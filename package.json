@@ -1,0 +1,33 @@
+{
+  "name": "whatsapp-ai-assistant",
+  "version": "1.0.0",
+  "description": "WhatsApp + AI assistant starter with Node.js, Express, Prisma and a web dashboard.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "db:seed": "node prisma/seed.mjs",
+    "import:chat": "node scripts/import-whatsapp-export.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.46.0",
+    "@prisma/client": "^6.7.0",
+    "axios": "^1.9.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.5.0",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "openai": "^5.10.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "prisma": "^6.7.0"
+  }
+}

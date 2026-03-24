@@ -1,0 +1,146 @@
+<%- include('partials/header', { title, appName }) %>
+
+<div class="wa-shell">
+	<aside class="wa-sidebar">
+		<div class="wa-brand">
+			<div>
+				<div class="eyebrow">Panel</div>
+				<h1><%= appName %></h1>
+				<p class="muted">Chats activos y atención manual.</p>
+			</div>
+			<form method="POST" action="/logout">
+				<button class="btn btn-ghost btn-icon" type="submit">Salir</button>
+			</form>
+		</div>
+
+		<nav class="wa-nav card-soft">
+			<a href="/dashboard" class="wa-nav-link <%= page === 'chats' ? 'active' : '' %>">Chats</a>
+			<a href="/dashboard/ai-lab" class="wa-nav-link <%= page === 'ai-lab' ? 'active' : '' %>">IA Lab</a>
+		</nav>
+
+		<div class="wa-conversations card-soft">
+			<div class="row-between wa-list-head">
+				<h3>Conversaciones</h3>
+				<span class="badge"><%= threads.length %></span>
+			</div>
+
+			<div class="conversation-list wa-scroll">
+				<% if (!threads.length) { %>
+					<div class="empty-list muted">Todavía no hay chats cargados.</div>
+				<% } %>
+
+				<% threads.forEach((thread) => { %>
+					<a class="conversation-item <%= selectedThread && selectedThread.key === thread.key ? 'active' : '' %>" href="/dashboard/conversations/<%= thread.latestConversationId %>">
+						<div class="avatar" style="<%= thread.avatar.style %>"><%= thread.avatar.initials %></div>
+
+						<div class="conversation-copy">
+							<div class="row-between conversation-top">
+								<strong><%= thread.displayName %></strong>
+								<span class="muted tiny">
+									<%= new Date(thread.lastMessageAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) %>
+								</span>
+							</div>
+
+							<div class="muted tiny"><%= thread.phoneDisplay %></div>
+							<div class="conversation-preview"><%= thread.preview %></div>
+						</div>
+
+						<div class="mini-pill <%= thread.aiEnabled ? 'ok' : 'off' %>">
+							IA <%= thread.aiEnabled ? 'ON' : 'OFF' %>
+						</div>
+					</a>
+				<% }) %>
+			</div>
+		</div>
+
+		<div class="card-soft test-box">
+			<h3>Nuevo chat de prueba</h3>
+			<p class="muted">Simulá un mensaje entrante y cae directo al panel.</p>
+
+			<form method="POST" action="/dashboard/simulate-inbound" class="form compact">
+				<label>
+					<span>Nombre</span>
+					<input type="text" name="name" placeholder="German" />
+				</label>
+
+				<label>
+					<span>WhatsApp</span>
+					<input type="text" name="waId" placeholder="54292315562286" />
+				</label>
+
+				<label>
+					<span>Mensaje</span>
+					<textarea name="body" rows="3" placeholder="Hola, me dijeron que soy talle XL"></textarea>
+				</label>
+
+				<button class="btn btn-primary" type="submit">Simular mensaje</button>
+			</form>
+		</div>
+	</aside>
+
+	<main class="wa-main">
+		<% if (!selectedThread) { %>
+			<section class="wa-empty">
+				<div class="empty-card">
+					<h2>No hay chats para mostrar</h2>
+					<p class="muted">Creá un mensaje de prueba o conectá WhatsApp para ver conversaciones reales.</p>
+				</div>
+			</section>
+		<% } else { %>
+			<section class="wa-chat-shell">
+				<header class="wa-chat-header">
+					<div class="wa-chat-user">
+						<div class="avatar avatar-lg" style="<%= selectedThread.avatar.style %>"><%= selectedThread.avatar.initials %></div>
+
+						<div>
+							<h2><%= selectedThread.displayName %></h2>
+							<div class="muted"><%= selectedThread.phoneDisplay %></div>
+
+							<% if (selectedThread.lastSummary) { %>
+								<div class="muted tiny summary-line"><%= selectedThread.lastSummary %></div>
+							<% } %>
+						</div>
+					</div>
+
+					<form method="POST" action="/dashboard/conversations/<%= selectedThread.latestConversationId %>/toggle-ai">
+						<button class="btn <%= selectedThread.aiEnabled ? 'btn-secondary' : 'btn-primary' %>" type="submit">
+							IA <%= selectedThread.aiEnabled ? 'activada' : 'desactivada' %>
+						</button>
+					</form>
+				</header>
+
+				<div class="wa-chat-stage">
+					<div class="wa-chat-scroll wa-scroll">
+						<% selectedThread.messages.forEach((msg) => { %>
+							<div class="bubble-row <%= msg.direction === 'OUTBOUND' ? 'outbound' : 'inbound' %>">
+								<% if (msg.direction === 'INBOUND') { %>
+									<div class="avatar avatar-sm" style="<%= selectedThread.avatar.style %>"><%= selectedThread.avatar.initials %></div>
+								<% } %>
+
+								<div class="message-bubble <%= msg.direction === 'OUTBOUND' ? 'outbound' : 'inbound' %>">
+									<div class="message-body"><%= msg.body %></div>
+
+									<div class="message-meta">
+										<span><%= new Date(msg.createdAt).toLocaleString('es-AR') %></span>
+										<% if (msg.tokenTotal) { %>
+											<span>· <%= msg.tokenTotal %> tok</span>
+										<% } %>
+									</div>
+								</div>
+							</div>
+						<% }) %>
+					</div>
+				</div>
+
+				<footer class="wa-composer-wrap">
+					<form method="POST" action="/dashboard/conversations/<%= selectedThread.latestConversationId %>/reply" class="wa-composer">
+						<textarea name="body" rows="1" placeholder="Escribí un mensaje manual..." required></textarea>
+						<button class="btn btn-primary" type="submit">Enviar</button>
+					</form>
+				</footer>
+			</section>
+		<% } %>
+	</main>
+</div>
+
+<%- include('partials/footer') %>

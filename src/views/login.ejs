@@ -1,0 +1,29 @@
+<%- include('partials/header', { title, appName }) %>
+
+<div class="page-center">
+  <div class="card auth-card">
+    <div class="eyebrow">WhatsApp + IA</div>
+    <h1>Ingresar al panel</h1>
+    <p class="muted">Entrá con el usuario seed para empezar a probar el proyecto.</p>
+
+    <% if (error) { %>
+      <div class="alert error"><%= error %></div>
+    <% } %>
+
+    <form method="POST" action="/login" class="form">
+      <label>
+        <span>Email</span>
+        <input type="email" name="email" placeholder="admin@example.com" required />
+      </label>
+
+      <label>
+        <span>Contraseña</span>
+        <input type="password" name="password" placeholder="••••••••" required />
+      </label>
+
+      <button type="submit" class="btn btn-primary">Ingresar</button>
+    </form>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
