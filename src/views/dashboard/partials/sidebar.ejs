@@ -8,9 +8,9 @@
 			<div class="admin-brand-mark">L</div>
 
 			<div class="admin-brand-copy">
-				<div class="eyebrow">Panel</div>
+				<div class="eyebrow">Lummine Console</div>
 				<h1><%= appName || 'Lummine' %></h1>
-				<p class="muted">Atención, contactos y campañas</p>
+				<p class="muted">Ventas conversacionales</p>
 			</div>
 		</div>
 	</div>
@@ -20,17 +20,22 @@
 			<div class="admin-menu-label">Principal</div>
 
 			<a href="/dashboard" class="admin-menu-link <%= page === 'inbox' ? 'active' : '' %>">
-				<span class="admin-menu-icon">💬</span>
+				<span class="admin-menu-icon">•</span>
 				<span class="admin-menu-text">Inbox</span>
 			</a>
 
 			<a href="/dashboard/campaigns" class="admin-menu-link <%= page === 'campaigns' ? 'active' : '' %>">
-				<span class="admin-menu-icon">📣</span>
+				<span class="admin-menu-icon">•</span>
 				<span class="admin-menu-text">Campañas</span>
 			</a>
 
+			<a href="/dashboard/catalog" class="admin-menu-link <%= page === 'catalog' ? 'active' : '' %>">
+				<span class="admin-menu-icon">•</span>
+				<span class="admin-menu-text">Catálogo</span>
+			</a>
+
 			<a href="/dashboard/ai-lab" class="admin-menu-link <%= page === 'ai-lab' ? 'active' : '' %>">
-				<span class="admin-menu-icon">🧠</span>
+				<span class="admin-menu-icon">•</span>
 				<span class="admin-menu-text">IA Lab</span>
 			</a>
 		</div>
@@ -39,17 +44,22 @@
 			<div class="admin-menu-label">Gestión</div>
 
 			<a href="#" class="admin-menu-link disabled">
-				<span class="admin-menu-icon">👥</span>
+				<span class="admin-menu-icon">•</span>
 				<span class="admin-menu-text">Contactos</span>
 			</a>
 
 			<a href="#" class="admin-menu-link disabled">
-				<span class="admin-menu-icon">🏷️</span>
+				<span class="admin-menu-icon">•</span>
+				<span class="admin-menu-text">Pedidos</span>
+			</a>
+
+			<a href="#" class="admin-menu-link disabled">
+				<span class="admin-menu-icon">•</span>
 				<span class="admin-menu-text">Segmentos</span>
 			</a>
 
 			<a href="#" class="admin-menu-link disabled">
-				<span class="admin-menu-icon">⚙️</span>
+				<span class="admin-menu-icon">•</span>
 				<span class="admin-menu-text">Automatizaciones</span>
 			</a>
 		</div>

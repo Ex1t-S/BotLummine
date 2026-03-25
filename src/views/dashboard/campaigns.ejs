@@ -1,50 +1,60 @@
 <%- include('../partials/header', { title, appName }) %>
 
-<div class="wa-shell inbox-shell">
+<div class="admin-shell" id="adminShell">
 	<%- include('./partials/sidebar', { appName, page }) %>
 
-	<main class="wa-main inbox-main">
-		<section class="card-soft" style="padding: 24px;">
-			<div class="row-between" style="margin-bottom: 16px;">
+	<section class="admin-content admin-page-wrap">
+		<section class="dashboard-page-card">
+			<div class="dashboard-page-header">
 				<div>
 					<div class="eyebrow">Marketing</div>
-					<h2 style="margin: 0;">Campañas</h2>
-					<p class="muted" style="margin-top: 6px;">Base inicial para campañas controladas por WhatsApp.</p>
+					<h2>Campañas</h2>
+					<p class="muted">Prepará envíos masivos, promociones y seguimientos comerciales desde un espacio más ordenado y escalable.</p>
 				</div>
+				<div class="dashboard-header-pill">Broadcast</div>
 			</div>
 
 			<form class="form" method="POST" action="/dashboard/campaigns/send">
-				<label>
-					<span>Nombre de campaña</span>
-					<input type="text" name="name" placeholder="Promo bodies abril" />
-				</label>
+				<div class="dashboard-form-grid">
+					<label>
+						<span>Nombre de campaña</span>
+						<input type="text" name="name" placeholder="Promo bodies abril" />
+					</label>
 
-				<label>
-					<span>Template / tipo</span>
-					<select name="template">
-						<option value="custom">Mensaje simple</option>
-						<option value="hello_world">hello_world</option>
-					</select>
-				</label>
+					<label>
+						<span>Template / tipo</span>
+						<select name="template">
+							<option value="custom">Mensaje simple</option>
+							<option value="hello_world">hello_world</option>
+						</select>
+					</label>
+				</div>
 
 				<label>
 					<span>Mensaje base</span>
-					<textarea name="body" rows="5" placeholder="Hola 😊 Tenemos novedades en Lummine..."></textarea>
+					<textarea name="body" rows="6" placeholder="Hola, tenemos novedades en Lummine y queremos mostrártelas antes que a nadie."></textarea>
 				</label>
 
-				<div class="card-soft" style="padding:16px; margin-top: 12px;">
-					<strong>Próxima etapa sugerida</strong>
-					<p class="muted" style="margin:8px 0 0;">
-						Segmentar por interés, compras previas, tags y contactos activos.
-					</p>
+				<div class="dashboard-info-grid">
+					<div class="dashboard-info-card">
+						<strong>Siguiente mejora recomendada</strong>
+						<p class="muted">Segmentar por interés, compras previas, stock, etiquetas y actividad reciente.</p>
+					</div>
+
+					<div class="dashboard-info-card">
+						<strong>Objetivo ideal</strong>
+						<p class="muted">Pasar de “mensaje a todos” a campañas con intención comercial real y mejor tasa de respuesta.</p>
+					</div>
 				</div>
 
-				<div style="margin-top: 16px;">
+				<div class="dashboard-actions-row">
 					<button class="btn btn-primary" type="submit">Guardar base de campaña</button>
 				</div>
 			</form>
 		</section>
-	</main>
+	</section>
 </div>
+
+<script src="/js/dashboard.js"></script>
 
 <%- include('../partials/footer') %>

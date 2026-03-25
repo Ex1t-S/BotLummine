@@ -4,14 +4,15 @@
   "description": "WhatsApp + AI assistant starter with Node.js, Express, Prisma and a web dashboard.",
   "type": "module",
   "main": "src/server.js",
-  "scripts": {
+   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "node prisma/seed.mjs",
-    "import:chat": "node scripts/import-whatsapp-export.mjs"
+    "import:chat": "node scripts/import-whatsapp-export.mjs",
+    "catalog:sync": "node scripts/sync-tiendanube-catalog.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",

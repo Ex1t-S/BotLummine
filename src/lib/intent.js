@@ -1,45 +1,63 @@
 export function normalizeDigits(value = '') {
-  return String(value || '').replace(/\D/g, '');
+	return String(value || '').replace(/\D/g, '');
 }
 
 export function extractOrderNumber(text = '') {
-  const match = String(text || '').match(/\b\d{4,10}\b/);
-  return match ? match[0] : null;
+	const match = String(text || '').match(/\b\d{4,10}\b/);
+	return match ? match[0] : null;
 }
 
 export function detectIntent(text = '', currentState = {}) {
-  const q = String(text || '').toLowerCase().trim();
-  const orderNumber = extractOrderNumber(text);
+	const q = String(text || '').toLowerCase().trim();
+	const orderNumber = extractOrderNumber(text);
 
-  // Si venimos de una conversación sobre pedido y ahora manda un número,
-  // interpretarlo como respuesta al número de orden.
-  if (currentState?.lastIntent === 'order_status' && orderNumber) {
-    return 'order_status';
-  }
+	if (currentState?.lastIntent === 'order_status' && orderNumber) {
+		return 'order_status';
+	}
 
-  if (/(pedido|orden|seguimiento|estado de mi pedido|mi compra|despachado|lleg[oó]|demora)/.test(q)) {
-    return 'order_status';
-  }
+	if (
+		/(quiero hablar con una persona|quiero hablar con alguien|humano|asesor|persona real|operador)/.test(q)
+	) {
+		return 'human_handoff';
+	}
 
-  if (/(transferencia|alias|cbu|banco|comprobante|pago)/.test(q)) {
-    return 'payment';
-  }
+	if (
+		/(reclamo|queja|me llego mal|me llegó mal|vino fallado|vino roto|no me gusto|no me gustó|estoy disconforme|estoy desconforme|muy mala atencion|muy mala atención)/.test(q)
+	) {
+		return 'complaint';
+	}
 
-  if (/(env[ií]o|enviar|correo|oca|andreani|interior|provincia|llega|demora)/.test(q)) {
-    return 'shipping';
-  }
+	if (
+		/(cambio|devolucion|devolución|devolver|quiero cambiar|quiero devolver|me quedo chico|me quedó chico|me quedo grande|me quedó grande)/.test(q)
+	) {
+		return 'return_exchange';
+	}
 
-  if (/(talle|medida|medidas)/.test(q)) {
-    return 'size_help';
-  }
+	if (/(pedido|orden|seguimiento|estado de mi pedido|mi compra|despachado|lleg[oó]|demora)/.test(q)) {
+		return 'order_status';
+	}
 
-  if (/(stock|disponible|queda|color|colores)/.test(q)) {
-    return 'stock_check';
-  }
+	if (/(transferencia|alias|cbu|banco|comprobante|pago|cuotas|tarjeta|mercado pago)/.test(q)) {
+		return 'payment';
+	}
 
-  if (/(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley)/.test(q)) {
-    return 'product';
-  }
+	if (/(env[ií]o|enviar|correo|oca|andreani|interior|provincia|llega|demora|retiro|retirar)/.test(q)) {
+		return 'shipping';
+	}
 
-  return 'general';
+	if (/(talle|medida|medidas|tabla de talles|que talle|qué talle)/.test(q)) {
+		return 'size_help';
+	}
+
+	if (/(stock|disponible|queda|color|colores)/.test(q)) {
+		return 'stock_check';
+	}
+
+	if (
+		/(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley|legging|leggings|pack|combo|corset|modelador)/.test(q)
+	) {
+		return 'product';
+	}
+
+	return 'general';
 }

@@ -1,0 +1,154 @@
+<%- include('../partials/header', { title, appName }) %>
+
+<div class="admin-shell" id="adminShell">
+	<%- include('./partials/sidebar', { appName, page }) %>
+
+	<section class="admin-content">
+		<section class="catalog-shell">
+			<div class="catalog-header">
+				<div class="catalog-header-copy">
+					<div class="catalog-eyebrow">CATÁLOGO</div>
+					<h2>Productos sincronizados</h2>
+					<p>
+						El panel lee desde tu base de datos para mantener la carga rápida,
+						estable y sin depender de requests constantes a Tiendanube.
+					</p>
+
+					<% if (catalog.lastSync) { %>
+						<div class="catalog-sync-meta">
+							<span>
+								<strong>Última sync:</strong>
+								<%= new Date(catalog.lastSync.startedAt).toLocaleString('es-AR') %>
+							</span>
+							<span>
+								<strong>Estado:</strong>
+								<%= catalog.lastSync.status %>
+							</span>
+							<span>
+								<strong>Procesados:</strong>
+								<%= catalog.lastSync.productsProcessed %>
+							</span>
+						</div>
+					<% } %>
+				</div>
+
+				<form method="POST" action="/dashboard/catalog/sync">
+					<button class="catalog-sync-btn" type="submit">
+						<span class="catalog-sync-btn__icon">↻</span>
+						<span>Actualizar catálogo</span>
+					</button>
+				</form>
+			</div>
+
+			<div class="catalog-toolbar">
+				<form method="GET" action="/dashboard/catalog" class="catalog-search-form">
+					<input
+						type="text"
+						name="q"
+						value="<%= query %>"
+						placeholder="Buscar por nombre, marca o tags..."
+						class="catalog-search-input"
+					/>
+					<button class="catalog-search-btn" type="submit">Buscar</button>
+				</form>
+			</div>
+
+			<div class="catalog-count">
+				Total: <strong><%= catalog.total %></strong> productos
+			</div>
+
+			<% if (!catalog.items.length) { %>
+				<div class="catalog-empty">
+					<h3>No hay productos todavía</h3>
+					<p>Tocá “Actualizar catálogo” para sincronizar los productos desde Tiendanube.</p>
+				</div>
+			<% } %>
+
+			<div class="catalog-grid">
+				<% catalog.items.forEach((item) => { %>
+					<article class="catalog-card">
+						<div class="catalog-card__image-wrap">
+							<% if (item.featuredImage) { %>
+								<img
+									src="<%= item.featuredImage %>"
+									alt="<%= item.name %>"
+									class="catalog-card__image"
+								/>
+							<% } else { %>
+								<div class="catalog-card__image-empty">Sin imagen</div>
+							<% } %>
+
+							<span class="catalog-card__status <%= item.published ? 'is-published' : 'is-hidden' %>">
+								<%= item.published ? 'Publicado' : 'Oculto' %>
+							</span>
+						</div>
+
+						<div class="catalog-card__body">
+							<div class="catalog-card__top">
+								<h3 class="catalog-card__title"><%= item.name %></h3>
+								<p class="catalog-card__brand">
+									<%= item.brand || 'Sin marca' %>
+								</p>
+							</div>
+
+							<div class="catalog-card__price-row">
+								<div class="catalog-card__price">
+									<%= item.price ? `$${item.price}` : 'Sin precio' %>
+								</div>
+
+								<% const variants = Array.isArray(item.variants) ? item.variants : []; %>
+								<span class="catalog-card__badge">
+									<%= variants.length %> variantes
+								</span>
+							</div>
+
+							<% if (item.handle) { %>
+								<p class="catalog-card__handle">/<%= item.handle %></p>
+							<% } %>
+
+							<% if (item.tags) { %>
+								<div class="catalog-card__tags">
+									<% item.tags.split(',').slice(0, 3).forEach((tag) => { %>
+										<span class="catalog-card__tag"><%= tag.trim() %></span>
+									<% }) %>
+								</div>
+							<% } %>
+
+							<div class="catalog-card__actions">
+								<% if (item.productUrl) { %>
+									<a
+										class="catalog-card__btn"
+										href="<%= item.productUrl %>"
+										target="_blank"
+										rel="noreferrer"
+									>
+										Ver producto
+									</a>
+								<% } else { %>
+									<button class="catalog-card__btn is-disabled" type="button" disabled>
+										Sin enlace
+									</button>
+								<% } %>
+							</div>
+						</div>
+					</article>
+				<% }) %>
+			</div>
+
+			<% if (catalog.totalPages > 1) { %>
+				<div class="catalog-pagination">
+					<% for (let i = 1; i <= catalog.totalPages; i += 1) { %>
+						<a
+							class="catalog-page-btn <%= i === catalog.page ? 'is-active' : '' %>"
+							href="/dashboard/catalog?<%= new URLSearchParams({ q: query || '', page: String(i) }).toString() %>"
+						>
+							<%= i %>
+						</a>
+					<% } %>
+				</div>
+			<% } %>
+		</section>
+	</section>
+</div>
+
+<%- include('../partials/footer') %>

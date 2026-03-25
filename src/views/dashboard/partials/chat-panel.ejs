@@ -1,8 +1,9 @@
 <section class="wa-chat-column">
 	<% if (!selectedContact) { %>
 		<div class="wa-chat-empty">
-			<h2>WhatsApp Web</h2>
-			<p class="muted">Seleccioná un chat para empezar.</p>
+			<div class="wa-empty-mark">L</div>
+			<h2>Centro de conversaciones</h2>
+			<p class="muted">Seleccioná un cliente para ver el historial, responder manualmente o seguir la conversación asistida.</p>
 		</div>
 	<% } else { %>
 		<header class="wa-chat-topbar">
@@ -16,11 +17,10 @@
 			</div>
 
 			<div class="wa-chat-actions">
-				<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/toggle-ai">
-					<button class="btn <%= selectedContact.aiEnabled ? 'btn-secondary' : 'btn-primary' %>" type="submit">
-						IA <%= selectedContact.aiEnabled ? 'activada' : 'desactivada' %>
-					</button>
-				</form>
+				<div class="chat-status-chip">Asistente activo</div>
+				<button class="chat-action-btn" type="button" disabled>Cliente</button>
+				<button class="chat-action-btn" type="button" disabled>Pedido</button>
+				<button class="chat-action-btn" type="button" disabled>Transferir</button>
 			</div>
 		</header>
 
@@ -47,13 +47,16 @@
 
 		<footer class="wa-chat-composer">
 			<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/reply" class="wa-composer-form">
-				<button type="button" class="wa-icon-btn" title="Emoji">😊</button>
-
 				<div class="wa-input-shell">
-					<textarea name="body" rows="1" placeholder="Escribí un mensaje" required></textarea>
+					<textarea name="body" rows="1" placeholder="Escribí un mensaje para el cliente" required></textarea>
 				</div>
 
-				<button class="wa-send-circle" type="submit" title="Enviar">➤</button>
+				<button class="wa-send-circle" type="submit" title="Enviar">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M4 12 19 4l-4.5 16-2.8-5.2L4 12Z" fill="currentColor"/>
+					</svg>
+					<span>Enviar</span>
+				</button>
 			</form>
 		</footer>
 	<% } %>
