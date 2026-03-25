@@ -1,3 +1,5 @@
+import { normalizeText } from '../lib/text.js';
+
 export const STORE_LINKS = {
   home: 'https://lummine.com/',
   indumentaria: 'https://lummine.com/indumentaria/',
@@ -94,18 +96,10 @@ export const POLICY_SUMMARY = {
   ]
 };
 
-export function normalizeText(value = '') {
-  return String(value)
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .trim();
-}
-
 export function findRelevantProducts(text = '', limit = 3) {
   const query = normalizeText(text);
 
-  const scored = PRODUCT_CATALOG.map((product) => {
+  return PRODUCT_CATALOG.map((product) => {
     const haystack = normalizeText([
       product.name,
       product.category,
@@ -131,31 +125,30 @@ export function findRelevantProducts(text = '', limit = 3) {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((item) => item.product);
-
-  return scored;
 }
 
-export function detectIntent(text = '') {
+export function detectBusinessIntent(text = '') {
   const q = normalizeText(text);
 
+  if (/(pedido|orden|seguimiento|codigo de seguimiento|código de seguimiento|despachado|demora)/.test(q)) return 'order_status';
   if (/(transferencia|alias|cbu|banco|comprobante|pago)/.test(q)) return 'payment';
-  if (/(envio|enviar|correo|llega|demora|seguimiento)/.test(q)) return 'shipping';
-  if (/(cambio|devolucion|devolucion|reclamo|defecto|dañado|danado)/.test(q)) return 'returns';
+  if (/(envio|enviar|correo|llega|demora)/.test(q)) return 'shipping';
+  if (/(cambio|devolucion|devolución|reclamo|defecto|dañado|danado)/.test(q)) return 'returns';
+  if (/(talle|medida|medidas)/.test(q)) return 'size_help';
+  if (/(stock|disponible|queda|color|colores)/.test(q)) return 'stock_check';
   if (/(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley)/.test(q)) return 'product';
   return 'general';
 }
 
 export function buildRelevantBusinessData(userText = '') {
-  const intent = detectIntent(userText);
+  const intent = detectBusinessIntent(userText);
   const products = findRelevantProducts(userText, 3);
 
-  const result = {
+  return {
     intent,
     links: STORE_LINKS,
     products,
     paymentRules: PAYMENT_RULES,
     policySummary: POLICY_SUMMARY
   };
-
-  return result;
 }

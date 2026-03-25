@@ -1,3 +1,5 @@
+import { normalizeText, overlapScore } from '../lib/text.js';
+
 const BASE_FACTS = [
   'Lummine es una tienda online argentina de indumentaria y prendas modeladoras.',
   'La atención por WhatsApp debe sentirse humana, cercana y natural.',
@@ -15,7 +17,7 @@ const TOPIC_FACTS = {
     'Si no hay tiempo exacto confirmado, no inventarlo.'
   ],
   pagos: [
-    'Si preguntan por medios de pago o promos, ahí sí podés mencionar cuotas o descuento por transferencia.',
+    'Si preguntan por medios de pago o promos, ahí sí se pueden mencionar cuotas o descuento por transferencia.',
     'Las promos deben mencionarse solo cuando ayudan de verdad a avanzar la compra.'
   ],
   talles: [
@@ -35,7 +37,7 @@ const TOPIC_FACTS = {
   ],
   productos: [
     'Si preguntan por un producto, responder de forma concreta y útil.',
-    'No recitar catálogo entero si no lo pidieron.'
+    'No recitar el catálogo entero si no lo pidieron.'
   ]
 };
 
@@ -46,25 +48,25 @@ export const STYLE_EXAMPLES = [
     agent: '¡Hola! Soy Sofi de Lummine 😊 ¿En qué te puedo ayudar?'
   },
   {
-  tags: ['natural', 'ayuda'],
-  customer: 'Hola, quería saber por un modelo',
-  agent: 'Sí, claro 😊 Decime cuál viste y te ayudo.'
-},
-{
-  tags: ['stock'],
-  customer: 'Te quedó en beige?',
-  agent: 'Decime cuál producto y qué talle buscás así te lo confirmo bien.'
-},
-{
-  tags: ['talle'],
-  customer: 'No sé si me va a ir',
-  agent: 'Te ayudo con eso 😊 Decime qué talle usás normalmente y qué modelo querés.'
-},
-{
-  tags: ['pago'],
-  customer: 'Cómo puedo pagar?',
-  agent: 'Tenés distintas opciones 😊 Si querés te cuento cuál te conviene más.'
-},
+    tags: ['natural', 'ayuda'],
+    customer: 'Hola, quería saber por un modelo',
+    agent: 'Sí, claro 😊 Decime cuál viste y te ayudo.'
+  },
+  {
+    tags: ['stock'],
+    customer: 'Te quedó en beige?',
+    agent: 'Decime cuál producto y qué talle buscás así te lo confirmo bien.'
+  },
+  {
+    tags: ['talle'],
+    customer: 'No sé si me va a ir',
+    agent: 'Te ayudo con eso 😊 Decime qué talle usás normalmente y qué modelo querés.'
+  },
+  {
+    tags: ['pago'],
+    customer: 'Cómo puedo pagar?',
+    agent: 'Tenés distintas opciones 😊 Si querés te cuento cuál te conviene más.'
+  },
   {
     tags: ['saludo', 'natural'],
     customer: 'Holaa',
@@ -112,21 +114,6 @@ export const STYLE_EXAMPLES = [
   }
 ];
 
-function normalizeText(value = '') {
-  return String(value)
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .trim();
-}
-
-function tokenize(value = '') {
-  return normalizeText(value)
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
 function latestUserMessage(recentMessages = []) {
   const reversed = [...recentMessages].reverse();
   return reversed.find((item) => item.role === 'user')?.text || '';
@@ -142,21 +129,9 @@ function detectTopics(text = '') {
   if (/(stock|disponible|queda|color|colores|negro|beige|blanco)/.test(normalized)) topics.add('stock');
   if (/(pedido|orden|seguimiento|llego|llegó|demora)/.test(normalized)) topics.add('pedidos');
   if (/(cambio|devolucion|devolución)/.test(normalized)) topics.add('cambios');
-  if (/(body|bodys|bodys|corpiño|corpino|bombacha|musculosa|calza|faja|short|conjunto)/.test(normalized)) topics.add('productos');
+  if (/(body|bodys|corpiño|corpino|bombacha|musculosa|calza|faja|short|conjunto)/.test(normalized)) topics.add('productos');
 
   return [...topics];
-}
-
-function overlapScore(a = '', b = '') {
-  const aa = new Set(tokenize(a));
-  const bb = new Set(tokenize(b));
-  let score = 0;
-
-  for (const token of aa) {
-    if (bb.has(token)) score += 1;
-  }
-
-  return score;
 }
 
 export function getRelevantStoreFacts(recentMessages = []) {

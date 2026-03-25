@@ -40,6 +40,7 @@ model Contact {
   name          String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
   conversations Conversation[]
 }
 
@@ -55,8 +56,22 @@ model Conversation {
 
   contact         Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   messages        Message[]
+  state           ConversationState?
 
   @@index([lastMessageAt])
+}
+model ConversationState {
+  id              String        @id @default(cuid())
+  conversationId  String        @unique
+  customerName    String?
+  lastIntent      String?
+  lastOrderNumber String?
+  lastOrderId     String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model Message {
