@@ -1,0 +1,40 @@
+<section class="wa-contact-column">
+	<div class="wa-contact-header">
+		<div>
+			<h3>Chats</h3>
+			<div class="muted tiny"><%= Array.isArray(contacts) ? contacts.length : 0 %> contactos</div>
+		</div>
+	</div>
+
+	<div class="wa-contact-search">
+		<input type="text" placeholder="Buscar o empezar un chat nuevo" disabled />
+	</div>
+
+	<div class="wa-contact-list wa-scroll">
+		<% if (!contacts || !contacts.length) { %>
+			<div class="empty-list muted">Todavía no hay contactos.</div>
+		<% } %>
+
+		<% (contacts || []).forEach((contact) => { %>
+			<a
+				class="wa-contact-item <%= selectedContact && selectedContact.conversationId === contact.conversationId ? 'active' : '' %>"
+				href="/dashboard/conversations/<%= contact.conversationId %>"
+			>
+				<div class="avatar wa-contact-avatar" style="<%= contact.avatar.style %>"><%= contact.avatar.initials %></div>
+
+				<div class="wa-contact-copy">
+					<div class="wa-contact-top">
+						<strong><%= contact.displayName %></strong>
+						<span class="muted tiny"><%= contact.lastMessageTime || '' %></span>
+					</div>
+
+					<div class="wa-contact-bottom">
+						<span class="wa-contact-preview"><%= contact.preview || 'Sin mensajes aún' %></span>
+					</div>
+
+					<div class="muted tiny"><%= contact.phoneDisplay || '' %></div>
+				</div>
+			</a>
+		<% }) %>
+	</div>
+</section>

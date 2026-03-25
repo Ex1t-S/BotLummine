@@ -1,0 +1,60 @@
+<section class="wa-chat-column">
+	<% if (!selectedContact) { %>
+		<div class="wa-chat-empty">
+			<h2>WhatsApp Web</h2>
+			<p class="muted">Seleccioná un chat para empezar.</p>
+		</div>
+	<% } else { %>
+		<header class="wa-chat-topbar">
+			<div class="wa-chat-user">
+				<div class="avatar avatar-lg" style="<%= selectedContact.avatar.style %>"><%= selectedContact.avatar.initials %></div>
+
+				<div class="wa-chat-user-copy">
+					<h2><%= selectedContact.displayName %></h2>
+					<div class="muted"><%= selectedContact.phoneDisplay || '' %></div>
+				</div>
+			</div>
+
+			<div class="wa-chat-actions">
+				<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/toggle-ai">
+					<button class="btn <%= selectedContact.aiEnabled ? 'btn-secondary' : 'btn-primary' %>" type="submit">
+						IA <%= selectedContact.aiEnabled ? 'activada' : 'desactivada' %>
+					</button>
+				</form>
+			</div>
+		</header>
+
+		<div class="wa-chat-body wa-scroll">
+			<% if (!selectedContact.messages.length) { %>
+				<div class="empty-list muted">Todavía no hay mensajes.</div>
+			<% } %>
+
+			<% selectedContact.messages.forEach((msg) => { %>
+				<div class="wa-msg-row <%= msg.direction === 'OUTBOUND' ? 'out' : 'in' %>">
+					<div class="wa-msg-bubble <%= msg.direction === 'OUTBOUND' ? 'out' : 'in' %>">
+						<div class="wa-msg-text"><%= msg.body %></div>
+
+						<div class="wa-msg-meta">
+							<span><%= msg.createdAtLabel %></span>
+							<% if (msg.tokenTotal) { %>
+								<span>· <%= msg.tokenTotal %> tok</span>
+							<% } %>
+						</div>
+					</div>
+				</div>
+			<% }) %>
+		</div>
+
+		<footer class="wa-chat-composer">
+			<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/reply" class="wa-composer-form">
+				<button type="button" class="wa-icon-btn" title="Emoji">😊</button>
+
+				<div class="wa-input-shell">
+					<textarea name="body" rows="1" placeholder="Escribí un mensaje" required></textarea>
+				</div>
+
+				<button class="wa-send-circle" type="submit" title="Enviar">➤</button>
+			</form>
+		</footer>
+	<% } %>
+</section>

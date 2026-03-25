@@ -1,0 +1,50 @@
+<%- include('../partials/header', { title, appName }) %>
+
+<div class="wa-shell inbox-shell">
+	<%- include('./partials/sidebar', { appName, page }) %>
+
+	<main class="wa-main inbox-main">
+		<section class="card-soft" style="padding: 24px;">
+			<div class="row-between" style="margin-bottom: 16px;">
+				<div>
+					<div class="eyebrow">Marketing</div>
+					<h2 style="margin: 0;">Campañas</h2>
+					<p class="muted" style="margin-top: 6px;">Base inicial para campañas controladas por WhatsApp.</p>
+				</div>
+			</div>
+
+			<form class="form" method="POST" action="/dashboard/campaigns/send">
+				<label>
+					<span>Nombre de campaña</span>
+					<input type="text" name="name" placeholder="Promo bodies abril" />
+				</label>
+
+				<label>
+					<span>Template / tipo</span>
+					<select name="template">
+						<option value="custom">Mensaje simple</option>
+						<option value="hello_world">hello_world</option>
+					</select>
+				</label>
+
+				<label>
+					<span>Mensaje base</span>
+					<textarea name="body" rows="5" placeholder="Hola 😊 Tenemos novedades en Lummine..."></textarea>
+				</label>
+
+				<div class="card-soft" style="padding:16px; margin-top: 12px;">
+					<strong>Próxima etapa sugerida</strong>
+					<p class="muted" style="margin:8px 0 0;">
+						Segmentar por interés, compras previas, tags y contactos activos.
+					</p>
+				</div>
+
+				<div style="margin-top: 16px;">
+					<button class="btn btn-primary" type="submit">Guardar base de campaña</button>
+				</div>
+			</form>
+		</section>
+	</main>
+</div>
+
+<%- include('../partials/footer') %>

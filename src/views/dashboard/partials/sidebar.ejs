@@ -1,0 +1,65 @@
+<aside class="admin-sidebar" id="adminSidebar">
+	<div class="admin-sidebar-top">
+		<button class="admin-collapse-btn" type="button" id="sidebarToggle" title="Expandir / contraer">
+			☰
+		</button>
+
+		<div class="admin-brand">
+			<div class="admin-brand-mark">L</div>
+
+			<div class="admin-brand-copy">
+				<div class="eyebrow">Panel</div>
+				<h1><%= appName || 'Lummine' %></h1>
+				<p class="muted">Atención, contactos y campañas</p>
+			</div>
+		</div>
+	</div>
+
+	<nav class="admin-menu">
+		<div class="admin-menu-group">
+			<div class="admin-menu-label">Principal</div>
+
+			<a href="/dashboard" class="admin-menu-link <%= page === 'inbox' ? 'active' : '' %>">
+				<span class="admin-menu-icon">💬</span>
+				<span class="admin-menu-text">Inbox</span>
+			</a>
+
+			<a href="/dashboard/campaigns" class="admin-menu-link <%= page === 'campaigns' ? 'active' : '' %>">
+				<span class="admin-menu-icon">📣</span>
+				<span class="admin-menu-text">Campañas</span>
+			</a>
+
+			<a href="/dashboard/ai-lab" class="admin-menu-link <%= page === 'ai-lab' ? 'active' : '' %>">
+				<span class="admin-menu-icon">🧠</span>
+				<span class="admin-menu-text">IA Lab</span>
+			</a>
+		</div>
+
+		<div class="admin-menu-group">
+			<div class="admin-menu-label">Gestión</div>
+
+			<a href="#" class="admin-menu-link disabled">
+				<span class="admin-menu-icon">👥</span>
+				<span class="admin-menu-text">Contactos</span>
+			</a>
+
+			<a href="#" class="admin-menu-link disabled">
+				<span class="admin-menu-icon">🏷️</span>
+				<span class="admin-menu-text">Segmentos</span>
+			</a>
+
+			<a href="#" class="admin-menu-link disabled">
+				<span class="admin-menu-icon">⚙️</span>
+				<span class="admin-menu-text">Automatizaciones</span>
+			</a>
+		</div>
+	</nav>
+
+	<div class="admin-sidebar-bottom">
+		<form method="POST" action="/logout">
+			<button class="btn btn-ghost admin-logout-btn" type="submit">
+				<span>Salir</span>
+			</button>
+		</form>
+	</div>
+</aside>
