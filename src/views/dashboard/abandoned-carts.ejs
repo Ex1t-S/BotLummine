@@ -10,7 +10,13 @@
 				<p class="muted">Traé todo al backend, filtrá rápido y trabajá por páginas sin que la vista se rompa.</p>
 			</div>
 
-			<form method="POST" action="/dashboard/abandoned-carts/sync">
+			<form method="POST" action="/dashboard/abandoned-carts/sync" class="sync-form-inline">
+				<select name="daysBack" class="abandoned-filter-select">
+					<option value="7" <%= syncWindow === 7 ? 'selected' : '' %>>Últimos 7 días</option>
+					<option value="15" <%= syncWindow === 15 ? 'selected' : '' %>>Últimos 15 días</option>
+					<option value="30" <%= syncWindow === 30 ? 'selected' : '' %>>Últimos 30 días</option>
+				</select>
+
 				<button class="chat-action-btn compact-sync-btn" type="submit">Sincronizar Tiendanube</button>
 			</form>
 		</div>
@@ -38,12 +44,26 @@
 			<div class="abandoned-search-wrap">
 				<input
 					type="search"
-					name="search"
-					value="<%= filters.search %>"
+					name="q"
+					value="<%= filters.q || '' %>"
 					placeholder="Buscar por nombre, mail, teléfono, ciudad, provincia o checkout"
 					class="abandoned-search-input"
 				/>
 			</div>
+
+			<input
+				type="date"
+				name="dateFrom"
+				value="<%= filters.dateFrom || '' %>"
+				class="abandoned-filter-select"
+			/>
+
+			<input
+				type="date"
+				name="dateTo"
+				value="<%= filters.dateTo || '' %>"
+				class="abandoned-filter-select"
+			/>
 
 			<select name="status" class="abandoned-filter-select">
 				<option value="ALL" <%= filters.status === 'ALL' ? 'selected' : '' %>>Todos</option>
@@ -63,7 +83,7 @@
 				</div>
 			<% } %>
 
-			<% (carts || []).forEach((cart) => { %>
+			<% (carts || []).forEach(function(cart) { %>
 				<article class="panel abandoned-card abandoned-card-micro">
 					<div class="abandoned-top compact-top micro-top">
 						<div class="abandoned-avatar micro-avatar"><%= cart.initials %></div>
@@ -74,7 +94,9 @@
 							<div class="muted ellipsis" title="<%= cart.contactEmail || 'Sin email' %>"><%= cart.contactEmail || 'Sin email' %></div>
 						</div>
 
-						<span class="badge badge-<%= cart.status === 'CONTACTED' ? 'warning' : 'success' %> micro-badge"><%= cart.statusLabel %></span>
+						<span class="badge badge-<%= cart.status === 'CONTACTED' ? 'warning' : 'success' %> micro-badge">
+							<%= cart.statusLabel %>
+						</span>
 					</div>
 
 					<div class="abandoned-mini-meta micro-meta-grid">
@@ -82,14 +104,17 @@
 							<span>Total</span>
 							<strong><%= cart.totalLabel %></strong>
 						</div>
+
 						<div class="mini-meta-box micro-meta-box">
 							<span>Ciudad</span>
 							<strong title="<%= cart.shippingCity || '-' %>"><%= cart.shippingCity || '-' %></strong>
 						</div>
+
 						<div class="mini-meta-box micro-meta-box wide-meta-box">
 							<span>Provincia</span>
 							<strong title="<%= cart.shippingProvince || '-' %>"><%= cart.shippingProvince || '-' %></strong>
 						</div>
+
 						<div class="mini-meta-box micro-meta-box wide-meta-box">
 							<span>Productos</span>
 							<strong><%= cart.productsCount %> ítem(s)</strong>
@@ -98,26 +123,42 @@
 
 					<div class="compact-products micro-products-box">
 						<div class="product-pill-list micro-product-pill-list">
-							<% cart.productsPreview.forEach((productName, index) => { %>
+							<% const previewProducts = Array.isArray(cart.productsPreview) ? cart.productsPreview : []; %>
+							<% const fullProducts = Array.isArray(cart.productsList) ? cart.productsList : []; %>
+
+							<% previewProducts.forEach(function(productName, index) { %>
 								<div class="product-pill micro-product-pill" title="<%= productName %>">
 									<span><%= productName %></span>
-									<% if (cart.productsList[index]?.quantity) { %><em>x<%= cart.productsList[index].quantity %></em><% } %>
+									<% if (fullProducts[index] && fullProducts[index].quantity) { %>
+										<em>x<%= fullProducts[index].quantity %></em>
+									<% } %>
 								</div>
-							<% }) %>
-							<% if (cart.productsList.length > 2) { %>
-								<div class="product-pill more-pill micro-product-pill">+<%= cart.productsList.length - 2 %> más</div>
-							<% } %>
+							<% }); %>
 						</div>
 					</div>
 
 					<div class="abandoned-actions-row micro-actions-row">
 						<% if (cart.abandonedCheckoutUrl) { %>
-							<a href="<%= cart.abandonedCheckoutUrl %>" target="_blank" rel="noreferrer" class="abandoned-link-btn mini-link-btn">Abrir</a>
+							<a
+								href="<%= cart.abandonedCheckoutUrl %>"
+								target="_blank"
+								rel="noreferrer"
+								class="abandoned-link-btn mini-link-btn"
+							>
+								Abrir
+							</a>
 						<% } %>
 
 						<details class="message-editor-card inline-message-editor">
-							<summary class="mini-whatsapp-trigger"><%= cart.contactPhone ? 'WhatsApp' : 'Sin WhatsApp' %></summary>
-							<form method="POST" action="/dashboard/abandoned-carts/<%= cart.id %>/message" class="abandoned-form compact-abandoned-form micro-abandoned-form">
+							<summary class="mini-whatsapp-trigger">
+								<%= cart.contactPhone ? 'WhatsApp' : 'Sin WhatsApp' %>
+							</summary>
+
+							<form
+								method="POST"
+								action="/dashboard/abandoned-carts/<%= cart.id %>/message"
+								class="abandoned-form compact-abandoned-form micro-abandoned-form"
+							>
 								<textarea
 									name="body"
 									rows="3"
@@ -127,26 +168,47 @@
 
 								<div class="compact-form-footer micro-form-footer">
 									<span class="last-send-label">Último: <%= cart.lastMessageSentLabel %></span>
-									<button class="chat-action-btn compact-send-btn micro-send-btn" type="submit" <%= !cart.contactPhone ? 'disabled' : '' %>>Enviar</button>
+									<button
+										class="chat-action-btn compact-send-btn micro-send-btn"
+										type="submit"
+										<%= !cart.contactPhone ? 'disabled' : '' %>
+									>
+										Enviar
+									</button>
 								</div>
 							</form>
 						</details>
 					</div>
 				</article>
-			<% }) %>
+			<% }); %>
 		</div>
 
 		<% if (pagination.totalPages > 1) { %>
 			<nav class="abandoned-pagination" aria-label="Paginación de carritos abandonados">
-				<a class="page-nav-btn <%= !pagination.hasPrev ? 'disabled' : '' %>" href="<%= pagination.hasPrev ? pagination.prevUrl : '#' %>">Anterior</a>
+				<a
+					class="page-nav-btn <%= !pagination.hasPrev ? 'disabled' : '' %>"
+					href="<%= pagination.hasPrev ? pagination.prevUrl : '#' %>"
+				>
+					Anterior
+				</a>
 
 				<div class="page-numbers">
-					<% pagination.pages.forEach((pageItem) => { %>
-						<a href="<%= pageItem.url %>" class="page-number <%= pageItem.isCurrent ? 'active' : '' %>"><%= pageItem.number %></a>
-					<% }) %>
+					<% pagination.pages.forEach(function(pageItem) { %>
+						<a
+							href="<%= pageItem.url %>"
+							class="page-number <%= pageItem.isCurrent ? 'active' : '' %>"
+						>
+							<%= pageItem.number %>
+						</a>
+					<% }); %>
 				</div>
 
-				<a class="page-nav-btn <%= !pagination.hasNext ? 'disabled' : '' %>" href="<%= pagination.hasNext ? pagination.nextUrl : '#' %>">Siguiente</a>
+				<a
+					class="page-nav-btn <%= !pagination.hasNext ? 'disabled' : '' %>"
+					href="<%= pagination.hasNext ? pagination.nextUrl : '#' %>"
+				>
+					Siguiente
+				</a>
 			</nav>
 		<% } %>
 	</section>

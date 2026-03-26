@@ -1,10 +1,16 @@
 import { prisma } from '../lib/prisma.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
-const REQUESTED_PER_PAGE = Number.parseInt(process.env.TIENDANUBE_CHECKOUTS_PER_PAGE || '200', 10);
-const CHECKOUTS_PER_PAGE = Math.min(Math.max(REQUESTED_PER_PAGE, 1), 200);
-const MAX_PAGES = Number.parseInt(process.env.TIENDANUBE_CHECKOUTS_MAX_PAGES || '80', 10);
-const FULL_SYNC_MONTH = process.env.TIENDANUBE_FULL_SYNC_MONTH || '';
+
+// Seguimos trayendo de a 20
+const CHECKOUTS_PER_PAGE = 20;
+
+// Pero ahora permitimos recorrer más páginas
+const MAX_PAGES = Number.MAX_SAFE_INTEGER;
+
+// Default
+const DEFAULT_DAYS_BACK = 7;
+const ALLOWED_WINDOWS = new Set([7, 15, 30]);
 
 function normalizePhone(value = '') {
 	return String(value || '').replace(/\D/g, '');
@@ -52,44 +58,41 @@ function parseDateOrNull(value) {
 	return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function getCartReferenceDate(cart) {
-	return (
-		parseDateOrNull(cart.updated_at) ||
-		parseDateOrNull(cart.created_at) ||
-		parseDateOrNull(cart.completed_at) ||
-		null
-	);
-}
-
-function isInsideRequestedMonth(cart, monthFilter) {
-	if (!monthFilter) return true;
-	const date = getCartReferenceDate(cart);
-	if (!date) return true;
-	const year = date.getUTCFullYear();
-	const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-	return `${year}-${month}` === monthFilter;
-}
-
 function buildCartPayload(cart, storeId) {
+	const products = Array.isArray(cart.products)
+		? cart.products.map((product) => ({
+				id: product?.id ?? null,
+				productId: product?.product_id ?? null,
+				variantId: product?.variant_id ?? null,
+				name: product?.name || product?.name_without_variants || 'Producto sin nombre',
+				price: product?.price ?? null,
+				quantity: Number(product?.quantity || 1),
+				sku: product?.sku || null,
+				image: product?.image?.src || null,
+				variantValues: Array.isArray(product?.variant_values) ? product.variant_values : []
+		  }))
+		: [];
+
 	return {
 		storeId: String(cart.store_id || storeId),
 		token: cart.token || null,
-		contactName: cart.contact_name || null,
+		contactName: cart.contact_name || cart.shipping_name || null,
 		contactEmail: cart.contact_email || null,
-		contactPhone: normalizePhone(cart.contact_phone || cart.shipping_phone || ''),
+		contactPhone: normalizePhone(cart.contact_phone || cart.shipping_phone || cart.billing_phone || ''),
 		abandonedCheckoutUrl: cart.abandoned_checkout_url || null,
 		subtotal: toDecimalOrNull(cart.subtotal),
 		totalAmount: toDecimalOrNull(cart.total),
 		currency: cart.currency || null,
-		gateway: cart.gateway || null,
-		shipping: cart.shipping || null,
-		shippingPickupType: cart.shipping_pickup_type || null,
+		gateway: cart.gateway_name || cart.gateway || null,
+		shipping: null,
+		shippingPickupType: null,
 		shippingAddress: mapAddress(cart) || null,
 		shippingCity: cart.shipping_city || null,
 		shippingProvince: cart.shipping_province || null,
 		shippingZipcode: cart.shipping_zipcode || null,
-		products: Array.isArray(cart.products) ? cart.products : [],
-		rawPayload: cart
+		products,
+		rawPayload: cart,
+		checkoutCreatedAt: parseDateOrNull(cart.created_at)
 	};
 }
 
@@ -143,72 +146,89 @@ async function fetchCheckoutPage({ storeId, accessToken, page }) {
 	};
 }
 
-async function fetchAllCheckouts({ storeId, accessToken, monthFilter }) {
-	const allCarts = [];
-	const seenCheckoutIds = new Set();
+export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
+	const normalizedDaysBack = ALLOWED_WINDOWS.has(Number(daysBack))
+		? Number(daysBack)
+		: DEFAULT_DAYS_BACK;
+
+	const { storeId, accessToken } = await resolveStoreCredentials();
+
+	const now = new Date();
+	const cutoff = new Date(now);
+	cutoff.setDate(cutoff.getDate() - normalizedDaysBack);
+
+	console.log('[ABANDONED CARTS] Sync usando store:', storeId);
+	console.log('[ABANDONED CARTS] Per page:', CHECKOUTS_PER_PAGE, 'Max pages:', MAX_PAGES, 'Days back:', normalizedDaysBack);
+	console.log('[ABANDONED CARTS] Hoy:', now.toISOString());
+	console.log('[ABANDONED CARTS] Cutoff:', cutoff.toISOString());
+
+	let totalReceived = 0;
+	let syncedCount = 0;
+	let skippedOld = 0;
 	let pagesFetched = 0;
 
 	for (let page = 1; page <= MAX_PAGES; page += 1) {
 		const { carts, reachedEnd } = await fetchCheckoutPage({ storeId, accessToken, page });
 
-		if (reachedEnd) {
+		if (reachedEnd || !carts.length) {
 			break;
 		}
 
 		pagesFetched += 1;
+		totalReceived += carts.length;
 
-		if (!carts.length) break;
-
-		let newItemsInPage = 0;
+		let foundOlderInThisPage = false;
 
 		for (const cart of carts) {
-			const checkoutId = String(cart.id || '');
-			if (!checkoutId || seenCheckoutIds.has(checkoutId)) continue;
+			const checkoutDate = parseDateOrNull(cart.created_at);
 
-			seenCheckoutIds.add(checkoutId);
-
-			if (isInsideRequestedMonth(cart, monthFilter)) {
-				allCarts.push(cart);
+			if (!checkoutDate) {
+				continue;
 			}
 
-			newItemsInPage += 1;
+			if (checkoutDate < cutoff) {
+				foundOlderInThisPage = true;
+				skippedOld += 1;
+				continue;
+			}
+
+			const data = buildCartPayload(cart, storeId);
+
+			await prisma.abandonedCart.upsert({
+				where: { checkoutId: String(cart.id) },
+				update: data,
+				create: {
+					checkoutId: String(cart.id),
+					status: 'NEW',
+					...data
+				}
+			});
+
+			syncedCount += 1;
 		}
 
-		if (newItemsInPage === 0) break;
+		// Si la API viene de más nuevo a más viejo,
+		// y en esta página ya apareció uno más viejo que el corte,
+		// ya no tiene sentido seguir bajando más páginas.
+		if (foundOlderInThisPage) {
+			break;
+		}
 	}
 
-	return {
-		carts: allCarts,
-		pagesFetched
-	};
-}
-
-export async function syncAbandonedCarts() {
-	const { storeId, accessToken } = await resolveStoreCredentials();
-	const monthFilter = FULL_SYNC_MONTH.trim();
-
-	console.log('[ABANDONED CARTS] Sync usando store:', storeId);
-	console.log('[ABANDONED CARTS] Per page:', CHECKOUTS_PER_PAGE, 'Max pages:', MAX_PAGES, 'Month:', monthFilter || 'ALL');
-
-	const { carts, pagesFetched } = await fetchAllCheckouts({ storeId, accessToken, monthFilter });
-
-	for (const cart of carts) {
-		const data = buildCartPayload(cart, storeId);
-
-		await prisma.abandonedCart.upsert({
-			where: { checkoutId: String(cart.id) },
-			update: data,
-			create: {
-				checkoutId: String(cart.id),
-				...data
-			}
-		});
-	}
+	console.log('[ABANDONED CARTS] DONE', {
+		totalReceived,
+		syncedCount,
+		skippedOld,
+		pagesFetched,
+		daysBack: normalizedDaysBack,
+		now: now.toISOString(),
+		cutoff: cutoff.toISOString()
+	});
 
 	return {
 		ok: true,
-		count: carts.length,
+		count: syncedCount,
 		pagesFetched,
-		monthFilter: monthFilter || null
+		daysBack: normalizedDaysBack
 	};
 }

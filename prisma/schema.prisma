@@ -172,6 +172,7 @@ model AbandonedCart {
   products             Json?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  checkoutCreatedAt DateTime?
 
   @@index([status, updatedAt])
   @@index([contactPhone])

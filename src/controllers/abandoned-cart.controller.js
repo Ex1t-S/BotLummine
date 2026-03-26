@@ -41,7 +41,7 @@ function buildSuggestedMessage(cart) {
 	].join('\n\n');
 }
 
-function buildWhereClause({ q = '', status = 'ALL' }) {
+function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '' }) {
 	const where = {};
 
 	if (status && status !== 'ALL') {
@@ -61,38 +61,65 @@ function buildWhereClause({ q = '', status = 'ALL' }) {
 		];
 	}
 
+	if (dateFrom || dateTo) {
+		where.checkoutCreatedAt = {};
+
+		if (dateFrom) {
+			where.checkoutCreatedAt.gte = new Date(`${dateFrom}T00:00:00.000Z`);
+		}
+
+		if (dateTo) {
+			where.checkoutCreatedAt.lte = new Date(`${dateTo}T23:59:59.999Z`);
+		}
+	}
+
 	return where;
 }
 
 function mapCartForView(cart) {
-	const productsList = Array.isArray(cart.products) ? cart.products : [];
-	const productsPreview = productsList.slice(0, 2).map((p) => p?.name).filter(Boolean);
+	const rawProducts = Array.isArray(cart.products) ? cart.products : [];
+
+	const productsList = rawProducts.map((product) => ({
+		name: product?.name || product?.title || 'Producto sin nombre',
+		quantity: Number(product?.quantity || 1)
+	}));
+
+	const initials = String(cart.contactName || 'SN')
+		.trim()
+		.split(/\s+/)
+		.slice(0, 2)
+		.map((part) => part[0]?.toUpperCase() || '')
+		.join('') || 'SN';
 
 	return {
 		...cart,
-		totalLabel: formatCurrency(cart.totalAmount || cart.subtotal || 0, cart.currency),
-		createdAtLabel: formatDateTime(cart.createdAt),
-		updatedAtLabel: formatDateTime(cart.updatedAt),
-		lastMessageSentAtLabel: formatDateTime(cart.lastMessageSentAt),
+		initials,
+		statusLabel: cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo',
+		totalLabel: formatCurrency(cart.totalAmount, cart.currency || 'ARS'),
+		productsCount: productsList.reduce((acc, item) => acc + Number(item.quantity || 0), 0),
+		displayCreatedAt: formatDateTime(cart.checkoutCreatedAt || cart.createdAt),
+		displayUpdatedAt: formatDateTime(cart.updatedAt),
+		lastMessageSentLabel: cart.lastMessageSentAt ? formatDateTime(cart.lastMessageSentAt) : 'Nunca',
+		suggestedMessage: buildSuggestedMessage(cart),
 		productsList,
-		productsPreview,
-		productsCount: productsList.length,
-		suggestedMessage: buildSuggestedMessage(cart)
+		productsPreview: productsList.map((p) => p.name).slice(0, 3)
 	};
 }
 
-function buildPageUrl({ page, q, status }) {
+function buildPageUrl({ page, q, status, dateFrom, dateTo }) {
 	const params = new URLSearchParams();
 
 	if (page > 1) params.set('page', String(page));
 	if (q?.trim()) params.set('q', q.trim());
 	if (status && status !== 'ALL') params.set('status', status);
+	if (dateFrom) params.set('dateFrom', dateFrom);
+	if (dateTo) params.set('dateTo', dateTo);
 
 	const queryString = params.toString();
 	return `/dashboard/abandoned-carts${queryString ? `?${queryString}` : ''}`;
 }
 
-function buildPagination({ page, totalPages, q, status }) {
+function buildPagination({ page, totalPages, q, status, dateFrom, dateTo }) {
 	const pages = [];
 
 	if (totalPages <= 1) {
@@ -101,7 +128,9 @@ function buildPagination({ page, totalPages, q, status }) {
 			totalPages,
 			pages: [],
 			prevUrl: null,
-			nextUrl: null
+			nextUrl: null,
+			hasPrev: false,
+			hasNext: false
 		};
 	}
 
@@ -116,7 +145,7 @@ function buildPagination({ page, totalPages, q, status }) {
 	for (let current = start; current <= end; current += 1) {
 		pages.push({
 			number: current,
-			url: buildPageUrl({ page: current, q, status }),
+			url: buildPageUrl({ page: current, q, status, dateFrom, dateTo }),
 			isCurrent: current === page
 		});
 	}
@@ -125,8 +154,10 @@ function buildPagination({ page, totalPages, q, status }) {
 		page,
 		totalPages,
 		pages,
-		prevUrl: page > 1 ? buildPageUrl({ page: page - 1, q, status }) : null,
-		nextUrl: page < totalPages ? buildPageUrl({ page: page + 1, q, status }) : null
+		prevUrl: page > 1 ? buildPageUrl({ page: page - 1, q, status, dateFrom, dateTo }) : null,
+		nextUrl: page < totalPages ? buildPageUrl({ page: page + 1, q, status, dateFrom, dateTo }) : null,
+		hasPrev: page > 1,
+		hasNext: page < totalPages
 	};
 }
 
@@ -136,16 +167,21 @@ export async function renderAbandonedCarts(req, res, next) {
 
 		const page = Math.max(1, Number(req.query.page || 1) || 1);
 		const pageSize = 12;
-		const q = String(req.query.q || '');
+		const q = String(req.query.q || req.query.search || '');
 		const status = String(req.query.status || 'ALL').toUpperCase();
+		const dateFrom = String(req.query.dateFrom || '');
+		const dateTo = String(req.query.dateTo || '');
 
-		const where = buildWhereClause({ q, status });
+		const where = buildWhereClause({ q, status, dateFrom, dateTo });
 		const skip = (page - 1) * pageSize;
 
 		const [items, total, totalNew, totalContacted] = await Promise.all([
 			prisma.abandonedCart.findMany({
 				where,
-				orderBy: { updatedAt: 'desc' },
+				orderBy: [
+					{ checkoutCreatedAt: 'desc' },
+					{ updatedAt: 'desc' }
+				],
 				skip,
 				take: pageSize
 			}),
@@ -157,19 +193,26 @@ export async function renderAbandonedCarts(req, res, next) {
 		const carts = items.map(mapCartForView);
 		const totalPages = Math.max(1, Math.ceil(total / pageSize));
 		const safePage = Math.min(page, totalPages);
+
 		const pagination = buildPagination({
 			page: safePage,
 			totalPages,
 			q,
-			status
+			status,
+			dateFrom,
+			dateTo
 		});
+		const syncWindow = [7, 15, 30].includes(Number(req.query.syncWindow))
+	? Number(req.query.syncWindow)
+	: 7;
 
 		res.render('dashboard/abandoned-carts', {
 			title: 'Carritos abandonados',
 			appName: process.env.BUSINESS_NAME || 'Lummine',
 			page: 'abandoned-carts',
 			carts,
-			filters: { q, status },
+			filters: { q, status, dateFrom, dateTo },
+			syncWindow,
 			pagination: {
 				...pagination,
 				pageSize,
@@ -191,8 +234,12 @@ export async function renderAbandonedCarts(req, res, next) {
 export async function postSyncAbandonedCarts(req, res, next) {
 	try {
 		ensureAbandonedCartModel();
-		await syncAbandonedCarts();
-		return res.redirect('/dashboard/abandoned-carts');
+
+		const requestedDays = Number(req.body?.daysBack || 7);
+		const daysBack = [7, 15, 30].includes(requestedDays) ? requestedDays : 7;
+
+		await syncAbandonedCarts(daysBack);
+		return res.redirect(`/dashboard/abandoned-carts?syncWindow=${daysBack}`);
 	} catch (error) {
 		next(error);
 	}
