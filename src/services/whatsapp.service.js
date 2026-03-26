@@ -5,109 +5,118 @@ export function normalizeWhatsAppNumber(input) {
 }
 
 export async function sendWhatsAppText({ to, body }) {
-  const cleanBody = String(body || '').trim();
-  const forcedTo = normalizeWhatsAppNumber(process.env.WHATSAPP_FORCE_TO || to);
+	const cleanBody = String(body || '').trim();
+	const finalTo = normalizeWhatsAppNumber(to);
 
-  if (!forcedTo || !cleanBody) {
-    return {
-      ok: false,
-      provider: 'whatsapp-cloud-api',
-      model: null,
-      error: { message: 'Falta número o mensaje para enviar por WhatsApp.' }
-    };
-  }
+	if (!finalTo || !cleanBody) {
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta número o mensaje para enviar por WhatsApp.' }
+		};
+	}
 
-  const url = `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || 'v25.0'}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+	const url = `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || 'v25.0'}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-  const payload = {
-    messaging_product: 'whatsapp',
-    to: forcedTo,
-    type: 'text',
-    text: { body: cleanBody }
-  };
+	const payload = {
+		messaging_product: 'whatsapp',
+		to: finalTo,
+		type: 'text',
+		text: { body: cleanBody }
+	};
 
-  console.log('[WHATSAPP TEST] URL:', url);
-  console.log('[WHATSAPP TEST] TO:', forcedTo);
-  console.log('[WHATSAPP TEST] TOKEN first chars:', (process.env.WHATSAPP_ACCESS_TOKEN || '').slice(0, 20));
-  console.log('[WHATSAPP TEST] PAYLOAD:', JSON.stringify(payload, null, 2));
+	console.log('[WHATSAPP TEST] URL:', url);
+	console.log('[WHATSAPP TEST] TO:', finalTo);
+	console.log('[WHATSAPP TEST] TOKEN first chars:', (process.env.WHATSAPP_ACCESS_TOKEN || '').slice(0, 20));
+	console.log('[WHATSAPP TEST] PAYLOAD:', JSON.stringify(payload, null, 2));
 
-  try {
-    const response = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+	try {
+		const response = await axios.post(url, payload, {
+			headers: {
+				Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+				'Content-Type': 'application/json'
+			}
+		});
 
-    console.log('[WHATSAPP TEST] RESPONSE:', response.data);
+		console.log('[WHATSAPP TEST] RESPONSE:', response.data);
 
-    return {
-      ok: true,
-      provider: 'whatsapp-cloud-api',
-      model: null,
-      rawPayload: response.data
-    };
-  } catch (error) {
-    console.error('[WHATSAPP TEST] ERROR:', error.response?.data || error.message);
+		return {
+			ok: true,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			rawPayload: response.data
+		};
+	} catch (error) {
+		console.error('[WHATSAPP TEST] ERROR:', error.response?.data || error.message);
 
-    return {
-      ok: false,
-      provider: 'whatsapp-cloud-api',
-      model: null,
-      error: error.response?.data || { message: error.message }
-    };
-  }
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: error.response?.data || { message: error.message }
+		};
+	}
 }
 
 export async function sendWhatsAppTemplate({
-  to,
-  templateName,
-  languageCode = 'es_AR',
-  components = []
+	to,
+	templateName,
+	languageCode = 'es_AR',
+	components = []
 }) {
-  const forcedTo = normalizeWhatsAppNumber(process.env.WHATSAPP_FORCE_TO || to);
+	const finalTo = normalizeWhatsAppNumber(to);
 
-  const url = `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || 'v25.0'}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+	if (!finalTo || !templateName) {
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta número o nombre del template para enviar por WhatsApp.' }
+		};
+	}
 
-  const payload = {
-    messaging_product: 'whatsapp',
-    to: forcedTo,
-    type: 'template',
-    template: {
-      name: templateName,
-      language: { code: languageCode },
-      components
-    }
-  };
+	const url = `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || 'v25.0'}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-  console.log('[WHATSAPP TEMPLATE TEST] URL:', url);
-  console.log('[WHATSAPP TEMPLATE TEST] TO:', forcedTo);
-  console.log('[WHATSAPP TEMPLATE TEST] PAYLOAD:', JSON.stringify(payload, null, 2));
+	const payload = {
+		messaging_product: 'whatsapp',
+		to: finalTo,
+		type: 'template',
+		template: {
+			name: templateName,
+			language: { code: languageCode },
+			components
+		}
+	};
 
-  try {
-    const response = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+	console.log('[WHATSAPP TEMPLATE TEST] URL:', url);
+	console.log('[WHATSAPP TEMPLATE TEST] TO:', finalTo);
+	console.log('[WHATSAPP TEMPLATE TEST] PAYLOAD:', JSON.stringify(payload, null, 2));
 
-    console.log('[WHATSAPP TEMPLATE TEST] RESPONSE:', response.data);
+	try {
+		const response = await axios.post(url, payload, {
+			headers: {
+				Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+				'Content-Type': 'application/json'
+			}
+		});
 
-    return {
-      ok: true,
-      provider: 'whatsapp-cloud-api',
-      model: null,
-      rawPayload: response.data
-    };
-  } catch (error) {
-    console.error('[WHATSAPP TEMPLATE TEST] ERROR:', error.response?.data || error.message);
+		console.log('[WHATSAPP TEMPLATE TEST] RESPONSE:', response.data);
 
-    return {
-      ok: false,
-      provider: 'whatsapp-cloud-api',
-      model: null,
-      error: error.response?.data || { message: error.message }
-    };
-  }
+		return {
+			ok: true,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			rawPayload: response.data
+		};
+	} catch (error) {
+		console.error('[WHATSAPP TEMPLATE TEST] ERROR:', error.response?.data || error.message);
+
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: error.response?.data || { message: error.message }
+		};
+	}
 }
