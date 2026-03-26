@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { processInboundMessage } from '../services/chat.service.js';
 import { sendWhatsAppText } from '../services/whatsapp.service.js';
 import { getCatalogPage, syncCatalogFromTiendanube } from '../services/catalog.service.js';
+import { getQueueMeta } from '../services/inbox-routing.service.js';
 
 function formatTime(value) {
 	if (!value) return '';
@@ -55,6 +56,7 @@ function normalizePhone(value = '') {
 
 function buildContactCard(conversation) {
 	const contact = conversation.contact || {};
+	const state = conversation.state || {};
 	const lastMessage =
 		Array.isArray(conversation.messages) && conversation.messages.length
 			? conversation.messages[conversation.messages.length - 1]
@@ -62,6 +64,7 @@ function buildContactCard(conversation) {
 
 	const phone = normalizePhone(contact.phone || contact.waId || '');
 	const displayName = contact.name || phone || 'Sin nombre';
+	const queueMeta = getQueueMeta(conversation.queue);
 
 	return {
 		key: contact.waId || conversation.id,
@@ -73,19 +76,29 @@ function buildContactCard(conversation) {
 		lastMessageTime: formatTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
 		lastMessageLabel: formatDateTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
 		aiEnabled: !!conversation.aiEnabled,
+		queue: conversation.queue || 'AUTO',
+		queueLabel: queueMeta.label,
+		queueBadgeClass: queueMeta.badgeClass,
+		needsHuman: !!state.needsHuman,
+		handoffReason: state.handoffReason || '',
 		avatar: buildAvatar(displayName, phone),
 		lastSummary: conversation.lastSummary || '',
 		messages: (conversation.messages || []).map((msg) => ({
 			...msg,
 			createdAtLabel: formatDateTime(msg.createdAt)
-		}))
+		})),
+		state
 	};
 }
 
-async function fetchInboxData(selectedConversationId = null) {
+async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
+	const where = queue === 'ALL' ? {} : { queue };
+
 	const conversations = await prisma.conversation.findMany({
+		where,
 		include: {
 			contact: true,
+			state: true,
 			messages: {
 				orderBy: { createdAt: 'asc' }
 			}
@@ -108,13 +121,29 @@ async function fetchInboxData(selectedConversationId = null) {
 		selectedContact = contacts[0];
 	}
 
-	return { contacts, selectedContact };
+	const [autoCount, humanCount, paymentCount] = await Promise.all([
+		prisma.conversation.count({ where: { queue: 'AUTO' } }),
+		prisma.conversation.count({ where: { queue: 'HUMAN' } }),
+		prisma.conversation.count({ where: { queue: 'PAYMENT_REVIEW' } })
+	]);
+
+	return {
+		contacts,
+		selectedContact,
+		counts: {
+			AUTO: autoCount,
+			HUMAN: humanCount,
+			PAYMENT_REVIEW: paymentCount
+		}
+	};
 }
 
 export async function renderInbox(req, res, next) {
 	try {
-		const { contacts, selectedContact } = await fetchInboxData(
-			req.params.conversationId || null
+		const currentQueue = String(req.query.queue || 'AUTO').toUpperCase();
+		const { contacts, selectedContact, counts } = await fetchInboxData(
+			req.params.conversationId || null,
+			currentQueue
 		);
 
 		res.render('dashboard/inbox', {
@@ -122,7 +151,9 @@ export async function renderInbox(req, res, next) {
 			appName: process.env.BUSINESS_NAME || 'Lummine',
 			page: 'inbox',
 			contacts,
-			selectedContact
+			selectedContact,
+			currentQueue,
+			counts
 		});
 	} catch (error) {
 		next(error);
@@ -197,6 +228,8 @@ export async function postSimulateInbound(req, res, next) {
 			waId,
 			contactName: name || waId,
 			messageBody: body,
+			messageType: 'text',
+			attachmentMeta: null,
 			rawPayload: {
 				simulated: true,
 				source: 'dashboard'
@@ -205,6 +238,134 @@ export async function postSimulateInbound(req, res, next) {
 		});
 
 		return res.redirect('/dashboard');
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function postToggleAi(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+
+		const conversation = await prisma.conversation.findUnique({
+			where: { id: conversationId }
+		});
+
+		if (!conversation) {
+			return res.redirect('/dashboard');
+		}
+
+		await prisma.conversation.update({
+			where: { id: conversationId },
+			data: {
+				aiEnabled: !conversation.aiEnabled
+			}
+		});
+
+		return res.redirect(`/dashboard/conversations/${conversationId}?queue=${conversation.queue}`);
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function postMoveConversation(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+		const queue = String(req.body.queue || 'AUTO').toUpperCase();
+
+		const allowedQueues = ['AUTO', 'HUMAN', 'PAYMENT_REVIEW'];
+		const nextQueue = allowedQueues.includes(queue) ? queue : 'AUTO';
+
+		const conversation = await prisma.conversation.findUnique({
+			where: { id: conversationId }
+		});
+
+		if (!conversation) {
+			return res.redirect('/dashboard');
+		}
+
+		await prisma.conversation.update({
+			where: { id: conversationId },
+			data: {
+				queue: nextQueue,
+				aiEnabled: nextQueue === 'AUTO'
+			}
+		});
+
+		if (nextQueue === 'AUTO') {
+			await prisma.conversationState.updateMany({
+				where: { conversationId },
+				data: {
+					needsHuman: false,
+					handoffReason: null
+				}
+			});
+		}
+
+		return res.redirect(`/dashboard/conversations/${conversationId}?queue=${nextQueue}`);
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function postSendCampaign(req, res, next) {
+	try {
+		return res.redirect('/dashboard/campaigns');
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getConversationMessagesJson(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+
+		const conversation = await prisma.conversation.findUnique({
+			where: { id: conversationId },
+			include: {
+				contact: true,
+				state: true,
+				messages: {
+					orderBy: { createdAt: 'asc' }
+				}
+			}
+		});
+
+		if (!conversation) {
+			return res.status(404).json({ ok: false, error: 'Conversation not found' });
+		}
+
+		return res.json({
+			ok: true,
+			conversation: {
+				id: conversation.id,
+				queue: conversation.queue,
+				aiEnabled: conversation.aiEnabled,
+				lastMessageAt: conversation.lastMessageAt,
+				contact: {
+					name: conversation.contact?.name || '',
+					phone: conversation.contact?.phone || conversation.contact?.waId || ''
+				},
+				state: {
+					handoffReason: conversation.state?.handoffReason || '',
+					lastDetectedIntent: conversation.state?.lastDetectedIntent || '',
+					lastIntent: conversation.state?.lastIntent || '',
+					lastUserGoal: conversation.state?.lastUserGoal || ''
+				},
+				messages: (conversation.messages || []).map((msg) => ({
+					id: msg.id,
+					direction: msg.direction,
+					body: msg.body,
+					type: msg.type,
+					createdAt: msg.createdAt,
+					createdAtLabel: formatDateTime(msg.createdAt),
+					senderName: msg.senderName || '',
+					tokenTotal: msg.tokenTotal ?? null,
+					attachmentName: msg.attachmentName || null,
+					attachmentMimeType: msg.attachmentMimeType || null
+				}))
+			}
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -239,6 +400,7 @@ export async function postManualReply(req, res, next) {
 				direction: 'OUTBOUND',
 				senderName: process.env.BUSINESS_NAME || 'Lummine',
 				body: body.trim(),
+				type: 'text',
 				provider: 'manual',
 				model: null,
 				rawPayload: {
@@ -252,40 +414,7 @@ export async function postManualReply(req, res, next) {
 			data: { lastMessageAt: new Date() }
 		});
 
-		return res.redirect(`/dashboard/conversations/${conversationId}`);
-	} catch (error) {
-		next(error);
-	}
-}
-
-export async function postToggleAi(req, res, next) {
-	try {
-		const { conversationId } = req.params;
-
-		const conversation = await prisma.conversation.findUnique({
-			where: { id: conversationId }
-		});
-
-		if (!conversation) {
-			return res.redirect('/dashboard');
-		}
-
-		await prisma.conversation.update({
-			where: { id: conversationId },
-			data: {
-				aiEnabled: !conversation.aiEnabled
-			}
-		});
-
-		return res.redirect(`/dashboard/conversations/${conversationId}`);
-	} catch (error) {
-		next(error);
-	}
-}
-
-export async function postSendCampaign(req, res, next) {
-	try {
-		return res.redirect('/dashboard/campaigns');
+		return res.redirect(`/dashboard/conversations/${conversationId}?queue=${conversation.queue}`);
 	} catch (error) {
 		next(error);
 	}

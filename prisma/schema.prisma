@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "windows"]
 }
 
 datasource db {
@@ -29,8 +30,9 @@ model Contact {
 
 model Conversation {
   id            String             @id @default(cuid())
-  contactId     String
+  contactId     String             @unique
   status        ConversationStatus @default(OPEN)
+  queue         ConversationQueue  @default(AUTO)
   aiEnabled     Boolean            @default(true)
   lastSummary   String?
   lastMessageAt DateTime?
@@ -41,50 +43,54 @@ model Conversation {
   messages      Message[]
 
   @@index([lastMessageAt])
+  @@index([queue, aiEnabled, lastMessageAt])
 }
 
 model ConversationState {
-  id                String       @id @default(cuid())
-  conversationId    String       @unique
-  customerName      String?
-  lastIntent        String?
+  id                 String       @id @default(cuid())
+  conversationId     String       @unique
+  customerName       String?
+  lastIntent         String?
   lastDetectedIntent String?
-  lastUserGoal      String?
-  lastOrderNumber   String?
-  lastOrderId       String?
-  preferredTone     String?
-  customerMood      String?
-  urgencyLevel      String?
-  frequentSize      String?
-  paymentPreference String?
+  lastUserGoal       String?
+  lastOrderNumber    String?
+  lastOrderId        String?
+  preferredTone      String?
+  customerMood       String?
+  urgencyLevel       String?
+  frequentSize       String?
+  paymentPreference  String?
   deliveryPreference String?
   interestedProducts Json?
-  objections        Json?
-  needsHuman        Boolean      @default(false)
-  handoffReason     String?
-  interactionCount  Int          @default(0)
-  notes             String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  objections         Json?
+  needsHuman         Boolean      @default(false)
+  handoffReason      String?
+  interactionCount   Int          @default(0)
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model Message {
-  id              String           @id @default(cuid())
-  conversationId  String
-  metaMessageId   String?          @unique
-  senderName      String?
-  direction       MessageDirection
-  type            String           @default("text")
-  body            String
-  provider        String?
-  model           String?
-  tokenPrompt     Int?
-  tokenCompletion Int?
-  tokenTotal      Int?
-  rawPayload      Json?
-  createdAt       DateTime         @default(now())
-  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id                 String           @id @default(cuid())
+  conversationId     String
+  metaMessageId      String?          @unique
+  senderName         String?
+  direction          MessageDirection
+  type               String           @default("text")
+  body               String
+  provider           String?
+  model              String?
+  tokenPrompt        Int?
+  tokenCompletion    Int?
+  tokenTotal         Int?
+  attachmentUrl      String?
+  attachmentMimeType String?
+  attachmentName     String?
+  rawPayload         Json?
+  createdAt          DateTime         @default(now())
+  conversation       Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
 }
@@ -139,6 +145,38 @@ model CatalogSyncLog {
   createdAt         DateTime @default(now())
 }
 
+model AbandonedCart {
+  id                   String   @id @default(cuid())
+  storeId              String?
+  checkoutId           String   @unique
+  token                String?
+  contactName          String?
+  contactEmail         String?
+  contactPhone         String?
+  abandonedCheckoutUrl String?
+  subtotal             Decimal? @db.Decimal(10, 2)
+  totalAmount          Decimal? @db.Decimal(10, 2)
+  currency             String?
+  gateway              String?
+  shipping             String?
+  shippingPickupType   String?
+  shippingAddress      String?
+  shippingCity         String?
+  shippingProvince     String?
+  shippingZipcode      String?
+  status               String   @default("NEW")
+  contactedAt          DateTime?
+  recoveredAt          DateTime?
+  lastMessageSentAt    DateTime?
+  rawPayload           Json?
+  products             Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([contactPhone])
+}
+
 enum UserRole {
   ADMIN
   AGENT
@@ -148,6 +186,12 @@ enum ConversationStatus {
   OPEN
   PENDING
   CLOSED
+}
+
+enum ConversationQueue {
+  AUTO
+  HUMAN
+  PAYMENT_REVIEW
 }
 
 enum MessageDirection {

@@ -24,24 +24,23 @@ function isFirstContact(recentMessages = []) {
 }
 
 function formatLiveOrderContext(liveOrderContext) {
-	if (!liveOrderContext) return 'No hay datos operativos en tiempo real para este mensaje.';
+	if (!liveOrderContext) return 'No hay pedido operativo cargado.';
 
 	return [
-		`- Número de pedido: ${liveOrderContext.orderNumber}`,
-		`- ID interno: ${liveOrderContext.orderId}`,
+		`- Número: ${liveOrderContext.orderNumber}`,
 		`- Cliente: ${liveOrderContext.customerName || 'No informado'}`,
-		`- Email: ${liveOrderContext.contactEmail || 'No informado'}`,
-		`- WhatsApp/Teléfono: ${liveOrderContext.contactPhone || 'No informado'}`,
 		`- Pago: ${liveOrderContext.paymentStatus || 'No informado'}`,
 		`- Envío: ${liveOrderContext.shippingStatus || 'No informado'}`,
 		`- Estado general: ${liveOrderContext.orderStatus || 'No informado'}`,
-		`- Total: ${liveOrderContext.total || 'No informado'} ${liveOrderContext.currency || ''}`,
+		liveOrderContext.shippingCarrier
+			? `- Carrier: ${liveOrderContext.shippingCarrier}`
+			: '- Carrier: no informado',
 		liveOrderContext.trackingNumber
-			? `- Código de seguimiento: ${liveOrderContext.trackingNumber}`
-			: '- Código de seguimiento: no informado',
+			? `- Tracking: ${liveOrderContext.trackingNumber}`
+			: '- Tracking: no informado',
 		liveOrderContext.trackingUrl
-			? `- URL de seguimiento: ${liveOrderContext.trackingUrl}`
-			: '- URL de seguimiento: no informada'
+			? `- URL tracking: ${liveOrderContext.trackingUrl}`
+			: '- URL tracking: no informada'
 	].join('\n');
 }
 
@@ -49,42 +48,21 @@ function formatArrayField(value = [], fallback = 'ninguno') {
 	return Array.isArray(value) && value.length ? value.join(', ') : fallback;
 }
 
-function buildToneInstruction(conversationState = {}) {
-	const tone = conversationState.preferredTone || 'amigable_directo';
-
-	const map = {
-		amigable_directo: 'Respondé natural, clara, cercana y sin dar demasiadas vueltas.',
-		venta_calida: 'Respondé cálida, comercial y útil, guiando suavemente hacia la compra.',
-		asesoramiento_calido: 'Respondé como asesora paciente, explicando sin sonar técnica.',
-		postventa_clara: 'Respondé clara, ordenada y tranquilizadora.',
-		calmo_resolutivo: 'Respondé con empatía, calma y foco en resolver. No discutas ni minimices el problema.',
-		empatico_concreto: 'Respondé con empatía y precisión. Validá la situación y explicá el siguiente paso.',
-		cierre_comercial: 'Respondé breve, segura y orientada a cerrar la compra con CTA claro.'
-	};
-
-	return map[tone] || map.amigable_directo;
-}
-
-function buildMoodInstruction(conversationState = {}) {
-	const mood = conversationState.customerMood || 'neutral';
-
-	const map = {
-		molesta: 'La clienta parece molesta. Validá su situación y evitá sonar fría o automática.',
-		confundida: 'La clienta parece confundida. Explicá simple y con seguridad.',
-		apurada: 'La clienta parece apurada. Respondé corto, claro y accionable.',
-		lista_para_comprar: 'La clienta parece lista para comprar. Ayudá a avanzar sin fricción.',
-		neutral: 'Mantené un tono natural y útil.'
-	};
-
-	return map[mood] || map.neutral;
-}
-
-function buildUrgencyInstruction(conversationState = {}) {
-	const urgency = conversationState.urgencyLevel || 'baja';
-
-	if (urgency === 'alta') return 'Hay urgencia alta: priorizá resolver o destrabar el siguiente paso.';
-	if (urgency === 'media') return 'Hay urgencia media: respondé ágil y concreta.';
-	return 'No hace falta apurar la conversación; priorizá claridad.';
+function buildPolicyBlock(responsePolicy = {}) {
+	return [
+		`- Acción permitida: ${responsePolicy.action || 'general_help'}`,
+		`- Tono: ${responsePolicy.tone || 'amigable_directo'}`,
+		`- Máximo ideal: ${responsePolicy.maxChars || 260} caracteres`,
+		`- ¿Puede mencionar derivación humana?: ${responsePolicy.allowHandoffMention ? 'Sí' : 'No'}`,
+		'- No inventes acciones operativas.',
+		'- No prometas que una asesora va a tomar el caso salvo que la acción permitida sea handoff_human.',
+		'- Si no hay tracking, no inventes tracking.',
+		'- Si no sabés algo, respondé solo con lo que sí está confirmado.',
+		'- No repitas saludo si la conversación ya empezó.',
+		'- Respondé como continuidad natural del chat.',
+		'- No uses párrafos largos.',
+		'- No metas relleno.'
+	].join('\n');
 }
 
 export function buildPrompt({
@@ -97,41 +75,36 @@ export function buildPrompt({
 	liveOrderContext = null,
 	catalogProducts = [],
 	catalogContext = '',
-	commercialHints = []
+	commercialHints = [],
+	responsePolicy = {}
 }) {
 	const systemPrompt = process.env.SYSTEM_PROMPT || 'Respondé como asesora humana.';
 	const businessContext = process.env.BUSINESS_CONTEXT || '';
 	const agentName = process.env.BUSINESS_AGENT_NAME || 'Sofi';
 
-	const lastUserText = [...recentMessages].reverse().find((m) => m.role === 'user')?.text || '';
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
 	const facts = getRelevantStoreFacts(recentMessages);
-	const examples = getRelevantStyleExamples(recentMessages, 4);
+	const examples = getRelevantStyleExamples(recentMessages, 3);
 	const firstContact = isFirstContact(recentMessages);
-	const businessData = buildRelevantBusinessData(lastUserText);
+	const businessData = buildRelevantBusinessData(
+		[...recentMessages].reverse().find((m) => m.role === 'user')?.text || ''
+	);
 
-	const paymentBlock = businessData.intent === 'payment'
-		? `DATOS DE PAGO / TRANSFERENCIA:
-- Alias: ${businessData.paymentRules.transfer.alias}
-- CBU: ${businessData.paymentRules.transfer.cbu}
-- Titular: ${businessData.paymentRules.transfer.holder}
-- Banco: ${businessData.paymentRules.transfer.bank}
-- Instrucción extra: ${businessData.paymentRules.transfer.extraInstructions}`
-		: `DATOS DE PAGO / TRANSFERENCIA:
-- No compartir alias/CBU salvo que la clienta lo pida, pregunte por transferencia o esté lista para pagar.`;
+	const commercialHintsBlock =
+		Array.isArray(commercialHints) && commercialHints.length
+			? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n')
+			: '- Priorizá ayudar con claridad.';
 
-	const handoffBlock = conversationState.needsHuman
-		? `DERIVACIÓN:
-- Esta conversación está marcada para humano.
-- No intentes seguir resolviendo con IA.
-- Solo respondé si el sistema igualmente te pidió texto, y en ese caso decí algo breve indicando que una asesora seguirá el caso.`
-		: `DERIVACIÓN:
-- Solo sugerí derivación a humano si el caso es sensible, ambiguo o requiere excepción.`;
-
-	const catalogBlock = catalogContext || 'No se encontraron productos relevantes del catálogo local para este mensaje.';
-	const commercialHintsBlock = Array.isArray(commercialHints) && commercialHints.length
-		? commercialHints.map((hint) => `- ${hint}`).join('\n')
-		: '- Priorizá ayudar con claridad antes que vender por vender.';
+	const compactCatalog =
+		Array.isArray(catalogProducts) && catalogProducts.length
+			? catalogProducts
+					.slice(0, 4)
+					.map((item) => {
+						const price = item.price ? `$${item.price}` : 'precio no cargado';
+						return `- ${item.name} | ${price}${item.productUrl ? ` | ${item.productUrl}` : ''}`;
+					})
+					.join('\n')
+			: catalogContext || 'No se encontraron productos relevantes.';
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
@@ -140,64 +113,42 @@ export function buildPrompt({
 		businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}` : '',
 		`DATOS DEL CLIENTE:
 - Nombre: ${customerContext.name || contactName || 'Cliente'}
-- WhatsApp: ${customerContext.waId || 'No informado'}
-- Email: ${conversationState.customerEmail || 'No informado'}`,
+- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
-		`ESTADO ESTRUCTURADO:
+		`ESTADO ACTUAL:
 - Última intención: ${conversationState.lastIntent || 'general'}
-- Intención detectada fina: ${conversationState.lastDetectedIntent || 'general'}
-- Objetivo detectado: ${conversationState.lastUserGoal || 'consulta_general'}
-- Ánimo del cliente: ${conversationState.customerMood || 'neutral'}
+- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}
+- Ánimo: ${conversationState.customerMood || 'neutral'}
 - Urgencia: ${conversationState.urgencyLevel || 'baja'}
-- Tono recomendado: ${conversationState.preferredTone || 'amigable_directo'}
-- Último pedido consultado: ${conversationState.lastOrderNumber || 'ninguno'}
-- Talle frecuente detectado: ${conversationState.frequentSize || 'no detectado'}
-- Preferencia de pago: ${conversationState.paymentPreference || 'no detectada'}
-- Preferencia de entrega: ${conversationState.deliveryPreference || 'no detectada'}
+- Talle detectado: ${conversationState.frequentSize || 'no detectado'}
+- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}
+- Entrega preferida: ${conversationState.deliveryPreference || 'no detectada'}
 - Productos de interés: ${formatArrayField(conversationState.interestedProducts)}
-- Objeciones detectadas: ${formatArrayField(conversationState.objections)}
-- ¿Lista para compra?: ${conversationState.lastUserGoal === 'comprar' ? 'Sí' : 'No'}
-- ¿Derivar a humano?: ${conversationState.needsHuman ? 'Sí' : 'No'}
-- Motivo de derivación: ${conversationState.handoffReason || 'ninguno'}`,
+- ¿Necesita humano?: ${conversationState.needsHuman ? 'Sí' : 'No'}`,
+		`POLÍTICA DE RESPUESTA:
+${buildPolicyBlock(responsePolicy)}`,
 		`PEDIDO REAL / TRACKING:
 ${formatLiveOrderContext(liveOrderContext)}`,
 		`HECHOS ÚTILES:
 ${facts.map((fact) => `- ${fact}`).join('\n')}`,
-		`CATÁLOGO LOCAL RELEVANTE:
-${catalogBlock}`,
-		`PISTAS COMERCIALES:
+		`CATÁLOGO RELEVANTE:
+${compactCatalog}`,
+		`PISTAS:
 ${commercialHintsBlock}`,
 		`POLÍTICAS RESUMIDAS:
 - Envíos: ${businessData.policySummary.shipping.join(' ')}
 - Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
-		paymentBlock,
-		`LINKS FIJOS DEL NEGOCIO:
-- Home: ${businessData.links.home}
-- Contacto: ${businessData.links.contacto}
-- Política de envío: ${businessData.links.politicaEnvio}
-- Política de devolución: ${businessData.links.politicaDevolucion}`,
 		`EJEMPLOS DE ESTILO:
 ${formatExamples({ businessName, examples })}`,
-		`ESTILO Y ENFOQUE:
-- ${buildToneInstruction(conversationState)}
-- ${buildMoodInstruction(conversationState)}
-- ${buildUrgencyInstruction(conversationState)}
-- Variá levemente la forma de responder para no sonar repetitiva.
-- Si la clienta está lista para comprar, cerrá con un siguiente paso claro.`,
-		handoffBlock,
-		`REGLAS DE CATÁLOGO:
-- Si hay productos en CATÁLOGO LOCAL RELEVANTE, priorizalos por sobre conocimiento general.
-- No inventes productos que no estén ahí cuando la consulta sea específica.
-- No inventes talles, colores, variantes, promociones ni stock.
-- Si hay link real del producto, podés compartirlo.
-- Si no alcanza la info, pedí una aclaración corta.`,
-		`REGLAS FINALES:
-- Soná humana, cálida y breve.
-- ${firstContact ? `Si es el primer mensaje, presentate como ${agentName} de ${businessName}.` : 'Si no es el primer mensaje, no te vuelvas a presentar.'}
-- Si hay datos en PEDIDO REAL / TRACKING, usalos tal cual y no inventes nada.
-- Si no hay número de pedido o faltan datos operativos, pedilos.
-- Si pide transferencia o pago, ahí sí podés compartir los datos de pago.
-- Máximo ideal: 350 caracteres.`,
+		`REGLAS DE SALIDA:
+- ${firstContact ? `Si es el primer mensaje, podés presentarte como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}
+- Respondé solo al último mensaje.
+- Una sola respuesta.
+- Soná humana, clara y natural.
+- No uses formato raro ni listas largas.
+- No repitas datos ya dichos si no hace falta.
+- Si la acción es handoff_human, avisalo con calidez y sin prometer tiempos exactos.
+- Si la acción NO es handoff_human, no menciones asesora, equipo ni derivación.`,
 		`CONVERSACIÓN RECIENTE:
 ${transcript}`,
 		'Respondé ahora al último mensaje del cliente.'

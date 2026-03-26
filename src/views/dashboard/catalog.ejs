@@ -92,8 +92,16 @@
 							</div>
 
 							<div class="catalog-card__price-row">
-								<div class="catalog-card__price">
-									<%= item.price ? `$${item.price}` : 'Sin precio' %>
+								<div class="catalog-card__price-group">
+									<div class="catalog-card__price">
+										<%= item.currentPriceLabel || 'Sin precio' %>
+									</div>
+
+									<% if (item.originalPriceLabel) { %>
+										<div class="catalog-card__price-compare" style="text-decoration: line-through; opacity: .7; font-size: 13px;">
+											<%= item.originalPriceLabel %>
+										</div>
+									<% } %>
 								</div>
 
 								<% const variants = Array.isArray(item.variants) ? item.variants : []; %>
@@ -104,6 +112,22 @@
 
 							<% if (item.handle) { %>
 								<p class="catalog-card__handle">/<%= item.handle %></p>
+							<% } %>
+
+							<% if (item.colors?.length) { %>
+								<div class="catalog-card__tags">
+									<% item.colors.slice(0, 4).forEach((color) => { %>
+										<span class="catalog-card__tag"><%= color %></span>
+									<% }) %>
+								</div>
+							<% } %>
+
+							<% if (item.sizes?.length) { %>
+								<div class="catalog-card__tags">
+									<% item.sizes.slice(0, 4).forEach((size) => { %>
+										<span class="catalog-card__tag"><%= size %></span>
+									<% }) %>
+								</div>
 							<% } %>
 
 							<% if (item.tags) { %>

@@ -9,8 +9,15 @@ import {
 	postManualReply,
 	postToggleAi,
 	postSendCampaign,
-	postSyncCatalog
+	postSyncCatalog,
+	postMoveConversation,
+  getConversationMessagesJson
 } from '../controllers/dashboard.controller.js';
+import {
+	renderAbandonedCarts,
+	postSyncAbandonedCarts,
+	postSendAbandonedCartMessage
+} from '../controllers/abandoned-cart.controller.js';
 
 const router = Router();
 
@@ -19,7 +26,7 @@ router.use(requireAuth);
 router.get('/', renderInbox);
 router.get('/inbox', renderInbox);
 router.get('/conversations/:conversationId', renderInbox);
-
+router.get('/api/conversations/:conversationId/messages', getConversationMessagesJson);
 router.get('/campaigns', renderCampaigns);
 router.post('/campaigns/send', postSendCampaign);
 
@@ -31,5 +38,8 @@ router.get('/ai-lab', getAiLab);
 router.post('/simulate-inbound', postSimulateInbound);
 router.post('/conversations/:conversationId/reply', postManualReply);
 router.post('/conversations/:conversationId/toggle-ai', postToggleAi);
-
+router.post('/conversations/:conversationId/move', postMoveConversation);
+router.get('/abandoned-carts', renderAbandonedCarts);
+router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
+router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
 export default router;

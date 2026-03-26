@@ -35,6 +35,8 @@ function extractFrequentSize(text) {
 		if (match?.[1]) return match[1].toUpperCase();
 	}
 
+	if (/(110 de corpiño|110 de corpino)/.test(text)) return '110';
+
 	return null;
 }
 
@@ -59,7 +61,7 @@ function extractInterestedProducts(text) {
 		{ key: 'legging', patterns: [/legging/, /leggings/] },
 		{ key: 'corset', patterns: [/corset/] },
 		{ key: 'faja', patterns: [/faja/, /fajas/] },
-		{ key: 'corpinio', patterns: [/corpiño/, /corpinio/, /corpiños/, /corpinhos/] },
+		{ key: 'corpinio', patterns: [/corpiño/, /corpinio/, /corpiños/] },
 		{ key: 'pack', patterns: [/pack/, /combo/, /conjunto/] },
 		{ key: 'modelador', patterns: [/modelador/, /modeladora/, /moldeador/] },
 		{ key: 'bombacha', patterns: [/bombacha/, /bombachas/] },
@@ -91,16 +93,14 @@ function extractObjections(text) {
 		objections.push('pago');
 	}
 
-	if (/(calidad|material|tela|transparente|se marca)/.test(text)) {
-		objections.push('calidad');
-	}
-
 	return objections;
 }
 
 function detectMood(text, intent) {
 	if (
-		/(estoy enojad|malisimo|malísimo|pesimo|pésimo|horrible|me molesta|me enoja|un desastre|no me responden|quiero reclamar|reclamo|me llego mal|me llegó mal|me vino mal)/.test(text)
+		/(estoy enojad|malisimo|malísimo|pesimo|pésimo|horrible|me molesta|me enoja|un desastre|no me responden|quiero reclamar|reclamo|me llego mal|me vino mal)/.test(
+			text
+		)
 	) {
 		return 'molesta';
 	}
@@ -115,7 +115,9 @@ function detectMood(text, intent) {
 
 	if (
 		(intent === 'product' || intent === 'payment') &&
-		/(quiero|me interesa|lo quiero|pasame el link|pásame el link|como compro|cómo compro|me lo llevo|lo compro|quiero comprar)/.test(text)
+		/(quiero|me interesa|lo quiero|pasame el link|como compro|me lo llevo|quiero comprar|armar el pedido|armo el pedido|te quiero transferir)/.test(
+			text
+		)
 	) {
 		return 'lista_para_comprar';
 	}
@@ -125,15 +127,12 @@ function detectMood(text, intent) {
 
 function detectUrgency(text, mood) {
 	if (mood === 'molesta') return 'alta';
-
-	if (/(urgente|ya|ahora|hoy|cuanto antes|cuánto antes|lo antes posible|rapido|rápido|rapid[oa])/.test(text)) {
+	if (/(urgente|ya|ahora|hoy|cuanto antes|cuánto antes|lo antes posible|rapido|rápido)/.test(text)) {
 		return 'alta';
 	}
-
-	if (/(cuando puedas|en un rato|despues|después|para hoy|mañana|manana)/.test(text)) {
+	if (/(mañana|manana|cuando puedas|después|despues)/.test(text)) {
 		return 'media';
 	}
-
 	return 'baja';
 }
 
@@ -141,13 +140,19 @@ function detectPreferredTone({ mood, intent, isReadyToBuy }) {
 	if (mood === 'molesta') return 'calmo_resolutivo';
 	if (intent === 'complaint' || intent === 'return_exchange') return 'empatico_concreto';
 	if (intent === 'order_status') return 'postventa_clara';
-	if (intent === 'size_help') return 'asesoramiento_calido';
-	if (isReadyToBuy) return 'cierre_comercial';
-	if (intent === 'product') return 'venta_calida';
+	if (isReadyToBuy) return 'guia_comercial';
 	return 'amigable_directo';
 }
 
 function inferLastUserGoal(intent, text, isReadyToBuy) {
+	if (
+		/(armar el pedido|armo el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|te lo compro|te compro|te quiero transferir|pasame alias)/.test(
+			text
+		)
+	) {
+		return 'comprar';
+	}
+
 	if (intent === 'order_status') return 'seguir_pedido';
 	if (intent === 'payment') return 'resolver_pago';
 	if (intent === 'shipping') return 'resolver_envio';
@@ -157,11 +162,18 @@ function inferLastUserGoal(intent, text, isReadyToBuy) {
 	if (intent === 'return_exchange') return 'gestionar_cambio_devolucion';
 	if (intent === 'human_handoff') return 'hablar_con_humano';
 
-	if (/(quiero comprar|como compro|cómo compro|pasame el link|pásame el link|me interesa)/.test(text)) {
-		return 'comprar';
-	}
-
 	return 'consulta_general';
+}
+
+function assistantAskedForHumanRecently(recentMessages = []) {
+	return recentMessages
+		.filter((m) => m.role === 'assistant')
+		.slice(-3)
+		.some((m) =>
+			/(asesora|asesor|persona del equipo|atencion humana|atención humana|te paso con)/i.test(
+				String(m.text || '')
+			)
+		);
 }
 
 function wasLoopingRecentMessages(recentMessages = []) {
@@ -172,14 +184,16 @@ function wasLoopingRecentMessages(recentMessages = []) {
 
 	if (assistantMessages.length < 3) return false;
 
-	return new Set(assistantMessages).size <= 2;
+	return new Set(assistantMessages).size <= 1;
 }
 
 function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState = {}, recentMessages = [] }) {
 	const explicitHumanRequest =
-		/(quiero hablar con una persona|quiero hablar con alguien|asesor|humano|persona real|atencion humana|atención humana|operador)/.test(text);
+		/(quiero hablar con una persona|quiero hablar con alguien|quiero hablar con un humano|humano|asesor|asesora|persona real|atencion humana|atención humana|operador|agente|alguien del equipo)/.test(
+			text
+		);
 
-	if (explicitHumanRequest) {
+	if (explicitHumanRequest || intent === 'human_handoff') {
 		return {
 			needsHuman: true,
 			handoffReason: 'requested_human'
@@ -200,16 +214,36 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 		};
 	}
 
-	if (currentState?.interactionCount >= 6 && wasLoopingRecentMessages(recentMessages)) {
+	if (intent === 'order_status') {
+		const repeatedPostSaleFriction =
+			Number(currentState?.interactionCount || 0) >= 4 &&
+			/(no me aparece|no llego|no llegó|pero|seguro|revisalo|revisalo bien|estas segura|estás segura|quiero que lo vea alguien|no me sirve)/.test(
+				text
+			);
+
+		if (repeatedPostSaleFriction) {
+			return {
+				needsHuman: true,
+				handoffReason: 'postsale_operational_gap'
+			};
+		}
+	}
+
+	if (assistantAskedForHumanRecently(recentMessages)) {
+		return {
+			needsHuman: true,
+			handoffReason: currentState?.handoffReason || 'assistant_already_offered_handoff'
+		};
+	}
+
+	if (currentState?.interactionCount >= 8 && wasLoopingRecentMessages(recentMessages)) {
 		return {
 			needsHuman: true,
 			handoffReason: 'too_many_turns_without_resolution'
 		};
 	}
 
-	if (
-		/(excepcion|excepción|caso especial|se puede hacer una excepcion|se puede hacer una excepción)/.test(text)
-	) {
+	if (/(excepcion|excepción|caso especial|se puede hacer una excepcion|se puede hacer una excepción)/.test(text)) {
 		return {
 			needsHuman: true,
 			handoffReason: 'exception_request'
@@ -228,23 +262,28 @@ export function buildHandoffReply({ contactName = '', reason = '' } = {}) {
 
 	const variantsByReason = {
 		requested_human: [
-			`${prefix}perfecto. Te derivo con una asesora para que te ayude mejor 😊`,
-			`${prefix}dale, te paso con una persona del equipo para seguir mejor tu caso.`,
-			`${prefix}ya te toma una asesora así lo vemos bien con vos.`
+			`${prefix}perfecto, te paso con una asesora del equipo para seguir mejor tu consulta 😊`,
+			`${prefix}dale, ahora lo toma una asesora así seguimos con atención humana.`,
+			`${prefix}ya lo toma una persona del equipo para ayudarte mejor.`
 		],
 		sensitive_complaint: [
 			`${prefix}quiero ayudarte bien con esto, así que te derivo con una asesora para revisarlo en detalle.`,
-			`${prefix}para resolverlo mejor te paso con una persona del equipo ahora.`,
-			`${prefix}esto conviene verlo con una asesora para darte una solución más precisa.`
+			`${prefix}para resolverlo mejor te paso con una persona del equipo.`,
+			`${prefix}esto conviene verlo con una asesora para darte una respuesta más precisa.`
 		],
 		urgent_return_exchange: [
-			`${prefix}te derivo con una asesora para resolver el cambio/devolución lo antes posible.`,
-			`${prefix}esto te lo va a tomar una persona del equipo para verlo más rápido.`,
-			`${prefix}te paso con una asesora así lo resolvemos mejor y sin vueltas.`
+			`${prefix}te derivo con una asesora para resolver el cambio o devolución lo antes posible.`,
+			`${prefix}esto te lo va a tomar una persona del equipo para verlo mejor.`,
+			`${prefix}te paso con una asesora así lo resolvemos sin vueltas.`
+		],
+		postsale_operational_gap: [
+			`${prefix}para revisarlo bien te paso con una asesora del equipo.`,
+			`${prefix}esto conviene verlo con una persona del equipo para confirmártelo bien.`,
+			`${prefix}te paso con una asesora para que lo revise en detalle.`
 		],
 		too_many_turns_without_resolution: [
 			`${prefix}para no hacerte dar más vueltas, te paso con una asesora 🙌`,
-			`${prefix}así avanzamos mejor, te derivo con una persona del equipo.`,
+			`${prefix}así avanzamos mejor, ahora lo toma una persona del equipo.`,
 			`${prefix}prefiero que lo tome una asesora para resolverlo bien.`
 		],
 		exception_request: [
@@ -272,7 +311,9 @@ export function analyzeConversationTurn({
 	const text = normalizeText(messageBody);
 
 	const isReadyToBuy =
-		/(quiero comprar|como compro|cómo compro|pasame el link|pásame el link|me interesa comprar|lo quiero|me lo llevo|quiero ese)/.test(text);
+		/(quiero comprar|como compro|pasame el link|me interesa comprar|lo quiero|me lo llevo|quiero ese|armar el pedido|armo el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|te lo compro|te compro|te quiero transferir|te pago por transferencia|pasame alias)/.test(
+			text
+		);
 
 	const mood = detectMood(text, intent);
 	const urgencyLevel = detectUrgency(text, mood);
@@ -301,10 +342,7 @@ export function analyzeConversationTurn({
 		extractInterestedProducts(text)
 	);
 
-	const objections = mergeStringArrays(
-		currentState.objections,
-		extractObjections(text)
-	);
+	const objections = mergeStringArrays(currentState.objections, extractObjections(text));
 
 	return {
 		customerMood: mood,

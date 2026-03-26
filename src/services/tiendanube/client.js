@@ -1,49 +1,85 @@
+import 'dotenv/config';
 import axios from 'axios';
 import { prisma } from '../../lib/prisma.js';
 
 function buildHeaders(accessToken) {
-  return {
-    Authentication: `bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-    'User-Agent': `${process.env.TIENDANUBE_APP_NAME || 'LummineBot'} ${process.env.TIENDANUBE_APP_SUPPORT_EMAIL || 'soporte@lummine.com'}`
-  };
+	return {
+		Authentication: `bearer ${accessToken}`,
+		'Content-Type': 'application/json',
+		'User-Agent':
+			process.env.TIENDANUBE_USER_AGENT ||
+			'Lummine IA Assistant (soporte@lummine.com)'
+	};
 }
 
-export async function getTiendanubeInstallation() {
-  if (process.env.TIENDANUBE_STORE_ID && process.env.TIENDANUBE_ACCESS_TOKEN) {
-    return {
-      storeId: process.env.TIENDANUBE_STORE_ID,
-      accessToken: process.env.TIENDANUBE_ACCESS_TOKEN,
-      scope: process.env.TIENDANUBE_SCOPE || '',
-      storeName: process.env.TIENDANUBE_STORE_NAME || null,
-      storeUrl: process.env.TIENDANUBE_STORE_URL || null
-    };
-  }
+function buildBaseUrl(storeId) {
+	const apiVersion = process.env.TIENDANUBE_API_VERSION || '2025-03';
+	return `https://api.tiendanube.com/${apiVersion}/${storeId}`;
+}
 
-  const preferredStoreId = process.env.TIENDANUBE_STORE_ID || null;
+function getEnvTiendanubeConfig() {
+	const storeId = process.env.TIENDANUBE_STORE_ID || null;
+	const accessToken = process.env.TIENDANUBE_ACCESS_TOKEN || null;
 
-  if (preferredStoreId) {
-    return prisma.storeInstallation.findUnique({
-      where: { storeId: preferredStoreId }
-    });
-  }
+	if (!storeId || !accessToken) {
+		return null;
+	}
 
-  return prisma.storeInstallation.findFirst({
-    orderBy: { installedAt: 'desc' }
-  });
+	return {
+		storeId: String(storeId),
+		accessToken: String(accessToken),
+		source: 'env'
+	};
+}
+
+async function getStoredTiendanubeConfig() {
+	const installation = await prisma.storeInstallation.findFirst({
+		orderBy: { installedAt: 'desc' }
+	});
+
+	if (!installation?.storeId || !installation?.accessToken) {
+		return null;
+	}
+
+	return {
+		storeId: String(installation.storeId),
+		accessToken: String(installation.accessToken),
+		storeName: installation.storeName || null,
+		storeUrl: installation.storeUrl || null,
+		installedAt: installation.installedAt,
+		source: 'database'
+	};
+}
+
+export async function getTiendanubeConfig() {
+	const stored = await getStoredTiendanubeConfig();
+	if (stored) return stored;
+
+	const envConfig = getEnvTiendanubeConfig();
+	if (envConfig) return envConfig;
+
+	throw new Error('Faltan credenciales de Tiendanube. Configurá StoreInstallation o TIENDANUBE_STORE_ID/TIENDANUBE_ACCESS_TOKEN en el .env');
+}
+
+export function createTiendanubeClient(config = null) {
+	const resolved = config || getEnvTiendanubeConfig();
+
+	if (!resolved?.storeId || !resolved?.accessToken) {
+		throw new Error('Faltan TIENDANUBE_STORE_ID o TIENDANUBE_ACCESS_TOKEN en el .env');
+	}
+
+	return axios.create({
+		baseURL: buildBaseUrl(resolved.storeId),
+		headers: buildHeaders(resolved.accessToken),
+		timeout: 15000
+	});
 }
 
 export async function getTiendanubeClient() {
-  const installation = await getTiendanubeInstallation();
+	const installation = await getTiendanubeConfig();
 
-  if (!installation?.storeId || !installation?.accessToken) {
-    throw new Error('No hay integración activa con Tiendanube. Instalá la app o configurá TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN.');
-  }
-
-  const client = axios.create({
-    baseURL: `https://api.tiendanube.com/2025-03/${installation.storeId}`,
-    headers: buildHeaders(installation.accessToken)
-  });
-
-  return { client, installation };
+	return {
+		client: createTiendanubeClient(installation),
+		installation
+	};
 }

@@ -2,7 +2,7 @@
 	<div class="wa-contact-header">
 		<div>
 			<h3>Conversaciones</h3>
-			<div class="muted tiny"><%= Array.isArray(contacts) ? contacts.length : 0 %> contactos</div>
+			<div class="muted tiny"><%= Array.isArray(contacts) ? contacts.length : 0 %> chats</div>
 		</div>
 	</div>
 
@@ -12,13 +12,13 @@
 
 	<div class="wa-contact-list wa-scroll">
 		<% if (!contacts || !contacts.length) { %>
-			<div class="empty-list muted">Todavía no hay contactos.</div>
+			<div class="empty-list muted">No hay chats en esta bandeja.</div>
 		<% } %>
 
 		<% (contacts || []).forEach((contact) => { %>
 			<a
 				class="wa-contact-item <%= selectedContact && selectedContact.conversationId === contact.conversationId ? 'active' : '' %>"
-				href="/dashboard/conversations/<%= contact.conversationId %>"
+				href="/dashboard/conversations/<%= contact.conversationId %>?queue=<%= currentQueue %>"
 			>
 				<div class="avatar wa-contact-avatar" style="<%= contact.avatar.style %>"><%= contact.avatar.initials %></div>
 
@@ -32,7 +32,12 @@
 						<span class="wa-contact-preview"><%= contact.preview || 'Sin mensajes aún' %></span>
 					</div>
 
-					<div class="muted tiny"><%= contact.phoneDisplay || '' %></div>
+					<div class="wa-contact-meta-row">
+						<span class="badge badge-<%= contact.queueBadgeClass %>"><%= contact.queueLabel %></span>
+						<% if (contact.phoneDisplay) { %>
+							<span class="muted tiny"><%= contact.phoneDisplay %></span>
+						<% } %>
+					</div>
 				</div>
 			</a>
 		<% }) %>

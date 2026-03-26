@@ -2,7 +2,11 @@ import { prisma } from '../lib/prisma.js';
 import { runAssistantReply } from './ai/index.js';
 import { sendWhatsAppText } from './whatsapp.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
-import { detectIntent, extractOrderNumber } from '../lib/intent.js';
+import {
+	detectIntent,
+	extractOrderNumber,
+	extractStandaloneOrderNumber
+} from '../lib/intent.js';
 import {
 	analyzeConversationTurn,
 	buildHandoffReply
@@ -20,8 +24,290 @@ import {
 	buildCatalogContext,
 	pickCommercialHints
 } from './catalog-search.service.js';
+import {
+	isPaymentProofMessage,
+	buildPaymentReviewAck,
+	resolveConversationQueue
+} from './inbox-routing.service.js';
 
-export async function getOrCreateConversation({ waId, contactName }) {
+function normalizeText(value = '') {
+	return String(value || '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function summarizeText(value = '', max = 160) {
+	const text = normalizeText(value);
+	if (!text) return '';
+	if (text.length <= max) return text;
+	return `${text.slice(0, max - 1).trim()}…`;
+}
+
+function buildConversationSummary({
+	intent,
+	enrichedState,
+	lastUserMessage,
+	lastAssistantMessage,
+	liveOrderContext
+}) {
+	const parts = [];
+
+	if (enrichedState?.lastUserGoal) {
+		parts.push(`Objetivo: ${enrichedState.lastUserGoal}`);
+	}
+
+	if (enrichedState?.interestedProducts?.length) {
+		parts.push(`Interés: ${enrichedState.interestedProducts.join(', ')}`);
+	}
+
+	if (enrichedState?.frequentSize) {
+		parts.push(`Talle: ${enrichedState.frequentSize}`);
+	}
+
+	if (enrichedState?.paymentPreference) {
+		parts.push(`Pago: ${enrichedState.paymentPreference}`);
+	}
+
+	if (enrichedState?.deliveryPreference) {
+		parts.push(`Entrega: ${enrichedState.deliveryPreference}`);
+	}
+
+	if (intent === 'order_status' && liveOrderContext) {
+		parts.push(`Pedido #${liveOrderContext.orderNumber}`);
+		parts.push(`Pago ${liveOrderContext.paymentStatus}`);
+		parts.push(`Envío ${liveOrderContext.shippingStatus}`);
+		if (liveOrderContext.shippingCarrier) {
+			parts.push(`Carrier ${liveOrderContext.shippingCarrier}`);
+		}
+	}
+
+	if (enrichedState?.needsHuman) {
+		parts.push(`Derivar: ${enrichedState.handoffReason || 'sí'}`);
+	}
+
+	if (lastUserMessage) {
+		parts.push(`Último cliente: ${summarizeText(lastUserMessage, 120)}`);
+	}
+
+	if (lastAssistantMessage) {
+		parts.push(`Última respuesta: ${summarizeText(lastAssistantMessage, 120)}`);
+	}
+
+	return parts.filter(Boolean).join(' | ');
+}
+
+function buildAiFailureFallback({ intent, enrichedState, catalogProducts = [] }) {
+	const firstProduct =
+		Array.isArray(catalogProducts) && catalogProducts.length ? catalogProducts[0] : null;
+
+	if (enrichedState?.needsHuman) {
+		return 'Te paso con una asesora para seguir mejor con esto.';
+	}
+
+	if (intent === 'product') {
+		return firstProduct?.productUrl
+			? `Te paso el link para que lo veas mejor 😊 ${firstProduct.productUrl}`
+			: 'Contame cuál producto te interesa y te oriento.';
+	}
+
+	if (intent === 'payment') {
+		return 'Sí, te ayudo con el pago. Decime si querés transferencia, alias o cuotas y seguimos.';
+	}
+
+	if (intent === 'shipping') {
+		return 'Sí, hacemos envíos. Decime tu zona o ciudad y te digo cómo sería.';
+	}
+
+	if (intent === 'size_help') {
+		return 'Decime qué talle usás normalmente y te oriento.';
+	}
+
+	if (intent === 'order_status') {
+		return 'Pasame tu número de pedido y te reviso el estado por acá.';
+	}
+
+	return 'Te sigo ayudando por acá. Contame un poquito más así te respondo mejor.';
+}
+
+function buildResponsePolicy({
+	intent,
+	enrichedState,
+	aiGuidance,
+	liveOrderContext,
+	queueDecision
+}) {
+	if (queueDecision?.queue === 'HUMAN' || enrichedState?.needsHuman) {
+		return {
+			action: 'handoff_human',
+			useAI: false,
+			allowHandoffMention: true,
+			maxChars: 220,
+			tone: 'empatico_concreto'
+		};
+	}
+
+	if (intent === 'order_status') {
+		if (!liveOrderContext) {
+			return {
+				action: 'ask_order_number_or_not_found',
+				useAI: false,
+				allowHandoffMention: false,
+				maxChars: 220,
+				tone: 'postventa_clara'
+			};
+		}
+
+		if (liveOrderContext.trackingUrl || liveOrderContext.trackingNumber) {
+			return {
+				action: 'order_status_with_tracking',
+				useAI: false,
+				allowHandoffMention: false,
+				maxChars: 320,
+				tone: 'postventa_clara'
+			};
+		}
+
+		return {
+			action: 'order_status_without_tracking',
+			useAI: false,
+			allowHandoffMention: false,
+			maxChars: 320,
+			tone: 'postventa_clara'
+		};
+	}
+
+	if (intent === 'payment') {
+		return {
+			action: 'payment_guidance',
+			useAI: true,
+			allowHandoffMention: false,
+			maxChars: 260,
+			tone: 'amigable_directo'
+		};
+	}
+
+	if (intent === 'shipping') {
+		return {
+			action: 'shipping_guidance',
+			useAI: true,
+			allowHandoffMention: false,
+			maxChars: 260,
+			tone: 'amigable_directo'
+		};
+	}
+
+	if (intent === 'size_help') {
+		return {
+			action: 'size_help',
+			useAI: true,
+			allowHandoffMention: false,
+			maxChars: 260,
+			tone: 'amigable_directo'
+		};
+	}
+
+	if (intent === 'product') {
+		return {
+			action: 'product_guidance',
+			useAI: true,
+			allowHandoffMention: false,
+			maxChars: 300,
+			tone: enrichedState?.preferredTone || 'guia_comercial'
+		};
+	}
+
+	return {
+		action: 'general_help',
+		useAI: true,
+		allowHandoffMention: false,
+		maxChars: 260,
+		tone: enrichedState?.preferredTone || 'amigable_directo'
+	};
+}
+
+function responseMentionsHumanHandoff(text = '') {
+	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana|una asesora puede ayudarte enseguida|una persona del equipo)/i.test(
+		String(text || '')
+	);
+}
+
+function looksLikeInventedTracking(text = '', liveOrderContext = null) {
+	const normalized = String(text || '').toLowerCase();
+
+	if (!liveOrderContext?.trackingUrl && /seguilo aca|seguirlo aca|pod[eé]s seguirlo acá|pod[eé]s seguirlo aca|link de seguimiento/i.test(normalized)) {
+		return true;
+	}
+
+	if (!liveOrderContext?.trackingNumber && /c[oó]digo de seguimiento|seguimiento:/i.test(normalized)) {
+		return true;
+	}
+
+	return false;
+}
+
+function auditAssistantReply({
+	text,
+	responsePolicy,
+	liveOrderContext,
+	fallbackReply
+}) {
+	const cleaned = normalizeText(text);
+
+	if (!cleaned) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false
+		};
+	}
+
+	if (responsePolicy?.action?.startsWith('order_status') && looksLikeInventedTracking(cleaned, liveOrderContext)) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false
+		};
+	}
+
+	const triggerHumanHandoff = responseMentionsHumanHandoff(cleaned);
+
+	return {
+		finalText: cleaned,
+		triggerHumanHandoff
+	};
+}
+
+async function syncHumanHandoff({ conversationId, reason = 'ai_declared_handoff' }) {
+	await prisma.conversation.update({
+		where: { id: conversationId },
+		data: {
+			queue: 'HUMAN',
+			aiEnabled: false,
+			lastMessageAt: new Date()
+		}
+	});
+
+	await prisma.conversationState.upsert({
+		where: { conversationId },
+		update: {
+			needsHuman: true,
+			handoffReason: reason
+		},
+		create: {
+			conversationId,
+			needsHuman: true,
+			handoffReason: reason,
+			interactionCount: 0,
+			interestedProducts: [],
+			objections: []
+		}
+	});
+}
+
+export async function getOrCreateConversation({
+	waId,
+	contactName,
+	queue = 'AUTO',
+	aiEnabled = true
+}) {
 	const normalizedWaId = normalizeThreadPhone(waId);
 
 	const contact = await prisma.contact.upsert({
@@ -46,7 +332,8 @@ export async function getOrCreateConversation({ waId, contactName }) {
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
-				aiEnabled: true,
+				queue,
+				aiEnabled,
 				lastMessageAt: new Date(),
 				state: {
 					create: {
@@ -54,7 +341,7 @@ export async function getOrCreateConversation({ waId, contactName }) {
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: false
+						needsHuman: queue === 'HUMAN'
 					}
 				}
 			},
@@ -72,9 +359,20 @@ export async function getOrCreateConversation({ waId, contactName }) {
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: false
+						needsHuman: queue === 'HUMAN'
 					}
 				}
+			},
+			include: { contact: true, state: true }
+		});
+	}
+
+	if (conversation.queue !== queue || conversation.aiEnabled !== aiEnabled) {
+		conversation = await prisma.conversation.update({
+			where: { id: conversation.id },
+			data: {
+				queue,
+				aiEnabled
 			},
 			include: { contact: true, state: true }
 		});
@@ -83,8 +381,13 @@ export async function getOrCreateConversation({ waId, contactName }) {
 	return conversation;
 }
 
-async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = null }) {
+export async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = null }) {
 	const waResult = await sendWhatsAppText({ to: waId, body });
+
+	if (waResult?.ok === false) {
+		console.error('Error enviando WhatsApp:', waResult.error || waResult);
+		return waResult;
+	}
 
 	await prisma.message.create({
 		data: {
@@ -92,14 +395,16 @@ async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = nul
 			direction: 'OUTBOUND',
 			senderName: process.env.BUSINESS_NAME || 'Lummine',
 			body,
+			type: 'text',
 			provider: aiMeta?.provider || waResult?.provider || 'whatsapp-cloud-api',
 			model: aiMeta?.model || waResult?.model || null,
 			tokenPrompt: aiMeta?.usage?.inputTokens ?? null,
 			tokenCompletion: aiMeta?.usage?.outputTokens ?? null,
 			tokenTotal: aiMeta?.usage?.totalTokens ?? null,
+			metaMessageId: waResult?.rawPayload?.messages?.[0]?.id || null,
 			rawPayload: {
 				ai: aiMeta?.raw || null,
-				whatsapp: waResult?.rawPayload || waResult?.error || waResult || {}
+				whatsapp: waResult?.rawPayload || waResult || {}
 			}
 		}
 	});
@@ -109,20 +414,16 @@ async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = nul
 		data: { lastMessageAt: new Date() }
 	});
 
-	if (waResult?.ok === false) {
-		console.error('Error enviando WhatsApp:', waResult.error || waResult);
-	}
-
 	return waResult;
 }
 
-async function resolveIntentAction({ intent, messageBody, explicitOrderNumber }) {
+async function resolveIntentAction({ intent, messageBody, explicitOrderNumber, currentState }) {
 	if (intent === 'order_status') {
-		return handleOrderStatusIntent({ explicitOrderNumber });
+		return handleOrderStatusIntent({ explicitOrderNumber, currentState });
 	}
 
 	if (intent === 'payment') {
-		return handlePaymentIntent();
+		return handlePaymentIntent({ currentState });
 	}
 
 	if (intent === 'shipping') {
@@ -130,17 +431,18 @@ async function resolveIntentAction({ intent, messageBody, explicitOrderNumber })
 	}
 
 	if (intent === 'size_help') {
-		return handleSizeHelpIntent();
+		return handleSizeHelpIntent({ currentState });
 	}
 
 	if (intent === 'product') {
-		return handleProductRecommendationIntent({ messageBody });
+		return handleProductRecommendationIntent({ messageBody, currentState });
 	}
 
 	return {
 		handled: false,
 		forcedReply: null,
-		liveOrderContext: null
+		liveOrderContext: null,
+		aiGuidance: null
 	};
 }
 
@@ -167,11 +469,9 @@ function buildStatePayload({
 			? explicitOrderNumber || currentState.lastOrderNumber || null
 			: null,
 		lastOrderId: shouldKeepOrderContext
-			? (
-					liveOrderContext?.orderId
-						? String(liveOrderContext.orderId)
-						: currentState.lastOrderId || null
-			  )
+			? liveOrderContext?.orderId
+				? String(liveOrderContext.orderId)
+				: currentState.lastOrderId || null
 			: null,
 		preferredTone: memoryPatch.preferredTone,
 		customerMood: memoryPatch.customerMood,
@@ -191,6 +491,8 @@ export async function processInboundMessage({
 	waId,
 	contactName,
 	messageBody,
+	messageType = 'text',
+	attachmentMeta = null,
 	rawPayload,
 	metaMessageId = null
 }) {
@@ -201,13 +503,27 @@ export async function processInboundMessage({
 		contactName
 	});
 
+	if (metaMessageId) {
+		const existingMessage = await prisma.message.findUnique({
+			where: { metaMessageId }
+		});
+
+		if (existingMessage) {
+			return { conversation };
+		}
+	}
+
 	await prisma.message.create({
 		data: {
 			conversationId: conversation.id,
 			metaMessageId,
 			senderName: contactName || normalizedWaId,
 			direction: 'INBOUND',
+			type: messageType || 'text',
 			body: messageBody,
+			attachmentUrl: attachmentMeta?.attachmentUrl || null,
+			attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
+			attachmentName: attachmentMeta?.attachmentName || null,
 			rawPayload
 		}
 	});
@@ -232,25 +548,15 @@ export async function processInboundMessage({
 		return { conversation };
 	}
 
-	const isAiEnabledGlobal =
-		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true';
-
-	const shouldReply = isAiEnabledGlobal && freshConversation.aiEnabled;
-
-	if (!shouldReply) {
-		return { conversation: freshConversation };
-	}
-
 	const currentState = freshConversation.state || {};
 	const intent = detectIntent(messageBody, currentState);
-	const explicitOrderNumber = extractOrderNumber(messageBody);
+	const explicitOrderNumber =
+	extractOrderNumber(messageBody, currentState) || extractStandaloneOrderNumber(messageBody);
 
-	const recentMessages = freshConversation.messages
-		.slice(-8)
-		.map((msg) => ({
-			role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
-			text: msg.body
-		}));
+	const recentMessages = freshConversation.messages.slice(-8).map((msg) => ({
+		role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
+		text: msg.body
+	}));
 
 	const memoryPatch = analyzeConversationTurn({
 		messageBody,
@@ -259,14 +565,36 @@ export async function processInboundMessage({
 		recentMessages
 	});
 
+	if (intent === 'human_handoff') {
+		memoryPatch.needsHuman = true;
+		memoryPatch.handoffReason = 'requested_human';
+	}
+
+	const detectedPaymentProof = isPaymentProofMessage({
+		messageType,
+		body: messageBody,
+		rawPayload,
+		currentState,
+		recentMessages
+	});
+
+	const queueDecision = resolveConversationQueue({
+		currentConversation: freshConversation,
+		memoryPatch,
+		detectedPaymentProof,
+		aiDeclaredHandoff: false
+	});
+
 	const intentResult = await resolveIntentAction({
 		intent,
 		messageBody,
-		explicitOrderNumber
+		explicitOrderNumber,
+		currentState
 	});
 
 	const liveOrderContext = intentResult.liveOrderContext || null;
 	const forcedReply = intentResult.forcedReply || null;
+	const aiGuidance = intentResult.aiGuidance || null;
 
 	const nextStatePayload = buildStatePayload({
 		freshConversation,
@@ -288,10 +616,49 @@ export async function processInboundMessage({
 		}
 	});
 
+	await prisma.conversation.update({
+		where: { id: freshConversation.id },
+		data: {
+			queue: queueDecision.queue,
+			aiEnabled: queueDecision.aiEnabled,
+			lastMessageAt: new Date()
+		}
+	});
+
 	const enrichedState = {
 		...currentState,
 		...nextStatePayload
 	};
+
+	if (detectedPaymentProof) {
+		const ack = buildPaymentReviewAck();
+
+		await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			waId: freshConversation.contact.waId,
+			body: ack,
+			aiMeta: {
+				provider: 'system',
+				model: 'payment-proof-router',
+				raw: { detectedPaymentProof: true }
+			}
+		});
+
+		await prisma.conversation.update({
+			where: { id: freshConversation.id },
+			data: {
+				lastSummary: buildConversationSummary({
+					intent,
+					enrichedState,
+					lastUserMessage: messageBody,
+					lastAssistantMessage: ack,
+					liveOrderContext
+				})
+			}
+		});
+
+		return { conversation: freshConversation };
+	}
 
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
 
@@ -304,34 +671,48 @@ export async function processInboundMessage({
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
 			waId: freshConversation.contact.waId,
-			body: handoffReply
+			body: handoffReply,
+			aiMeta: {
+				provider: 'system',
+				model: 'human-handoff-router',
+				raw: { handoffReason: enrichedState.handoffReason }
+			}
+		});
+
+		await prisma.conversation.update({
+			where: { id: freshConversation.id },
+			data: {
+				lastSummary: buildConversationSummary({
+					intent,
+					enrichedState,
+					lastUserMessage: messageBody,
+					lastAssistantMessage: handoffReply,
+					liveOrderContext
+				})
+			}
 		});
 
 		return { conversation: freshConversation };
 	}
 
-	if (enrichedState.needsHuman) {
-		return { conversation: freshConversation };
-	}
+	const isAiEnabledGlobal =
+		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true';
 
-	if (forcedReply) {
-		await sendAndPersistOutbound({
-			conversationId: freshConversation.id,
-			waId: freshConversation.contact.waId,
-			body: forcedReply
-		});
+	const shouldReply =
+		isAiEnabledGlobal &&
+		queueDecision.aiEnabled &&
+		queueDecision.queue === 'AUTO';
 
+	if (!shouldReply) {
 		return { conversation: freshConversation };
 	}
 
 	const maxContext = Number(process.env.MAX_CONTEXT_MESSAGES || 12);
 
-	const fullRecentMessages = freshConversation.messages
-		.slice(-maxContext)
-		.map((msg) => ({
-			role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
-			text: msg.body
-		}));
+	const fullRecentMessages = freshConversation.messages.slice(-maxContext).map((msg) => ({
+		role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
+		text: msg.body
+	}));
 
 	let catalogProducts = [];
 	let catalogContext = '';
@@ -341,18 +722,76 @@ export async function processInboundMessage({
 		catalogProducts = await searchCatalogProducts({
 			query: messageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
-			limit: 4
+			limit: 5
 		});
 
 		catalogContext = buildCatalogContext(catalogProducts);
 		commercialHints = pickCommercialHints(catalogProducts);
+
+		if (aiGuidance?.type === 'payment') {
+			if (Array.isArray(aiGuidance.missing) && aiGuidance.missing.length) {
+				commercialHints.push(
+					`Si pregunta por pago, pedí natural solo lo que falte (${aiGuidance.missing.join(', ')}).`
+				);
+			}
+
+			if (aiGuidance.paymentDataAvailable) {
+				commercialHints.push('Si realmente quiere avanzar, podés compartir datos de pago.');
+			}
+		}
+
+		if (aiGuidance?.type === 'shipping') {
+			commercialHints.push(
+				'Si falta ubicación, pedí zona, localidad o provincia sin cortar el hilo.'
+			);
+		}
+
+		if (aiGuidance?.type === 'size_help') {
+			commercialHints.push(
+				'Si ya venían hablando de un producto, tratá la pregunta de talle como continuidad.'
+			);
+
+			if (aiGuidance.knownSize) {
+				commercialHints.push(
+					`Ya hay un talle detectado en la conversación (${aiGuidance.knownSize}).`
+				);
+			}
+		}
+
+		commercialHints.push('No repitas saludo si la conversación ya empezó.');
+		commercialHints.push('No derivas por una duda simple si ya la podés resolver.');
+		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
+		commercialHints.push('Si ayuda, ofrecé el link del producto como siguiente paso natural.');
 	} catch (catalogError) {
 		console.error('Error buscando productos en catálogo local:', catalogError);
 	}
 
-	if (intent === 'order_status' && liveOrderContext) {
+	const responsePolicy = buildResponsePolicy({
+		intent,
+		enrichedState,
+		aiGuidance,
+		liveOrderContext,
+		queueDecision
+	});
+
+	let finalReply = forcedReply || null;
+	let aiMeta = null;
+
+	if (!finalReply && !responsePolicy.useAI) {
+		if (intent === 'order_status' && liveOrderContext) {
+			finalReply = buildFixedOrderReply(liveOrderContext);
+		} else {
+			finalReply = buildAiFailureFallback({
+				intent,
+				enrichedState,
+				catalogProducts
+			});
+		}
+	}
+
+	if (!finalReply) {
 		try {
-			const aiOrderResult = await runAssistantReply({
+			const aiResult = await runAssistantReply({
 				businessName: process.env.BUSINESS_NAME || 'Lummine',
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				recentMessages: fullRecentMessages,
@@ -365,59 +804,76 @@ export async function processInboundMessage({
 				liveOrderContext,
 				catalogProducts,
 				catalogContext,
-				commercialHints
+				commercialHints,
+				responsePolicy
 			});
 
-			const finalOrderReply =
-				String(aiOrderResult?.text || '').trim() || buildFixedOrderReply(liveOrderContext);
+			const fallbackReply =
+				intent === 'order_status' && liveOrderContext
+					? buildFixedOrderReply(liveOrderContext)
+					: buildAiFailureFallback({
+							intent,
+							enrichedState,
+							catalogProducts
+						});
 
-			await sendAndPersistOutbound({
-				conversationId: freshConversation.id,
-				waId: freshConversation.contact.waId,
-				body: finalOrderReply,
-				aiMeta: aiOrderResult
+			const audited = auditAssistantReply({
+				text: aiResult?.text || '',
+				responsePolicy,
+				liveOrderContext,
+				fallbackReply
 			});
 
-			return { conversation: freshConversation };
-		} catch (orderAiError) {
-			console.error('Error redactando respuesta de pedido con IA:', orderAiError);
+			finalReply = audited.finalText;
+			aiMeta = aiResult;
 
-			await sendAndPersistOutbound({
-				conversationId: freshConversation.id,
-				waId: freshConversation.contact.waId,
-				body: buildFixedOrderReply(liveOrderContext)
-			});
+			if (audited.triggerHumanHandoff) {
+				await syncHumanHandoff({
+					conversationId: freshConversation.id,
+					reason: 'ai_declared_handoff'
+				});
+			}
+		} catch (aiError) {
+			console.error('Error en flujo de respuesta automática:', aiError);
 
-			return { conversation: freshConversation };
+			finalReply =
+				intent === 'order_status' && liveOrderContext
+					? buildFixedOrderReply(liveOrderContext)
+					: buildAiFailureFallback({
+							intent,
+							enrichedState,
+							catalogProducts
+						});
+
+			aiMeta = {
+				provider: 'fallback',
+				model: 'rule-based-fallback',
+				raw: {
+					error: aiError?.message || String(aiError)
+				}
+			};
 		}
 	}
 
-	try {
-		const aiResult = await runAssistantReply({
-			businessName: process.env.BUSINESS_NAME || 'Lummine',
-			contactName: freshConversation.contact.name || freshConversation.contact.waId,
-			recentMessages: fullRecentMessages,
-			conversationSummary: freshConversation.lastSummary || '',
-			customerContext: {
-				name: freshConversation.contact.name || freshConversation.contact.waId,
-				waId: freshConversation.contact.waId
-			},
-			conversationState: enrichedState,
-			liveOrderContext,
-			catalogProducts,
-			catalogContext,
-			commercialHints
-		});
+	await sendAndPersistOutbound({
+		conversationId: freshConversation.id,
+		waId: freshConversation.contact.waId,
+		body: finalReply,
+		aiMeta
+	});
 
-		await sendAndPersistOutbound({
-			conversationId: freshConversation.id,
-			waId: freshConversation.contact.waId,
-			body: aiResult.text,
-			aiMeta: aiResult
-		});
-	} catch (aiError) {
-		console.error('Error en flujo de respuesta automática:', aiError);
-	}
+	await prisma.conversation.update({
+		where: { id: freshConversation.id },
+		data: {
+			lastSummary: buildConversationSummary({
+				intent,
+				enrichedState,
+				lastUserMessage: messageBody,
+				lastAssistantMessage: finalReply,
+				liveOrderContext
+			})
+		}
+	});
 
 	return { conversation: freshConversation };
 }

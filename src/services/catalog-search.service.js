@@ -19,19 +19,45 @@ function parseJsonArray(value) {
 	return Array.isArray(value) ? value : [];
 }
 
-function extractVariantHints(variants = []) {
+function toNumberOrNull(value) {
+	if (value == null || value === '') return null;
+	const n = Number(value);
+	return Number.isFinite(n) ? n : null;
+}
+
+function resolveCatalogPrices(aValue, bValue) {
+	const a = toNumberOrNull(aValue);
+	const b = toNumberOrNull(bValue);
+
+	if (a != null && b != null) {
+		if (b > 0 && b < a) {
+			return { currentPrice: b, originalPrice: a };
+		}
+
+		if (a > 0 && a < b) {
+			return { currentPrice: a, originalPrice: b };
+		}
+
+		return { currentPrice: a, originalPrice: null };
+	}
+
+	if (a != null) return { currentPrice: a, originalPrice: null };
+	if (b != null) return { currentPrice: b, originalPrice: null };
+
+	return { currentPrice: null, originalPrice: null };
+}
+
+function extractVariantMeta(variants = []) {
 	const flat = parseJsonArray(variants);
 
-	const hints = flat
+	const rawValues = flat
 		.flatMap((variant) => {
 			const collected = [];
 
 			if (variant?.sku) collected.push(String(variant.sku));
-
 			if (Array.isArray(variant?.values)) {
 				collected.push(...variant.values.map((v) => String(v)));
 			}
-
 			if (variant?.option1) collected.push(String(variant.option1));
 			if (variant?.option2) collected.push(String(variant.option2));
 			if (variant?.option3) collected.push(String(variant.option3));
@@ -42,9 +68,24 @@ function extractVariantHints(variants = []) {
 
 			return collected;
 		})
-		.filter(Boolean);
+		.filter(Boolean)
+		.map((v) => String(v).trim());
 
-	return [...new Set(hints)].slice(0, 8);
+	const unique = [...new Set(rawValues)].filter(Boolean);
+
+	const colors = unique.filter((v) =>
+		/(negro|blanco|beige|avellana|marron|marrón|nude|rosa|gris|azul|verde|bordo)/i.test(v)
+	);
+
+	const sizes = unique.filter((v) =>
+		/(^xs$|^s$|^m$|^l$|^xl$|^xxl$|^xxxl$|m\/l|l\/xl|xl\/xxl|talle|110|[0-9]+)/i.test(v)
+	);
+
+	return {
+		variantHints: unique.slice(0, 12),
+		colors: colors.slice(0, 8),
+		sizes: sizes.slice(0, 8)
+	};
 }
 
 function scoreProduct(product, normalizedQuery, terms = []) {
@@ -55,14 +96,18 @@ function scoreProduct(product, normalizedQuery, terms = []) {
 	const tags = normalizeText(product.tags || '');
 	const description = normalizeText(product.description || '');
 	const handle = normalizeText(product.handle || '');
+	const variantBlob = normalizeText(
+		JSON.stringify(product.variants || []) + ' ' + JSON.stringify(product.attributes || [])
+	);
 
-	if (!normalizedQuery) return 0;
+	if (!normalizedQuery && !terms.length) return 0;
 
 	if (name.includes(normalizedQuery)) score += 14;
 	if (brand.includes(normalizedQuery)) score += 8;
 	if (tags.includes(normalizedQuery)) score += 10;
 	if (description.includes(normalizedQuery)) score += 6;
 	if (handle.includes(normalizedQuery)) score += 7;
+	if (variantBlob.includes(normalizedQuery)) score += 8;
 
 	for (const term of terms) {
 		if (name.includes(term)) score += 5;
@@ -70,6 +115,7 @@ function scoreProduct(product, normalizedQuery, terms = []) {
 		if (tags.includes(term)) score += 4;
 		if (description.includes(term)) score += 2;
 		if (handle.includes(term)) score += 3;
+		if (variantBlob.includes(term)) score += 4;
 	}
 
 	if (product.published) score += 2;
@@ -93,11 +139,13 @@ function formatPrice(value) {
 	if (value == null) return null;
 
 	try {
-		const numeric = Number(value);
-		if (!Number.isFinite(numeric)) return String(value);
-		return `$${numeric}`;
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: 'ARS',
+			maximumFractionDigits: 0
+		}).format(Number(value));
 	} catch {
-		return String(value);
+		return `$${value}`;
 	}
 }
 
@@ -122,13 +170,11 @@ export async function searchCatalogProducts({
 		where: {
 			published: true
 		},
-		orderBy: [
-			{ updatedAt: 'desc' }
-		],
-		take: 80
+		orderBy: [{ updatedAt: 'desc' }],
+		take: 100
 	});
 
-	const ranked = rawProducts
+	return rawProducts
 		.map((product) => ({
 			product,
 			score: scoreProduct(product, normalizedQuery, allTerms)
@@ -137,27 +183,32 @@ export async function searchCatalogProducts({
 		.sort((a, b) => b.score - a.score)
 		.slice(0, limit)
 		.map(({ product, score }) => {
-			const variantHints = extractVariantHints(product.variants);
+			const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
+			const variantMeta = extractVariantMeta(product.variants);
 
 			return {
 				id: product.id,
 				productId: product.productId,
 				name: product.name,
 				brand: product.brand || null,
-				price: formatPrice(product.price),
+				price: formatPrice(currentPrice),
+				priceValue: currentPrice,
+				originalPrice: formatPrice(originalPrice),
+				originalPriceValue: originalPrice,
+				hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
 				handle: product.handle || null,
 				productUrl: product.productUrl || null,
 				featuredImage: product.featuredImage || null,
 				shortDescription: buildShortDescription(product),
-				variantHints,
+				variantHints: variantMeta.variantHints,
+				colors: variantMeta.colors,
+				sizes: variantMeta.sizes,
 				tags: product.tags
 					? product.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6)
 					: [],
 				score
 			};
 		});
-
-	return ranked;
 }
 
 export function buildCatalogContext(products = []) {
@@ -170,13 +221,21 @@ export function buildCatalogContext(products = []) {
 			const lines = [
 				`${index + 1}. ${product.name}`,
 				`   - Marca: ${product.brand || 'No informada'}`,
-				`   - Precio: ${product.price || 'No informado'}`,
+				`   - Precio actual: ${product.price || 'No informado'}`,
 				`   - Link: ${product.productUrl || 'No disponible'}`,
 				`   - Resumen: ${product.shortDescription}`
 			];
 
-			if (product.tags?.length) {
-				lines.push(`   - Tags: ${product.tags.join(', ')}`);
+			if (product.originalPrice) {
+				lines.push(`   - Precio anterior: ${product.originalPrice}`);
+			}
+
+			if (product.colors?.length) {
+				lines.push(`   - Colores detectados: ${product.colors.join(', ')}`);
+			}
+
+			if (product.sizes?.length) {
+				lines.push(`   - Talles detectados: ${product.sizes.join(', ')}`);
 			}
 
 			if (product.variantHints?.length) {
@@ -200,11 +259,19 @@ export function pickCommercialHints(products = []) {
 	}
 
 	if (products.some((p) => p.price)) {
-		hints.push('Si la clienta está lista para comprar, cerrá con una invitación a ver el link o avanzar con la compra.');
+		hints.push('Si la clienta pregunta por precio, usá el precio actual del catálogo como fuente principal.');
 	}
 
-	if (products.some((p) => Array.isArray(p.variantHints) && p.variantHints.length)) {
-		hints.push('Si preguntan por talle, color o variante, usá solo las variantes detectadas y no inventes otras.');
+	if (products.some((p) => p.hasDiscount)) {
+		hints.push('Si hay diferencia entre precio actual y precio anterior, priorizá el precio actual.');
+	}
+
+	if (products.some((p) => Array.isArray(p.colors) && p.colors.length)) {
+		hints.push('Si preguntan por color, respondé con los colores detectados y no inventes otros.');
+	}
+
+	if (products.some((p) => Array.isArray(p.sizes) && p.sizes.length)) {
+		hints.push('Si preguntan por talle, respondé con los talles detectados y evitá mandar a la web si ya lo sabés.');
 	}
 
 	return hints;

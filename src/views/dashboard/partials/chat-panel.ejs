@@ -3,7 +3,7 @@
 		<div class="wa-chat-empty">
 			<div class="wa-empty-mark">L</div>
 			<h2>Centro de conversaciones</h2>
-			<p class="muted">Seleccioná un cliente para ver el historial, responder manualmente o seguir la conversación asistida.</p>
+			<p class="muted">Seleccioná un chat para ver historial, responder manualmente o moverlo de bandeja.</p>
 		</div>
 	<% } else { %>
 		<header class="wa-chat-topbar">
@@ -13,16 +13,44 @@
 				<div class="wa-chat-user-copy">
 					<h2><%= selectedContact.displayName %></h2>
 					<div class="muted"><%= selectedContact.phoneDisplay || '' %></div>
+					<div class="chat-top-meta">
+						<span class="badge badge-<%= selectedContact.queueBadgeClass %>"><%= selectedContact.queueLabel %></span>
+						<span class="badge badge-<%= selectedContact.aiEnabled ? 'success' : 'muted' %>">
+							<%= selectedContact.aiEnabled ? 'IA activa' : 'IA pausada' %>
+						</span>
+					</div>
 				</div>
 			</div>
 
-			<div class="wa-chat-actions">
-				<div class="chat-status-chip">Asistente activo</div>
-				<button class="chat-action-btn" type="button" disabled>Cliente</button>
-				<button class="chat-action-btn" type="button" disabled>Pedido</button>
-				<button class="chat-action-btn" type="button" disabled>Transferir</button>
+			<div class="wa-chat-actions wa-chat-actions-stacked">
+				<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/toggle-ai">
+					<button class="chat-action-btn" type="submit">
+						<%= selectedContact.aiEnabled ? 'Pausar IA' : 'Activar IA' %>
+					</button>
+				</form>
+
+				<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/move">
+					<input type="hidden" name="queue" value="AUTO" />
+					<button class="chat-action-btn" type="submit">Mover a Auto</button>
+				</form>
+
+				<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/move">
+					<input type="hidden" name="queue" value="HUMAN" />
+					<button class="chat-action-btn" type="submit">Mover a Humano</button>
+				</form>
+
+				<form method="POST" action="/dashboard/conversations/<%= selectedContact.conversationId %>/move">
+					<input type="hidden" name="queue" value="PAYMENT_REVIEW" />
+					<button class="chat-action-btn" type="submit">Mover a Comprobante</button>
+				</form>
 			</div>
 		</header>
+
+		<div class="chat-state-card">
+			<div><strong>Motivo:</strong> <%= selectedContact.handoffReason || 'Sin motivo especial' %></div>
+			<div><strong>Última intención:</strong> <%= selectedContact.state?.lastDetectedIntent || selectedContact.state?.lastIntent || 'general' %></div>
+			<div><strong>Objetivo:</strong> <%= selectedContact.state?.lastUserGoal || 'consulta_general' %></div>
+		</div>
 
 		<div class="wa-chat-body wa-scroll">
 			<% if (!selectedContact.messages.length) { %>
@@ -30,14 +58,26 @@
 			<% } %>
 
 			<% selectedContact.messages.forEach((msg) => { %>
-				<div class="wa-msg-row <%= msg.direction === 'OUTBOUND' ? 'out' : 'in' %>">
+				<div
+					class="wa-msg-row <%= msg.direction === 'OUTBOUND' ? 'out' : 'in' %>"
+					data-message-id="<%= msg.id %>"
+				>
 					<div class="wa-msg-bubble <%= msg.direction === 'OUTBOUND' ? 'out' : 'in' %>">
 						<div class="wa-msg-text"><%= msg.body %></div>
+
+						<% if (msg.attachmentMimeType || msg.attachmentName) { %>
+							<div class="wa-msg-attachment">
+								📎 <%= msg.attachmentName || msg.attachmentMimeType || 'Adjunto recibido' %>
+							</div>
+						<% } %>
 
 						<div class="wa-msg-meta">
 							<span><%= msg.createdAtLabel %></span>
 							<% if (msg.tokenTotal) { %>
 								<span>· <%= msg.tokenTotal %> tok</span>
+							<% } %>
+							<% if (msg.type && msg.type !== 'text') { %>
+								<span>· <%= msg.type %></span>
 							<% } %>
 						</div>
 					</div>

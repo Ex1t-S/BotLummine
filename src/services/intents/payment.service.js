@@ -1,30 +1,41 @@
-export async function handlePaymentIntent() {
-  const alias = process.env.TRANSFER_ALIAS;
-  const cbu = process.env.TRANSFER_CBU;
-  const holder = process.env.TRANSFER_HOLDER;
-  const bank = process.env.TRANSFER_BANK;
-  const extra = process.env.TRANSFER_EXTRA;
+export async function handlePaymentIntent({ currentState = {} } = {}) {
+	const alias = process.env.TRANSFER_ALIAS;
+	const cbu = process.env.TRANSFER_CBU;
+	const holder = process.env.TRANSFER_HOLDER;
+	const bank = process.env.TRANSFER_BANK;
+	const extra = process.env.TRANSFER_EXTRA;
 
-  if (!alias && !cbu) {
-    return {
-      handled: false,
-      forcedReply: null
-    };
-  }
+	const missing = [];
 
-  const lines = [
-    'Sí, claro 😊 Te paso los datos para transferencia:'
-  ];
+	if (!Array.isArray(currentState?.interestedProducts) || !currentState.interestedProducts.length) {
+		missing.push('producto');
+	}
 
-  if (alias) lines.push(`Alias: ${alias}`);
-  if (cbu) lines.push(`CBU: ${cbu}`);
-  if (holder) lines.push(`Titular: ${holder}`);
-  if (bank) lines.push(`Banco: ${bank}`);
-  if (extra) lines.push(extra);
+	if (!currentState?.frequentSize) {
+		missing.push('talle');
+	}
 
-  return {
-    handled: true,
-    forcedReply: lines.join('\n'),
-    liveOrderContext: null
-  };
+	if (!currentState?.deliveryPreference) {
+		missing.push('envío o retiro');
+	}
+
+	const paymentDataAvailable = Boolean(alias || cbu);
+
+	return {
+		handled: false,
+		forcedReply: null,
+		liveOrderContext: null,
+		aiGuidance: {
+			type: 'payment',
+			paymentDataAvailable,
+			missing,
+			transfer: {
+				alias: alias || null,
+				cbu: cbu || null,
+				holder: holder || null,
+				bank: bank || null,
+				extra: extra || null
+			}
+		}
+	};
 }
