@@ -147,6 +147,7 @@ ${formatExamples({ businessName, examples })}`,
 - Soná humana, clara y natural.
 - No uses formato raro ni listas largas.
 - No repitas datos ya dichos si no hace falta.
+- No repitas datos ya dichos cuando te pregunten por talle o color, respondé como continuidad del producto que ya se está hablando.
 - Si la acción es handoff_human, avisalo con calidez y sin prometer tiempos exactos.
 - Si la acción NO es handoff_human, no menciones asesora, equipo ni derivación.`,
 		`CONVERSACIÓN RECIENTE:

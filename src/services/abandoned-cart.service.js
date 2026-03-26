@@ -108,6 +108,26 @@ async function fetchCheckoutPage({ storeId, accessToken, page }) {
 
 	if (!response.ok) {
 		const text = await response.text();
+
+		if (response.status === 404) {
+			let payload = null;
+
+			try {
+				payload = JSON.parse(text);
+			} catch {
+				payload = null;
+			}
+
+			const description = payload?.description || '';
+
+			if (description.includes('Last page is')) {
+				return {
+					carts: [],
+					reachedEnd: true
+				};
+			}
+		}
+
 		throw new Error(`Tiendanube error ${response.status}: ${text}`);
 	}
 
@@ -117,7 +137,10 @@ async function fetchCheckoutPage({ storeId, accessToken, page }) {
 		throw new Error('La respuesta de Tiendanube no fue una lista de carritos.');
 	}
 
-	return carts;
+	return {
+		carts,
+		reachedEnd: false
+	};
 }
 
 async function fetchAllCheckouts({ storeId, accessToken, monthFilter }) {
@@ -126,7 +149,12 @@ async function fetchAllCheckouts({ storeId, accessToken, monthFilter }) {
 	let pagesFetched = 0;
 
 	for (let page = 1; page <= MAX_PAGES; page += 1) {
-		const carts = await fetchCheckoutPage({ storeId, accessToken, page });
+		const { carts, reachedEnd } = await fetchCheckoutPage({ storeId, accessToken, page });
+
+		if (reachedEnd) {
+			break;
+		}
+
 		pagesFetched += 1;
 
 		if (!carts.length) break;

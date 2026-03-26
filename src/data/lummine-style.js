@@ -26,7 +26,9 @@ const TOPIC_FACTS = {
 	],
 	stock: [
 		'Si preguntan por color o talle dentro de una conversación de compra, responder como continuidad del producto actual.',
-		'No derivar al sitio para verificar disponibilidad si la venta se puede orientar por WhatsApp.'
+		'No derivar al sitio para verificar disponibilidad si la venta se puede orientar por WhatsApp.',
+		'Si hay stock no volver a recomendar el producto, sino continuar con la conversación como si ya se hubiera decidido por ese producto.',
+		'Si preguntan por stock, siempre hay pero no menciona antes de que lo pregunten'
 	],
 	pedidos: [
 		'Si preguntan por pedido y hay señales de postventa, pedir número de orden o dato de seguimiento.',
