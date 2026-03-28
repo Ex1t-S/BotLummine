@@ -6,6 +6,8 @@ const cookieName = process.env.COOKIE_NAME || 'wa_assistant_token';
 export async function attachUser(req, _res, next) {
 	try {
 		const token = req.cookies?.[cookieName];
+		console.log('[AUTH] origin:', req.headers.origin);
+		console.log('[AUTH] cookie present:', Boolean(token));
 
 		if (!token) {
 			req.user = null;
@@ -13,14 +15,18 @@ export async function attachUser(req, _res, next) {
 		}
 
 		const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+		console.log('[AUTH] payload sub:', payload.sub);
 
 		const user = await prisma.user.findUnique({
-			where: { id: payload.sub }
+			where: { id: payload.sub },
 		});
+
+		console.log('[AUTH] user found:', Boolean(user));
 
 		req.user = user || null;
 		return next();
-	} catch {
+	} catch (error) {
+		console.log('[AUTH] attachUser error:', error.message);
 		req.user = null;
 		return next();
 	}
