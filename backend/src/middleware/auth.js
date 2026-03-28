@@ -44,12 +44,12 @@ export function issueAuthCookie(res, user) {
 		{ expiresIn: '7d' }
 	);
 
-	res.cookie(cookieName, token, {
-		httpOnly: true,
-		sameSite: 'lax',
-		secure: false,
-		maxAge: 7 * 24 * 60 * 60 * 1000
-	});
+	res.cookie(process.env.COOKIE_NAME || 'wa_assistant_token', token, {
+	httpOnly: true,
+	secure: true,
+	sameSite: 'none',
+	maxAge: 7 * 24 * 60 * 60 * 1000
+});
 }
 
 export function clearAuthCookie(res) {
