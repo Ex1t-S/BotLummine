@@ -324,7 +324,19 @@ export async function patchConversationQueue(req, res, next) {
 			});
 		}
 
-		const updated = await prisma.conversation.update({
+		const conversation = await prisma.conversation.findUnique({
+			where: { id: conversationId },
+			include: { state: true }
+		});
+
+		if (!conversation) {
+			return res.status(404).json({
+				ok: false,
+				error: 'Conversación no encontrada'
+			});
+		}
+
+		const updatedConversation = await prisma.conversation.update({
 			where: { id: conversationId },
 			data: {
 				queue: requestedQueue,
@@ -332,10 +344,34 @@ export async function patchConversationQueue(req, res, next) {
 			}
 		});
 
+		if (conversation.state) {
+			await prisma.conversationState.update({
+				where: { conversationId },
+				data: {
+					needsHuman: requestedQueue === 'AUTO' ? false : requestedQueue === 'HUMAN',
+					handoffReason:
+						requestedQueue === 'AUTO'
+							? null
+							: requestedQueue === 'HUMAN'
+								? 'manual_handoff'
+								: conversation.state.handoffReason
+				}
+			});
+		} else {
+			await prisma.conversationState.create({
+				data: {
+					conversationId,
+					needsHuman: requestedQueue === 'HUMAN',
+					handoffReason: requestedQueue === 'HUMAN' ? 'manual_handoff' : null
+				}
+			});
+		}
+
 		return res.json({
 			ok: true,
-			conversationId: updated.id,
-			queue: updated.queue
+			conversationId: updatedConversation.id,
+			queue: updatedConversation.queue,
+			aiEnabled: updatedConversation.aiEnabled
 		});
 	} catch (error) {
 		next(error);

@@ -229,7 +229,7 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 		}
 	}
 
-	if (assistantAskedForHumanRecently(recentMessages)) {
+	if (currentState?.needsHuman === true && assistantAskedForHumanRecently(recentMessages)) {
 		return {
 			needsHuman: true,
 			handoffReason: currentState?.handoffReason || 'assistant_already_offered_handoff'
@@ -251,8 +251,8 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 	}
 
 	return {
-		needsHuman: Boolean(currentState?.needsHuman),
-		handoffReason: currentState?.handoffReason || null
+		needsHuman: false,
+		handoffReason: null
 	};
 }
 
