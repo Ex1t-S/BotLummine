@@ -14,38 +14,35 @@ dotenv.config();
 
 const app = express();
 
-app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-const allowedOrigins = [
+const allowedOrigins = new Set([
 	'http://localhost:5173',
 	'http://127.0.0.1:5173',
 	process.env.FRONTEND_URL
-].filter(Boolean);
+].filter(Boolean));
 
 app.use((req, res, next) => {
 	const origin = req.headers.origin;
 
-	if (origin && allowedOrigins.includes(origin)) {
-		res.header('Access-Control-Allow-Origin', origin);
+	if (origin && allowedOrigins.has(origin)) {
+		res.setHeader('Access-Control-Allow-Origin', origin);
 	}
 
-	res.header('Vary', 'Origin');
-	res.header('Access-Control-Allow-Credentials', 'true');
-	res.header(
-		'Access-Control-Allow-Headers',
-		'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-	);
-	res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+	res.setHeader('Vary', 'Origin');
+	res.setHeader('Access-Control-Allow-Credentials', 'true');
+	res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+	res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
 
 	if (req.method === 'OPTIONS') {
-		return res.sendStatus(204);
+		return res.status(204).end();
 	}
 
 	next();
 });
+
+app.use(morgan('dev'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use(attachUser);
 
@@ -61,7 +58,6 @@ app.use('/api/webhook', webhookRoutes);
 
 app.use((err, _req, res, _next) => {
 	console.error(err);
-
 	res.status(err.status || 500).json({
 		ok: false,
 		error: err.message || 'Internal server error'
