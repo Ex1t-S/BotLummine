@@ -5,13 +5,15 @@ import {
 	getConversationMessagesJson,
 	postConversationMessage,
 	patchConversationQueue,
+	patchConversationResetContext,
+	deleteConversationHistory,
 	getCatalog,
-	postSyncCatalog
+	postSyncCatalog,
 } from '../controllers/dashboard.controller.js';
 import {
 	getAbandonedCarts,
 	postSyncAbandonedCarts,
-	postSendAbandonedCartMessage
+	postSendAbandonedCartMessage,
 } from '../controllers/abandoned-cart.controller.js';
 
 const router = Router();
@@ -22,6 +24,8 @@ router.get('/inbox', getInbox);
 router.get('/conversations/:conversationId/messages', getConversationMessagesJson);
 router.post('/conversations/:conversationId/messages', postConversationMessage);
 router.patch('/conversations/:conversationId/queue', patchConversationQueue);
+router.patch('/conversations/:conversationId/reset-context', patchConversationResetContext);
+router.delete('/conversations/:conversationId/history', deleteConversationHistory);
 
 router.get('/catalog', getCatalog);
 router.post('/catalog/sync', postSyncCatalog);

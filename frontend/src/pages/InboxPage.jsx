@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
@@ -9,8 +9,14 @@ const QUEUES = [
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
 
+function isDocumentVisible() {
+	if (typeof document === 'undefined') return true;
+	return !document.hidden;
+}
+
 export default function InboxPage() {
 	const queryClient = useQueryClient();
+	const messagesContainerRef = useRef(null);
 
 	const [queue, setQueue] = useState('AUTO');
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
@@ -25,6 +31,8 @@ export default function InboxPage() {
 			return res.data;
 		},
 		placeholderData: (previousData) => previousData,
+		refetchInterval: () => (isDocumentVisible() ? 5000 : false),
+		refetchIntervalInBackground: false,
 		...queryPresets.inbox,
 	});
 
@@ -65,6 +73,9 @@ export default function InboxPage() {
 		},
 		enabled: Boolean(selectedConversationId),
 		placeholderData: (previousData) => previousData,
+		refetchInterval: () =>
+			selectedConversationId && isDocumentVisible() ? 3000 : false,
+		refetchIntervalInBackground: false,
 		...queryPresets.conversation,
 	});
 
@@ -78,7 +89,16 @@ export default function InboxPage() {
 		);
 	}, [contacts, selectedConversationId]);
 
-	const invalidateInboxAndConversation = async (conversationId = selectedConversationId) => {
+	useEffect(() => {
+		const el = messagesContainerRef.current;
+		if (!el) return;
+
+		el.scrollTop = el.scrollHeight;
+	}, [conversation?.messages?.length, selectedConversationId]);
+
+	const invalidateInboxAndConversation = async (
+		conversationId = selectedConversationId
+	) => {
 		await queryClient.invalidateQueries({
 			queryKey: queryKeys.inbox(queue),
 		});
@@ -93,11 +113,13 @@ export default function InboxPage() {
 	const sendMessageMutation = useMutation({
 		mutationFn: async () => {
 			const body = messageText.trim();
+
 			if (!selectedConversationId || !body) return;
 
-			await api.post(`/dashboard/conversations/${selectedConversationId}/messages`, {
-				body,
-			});
+			await api.post(
+				`/dashboard/conversations/${selectedConversationId}/messages`,
+				{ body }
+			);
 		},
 		onSuccess: async () => {
 			setMessageText('');
@@ -177,7 +199,9 @@ export default function InboxPage() {
 
 	function handleSubmit(e) {
 		e.preventDefault();
+
 		if (!messageText.trim()) return;
+
 		sendMessageMutation.mutate();
 	}
 
@@ -220,7 +244,9 @@ export default function InboxPage() {
 					) : null}
 
 					{!inboxQuery.isLoading && !contacts.length ? (
-						<div className="empty-state">No hay conversaciones en esta bandeja.</div>
+						<div className="empty-state">
+							No hay conversaciones en esta bandeja.
+						</div>
 					) : null}
 
 					{contacts.map((contact) => {
@@ -240,7 +266,9 @@ export default function InboxPage() {
 									className="contact-avatar"
 									style={{
 										background:
-											contact.avatar?.style?.replace('background:', '').replace(';', '') ||
+											contact.avatar?.style
+												?.replace('background:', '')
+												.replace(';', '') ||
 											'linear-gradient(135deg,#22c55e,#16a34a)',
 									}}
 								>
@@ -360,7 +388,7 @@ export default function InboxPage() {
 							</div>
 						</div>
 
-						<div className="chat-messages">
+						<div className="chat-messages" ref={messagesContainerRef}>
 							{conversationQuery.isLoading ? (
 								<div className="empty-state">Cargando mensajes...</div>
 							) : null}
