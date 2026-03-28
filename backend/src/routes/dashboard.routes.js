@@ -4,6 +4,7 @@ import {
 	getInbox,
 	getConversationMessagesJson,
 	postConversationMessage,
+	patchConversationQueue,
 	getCatalog,
 	postSyncCatalog
 } from '../controllers/dashboard.controller.js';
@@ -20,6 +21,7 @@ router.use(requireAuth);
 router.get('/inbox', getInbox);
 router.get('/conversations/:conversationId/messages', getConversationMessagesJson);
 router.post('/conversations/:conversationId/messages', postConversationMessage);
+router.patch('/conversations/:conversationId/queue', patchConversationQueue);
 
 router.get('/catalog', getCatalog);
 router.post('/catalog/sync', postSyncCatalog);

@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api.js';
 
-const QUEUES = ['AUTO', 'HUMAN', 'PAYMENT_REVIEW'];
+const QUEUES = [
+	{ key: 'AUTO', label: 'Automático' },
+	{ key: 'HUMAN', label: 'Atención humana' },
+	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' }
+];
 
 export default function InboxPage() {
 	const [queue, setQueue] = useState('AUTO');
 	const [loadingList, setLoadingList] = useState(true);
 	const [loadingMessages, setLoadingMessages] = useState(false);
 	const [sending, setSending] = useState(false);
+	const [movingQueue, setMovingQueue] = useState(false);
 
 	const [contacts, setContacts] = useState([]);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
@@ -93,18 +98,42 @@ export default function InboxPage() {
 		}
 	}
 
+	async function handleMoveQueue(nextQueue) {
+		if (!selectedConversationId) return;
+
+		setMovingQueue(true);
+
+		try {
+			await api.patch(`/dashboard/conversations/${selectedConversationId}/queue`, {
+				queue: nextQueue
+			});
+
+			if (queue !== nextQueue) {
+				setConversation(null);
+				await loadInbox(queue);
+			} else {
+				await loadInbox(queue);
+				await loadMessages(selectedConversationId);
+			}
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setMovingQueue(false);
+		}
+	}
+
 	return (
 		<div className="inbox-shell">
 			<aside className="inbox-sidebar">
 				<div className="inbox-queues">
 					{QUEUES.map((item) => (
 						<button
-							key={item}
-							className={`queue-pill${queue === item ? ' active' : ''}`}
-							onClick={() => setQueue(item)}
+							key={item.key}
+							className={`queue-pill${queue === item.key ? ' active' : ''}`}
+							onClick={() => setQueue(item.key)}
 							type="button"
 						>
-							{item} <span>{counts[item] || 0}</span>
+							{item.label} <span>{counts[item.key] || 0}</span>
 						</button>
 					))}
 				</div>
@@ -160,9 +189,23 @@ export default function InboxPage() {
 								<p>{conversation.contact?.phone || 'Sin teléfono'}</p>
 							</div>
 
-							<div className="chat-meta">
-								<span>{conversation.queue}</span>
-								<span>{conversation.aiEnabled ? 'IA activa' : 'Humano'}</span>
+							<div className="chat-right-actions">
+								<div className="chat-meta">
+									<span>{conversation.queue}</span>
+									<span>{conversation.aiEnabled ? 'IA activa' : 'Humano'}</span>
+								</div>
+
+								<div className="chat-move-buttons">
+									<button type="button" disabled={movingQueue} onClick={() => handleMoveQueue('AUTO')}>
+										Automático
+									</button>
+									<button type="button" disabled={movingQueue} onClick={() => handleMoveQueue('HUMAN')}>
+										Atención humana
+									</button>
+									<button type="button" disabled={movingQueue} onClick={() => handleMoveQueue('PAYMENT_REVIEW')}>
+										Comprobantes
+									</button>
+								</div>
 							</div>
 						</div>
 

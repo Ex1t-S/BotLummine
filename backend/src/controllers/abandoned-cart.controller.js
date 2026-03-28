@@ -103,7 +103,9 @@ function mapCartForView(cart) {
 		lastMessageSentLabel: cart.lastMessageSentAt ? formatDateTime(cart.lastMessageSentAt) : 'Nunca',
 		suggestedMessage: buildSuggestedMessage(cart),
 		productsList,
-		productsPreview: productsList.map((p) => p.name).slice(0, 3)
+		productsPreview: productsList.map((p) => p.name).slice(0, 3),
+		canOpenCart: !!cart.abandonedCheckoutUrl,
+		canMessage: !!cart.contactPhone
 	};
 }
 
@@ -174,7 +176,8 @@ export async function postSyncAbandonedCarts(req, res, next) {
 
 		return res.json({
 			ok: true,
-			...result
+			...result,
+			note: 'La sync no borra históricos. Solo crea/actualiza los carritos dentro de la ventana pedida.'
 		});
 	} catch (error) {
 		next(error);

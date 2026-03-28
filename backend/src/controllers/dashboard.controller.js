@@ -309,3 +309,35 @@ export async function postConversationMessage(req, res, next) {
 		next(error);
 	}
 }
+
+export async function patchConversationQueue(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+		const requestedQueue = String(req.body?.queue || '').toUpperCase();
+
+		const allowedQueues = ['AUTO', 'HUMAN', 'PAYMENT_REVIEW'];
+
+		if (!allowedQueues.includes(requestedQueue)) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Bandeja inválida'
+			});
+		}
+
+		const updated = await prisma.conversation.update({
+			where: { id: conversationId },
+			data: {
+				queue: requestedQueue,
+				aiEnabled: requestedQueue === 'AUTO'
+			}
+		});
+
+		return res.json({
+			ok: true,
+			conversationId: updated.id,
+			queue: updated.queue
+		});
+	} catch (error) {
+		next(error);
+	}
+}
