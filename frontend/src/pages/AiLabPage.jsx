@@ -14,22 +14,23 @@ function JsonBlock({ value }) {
 	return <pre className="ai-lab-code-block">{formatted}</pre>;
 }
 
-function getApiError(error) {
-	return (
-		error?.response?.data?.error ||
-		error?.message ||
-		'Error desconocido'
-	);
+function getAssistantText(value) {
+	if (typeof value === 'string') return value;
+	if (value && typeof value === 'object') {
+		if (typeof value.text === 'string') return value.text;
+		if (typeof value.output_text === 'string') return value.output_text;
+		if (typeof value.message === 'string') return value.message;
+	}
+	return 'Todavía no corriste ningún turno.';
 }
 
 export default function AiLabPage() {
 	const messagesEndRef = useRef(null);
 	const [session, setSession] = useState(null);
-	const [fixtureKey, setFixtureKey] = useState('body-modelador-inicio');
+	const [fixtureKey, setFixtureKey] = useState('blank');
 	const [messageText, setMessageText] = useState('');
 	const [showPrompt, setShowPrompt] = useState(false);
-	const [showCatalog, setShowCatalog] = useState(true);
-	const [uiError, setUiError] = useState('');
+	const [showCatalog, setShowCatalog] = useState(false);
 
 	const fixturesQuery = useQuery({
 		queryKey: ['ai-lab', 'fixtures'],
@@ -38,7 +39,6 @@ export default function AiLabPage() {
 			return res.data.fixtures || [];
 		},
 		staleTime: 60 * 1000,
-		retry: false
 	});
 
 	const createSessionMutation = useMutation({
@@ -47,13 +47,8 @@ export default function AiLabPage() {
 			return res.data.session;
 		},
 		onSuccess: (nextSession) => {
-			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
-		},
-		onError: (error) => {
-			setUiError(`No se pudo crear la sesión: ${getApiError(error)}`);
-			console.error('AI Lab create session error:', error);
 		}
 	});
 
@@ -65,13 +60,8 @@ export default function AiLabPage() {
 		},
 		onSuccess: (nextSession) => {
 			if (!nextSession) return;
-			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
-		},
-		onError: (error) => {
-			setUiError(`No se pudo resetear la sesión: ${getApiError(error)}`);
-			console.error('AI Lab reset error:', error);
 		}
 	});
 
@@ -85,21 +75,13 @@ export default function AiLabPage() {
 		},
 		onSuccess: (nextSession) => {
 			if (!nextSession) return;
-			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
 		},
 		onError: (error) => {
-			setUiError(`No se pudo enviar el mensaje: ${getApiError(error)}`);
-			console.error('AI Lab send message error:', error);
+			console.error(error);
 		}
 	});
-
-	useEffect(() => {
-		if (fixturesQuery.error) {
-			setUiError(`No se pudieron cargar los fixtures: ${getApiError(fixturesQuery.error)}`);
-		}
-	}, [fixturesQuery.error]);
 
 	useEffect(() => {
 		if (!fixturesQuery.data?.length || session || createSessionMutation.isPending) {
@@ -116,14 +98,11 @@ export default function AiLabPage() {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 	}, [session?.messages?.length]);
 
-	const isBusy =
-		createSessionMutation.isPending ||
-		resetSessionMutation.isPending ||
-		sendMessageMutation.isPending;
-
+	const isBusy = createSessionMutation.isPending || resetSessionMutation.isPending || sendMessageMutation.isPending;
 	const trace = session?.lastTrace || null;
 	const commercialPlan = trace?.commercialPlan || null;
 	const fixtures = fixturesQuery.data || [];
+	const activeFixture = fixtures.find((fixture) => fixture.key === fixtureKey) || session?.fixtureMeta || null;
 
 	function handleSubmit(event) {
 		event.preventDefault();
@@ -137,33 +116,18 @@ export default function AiLabPage() {
 				<div className="ai-lab-sidebar-header">
 					<div>
 						<h1>AI Lab</h1>
-						<p>Probá la IA sin WhatsApp, con contexto, reset rápido y trazas internas.</p>
+						<p>Probá la IA sin WhatsApp. Elegís escenario, reiniciás rápido y ves por qué respondió eso.</p>
 					</div>
 				</div>
 
-				{uiError ? (
-					<div className="ai-lab-meta-box" style={{ borderColor: '#ef4444' }}>
-						<h3>Error</h3>
-						<p style={{ color: '#b91c1c', margin: 0 }}>{uiError}</p>
-					</div>
-				) : null}
-
 				<label className="ai-lab-field">
-					<span>Fixture / escenario</span>
-					<select
-						value={fixtureKey}
-						onChange={(event) => setFixtureKey(event.target.value)}
-						disabled={!fixtures.length}
-					>
-						{fixtures.length ? (
-							fixtures.map((fixture) => (
-								<option key={fixture.key} value={fixture.key}>
-									{fixture.name}
-								</option>
-							))
-						) : (
-							<option value="">No hay fixtures cargados</option>
-						)}
+					<span>Escenario</span>
+					<select value={fixtureKey} onChange={(event) => setFixtureKey(event.target.value)}>
+						{fixtures.map((fixture) => (
+							<option key={fixture.key} value={fixture.key}>
+								{fixture.name}
+							</option>
+						))}
 					</select>
 				</label>
 
@@ -172,7 +136,7 @@ export default function AiLabPage() {
 						type="button"
 						className="ai-lab-primary-btn"
 						onClick={() => createSessionMutation.mutate(fixtureKey)}
-						disabled={isBusy || !fixtures.length}
+						disabled={isBusy}
 					>
 						Nueva sesión
 					</button>
@@ -182,8 +146,17 @@ export default function AiLabPage() {
 						onClick={() => resetSessionMutation.mutate()}
 						disabled={!session?.id || isBusy}
 					>
-						Reset rápido
+						Aplicar escenario
 					</button>
+				</div>
+
+				<div className="ai-lab-meta-box compact">
+					<h3>Cómo funciona</h3>
+					<ul>
+						<li><strong>Nueva sesión</strong>: crea una conversación nueva con el escenario elegido.</li>
+						<li><strong>Aplicar escenario</strong>: reinicia la sesión actual con el escenario elegido.</li>
+						<li>El selector solo cambia el escenario preparado; no toca la charla hasta apretar un botón.</li>
+					</ul>
 				</div>
 
 				<div className="ai-lab-fixture-list">
@@ -207,8 +180,8 @@ export default function AiLabPage() {
 				<div className="ai-lab-meta-box">
 					<h3>Esperado</h3>
 					<ul>
-						{session?.fixtureMeta?.expected?.length ? (
-							session.fixtureMeta.expected.map((item) => <li key={item}>{item}</li>)
+						{activeFixture?.expected?.length ? (
+							activeFixture.expected.map((item) => <li key={item}>{item}</li>)
 						) : (
 							<li>Elegí un escenario para cargar expectativas rápidas.</li>
 						)}
@@ -228,6 +201,15 @@ export default function AiLabPage() {
 					</div>
 				</div>
 
+				<div className="ai-lab-session-banner">
+					<div>
+						<strong>Escenario cargado:</strong> {session?.fixtureMeta?.name || 'Sin escenario'}
+					</div>
+					<div>
+						<strong>Proveedor:</strong> {trace?.providerMeta?.provider || trace?.provider || 'sin correr'}{trace?.providerMeta?.model ? ` · ${trace.providerMeta.model}` : ''}
+					</div>
+				</div>
+
 				<div className="ai-lab-chat-body">
 					{session?.messages?.length ? (
 						session.messages.map((message) => (
@@ -238,12 +220,7 @@ export default function AiLabPage() {
 								<div className="ai-lab-bubble-text">{message.text}</div>
 								<div className="ai-lab-bubble-meta">
 									<span>{message.role === 'assistant' ? 'Sofi' : session?.contactName || 'Cliente'}</span>
-									<span>
-										{new Date(message.createdAt).toLocaleTimeString('es-AR', {
-											hour: '2-digit',
-											minute: '2-digit'
-										})}
-									</span>
+									<span>{new Date(message.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
 								</div>
 							</div>
 						))
@@ -272,7 +249,7 @@ export default function AiLabPage() {
 					<h2>Debug</h2>
 					<div className="ai-lab-debug-toggles">
 						<button type="button" onClick={() => setShowCatalog((value) => !value)}>
-							{showCatalog ? 'Ocultar catálogo' : 'Mostrar catálogo'}
+							{showCatalog ? 'Ocultar catálogo' : 'Ver catálogo'}
 						</button>
 						<button type="button" onClick={() => setShowPrompt((value) => !value)}>
 							{showPrompt ? 'Ocultar prompt' : 'Ver prompt'}
@@ -283,7 +260,7 @@ export default function AiLabPage() {
 				<div className="ai-lab-debug-grid">
 					<div className="ai-lab-debug-item">
 						<h3>Respuesta final</h3>
-						<p>{trace?.assistantMessage || 'Todavía no corriste ningún turno.'}</p>
+						<p>{getAssistantText(trace?.assistantMessage)}</p>
 					</div>
 					<div className="ai-lab-debug-item">
 						<h3>Acción recomendada</h3>
@@ -295,15 +272,15 @@ export default function AiLabPage() {
 					</div>
 					<div className="ai-lab-debug-item">
 						<h3>Oferta principal</h3>
-						<p>{commercialPlan?.bestOffer?.name || 'No definida'}</p>
+						<p>{commercialPlan?.bestOffer?.name || 'Todavía no conviene fijar una'}</p>
 					</div>
 					<div className="ai-lab-debug-item">
 						<h3>Precio principal</h3>
-						<p>{commercialPlan?.bestOffer?.price || 'No definido'}</p>
+						<p>{commercialPlan?.bestOffer?.price || 'Todavía no abrirlo'}</p>
 					</div>
 					<div className="ai-lab-debug-item">
 						<h3>¿Comparte link?</h3>
-						<p>{commercialPlan?.shouldShareLink ? 'Sí' : 'No'}</p>
+						<p>{commercialPlan?.shareLinkNow ? 'Sí' : 'No'}</p>
 					</div>
 				</div>
 

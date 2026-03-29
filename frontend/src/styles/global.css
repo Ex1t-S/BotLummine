@@ -1488,3 +1488,34 @@ body {
 		grid-template-columns: 1fr;
 	}
 }
+
+
+.ai-lab-session-banner {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 16px;
+	border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+	font-size: 13px;
+	color: #475569;
+	background: #f8fafc;
+}
+
+.ai-lab-meta-box.compact ul {
+	padding-left: 18px;
+	margin: 8px 0 0;
+}
+
+.ai-lab-meta-box.compact li {
+	margin-bottom: 6px;
+}
+
+.ai-lab-field span {
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 700;
+}
+
+.ai-lab-debug-item p {
+	white-space: pre-wrap;
+}

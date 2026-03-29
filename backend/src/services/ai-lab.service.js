@@ -21,6 +21,16 @@ function normalizeText(value = '') {
 		.trim();
 }
 
+function unwrapAssistantResult(result) {
+	if (typeof result === 'string') return normalizeText(result);
+	if (result && typeof result === 'object') {
+		if (typeof result.text === 'string') return normalizeText(result.text);
+		if (typeof result.output_text === 'string') return normalizeText(result.output_text);
+		if (typeof result.message === 'string') return normalizeText(result.message);
+	}
+	return '';
+}
+
 function uniqueStrings(values = []) {
 	return [...new Set((Array.isArray(values) ? values : []).filter(Boolean).map((item) => String(item).trim()))];
 }
@@ -478,6 +488,7 @@ export async function sendAiLabMessage(sessionId, { body }) {
 
 	let assistantReply = '';
 	let provider = 'ai';
+	let providerMeta = null;
 	let rawError = null;
 
 	if (responsePolicy.action === 'handoff_human') {
@@ -488,7 +499,7 @@ export async function sendAiLabMessage(sessionId, { body }) {
 		provider = 'handoff';
 	} else {
 		try {
-			assistantReply = await runAssistantReply({
+			const aiResult = await runAssistantReply({
 				businessName: session.businessName,
 				contactName: session.contactName,
 				recentMessages: messagesBeforeReply.slice(-10),
@@ -502,6 +513,12 @@ export async function sendAiLabMessage(sessionId, { body }) {
 				commercialPlan,
 				responsePolicy
 			});
+			providerMeta = aiResult && typeof aiResult === 'object' ? {
+				provider: aiResult.provider || 'ai',
+				model: aiResult.model || null,
+				usage: aiResult.usage || null
+			} : null;
+			assistantReply = unwrapAssistantResult(aiResult) || aiResult;
 		} catch (error) {
 			rawError = error;
 			provider = 'fallback';
@@ -541,6 +558,7 @@ export async function sendAiLabMessage(sessionId, { body }) {
 		conversationSummary,
 		prompt,
 		provider,
+		providerMeta,
 		error: rawError ? rawError.message : null,
 		lastUserMessage: messageBody,
 		assistantMessage: assistantMessage.text
