@@ -1,12 +1,12 @@
-import { prisma } from './lib/prisma.js';
+import { prisma } from '../lib/prisma.js';
 import { runAssistantReply } from './ai/index.js';
 import { sendWhatsAppText } from './whatsapp.service.js';
-import { normalizeThreadPhone } from './lib/conversation-threads.js';
+import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import {
 	detectIntent,
 	extractOrderNumber,
 	extractStandaloneOrderNumber
-} from './lib/intent.js';
+} from '../lib/intent.js';
 import {
 	analyzeConversationTurn,
 	buildHandoffReply
