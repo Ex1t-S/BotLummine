@@ -446,11 +446,6 @@ export async function getOrCreateConversation({
 export async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = null }) {
 	const waResult = await sendWhatsAppText({ to: waId, body });
 
-	if (waResult?.ok === false) {
-		console.error('Error enviando WhatsApp:', waResult.error || waResult);
-		return waResult;
-	}
-
 	await prisma.message.create({
 		data: {
 			conversationId,
@@ -466,7 +461,7 @@ export async function sendAndPersistOutbound({ conversationId, waId, body, aiMet
 			metaMessageId: waResult?.rawPayload?.messages?.[0]?.id || null,
 			rawPayload: {
 				ai: aiMeta?.raw || null,
-				whatsapp: waResult?.rawPayload || waResult || {}
+				whatsapp: waResult?.rawPayload || waResult?.error || waResult || {}
 			}
 		}
 	});
@@ -475,6 +470,10 @@ export async function sendAndPersistOutbound({ conversationId, waId, body, aiMet
 		where: { id: conversationId },
 		data: { lastMessageAt: new Date() }
 	});
+
+	if (waResult?.ok === false) {
+		console.error('Error enviando WhatsApp:', waResult.error || waResult);
+	}
 
 	return waResult;
 }
@@ -764,7 +763,11 @@ export async function processInboundMessage({
 		isAiEnabledGlobal &&
 		queueDecision.aiEnabled &&
 		queueDecision.queue === 'AUTO';
-
+	console.log('[AI DEBUG] isAiEnabledGlobal:', isAiEnabledGlobal);
+	console.log('[AI DEBUG] queueDecision:', queueDecision);
+	console.log('[AI DEBUG] shouldReply:', shouldReply);
+	console.log('[AI DEBUG] intent:', intent);
+	console.log('[AI DEBUG] waId:', freshConversation.contact.waId);
 	if (!shouldReply) {
 		return { conversation: freshConversation };
 	}
