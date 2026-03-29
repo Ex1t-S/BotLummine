@@ -292,14 +292,72 @@ function looksLikeInventedTracking(text = '', liveOrderContext = null) {
 	return false;
 }
 
+function escapeRegex(value = '') {
+	return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripHistoryEcho(text = '', { recentMessages = [], businessName = '', contactName = '' } = {}) {
+	let result = normalizeText(text);
+	if (!result) return '';
+
+	const assistantLabels = [businessName, process.env.BUSINESS_NAME, 'ASESORA', 'Asesora', 'Lummine']
+		.filter(Boolean)
+		.map((value) => normalizeText(value));
+	const userLabels = [contactName, 'CLIENTE', 'Cliente', 'Usuario']
+		.filter(Boolean)
+		.map((value) => normalizeText(value));
+
+	for (const msg of recentMessages.slice(-6)) {
+		const base = normalizeText(msg.text);
+		if (!base) continue;
+
+		const labels = msg.role === 'assistant' ? assistantLabels : userLabels;
+		const candidates = new Set([base]);
+
+		for (const label of labels) {
+			candidates.add(normalizeText(`${label}: ${msg.text}`));
+			candidates.add(normalizeText(`${label} ${msg.text}`));
+		}
+
+		let removed = false;
+		for (const candidate of [...candidates].sort((a, b) => b.length - a.length)) {
+			if (candidate && result.toLowerCase().startsWith(candidate.toLowerCase())) {
+				result = result.slice(candidate.length).replace(/^[\s:;,.!¡?¿\-–—|]+/, '').trim();
+				removed = true;
+				break;
+			}
+		}
+
+		if (!removed) {
+			break;
+		}
+	}
+
+	if (!result) return '';
+
+	const labelPattern = [contactName, businessName, 'CLIENTE', 'ASESORA', 'Cliente', 'Asesora', 'Lummine']
+		.filter(Boolean)
+		.map((value) => escapeRegex(normalizeText(value)))
+		.join('|');
+
+	if (labelPattern) {
+		result = result.replace(new RegExp(`^(?:${labelPattern})\\s*:\\s*`, 'i'), '').trim();
+	}
+
+	return result;
+}
+
 function auditAssistantReply({
 	text,
 	responsePolicy,
 	liveOrderContext,
 	fallbackReply,
-	commercialPlan
+	commercialPlan,
+	recentMessages = [],
+	businessName = '',
+	contactName = ''
 }) {
-	const cleaned = normalizeText(text);
+	const cleaned = stripHistoryEcho(text, { recentMessages, businessName, contactName });
 
 	if (!cleaned) {
 		return {
@@ -906,7 +964,10 @@ export async function processInboundMessage({
 				responsePolicy,
 				liveOrderContext,
 				fallbackReply,
-				commercialPlan
+				commercialPlan,
+				recentMessages: fullRecentMessages,
+				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				contactName: freshConversation.contact.name || freshConversation.contact.waId
 			});
 
 			finalReply = audited.finalText;

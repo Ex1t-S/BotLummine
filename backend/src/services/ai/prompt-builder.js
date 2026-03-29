@@ -1,11 +1,18 @@
 import { getRelevantStoreFacts } from '../../data/lummine-style.js';
 import { buildRelevantBusinessData } from '../../data/lummine-business.js';
 
-function formatTranscript({ businessName, contactName, recentMessages }) {
+function formatTranscript(recentMessages = []) {
 	return recentMessages
-		.slice(-10)
-		.map((item) => `${item.role === 'assistant' ? businessName : contactName}: ${item.text}`)
+		.slice(-8)
+		.map((item, index) => {
+			const speaker = item.role === 'assistant' ? 'ASESORA' : 'CLIENTE';
+			return `${index + 1}. ${speaker}: ${item.text}`;
+		})
 		.join('\n');
+}
+
+function getLastUserMessage(recentMessages = []) {
+	return [...recentMessages].reverse().find((msg) => msg.role === 'user')?.text || '';
 }
 
 function isFirstContact(recentMessages = []) {
@@ -90,7 +97,9 @@ export function buildPrompt({
 	const businessContext = process.env.BUSINESS_CONTEXT || '';
 	const agentName = process.env.BUSINESS_AGENT_NAME || 'Sofi';
 
-	const transcript = formatTranscript({ businessName, contactName, recentMessages });
+	const lastUserMessage = getLastUserMessage(recentMessages);
+	const priorContextMessages = lastUserMessage ? recentMessages.slice(0, -1) : recentMessages;
+	const transcript = formatTranscript(priorContextMessages);
 	const facts = getRelevantStoreFacts(recentMessages);
 	const firstContact = isFirstContact(recentMessages);
 	const businessData = buildRelevantBusinessData(
@@ -163,10 +172,13 @@ ${commercialHintsBlock}`,
 - Si preguntan por talle o color, respondé como continuidad del producto foco.
 - Si la acción es handoff_human, avisalo con calidez y sin prometer tiempos exactos.
 - Si la acción NO es handoff_human, no menciones equipo, asesora ni derivación.
+- Nunca copies, reescribas ni resumas textual el historial del chat.
+- No uses prefijos como CLIENTE:, ASESORA:, ${contactName}: o ${businessName}: en la respuesta.
+- Entregá únicamente el mensaje final que enviarías por WhatsApp.
 - Si hay una oferta principal clara, priorizala antes que listar otras.`,
-		`CONVERSACIÓN RECIENTE:
-${transcript}`,
-		'Respondé ahora al último mensaje del cliente.'
+		transcript ? `HISTORIAL DE CONTEXTO (solo para entender, no copiar):\n${transcript}` : '',
+		`ÚLTIMO MENSAJE DEL CLIENTE:\n${lastUserMessage || 'No informado.'}`,
+		'Respondé ahora solo con la respuesta final para el cliente.'
 	]
 		.filter(Boolean)
 		.join('\n\n');
