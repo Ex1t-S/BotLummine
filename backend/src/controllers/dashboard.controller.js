@@ -71,12 +71,13 @@ function buildResetStateData() {
 		frequentSize: null,
 		paymentPreference: null,
 		deliveryPreference: null,
-		interestedProducts: null,
-		objections: null,
+		interestedProducts: [],
+		objections: [],
 		needsHuman: false,
 		handoffReason: null,
 		interactionCount: 0,
 		notes: null,
+
 		currentProductFocus: null,
 		salesStage: null,
 		shownOffers: [],
@@ -89,7 +90,6 @@ function buildResetStateData() {
 		commercialSummary: null
 	};
 }
-
 async function getLatestMessagesByConversationIds(conversationIds) {
 	if (!conversationIds.length) {
 		return new Map();
@@ -538,6 +538,7 @@ export async function patchConversationResetContext(req, res, next) {
 			where: { id: conversationId },
 			data: {
 				lastSummary: null,
+				commercialSummary: null,
 			},
 		});
 
@@ -565,6 +566,7 @@ export async function patchConversationResetContext(req, res, next) {
 	}
 }
 
+
 export async function deleteConversationHistory(req, res, next) {
 	try {
 		const { conversationId } = req.params;
@@ -586,6 +588,7 @@ export async function deleteConversationHistory(req, res, next) {
 				where: { id: conversationId },
 				data: {
 					lastSummary: null,
+					commercialSummary: null,
 					lastMessageAt: null,
 				},
 			}),
