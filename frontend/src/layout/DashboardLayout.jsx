@@ -51,6 +51,10 @@ export default function DashboardLayout() {
 					<NavLink to="/abandoned-carts" className={navClass}>
 						Carritos
 					</NavLink>
+
+					<NavLink to="/ai-lab" className={navClass}>
+						AI Lab
+					</NavLink>
 				</nav>
 
 				<button className="logout-btn" onClick={handleLogout} type="button">

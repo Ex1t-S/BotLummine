@@ -5,6 +5,7 @@ import InboxPage from './pages/InboxPage.jsx';
 import CatalogPage from './pages/CatalogPage.jsx';
 import CampaignsPage from './pages/CampaignsPage.jsx';
 import AbandonedCartsPage from './pages/AbandonedCartsPage.jsx';
+import AiLabPage from './pages/AiLabPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
 				<Route path="catalog" element={<CatalogPage />} />
 				<Route path="campaigns" element={<CampaignsPage />} />
 				<Route path="abandoned-carts" element={<AbandonedCartsPage />} />
+				<Route path="ai-lab" element={<AiLabPage />} />
 			</Route>
 		</Routes>
 	);
