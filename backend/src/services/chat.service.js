@@ -120,44 +120,52 @@ function buildAiFailureFallback({
 	}
 
 	if (intent === 'product') {
-		if (commercialPlan?.recommendedAction === 'present_single_best_offer' && commercialPlan?.bestOffer) {
-			return `${commercialPlan.bestOffer.name}${commercialPlan.bestOffer.price ? ` por ${commercialPlan.bestOffer.price}` : ''}.`;
+		if (commercialPlan?.recommendedAction === 'present_offer_options_brief' && commercialPlan?.offerOptions?.length) {
+			const brief = commercialPlan.offerOptions
+				.slice(0, 3)
+				.map((option) => `${option.label}${option.price ? ` (${option.price})` : ''}`)
+				.join(', ');
+			return `En este producto solemos tener ${brief}. Si querés, te digo cuál te conviene más.`;
+		}
+
+		if (commercialPlan?.recommendedAction === 'guide_and_discover') {
+			return 'Tenemos opción individual y también promos. Si querés, te cuento rápido las más elegidas o te paso la web para que las veas.';
 		}
 
 		if (commercialPlan?.recommendedAction === 'present_price_once' && commercialPlan?.bestOffer) {
 			return `${commercialPlan.bestOffer.name} está ${commercialPlan.bestOffer.price}.`;
 		}
 
-		if (commercialPlan?.recommendedAction === 'confirm_variant_and_continue' && commercialPlan?.bestOffer) {
-			return `Sí, lo trabajamos en esa opción. Si querés seguimos con ${commercialPlan.bestOffer.name}.`;
+		if (commercialPlan?.recommendedAction === 'close_with_single_link' && commercialPlan?.bestOffer?.productUrl) {
+			return `Te paso el link de esa opción: ${commercialPlan.bestOffer.productUrl}`;
 		}
 
-		if (commercialPlan?.recommendedAction === 'close_with_single_link' && commercialPlan?.bestOffer?.productUrl) {
-			return `Sí, te paso el link directo: ${commercialPlan.bestOffer.productUrl}`;
+		if (commercialPlan?.recommendedAction === 'invite_to_catalog_and_offer_help') {
+			return 'Podés mirar las opciones en la web y si querés te ayudo a elegir la que más te convenga.';
 		}
 
 		return firstProduct?.productUrl
-			? `Te paso el link del producto: ${firstProduct.productUrl}`
-			: 'Contame cuál producto te interesa y te oriento.';
+			? `Si querés, te paso la web y te ayudo a elegir la opción más conveniente.`
+			: 'Contame qué producto buscás y te oriento.';
 	}
 
 	if (intent === 'payment') {
-		return 'Sí, aceptamos ese medio de pago. Si querés te indico cómo seguir.';
+		return 'Aceptamos transferencia y tarjetas. Si querés, te digo cómo seguir con esa opción.';
 	}
 
 	if (intent === 'shipping') {
-		return 'Sí, hacemos envíos. Decime tu zona o ciudad y te digo cómo sería.';
+		return 'Hacemos envíos. Decime tu zona o ciudad y te cuento cómo sería en tu caso.';
 	}
 
 	if (intent === 'size_help') {
-		return 'Decime qué talle usás normalmente y te oriento.';
+		return 'Decime qué talle usás normalmente y te oriento con eso.';
 	}
 
 	if (intent === 'order_status') {
 		return 'Pasame tu número de pedido y te reviso el estado por acá.';
 	}
 
-	return 'Te sigo ayudando por acá. Contame un poquito más así te respondo mejor.';
+	return 'Contame un poco más y te ayudo por acá.';
 }
 
 function buildResponsePolicy({
@@ -250,9 +258,11 @@ function buildResponsePolicy({
 			maxChars:
 				commercialPlan?.recommendedAction === 'close_with_single_link'
 					? 200
-					: commercialPlan?.recommendedAction === 'present_single_best_offer'
-						? 180
-						: 220,
+					: commercialPlan?.recommendedAction === 'present_offer_options_brief'
+						? 240
+						: commercialPlan?.recommendedAction === 'guide_and_discover' || commercialPlan?.recommendedAction === 'invite_to_catalog_and_offer_help'
+							? 230
+							: 220,
 			tone:
 				commercialPlan?.mood === 'angry'
 					? 'empatico_concreto'
@@ -270,34 +280,45 @@ function buildResponsePolicy({
 }
 
 
-function stripLeadingSalesFiller(text = '') {
-	let result = String(text || '').trim();
-	const patterns = [
-		/^((claro|perfecto|dale|genial|buenisimo|buenísimo|obvio|sí, claro|si, claro|sí, dale|si, dale)[,!\.\s]+)/i,
-		/^((hola\s+german|hola\s+cliente|hola)[,!\.\s]+)/i
-	];
+function stripRepeatedGreeting(text = '', recentMessages = [], contactName = '') {
+	const assistantCount = recentMessages.filter((msg) => msg.role === 'assistant').length;
+	if (assistantCount === 0) return text;
 
-	for (const pattern of patterns) {
-		result = result.replace(pattern, '');
+	let next = String(text || '').trim();
+	const name = String(contactName || '').trim();
+	const escapedName = name ? name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+	const patterns = [
+		/^¡?hola!?[,\s]*/i,
+		escapedName ? new RegExp(`^${escapedName}[,:!?\\s-]*`, 'i') : null,
+		escapedName ? new RegExp(`^hola[,\\s]+${escapedName}[,:!?\\s-]*`, 'i') : null,
+		escapedName ? new RegExp(`^${escapedName}[,:!?\\s-]*hola[,\\s]*`, 'i') : null
+	].filter(Boolean);
+
+	let changed = true;
+	while (changed) {
+		changed = false;
+		for (const pattern of patterns) {
+			if (pattern.test(next)) {
+				next = next.replace(pattern, '').trim();
+				changed = true;
+			}
+		}
 	}
 
-	return result.trim();
+	return next || text;
 }
 
-function stripTranscriptEcho(text = '', businessName = 'Lummine') {
-	let result = String(text || '');
-	const escapedBusiness = String(businessName || 'Lummine').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	result = result.replace(new RegExp(`(^|\\n)\\s*(CLIENTE|ASESORA|German|${escapedBusiness})\\s*:.*(?=\\n|$)`, 'gim'), '$1');
-	result = result.replace(/(^|\n)\s*\d+\.\s*(CLIENTE|ASESORA)\s*:.*(?=\n|$)/gim, '$1');
-	return result.replace(/\n{3,}/g, '\n\n').trim();
-}
+function stripBotOpenings(text = '') {
+	let next = String(text || '').trim();
+	const openingPattern = /^(?:¡)?(?:claro|perfecto|genial|buen[ií]simo|buenisimo|dale|obvio|excelente)(?:[,!\s-]+)(.*)$/i;
+	let safety = 0;
 
-function polishAssistantReply(text = '', { businessName = 'Lummine' } = {}) {
-	let cleaned = normalizeText(text);
-	cleaned = stripTranscriptEcho(cleaned, businessName);
-	cleaned = stripLeadingSalesFiller(cleaned);
-	cleaned = cleaned.replace(/^(Sofi|Lummine)\s*:\s*/i, '').trim();
-	return cleaned;
+	while (openingPattern.test(next) && safety < 3) {
+		next = next.replace(openingPattern, '$1').trim();
+		safety += 1;
+	}
+
+	return next || text;
 }
 
 function responseMentionsHumanHandoff(text = '') {
@@ -329,9 +350,14 @@ function auditAssistantReply({
 	liveOrderContext,
 	fallbackReply,
 	commercialPlan,
-	businessName = 'Lummine'
+	recentMessages = [],
+	contactName = ''
 }) {
-	const cleaned = polishAssistantReply(text, { businessName });
+	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
+	let cleaned = normalizeText(rawText);
+	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName);
+	cleaned = stripBotOpenings(cleaned);
+	cleaned = normalizeText(cleaned);
 
 	if (!cleaned) {
 		return {
@@ -835,7 +861,7 @@ export async function processInboundMessage({
 			? commercialPlan.rankedProducts.slice(0, 5)
 			: catalogProducts;
 
-		catalogContext = buildCatalogContext(catalogProducts);
+		catalogContext = buildCatalogContext(catalogProducts, commercialPlan);
 		commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
 
 		if (aiGuidance?.type === 'payment') {
@@ -939,7 +965,8 @@ export async function processInboundMessage({
 				liveOrderContext,
 				fallbackReply,
 				commercialPlan,
-				businessName: process.env.BUSINESS_NAME || 'Lummine'
+				recentMessages: fullRecentMessages,
+				contactName: freshConversation.contact.name || freshConversation.contact.waId
 			});
 
 			finalReply = audited.finalText;
