@@ -31,6 +31,7 @@ export async function runAssistantReply({
 	catalogProducts = [],
 	catalogContext = '',
 	commercialHints = [],
+	commercialPlan = {},
 	responsePolicy = {}
 }) {
 	const prompt = buildPrompt({
@@ -44,6 +45,7 @@ export async function runAssistantReply({
 		catalogProducts,
 		catalogContext,
 		commercialHints,
+		commercialPlan,
 		responsePolicy
 	});
 

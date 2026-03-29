@@ -78,16 +78,6 @@ function buildResetStateData() {
 		interactionCount: 0,
 		notes: null,
 
-		currentProductFocus: null,
-		salesStage: null,
-		shownOffers: [],
-		shownPrices: [],
-		sharedLinks: [],
-		lastRecommendedProduct: null,
-		lastRecommendedOffer: null,
-		buyingIntentLevel: null,
-		frictionLevel: null,
-		commercialSummary: null
 	};
 }
 async function getLatestMessagesByConversationIds(conversationIds) {
@@ -439,8 +429,7 @@ export async function postConversationMessage(req, res, next) {
 		await prisma.conversation.update({
 			where: { id: conversationId },
 			data: {
-				lastSummary: null,
-				commercialSummary: null
+				lastSummary: null
 			}
 		});
 
@@ -538,7 +527,6 @@ export async function patchConversationResetContext(req, res, next) {
 			where: { id: conversationId },
 			data: {
 				lastSummary: null,
-				commercialSummary: null,
 			},
 		});
 
@@ -588,7 +576,6 @@ export async function deleteConversationHistory(req, res, next) {
 				where: { id: conversationId },
 				data: {
 					lastSummary: null,
-					commercialSummary: null,
 					lastMessageAt: null,
 				},
 			}),
