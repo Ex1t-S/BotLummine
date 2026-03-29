@@ -200,7 +200,7 @@ function chooseBestOffer(products = []) {
 function detectRequestedAction(messageBody = '') {
 	const text = normalizeText(messageBody);
 
-	if (/(link|pasame|mandame|enviame).*link|url|web|tienda|comprar)/i.test(text)) {
+	if (/(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(text)) {
 		return 'ASK_LINK';
 	}
 
