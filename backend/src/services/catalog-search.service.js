@@ -88,6 +88,30 @@ function extractVariantMeta(variants = []) {
 	};
 }
 
+function buildShortDescription(product) {
+	const description = String(product.description || '')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+
+	if (!description) return 'Sin descripción cargada.';
+	return description.length > 180 ? `${description.slice(0, 177)}...` : description;
+}
+
+function formatPrice(value) {
+	if (value == null) return null;
+
+	try {
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: 'ARS',
+			maximumFractionDigits: 0
+		}).format(Number(value));
+	} catch {
+		return `$${value}`;
+	}
+}
+
 function scoreProduct(product, normalizedQuery, terms = []) {
 	let score = 0;
 
@@ -118,35 +142,22 @@ function scoreProduct(product, normalizedQuery, terms = []) {
 		if (variantBlob.includes(term)) score += 4;
 	}
 
+	if (/(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(normalizedQuery)) {
+		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(name)) score += 20;
+		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(tags)) score += 16;
+		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(description)) score += 10;
+	}
+
+	if (/(body|modelador|faja|reductor|reductora)/i.test(normalizedQuery)) {
+		if (/(body|modelador|faja|reductor|reductora)/i.test(name)) score += 18;
+		if (/(body|modelador|faja|reductor|reductora)/i.test(tags)) score += 10;
+	}
+
 	if (product.published) score += 2;
 	if (product.featuredImage) score += 1;
 	if (product.productUrl) score += 1;
 
 	return score;
-}
-
-function buildShortDescription(product) {
-	const description = String(product.description || '')
-		.replace(/<[^>]+>/g, ' ')
-		.replace(/\s+/g, ' ')
-		.trim();
-
-	if (!description) return 'Sin descripción cargada.';
-	return description.length > 180 ? `${description.slice(0, 177)}...` : description;
-}
-
-function formatPrice(value) {
-	if (value == null) return null;
-
-	try {
-		return new Intl.NumberFormat('es-AR', {
-			style: 'currency',
-			currency: 'ARS',
-			maximumFractionDigits: 0
-		}).format(Number(value));
-	} catch {
-		return `$${value}`;
-	}
 }
 
 export async function searchCatalogProducts({
@@ -247,32 +258,53 @@ export function buildCatalogContext(products = []) {
 		.join('\n\n');
 }
 
-export function pickCommercialHints(products = []) {
+export function pickCommercialHints(products = [], commercialPlan = null) {
 	if (!Array.isArray(products) || !products.length) {
 		return [];
 	}
 
 	const hints = [];
 
-	if (products.length >= 2) {
-		hints.push('Si tiene sentido, podés comparar dos opciones y ayudar a elegir.');
+	if (commercialPlan?.bestOffer?.name) {
+		hints.push(`Priorizá como oferta principal ${commercialPlan.bestOffer.name}.`);
 	}
 
-	if (products.some((p) => p.price)) {
-		hints.push('Si la clienta pregunta por precio, usá el precio actual del catálogo como fuente principal.');
+	if (commercialPlan?.requestedAction === 'ASK_OFFER') {
+		hints.push('No abras varias promos: mostrá solo la mejor oferta disponible.');
 	}
 
-	if (products.some((p) => p.hasDiscount)) {
-		hints.push('Si hay diferencia entre precio actual y precio anterior, priorizá el precio actual.');
+	if (commercialPlan?.requestedAction === 'AFFIRM_CONTINUATION') {
+		hints.push('Interpretá el "sí" como continuidad de la última oferta principal, no como permiso para listar todo.');
+	}
+
+	if (commercialPlan?.requestedAction === 'ASK_VARIANT') {
+		hints.push('Tratà color y talle como continuación natural del producto ya elegido.');
+	}
+
+	if (commercialPlan?.bestOffer?.price && commercialPlan.repeatPriceNow) {
+		hints.push(`Si vuelve a preguntar precio, usá ${commercialPlan.bestOffer.price} como precio principal.`);
+	}
+
+	if (commercialPlan?.bestOffer?.price && !commercialPlan.repeatPriceNow) {
+		hints.push('No repitas el precio si ya quedó claro, salvo pedido explícito.');
+	}
+
+	if (commercialPlan?.shareLinkNow) {
+		hints.push('Compartí un único link y solo del producto foco.');
+	} else {
+		hints.push('No compartas link todavía si la conversación sigue definiendo variante o promo.');
 	}
 
 	if (products.some((p) => Array.isArray(p.colors) && p.colors.length)) {
-		hints.push('Si preguntan por color, respondé con los colores detectados y no inventes otros.');
+		hints.push('Si preguntan por color, respondé directo con continuidad comercial.');
 	}
 
 	if (products.some((p) => Array.isArray(p.sizes) && p.sizes.length)) {
-		hints.push('Si preguntan por talle, respondé con los talles detectados y evitá mandar a la web si ya lo sabés.');
+		hints.push('Si preguntan por talle, respondé directo y evitá derivar a la web.');
 	}
+
+	hints.push('No compares más de una promo salvo pedido explícito.');
+	hints.push('Soná más directa y menos celebratoria.');
 
 	return hints;
 }

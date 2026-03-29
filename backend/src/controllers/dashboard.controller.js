@@ -77,6 +77,16 @@ function buildResetStateData() {
 		handoffReason: null,
 		interactionCount: 0,
 		notes: null,
+		currentProductFocus: null,
+		salesStage: null,
+		shownOffers: [],
+		shownPrices: [],
+		sharedLinks: [],
+		lastRecommendedProduct: null,
+		lastRecommendedOffer: null,
+		buyingIntentLevel: null,
+		frictionLevel: null,
+		commercialSummary: null
 	};
 }
 
@@ -427,12 +437,11 @@ export async function postConversationMessage(req, res, next) {
 		}
 
 		await prisma.conversation.update({
-			where: { id: conversation.id },
+			where: { id: conversationId },
 			data: {
-				queue: 'HUMAN',
-				aiEnabled: false,
-				lastMessageAt: new Date(),
-			},
+				lastSummary: null,
+				commercialSummary: null
+			}
 		});
 
 		return res.json({ ok: true });

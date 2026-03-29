@@ -1,12 +1,12 @@
-import { prisma } from '../lib/prisma.js';
+import { prisma } from './lib/prisma.js';
 import { runAssistantReply } from './ai/index.js';
 import { sendWhatsAppText } from './whatsapp.service.js';
-import { normalizeThreadPhone } from '../lib/conversation-threads.js';
+import { normalizeThreadPhone } from './lib/conversation-threads.js';
 import {
 	detectIntent,
 	extractOrderNumber,
 	extractStandaloneOrderNumber
-} from '../lib/intent.js';
+} from './lib/intent.js';
 import {
 	analyzeConversationTurn,
 	buildHandoffReply
@@ -24,6 +24,7 @@ import {
 	buildCatalogContext,
 	pickCommercialHints
 } from './catalog-search.service.js';
+import { resolveCommercialBrainV2 } from './commercial-brain.service.js';
 import {
 	isPaymentProofMessage,
 	buildPaymentReviewAck,
@@ -48,7 +49,8 @@ function buildConversationSummary({
 	enrichedState,
 	lastUserMessage,
 	lastAssistantMessage,
-	liveOrderContext
+	liveOrderContext,
+	commercialPlan = null
 }) {
 	const parts = [];
 
@@ -58,6 +60,14 @@ function buildConversationSummary({
 
 	if (enrichedState?.interestedProducts?.length) {
 		parts.push(`Interés: ${enrichedState.interestedProducts.join(', ')}`);
+	}
+
+	if (commercialPlan?.productFocus) {
+		parts.push(`Foco: ${commercialPlan.productFocus}`);
+	}
+
+	if (commercialPlan?.bestOffer?.name) {
+		parts.push(`Oferta: ${commercialPlan.bestOffer.name}`);
 	}
 
 	if (enrichedState?.frequentSize) {
@@ -81,8 +91,8 @@ function buildConversationSummary({
 		}
 	}
 
-	if (enrichedState?.needsHuman) {
-		parts.push(`Derivar: ${enrichedState.handoffReason || 'sí'}`);
+	if (enrichedState?.needsHuman || commercialPlan?.shouldEscalate) {
+		parts.push(`Derivar: ${enrichedState.handoffReason || commercialPlan?.handoffReason || 'sí'}`);
 	}
 
 	if (lastUserMessage) {
@@ -96,22 +106,43 @@ function buildConversationSummary({
 	return parts.filter(Boolean).join(' | ');
 }
 
-function buildAiFailureFallback({ intent, enrichedState, catalogProducts = [] }) {
+function buildAiFailureFallback({
+	intent,
+	enrichedState,
+	catalogProducts = [],
+	commercialPlan = null
+}) {
 	const firstProduct =
 		Array.isArray(catalogProducts) && catalogProducts.length ? catalogProducts[0] : null;
 
-	if (enrichedState?.needsHuman) {
+	if (commercialPlan?.shouldEscalate || enrichedState?.needsHuman) {
 		return 'Te paso con una asesora para seguir mejor con esto.';
 	}
 
 	if (intent === 'product') {
+		if (commercialPlan?.recommendedAction === 'present_single_best_offer' && commercialPlan?.bestOffer) {
+			return `${commercialPlan.bestOffer.name}${commercialPlan.bestOffer.price ? ` por ${commercialPlan.bestOffer.price}` : ''}.`;
+		}
+
+		if (commercialPlan?.recommendedAction === 'present_price_once' && commercialPlan?.bestOffer) {
+			return `${commercialPlan.bestOffer.name} está ${commercialPlan.bestOffer.price}.`;
+		}
+
+		if (commercialPlan?.recommendedAction === 'confirm_variant_and_continue' && commercialPlan?.bestOffer) {
+			return `Sí, lo trabajamos en esa opción. Si querés seguimos con ${commercialPlan.bestOffer.name}.`;
+		}
+
+		if (commercialPlan?.recommendedAction === 'close_with_single_link' && commercialPlan?.bestOffer?.productUrl) {
+			return `Sí, te paso el link directo: ${commercialPlan.bestOffer.productUrl}`;
+		}
+
 		return firstProduct?.productUrl
-			? `Te paso el link para que lo veas mejor 😊 ${firstProduct.productUrl}`
+			? `Te paso el link del producto: ${firstProduct.productUrl}`
 			: 'Contame cuál producto te interesa y te oriento.';
 	}
 
 	if (intent === 'payment') {
-		return 'Sí, te ayudo con el pago. Decime si querés transferencia, alias o cuotas y seguimos.';
+		return 'Sí, aceptamos ese medio de pago. Si querés te indico cómo seguir.';
 	}
 
 	if (intent === 'shipping') {
@@ -134,9 +165,14 @@ function buildResponsePolicy({
 	enrichedState,
 	aiGuidance,
 	liveOrderContext,
-	queueDecision
+	queueDecision,
+	commercialPlan
 }) {
-	if (queueDecision?.queue === 'HUMAN' || enrichedState?.needsHuman) {
+	if (
+		queueDecision?.queue === 'HUMAN' ||
+		enrichedState?.needsHuman ||
+		commercialPlan?.shouldEscalate
+	) {
 		return {
 			action: 'handoff_human',
 			useAI: false,
@@ -181,7 +217,7 @@ function buildResponsePolicy({
 			action: 'payment_guidance',
 			useAI: true,
 			allowHandoffMention: false,
-			maxChars: 260,
+			maxChars: 220,
 			tone: 'amigable_directo'
 		};
 	}
@@ -191,7 +227,7 @@ function buildResponsePolicy({
 			action: 'shipping_guidance',
 			useAI: true,
 			allowHandoffMention: false,
-			maxChars: 260,
+			maxChars: 220,
 			tone: 'amigable_directo'
 		};
 	}
@@ -201,18 +237,26 @@ function buildResponsePolicy({
 			action: 'size_help',
 			useAI: true,
 			allowHandoffMention: false,
-			maxChars: 260,
+			maxChars: 220,
 			tone: 'amigable_directo'
 		};
 	}
 
 	if (intent === 'product') {
 		return {
-			action: 'product_guidance',
+			action: commercialPlan?.recommendedAction || 'product_guidance',
 			useAI: true,
 			allowHandoffMention: false,
-			maxChars: 300,
-			tone: enrichedState?.preferredTone || 'guia_comercial'
+			maxChars:
+				commercialPlan?.recommendedAction === 'close_with_single_link'
+					? 200
+					: commercialPlan?.recommendedAction === 'present_single_best_offer'
+						? 180
+						: 220,
+			tone:
+				commercialPlan?.mood === 'angry'
+					? 'empatico_concreto'
+					: 'guia_comercial_directa'
 		};
 	}
 
@@ -220,13 +264,13 @@ function buildResponsePolicy({
 		action: 'general_help',
 		useAI: true,
 		allowHandoffMention: false,
-		maxChars: 260,
+		maxChars: 220,
 		tone: enrichedState?.preferredTone || 'amigable_directo'
 	};
 }
 
 function responseMentionsHumanHandoff(text = '') {
-	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana|una asesora puede ayudarte enseguida|una persona del equipo)/i.test(
+	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana)/i.test(
 		String(text || '')
 	);
 }
@@ -234,7 +278,10 @@ function responseMentionsHumanHandoff(text = '') {
 function looksLikeInventedTracking(text = '', liveOrderContext = null) {
 	const normalized = String(text || '').toLowerCase();
 
-	if (!liveOrderContext?.trackingUrl && /seguilo aca|seguirlo aca|pod[eé]s seguirlo acá|pod[eé]s seguirlo aca|link de seguimiento/i.test(normalized)) {
+	if (
+		!liveOrderContext?.trackingUrl &&
+		/seguilo aca|seguirlo aca|pod[eé]s seguirlo acá|pod[eé]s seguirlo aca|link de seguimiento/i.test(normalized)
+	) {
 		return true;
 	}
 
@@ -249,7 +296,8 @@ function auditAssistantReply({
 	text,
 	responsePolicy,
 	liveOrderContext,
-	fallbackReply
+	fallbackReply,
+	commercialPlan
 }) {
 	const cleaned = normalizeText(text);
 
@@ -260,14 +308,28 @@ function auditAssistantReply({
 		};
 	}
 
-	if (responsePolicy?.action?.startsWith('order_status') && looksLikeInventedTracking(cleaned, liveOrderContext)) {
+	if (
+		responsePolicy?.action?.startsWith('order_status') &&
+		looksLikeInventedTracking(cleaned, liveOrderContext)
+	) {
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false
 		};
 	}
 
-	const triggerHumanHandoff = responseMentionsHumanHandoff(cleaned);
+	if (
+		commercialPlan?.shareLinkNow === false &&
+		commercialPlan?.alreadyShared?.sharedLinks?.some((link) => cleaned.includes(link))
+	) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false
+		};
+	}
+
+	const triggerHumanHandoff =
+		commercialPlan?.shouldEscalate || responseMentionsHumanHandoff(cleaned);
 
 	return {
 		finalText: cleaned,
@@ -551,7 +613,7 @@ export async function processInboundMessage({
 	const currentState = freshConversation.state || {};
 	const intent = detectIntent(messageBody, currentState);
 	const explicitOrderNumber =
-	extractOrderNumber(messageBody, currentState) || extractStandaloneOrderNumber(messageBody);
+		extractOrderNumber(messageBody, currentState) || extractStandaloneOrderNumber(messageBody);
 
 	const recentMessages = freshConversation.messages.slice(-8).map((msg) => ({
 		role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
@@ -592,9 +654,9 @@ export async function processInboundMessage({
 		currentState
 	});
 
+	const aiGuidance = intentResult.aiGuidance || null;
 	const liveOrderContext = intentResult.liveOrderContext || null;
 	const forcedReply = intentResult.forcedReply || null;
-	const aiGuidance = intentResult.aiGuidance || null;
 
 	const nextStatePayload = buildStatePayload({
 		freshConversation,
@@ -717,6 +779,7 @@ export async function processInboundMessage({
 	let catalogProducts = [];
 	let catalogContext = '';
 	let commercialHints = [];
+	let commercialPlan = null;
 
 	try {
 		catalogProducts = await searchCatalogProducts({
@@ -725,8 +788,20 @@ export async function processInboundMessage({
 			limit: 5
 		});
 
+		commercialPlan = resolveCommercialBrainV2({
+			intent,
+			messageBody,
+			currentState: enrichedState,
+			recentMessages: fullRecentMessages,
+			catalogProducts
+		});
+
+		catalogProducts = commercialPlan?.rankedProducts?.length
+			? commercialPlan.rankedProducts.slice(0, 5)
+			: catalogProducts;
+
 		catalogContext = buildCatalogContext(catalogProducts);
-		commercialHints = pickCommercialHints(catalogProducts);
+		commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
 
 		if (aiGuidance?.type === 'payment') {
 			if (Array.isArray(aiGuidance.missing) && aiGuidance.missing.length) {
@@ -736,7 +811,7 @@ export async function processInboundMessage({
 			}
 
 			if (aiGuidance.paymentDataAvailable) {
-				commercialHints.push('Si realmente quiere avanzar, podés compartir datos de pago.');
+				commercialHints.push('Si realmente quiere avanzar, orientala sin abrir otra promo.');
 			}
 		}
 
@@ -761,7 +836,9 @@ export async function processInboundMessage({
 		commercialHints.push('No repitas saludo si la conversación ya empezó.');
 		commercialHints.push('No derivas por una duda simple si ya la podés resolver.');
 		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
-		commercialHints.push('Si ayuda, ofrecé el link del producto como siguiente paso natural.');
+		commercialHints.push('No pases más de un link en una misma respuesta.');
+		commercialHints.push('No abras varias promos si la clienta ya eligió una.');
+		commercialHints.push('Bajá el tono celebratorio y soná más natural.');
 	} catch (catalogError) {
 		console.error('Error buscando productos en catálogo local:', catalogError);
 	}
@@ -771,7 +848,8 @@ export async function processInboundMessage({
 		enrichedState,
 		aiGuidance,
 		liveOrderContext,
-		queueDecision
+		queueDecision,
+		commercialPlan
 	});
 
 	let finalReply = forcedReply || null;
@@ -784,7 +862,8 @@ export async function processInboundMessage({
 			finalReply = buildAiFailureFallback({
 				intent,
 				enrichedState,
-				catalogProducts
+				catalogProducts,
+				commercialPlan
 			});
 		}
 	}
@@ -805,6 +884,7 @@ export async function processInboundMessage({
 				catalogProducts,
 				catalogContext,
 				commercialHints,
+				commercialPlan,
 				responsePolicy
 			});
 
@@ -814,14 +894,16 @@ export async function processInboundMessage({
 					: buildAiFailureFallback({
 							intent,
 							enrichedState,
-							catalogProducts
+							catalogProducts,
+							commercialPlan
 						});
 
 			const audited = auditAssistantReply({
 				text: aiResult?.text || '',
 				responsePolicy,
 				liveOrderContext,
-				fallbackReply
+				fallbackReply,
+				commercialPlan
 			});
 
 			finalReply = audited.finalText;
@@ -830,7 +912,7 @@ export async function processInboundMessage({
 			if (audited.triggerHumanHandoff) {
 				await syncHumanHandoff({
 					conversationId: freshConversation.id,
-					reason: 'ai_declared_handoff'
+					reason: commercialPlan?.handoffReason || 'ai_declared_handoff'
 				});
 			}
 		} catch (aiError) {
@@ -842,7 +924,8 @@ export async function processInboundMessage({
 					: buildAiFailureFallback({
 							intent,
 							enrichedState,
-							catalogProducts
+							catalogProducts,
+							commercialPlan
 						});
 
 			aiMeta = {
@@ -870,7 +953,8 @@ export async function processInboundMessage({
 				enrichedState,
 				lastUserMessage: messageBody,
 				lastAssistantMessage: finalReply,
-				liveOrderContext
+				liveOrderContext,
+				commercialPlan
 			})
 		}
 	});
