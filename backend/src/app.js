@@ -9,6 +9,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import campaignRoutes from './routes/campaign.routes.js';
 import tiendanubeRoutes from './routes/tiendanube.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
+import aiLabRoutes from './routes/ai-lab.routes.js';
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/tiendanube', tiendanubeRoutes);
 app.use('/api/webhook', webhookRoutes);
+app.use('/api/ai-lab', aiLabRoutes);
 
 app.use((err, _req, res, _next) => {
 	console.error(err);

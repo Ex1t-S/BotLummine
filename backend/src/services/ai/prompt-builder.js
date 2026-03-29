@@ -1,18 +1,19 @@
-import { getRelevantStoreFacts } from '../../data/lummine-style.js';
+import { getRelevantStoreFacts, getRelevantStyleExamples } from '../../data/lummine-style.js';
 import { buildRelevantBusinessData } from '../../data/lummine-business.js';
 
-function formatTranscript(recentMessages = []) {
+function lastUserMessage(recentMessages = []) {
+	const reversed = [...recentMessages].reverse();
+	return reversed.find((item) => item.role === 'user')?.text || '';
+}
+
+function formatHistoryForReference({ recentMessages = [] }) {
 	return recentMessages
 		.slice(-8)
 		.map((item, index) => {
 			const speaker = item.role === 'assistant' ? 'ASESORA' : 'CLIENTE';
-			return `${index + 1}. ${speaker}: ${item.text}`;
+			return `${index + 1}. ${speaker}: ${String(item.text || '').replace(/\s+/g, ' ').trim()}`;
 		})
 		.join('\n');
-}
-
-function getLastUserMessage(recentMessages = []) {
-	return [...recentMessages].reverse().find((msg) => msg.role === 'user')?.text || '';
 }
 
 function isFirstContact(recentMessages = []) {
@@ -77,6 +78,35 @@ function buildCommercialPlanBlock(commercialPlan = {}) {
 	].join('\n');
 }
 
+function buildCatalogBlock(catalogProducts = [], catalogContext = '', commercialPlan = {}) {
+	if (Array.isArray(catalogProducts) && catalogProducts.length) {
+		return catalogProducts
+			.slice(0, 3)
+			.map((item) => {
+				return [
+					`- ${item.name}`,
+					`  precio: ${item.price || 'no cargado'}`,
+					item.colors?.length ? `  colores: ${item.colors.join(', ')}` : '',
+					item.sizes?.length ? `  talles: ${item.sizes.join(', ')}` : '',
+					commercialPlan.shareLinkNow && item.productUrl ? `  link: ${item.productUrl}` : ''
+				]
+					.filter(Boolean)
+					.join('\n');
+			})
+			.join('\n');
+	}
+
+	if (!catalogContext) {
+		return 'No se encontraron productos relevantes.';
+	}
+
+	if (!commercialPlan.shareLinkNow) {
+		return catalogContext.replace(/^\s*- Link: .*$/gim, '').trim();
+	}
+
+	return catalogContext;
+}
+
 export function buildPrompt({
 	businessName,
 	contactName,
@@ -96,89 +126,45 @@ export function buildPrompt({
 		'Respondé como asesora humana de ventas por WhatsApp. Soná natural, directa y comercial.';
 	const businessContext = process.env.BUSINESS_CONTEXT || '';
 	const agentName = process.env.BUSINESS_AGENT_NAME || 'Sofi';
-
-	const lastUserMessage = getLastUserMessage(recentMessages);
-	const priorContextMessages = lastUserMessage ? recentMessages.slice(0, -1) : recentMessages;
-	const transcript = formatTranscript(priorContextMessages);
+	const customerName = customerContext.name || contactName || 'Cliente';
+	const lastCustomerMessage = lastUserMessage(recentMessages);
 	const facts = getRelevantStoreFacts(recentMessages);
+	const styleExamples = getRelevantStyleExamples(recentMessages, 4);
 	const firstContact = isFirstContact(recentMessages);
-	const businessData = buildRelevantBusinessData(
-		[...recentMessages].reverse().find((m) => m.role === 'user')?.text || ''
-	);
+	const businessData = buildRelevantBusinessData(lastCustomerMessage || '');
+	const history = formatHistoryForReference({ recentMessages });
 
 	const commercialHintsBlock =
 		Array.isArray(commercialHints) && commercialHints.length
 			? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n')
 			: '- Priorizá una sola oferta principal.';
 
-	const compactCatalog =
-		Array.isArray(catalogProducts) && catalogProducts.length
-			? catalogProducts
-					.slice(0, 3)
-					.map((item) => {
-						return [
-							`- ${item.name}`,
-							`  precio: ${item.price || 'no cargado'}`,
-							item.productUrl ? `  link: ${item.productUrl}` : '',
-							item.colors?.length ? `  colores: ${item.colors.join(', ')}` : '',
-							item.sizes?.length ? `  talles: ${item.sizes.join(', ')}` : ''
-						]
-							.filter(Boolean)
-							.join('\n');
-					})
-					.join('\n')
-			: catalogContext || 'No se encontraron productos relevantes.';
+	const styleExamplesBlock = styleExamples
+		.map((item) => `- Cliente: ${item.customer}\n  Sofi: ${item.agent}`)
+		.join('\n');
+
+	const catalogBlock = buildCatalogBlock(catalogProducts, catalogContext, commercialPlan);
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
 		`NEGOCIO: ${businessName}`,
 		`ASESORA: ${agentName}`,
+		'OBJETIVO CENTRAL: vender con tono humano, natural y útil, sin sonar automática ni apurada.',
 		businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}` : '',
-		`DATOS DEL CLIENTE:
-- Nombre: ${customerContext.name || contactName || 'Cliente'}
-- WhatsApp: ${customerContext.waId || 'No informado'}`,
+		`DATOS DEL CLIENTE:\n- Nombre: ${customerName}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
-		`ESTADO ACTUAL:
-- Última intención: ${conversationState.lastIntent || 'general'}
-- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}
-- Ánimo: ${conversationState.customerMood || 'neutral'}
-- Talle detectado: ${conversationState.frequentSize || 'no detectado'}
-- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}
-- Productos de interés: ${formatArrayField(conversationState.interestedProducts)}
-- ¿Necesita humano?: ${conversationState.needsHuman ? 'Sí' : 'No'}`,
-		`POLÍTICA DE RESPUESTA:
-${buildPolicyBlock(responsePolicy)}`,
-		`PLAN COMERCIAL:
-${buildCommercialPlanBlock(commercialPlan)}`,
-		`PEDIDO REAL / TRACKING:
-${formatLiveOrderContext(liveOrderContext)}`,
-		`HECHOS ÚTILES:
-${facts.map((fact) => `- ${fact}`).join('\n')}`,
-		`CATÁLOGO RELEVANTE:
-${compactCatalog}`,
-		`PISTAS COMERCIALES:
-${commercialHintsBlock}`,
-		`POLÍTICAS RESUMIDAS:
-- Envíos: ${businessData.policySummary.shipping.join(' ')}
-- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
-		`REGLAS DE SALIDA:
-- ${firstContact ? `Si es el primer mensaje, podés presentarte una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}
-- Respondé solo al último mensaje.
-- Una sola respuesta.
-- Soná humana, clara, breve y comercial.
-- No uses listas largas ni dos links juntos.
-- No repitas promo, precio ni link si ya fueron dados, salvo pedido explícito.
-- Si el cliente ya eligió una promo, seguí solo con esa.
-- Si preguntan por talle o color, respondé como continuidad del producto foco.
-- Si la acción es handoff_human, avisalo con calidez y sin prometer tiempos exactos.
-- Si la acción NO es handoff_human, no menciones equipo, asesora ni derivación.
-- Nunca copies, reescribas ni resumas textual el historial del chat.
-- No uses prefijos como CLIENTE:, ASESORA:, ${contactName}: o ${businessName}: en la respuesta.
-- Entregá únicamente el mensaje final que enviarías por WhatsApp.
-- Si hay una oferta principal clara, priorizala antes que listar otras.`,
-		transcript ? `HISTORIAL DE CONTEXTO (solo para entender, no copiar):\n${transcript}` : '',
-		`ÚLTIMO MENSAJE DEL CLIENTE:\n${lastUserMessage || 'No informado.'}`,
-		'Respondé ahora solo con la respuesta final para el cliente.'
+		`ESTADO ACTUAL:\n- Última intención: ${conversationState.lastIntent || 'general'}\n- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}\n- Ánimo: ${conversationState.customerMood || 'neutral'}\n- Talle detectado: ${conversationState.frequentSize || 'no detectado'}\n- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}\n- Productos de interés: ${formatArrayField(conversationState.interestedProducts)}\n- ¿Necesita humano?: ${conversationState.needsHuman ? 'Sí' : 'No'}`,
+		`POLÍTICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy)}`,
+		`PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}`,
+		`PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`,
+		`HECHOS ÚTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}`,
+		`CATÁLOGO RELEVANTE:\n${catalogBlock}`,
+		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,
+		`ESTILO ESPERADO (IMITAR TONO, NO COPIAR TEXTUAL):\n${styleExamplesBlock}`,
+		`POLÍTICAS RESUMIDAS:\n- Envíos: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
+		`HISTORIAL DE REFERENCIA (SOLO CONTEXTO, NO COPIAR NI REESCRIBIR):\n${history || 'Sin historial relevante.'}`,
+		`ÚLTIMO MENSAJE DEL CLIENTE (RESPONDÉ SOLO A ESTO):\n${lastCustomerMessage || 'Sin mensaje detectado.'}`,
+		`REGLAS DE SALIDA OBLIGATORIAS:\n- ${firstContact ? `Si es el primer mensaje, presentate una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}\n- Nunca copies ni reescribas el historial.\n- Nunca devuelvas prefijos como CLIENTE:, ASESORA:, ${customerName}: o ${businessName}:.\n- No uses muletillas repetidas como “claro”, “perfecto”, “dale”, “genial” al inicio de cada respuesta.\n- Si el cliente recién está explorando, orientá primero y no cierres una promo demasiado rápido.\n- Si todavía no pidió link, no mandes link.\n- Si ya hay una promo o producto foco elegido, seguí solo con ese.\n- No mezcles dos promos distintas en una misma respuesta.\n- No listes nombres largos de productos salvo que haga falta.\n- Soná humana, breve y vendedora, pero sin sonar automática.\n- Entregá una sola respuesta final, lista para WhatsApp.`
 	]
 		.filter(Boolean)
 		.join('\n\n');

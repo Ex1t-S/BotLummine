@@ -269,6 +269,37 @@ function buildResponsePolicy({
 	};
 }
 
+
+function stripLeadingSalesFiller(text = '') {
+	let result = String(text || '').trim();
+	const patterns = [
+		/^((claro|perfecto|dale|genial|buenisimo|buenísimo|obvio|sí, claro|si, claro|sí, dale|si, dale)[,!\.\s]+)/i,
+		/^((hola\s+german|hola\s+cliente|hola)[,!\.\s]+)/i
+	];
+
+	for (const pattern of patterns) {
+		result = result.replace(pattern, '');
+	}
+
+	return result.trim();
+}
+
+function stripTranscriptEcho(text = '', businessName = 'Lummine') {
+	let result = String(text || '');
+	const escapedBusiness = String(businessName || 'Lummine').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	result = result.replace(new RegExp(`(^|\\n)\\s*(CLIENTE|ASESORA|German|${escapedBusiness})\\s*:.*(?=\\n|$)`, 'gim'), '$1');
+	result = result.replace(/(^|\n)\s*\d+\.\s*(CLIENTE|ASESORA)\s*:.*(?=\n|$)/gim, '$1');
+	return result.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function polishAssistantReply(text = '', { businessName = 'Lummine' } = {}) {
+	let cleaned = normalizeText(text);
+	cleaned = stripTranscriptEcho(cleaned, businessName);
+	cleaned = stripLeadingSalesFiller(cleaned);
+	cleaned = cleaned.replace(/^(Sofi|Lummine)\s*:\s*/i, '').trim();
+	return cleaned;
+}
+
 function responseMentionsHumanHandoff(text = '') {
 	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana)/i.test(
 		String(text || '')
@@ -292,72 +323,15 @@ function looksLikeInventedTracking(text = '', liveOrderContext = null) {
 	return false;
 }
 
-function escapeRegex(value = '') {
-	return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function stripHistoryEcho(text = '', { recentMessages = [], businessName = '', contactName = '' } = {}) {
-	let result = normalizeText(text);
-	if (!result) return '';
-
-	const assistantLabels = [businessName, process.env.BUSINESS_NAME, 'ASESORA', 'Asesora', 'Lummine']
-		.filter(Boolean)
-		.map((value) => normalizeText(value));
-	const userLabels = [contactName, 'CLIENTE', 'Cliente', 'Usuario']
-		.filter(Boolean)
-		.map((value) => normalizeText(value));
-
-	for (const msg of recentMessages.slice(-6)) {
-		const base = normalizeText(msg.text);
-		if (!base) continue;
-
-		const labels = msg.role === 'assistant' ? assistantLabels : userLabels;
-		const candidates = new Set([base]);
-
-		for (const label of labels) {
-			candidates.add(normalizeText(`${label}: ${msg.text}`));
-			candidates.add(normalizeText(`${label} ${msg.text}`));
-		}
-
-		let removed = false;
-		for (const candidate of [...candidates].sort((a, b) => b.length - a.length)) {
-			if (candidate && result.toLowerCase().startsWith(candidate.toLowerCase())) {
-				result = result.slice(candidate.length).replace(/^[\s:;,.!¡?¿\-–—|]+/, '').trim();
-				removed = true;
-				break;
-			}
-		}
-
-		if (!removed) {
-			break;
-		}
-	}
-
-	if (!result) return '';
-
-	const labelPattern = [contactName, businessName, 'CLIENTE', 'ASESORA', 'Cliente', 'Asesora', 'Lummine']
-		.filter(Boolean)
-		.map((value) => escapeRegex(normalizeText(value)))
-		.join('|');
-
-	if (labelPattern) {
-		result = result.replace(new RegExp(`^(?:${labelPattern})\\s*:\\s*`, 'i'), '').trim();
-	}
-
-	return result;
-}
-
 function auditAssistantReply({
 	text,
 	responsePolicy,
 	liveOrderContext,
 	fallbackReply,
 	commercialPlan,
-	recentMessages = [],
-	businessName = '',
-	contactName = ''
+	businessName = 'Lummine'
 }) {
-	const cleaned = stripHistoryEcho(text, { recentMessages, businessName, contactName });
+	const cleaned = polishAssistantReply(text, { businessName });
 
 	if (!cleaned) {
 		return {
@@ -965,9 +939,7 @@ export async function processInboundMessage({
 				liveOrderContext,
 				fallbackReply,
 				commercialPlan,
-				recentMessages: fullRecentMessages,
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
-				contactName: freshConversation.contact.name || freshConversation.contact.waId
+				businessName: process.env.BUSINESS_NAME || 'Lummine'
 			});
 
 			finalReply = audited.finalText;

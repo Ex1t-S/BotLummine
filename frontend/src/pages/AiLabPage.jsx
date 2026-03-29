@@ -14,6 +14,14 @@ function JsonBlock({ value }) {
 	return <pre className="ai-lab-code-block">{formatted}</pre>;
 }
 
+function getApiError(error) {
+	return (
+		error?.response?.data?.error ||
+		error?.message ||
+		'Error desconocido'
+	);
+}
+
 export default function AiLabPage() {
 	const messagesEndRef = useRef(null);
 	const [session, setSession] = useState(null);
@@ -21,6 +29,7 @@ export default function AiLabPage() {
 	const [messageText, setMessageText] = useState('');
 	const [showPrompt, setShowPrompt] = useState(false);
 	const [showCatalog, setShowCatalog] = useState(true);
+	const [uiError, setUiError] = useState('');
 
 	const fixturesQuery = useQuery({
 		queryKey: ['ai-lab', 'fixtures'],
@@ -29,6 +38,7 @@ export default function AiLabPage() {
 			return res.data.fixtures || [];
 		},
 		staleTime: 60 * 1000,
+		retry: false
 	});
 
 	const createSessionMutation = useMutation({
@@ -37,8 +47,13 @@ export default function AiLabPage() {
 			return res.data.session;
 		},
 		onSuccess: (nextSession) => {
+			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
+		},
+		onError: (error) => {
+			setUiError(`No se pudo crear la sesión: ${getApiError(error)}`);
+			console.error('AI Lab create session error:', error);
 		}
 	});
 
@@ -50,8 +65,13 @@ export default function AiLabPage() {
 		},
 		onSuccess: (nextSession) => {
 			if (!nextSession) return;
+			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
+		},
+		onError: (error) => {
+			setUiError(`No se pudo resetear la sesión: ${getApiError(error)}`);
+			console.error('AI Lab reset error:', error);
 		}
 	});
 
@@ -65,13 +85,21 @@ export default function AiLabPage() {
 		},
 		onSuccess: (nextSession) => {
 			if (!nextSession) return;
+			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
 		},
 		onError: (error) => {
-			console.error(error);
+			setUiError(`No se pudo enviar el mensaje: ${getApiError(error)}`);
+			console.error('AI Lab send message error:', error);
 		}
 	});
+
+	useEffect(() => {
+		if (fixturesQuery.error) {
+			setUiError(`No se pudieron cargar los fixtures: ${getApiError(fixturesQuery.error)}`);
+		}
+	}, [fixturesQuery.error]);
 
 	useEffect(() => {
 		if (!fixturesQuery.data?.length || session || createSessionMutation.isPending) {
@@ -88,7 +116,11 @@ export default function AiLabPage() {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 	}, [session?.messages?.length]);
 
-	const isBusy = createSessionMutation.isPending || resetSessionMutation.isPending || sendMessageMutation.isPending;
+	const isBusy =
+		createSessionMutation.isPending ||
+		resetSessionMutation.isPending ||
+		sendMessageMutation.isPending;
+
 	const trace = session?.lastTrace || null;
 	const commercialPlan = trace?.commercialPlan || null;
 	const fixtures = fixturesQuery.data || [];
@@ -109,14 +141,29 @@ export default function AiLabPage() {
 					</div>
 				</div>
 
+				{uiError ? (
+					<div className="ai-lab-meta-box" style={{ borderColor: '#ef4444' }}>
+						<h3>Error</h3>
+						<p style={{ color: '#b91c1c', margin: 0 }}>{uiError}</p>
+					</div>
+				) : null}
+
 				<label className="ai-lab-field">
 					<span>Fixture / escenario</span>
-					<select value={fixtureKey} onChange={(event) => setFixtureKey(event.target.value)}>
-						{fixtures.map((fixture) => (
-							<option key={fixture.key} value={fixture.key}>
-								{fixture.name}
-							</option>
-						))}
+					<select
+						value={fixtureKey}
+						onChange={(event) => setFixtureKey(event.target.value)}
+						disabled={!fixtures.length}
+					>
+						{fixtures.length ? (
+							fixtures.map((fixture) => (
+								<option key={fixture.key} value={fixture.key}>
+									{fixture.name}
+								</option>
+							))
+						) : (
+							<option value="">No hay fixtures cargados</option>
+						)}
 					</select>
 				</label>
 
@@ -125,7 +172,7 @@ export default function AiLabPage() {
 						type="button"
 						className="ai-lab-primary-btn"
 						onClick={() => createSessionMutation.mutate(fixtureKey)}
-						disabled={isBusy}
+						disabled={isBusy || !fixtures.length}
 					>
 						Nueva sesión
 					</button>
@@ -191,7 +238,12 @@ export default function AiLabPage() {
 								<div className="ai-lab-bubble-text">{message.text}</div>
 								<div className="ai-lab-bubble-meta">
 									<span>{message.role === 'assistant' ? 'Sofi' : session?.contactName || 'Cliente'}</span>
-									<span>{new Date(message.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
+									<span>
+										{new Date(message.createdAt).toLocaleTimeString('es-AR', {
+											hour: '2-digit',
+											minute: '2-digit'
+										})}
+									</span>
 								</div>
 							</div>
 						))
@@ -251,7 +303,7 @@ export default function AiLabPage() {
 					</div>
 					<div className="ai-lab-debug-item">
 						<h3>¿Comparte link?</h3>
-						<p>{commercialPlan?.shareLinkNow ? 'Sí' : 'No'}</p>
+						<p>{commercialPlan?.shouldShareLink ? 'Sí' : 'No'}</p>
 					</div>
 				</div>
 
