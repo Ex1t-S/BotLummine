@@ -2,6 +2,7 @@ import express from 'express';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 import { attachUser } from './middleware/auth.js';
 import authRoutes from './routes/auth.routes.js';
@@ -15,30 +16,47 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = new Set([
+const allowedOrigins = [
 	'http://localhost:5173',
 	'http://127.0.0.1:5173',
-	process.env.FRONTEND_URL
-].filter(Boolean));
+	'http://localhost:3000',
+	'http://127.0.0.1:3000',
+	process.env.FRONTEND_URL,
+	process.env.FRONTEND_URL_PROD
+].filter(Boolean);
 
-app.use((req, res, next) => {
-	const origin = req.headers.origin;
+function isAllowedOrigin(origin) {
+	if (!origin) return true;
 
-	if (origin && allowedOrigins.has(origin)) {
-		res.setHeader('Access-Control-Allow-Origin', origin);
+	if (allowedOrigins.includes(origin)) {
+		return true;
 	}
 
-	res.setHeader('Vary', 'Origin');
-	res.setHeader('Access-Control-Allow-Credentials', 'true');
-	res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-	res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-
-	if (req.method === 'OPTIONS') {
-		return res.status(204).end();
+	if (
+		process.env.ALLOW_VERCEL_PREVIEWS === 'true' &&
+		/^https:\/\/.*\.vercel\.app$/.test(origin)
+	) {
+		return true;
 	}
 
-	next();
-});
+	return false;
+}
+
+const corsOptions = {
+	origin(origin, callback) {
+		if (isAllowedOrigin(origin)) {
+			return callback(null, true);
+		}
+
+		return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+	},
+	credentials: true,
+	methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+	allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
@@ -60,6 +78,14 @@ app.use('/api/ai-lab', aiLabRoutes);
 
 app.use((err, _req, res, _next) => {
 	console.error(err);
+
+	if (err.message?.startsWith('Origen no permitido por CORS')) {
+		return res.status(403).json({
+			ok: false,
+			error: err.message
+		});
+	}
+
 	res.status(err.status || 500).json({
 		ok: false,
 		error: err.message || 'Internal server error'
