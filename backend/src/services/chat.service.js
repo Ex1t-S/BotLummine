@@ -263,7 +263,6 @@ export async function processInboundMessage({
 			aiEnabled: turnResult.queueDecision.aiEnabled,
 			lastMessageAt: new Date(),
 			lastSummary: turnResult.lastSummary || freshConversation.lastSummary || null,
-			commercialSummary: turnResult.enrichedState?.commercialSummary || null
 		}
 	});
 
