@@ -87,7 +87,6 @@ async function resetConversationForFixture(conversationId, fixture) {
 				queue: 'AUTO',
 				aiEnabled: true,
 				lastSummary: null,
-				commercialSummary: null,
 				lastMessageAt: null
 			}
 		}),
