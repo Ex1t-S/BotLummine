@@ -84,11 +84,12 @@ async function resetConversationForFixture(conversationId, fixture) {
 		prisma.conversation.update({
 			where: { id: conversationId },
 			data: {
-				queue: 'AUTO',
-				aiEnabled: true,
-				lastSummary: null,
-				lastMessageAt: null
-			}
+			queue: 'AUTO',
+			aiEnabled: true,
+			lastSummary: null,
+			commercialSummary: null,
+			lastMessageAt: null
+		}
 		}),
 		prisma.conversationState.upsert({
 			where: { conversationId },

@@ -49,7 +49,6 @@ model Conversation {
 model ConversationState {
   id                    String   @id @default(cuid())
   conversationId        String   @unique
-
   customerName          String?
   lastIntent            String?
   lastDetectedIntent    String?
@@ -69,10 +68,19 @@ model ConversationState {
   interactionCount      Int      @default(0)
   notes                 String?
 
+  currentProductFocus   String?
+  salesStage            String?
+  shownOffers           Json?
+  shownPrices           Json?
+  sharedLinks           Json?
+  lastRecommendedProduct String?
+  lastRecommendedOffer  String?
+  buyingIntentLevel     String?
+  frictionLevel         String?
+  commercialSummary     String?
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-
   conversation          Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
