@@ -32,6 +32,7 @@ export async function attachUser(req, _res, next) {
 	}
 }
 
+
 export function requireAuth(req, res, next) {
 	if (!req.user) {
 		return res.status(401).json({
@@ -50,12 +51,36 @@ export function issueAuthCookie(res, user) {
 		{ expiresIn: '7d' }
 	);
 
-	res.cookie(process.env.COOKIE_NAME || 'wa_assistant_token', token, {
-	httpOnly: true,
-	secure: true,
-	sameSite: 'none',
-	maxAge: 7 * 24 * 60 * 60 * 1000
-});
+	const cookieOptions = {
+		httpOnly: true,
+		secure: true,
+		sameSite: 'none',
+		path: '/',
+		maxAge: 7 * 24 * 60 * 60 * 1000
+	};
+
+	console.log('---------------- AUTH COOKIE ISSUE ----------------');
+	console.log('[AUTH] seteando cookie:', cookieName);
+	console.log('[AUTH] para user id:', user.id);
+	console.log('[AUTH] para email:', user.email);
+	console.log('[AUTH] cookie options:', cookieOptions);
+
+	res.cookie(cookieName, token, cookieOptions);
+}
+
+export function clearAuthCookie(res) {
+	const cookieOptions = {
+		httpOnly: true,
+		secure: true,
+		sameSite: 'none',
+		path: '/'
+	};
+
+	console.log('---------------- AUTH COOKIE CLEAR ----------------');
+	console.log('[AUTH] limpiando cookie:', cookieName);
+	console.log('[AUTH] cookie options:', cookieOptions);
+
+	res.clearCookie(cookieName, cookieOptions);
 }
 
 export function clearAuthCookie(res) {
