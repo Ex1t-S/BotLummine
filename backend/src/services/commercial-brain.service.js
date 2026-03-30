@@ -63,10 +63,10 @@ function detectSalesStage({ intent, messageBody, currentState = {}, greetingOnly
 	const text = normalizeText(messageBody);
 	if (greetingOnly) return 'DISCOVERY';
 	if (currentState?.needsHuman) return 'NEEDS_HUMAN';
-	if (/(precio|cuanto|cu[aá]nto|sale|valor)/i.test(text) && /(oferta|promo|pack|combo|2x1|3x1)/i.test(text))
+	if (/(precio|cuanto|cu[aá]nto|sale|valor)/i.test(text) && /(oferta|promo|pack|combo|2\s*x\s*1|3\s*x\s*1|2x1|3x1|dos por uno|tres por uno)/i.test(text))
 		return 'PRICE_OFFER_EVALUATION';
 	if (/(precio|cuanto|cu[aá]nto|sale|valor)/i.test(text)) return 'PRICE_EVALUATION';
-	if (/(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(text)) return 'OFFER_DISCOVERY';
+	if (/(oferta|promo|promocion|promoción|pack|combo|2\s*x\s*1|3\s*x\s*1|2x1|3x1|dos por uno|tres por uno)/i.test(text)) return 'OFFER_DISCOVERY';
 	if (/(talle|medida|size|xl|xxl|xxxl|m\/l|l\/xl|xl\/xxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text))
 		return 'SIZE_COLOR_CHECK';
 	if (/(quiero|lo quiero|me lo llevo|como compro|pasame el link|mandame el link|gu[ií]ame)/i.test(text))
@@ -79,9 +79,18 @@ function detectRequestedAction(messageBody = '', greetingOnly = false) {
 	const text = normalizeText(messageBody);
 	if (greetingOnly) return 'GREETING';
 
-	const asksLink = /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(text);
+	const asksLink =
+		/(pasame|mandame|enviame).*(link|url)/i.test(text) ||
+		/\b(link|url|web|tienda|pagina|página)\b/i.test(text);
 	const asksPrice = /(precio|cuanto|cu[aá]nto|sale|valor)/i.test(text);
-	const asksOffer = /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(text);
+	const asksOffer =
+		/(oferta|promo|promocion|promoción|pack|combo|2\s*x\s*1|3\s*x\s*1|2x1|3x1|dos por uno|tres por uno)/i.test(
+			text
+		);
+	const asksOptions =
+		/(otros? modelos?|otras? opciones?|otras? promos?|mostrame|mostrarme|ver opciones|que opciones tenes|qué opciones ten[eé]s)/i.test(
+			text
+		);
 	const asksVariant =
 		/(talle|medida|size|xl|xxl|xxxl|m\/l|l\/xl|xl\/xxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(
 			text
@@ -91,6 +100,7 @@ function detectRequestedAction(messageBody = '', greetingOnly = false) {
 	if (asksPrice && asksOffer) return 'ASK_PRICE_AND_OFFER';
 	if (asksPrice) return 'ASK_PRICE';
 	if (asksOffer) return 'ASK_OFFER';
+	if (asksOptions) return 'ASK_OPTIONS';
 	if (asksVariant) return 'ASK_VARIANT';
 	if (/^si$/i.test(text) || /^(sí)$/i.test(text)) return 'AFFIRM_CONTINUATION';
 	if (/(transferencia|alias|pago|cuotas)/i.test(text)) return 'ASK_PAYMENT';
@@ -474,9 +484,13 @@ function buildRecommendedAction({
 	if (requestedAction === 'ASK_PRICE_AND_OFFER') return 'compare_single_vs_best_offer';
 	if (requestedAction === 'ASK_PRICE' && repeatPriceNow) return 'present_price_once';
 	if (requestedAction === 'ASK_OFFER') return 'present_single_best_offer';
+	if (requestedAction === 'ASK_OPTIONS') return 'show_family_options';
 	if (requestedAction === 'ASK_VARIANT') return 'confirm_variant_and_continue';
 	if (requestedAction === 'ASK_PAYMENT') return 'payment_guidance_with_current_offer';
 	if (requestedAction === 'AFFIRM_CONTINUATION') return 'continue_current_offer';
+	if (stage === 'READY_TO_BUY' && requestedAction === 'GENERAL' && family === 'body_modelador') {
+		return 'discover_family_before_offer';
+	}
 	if (stage === 'READY_TO_BUY') return 'close_sale';
 	if (stage === 'PRODUCT_INTEREST' && family === 'body_modelador') return 'discover_family_before_offer';
 	return 'answer_and_guide';
@@ -489,14 +503,16 @@ function findProductFocus({
 	family = null,
 	bestOffer = null
 }) {
-	if (bestOffer?.name) return bestOffer.name;
+	if (['GENERAL', 'GREETING', 'ASK_OPTIONS'].includes(requestedAction) && family) {
+		return getFamilyLabel(family);
+	}
 	if (
 		currentState?.currentProductFocus &&
 		inferCommercialFamily(currentState.currentProductFocus) === family
 	) {
 		return currentState.currentProductFocus;
 	}
-	if (requestedAction === 'GENERAL' && family) return getFamilyLabel(family);
+	if (bestOffer?.name) return bestOffer.name;
 	if (products[0]?.name) return products[0].name;
 	return currentState?.currentProductFocus || getFamilyLabel(family);
 }

@@ -361,6 +361,24 @@ function buildAiFailureFallback({
 			return `Sí, en ${familyLabel} seguimos con ${requestedVariantText}. Si querés, te paso precio individual y promo dentro de esta misma familia.`;
 		}
 
+		if (commercialPlan?.recommendedAction === 'show_family_options') {
+			const parts = [];
+			if (singleOption?.price) {
+				parts.push(`En ${familyLabel} tengo opción individual desde ${singleOption.price}.`);
+			} else {
+				parts.push(`En ${familyLabel} tengo opción individual.`);
+			}
+			if (offerOption?.name) {
+				parts.push(
+					`Y en promo, la principal es ${offerOption.name}${
+						offerOption.price ? ` por ${offerOption.price}` : ''
+					}.`
+				);
+			}
+			parts.push('Si querés, te digo cuál te conviene más o seguimos por color y talle.');
+			return parts.join(' ');
+		}
+
 		if (
 			commercialPlan?.recommendedAction === 'present_single_best_offer' &&
 			commercialPlan?.bestOffer
@@ -378,13 +396,31 @@ function buildAiFailureFallback({
 		}
 
 		if (
+			commercialPlan?.recommendedAction === 'continue_current_offer' &&
+			(commercialPlan?.comparisonSet?.single || commercialPlan?.comparisonSet?.offer)
+		) {
+			const preferred = commercialPlan?.comparisonSet?.offer || commercialPlan?.comparisonSet?.single;
+			return `Seguimos dentro de ${familyLabel}. ${
+				preferred?.name
+					? `La opción más alineada es ${preferred.name}${
+							preferred.price ? ` por ${preferred.price}` : ''
+						}.`
+					: 'Si querés, te paso la opción que más te conviene.'
+			}`;
+		}
+
+		if (
 			commercialPlan?.recommendedAction === 'close_with_single_link' &&
 			commercialPlan?.bestOffer?.productUrl
 		) {
 			return `Sí, te paso el link directo: ${commercialPlan.bestOffer.productUrl}`;
 		}
 
-		if (commercialPlan?.bestOffer?.productUrl) {
+		if (commercialPlan?.recommendedAction === 'answer_and_guide' && familyLabel !== 'producto') {
+			return `Sí, trabajamos ${familyLabel}. Si querés, seguimos por color y talle o te paso opciones y promos dentro de esta misma familia.`;
+		}
+
+		if (commercialPlan?.bestOffer?.productUrl && commercialPlan?.shareLinkNow) {
 			return `Te paso la opción más alineada con lo que venían viendo: ${commercialPlan.bestOffer.productUrl}`;
 		}
 
@@ -495,9 +531,21 @@ function buildResponsePolicy({
 	}
 
 	if (intent === 'product') {
+		const deterministicActions = new Set([
+			'greet_and_discover',
+			'discover_family_before_offer',
+			'show_family_options',
+			'compare_single_vs_best_offer',
+			'present_single_best_offer',
+			'present_price_once',
+			'confirm_variant_and_continue',
+			'continue_current_offer',
+			'close_with_single_link'
+		]);
+
 		return {
 			action: commercialPlan?.recommendedAction || 'product_guidance',
-			useAI: true,
+			useAI: !deterministicActions.has(commercialPlan?.recommendedAction),
 			allowHandoffMention: false,
 			maxChars:
 				commercialPlan?.recommendedAction === 'close_with_single_link'
@@ -639,6 +687,7 @@ export async function getOrCreateConversation({
 	aiEnabled = true
 }) {
 	const normalizedWaId = normalizeThreadPhone(waId);
+	const isLabMode = transportMode === 'lab';
 
 	const contact = await prisma.contact.upsert({
 		where: { waId: normalizedWaId },
@@ -826,6 +875,37 @@ function buildStatePayload({
 	};
 }
 
+function buildLabTrace({
+	intent = null,
+	queueDecision = null,
+	responsePolicy = null,
+	commercialPlan = null,
+	catalogProducts = [],
+	commercialHints = [],
+	assistantMessage = null,
+	provider = null,
+	model = null,
+	aiGuidance = null,
+	liveOrderContext = null,
+	shouldReply = true
+}) {
+	return {
+		intent,
+		queueDecision,
+		responsePolicy,
+		commercialPlan,
+		catalogProducts,
+		commercialHints,
+		prompt: null,
+		assistantMessage,
+		provider,
+		model,
+		aiGuidance,
+		liveOrderContext,
+		shouldReply
+	};
+}
+
 export async function processInboundMessage({
 	waId,
 	contactName,
@@ -833,9 +913,11 @@ export async function processInboundMessage({
 	messageType = 'text',
 	attachmentMeta = null,
 	rawPayload,
-	metaMessageId = null
+	metaMessageId = null,
+	transportMode = 'live'
 }) {
 	const normalizedWaId = normalizeThreadPhone(waId);
+	const isLabMode = transportMode === 'lab';
 
 	const conversation = await getOrCreateConversation({
 		waId: normalizedWaId,
@@ -996,7 +1078,31 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation };
+		return {
+			conversation: freshConversation,
+			trace: isLabMode
+				? buildLabTrace({
+						intent,
+						queueDecision,
+						responsePolicy: {
+							action: 'payment_review_ack',
+							useAI: false,
+							allowHandoffMention: false,
+							maxChars: 180,
+							tone: 'amigable_directo'
+						},
+						commercialPlan: null,
+						catalogProducts: [],
+						commercialHints: [],
+						assistantMessage: ack,
+						provider: 'system',
+						model: 'payment-proof-router',
+						aiGuidance,
+						liveOrderContext,
+						shouldReply: true
+					})
+				: null
+		};
 	}
 
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
@@ -1031,7 +1137,31 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation };
+		return {
+			conversation: freshConversation,
+			trace: isLabMode
+				? buildLabTrace({
+						intent,
+						queueDecision,
+						responsePolicy: {
+							action: 'handoff_human',
+							useAI: false,
+							allowHandoffMention: true,
+							maxChars: 220,
+							tone: 'empatico_concreto'
+						},
+						commercialPlan: null,
+						catalogProducts: [],
+						commercialHints: [],
+						assistantMessage: handoffReply,
+						provider: 'system',
+						model: 'human-handoff-router',
+						aiGuidance,
+						liveOrderContext,
+						shouldReply: true
+					})
+				: null
+		};
 	}
 
 	const isAiEnabledGlobal =
@@ -1047,7 +1177,25 @@ export async function processInboundMessage({
 	console.log('[AI DEBUG] intent:', intent);
 	console.log('[AI DEBUG] waId:', freshConversation.contact.waId);
 	if (!shouldReply) {
-		return { conversation: freshConversation };
+		return {
+			conversation: freshConversation,
+			trace: isLabMode
+				? buildLabTrace({
+						intent,
+						queueDecision,
+						responsePolicy: null,
+						commercialPlan: null,
+						catalogProducts: [],
+						commercialHints: [],
+						assistantMessage: null,
+						provider: null,
+						model: null,
+						aiGuidance,
+						liveOrderContext,
+						shouldReply: false
+					})
+				: null
+		};
 	}
 
 	const maxContext = Number(process.env.MAX_CONTEXT_MESSAGES || 12);
@@ -1268,5 +1416,21 @@ export async function processInboundMessage({
 		}
 	});
 
-	return { conversation: freshConversation };
+	return {
+		conversation: freshConversation,
+		trace: buildLabTrace({
+			intent,
+			queueDecision,
+			responsePolicy,
+			commercialPlan,
+			catalogProducts,
+			commercialHints,
+			assistantMessage: finalReply,
+			provider: aiMeta?.provider || null,
+			model: aiMeta?.model || null,
+			aiGuidance,
+			liveOrderContext,
+			shouldReply: true
+		})
+	};
 }
