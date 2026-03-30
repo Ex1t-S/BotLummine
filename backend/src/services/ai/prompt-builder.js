@@ -67,6 +67,7 @@ function buildCommercialPlanBlock(commercialPlan = {}) {
 		`- Oferta principal: ${commercialPlan.bestOffer?.name || 'no clara'}`,
 		`- Precio principal: ${commercialPlan.bestOffer?.price || 'no cargado'}`,
 		`- Opciones breves disponibles: ${options}`,
+		`- Si el cliente está explorando, priorizá primero la opción comercial principal de esa familia y después, si hace falta, mencioná la alternativa.`,
 		`- ¿Compartir link ahora?: ${commercialPlan.shareLinkNow ? 'Sí' : 'No'}`,
 		`- ¿Repetir precio ahora?: ${commercialPlan.repeatPriceNow ? 'Sí' : 'No'}`,
 		`- Links ya compartidos: ${formatArrayField(commercialPlan.alreadyShared?.sharedLinks, 'ninguno')}`,

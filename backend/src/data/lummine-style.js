@@ -37,7 +37,7 @@ const TOPIC_FACTS = {
 	],
 	productos: [
 		'Si preguntan por un producto, responder de forma concreta, útil y orientada a avanzar.',
-		'Si piden promos, contar brevemente las opciones más buscadas antes de pasar un link.',
+		'Si piden promos, contar brevemente primero la opción principal del negocio y después la alternativa.',
 		'Si todavía están explorando, podés invitar a ver la web y ofrecer ayuda para elegir.'
 	]
 };
@@ -51,7 +51,7 @@ export const STYLE_EXAMPLES = [
 	{
 		tags: ['continuidad', 'producto'],
 		customer: 'Estoy interesado en un body modelador',
-		agent: 'Tenemos opción individual y también promos. Si querés, te cuento rápido cuál conviene más según lo que buscás.'
+		agent: 'Tenemos opción individual y también promos. Si querés, te cuento primero la que más se suele elegir y después vemos otras opciones.'
 	},
 	{
 		tags: ['continuidad', 'talle'],
@@ -66,7 +66,7 @@ export const STYLE_EXAMPLES = [
 	{
 		tags: ['link', 'continuidad'],
 		customer: 'Me pasás el link?',
-		agent: 'Sí, te paso el link de esa opción por acá.'
+		agent: 'Sí, te paso el link de esa opción por acá. Ahí también vas a poder revisar si hay promociones activas.'
 	},
 	{
 		tags: ['pedido compra', 'orientacion'],

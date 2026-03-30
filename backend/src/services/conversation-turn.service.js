@@ -576,7 +576,7 @@ export async function runConversationTurn({
 	const liveOrderContext = intentResult.liveOrderContext || null;
 	const forcedReply = intentResult.forcedReply || null;
 
-	const nextStatePayload = buildStatePayload({
+	let nextStatePayload = buildStatePayload({
 		contactName,
 		normalizedWaId,
 		intent,
@@ -751,6 +751,37 @@ export async function runConversationTurn({
 		commercialHints.push('No pases más de un link en una misma respuesta.');
 		commercialHints.push('No abras varias promos si la clienta ya eligió una.');
 		commercialHints.push('Bajá el tono celebratorio y soná más natural.');
+
+		nextStatePayload = {
+			...nextStatePayload,
+			currentProductFocus: commercialPlan?.productFocusLabel || commercialPlan?.productFocus || nextStatePayload.currentProductFocus || null,
+			salesStage: commercialPlan?.stage || nextStatePayload.salesStage || null,
+			shownOffers: commercialPlan?.bestOffer?.offerLabel
+				? [...new Set([...(Array.isArray(nextStatePayload.shownOffers) ? nextStatePayload.shownOffers : []), commercialPlan.bestOffer.offerLabel])]
+				: nextStatePayload.shownOffers || [],
+			shownPrices: commercialPlan?.repeatPriceNow && commercialPlan?.bestOffer?.price
+				? [...new Set([...(Array.isArray(nextStatePayload.shownPrices) ? nextStatePayload.shownPrices : []), `${commercialPlan.bestOffer.name}::${commercialPlan.bestOffer.price}`])]
+				: nextStatePayload.shownPrices || [],
+			sharedLinks: commercialPlan?.shareLinkNow && commercialPlan?.bestOffer?.productUrl
+				? [...new Set([...(Array.isArray(nextStatePayload.sharedLinks) ? nextStatePayload.sharedLinks : []), commercialPlan.bestOffer.productUrl])]
+				: nextStatePayload.sharedLinks || [],
+			lastRecommendedProduct: commercialPlan?.bestOffer?.name || nextStatePayload.lastRecommendedProduct || null,
+			lastRecommendedOffer: commercialPlan?.bestOffer?.offerLabel || nextStatePayload.lastRecommendedOffer || null,
+			buyingIntentLevel: commercialPlan?.buyingIntentLevel || nextStatePayload.buyingIntentLevel || null,
+			commercialSummary: buildConversationSummary({
+				intent,
+				enrichedState: { ...enrichedState, currentProductFocus: commercialPlan?.productFocusLabel || commercialPlan?.productFocus || nextStatePayload.currentProductFocus || null },
+				lastUserMessage: messageBody,
+				lastAssistantMessage: '',
+				liveOrderContext,
+				commercialPlan
+			})
+		};
+
+		enrichedState = {
+			...enrichedState,
+			...nextStatePayload
+		};
 	} catch (catalogError) {
 		console.error('Error buscando productos en catálogo local:', catalogError);
 	}

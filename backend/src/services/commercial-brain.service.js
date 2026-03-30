@@ -1,3 +1,5 @@
+import { getCommercialProfile, normalizeCommercialFamily } from '../data/catalog-commercial-map.js';
+
 function normalizeText(value = '') {
 	return String(value || '')
 		.toLowerCase()
@@ -17,37 +19,15 @@ function uniqueStrings(values = []) {
 
 function detectMood(messageBody = '', currentState = {}) {
 	const text = normalizeText(messageBody);
-
-	if (
-		/(horrible|malisimo|malisima|desastre|pesimo|p[eé]simo|me cans[eé]|no responden|nadie responde|quiero una persona|quiero hablar con alguien|me tienen harta|me tienen podrida)/i.test(
-			text
-		)
-	) {
-		return 'angry';
-	}
-
-	if (/(urgente|ya|ahora|hoy|cuanto antes)/i.test(text)) {
-		return 'urgent';
-	}
-
+	if (/(horrible|malisimo|malisima|desastre|pesimo|me canse|no responden|nadie responde|quiero una persona|quiero hablar con alguien)/i.test(text)) return 'angry';
+	if (/(urgente|ya|ahora|hoy|cuanto antes)/i.test(text)) return 'urgent';
 	return currentState?.customerMood || 'neutral';
 }
 
 function detectBuyingIntent(messageBody = '', currentState = {}) {
 	const text = normalizeText(messageBody);
-
-	if (
-		/(lo quiero|lo compro|pasame el link|mandame el link|como compro|como pago|gu[ií]ame|quiero comprar)/i.test(
-			text
-		)
-	) {
-		return 'high';
-	}
-
-	if (/(precio|cuanto|cu[aá]nto|sale|valor|ten[eé]s|tienen|talle|color|oferta|promo|link)/i.test(text)) {
-		return 'medium';
-	}
-
+	if (/(lo quiero|lo compro|pasame el link|mandame el link|como compro|como pago|gu[ií]ame|quiero comprar)/i.test(text)) return 'high';
+	if (/(precio|cuanto|sale|valor|talle|color|oferta|promo|link)/i.test(text)) return 'medium';
 	return currentState?.buyingIntentLevel || 'low';
 }
 
@@ -55,52 +35,47 @@ function detectRequestedVariant(messageBody = '', products = []) {
 	const text = normalizeText(messageBody);
 	const color = (text.match(/\b(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|marron|avellana)\b/) || [])[1] || null;
 	const size = (text.match(/\b(xs|s|m|l|xl|xxl|xxxl|m\/l|l\/xl|xl\/xxl)\b/) || [])[1] || null;
-
 	const resolvedColor = color || products.flatMap((p) => asArray(p.colors)).find((value) => text.includes(normalizeText(value))) || null;
 	const resolvedSize = size || products.flatMap((p) => asArray(p.sizes)).find((value) => text.includes(normalizeText(value))) || null;
-
-	return {
-		color: resolvedColor,
-		size: resolvedSize
-	};
+	return { color: resolvedColor, size: resolvedSize };
 }
 
-function detectSalesStage({ intent, messageBody, currentState = {} }) {
+function detectRequestedAction(messageBody = '') {
 	const text = normalizeText(messageBody);
+	if (/(pasame|mandame|enviame).*(link|url)|\b(link|url|comprar)\b/i.test(text)) return 'ASK_LINK';
+	if (/(catalogo|catálogo|pagina|página|web|ver opciones|mirar opciones|ver la web|ver la pagina)/i.test(text)) return 'ASK_CATALOG';
+	if (/(precio|cuanto|sale|valor)/i.test(text)) return 'ASK_PRICE';
+	if (/(oferta|promo|promocion|promoción|pack|combo|2x1|3x1|alguna promo mas|alguna promo más|que opciones|qué opciones|otras opciones)/i.test(text)) return 'ASK_OFFER';
+	if (/(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text)) return 'ASK_VARIANT';
+	if (/^si$/i.test(text) || /^(sí)$/i.test(text)) return 'AFFIRM_CONTINUATION';
+	if (/(transferencia|alias|pago|cuotas|comprobante)/i.test(text)) return 'ASK_PAYMENT';
+	return 'GENERAL';
+}
 
+function detectSalesStage({ intent, messageBody, currentState = {}, requestedAction }) {
+	const text = normalizeText(messageBody);
 	if (currentState?.needsHuman) return 'NEEDS_HUMAN';
-	if (/(precio|cuanto|cu[aá]nto|sale|valor)/i.test(text)) return 'PRICE_EVALUATION';
-	if (/(oferta|promo|promocion|promoción|pack|combo|2x1|3x1|que opciones|qué opciones|alguna promo)/i.test(text)) return 'OFFER_DISCOVERY';
-	if (/(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text)) {
-		return 'SIZE_COLOR_CHECK';
-	}
-	if (/(quiero|lo quiero|me lo llevo|como compro|pasame el link|mandame el link|gu[ií]ame)/i.test(text)) {
-		return 'READY_TO_BUY';
-	}
+	if (requestedAction === 'ASK_PRICE') return 'PRICE_EVALUATION';
+	if (requestedAction === 'ASK_OFFER') return 'OFFER_DISCOVERY';
+	if (requestedAction === 'ASK_VARIANT') return 'SIZE_COLOR_CHECK';
+	if (/(quiero|lo quiero|me lo llevo|como compro|pasame el link|mandame el link|gu[ií]ame)/i.test(text)) return 'READY_TO_BUY';
 	if (intent === 'product') return 'PRODUCT_INTEREST';
-
 	return currentState?.salesStage || 'DISCOVERY';
 }
 
-function findProductFocus({ messageBody, currentState = {}, products = [] }) {
-	const text = normalizeText(messageBody);
+function familyFromRecentMessages(recentMessages = []) {
+	const recentUserText = [...recentMessages].slice(-4).map((msg) => (msg.role === 'user' ? msg.text : '')).join(' ');
+	return normalizeCommercialFamily(recentUserText);
+}
 
-	if (/(body|bodies|body modelador)/.test(text)) return 'body modelador';
-	if (/(short|short faja)/.test(text)) return 'short/faja';
-	if (/(bombacha|colaless)/.test(text)) return 'bombacha modeladora';
-	if (/(faja|reductora|reductor)/.test(text)) return 'faja reductora';
-
-	const byFamily = products.find((product) => product.family && product.family !== 'general');
-	if (byFamily?.family === 'body_modelador') return 'body modelador';
-	if (byFamily?.family === 'short_faja') return 'short/faja';
-	if (byFamily?.family === 'bombacha_modeladora') return 'bombacha modeladora';
-	if (byFamily?.family === 'faja') return 'faja reductora';
-
-	if (currentState?.currentProductFocus) return currentState.currentProductFocus;
-	if (products[0]?.name) return products[0].name;
-
-	const interested = asArray(currentState?.interestedProducts);
-	return interested[0] || null;
+function findProductFocus({ messageBody, currentState = {}, products = [], recentMessages = [] }) {
+	const messageFamily = normalizeCommercialFamily(messageBody);
+	if (messageFamily !== 'general') return messageFamily;
+	const recentFamily = familyFromRecentMessages(recentMessages);
+	if (recentFamily !== 'general') return recentFamily;
+	if (currentState?.currentProductFocus) return normalizeCommercialFamily(currentState.currentProductFocus);
+	if (products[0]?.family && products[0].family !== 'general') return products[0].family;
+	return 'general';
 }
 
 function mergeHistorySignals({ recentMessages = [], currentState = {}, products = [] }) {
@@ -109,37 +84,16 @@ function mergeHistorySignals({ recentMessages = [], currentState = {}, products 
 		shownPrices: uniqueStrings(asArray(currentState?.shownPrices)),
 		shownOffers: uniqueStrings(asArray(currentState?.shownOffers))
 	};
-
-	const assistantTexts = recentMessages
-		.filter((msg) => msg.role === 'assistant')
-		.map((msg) => String(msg.text || ''));
-
+	const assistantTexts = recentMessages.filter((msg) => msg.role === 'assistant').map((msg) => String(msg.text || ''));
 	const joined = assistantTexts.join('\n').toLowerCase();
-
-	const fromRecent = {
-		sharedLinks: [],
-		shownPrices: [],
-		shownOffers: []
-	};
-
+	const fromRecent = { sharedLinks: [], shownPrices: [], shownOffers: [] };
 	for (const product of products) {
-		if (product.productUrl && joined.includes(String(product.productUrl).toLowerCase())) {
-			fromRecent.sharedLinks.push(product.productUrl);
-		}
-
-		if (product.price && joined.includes(String(product.price).toLowerCase())) {
-			fromRecent.shownPrices.push(`${product.name}::${product.price}`);
-		}
-
-		if (product.offerType && joined.includes(String(product.offerLabel || '').toLowerCase())) {
-			fromRecent.shownOffers.push(product.offerLabel);
-		}
+		if (product.productUrl && joined.includes(String(product.productUrl).toLowerCase())) fromRecent.sharedLinks.push(product.productUrl);
+		if (product.price && joined.includes(String(product.price).toLowerCase())) fromRecent.shownPrices.push(`${product.name}::${product.price}`);
+		if (product.offerLabel && joined.includes(String(product.offerLabel).toLowerCase())) fromRecent.shownOffers.push(product.offerLabel);
 	}
-
 	if (/(3x1|tres por uno)/i.test(joined)) fromRecent.shownOffers.push('3x1');
 	if (/(2x1|dos por uno)/i.test(joined)) fromRecent.shownOffers.push('2x1');
-	if (/(promo|promocion|promoción|oferta)/i.test(joined)) fromRecent.shownOffers.push('promo');
-
 	return {
 		sharedLinks: uniqueStrings([...fromState.sharedLinks, ...fromRecent.sharedLinks]),
 		shownPrices: uniqueStrings([...fromState.shownPrices, ...fromRecent.shownPrices]),
@@ -147,42 +101,29 @@ function mergeHistorySignals({ recentMessages = [], currentState = {}, products 
 	};
 }
 
-function rankCommercialProducts(products = [], { messageBody = '', currentState = {} } = {}) {
+function rankCommercialProducts(products = [], { messageBody = '', currentState = {}, recentMessages = [] } = {}) {
 	const text = normalizeText(messageBody);
-	const currentFocus = normalizeText(currentState?.currentProductFocus || '');
-	const interests = asArray(currentState?.interestedProducts).map((v) => normalizeText(v));
 	const asksPromo = /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(text);
+	const requestedFamily = findProductFocus({ messageBody, currentState, products, recentMessages });
+	const currentFocus = normalizeCommercialFamily(currentState?.currentProductFocus || '');
 	const specificColor = /(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text);
 	const specificSize = /(xs|s|m|l|xl|xxl|xxxl|m\/l|l\/xl|xl\/xxl)/i.test(text);
 
 	return [...products]
 		.map((product) => {
 			let score = Number(product.score || 0);
-			const name = normalizeText(product.name || '');
-
-			if (product.priceValue != null) score += 8;
+			if (product.family === requestedFamily) score += 34;
+			if (currentFocus && product.family === currentFocus) score += 18;
 			if (product.productUrl) score += 2;
-
-			if (currentFocus && name.includes(currentFocus)) {
-				score += 18;
-			}
-
-			if (interests.some((term) => term && name.includes(term))) {
-				score += 10;
-			}
-
-			if (asksPromo) {
-				if (product.hasDiscount) score += 14;
-				if (product.offerType === 'pack_3x1') score += 12;
-				if (product.offerType === 'pack_2x1') score += 8;
-			} else {
-				if (product.offerType === 'single') score += 12;
-				if (product.offerType?.startsWith('pack')) score -= 10;
-			}
-
-			if (specificColor && !(product.colors || []).length) score -= 6;
-			if (specificSize && !(product.sizes || []).length) score -= 6;
-
+			if (product.priceValue != null) score += 4;
+			if (specificColor && !(product.colors || []).length) score -= 5;
+			if (specificSize && !(product.sizes || []).length) score -= 5;
+			if (!asksPromo && product.profile?.showMode === 'offer_first' && product.offerType === 'pack_3x1') score += 10;
+			if (!asksPromo && product.profile?.showMode === 'offer_first' && product.offerType === 'pack_2x1') score += 4;
+			if (!asksPromo && product.profile?.showMode === 'product_first' && product.offerType === 'single') score += 10;
+			if (!asksPromo && product.profile?.showMode === 'product_first' && product.offerType.startsWith('pack')) score -= 10;
+			if (asksPromo && product.offerType === 'pack_3x1') score += 18;
+			if (asksPromo && product.offerType === 'pack_2x1') score += 10;
 			return { ...product, commercialScore: score };
 		})
 		.sort((a, b) => b.commercialScore - a.commercialScore);
@@ -190,20 +131,25 @@ function rankCommercialProducts(products = [], { messageBody = '', currentState 
 
 function chooseBestOffer(products = [], context = {}) {
 	if (!products.length) return null;
+	const family = context.productFocus !== 'general' ? context.productFocus : products[0]?.family || 'general';
+	const profile = getCommercialProfile(family);
+	const familyProducts = products.filter((product) => product.family === family);
+	const pool = familyProducts.length ? familyProducts : products;
 
-	const ordered = [...products].sort((a, b) => {
-		if ((a.commercialScore ?? 0) !== (b.commercialScore ?? 0)) {
-			return (b.commercialScore ?? 0) - (a.commercialScore ?? 0);
-		}
-		if ((a.priceValue ?? Infinity) !== (b.priceValue ?? Infinity)) {
-			return (a.priceValue ?? Infinity) - (b.priceValue ?? Infinity);
-		}
-		return 0;
-	});
-
-	const chosen = ordered[0];
+	let chosen = null;
+	if (context.requestedAction === 'ASK_LINK' || context.requestedAction === 'ASK_PRICE') {
+		chosen = pool.find((product) => product.offerType === 'single' && product.productUrl) || pool[0] || null;
+	}
+	if (!chosen && (context.requestedAction === 'ASK_OFFER' || context.asksPromo)) {
+		chosen = pool.find((product) => product.offerType === 'pack_3x1') || pool.find((product) => product.offerType === 'pack_2x1') || pool[0] || null;
+	}
+	if (!chosen && profile?.showMode === 'offer_first') {
+		chosen = pool.find((product) => product.offerType === 'pack_3x1') || pool.find((product) => product.offerType === 'pack_2x1') || pool.find((product) => product.offerType === 'single') || pool[0] || null;
+	}
+	if (!chosen) {
+		chosen = pool.find((product) => product.offerType === 'single') || pool[0] || null;
+	}
 	if (!chosen) return null;
-
 	return {
 		name: chosen.name,
 		price: chosen.price || null,
@@ -220,119 +166,49 @@ function chooseBestOffer(products = [], context = {}) {
 	};
 }
 
-function buildOfferOptions(products = [], productFocus = null) {
-	const byKey = new Map();
-
-	for (const product of products) {
-		const key = `${product.family || 'general'}::${product.offerType || 'single'}`;
-		if (byKey.has(key)) continue;
-
-		let label = 'opción individual';
-		if (product.offerType === 'pack_3x1') label = 'promo 3x1';
-		else if (product.offerType === 'pack_2x1') label = 'promo 2x1';
-		else if (product.offerType === 'pack') label = 'pack';
-
-		byKey.set(key, {
-			label,
-			productName: product.name,
-			price: product.price || null,
-			productUrl: product.productUrl || null,
-			family: product.family || null
-		});
-		if (byKey.size >= 3) break;
+function buildOfferOptions(products = [], productFocus = 'general') {
+	const family = productFocus !== 'general' ? productFocus : products[0]?.family || 'general';
+	const familyProducts = products.filter((product) => product.family === family);
+	const profile = getCommercialProfile(family);
+	const source = familyProducts.length ? familyProducts : products;
+	const options = [];
+	const pushUnique = (product, label) => {
+		if (!product || options.some((item) => item.productUrl && item.productUrl === product.productUrl)) return;
+		options.push({ label, productName: product.name, price: product.price || null, productUrl: product.productUrl || null, family: product.family || null });
+	};
+	if (profile?.showMode === 'offer_first') {
+		pushUnique(source.find((p) => p.offerType === 'pack_3x1'), 'promo 3x1');
+		pushUnique(source.find((p) => p.offerType === 'pack_2x1'), 'promo 2x1');
+		pushUnique(source.find((p) => p.offerType === 'single'), 'opción individual');
+	} else {
+		pushUnique(source.find((p) => p.offerType === 'single'), 'opción individual');
+		pushUnique(source.find((p) => p.offerType === 'pack_3x1'), 'promo 3x1');
+		pushUnique(source.find((p) => p.offerType === 'pack_2x1'), 'promo 2x1');
 	}
-
-	const options = [...byKey.values()];
-	if (productFocus && !options.length) {
-		return [{ label: 'opción del producto consultado', productName: productFocus, price: null, productUrl: null }];
-	}
-	return options;
-}
-
-function detectRequestedAction(messageBody = '') {
-	const text = normalizeText(messageBody);
-
-	if (/(pasame|mandame|enviame).*(link|url)|\b(link|url|comprar)\b/i.test(text)) {
-		return 'ASK_LINK';
-	}
-
-	if (/(catalogo|catálogo|pagina|página|web|ver opciones|mirar opciones|ver la web|ver la pagina)/i.test(text)) {
-		return 'ASK_CATALOG';
-	}
-
-	if (/(precio|cuanto|cu[aá]nto|sale|valor)/i.test(text)) {
-		return 'ASK_PRICE';
-	}
-
-	if (/(oferta|promo|promocion|promoción|pack|combo|2x1|3x1|alguna promo mas|alguna promo más|que opciones|qué opciones|otras opciones)/i.test(text)) {
-		return 'ASK_OFFER';
-	}
-
-	if (/(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text)) {
-		return 'ASK_VARIANT';
-	}
-
-	if (/^si$/i.test(text) || /^(sí)$/i.test(text)) {
-		return 'AFFIRM_CONTINUATION';
-	}
-
-	if (/(transferencia|alias|pago|cuotas|comprobante)/i.test(text)) {
-		return 'ASK_PAYMENT';
-	}
-
-	return 'GENERAL';
+	return options.slice(0, 3);
 }
 
 function shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared }) {
 	if (!bestOffer?.productUrl) return false;
-
 	if (requestedAction === 'ASK_LINK') return true;
-
-	if (requestedAction === 'AFFIRM_CONTINUATION' && stage === 'READY_TO_BUY') {
-		return !alreadyShared.sharedLinks.includes(bestOffer.productUrl);
-	}
-
+	if (requestedAction === 'AFFIRM_CONTINUATION' && stage === 'READY_TO_BUY') return !alreadyShared.sharedLinks.includes(bestOffer.productUrl);
 	return false;
 }
 
 function shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared }) {
-	if (!bestOffer?.price) return false;
-	if (requestedAction !== 'ASK_PRICE') return false;
-
+	if (!bestOffer?.price || requestedAction !== 'ASK_PRICE') return false;
 	return !alreadyShared.shownPrices.includes(`${bestOffer.name}::${bestOffer.price}`);
 }
 
 function shouldEscalate({ messageBody = '', mood = 'neutral', currentState = {} }) {
 	const text = normalizeText(messageBody);
-
-	if (currentState?.needsHuman) {
-		return {
-			shouldEscalate: true,
-			reason: currentState.handoffReason || 'existing_handoff'
-		};
-	}
-
-	if (/(quiero hablar con una persona|quiero una asesora|pasame con alguien|atencion humana|atención humana|humano)/i.test(text)) {
-		return {
-			shouldEscalate: true,
-			reason: 'requested_human'
-		};
-	}
-
-	if (mood === 'angry') {
-		return {
-			shouldEscalate: true,
-			reason: 'angry_customer'
-		};
-	}
-
-	return {
-		shouldEscalate: false,
-		reason: null
-	};
+	if (currentState?.needsHuman) return { shouldEscalate: true, reason: currentState.handoffReason || 'existing_handoff' };
+	if (/(quiero hablar con una persona|quiero una asesora|pasame con alguien|atencion humana|atención humana|humano)/i.test(text)) return { shouldEscalate: true, reason: 'requested_human' };
+	if (mood === 'angry') return { shouldEscalate: true, reason: 'angry_customer' };
+	return { shouldEscalate: false, reason: null };
 }
 
-function buildRecommendedAction({ stage, requestedAction, shouldEscalate, shareLinkNow, repeatPriceNow, buyingIntentLevel, requestedVariant }) {
+function buildRecommendedAction({ stage, requestedAction, shouldEscalate, shareLinkNow, repeatPriceNow, buyingIntentLevel, requestedVariant, productFocus }) {
 	if (shouldEscalate) return 'handoff_human';
 	if (requestedAction === 'ASK_LINK' && shareLinkNow) return 'close_with_single_link';
 	if (requestedAction === 'ASK_PRICE' && repeatPriceNow) return 'present_price_once';
@@ -343,51 +219,28 @@ function buildRecommendedAction({ stage, requestedAction, shouldEscalate, shareL
 	if (stage === 'PRODUCT_INTEREST' && buyingIntentLevel === 'low') return 'guide_and_discover';
 	if (stage === 'PRODUCT_INTEREST' && requestedVariant && (requestedVariant.color || requestedVariant.size)) return 'guide_specific_product';
 	if (stage === 'READY_TO_BUY') return 'close_sale';
+	if (productFocus && productFocus !== 'general') return 'answer_and_guide';
 	return 'answer_and_guide';
 }
 
-export function resolveCommercialBrainV2({
-	intent,
-	messageBody,
-	currentState = {},
-	recentMessages = [],
-	catalogProducts = []
-}) {
-	const rankedProducts = rankCommercialProducts(catalogProducts, {
-		messageBody,
-		currentState
-	});
-
+export function resolveCommercialBrainV2({ intent, messageBody, currentState = {}, recentMessages = [], catalogProducts = [] }) {
+	const requestedAction = detectRequestedAction(messageBody);
 	const mood = detectMood(messageBody, currentState);
 	const buyingIntentLevel = detectBuyingIntent(messageBody, currentState);
-	const stage = detectSalesStage({ intent, messageBody, currentState });
-	const requestedAction = detectRequestedAction(messageBody);
+	const stage = detectSalesStage({ intent, messageBody, currentState, requestedAction });
+	const rankedProducts = rankCommercialProducts(catalogProducts, { messageBody, currentState, recentMessages });
 	const requestedVariant = detectRequestedVariant(messageBody, rankedProducts);
-	const productFocus = findProductFocus({
-		messageBody,
-		currentState,
-		products: rankedProducts
+	const productFocus = findProductFocus({ messageBody, currentState, products: rankedProducts, recentMessages });
+	const alreadyShared = mergeHistorySignals({ recentMessages, currentState, products: rankedProducts });
+	const bestOffer = chooseBestOffer(rankedProducts, {
+		requestedVariant,
+		requestedAction,
+		asksPromo: requestedAction === 'ASK_OFFER',
+		productFocus
 	});
-
-	const alreadyShared = mergeHistorySignals({
-		recentMessages,
-		currentState,
-		products: rankedProducts
-	});
-
-	const bestOffer = chooseBestOffer(rankedProducts, { requestedVariant });
 	const offerOptions = buildOfferOptions(rankedProducts, productFocus);
-	const shareLinkNow = shouldShareLinkNow({
-		requestedAction,
-		stage,
-		bestOffer,
-		alreadyShared
-	});
-	const repeatPriceNow = shouldRepeatPriceNow({
-		requestedAction,
-		bestOffer,
-		alreadyShared
-	});
+	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared });
+	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
 	const recommendedAction = buildRecommendedAction({
 		stage,
@@ -396,9 +249,10 @@ export function resolveCommercialBrainV2({
 		shareLinkNow,
 		repeatPriceNow,
 		buyingIntentLevel,
-		requestedVariant
+		requestedVariant,
+		productFocus
 	});
-
+	const profile = getCommercialProfile(productFocus);
 	return {
 		mood,
 		buyingIntentLevel,
@@ -406,6 +260,7 @@ export function resolveCommercialBrainV2({
 		requestedAction,
 		requestedVariant,
 		productFocus,
+		productFocusLabel: profile?.familyLabel || productFocus,
 		bestOffer,
 		offerOptions,
 		shareLinkNow,
@@ -414,6 +269,7 @@ export function resolveCommercialBrainV2({
 		shouldEscalate: escalation.shouldEscalate,
 		handoffReason: escalation.reason,
 		alreadyShared,
-		rankedProducts
+		rankedProducts,
+		introLine: profile?.introLine || null
 	};
 }
