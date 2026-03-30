@@ -20,9 +20,15 @@ function formatLiveOrderContext(liveOrderContext) {
 		`- Pago: ${liveOrderContext.paymentStatus || 'No informado'}`,
 		`- Envío: ${liveOrderContext.shippingStatus || 'No informado'}`,
 		`- Estado general: ${liveOrderContext.orderStatus || 'No informado'}`,
-		liveOrderContext.shippingCarrier ? `- Carrier: ${liveOrderContext.shippingCarrier}` : '- Carrier: no informado',
-		liveOrderContext.trackingNumber ? `- Tracking: ${liveOrderContext.trackingNumber}` : '- Tracking: no informado',
-		liveOrderContext.trackingUrl ? `- URL tracking: ${liveOrderContext.trackingUrl}` : '- URL tracking: no informada'
+		liveOrderContext.shippingCarrier
+			? `- Carrier: ${liveOrderContext.shippingCarrier}`
+			: '- Carrier: no informado',
+		liveOrderContext.trackingNumber
+			? `- Tracking: ${liveOrderContext.trackingNumber}`
+			: '- Tracking: no informado',
+		liveOrderContext.trackingUrl
+			? `- URL tracking: ${liveOrderContext.trackingUrl}`
+			: '- URL tracking: no informada'
 	].join('\n');
 }
 
@@ -49,9 +55,12 @@ function buildCommercialPlanBlock(commercialPlan = {}) {
 		`- Etapa comercial: ${commercialPlan.stage || 'DISCOVERY'}`,
 		`- Acción detectada del cliente: ${commercialPlan.requestedAction || 'GENERAL'}`,
 		`- Familia foco: ${commercialPlan.productFamily || 'no clara'}`,
+		`- ¿Familia bloqueada?: ${commercialPlan.familyLocked ? 'Sí' : 'No'}`,
 		`- Producto foco: ${commercialPlan.productFocus || 'no claro'}`,
 		`- Oferta principal: ${commercialPlan.bestOffer?.name || 'no clara'}`,
 		`- Precio principal: ${commercialPlan.bestOffer?.price || 'no cargado'}`,
+		`- Colores pedidos: ${formatArrayField(commercialPlan.requestedColors, 'ninguno')}`,
+		`- Talles pedidos: ${formatArrayField(commercialPlan.requestedSizes, 'ninguno')}`,
 		`- ¿Compartir link ahora?: ${commercialPlan.shareLinkNow ? 'Sí' : 'No'}`,
 		`- ¿Repetir precio ahora?: ${commercialPlan.repeatPriceNow ? 'Sí' : 'No'}`,
 		`- Links ya compartidos: ${formatArrayField(commercialPlan.alreadyShared?.sharedLinks, 'ninguno')}`,
@@ -76,23 +85,40 @@ export function buildPrompt({
 	commercialPlan = {},
 	responsePolicy = {}
 }) {
-	const systemPrompt = process.env.SYSTEM_PROMPT || 'Respondé como asesora humana de ventas por WhatsApp. Soná natural, directa y comercial.';
+	const systemPrompt =
+		process.env.SYSTEM_PROMPT ||
+		'Respondé como asesora humana de ventas por WhatsApp. Soná natural, directa y comercial.';
 	const businessContext = process.env.BUSINESS_CONTEXT || '';
 	const agentName = process.env.BUSINESS_AGENT_NAME || 'Sofi';
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
 	const facts = getRelevantStoreFacts(recentMessages);
 	const firstContact = isFirstContact(recentMessages);
-	const businessData = buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '');
-	const commercialHintsBlock = Array.isArray(commercialHints) && commercialHints.length ? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n') : '- Guiá una sola opción principal y no abras todo el catálogo.';
-	const compactCatalog = Array.isArray(catalogProducts) && catalogProducts.length ? catalogProducts.slice(0, 3).map((item) => [
-		`- ${item.name}`,
-		`  familia: ${item.family || 'sin clasificar'}`,
-		`  oferta: ${item.offerType || 'single'}`,
-		`  precio: ${item.price || 'no cargado'}`,
-		item.productUrl ? `  link: ${item.productUrl}` : '',
-		item.colors?.length ? `  colores: ${item.colors.join(', ')}` : '',
-		item.sizes?.length ? `  talles: ${item.sizes.join(', ')}` : ''
-	].filter(Boolean).join('\n')).join('\n') : catalogContext || 'No se encontraron productos relevantes.';
+	const businessData = buildRelevantBusinessData(
+		[...recentMessages].reverse().find((m) => m.role === 'user')?.text || ''
+	);
+	const commercialHintsBlock =
+		Array.isArray(commercialHints) && commercialHints.length
+			? commercialHints.slice(0, 10).map((hint) => `- ${hint}`).join('\n')
+			: '- Guiá una sola opción principal y no abras todo el catálogo.';
+	const compactCatalog =
+		Array.isArray(catalogProducts) && catalogProducts.length
+			? catalogProducts
+					.slice(0, 3)
+					.map((item) =>
+						[
+							`- ${item.name}`,
+							`  familia: ${item.family || 'sin clasificar'}`,
+							`  oferta: ${item.offerType || 'single'}`,
+							`  precio: ${item.price || 'no cargado'}`,
+							item.productUrl ? `  link: ${item.productUrl}` : '',
+							item.colors?.length ? `  colores: ${item.colors.join(', ')}` : '',
+							item.sizes?.length ? `  talles: ${item.sizes.join(', ')}` : ''
+						]
+							.filter(Boolean)
+							.join('\n')
+					)
+					.join('\n')
+			: catalogContext || 'No se encontraron productos relevantes.';
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
@@ -109,8 +135,10 @@ export function buildPrompt({
 		`CATÁLOGO RELEVANTE:\n${compactCatalog}`,
 		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,
 		`POLÍTICAS RESUMIDAS:\n- Envíos: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
-		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podés presentarte una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}\n- Si el mensaje del cliente es solo un saludo, respondé breve y preguntá qué está buscando.\n- Si habla de una familia general, primero orientá la familia y recién después bajá a una promo o SKU.\n- Si mostrás opciones, priorizá una sola principal según el plan comercial.\n- Si ya se venía hablando de otro producto más reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explícito.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenísimo o dale.\n- Si la respuesta es continuidad, no repitas nombre ni saludo.`,
+		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podés presentarte una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}\n- Si el mensaje del cliente es solo un saludo, respondé breve y preguntá qué está buscando.\n- Si la familia foco es body, calzas, faja o short, no salgas de esa familia salvo pedido explícito.\n- Si habla de una familia general, primero orientá la familia y recién después bajá a una promo o SKU.\n- Si mostrás opciones, priorizá una sola principal según el plan comercial.\n- Si pidió color o talle, tratá eso como continuidad del producto actual.\n- No confirmes talle o color si no está claro en catálogo.\n- Si ya se venía hablando de otro producto más reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explícito.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenísimo o dale.\n- Si la respuesta es continuidad, no repitas nombre ni saludo.`,
 		`CONVERSACIÓN RECIENTE:\n${transcript}`,
 		'Respondé ahora al último mensaje del cliente.'
-	].filter(Boolean).join('\n\n');
+	]
+		.filter(Boolean)
+		.join('\n\n');
 }

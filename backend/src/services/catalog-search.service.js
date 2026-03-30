@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import {
 	getCommercialProfile,
+	getPreferredOfferOrder,
 	inferCommercialFamily,
 	scoreProductAgainstCommercialProfile
 } from '../data/catalog-commercial-map.js';
@@ -10,12 +11,13 @@ function normalizeText(value = '') {
 		.toLowerCase()
 		.normalize('NFD')
 		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/\s+/g, ' ')
 		.trim();
 }
 
 function splitTerms(text = '') {
 	return normalizeText(text)
-		.split(/[^a-z0-9]+/i)
+		.split(/[^a-z0-9/]+/i)
 		.map((term) => term.trim())
 		.filter((term) => term.length >= 2);
 }
@@ -68,11 +70,11 @@ function extractVariantMeta(variants = []) {
 		/(negro|blanco|beige|avellana|marron|marrón|nude|rosa|gris|azul|verde|bordo)/i.test(v)
 	);
 	const sizes = unique.filter((v) =>
-		/(^xs$|^s$|^m$|^l$|^xl$|^xxl$|^xxxl$|m\/l|l\/xl|xl\/xxl|talle|110|[0-9]+)/i.test(v)
+		/(^xs$|^s$|^m$|^l$|^xl$|^xxl$|^xxxl$|m\/l|l\/xl|xl\/xxl|s\/m|talle|110|[0-9]+)/i.test(v)
 	);
 
 	return {
-		variantHints: unique.slice(0, 12),
+		variantHints: unique.slice(0, 18),
 		colors: colors.slice(0, 8),
 		sizes: sizes.slice(0, 8)
 	};
@@ -101,22 +103,103 @@ function formatPrice(value) {
 }
 
 const CATALOG_STOPWORDS = new Set([
-	'hola','holi','buenas','buenos','dias','dia','día','tardes','noches','gracias','ok','oka','dale','joya','bien','genial','perfecto','buenisimo','buenísimo','entiendo','barbaro','bárbaro','si','sí','claro'
+	'hola',
+	'holi',
+	'buenas',
+	'buenos',
+	'dias',
+	'dia',
+	'día',
+	'tardes',
+	'noches',
+	'gracias',
+	'ok',
+	'oka',
+	'dale',
+	'joya',
+	'bien',
+	'genial',
+	'perfecto',
+	'buenisimo',
+	'buenísimo',
+	'entiendo',
+	'barbaro',
+	'bárbaro',
+	'si',
+	'sí',
+	'claro',
+	'este',
+	'de',
+	'del',
+	'la',
+	'el',
+	'los',
+	'las'
 ]);
+
+function extractRequestedColors(text = '') {
+	const matches = normalizeText(text).match(
+		/\b(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|marron|marrón|avellana)\b/g
+	);
+	return [...new Set(matches || [])];
+}
+
+function extractRequestedSizes(text = '') {
+	const normalized = normalizeText(text);
+	const patterns = [
+		/\b(xxxl|3xl)\b/g,
+		/\b(xxl|2xl)\b/g,
+		/\b(xl)\b/g,
+		/\b(l\/xl)\b/g,
+		/\b(xl\/xxl)\b/g,
+		/\b(m\/l)\b/g,
+		/\b(s\/m)\b/g,
+		/\b110\b/g
+	];
+
+	const found = [];
+	for (const pattern of patterns) {
+		const matches = normalized.match(pattern);
+		if (matches?.length) found.push(...matches);
+	}
+	return [...new Set(found.map((item) => item.toUpperCase()))];
+}
 
 function detectRequestedSignals(query = '', interestedProducts = []) {
 	const normalizedQuery = normalizeText(query);
-	const terms = [...new Set([...splitTerms(query), ...(Array.isArray(interestedProducts) ? interestedProducts.map((v) => normalizeText(v)).filter(Boolean) : [])])];
-	const requestedFamily = inferCommercialFamily([query, ...(interestedProducts || [])].join(' '));
+	const mergedText = [query, ...(Array.isArray(interestedProducts) ? interestedProducts : [])]
+		.filter(Boolean)
+		.join(' ');
+	const terms = [
+		...new Set([
+			...splitTerms(query),
+			...(Array.isArray(interestedProducts)
+				? interestedProducts.map((v) => normalizeText(v)).filter(Boolean)
+				: [])
+		])
+	];
+	const requestedFamily = inferCommercialFamily(mergedText);
+	const asksPromo = /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(
+		normalizedQuery
+	);
+	const asksPrice = /(precio|cuanto|cuánto|sale|valor)/i.test(normalizedQuery);
 	return {
 		normalizedQuery,
 		terms,
 		requestedFamily,
-		asksPromo: /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(normalizedQuery),
-		asksPrice: /(precio|cuanto|cuánto|sale|valor)/i.test(normalizedQuery),
-		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
+		requestedColors: extractRequestedColors(mergedText),
+		requestedSizes: extractRequestedSizes(mergedText),
+		asksPromo,
+		asksPrice,
+		asksPriceAndOffer: asksPrice && asksPromo,
+		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(
+			normalizedQuery
+		),
 		asksComparison: /(cual|cuál|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
-		hasVariantSpecificity: /(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(normalizedQuery)
+		hasVariantSpecificity:
+			/(talle|medida|size|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|m\/l|l\/xl|xl\/xxl|s\/m|xl|xxl|xxxl)/i.test(
+				normalizedQuery
+			)
 	};
 }
 
@@ -125,7 +208,13 @@ function shouldSkipCatalogLookup(signals = {}) {
 	if (!query) return true;
 	const meaningfulTerms = (signals.terms || []).filter((term) => !CATALOG_STOPWORDS.has(term));
 	if (!meaningfulTerms.length) return true;
-	const hasCommercialSignal = Boolean(signals.requestedFamily) || signals.asksPromo || signals.asksPrice || signals.asksLink || signals.asksComparison || signals.hasVariantSpecificity;
+	const hasCommercialSignal =
+		Boolean(signals.requestedFamily) ||
+		signals.asksPromo ||
+		signals.asksPrice ||
+		signals.asksLink ||
+		signals.asksComparison ||
+		signals.hasVariantSpecificity;
 	return !hasCommercialSignal && meaningfulTerms.length < 2;
 }
 
@@ -143,6 +232,35 @@ function inferPackCount(offerType = 'single') {
 	return 1;
 }
 
+function productVariantMatchScore(product, signals = {}) {
+	const haystack = normalizeText(
+		[
+			product.name,
+			product.tags,
+			product.handle,
+			JSON.stringify(product.variants || []),
+			JSON.stringify(product.attributes || [])
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
+
+	let score = 0;
+
+	for (const color of signals.requestedColors || []) {
+		if (haystack.includes(normalizeText(color))) score += 18;
+	}
+
+	for (const size of signals.requestedSizes || []) {
+		if (haystack.includes(normalizeText(size))) score += 18;
+	}
+
+	if ((signals.requestedColors || []).length && !signals.hasVariantSpecificity) score += 0;
+	if ((signals.requestedSizes || []).length && !signals.hasVariantSpecificity) score += 0;
+
+	return score;
+}
+
 function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	let score = 0;
 	const name = normalizeText(product.name || '');
@@ -150,7 +268,10 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	const tags = normalizeText(product.tags || '');
 	const description = normalizeText(product.description || '');
 	const handle = normalizeText(product.handle || '');
-	const variantBlob = normalizeText(JSON.stringify(product.variants || []) + ' ' + JSON.stringify(product.attributes || []));
+	const variantBlob = normalizeText(
+		JSON.stringify(product.variants || []) + ' ' + JSON.stringify(product.attributes || [])
+	);
+	const fullBlob = `${name} ${brand} ${tags} ${description} ${handle} ${variantBlob}`;
 
 	if (!normalizedQuery && !terms.length) return 0;
 
@@ -162,6 +283,7 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	if (variantBlob.includes(normalizedQuery)) score += 8;
 
 	for (const term of terms) {
+		if (!term) continue;
 		if (name.includes(term)) score += 5;
 		if (brand.includes(term)) score += 2;
 		if (tags.includes(term)) score += 4;
@@ -175,9 +297,13 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(tags)) score += 16;
 	}
 
-	if (signals.requestedFamily === 'body_modelador' && /(body|modelador|reductor|reductora)/i.test(name)) score += 20;
-	if (signals.requestedFamily === 'calzas_linfaticas' && /(calza|linfat|modeladora)/i.test(name)) score += 20;
-	if (signals.hasVariantSpecificity && /(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|xl|xxl|xxxl)/i.test(variantBlob)) score += 14;
+	if (signals.requestedFamily) {
+		const productFamily = inferCommercialFamily(fullBlob);
+		if (productFamily === signals.requestedFamily) score += 28;
+		else if (productFamily) score -= 18;
+	}
+
+	score += productVariantMatchScore(product, signals);
 
 	if (product.published) score += 2;
 	if (product.featuredImage) score += 1;
@@ -186,34 +312,51 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	return score;
 }
 
-export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4 } = {}) {
+export async function searchCatalogProducts({
+	query = '',
+	interestedProducts = [],
+	limit = 4
+} = {}) {
 	const signals = detectRequestedSignals(query, interestedProducts);
 	if (shouldSkipCatalogLookup(signals)) return [];
 
 	const rawProducts = await prisma.catalogProduct.findMany({
 		where: { published: true },
 		orderBy: [{ updatedAt: 'desc' }],
-		take: 120
+		take: 150
 	});
 
 	return rawProducts
-		.map((product) => ({ product, score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals) }))
+		.map((product) => ({
+			product,
+			score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals)
+		}))
 		.filter((entry) => entry.score > 0)
 		.map(({ product, score }) => {
-			const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
+			const { currentPrice, originalPrice } = resolveCatalogPrices(
+				product.price,
+				product.compareAtPrice
+			);
 			const variantMeta = extractVariantMeta(product.variants);
 			const shortDescription = buildShortDescription(product);
-			const family = inferCommercialFamily([product.name, product.tags, product.handle, shortDescription].filter(Boolean).join(' '));
+			const family = inferCommercialFamily(
+				[product.name, product.tags, product.handle, shortDescription]
+					.filter(Boolean)
+					.join(' ')
+			);
 			const offerType = inferOfferType(product.name || '');
-			const profileScore = scoreProductAgainstCommercialProfile({
-				name: product.name,
-				handle: product.handle,
-				tags: product.tags,
-				shortDescription,
-				variantHints: variantMeta.variantHints,
-				colors: variantMeta.colors,
-				sizes: variantMeta.sizes
-			}, family);
+			const profileScore = scoreProductAgainstCommercialProfile(
+				{
+					name: product.name,
+					handle: product.handle,
+					tags: product.tags,
+					shortDescription,
+					variantHints: variantMeta.variantHints,
+					colors: variantMeta.colors,
+					sizes: variantMeta.sizes
+				},
+				family
+			);
 			return {
 				id: product.id,
 				productId: product.productId,
@@ -223,7 +366,8 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 				priceValue: currentPrice,
 				originalPrice: formatPrice(originalPrice),
 				originalPriceValue: originalPrice,
-				hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
+				hasDiscount:
+					currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
 				handle: product.handle || null,
 				productUrl: product.productUrl || null,
 				featuredImage: product.featuredImage || null,
@@ -231,51 +375,114 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 				variantHints: variantMeta.variantHints,
 				colors: variantMeta.colors,
 				sizes: variantMeta.sizes,
-				tags: product.tags ? product.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6) : [],
+				tags: product.tags
+					? product.tags
+							.split(',')
+							.map((t) => t.trim())
+							.filter(Boolean)
+							.slice(0, 6)
+					: [],
 				score,
 				family,
 				offerType,
 				packCount: inferPackCount(offerType),
 				commercialProfile: getCommercialProfile(family),
 				commercialScoreBoost: profileScore,
-				isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(normalizeText(product.name || ''))
+				preferredOfferOrder: getPreferredOfferOrder(family),
+				isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(
+					normalizeText(product.name || '')
+				)
 			};
 		})
 		.filter((item) => !item.isGiftLike)
-		.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost))
+		.sort(
+			(a, b) =>
+				b.score +
+				b.commercialScoreBoost -
+				(a.score + a.commercialScoreBoost)
+		)
 		.slice(0, limit);
 }
 
 export function buildCatalogContext(products = []) {
-	if (!Array.isArray(products) || !products.length) return 'No se encontraron productos relevantes del catálogo local para este mensaje.';
-	return products.map((product, index) => {
-		const lines = [
-			`${index + 1}. ${product.name}`,
-			`   - Familia: ${product.family || 'sin clasificar'}`,
-			`   - Tipo de oferta: ${product.offerType || 'single'}`,
-			`   - Precio actual: ${product.price || 'No informado'}`,
-			`   - Link: ${product.productUrl || 'No disponible'}`,
-			`   - Resumen: ${product.shortDescription}`
-		];
-		if (product.originalPrice) lines.push(`   - Precio anterior: ${product.originalPrice}`);
-		if (product.colors?.length) lines.push(`   - Colores detectados: ${product.colors.join(', ')}`);
-		if (product.sizes?.length) lines.push(`   - Talles detectados: ${product.sizes.join(', ')}`);
-		return lines.join('\n');
-	}).join('\n\n');
+	if (!Array.isArray(products) || !products.length) {
+		return 'No se encontraron productos relevantes del catálogo local para este mensaje.';
+	}
+
+	return products
+		.map((product, index) => {
+			const lines = [
+				`${index + 1}. ${product.name}`,
+				`   - Familia: ${product.family || 'sin clasificar'}`,
+				`   - Tipo de oferta: ${product.offerType || 'single'}`,
+				`   - Precio actual: ${product.price || 'No informado'}`,
+				`   - Link: ${product.productUrl || 'No disponible'}`,
+				`   - Resumen: ${product.shortDescription}`
+			];
+			if (product.originalPrice) lines.push(`   - Precio anterior: ${product.originalPrice}`);
+			if (product.colors?.length)
+				lines.push(`   - Colores detectados: ${product.colors.join(', ')}`);
+			if (product.sizes?.length)
+				lines.push(`   - Talles detectados: ${product.sizes.join(', ')}`);
+			return lines.join('\n');
+		})
+		.join('\n\n');
 }
 
 export function pickCommercialHints(products = [], commercialPlan = null) {
 	if (!Array.isArray(products) || !products.length) return [];
+
 	const hints = [];
 	const family = commercialPlan?.productFamily || products[0]?.family || null;
 	const profile = getCommercialProfile(family);
+
+	if (profile?.discoveryPrompt && commercialPlan?.recommendedAction === 'discover_family_before_offer') {
+		hints.push(profile.discoveryPrompt);
+	}
+
 	if (profile?.defaultPitch) hints.push(profile.defaultPitch);
-	if (commercialPlan?.bestOffer?.name) hints.push(`Priorizá como oferta principal ${commercialPlan.bestOffer.name}.`);
-	if (commercialPlan?.requestedAction === 'ASK_OFFER') hints.push('Mostrá primero la oferta principal de esta familia; si no avanza, recién ahí abrí la alternativa.');
-	if (commercialPlan?.requestedAction === 'ASK_VARIANT') hints.push('Tomá color y talle como continuidad del producto o familia actual, sin reiniciar la venta.');
-	if (commercialPlan?.shareLinkNow) hints.push(profile?.linkHint || 'Compartí un único link y solo del producto foco más reciente.');
-	else hints.push('No compartas link todavía si la conversación sigue definiendo producto, variante o promo.');
+
+	if (commercialPlan?.familyLocked && family) {
+		hints.push(`No salgas de la familia ${profile?.label || family} salvo pedido explícito de la clienta.`);
+	}
+
+	if (commercialPlan?.requestedColors?.length || commercialPlan?.requestedSizes?.length) {
+		const parts = [];
+		if (commercialPlan.requestedColors?.length) parts.push(`colores ${commercialPlan.requestedColors.join(', ')}`);
+		if (commercialPlan.requestedSizes?.length) parts.push(`talles ${commercialPlan.requestedSizes.join(', ')}`);
+		hints.push(`Respetá como continuidad lo que viene pidiendo: ${parts.join(' y ')}.`);
+		hints.push('No confirmes un talle o color si el producto foco no lo soporta o no está confirmado en catálogo.');
+	}
+
+	if (commercialPlan?.bestOffer?.name) {
+		hints.push(`Priorizá como oferta principal ${commercialPlan.bestOffer.name}.`);
+	}
+
+	if (commercialPlan?.requestedAction === 'ASK_OFFER') {
+		hints.push('Mostrá primero la oferta principal de esta familia; si no avanza, recién ahí abrí la alternativa.');
+	}
+
+	if (commercialPlan?.requestedAction === 'ASK_PRICE_AND_OFFER') {
+		hints.push(
+			'Si preguntó precio individual o promos, compará solo dos opciones: individual y promo principal de esta familia.'
+		);
+	}
+
+	if (commercialPlan?.requestedAction === 'ASK_VARIANT') {
+		hints.push('Tomá color y talle como continuidad del producto o familia actual, sin reiniciar la venta.');
+	}
+
+	if (commercialPlan?.shareLinkNow) {
+		hints.push(
+			profile?.linkHint ||
+				'Compartí un único link y solo del producto foco más reciente.'
+		);
+	} else {
+		hints.push('No compartas link todavía si la conversación sigue definiendo producto, variante o promo.');
+	}
+
 	hints.push('No abras varias promos salvo pedido explícito.');
 	hints.push('No arranques con saludo repetido ni con claro, perfecto, genial o buenísimo.');
-	return hints;
+
+	return [...new Set(hints)];
 }

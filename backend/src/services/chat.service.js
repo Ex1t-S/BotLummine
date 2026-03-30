@@ -106,6 +106,193 @@ function buildConversationSummary({
 	return parts.filter(Boolean).join(' | ');
 }
 
+function familyToHumanLabel(family = null) {
+	const map = {
+		body_modelador: 'body modelador',
+		calzas_linfaticas: 'calzas linfáticas',
+		short_faja: 'short faja',
+		faja: 'faja',
+		bombacha_modeladora: 'bombacha modeladora'
+	};
+	return map[family] || family || 'producto';
+}
+
+function normalizeCommercialText(value = '') {
+	return String(value || '')
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function stripRepeatedGreeting(text = '', hasAssistantHistory = false) {
+	if (!hasAssistantHistory) return String(text || '').trim();
+	let cleaned = String(text || '').trim();
+	cleaned = cleaned.replace(
+		/^(hola [^,!.]+[,!.\s]+|hola[,!.\s]+|buenas[,!.\s]+|buen dia[,!.\s]+|buen día[,!.\s]+|buenas tardes[,!.\s]+|buenas noches[,!.\s]+)/i,
+		''
+	);
+	return cleaned.trim();
+}
+
+function detectFamilyMentionFromReply(text = '') {
+	const normalized = normalizeCommercialText(text);
+	if (/(body|bodys?).*(modelador|reductor)|\bbody modelador\b|\bbody\b/.test(normalized)) {
+		return 'body_modelador';
+	}
+	if (/(calza|calzas).*(linfat|modeladora)|\bcalzas? linfaticas\b/.test(normalized)) {
+		return 'calzas_linfaticas';
+	}
+	if (/(short).*(faja|modelador|reductor)|\bshort faja\b/.test(normalized)) {
+		return 'short_faja';
+	}
+	if (/(bombacha).*(modeladora|reductora)|\bbombacha modeladora\b/.test(normalized)) {
+		return 'bombacha_modeladora';
+	}
+	if (/\bfaja\b/.test(normalized)) {
+		return 'faja';
+	}
+	return null;
+}
+
+function mentionsDifferentLockedFamily(text = '', commercialPlan = null) {
+	if (!commercialPlan?.familyLocked || !commercialPlan?.productFamily) return false;
+	const replyFamily = detectFamilyMentionFromReply(text);
+	return Boolean(replyFamily && replyFamily !== commercialPlan.productFamily);
+}
+
+function mergeUniqueStringArrays(existing = [], incoming = []) {
+	return [
+		...new Set(
+			[
+				...(Array.isArray(existing) ? existing : []),
+				...(Array.isArray(incoming) ? incoming : [])
+			]
+				.filter(Boolean)
+				.map((item) => String(item).trim())
+		)
+	];
+}
+
+function buildCommercialStatePatch({ currentState = {}, commercialPlan = null, finalReply = '' }) {
+	if (!commercialPlan) return {};
+
+	const replyText = String(finalReply || '');
+	const nextOffers = mergeUniqueStringArrays(currentState?.shownOffers, []);
+	const nextPrices = mergeUniqueStringArrays(currentState?.shownPrices, []);
+	const nextLinks = mergeUniqueStringArrays(currentState?.sharedLinks, []);
+
+	if (commercialPlan?.bestOffer?.offerKey && replyText) {
+		if (
+			replyText.includes(commercialPlan.bestOffer.name || '') ||
+			/(3x1|2x1|promo|oferta|pack)/i.test(replyText)
+		) {
+			nextOffers.push(commercialPlan.bestOffer.offerKey);
+		}
+	}
+
+	if (
+		commercialPlan?.comparisonSet?.offer?.name &&
+		replyText.includes(commercialPlan.comparisonSet.offer.name)
+	) {
+		nextOffers.push(commercialPlan.comparisonSet.offer.offerType || 'pack');
+	}
+	if (
+		commercialPlan?.comparisonSet?.single?.name &&
+		replyText.includes(commercialPlan.comparisonSet.single.name)
+	) {
+		nextOffers.push('single');
+	}
+
+	if (commercialPlan?.bestOffer?.price && replyText.includes(commercialPlan.bestOffer.price)) {
+		nextPrices.push(`${commercialPlan.bestOffer.name}::${commercialPlan.bestOffer.price}`);
+	}
+	if (
+		commercialPlan?.comparisonSet?.single?.price &&
+		replyText.includes(commercialPlan.comparisonSet.single.price)
+	) {
+		nextPrices.push(
+			`${commercialPlan.comparisonSet.single.name}::${commercialPlan.comparisonSet.single.price}`
+		);
+	}
+	if (
+		commercialPlan?.comparisonSet?.offer?.price &&
+		replyText.includes(commercialPlan.comparisonSet.offer.price)
+	) {
+		nextPrices.push(
+			`${commercialPlan.comparisonSet.offer.name}::${commercialPlan.comparisonSet.offer.price}`
+		);
+	}
+
+	if (
+		commercialPlan?.bestOffer?.productUrl &&
+		replyText.includes(commercialPlan.bestOffer.productUrl)
+	) {
+		nextLinks.push(commercialPlan.bestOffer.productUrl);
+	}
+	if (
+		commercialPlan?.comparisonSet?.single?.productUrl &&
+		replyText.includes(commercialPlan.comparisonSet.single.productUrl)
+	) {
+		nextLinks.push(commercialPlan.comparisonSet.single.productUrl);
+	}
+	if (
+		commercialPlan?.comparisonSet?.offer?.productUrl &&
+		replyText.includes(commercialPlan.comparisonSet.offer.productUrl)
+	) {
+		nextLinks.push(commercialPlan.comparisonSet.offer.productUrl);
+	}
+
+	return {
+		currentProductFocus:
+			commercialPlan.productFocus ||
+			commercialPlan.bestOffer?.name ||
+			currentState.currentProductFocus ||
+			null,
+		salesStage: commercialPlan.stage || currentState.salesStage || null,
+		shownOffers: mergeUniqueStringArrays([], nextOffers),
+		shownPrices: mergeUniqueStringArrays([], nextPrices),
+		sharedLinks: mergeUniqueStringArrays([], nextLinks),
+		lastRecommendedProduct:
+			commercialPlan.bestOffer?.name ||
+			commercialPlan.comparisonSet?.offer?.name ||
+			currentState.lastRecommendedProduct ||
+			null,
+		lastRecommendedOffer:
+			commercialPlan.bestOffer?.offerKey ||
+			commercialPlan.comparisonSet?.offer?.offerType ||
+			currentState.lastRecommendedOffer ||
+			null,
+		buyingIntentLevel:
+			commercialPlan.buyingIntentLevel || currentState.buyingIntentLevel || null,
+		frictionLevel:
+			commercialPlan.mood === 'angry'
+				? 'high'
+				: commercialPlan.mood === 'urgent'
+					? 'medium'
+					: currentState.frictionLevel || 'low',
+		commercialSummary: [
+			commercialPlan.productFamily
+				? `Familia: ${familyToHumanLabel(commercialPlan.productFamily)}`
+				: '',
+			commercialPlan.productFocus ? `Foco: ${commercialPlan.productFocus}` : '',
+			commercialPlan.bestOffer?.name
+				? `Oferta principal: ${commercialPlan.bestOffer.name}`
+				: '',
+			commercialPlan.requestedColors?.length
+				? `Colores: ${commercialPlan.requestedColors.join(', ')}`
+				: '',
+			commercialPlan.requestedSizes?.length
+				? `Talles: ${commercialPlan.requestedSizes.join(', ')}`
+				: ''
+		]
+			.filter(Boolean)
+			.join(' | ')
+	};
+}
+
+
 function buildAiFailureFallback({
 	intent,
 	enrichedState,
@@ -114,26 +301,91 @@ function buildAiFailureFallback({
 }) {
 	const firstProduct =
 		Array.isArray(catalogProducts) && catalogProducts.length ? catalogProducts[0] : null;
+	const ranked = Array.isArray(commercialPlan?.rankedProducts)
+		? commercialPlan.rankedProducts
+		: Array.isArray(catalogProducts)
+			? catalogProducts
+			: [];
+	const singleOption =
+		commercialPlan?.comparisonSet?.single ||
+		ranked.find((item) => (item.offerType || 'single') === 'single') ||
+		null;
+	const offerOption =
+		commercialPlan?.comparisonSet?.offer ||
+		ranked.find((item) => ['3x1', '2x1', 'pack'].includes(item.offerType || 'single')) ||
+		commercialPlan?.bestOffer ||
+		null;
+	const familyLabel = familyToHumanLabel(commercialPlan?.productFamily);
+	const requestedVariantText = [
+		...(commercialPlan?.requestedColors || []),
+		...(commercialPlan?.requestedSizes || [])
+	]
+		.filter(Boolean)
+		.join(' / ');
 
 	if (commercialPlan?.shouldEscalate || enrichedState?.needsHuman) {
 		return 'Te paso con una asesora para seguir mejor con esto.';
 	}
 
+	if (commercialPlan?.greetingOnly) {
+		return 'Hola, ¿qué producto estás buscando?';
+	}
+
 	if (intent === 'product') {
-		if (commercialPlan?.recommendedAction === 'present_single_best_offer' && commercialPlan?.bestOffer) {
-			return `${commercialPlan.bestOffer.name}${commercialPlan.bestOffer.price ? ` por ${commercialPlan.bestOffer.price}` : ''}.`;
+		if (commercialPlan?.recommendedAction === 'discover_family_before_offer') {
+			return `Sí, trabajamos ${familyLabel}. Tenés opción individual y promos; la principal suele ser el 3x1. Si querés, primero veo color y talle o te paso precios.`;
 		}
 
-		if (commercialPlan?.recommendedAction === 'present_price_once' && commercialPlan?.bestOffer) {
+		if (
+			commercialPlan?.recommendedAction === 'compare_single_vs_best_offer' &&
+			(singleOption || offerOption)
+		) {
+			const left = singleOption?.price
+				? `La opción individual está ${singleOption.price}.`
+				: '';
+			const right = offerOption?.name
+				? `En promo, la principal es ${offerOption.name}${
+						offerOption.price ? ` por ${offerOption.price}` : ''
+					}.`
+				: '';
+			return [left, right].filter(Boolean).join(' ');
+		}
+
+		if (
+			commercialPlan?.recommendedAction === 'confirm_variant_and_continue' &&
+			requestedVariantText
+		) {
+			if (singleOption?.price) {
+				return `Sí, en ${familyLabel} seguimos con ${requestedVariantText}. Si querés, la opción individual está ${singleOption.price} y después vemos promo.`;
+			}
+			return `Sí, en ${familyLabel} seguimos con ${requestedVariantText}. Si querés, te paso precio individual y promo dentro de esta misma familia.`;
+		}
+
+		if (
+			commercialPlan?.recommendedAction === 'present_single_best_offer' &&
+			commercialPlan?.bestOffer
+		) {
+			return `En ${familyLabel}, la promo principal es ${commercialPlan.bestOffer.name}${
+				commercialPlan.bestOffer.price ? ` por ${commercialPlan.bestOffer.price}` : ''
+			}.`;
+		}
+
+		if (
+			commercialPlan?.recommendedAction === 'present_price_once' &&
+			commercialPlan?.bestOffer
+		) {
 			return `${commercialPlan.bestOffer.name} está ${commercialPlan.bestOffer.price}.`;
 		}
 
-		if (commercialPlan?.recommendedAction === 'confirm_variant_and_continue' && commercialPlan?.bestOffer) {
-			return `Sí, lo trabajamos en esa opción. Si querés seguimos con ${commercialPlan.bestOffer.name}.`;
+		if (
+			commercialPlan?.recommendedAction === 'close_with_single_link' &&
+			commercialPlan?.bestOffer?.productUrl
+		) {
+			return `Sí, te paso el link directo: ${commercialPlan.bestOffer.productUrl}`;
 		}
 
-		if (commercialPlan?.recommendedAction === 'close_with_single_link' && commercialPlan?.bestOffer?.productUrl) {
-			return `Sí, te paso el link directo: ${commercialPlan.bestOffer.productUrl}`;
+		if (commercialPlan?.bestOffer?.productUrl) {
+			return `Te paso la opción más alineada con lo que venían viendo: ${commercialPlan.bestOffer.productUrl}`;
 		}
 
 		return firstProduct?.productUrl
@@ -297,9 +549,11 @@ function auditAssistantReply({
 	responsePolicy,
 	liveOrderContext,
 	fallbackReply,
-	commercialPlan
+	commercialPlan,
+	hasAssistantHistory = false
 }) {
-	const cleaned = normalizeText(text);
+	let cleaned = normalizeText(text);
+	cleaned = stripRepeatedGreeting(cleaned, hasAssistantHistory);
 
 	if (!cleaned) {
 		return {
@@ -312,6 +566,20 @@ function auditAssistantReply({
 		responsePolicy?.action?.startsWith('order_status') &&
 		looksLikeInventedTracking(cleaned, liveOrderContext)
 	) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false
+		};
+	}
+
+	if (mentionsDifferentLockedFamily(cleaned, commercialPlan)) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false
+		};
+	}
+
+	if (commercialPlan?.shareLinkNow === false && /(https?:\/\/|www\.)/i.test(cleaned)) {
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false
@@ -544,7 +812,17 @@ function buildStatePayload({
 		objections: memoryPatch.objections,
 		needsHuman: memoryPatch.needsHuman,
 		handoffReason: memoryPatch.handoffReason,
-		interactionCount: memoryPatch.interactionCount
+		interactionCount: memoryPatch.interactionCount,
+		currentProductFocus: currentState.currentProductFocus || null,
+		salesStage: currentState.salesStage || null,
+		shownOffers: currentState.shownOffers || [],
+		shownPrices: currentState.shownPrices || [],
+		sharedLinks: currentState.sharedLinks || [],
+		lastRecommendedProduct: currentState.lastRecommendedProduct || null,
+		lastRecommendedOffer: currentState.lastRecommendedOffer || null,
+		buyingIntentLevel: currentState.buyingIntentLevel || null,
+		frictionLevel: currentState.frictionLevel || null,
+		commercialSummary: currentState.commercialSummary || null
 	};
 }
 
@@ -916,7 +1194,8 @@ export async function processInboundMessage({
 				responsePolicy,
 				liveOrderContext,
 				fallbackReply,
-				commercialPlan
+				commercialPlan,
+				hasAssistantHistory: fullRecentMessages.some((msg) => msg.role === 'assistant')
 			});
 
 			finalReply = audited.finalText;
@@ -957,6 +1236,23 @@ export async function processInboundMessage({
 		body: finalReply,
 		aiMeta
 	});
+
+	const commercialStatePatch = buildCommercialStatePatch({
+		currentState: enrichedState,
+		commercialPlan,
+		finalReply
+	});
+
+	if (Object.keys(commercialStatePatch).length) {
+		await prisma.conversationState.upsert({
+			where: { conversationId: freshConversation.id },
+			update: commercialStatePatch,
+			create: {
+				conversationId: freshConversation.id,
+				...commercialStatePatch
+			}
+		});
+	}
 
 	await prisma.conversation.update({
 		where: { id: freshConversation.id },

@@ -3,6 +3,7 @@ function normalizeText(value = '') {
 		.toLowerCase()
 		.normalize('NFD')
 		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/\s+/g, ' ')
 		.trim();
 }
 
@@ -20,23 +21,13 @@ function extractFrequentSize(text) {
 	const rangeMatch = text.match(/\b(\d{2}\s*\/\s*\d{2})\b/);
 	if (rangeMatch?.[1]) return rangeMatch[1].replace(/\s+/g, '');
 
-	const sizePatterns = [
-		/\b(xxxl|3xl)\b/i,
-		/\b(xxl|2xl)\b/i,
-		/\b(xl)\b/i,
-		/\b(l)\b/i,
-		/\b(m)\b/i,
-		/\b(s)\b/i,
-		/\b(xs)\b/i
-	];
-
+	const sizePatterns = [/\b(xxxl|3xl)\b/i, /\b(xxl|2xl)\b/i, /\b(xl)\b/i, /\b(l\/xl)\b/i, /\b(xl\/xxl)\b/i, /\b(m\/l)\b/i, /\b(s\/m)\b/i];
 	for (const pattern of sizePatterns) {
 		const match = text.match(pattern);
 		if (match?.[1]) return match[1].toUpperCase();
 	}
 
 	if (/(110 de corpiño|110 de corpino)/.test(text)) return '110';
-
 	return null;
 }
 
@@ -55,23 +46,35 @@ function detectDeliveryPreference(text) {
 }
 
 function extractInterestedProducts(text) {
-	const dictionary = [
-		{ key: 'body', patterns: [/body/, /bodies/] },
-		{ key: 'calza', patterns: [/calza/, /calzas/] },
-		{ key: 'legging', patterns: [/legging/, /leggings/] },
-		{ key: 'corset', patterns: [/corset/] },
-		{ key: 'faja', patterns: [/faja/, /fajas/] },
-		{ key: 'corpinio', patterns: [/corpiño/, /corpinio/, /corpiños/] },
-		{ key: 'pack', patterns: [/pack/, /combo/, /conjunto/] },
-		{ key: 'modelador', patterns: [/modelador/, /modeladora/, /moldeador/] },
-		{ key: 'bombacha', patterns: [/bombacha/, /bombachas/] },
-		{ key: 'musculosa', patterns: [/musculosa/, /musculosas/] },
-		{ key: 'short', patterns: [/short/, /shorts/] }
-	];
+	const normalized = normalizeText(text);
+	const products = [];
 
-	return dictionary
-		.filter((item) => item.patterns.some((pattern) => pattern.test(text)))
-		.map((item) => item.key);
+	if (/(body|bodys?).*(modelador|reductor)|\bbody modelador\b|\bbody\b/.test(normalized)) {
+		products.push('body modelador');
+	}
+	if (/(calza|calzas).*(linfat|modeladora)|\bcalzas? linfaticas\b/.test(normalized)) {
+		products.push('calzas linfaticas');
+	}
+	if (/(short).*(faja|modelador|reductor)|\bshort faja\b/.test(normalized)) {
+		products.push('short faja');
+	}
+	if (/(bombacha).*(modeladora|reductora)|\bbombacha modeladora\b/.test(normalized)) {
+		products.push('bombacha modeladora');
+	}
+	if (/\bfaja\b/.test(normalized)) {
+		products.push('faja');
+	}
+
+	if (/(pack|combo|conjunto)/.test(normalized)) products.push('pack');
+	if (/(promo|promocion|promoción|oferta|2x1|3x1)/.test(normalized)) products.push('promo');
+	if (/(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/.test(normalized)) {
+		const colors = normalized.match(/\b(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)\b/g) || [];
+		products.push(...colors.map((color) => `color:${color}`));
+	}
+	const size = extractFrequentSize(normalized);
+	if (size) products.push(`talle:${size}`);
+
+	return uniqStrings(products);
 }
 
 function extractObjections(text) {
@@ -80,15 +83,12 @@ function extractObjections(text) {
 	if (/(caro|precio|sale mucho|muy caro|tenes algo mas barato|más barato|mucho dinero)/.test(text)) {
 		objections.push('precio');
 	}
-
 	if (/(talle|tallas|medida|medidas|no se que talle|no sé que talle)/.test(text)) {
 		objections.push('talle');
 	}
-
 	if (/(envio|envío|demora|cuando llega|cuanto tarda|cuánto tarda)/.test(text)) {
 		objections.push('envio');
 	}
-
 	if (/(pago|tarjeta|transferencia|cuotas|alias|cbu)/.test(text)) {
 		objections.push('pago');
 	}
@@ -183,35 +183,32 @@ function wasLoopingRecentMessages(recentMessages = []) {
 		.map((m) => String(m.text || '').trim().toLowerCase());
 
 	if (assistantMessages.length < 3) return false;
-
 	return new Set(assistantMessages).size <= 1;
 }
 
-function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState = {}, recentMessages = [] }) {
+function shouldEscalateToHuman({
+	text,
+	intent,
+	mood,
+	urgencyLevel,
+	currentState = {},
+	recentMessages = []
+}) {
 	const explicitHumanRequest =
 		/(quiero hablar con una persona|quiero hablar con alguien|quiero hablar con un humano|humano|asesor|asesora|persona real|atencion humana|atención humana|operador|agente|alguien del equipo)/.test(
 			text
 		);
 
 	if (explicitHumanRequest || intent === 'human_handoff') {
-		return {
-			needsHuman: true,
-			handoffReason: 'requested_human'
-		};
+		return { needsHuman: true, handoffReason: 'requested_human' };
 	}
 
 	if (intent === 'complaint' && mood === 'molesta') {
-		return {
-			needsHuman: true,
-			handoffReason: 'sensitive_complaint'
-		};
+		return { needsHuman: true, handoffReason: 'sensitive_complaint' };
 	}
 
 	if (intent === 'return_exchange' && urgencyLevel === 'alta') {
-		return {
-			needsHuman: true,
-			handoffReason: 'urgent_return_exchange'
-		};
+		return { needsHuman: true, handoffReason: 'urgent_return_exchange' };
 	}
 
 	if (intent === 'order_status') {
@@ -222,10 +219,7 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 			);
 
 		if (repeatedPostSaleFriction) {
-			return {
-				needsHuman: true,
-				handoffReason: 'postsale_operational_gap'
-			};
+			return { needsHuman: true, handoffReason: 'postsale_operational_gap' };
 		}
 	}
 
@@ -237,23 +231,14 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 	}
 
 	if (currentState?.interactionCount >= 8 && wasLoopingRecentMessages(recentMessages)) {
-		return {
-			needsHuman: true,
-			handoffReason: 'too_many_turns_without_resolution'
-		};
+		return { needsHuman: true, handoffReason: 'too_many_turns_without_resolution' };
 	}
 
 	if (/(excepcion|excepción|caso especial|se puede hacer una excepcion|se puede hacer una excepción)/.test(text)) {
-		return {
-			needsHuman: true,
-			handoffReason: 'exception_request'
-		};
+		return { needsHuman: true, handoffReason: 'exception_request' };
 	}
 
-	return {
-		needsHuman: false,
-		handoffReason: null
-	};
+	return { needsHuman: false, handoffReason: null };
 }
 
 export function buildHandoffReply({ contactName = '', reason = '' } = {}) {
@@ -334,8 +319,10 @@ export function analyzeConversationTurn({
 	});
 
 	const frequentSize = extractFrequentSize(text) || currentState.frequentSize || null;
-	const paymentPreference = detectPaymentPreference(text) || currentState.paymentPreference || null;
-	const deliveryPreference = detectDeliveryPreference(text) || currentState.deliveryPreference || null;
+	const paymentPreference =
+		detectPaymentPreference(text) || currentState.paymentPreference || null;
+	const deliveryPreference =
+		detectDeliveryPreference(text) || currentState.deliveryPreference || null;
 
 	const interestedProducts = mergeStringArrays(
 		currentState.interestedProducts,
