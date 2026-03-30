@@ -8,7 +8,7 @@ import {
 
 export async function getAiLabFixtures(_req, res, next) {
 	try {
-		res.json({ ok: true, fixtures: listAiLabFixtures() });
+		return res.json({ ok: true, fixtures: listAiLabFixtures() });
 	} catch (error) {
 		next(error);
 	}
@@ -16,11 +16,8 @@ export async function getAiLabFixtures(_req, res, next) {
 
 export async function postAiLabSession(req, res, next) {
 	try {
-		const session = await createAiLabSession({
-			fixtureKey: req.body?.fixtureKey || req.query?.fixtureKey || 'blank'
-		});
-
-		res.status(201).json({ ok: true, session });
+		const session = await createAiLabSession({ fixtureKey: req.body?.fixtureKey || 'blank' });
+		return res.status(201).json({ ok: true, session });
 	} catch (error) {
 		next(error);
 	}
@@ -28,13 +25,22 @@ export async function postAiLabSession(req, res, next) {
 
 export async function getAiLabSessionById(req, res, next) {
 	try {
-		const session = getAiLabSession(req.params.sessionId);
-
+		const session = await getAiLabSession(req.params.sessionId);
 		if (!session) {
-			return res.status(404).json({ ok: false, error: 'Sesión de AI Lab no encontrada.' });
+			return res.status(404).json({ ok: false, error: 'Sesión no encontrada' });
 		}
+		return res.json({ ok: true, session });
+	} catch (error) {
+		next(error);
+	}
+}
 
-		res.json({ ok: true, session });
+export async function postAiLabSessionReset(req, res, next) {
+	try {
+		const session = await resetAiLabSession(req.params.sessionId, {
+			fixtureKey: req.body?.fixtureKey || null
+		});
+		return res.json({ ok: true, session });
 	} catch (error) {
 		next(error);
 	}
@@ -45,20 +51,7 @@ export async function postAiLabSessionMessage(req, res, next) {
 		const session = await sendAiLabMessage(req.params.sessionId, {
 			body: req.body?.body || ''
 		});
-
-		res.json({ ok: true, session });
-	} catch (error) {
-		next(error);
-	}
-}
-
-export async function postAiLabSessionReset(req, res, next) {
-	try {
-		const session = await resetAiLabSession(req.params.sessionId, {
-			fixtureKey: req.body?.fixtureKey || req.query?.fixtureKey
-		});
-
-		res.json({ ok: true, session });
+		return res.json({ ok: true, session });
 	} catch (error) {
 		next(error);
 	}

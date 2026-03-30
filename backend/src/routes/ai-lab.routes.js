@@ -4,18 +4,17 @@ import {
 	getAiLabFixtures,
 	postAiLabSession,
 	getAiLabSessionById,
-	postAiLabSessionMessage,
-	postAiLabSessionReset
+	postAiLabSessionReset,
+	postAiLabSessionMessage
 } from '../controllers/ai-lab.controller.js';
 
 const router = Router();
 
 router.use(requireAuth);
-
 router.get('/fixtures', getAiLabFixtures);
 router.post('/sessions', postAiLabSession);
 router.get('/sessions/:sessionId', getAiLabSessionById);
-router.post('/sessions/:sessionId/messages', postAiLabSessionMessage);
 router.post('/sessions/:sessionId/reset', postAiLabSessionReset);
+router.post('/sessions/:sessionId/messages', postAiLabSessionMessage);
 
 export default router;

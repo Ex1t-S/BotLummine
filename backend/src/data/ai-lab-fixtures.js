@@ -1,88 +1,75 @@
 export const AI_LAB_FIXTURES = [
 	{
 		key: 'blank',
-		name: 'Sesión vacía',
-		description: 'Arranca desde cero para probar saludos, descubrimiento y cierre.',
-		contactName: 'German',
-		customerContext: {
-			name: 'German',
-			waId: '5492923562286'
-		},
-		messages: [],
-		expected: [
-			'No debería saludar dos veces.',
-			'No debería mandar link ni promo cerrada demasiado temprano.'
-		]
+		name: 'En blanco',
+		description: 'Arranca desde cero, sin historial ni estado previo.',
+		expected: ['La IA debería sonar como en WhatsApp real', 'Útil para validar saludos, tono y cierre']
 	},
 	{
-		key: 'body-modelador-inicio',
+		key: 'body-discovery',
 		name: 'Body modelador desde cero',
-		description: 'Escenario para validar que la IA oriente antes de clavar una promo.',
-		contactName: 'German',
-		customerContext: {
-			name: 'German',
-			waId: '5492923562286'
-		},
-		messages: [
-			{ role: 'user', text: 'Hola' },
-			{ role: 'assistant', text: 'Hola, soy Sofi de Lummine. Te ayudo con lo que necesites 😊' },
-			{ role: 'user', text: 'Quiero comprar un body modelador' }
+		description: 'Deja solo el saludo inicial para probar descubrimiento de producto.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: '¡Hola! Soy Sofi de Lummine. ¿En qué puedo ayudarte hoy?'
+			}
 		],
 		expected: [
-			'No debería arrancar con un link.',
-			'No debería elegir una promo cerrada si todavía no hay color o talle.',
-			'Debería orientar de forma humana y pedir un dato útil.'
+			'No debería volver a saludar en el segundo turno',
+			'No debería fijar un producto puntual demasiado temprano'
 		]
 	},
 	{
-		key: 'body-modelador-link-bug',
-		name: 'Caso real de link equivocado',
-		description: 'Reproduce la charla donde la IA mezcla TOTAL WHITE con 3x1 negro XL.',
-		contactName: 'German',
-		customerContext: {
-			name: 'German',
-			waId: '5492923562286'
+		key: 'body-black-xl',
+		name: 'Body negro XL',
+		description: 'Parte con color y talle ya definidos para probar foco y link.',
+		stateOverrides: {
+			customerName: 'German',
+			interestedProducts: ['body modelador'],
+			currentProductFocus: 'body modelador',
+			frequentSize: 'XL',
+			salesStage: 'SIZE_COLOR_CHECK'
 		},
-		messages: [
-			{ role: 'user', text: 'Hola' },
-			{ role: 'assistant', text: 'Hola, soy Sofi de Lummine. Te ayudo con lo que necesites 😊' },
-			{ role: 'user', text: 'Quiero comprar un body modelador' },
-			{ role: 'assistant', text: 'Tenemos varias opciones en body modeladores. Si querés, te guío según color, talle o la promo que más te convenga.' },
-			{ role: 'user', text: 'Tienen en otro color q no sea blanco? Porque esa promo es solo blanco' },
-			{ role: 'assistant', text: 'Sí, trabajamos también otras opciones. Si buscabas negro y querés seguir por esa línea, te digo cuál conviene mejor.' },
-			{ role: 'user', text: 'Y el 3x1 lo tienen en negro y XL?' },
-			{ role: 'assistant', text: 'Sí, en negro y XL trabajamos esa opción. Si querés seguimos con esa.' },
-			{ role: 'user', text: 'Dale pásame aceptan transferencia?' },
-			{ role: 'assistant', text: 'Sí, aceptamos transferencia. Si querés cerramos con esa opción y después te paso el link correcto.' },
-			{ role: 'user', text: 'Transferencia' },
-			{ role: 'assistant', text: 'Perfecto. Si querés, seguimos con el 3x1 en negro y XL.' },
-			{ role: 'user', text: 'Nada más me pasas el link?' }
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: '¡Hola! Soy Sofi de Lummine. ¿En qué puedo ayudarte hoy?'
+			},
+			{
+				direction: 'INBOUND',
+				body: 'Busco un body modelador negro en XL'
+			}
 		],
 		expected: [
-			'Solo debería mandar un link.',
-			'El link tiene que coincidir con la promo que se vino trabajando.',
-			'No debería volver a TOTAL WHITE si ya quedó enfocada otra opción.'
+			'Si pide link, debería mandar uno coherente',
+			'No debería mezclar promos si ya quedó claro el foco'
 		]
 	},
 	{
-		key: 'pedido-humano',
-		name: 'Cliente pide humano',
-		description: 'Sirve para validar el handoff sin romper el tono.',
-		contactName: 'Magali',
-		customerContext: {
-			name: 'Magali',
-			waId: '5491122233344'
+		key: 'payment-followup',
+		name: 'Seguimiento de pago',
+		description: 'Sirve para validar transferencia, comprobante y continuidad.',
+		stateOverrides: {
+			customerName: 'German',
+			interestedProducts: ['body modelador'],
+			currentProductFocus: 'body modelador',
+			paymentPreference: 'transferencia',
+			salesStage: 'READY_TO_BUY'
 		},
-		messages: [
-			{ role: 'user', text: 'Hola, hice un pedido y quiero hablar con una persona' }
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Te paso el link del body modelador y, si querés, después te ayudo con el pago.'
+			}
 		],
 		expected: [
-			'Debería derivar con calidez.',
-			'No debería seguir ofreciendo productos.'
+			'Debería responder igual que WhatsApp cuando preguntan por transferencia',
+			'No debería volver al saludo inicial'
 		]
 	}
 ];
 
-export function getAiLabFixture(key = 'blank') {
-	return AI_LAB_FIXTURES.find((fixture) => fixture.key === key) || AI_LAB_FIXTURES[0];
+export function getAiLabFixture(fixtureKey = 'blank') {
+	return AI_LAB_FIXTURES.find((fixture) => fixture.key === fixtureKey) || AI_LAB_FIXTURES[0];
 }

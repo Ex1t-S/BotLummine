@@ -1,368 +1,128 @@
 import { randomUUID } from 'node:crypto';
 
-import { detectIntent } from '../lib/intent.js';
-import { analyzeConversationTurn, buildHandoffReply } from './conversation-analysis.service.js';
-import {
-	searchCatalogProducts,
-	buildCatalogContext,
-	pickCommercialHints
-} from './catalog-search.service.js';
-import { resolveCommercialBrainV2 } from './commercial-brain.service.js';
-import { runAssistantReply } from './ai/index.js';
-import { buildPrompt } from './ai/prompt-builder.js';
-import { AI_LAB_FIXTURES, getAiLabFixture } from '../data/ai-lab-fixtures.js';
+import { prisma } from '../lib/prisma.js';
+import { getOrCreateConversation, processInboundMessage } from './chat.service.js';
+import { createResetConversationState } from './conversation-turn.service.js';
+import { getAiLabFixture, AI_LAB_FIXTURES } from '../data/ai-lab-fixtures.js';
 
 const SESSIONS = new Map();
-const MAX_SESSION_MESSAGES = 80;
 
-function normalizeText(value = '') {
-	return String(value || '')
-		.replace(/\s+/g, ' ')
-		.trim();
+function buildFakeWaId() {
+	const suffix = `${Date.now()}${Math.floor(Math.random() * 900 + 100)}`.slice(-10);
+	return `54911${suffix}`;
 }
 
-function unwrapAssistantResult(result) {
-	if (typeof result === 'string') return normalizeText(result);
-	if (result && typeof result === 'object') {
-		if (typeof result.text === 'string') return normalizeText(result.text);
-		if (typeof result.output_text === 'string') return normalizeText(result.output_text);
-		if (typeof result.message === 'string') return normalizeText(result.message);
-	}
-	return '';
-}
-
-function uniqueStrings(values = []) {
-	return [...new Set((Array.isArray(values) ? values : []).filter(Boolean).map((item) => String(item).trim()))];
-}
-
-function createInitialState() {
+function buildTracePayload(trace = null) {
+	if (!trace) return null;
 	return {
-		customerName: null,
-		lastIntent: null,
-		lastDetectedIntent: null,
-		lastUserGoal: null,
-		lastOrderNumber: null,
-		lastOrderId: null,
-		preferredTone: null,
-		customerMood: null,
-		urgencyLevel: null,
-		frequentSize: null,
-		paymentPreference: null,
-		deliveryPreference: null,
-		interestedProducts: [],
-		objections: [],
-		needsHuman: false,
-		handoffReason: null,
-		interactionCount: 0,
-		notes: null,
-		currentProductFocus: null,
-		salesStage: null,
-		shownOffers: [],
-		shownPrices: [],
-		sharedLinks: [],
-		lastRecommendedProduct: null,
-		lastRecommendedOffer: null,
-		buyingIntentLevel: null,
-		frictionLevel: null,
-		commercialSummary: null
+		intent: trace.intent || null,
+		queueDecision: trace.queueDecision || null,
+		responsePolicy: trace.responsePolicy || null,
+		commercialPlan: trace.commercialPlan || null,
+		catalogProducts: trace.catalogProducts || [],
+		commercialHints: trace.commercialHints || [],
+		prompt: trace.prompt || null,
+		assistantMessage: trace.assistantMessage || null,
+		provider: trace.provider || null,
+		model: trace.model || null,
+		aiGuidance: trace.aiGuidance || null,
+		liveOrderContext: trace.liveOrderContext || null,
+		shouldReply: trace.shouldReply ?? true
 	};
 }
 
-function createBaseSession({ fixtureKey = 'blank' } = {}) {
-	const fixture = getAiLabFixture(fixtureKey);
-	const businessName = process.env.BUSINESS_NAME || 'Lummine';
-
-	return {
-		id: randomUUID(),
-		fixtureKey: fixture.key,
-		businessName,
-		contactName: fixture.contactName || 'Cliente',
-		customerContext: {
-			name: fixture.customerContext?.name || fixture.contactName || 'Cliente',
-			waId: fixture.customerContext?.waId || '5491100000000'
-		},
-		conversationState: createInitialState(),
-		messages: [],
-		lastTrace: null,
-		createdAt: new Date().toISOString(),
-		updatedAt: new Date().toISOString(),
-		fixtureMeta: {
-			key: fixture.key,
-			name: fixture.name,
-			description: fixture.description,
-			expected: fixture.expected || []
+async function fetchSessionConversation(conversationId) {
+	return prisma.conversation.findUnique({
+		where: { id: conversationId },
+		include: {
+			contact: true,
+			state: true,
+			messages: {
+				orderBy: { createdAt: 'asc' }
+			}
 		}
-	};
-}
-
-function trimMessages(messages = []) {
-	if (!Array.isArray(messages) || messages.length <= MAX_SESSION_MESSAGES) {
-		return Array.isArray(messages) ? messages : [];
-	}
-
-	return messages.slice(-MAX_SESSION_MESSAGES);
-}
-
-function buildConversationSummary({ state, lastUserMessage, lastAssistantMessage, commercialPlan }) {
-	const parts = [];
-
-	if (state?.lastUserGoal) parts.push(`Objetivo: ${state.lastUserGoal}`);
-	if (state?.interestedProducts?.length) parts.push(`Interés: ${state.interestedProducts.join(', ')}`);
-	if (commercialPlan?.productFocus) parts.push(`Foco: ${commercialPlan.productFocus}`);
-	if (commercialPlan?.bestOffer?.name) parts.push(`Oferta: ${commercialPlan.bestOffer.name}`);
-	if (state?.frequentSize) parts.push(`Talle: ${state.frequentSize}`);
-	if (state?.paymentPreference) parts.push(`Pago: ${state.paymentPreference}`);
-	if (state?.deliveryPreference) parts.push(`Entrega: ${state.deliveryPreference}`);
-	if (state?.needsHuman || commercialPlan?.shouldEscalate) {
-		parts.push(`Derivar: ${state.handoffReason || commercialPlan?.handoffReason || 'sí'}`);
-	}
-	if (lastUserMessage) parts.push(`Último cliente: ${normalizeText(lastUserMessage).slice(0, 120)}`);
-	if (lastAssistantMessage) parts.push(`Última respuesta: ${normalizeText(lastAssistantMessage).slice(0, 120)}`);
-
-	return parts.filter(Boolean).join(' | ');
-}
-
-function buildResponsePolicy({ intent, state, commercialPlan }) {
-	if (state?.needsHuman || commercialPlan?.shouldEscalate) {
-		return {
-			action: 'handoff_human',
-			useAI: false,
-			allowHandoffMention: true,
-			maxChars: 220,
-			tone: 'empatico_concreto'
-		};
-	}
-
-	if (intent === 'payment') {
-		return {
-			action: 'payment_guidance',
-			useAI: true,
-			allowHandoffMention: false,
-			maxChars: 220,
-			tone: 'amigable_directo'
-		};
-	}
-
-	if (intent === 'shipping') {
-		return {
-			action: 'shipping_guidance',
-			useAI: true,
-			allowHandoffMention: false,
-			maxChars: 220,
-			tone: 'amigable_directo'
-		};
-	}
-
-	if (intent === 'size_help') {
-		return {
-			action: 'size_help',
-			useAI: true,
-			allowHandoffMention: false,
-			maxChars: 220,
-			tone: 'amigable_directo'
-		};
-	}
-
-	if (intent === 'product' || intent === 'stock_check') {
-		return {
-			action: commercialPlan?.recommendedAction || 'product_guidance',
-			useAI: true,
-			allowHandoffMention: false,
-			maxChars:
-				commercialPlan?.recommendedAction === 'close_with_single_link'
-					? 200
-					: commercialPlan?.recommendedAction === 'present_single_best_offer'
-						? 190
-						: 240,
-			tone:
-				commercialPlan?.mood === 'angry'
-					? 'empatico_concreto'
-					: 'guia_comercial_directa'
-		};
-	}
-
-	return {
-		action: 'general_help',
-		useAI: true,
-		allowHandoffMention: false,
-		maxChars: 220,
-		tone: state?.preferredTone || 'amigable_directo'
-	};
-}
-
-function inferCommercialMemory({ previousState, commercialPlan, assistantReply }) {
-	const nextState = { ...previousState };
-	const reply = normalizeText(assistantReply);
-
-	nextState.currentProductFocus = commercialPlan?.productFocus || previousState.currentProductFocus || null;
-	nextState.salesStage = commercialPlan?.stage || previousState.salesStage || null;
-	nextState.buyingIntentLevel = commercialPlan?.buyingIntentLevel || previousState.buyingIntentLevel || null;
-	nextState.lastRecommendedProduct = commercialPlan?.bestOffer?.name || previousState.lastRecommendedProduct || null;
-	nextState.lastRecommendedOffer = commercialPlan?.bestOffer?.offerKey || previousState.lastRecommendedOffer || null;
-	nextState.commercialSummary = buildConversationSummary({
-		state: nextState,
-		lastUserMessage: null,
-		lastAssistantMessage: assistantReply,
-		commercialPlan
 	});
-
-	const shownOffers = [...(Array.isArray(previousState.shownOffers) ? previousState.shownOffers : [])];
-	const shownPrices = [...(Array.isArray(previousState.shownPrices) ? previousState.shownPrices : [])];
-	const sharedLinks = [...(Array.isArray(previousState.sharedLinks) ? previousState.sharedLinks : [])];
-
-	if (commercialPlan?.bestOffer?.name && reply.includes(normalizeText(commercialPlan.bestOffer.name))) {
-		shownOffers.push(commercialPlan.bestOffer.offerKey || commercialPlan.bestOffer.name);
-	}
-
-	if (commercialPlan?.bestOffer?.price && reply.includes(normalizeText(commercialPlan.bestOffer.price))) {
-		shownPrices.push(`${commercialPlan.bestOffer.name}::${commercialPlan.bestOffer.price}`);
-	}
-
-	if (commercialPlan?.bestOffer?.productUrl && assistantReply.includes(commercialPlan.bestOffer.productUrl)) {
-		sharedLinks.push(commercialPlan.bestOffer.productUrl);
-	}
-
-	nextState.shownOffers = uniqueStrings(shownOffers);
-	nextState.shownPrices = uniqueStrings(shownPrices);
-	nextState.sharedLinks = uniqueStrings(sharedLinks);
-
-	return nextState;
 }
 
-function sanitizeAssistantReply({ reply, businessName, contactName }) {
-	let clean = String(reply || '').trim();
-
-	if (!clean) return '';
-
-	const labels = [businessName, contactName, 'Cliente', 'Asesora', 'Sofi', 'Lummine']
-		.filter(Boolean)
-		.map((label) => String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-
-	for (const label of labels) {
-		clean = clean.replace(new RegExp(`(^|\\n)${label}:`, 'gi'), '$1');
-	}
-
-	const lines = clean
-		.split('\n')
-		.map((line) => line.trim())
-		.filter(Boolean)
-		.filter((line) => !/^(respond[eé]|conversaci[oó]n reciente|plan comercial|cliente:|asesora:)/i.test(line));
-
-	return normalizeText(lines.join(' '));
-}
-
-function serializeSession(session) {
-	if (!session) return null;
+function serializeConversation(conversation, fixtureMeta, lastTrace = null, sessionId = null) {
+	if (!conversation) return null;
 
 	return {
-		id: session.id,
-		fixtureKey: session.fixtureKey,
-		fixtureMeta: session.fixtureMeta,
-		businessName: session.businessName,
-		contactName: session.contactName,
-		customerContext: session.customerContext,
-		conversationState: session.conversationState,
-		messages: session.messages,
-		lastTrace: session.lastTrace,
-		createdAt: session.createdAt,
-		updatedAt: session.updatedAt
+		id: sessionId,
+		conversationId: conversation.id,
+		fixtureMeta,
+		contactName: conversation.contact?.name || 'Cliente',
+		customerContext: {
+			name: conversation.contact?.name || 'Cliente',
+			waId: conversation.contact?.waId || ''
+		},
+		conversationState: conversation.state || {},
+		messages: (conversation.messages || []).map((message) => ({
+			id: message.id,
+			role: message.direction === 'INBOUND' ? 'user' : 'assistant',
+			text: message.body,
+			createdAt: message.createdAt,
+			provider: message.provider || null,
+			model: message.model || null,
+			tokenTotal: message.tokenTotal ?? null
+		})),
+		lastTrace: buildTracePayload(lastTrace),
+		updatedAt: conversation.updatedAt,
+		queue: conversation.queue,
+		aiEnabled: conversation.aiEnabled
 	};
 }
 
-async function replayFixtureState(session) {
-	let rollingState = createInitialState();
-	let rollingMessages = [];
-	let lastTrace = null;
+async function resetConversationForFixture(conversationId, fixture) {
+	const baseState = {
+		...createResetConversationState(),
+		...(fixture.stateOverrides || {})
+	};
 
-	for (const message of session.messages) {
-		rollingMessages.push(message);
+	await prisma.$transaction([
+		prisma.message.deleteMany({ where: { conversationId } }),
+		prisma.conversation.update({
+			where: { id: conversationId },
+			data: {
+				queue: 'AUTO',
+				aiEnabled: true,
+				lastSummary: null,
+				commercialSummary: null,
+				lastMessageAt: null
+			}
+		}),
+		prisma.conversationState.upsert({
+			where: { conversationId },
+			update: baseState,
+			create: {
+				conversationId,
+				...baseState
+			}
+		})
+	]);
 
-		if (message.role !== 'user') continue;
-
-		const intent = detectIntent(message.text, rollingState);
-		const analyzed = analyzeConversationTurn({
-			messageBody: message.text,
-			intent,
-			currentState: rollingState,
-			recentMessages: rollingMessages.slice(-12)
+	if (Array.isArray(fixture.seedMessages) && fixture.seedMessages.length) {
+		const now = Date.now();
+		await prisma.message.createMany({
+			data: fixture.seedMessages.map((message, index) => ({
+				conversationId,
+				direction: message.direction,
+				type: message.type || 'text',
+				body: message.body,
+				senderName: message.direction === 'OUTBOUND' ? (process.env.BUSINESS_NAME || 'Lummine') : (fixture.contactName || 'Cliente'),
+				provider: message.direction === 'OUTBOUND' ? 'fixture' : null,
+				model: message.direction === 'OUTBOUND' ? 'fixture' : null,
+				createdAt: new Date(now + index * 1000)
+			}))
 		});
 
-		const mergedState = {
-			...rollingState,
-			...analyzed,
-			lastIntent: intent,
-			lastDetectedIntent: analyzed.lastDetectedIntent,
-			lastUserGoal: analyzed.lastUserGoal,
-			customerName: session.customerContext?.name || session.contactName
-		};
-
-		const catalogProducts = await searchCatalogProducts({
-			query: message.text,
-			interestedProducts: mergedState.interestedProducts,
-			limit: 4
+		await prisma.conversation.update({
+			where: { id: conversationId },
+			data: {
+				lastMessageAt: new Date(now + fixture.seedMessages.length * 1000)
+			}
 		});
-
-		const commercialPlan = resolveCommercialBrainV2({
-			intent,
-			messageBody: message.text,
-			currentState: mergedState,
-			recentMessages: rollingMessages.slice(-12),
-			catalogProducts
-		});
-
-		rollingState = {
-			...mergedState,
-			currentProductFocus: commercialPlan.productFocus || mergedState.currentProductFocus || null,
-			salesStage: commercialPlan.stage || mergedState.salesStage || null,
-			buyingIntentLevel: commercialPlan.buyingIntentLevel || mergedState.buyingIntentLevel || null,
-			lastRecommendedProduct: commercialPlan.bestOffer?.name || mergedState.lastRecommendedProduct || null,
-			lastRecommendedOffer: commercialPlan.bestOffer?.offerKey || mergedState.lastRecommendedOffer || null
-		};
-
-		lastTrace = {
-			intent,
-			commercialPlan,
-			catalogProducts,
-			responsePolicy: buildResponsePolicy({ intent, state: rollingState, commercialPlan }),
-			mode: 'fixture_replay'
-		};
 	}
-
-	session.conversationState = rollingState;
-	session.lastTrace = lastTrace;
-}
-
-async function applyFixtureToSession(session, fixtureKey) {
-	const fixture = getAiLabFixture(fixtureKey);
-
-	session.fixtureKey = fixture.key;
-	session.contactName = fixture.contactName || session.contactName;
-	session.customerContext = {
-		name: fixture.customerContext?.name || fixture.contactName || session.contactName,
-		waId: fixture.customerContext?.waId || session.customerContext?.waId || '5491100000000'
-	};
-	session.messages = trimMessages(
-		(fixture.messages || []).map((message, index) => ({
-			id: `${fixture.key}-${index + 1}`,
-			role: message.role,
-			text: message.text,
-			createdAt: new Date().toISOString()
-		}))
-	);
-	session.conversationState = createInitialState();
-	session.lastTrace = null;
-	session.fixtureMeta = {
-		key: fixture.key,
-		name: fixture.name,
-		description: fixture.description,
-		expected: fixture.expected || []
-	};
-	session.updatedAt = new Date().toISOString();
-
-	await replayFixtureState(session);
-	SESSIONS.set(session.id, session);
-
-	return serializeSession(session);
 }
 
 export function listAiLabFixtures() {
@@ -371,20 +131,61 @@ export function listAiLabFixtures() {
 		name: fixture.name,
 		description: fixture.description,
 		expected: fixture.expected || [],
-		messageCount: Array.isArray(fixture.messages) ? fixture.messages.length : 0
+		messageCount: Array.isArray(fixture.seedMessages) ? fixture.seedMessages.length : 0
 	}));
 }
 
 export async function createAiLabSession({ fixtureKey = 'blank' } = {}) {
-	const session = createBaseSession({ fixtureKey });
-	await applyFixtureToSession(session, fixtureKey);
-	return serializeSession(session);
+	const fixture = getAiLabFixture(fixtureKey);
+	const waId = buildFakeWaId();
+	const contactName = fixture.contactName || 'German';
+	const conversation = await getOrCreateConversation({
+		waId,
+		contactName,
+		queue: 'AUTO',
+		aiEnabled: true
+	});
+
+	await resetConversationForFixture(conversation.id, fixture);
+
+	const sessionId = randomUUID();
+	SESSIONS.set(sessionId, {
+		sessionId,
+		conversationId: conversation.id,
+		fixtureKey: fixture.key,
+		lastTrace: null
+	});
+
+	const hydrated = await fetchSessionConversation(conversation.id);
+	return serializeConversation(
+		hydrated,
+		{
+			key: fixture.key,
+			name: fixture.name,
+			description: fixture.description,
+			expected: fixture.expected || []
+		},
+		null,
+		sessionId
+	);
 }
 
-export function getAiLabSession(sessionId) {
+export async function getAiLabSession(sessionId) {
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) return null;
-	return serializeSession(session);
+	const fixture = getAiLabFixture(session.fixtureKey);
+	const conversation = await fetchSessionConversation(session.conversationId);
+	return serializeConversation(
+		conversation,
+		{
+			key: fixture.key,
+			name: fixture.name,
+			description: fixture.description,
+			expected: fixture.expected || []
+		},
+		session.lastTrace,
+		session.sessionId
+	);
 }
 
 export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
@@ -395,7 +196,23 @@ export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
 		throw error;
 	}
 
-	return applyFixtureToSession(session, fixtureKey || session.fixtureKey || 'blank');
+	const fixture = getAiLabFixture(fixtureKey || session.fixtureKey);
+	session.fixtureKey = fixture.key;
+	session.lastTrace = null;
+	await resetConversationForFixture(session.conversationId, fixture);
+
+	const conversation = await fetchSessionConversation(session.conversationId);
+	return serializeConversation(
+		conversation,
+		{
+			key: fixture.key,
+			name: fixture.name,
+			description: fixture.description,
+			expected: fixture.expected || []
+		},
+		null,
+		session.sessionId
+	);
 }
 
 export async function sendAiLabMessage(sessionId, { body }) {
@@ -406,166 +223,46 @@ export async function sendAiLabMessage(sessionId, { body }) {
 		throw error;
 	}
 
-	const messageBody = normalizeText(body);
-	if (!messageBody) {
+	const conversation = await fetchSessionConversation(session.conversationId);
+	if (!conversation) {
+		const error = new Error('Conversación de AI Lab no encontrada.');
+		error.status = 404;
+		throw error;
+	}
+
+	const cleanBody = String(body || '').trim();
+	if (!cleanBody) {
 		const error = new Error('El mensaje no puede estar vacío.');
 		error.status = 400;
 		throw error;
 	}
 
-	const userMessage = {
-		id: randomUUID(),
-		role: 'user',
-		text: messageBody,
-		createdAt: new Date().toISOString()
-	};
-
-	const messagesBeforeReply = trimMessages([...session.messages, userMessage]);
-	const intent = detectIntent(messageBody, session.conversationState);
-	const analyzed = analyzeConversationTurn({
-		messageBody,
-		intent,
-		currentState: session.conversationState,
-		recentMessages: messagesBeforeReply.slice(-12)
+	const result = await processInboundMessage({
+		waId: conversation.contact?.waId,
+		contactName: conversation.contact?.name || 'German',
+		messageBody: cleanBody,
+		messageType: 'text',
+		attachmentMeta: null,
+		rawPayload: {
+			source: 'ai-lab',
+			sessionId
+		},
+		transportMode: 'lab'
 	});
 
-	let nextState = {
-		...session.conversationState,
-		...analyzed,
-		customerName: session.customerContext?.name || session.contactName,
-		lastIntent: intent,
-		lastDetectedIntent: analyzed.lastDetectedIntent,
-		lastUserGoal: analyzed.lastUserGoal
-	};
+	session.lastTrace = result.trace || null;
+	const fixture = getAiLabFixture(session.fixtureKey);
+	const updatedConversation = await fetchSessionConversation(session.conversationId);
 
-	const catalogProducts = await searchCatalogProducts({
-		query: messageBody,
-		interestedProducts: nextState.interestedProducts,
-		limit: 4
-	});
-
-	const commercialPlan = resolveCommercialBrainV2({
-		intent,
-		messageBody,
-		currentState: nextState,
-		recentMessages: messagesBeforeReply.slice(-12),
-		catalogProducts
-	});
-
-	const catalogContext = buildCatalogContext(catalogProducts);
-	const commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
-	const responsePolicy = buildResponsePolicy({
-		intent,
-		state: nextState,
-		commercialPlan
-	});
-
-	const lastAssistantMessage = [...messagesBeforeReply]
-		.reverse()
-		.find((message) => message.role === 'assistant')?.text || '';
-
-	const conversationSummary = buildConversationSummary({
-		state: nextState,
-		lastUserMessage: messageBody,
-		lastAssistantMessage,
-		commercialPlan
-	});
-
-	const prompt = buildPrompt({
-		businessName: session.businessName,
-		contactName: session.contactName,
-		recentMessages: messagesBeforeReply.slice(-10),
-		conversationSummary,
-		customerContext: session.customerContext,
-		conversationState: nextState,
-		liveOrderContext: null,
-		catalogProducts,
-		catalogContext,
-		commercialHints,
-		commercialPlan,
-		responsePolicy
-	});
-
-	let assistantReply = '';
-	let provider = 'ai';
-	let providerMeta = null;
-	let rawError = null;
-
-	if (responsePolicy.action === 'handoff_human') {
-		assistantReply = buildHandoffReply({
-			contactName: session.customerContext?.name || session.contactName,
-			reason: nextState.handoffReason || commercialPlan.handoffReason || 'requested_human'
-		});
-		provider = 'handoff';
-	} else {
-		try {
-			const aiResult = await runAssistantReply({
-				businessName: session.businessName,
-				contactName: session.contactName,
-				recentMessages: messagesBeforeReply.slice(-10),
-				conversationSummary,
-				customerContext: session.customerContext,
-				conversationState: nextState,
-				liveOrderContext: null,
-				catalogProducts,
-				catalogContext,
-				commercialHints,
-				commercialPlan,
-				responsePolicy
-			});
-			providerMeta = aiResult && typeof aiResult === 'object' ? {
-				provider: aiResult.provider || 'ai',
-				model: aiResult.model || null,
-				usage: aiResult.usage || null
-			} : null;
-			assistantReply = unwrapAssistantResult(aiResult) || aiResult;
-		} catch (error) {
-			rawError = error;
-			provider = 'fallback';
-			assistantReply = `No pude generar la respuesta con la IA ahora mismo: ${error.message}`;
-		}
-	}
-
-	const cleanedReply = sanitizeAssistantReply({
-		reply: assistantReply,
-		businessName: session.businessName,
-		contactName: session.contactName
-	});
-
-	const assistantMessage = {
-		id: randomUUID(),
-		role: 'assistant',
-		text: cleanedReply || assistantReply,
-		createdAt: new Date().toISOString()
-	};
-
-	nextState = inferCommercialMemory({
-		previousState: nextState,
-		commercialPlan,
-		assistantReply: assistantMessage.text
-	});
-
-	session.messages = trimMessages([...messagesBeforeReply, assistantMessage]);
-	session.conversationState = nextState;
-	session.lastTrace = {
-		intent,
-		analyzedState: analyzed,
-		commercialPlan,
-		responsePolicy,
-		catalogProducts,
-		catalogContext,
-		commercialHints,
-		conversationSummary,
-		prompt,
-		provider,
-		providerMeta,
-		error: rawError ? rawError.message : null,
-		lastUserMessage: messageBody,
-		assistantMessage: assistantMessage.text
-	};
-	session.updatedAt = new Date().toISOString();
-
-	SESSIONS.set(session.id, session);
-
-	return serializeSession(session);
+	return serializeConversation(
+		updatedConversation,
+		{
+			key: fixture.key,
+			name: fixture.name,
+			description: fixture.description,
+			expected: fixture.expected || []
+		},
+		session.lastTrace,
+		session.sessionId
+	);
 }
