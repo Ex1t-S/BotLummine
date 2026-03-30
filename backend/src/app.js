@@ -23,18 +23,26 @@ const allowedOrigins = [
 	'http://127.0.0.1:3000',
 	process.env.FRONTEND_URL,
 	process.env.FRONTEND_URL_PROD
-].filter(Boolean);
+]
+	.filter(Boolean)
+	.map((value) => value.replace(/\/+$/, ''));
+
+function normalizeOrigin(origin) {
+	return String(origin || '').trim().replace(/\/+$/, '');
+}
 
 function isAllowedOrigin(origin) {
 	if (!origin) return true;
 
-	if (allowedOrigins.includes(origin)) {
+	const normalizedOrigin = normalizeOrigin(origin);
+
+	if (allowedOrigins.includes(normalizedOrigin)) {
 		return true;
 	}
 
 	if (
 		process.env.ALLOW_VERCEL_PREVIEWS === 'true' &&
-		/^https:\/\/.*\.vercel\.app$/.test(origin)
+		/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)
 	) {
 		return true;
 	}
@@ -44,10 +52,18 @@ function isAllowedOrigin(origin) {
 
 const corsOptions = {
 	origin(origin, callback) {
+		const normalizedOrigin = normalizeOrigin(origin);
+
+		console.log('[CORS] Origin recibido:', origin);
+		console.log('[CORS] Origin normalizado:', normalizedOrigin);
+		console.log('[CORS] Allowed origins:', allowedOrigins);
+
 		if (isAllowedOrigin(origin)) {
+			console.log('[CORS] Permitido');
 			return callback(null, true);
 		}
 
+		console.log('[CORS] Bloqueado');
 		return callback(new Error(`Origen no permitido por CORS: ${origin}`));
 	},
 	credentials: true,
