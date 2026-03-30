@@ -77,6 +77,12 @@ export function verifyWhatsappWebhook(req, res) {
 }
 
 export async function receiveWhatsappWebhook(req, res) {
+	console.log('[WEBHOOK DEBUG] inbound message', {
+	from: message?.from,
+	type: message?.type,
+	messageId: message?.id,
+	timestamp: message?.timestamp,
+	});
 	try {
 		res.sendStatus(200);
 

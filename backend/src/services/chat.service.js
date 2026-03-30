@@ -444,6 +444,15 @@ export async function getOrCreateConversation({
 }
 
 export async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = null }) {
+	
+	console.log('[AI DEBUG] outbound reply', {
+	waId,
+	contactWaId: freshConversation?.contact?.waId,
+	conversationId: freshConversation?.id,
+	queue: freshConversation?.queue,
+	aiEnabled: freshConversation?.aiEnabled,
+	replyPreview: String(replyText || '').slice(0, 160),
+	});
 	const waResult = await sendWhatsAppText({ to: waId, body });
 
 	await prisma.message.create({

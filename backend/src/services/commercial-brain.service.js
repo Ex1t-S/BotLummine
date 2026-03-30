@@ -228,10 +228,10 @@ export function resolveCommercialBrainV2({ intent, messageBody, currentState = {
 	const recommendedAction = buildRecommendedAction({ stage, requestedAction, shouldEscalate: escalation.shouldEscalate, shareLinkNow, repeatPriceNow });
 	const responseRules = [
 		'Si es solo un saludo, respondé breve y no ofrezcas productos todavía.',
-		'No repitas saludo ni nombre del cliente si la conversación ya empezó.',
-		'No abras varias promos si no te pidieron comparar.',
+		'Nombra y saluda al cliente una vez sola al comenzar la conversación.',
+		'Ofrecer varias promos si solo te pidieron comparar.',
 		'Priorizá una sola oferta principal por familia.',
-		'No compartas más de un link por respuesta.',
+		'Compartir un unico link por respuesta.',
 		'Si la conversación cambió de producto, el link y el foco tienen que seguir el producto más reciente.',
 		'Si ya se dijo el precio, no lo repitas salvo pedido explícito.',
 		'Bajá el entusiasmo; soná más humana y directa.'

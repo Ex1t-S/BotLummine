@@ -77,15 +77,25 @@ export async function sendWhatsAppText({ to, body }) {
 	console.log('[WA DEBUG] sendWhatsAppText', {
 		rawTo,
 		finalTo,
-		bodyPreview: cleanBody.slice(0, 120)
+		bodyPreview: cleanBody.slice(0, 120),
+		graphVersion: process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
+		phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+		tokenLoaded: Boolean(process.env.WHATSAPP_ACCESS_TOKEN),
 	});
 
 	if (!finalTo || !cleanBody) {
+		console.log('[WA DEBUG] ABORT sendWhatsAppText', {
+			reason: 'missing_to_or_body',
+			rawTo,
+			finalTo,
+			bodyLength: cleanBody.length,
+		});
+
 		return {
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
-			error: { message: 'Falta número o mensaje para enviar por WhatsApp.' }
+			error: { message: 'Falta número o mensaje para enviar por WhatsApp.' },
 		};
 	}
 
@@ -95,35 +105,38 @@ export async function sendWhatsAppText({ to, body }) {
 		messaging_product: 'whatsapp',
 		to: finalTo,
 		type: 'text',
-		text: { body: cleanBody }
+		text: { body: cleanBody },
 	};
 
+	console.log('[WA DEBUG] TEXT URL', url);
 	console.log('[WA DEBUG] TEXT PAYLOAD', JSON.stringify(payload, null, 2));
 
 	try {
 		const response = await axios.post(url, payload, {
 			headers: {
 				Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-				'Content-Type': 'application/json'
-			}
+				'Content-Type': 'application/json',
+			},
 		});
 
-		console.log('[WA DEBUG] TEXT RESPONSE', response.data);
+		console.log('[WA DEBUG] TEXT RESPONSE', JSON.stringify(response.data, null, 2));
 
 		return {
 			ok: true,
 			provider: 'whatsapp-cloud-api',
 			model: null,
-			rawPayload: response.data
+			rawPayload: response.data,
 		};
 	} catch (error) {
-		console.error('[WA DEBUG] TEXT ERROR', error.response?.data || error.message);
+		console.error('[WA DEBUG] TEXT ERROR MESSAGE', error.message);
+		console.error('[WA DEBUG] TEXT ERROR STATUS', error.response?.status);
+		console.error('[WA DEBUG] TEXT ERROR DATA', JSON.stringify(error.response?.data || {}, null, 2));
 
 		return {
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
-			error: error.response?.data || { message: error.message }
+			error: error.response?.data || { message: error.message },
 		};
 	}
 }
