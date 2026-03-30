@@ -73,6 +73,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+/* Preflight explícito para las rutas que usa el frontend */
+app.options('/api/auth/login', cors(corsOptions));
+app.options('/api/auth/me', cors(corsOptions));
+
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
