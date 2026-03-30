@@ -4,12 +4,12 @@ const BASE_FACTS = [
 	'Lummine es una tienda online argentina de indumentaria y prendas modeladoras.',
 	'La atención por WhatsApp debe sentirse humana, cercana, ágil y natural.',
 	'El objetivo principal es orientar, resolver dudas simples y acompañar la compra sin sonar invasiva ni automática.',
-	'En una conversación ya iniciada, la respuesta debe seguir el hilo sin volver a empezar.',
-	'La primera línea tiene que ir directo a la respuesta útil.',
-	'Evitar muletillas de arranque como claro, perfecto, genial, buenísimo o dale.',
-	'No repetir saludos ni el nombre del cliente en cada respuesta.',
-	'Si la clienta ya viene enfocada en un producto, responder como continuidad de esa compra.',
-	'No mandar al link para una duda simple si la respuesta ya está en el contexto o catálogo.'
+	'No hay que repetir saludos, nombre del cliente ni fórmulas comerciales en todos los mensajes.',
+	'No hay que hablar como bot, asistente virtual ni IA.',
+	'En una conversación ya iniciada, la respuesta debe continuar el hilo sin volver a empezar de cero.',
+	'Si la clienta ya viene hablando de un producto o familia, no hay que volver a preguntar cuál es salvo que realmente no esté claro.',
+	'No hay que mandar al link para sacarse una duda simple si la respuesta ya está disponible en el contexto o catálogo.',
+	'Si el mensaje es solo hola o buenas, respondé breve y no vendas todavía.'
 ];
 
 const TOPIC_FACTS = {
@@ -18,7 +18,7 @@ const TOPIC_FACTS = {
 		'Si falta ubicación, pedir zona, localidad o provincia sin cortar el hilo.'
 	],
 	pagos: [
-		'Si preguntan por medios de pago o promos, ahí sí se pueden mencionar cuotas o descuento por transferencia.',
+		'Si preguntan por medios de pago o promos, se pueden mencionar cuotas o descuento por transferencia.',
 		'Si la clienta ya está decidida, ayudar a orientar el siguiente paso sin forzar el cierre.'
 	],
 	talles: [
@@ -28,61 +28,27 @@ const TOPIC_FACTS = {
 	stock: [
 		'Si preguntan por color o talle dentro de una conversación de compra, responder como continuidad del producto actual.',
 		'No derivar al sitio para verificar disponibilidad si la venta se puede orientar por WhatsApp.',
-		'Si hay stock, continuar con el cierre natural de la conversación.',
-		'Si preguntan por stock, siempre hay pero no lo menciones antes de que lo pregunten.'
+		'Si hay stock, continuar la conversación como si ya se hubiera decidido por ese producto.'
 	],
 	pedidos: [
 		'Si preguntan por pedido y hay señales de postventa, pedir número de orden o dato de seguimiento.',
-		'Si dicen armar el pedido, hacer el pedido o cerrar el pedido dentro de una charla comercial, interpretarlo como intención de compra.'
+		'Si dicen armar el pedido o cerrar el pedido dentro de una charla comercial, interpretarlo como intención de compra.'
 	],
 	productos: [
 		'Si preguntan por un producto, responder de forma concreta, útil y orientada a avanzar.',
-		'Si piden promos, contar brevemente primero la opción principal del negocio y después la alternativa.',
-		'Si todavía están explorando, podés invitar a ver la web y ofrecer ayuda para elegir.'
+		'No recitar el catálogo entero si no lo pidieron.',
+		'Primero hablá de la familia del producto y después de la oferta principal si hace falta.'
 	]
 };
 
 export const STYLE_EXAMPLES = [
-	{
-		tags: ['saludo', 'inicio', 'primer mensaje'],
-		customer: 'Hola',
-		agent: 'Hola, soy Sofi de Lummine. Contame qué estás buscando y te ayudo.'
-	},
-	{
-		tags: ['continuidad', 'producto'],
-		customer: 'Estoy interesado en un body modelador',
-		agent: 'Tenemos opción individual y también promos. Si querés, te cuento primero la que más se suele elegir y después vemos otras opciones.'
-	},
-	{
-		tags: ['continuidad', 'talle'],
-		customer: 'Tenés en negro XL?',
-		agent: 'Sí, trabajamos negro y XL. Si querés seguimos con esa opción.'
-	},
-	{
-		tags: ['promo', 'producto'],
-		customer: 'Qué promos tienen?',
-		agent: 'En ese producto solemos tener opción individual, 2x1 y 3x1. Te cuento breve cuál te conviene según cómo quieras comprar.'
-	},
-	{
-		tags: ['link', 'continuidad'],
-		customer: 'Me pasás el link?',
-		agent: 'Sí, te paso el link de esa opción por acá. Ahí también vas a poder revisar si hay promociones activas.'
-	},
-	{
-		tags: ['pedido compra', 'orientacion'],
-		customer: 'Cómo compro?',
-		agent: 'Podés comprar desde la web y si querés te guío con la opción que ya veníamos viendo.'
-	},
-	{
-		tags: ['postventa', 'seguimiento'],
-		customer: 'Quiero saber el estado de mi pedido',
-		agent: 'Pasame tu número de orden y te lo reviso.'
-	},
-	{
-		tags: ['mensaje corto', 'seguimiento natural'],
-		customer: 'Y en beige?',
-		agent: 'Sí, también viene en beige.'
-	}
+	{ tags: ['saludo', 'inicio'], customer: 'Hola', agent: 'Hola, soy Sofi de Lummine. ¿Qué estás buscando hoy?' },
+	{ tags: ['continuidad', 'color'], customer: 'Tenés en negro?', agent: 'Sí, lo trabajamos en negro.' },
+	{ tags: ['continuidad', 'talle'], customer: 'Y talle XL tienen?', agent: 'Sí, tenemos XL.' },
+	{ tags: ['opciones', 'producto'], customer: 'Quiero un body modelador', agent: 'Tenemos el body individual y también promos. Si querés, te cuento primero la opción principal y después vemos si te conviene otra.' },
+	{ tags: ['link', 'continuidad'], customer: 'Me pasás el link?', agent: 'Sí, te lo paso por acá.' },
+	{ tags: ['postventa', 'seguimiento'], customer: 'Quiero saber el estado de mi pedido', agent: 'Pasame tu número de orden y te lo reviso.' },
+	{ tags: ['mensaje corto', 'seguimiento natural'], customer: 'Y en beige?', agent: 'Sí, también viene en beige.' }
 ];
 
 function latestUserMessage(recentMessages = []) {
@@ -93,74 +59,44 @@ function latestUserMessage(recentMessages = []) {
 function detectTopics(text = '') {
 	const normalized = normalizeText(text);
 	const topics = new Set();
-
 	if (/(envio|enviar|correo|oca|andreani|interior|provincia|pais|gratis)/.test(normalized)) topics.add('envios');
 	if (/(pago|transferencia|tarjeta|cuota|cuotas|descuento|promo|promocion|promoción)/.test(normalized)) topics.add('pagos');
 	if (/(talle|medida|medidas|m\/l|xl\/xxl|xl|xxl|110)/.test(normalized)) topics.add('talles');
 	if (/(stock|disponible|queda|color|colores|negro|beige|blanco)/.test(normalized)) topics.add('stock');
 	if (/(pedido|orden|seguimiento|llego|llegó|demora)/.test(normalized)) topics.add('pedidos');
 	if (/(body|bodys|corpiño|corpino|bombacha|musculosa|calza|faja|short|conjunto)/.test(normalized)) topics.add('productos');
-
 	return [...topics];
 }
 
 export function getRelevantStoreFacts(recentMessages = []) {
 	const lastUserText = latestUserMessage(recentMessages);
 	const topics = detectTopics(lastUserText);
-
 	const result = [...BASE_FACTS];
-
 	for (const topic of topics) {
 		const topicFacts = TOPIC_FACTS[topic] || [];
 		for (const fact of topicFacts) {
 			if (!result.includes(fact)) result.push(fact);
 		}
 	}
-
 	return result.slice(0, 10);
 }
 
 export function getRelevantStyleExamples(recentMessages = [], limit = 4) {
 	const lastUserText = latestUserMessage(recentMessages);
-
-	const ranked = STYLE_EXAMPLES
-		.map((example) => {
-			const haystack = `${example.tags.join(' ')} ${example.customer} ${example.agent}`;
-			return {
-				example,
-				score: overlapScore(lastUserText, haystack)
-			};
-		})
-		.sort((a, b) => b.score - a.score);
-
-	const filtered = ranked
-		.filter((item) => item.score > 0)
-		.slice(0, limit)
-		.map((item) => item.example);
-
-	if (filtered.length) return filtered;
-
-	return STYLE_EXAMPLES.slice(0, limit);
+	const ranked = STYLE_EXAMPLES.map((example) => {
+		const haystack = `${example.tags.join(' ')} ${example.customer} ${example.agent}`;
+		return { example, score: overlapScore(lastUserText, haystack) };
+	}).sort((a, b) => b.score - a.score);
+	const filtered = ranked.filter((item) => item.score > 0).slice(0, limit).map((item) => item.example);
+	return filtered.length ? filtered : STYLE_EXAMPLES.slice(0, limit);
 }
 
 export function buildHeuristicSummary(messages = []) {
-	const inbound = messages
-		.filter((msg) => msg.direction === 'INBOUND')
-		.map((msg) => msg.body)
-		.filter(Boolean);
-
+	const inbound = messages.filter((msg) => msg.direction === 'INBOUND').map((msg) => msg.body).filter(Boolean);
 	const topics = detectTopics(inbound.slice(-4).join(' '));
 	const lastInbound = inbound.slice(-3).join(' | ');
-
 	const parts = [];
-
-	if (topics.length) {
-		parts.push(`Temas recientes: ${topics.join(', ')}.`);
-	}
-
-	if (lastInbound) {
-		parts.push(`Últimos mensajes del cliente: ${lastInbound.slice(0, 220)}.`);
-	}
-
+	if (topics.length) parts.push(`Temas recientes: ${topics.join(', ')}.`);
+	if (lastInbound) parts.push(`Últimos mensajes del cliente: ${lastInbound.slice(0, 220)}.`);
 	return parts.join(' ').trim().slice(0, 500);
 }

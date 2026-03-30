@@ -9,129 +9,102 @@ function normalizeText(value = '') {
 
 export const CATALOG_COMMERCIAL_MAP = {
 	body_modelador: {
-		familyLabel: 'body modelador',
-		showMode: 'offer_first',
-		linkMode: 'recent_or_primary',
-		primaryOffer: {
-			type: 'pack_3x1',
-			handles: ['3x1', 'bodys-modeladores', 'body-modelador'],
-			keywords: ['3x1', 'bodies', 'body modelador']
-		},
-		secondaryOffer: {
-			type: 'pack_2x1',
-			handles: ['2x1', 'bodys-modeladores', 'body-modelador'],
-			keywords: ['2x1', 'bodies', 'body modelador']
-		},
-		fallback: {
-			type: 'single',
-			handles: ['body-modelador-reductor', 'body-modelador'],
-			keywords: ['body modelador', 'reductor']
-		},
-		introLine: 'Tenemos body modelador individual y también promos. Si querés, te cuento primero la más conveniente y después vemos otras opciones.'
+		label: 'body modelador',
+		introMode: 'offer_first',
+		primaryOfferHints: ['3x1', 'promo 3x1', 'pack 3x1'],
+		secondaryOfferHints: ['2x1', 'promo 2x1', 'pack 2x1'],
+		fallbackHints: ['body modelador', 'body modelador reductor', 'body reductor'],
+		avoidHints: ['gift', 'regalo', 'segunda piel de regalo'],
+		defaultPitch:
+			'Tenemos el body modelador individual y también promos. La principal para mostrar primero es la 3x1; si no te sirve, seguimos con la 2x1 o la opción individual.',
+		linkHint: 'Si pasás link, priorizá la opción elegida o, si todavía no eligió, la principal de esta familia.'
 	},
 	calzas_linfaticas: {
-		familyLabel: 'calzas linfáticas',
-		showMode: 'product_first',
-		linkMode: 'recent_only',
-		primaryOffer: {
-			type: 'single',
-			handles: ['calza', 'linfatica', 'linfaticas'],
-			keywords: ['calza', 'linfatica', 'linfaticas']
-		},
-		secondaryOffer: null,
-		fallback: {
-			type: 'single',
-			handles: ['calza', 'linfatica', 'linfaticas'],
-			keywords: ['calza', 'linfatica', 'linfaticas']
-		},
-		introLine: 'Para piernas solemos orientar más con las calzas linfáticas. Si querés, te cuento breve cómo son y después te paso el link.'
+		label: 'calzas linfáticas',
+		introMode: 'product_first',
+		primaryOfferHints: ['calzas linfaticas', 'calza linfatica', 'calzas modeladoras'],
+		secondaryOfferHints: ['3x1 calzas', '2x1 calzas'],
+		fallbackHints: ['calzas linfaticas', 'calza modeladora'],
+		avoidHints: ['gift', 'regalo'],
+		defaultPitch:
+			'Si preguntan por piernas o modelado en piernas, guiá primero con calzas linfáticas antes de abrir otras familias.',
+		linkHint: 'Si cambió a calzas, el link tiene que seguir esa conversación y no volver al body.'
 	},
 	short_faja: {
-		familyLabel: 'short faja',
-		showMode: 'offer_first',
-		linkMode: 'recent_or_primary',
-		primaryOffer: {
-			type: 'pack_3x1',
-			handles: ['3x1', 'short', 'faja'],
-			keywords: ['3x1', 'short', 'faja']
-		},
-		secondaryOffer: {
-			type: 'pack_2x1',
-			handles: ['2x1', 'short', 'faja'],
-			keywords: ['2x1', 'short', 'faja']
-		},
-		fallback: {
-			type: 'single',
-			handles: ['short', 'faja'],
-			keywords: ['short', 'faja']
-		}
+		label: 'short faja',
+		introMode: 'product_first',
+		primaryOfferHints: ['short faja', 'short modelador', 'short reductor'],
+		secondaryOfferHints: ['2x1 short', '3x1 short'],
+		fallbackHints: ['short faja', 'short modelador'],
+		avoidHints: ['gift', 'regalo']
 	},
 	faja: {
-		familyLabel: 'faja reductora',
-		showMode: 'product_first',
-		linkMode: 'recent_or_primary',
-		primaryOffer: {
-			type: 'single',
-			handles: ['faja', 'reductora'],
-			keywords: ['faja', 'reductora']
-		},
-		secondaryOffer: null,
-		fallback: {
-			type: 'single',
-			handles: ['faja', 'reductora'],
-			keywords: ['faja', 'reductora']
-		}
+		label: 'faja',
+		introMode: 'product_first',
+		primaryOfferHints: ['faja', 'faja reductora', 'faja modeladora'],
+		secondaryOfferHints: ['2x1 faja', '3x1 faja'],
+		fallbackHints: ['faja', 'faja reductora'],
+		avoidHints: ['gift', 'regalo']
 	},
 	bombacha_modeladora: {
-		familyLabel: 'bombacha modeladora',
-		showMode: 'product_first',
-		linkMode: 'recent_or_primary',
-		primaryOffer: {
-			type: 'single',
-			handles: ['bombacha', 'modeladora'],
-			keywords: ['bombacha', 'modeladora']
-		},
-		secondaryOffer: null,
-		fallback: {
-			type: 'single',
-			handles: ['bombacha', 'modeladora'],
-			keywords: ['bombacha', 'modeladora']
-		}
+		label: 'bombacha modeladora',
+		introMode: 'product_first',
+		primaryOfferHints: ['bombacha modeladora', 'bombacha reductora'],
+		secondaryOfferHints: ['2x1 bombacha', '3x1 bombacha'],
+		fallbackHints: ['bombacha modeladora'],
+		avoidHints: ['gift', 'regalo']
 	}
 };
 
-export function normalizeCommercialFamily(value = '') {
-	const text = normalizeText(value);
-	if (!text) return 'general';
-	if (/(calza|linfatica|linfaticas)/.test(text)) return 'calzas_linfaticas';
-	if (/(body|bodies|body modelador|body reductor)/.test(text)) return 'body_modelador';
-	if (/(short|short faja)/.test(text)) return 'short_faja';
-	if (/(bombacha|colaless)/.test(text)) return 'bombacha_modeladora';
-	if (/(faja|reductora|reductor)/.test(text)) return 'faja';
-	return 'general';
-}
+const FAMILY_PATTERNS = [
+	{ family: 'body_modelador', regex: /(body|bodys|bodys)\b.*(modelador|reductor|reductora)|\bbody\b|\bbodys\b/ },
+	{ family: 'calzas_linfaticas', regex: /(calza|calzas)\b.*(linfat|modeladora)|\bcalzas linfaticas\b|\bcalza linfatica\b/ },
+	{ family: 'short_faja', regex: /(short)\b.*(faja|modelador|reductor)|\bshort faja\b/ },
+	{ family: 'bombacha_modeladora', regex: /(bombacha)\b.*(modelador|reductor)|\bbombacha modeladora\b/ },
+	{ family: 'faja', regex: /\bfaja\b/ }
+];
 
-export function getCommercialProfile(family = '') {
-	const key = normalizeCommercialFamily(family);
-	return CATALOG_COMMERCIAL_MAP[key] || null;
-}
-
-export function scoreProductAgainstProfile(product = {}, profile = null, slot = 'primaryOffer') {
-	if (!profile?.[slot]) return 0;
-	const rule = profile[slot];
-	const haystack = normalizeText([product.name, product.handle, product.tags, product.description].join(' '));
-	let score = 0;
-	if (rule.type && product.offerType === rule.type) score += 30;
-	for (const handle of rule.handles || []) {
-		if (haystack.includes(normalizeText(handle))) score += 10;
+export function inferCommercialFamily(text = '') {
+	const normalized = normalizeText(text);
+	for (const item of FAMILY_PATTERNS) {
+		if (item.regex.test(normalized)) return item.family;
 	}
-	for (const keyword of rule.keywords || []) {
-		if (haystack.includes(normalizeText(keyword))) score += 6;
+	return null;
+}
+
+export function getCommercialProfile(family = null) {
+	if (!family) return null;
+	return CATALOG_COMMERCIAL_MAP[family] || null;
+}
+
+function termHitScore(text, hints = []) {
+	const normalized = normalizeText(text);
+	let score = 0;
+	for (const hint of hints) {
+		if (normalized.includes(normalizeText(hint))) score += 1;
 	}
 	return score;
 }
 
-export function isCommercialNoiseProduct(product = {}) {
-	const text = normalizeText([product.name, product.handle, product.tags, product.description].join(' '));
-	return /(regalo|gift|mes de la mujer|free gift|segunda piel de regalo)/.test(text);
+export function scoreProductAgainstCommercialProfile(product = {}, family = null) {
+	const profile = getCommercialProfile(family);
+	if (!profile) return 0;
+
+	const haystack = normalizeText([
+		product.name,
+		product.handle,
+		product.tags,
+		product.shortDescription,
+		...(Array.isArray(product.variantHints) ? product.variantHints : []),
+		...(Array.isArray(product.colors) ? product.colors : []),
+		...(Array.isArray(product.sizes) ? product.sizes : [])
+	].filter(Boolean).join(' '));
+
+	let score = 0;
+	score += termHitScore(haystack, profile.primaryOfferHints) * 18;
+	score += termHitScore(haystack, profile.secondaryOfferHints) * 12;
+	score += termHitScore(haystack, profile.fallbackHints) * 10;
+	score -= termHitScore(haystack, profile.avoidHints) * 40;
+
+	return score;
 }
