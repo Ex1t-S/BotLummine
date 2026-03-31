@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { uploadCampaignHeaderImage } from '../../lib/campaigns.js';
 
 const defaultAudienceText = `5492210000000|German|Body Modelador Reductor|XL|negro
 5492210000001|Magali|Body Bretel Fino|L|beige`;
@@ -10,7 +11,35 @@ const initialForm = {
   sendNow: false,
 };
 
-function parseAudience(rawValue = '') {
+function normalizeType(value = '') {
+  return String(value || '').trim().toUpperCase();
+}
+
+function getTemplateComponents(template) {
+  if (Array.isArray(template?.components)) {
+    return template.components;
+  }
+
+  if (Array.isArray(template?.rawPayload?.components)) {
+    return template.rawPayload.components;
+  }
+
+  return [];
+}
+
+function templateRequiresHeaderImage(template) {
+  const components = getTemplateComponents(template);
+
+  const header = components.find(
+    (component) => normalizeType(component?.type) === 'HEADER'
+  );
+
+  if (!header) return false;
+
+  return normalizeType(header?.format) === 'IMAGE';
+}
+
+function parseAudience(rawValue = '', extraVariables = {}) {
   return rawValue
     .split('\n')
     .map((row) => row.trim())
@@ -33,6 +62,7 @@ function parseAudience(rawValue = '') {
           product_name: productName || '',
           size: size || '',
           color: color || '',
+          ...extraVariables,
         },
       };
     })
@@ -57,6 +87,10 @@ export default function CampaignComposerPanel({
   creating,
 }) {
   const [form, setForm] = useState(initialForm);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadedMediaId, setUploadedMediaId] = useState('');
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const [imageError, setImageError] = useState('');
 
   useEffect(() => {
     if (!selectedTemplate && templates.length) {
@@ -64,13 +98,68 @@ export default function CampaignComposerPanel({
     }
   }, [templates, selectedTemplate, onSelectTemplate]);
 
-  const recipients = useMemo(() => parseAudience(form.audienceText), [form.audienceText]);
+  useEffect(() => {
+    setUploadedMediaId('');
+    setUploadedFileName('');
+    setImageError('');
+  }, [selectedTemplate?.id]);
+
+  const requiresHeaderImage = useMemo(
+    () => templateRequiresHeaderImage(selectedTemplate),
+    [selectedTemplate]
+  );
+
+  const recipients = useMemo(() => {
+    const extraVariables = uploadedMediaId
+      ? { header_image_id: uploadedMediaId }
+      : {};
+
+    return parseAudience(form.audienceText, extraVariables);
+  }, [form.audienceText, uploadedMediaId]);
+
   const estimatedCost = useMemo(() => recipients.length * 0.032, [recipients.length]);
+
+  async function handleImageChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setImageError('');
+    setUploadingImage(true);
+
+    try {
+      const result = await uploadCampaignHeaderImage(file);
+      const mediaId = result?.mediaId || '';
+
+      if (!mediaId) {
+        throw new Error('Meta no devolvió mediaId para la imagen.');
+      }
+
+      setUploadedMediaId(mediaId);
+      setUploadedFileName(file.name);
+    } catch (error) {
+      setUploadedMediaId('');
+      setUploadedFileName('');
+      setImageError(
+        error?.response?.data?.error ||
+          error?.message ||
+          'No se pudo subir la imagen del encabezado.'
+      );
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
 
     if (!selectedTemplate?.id) return;
+
+    if (requiresHeaderImage && !uploadedMediaId) {
+      setImageError('Esta plantilla requiere una imagen de encabezado antes de crear la campaña.');
+      return;
+    }
 
     const payload = {
       name: form.name.trim(),
@@ -101,6 +190,9 @@ export default function CampaignComposerPanel({
     }
 
     setForm(initialForm);
+    setUploadedMediaId('');
+    setUploadedFileName('');
+    setImageError('');
   }
 
   return (
@@ -142,6 +234,79 @@ export default function CampaignComposerPanel({
             </select>
           </label>
         </div>
+
+        {requiresHeaderImage ? (
+          <div className="field">
+            <span>Imagen del encabezado</span>
+
+            <div
+              style={{
+                border: '1px solid #d7dceb',
+                borderRadius: '14px',
+                padding: '14px',
+                display: 'grid',
+                gap: '10px',
+                background: '#fafbff',
+              }}
+            >
+              <div style={{ fontSize: '0.92rem', color: '#5d6b8a' }}>
+                Esta plantilla requiere una imagen en el header para poder enviarse.
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <label
+                  className="button secondary"
+                  style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer' }}
+                >
+                  {uploadingImage ? 'Subiendo…' : uploadedMediaId ? 'Cambiar imagen' : 'Subir imagen'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    disabled={uploadingImage}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+
+                {uploadedFileName ? (
+                  <span style={{ fontSize: '0.92rem', color: '#1f2a44' }}>
+                    {uploadedFileName}
+                  </span>
+                ) : null}
+              </div>
+
+              {uploadedMediaId ? (
+                <div
+                  style={{
+                    fontSize: '0.9rem',
+                    color: '#0a7a33',
+                    background: '#eefaf1',
+                    border: '1px solid #cbeed4',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                  }}
+                >
+                  Imagen cargada correctamente. Media ID: <strong>{uploadedMediaId}</strong>
+                </div>
+              ) : null}
+
+              {imageError ? (
+                <div
+                  style={{
+                    fontSize: '0.9rem',
+                    color: '#a61c1c',
+                    background: '#fff1f1',
+                    border: '1px solid #f2caca',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                  }}
+                >
+                  {imageError}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         <label className="field">
           <span>Descripción</span>
@@ -192,7 +357,11 @@ export default function CampaignComposerPanel({
           <button
             className="button primary"
             type="submit"
-            disabled={creating || !selectedTemplate?.id}
+            disabled={
+              creating ||
+              !selectedTemplate?.id ||
+              (requiresHeaderImage && !uploadedMediaId)
+            }
           >
             {creating ? 'Guardando…' : form.sendNow ? 'Crear y despachar' : 'Guardar campaña'}
           </button>

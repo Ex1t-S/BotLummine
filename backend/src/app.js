@@ -11,10 +11,13 @@ import campaignRoutes from './routes/campaign.routes.js';
 import tiendanubeRoutes from './routes/tiendanube.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import aiLabRoutes from './routes/ai-lab.routes.js';
+import mediaRoutes from './routes/media.routes.js';
 
 dotenv.config();
 
 const app = express();
+
+app.use('/api/media', mediaRoutes);
 
 const allowedOrigins = [
 	'http://localhost:5173',
