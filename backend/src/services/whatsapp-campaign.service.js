@@ -279,11 +279,17 @@ function ensureApprovedTemplate(template) {
 function buildBodyParametersFromText(text = '', variables = {}) {
 	const matches = [...String(text || '').matchAll(/{{\s*([^}]+?)\s*}}/g)];
 
-	return matches.map((match) => {
-		const key = normalizeString(match?.[1] || '');
-		const value = Object.prototype.hasOwnProperty.call(variables, key)
-			? variables[key]
-			: '';
+	return matches.map((match, index) => {
+		const rawKey = normalizeString(match?.[1] || '');
+		const fallbackKey = String(index + 1);
+
+		let value = '';
+
+		if (Object.prototype.hasOwnProperty.call(variables, rawKey)) {
+			value = variables[rawKey];
+		} else if (Object.prototype.hasOwnProperty.call(variables, fallbackKey)) {
+			value = variables[fallbackKey];
+		}
 
 		return {
 			type: 'text',
@@ -395,21 +401,28 @@ function buildSendComponentsFromTemplate({
 	renderedComponents = [],
 	variables = {}
 }) {
-	const sourceComponents = Array.isArray(renderedComponents) && renderedComponents.length
-		? renderedComponents
-		: safeArray(template?.rawPayload?.components);
+	const templateComponents = safeArray(template?.rawPayload?.components);
+	const rendered = Array.isArray(renderedComponents) ? renderedComponents : [];
 
-	const header = sourceComponents.find((component) => toUpper(component?.type) === 'HEADER');
-	const body = sourceComponents.find((component) => toUpper(component?.type) === 'BODY');
+	const templateHeader = templateComponents.find((component) => toUpper(component?.type) === 'HEADER');
+	const templateBody = templateComponents.find((component) => toUpper(component?.type) === 'BODY');
+
+	const renderedHeader = rendered.find((component) => toUpper(component?.type) === 'HEADER');
 
 	const sendComponents = [];
 
-	const headerSendComponent = buildHeaderComponentForSend(header, template, variables);
+	const headerSendComponent = buildHeaderComponentForSend(
+		renderedHeader || templateHeader || {},
+		template,
+		variables
+	);
+
 	if (headerSendComponent) {
 		sendComponents.push(headerSendComponent);
 	}
 
-	const bodySendComponent = buildBodyComponentForSend(body, variables);
+	const bodySendComponent = buildBodyComponentForSend(templateBody || {}, variables);
+
 	if (bodySendComponent) {
 		sendComponents.push(bodySendComponent);
 	}
