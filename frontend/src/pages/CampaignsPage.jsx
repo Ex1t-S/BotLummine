@@ -81,10 +81,20 @@ export default function CampaignsPage() {
     return data?.items || data?.campaigns || [];
   }, [campaignsQuery.data]);
 
-  const selectedCampaign =
-    campaignDetailQuery.data ||
-    campaigns.find((campaign) => campaign.id === selectedCampaignId) ||
-    null;
+  const selectedCampaign = useMemo(() => {
+    const detail = campaignDetailQuery.data;
+
+    if (detail?.campaign) {
+      return {
+        ...detail.campaign,
+        template: detail.template || null,
+        recipients: Array.isArray(detail.recipients) ? detail.recipients : [],
+        pagination: detail.pagination || null,
+      };
+    }
+
+    return campaigns.find((campaign) => campaign.id === selectedCampaignId) || null;
+  }, [campaignDetailQuery.data, campaigns, selectedCampaignId]);
 
   const overview = normalizeOverview(overviewQuery.data || {});
 
