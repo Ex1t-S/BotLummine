@@ -443,48 +443,92 @@ export async function getOrCreateConversation({
 	return conversation;
 }
 
-export async function sendAndPersistOutbound({ conversationId, waId, body, aiMeta = null }) {
-	
-	console.log('[AI DEBUG] outbound reply', {
-	waId,
-	contactWaId: freshConversation?.contact?.waId,
-	conversationId: freshConversation?.id,
-	queue: freshConversation?.queue,
-	aiEnabled: freshConversation?.aiEnabled,
-	replyPreview: String(replyText || '').slice(0, 160),
-	});
-	const waResult = await sendWhatsAppText({ to: waId, body });
+export async function sendAndPersistOutbound({
+	conversationId,
+	body,
+	userId = null,
+	provider = 'whatsapp-cloud-api',
+	model = null,
+	replyMessageId = null,
+}) {
+	const cleanBody = String(body || '').trim();
 
-	await prisma.message.create({
+	if (!conversationId) {
+		throw new Error('Falta conversationId para enviar el mensaje.');
+	}
+
+	if (!cleanBody) {
+		throw new Error('El mensaje no puede estar vacío.');
+	}
+
+	const conversation = await prisma.conversation.findUnique({
+		where: { id: conversationId },
+		include: {
+			contact: true,
+		},
+	});
+
+	if (!conversation) {
+		throw new Error('Conversación no encontrada.');
+	}
+
+	const waId = conversation.contact?.waId;
+
+	console.log('[OUTBOUND DEBUG] sendAndPersistOutbound', {
+		conversationId,
+		waId,
+		contactName: conversation.contact?.name || null,
+		bodyPreview: cleanBody.slice(0, 160),
+		replyMessageId,
+	});
+
+	if (!waId) {
+		throw new Error('La conversación no tiene un waId válido para enviar el mensaje.');
+	}
+
+	const sendResult = await sendWhatsAppText({
+		to: waId,
+		body: cleanBody,
+	});
+
+	console.log('[OUTBOUND DEBUG] send result', sendResult);
+
+	if (!sendResult?.ok) {
+		throw new Error(
+			sendResult?.error?.message ||
+			'No se pudo enviar el mensaje por WhatsApp.'
+		);
+	}
+
+	const createdMessage = await prisma.message.create({
 		data: {
-			conversationId,
+			conversationId: conversation.id,
 			direction: 'OUTBOUND',
-			senderName: process.env.BUSINESS_NAME || 'Lummine',
-			body,
 			type: 'text',
-			provider: aiMeta?.provider || waResult?.provider || 'whatsapp-cloud-api',
-			model: aiMeta?.model || waResult?.model || null,
-			tokenPrompt: aiMeta?.usage?.inputTokens ?? null,
-			tokenCompletion: aiMeta?.usage?.outputTokens ?? null,
-			tokenTotal: aiMeta?.usage?.totalTokens ?? null,
-			metaMessageId: waResult?.rawPayload?.messages?.[0]?.id || null,
-			rawPayload: {
-				ai: aiMeta?.raw || null,
-				whatsapp: waResult?.rawPayload || waResult?.error || waResult || {}
-			}
-		}
+			body: cleanBody,
+			senderName: process.env.BUSINESS_NAME || 'Lummine',
+			provider,
+			model,
+			metaMessageId:
+				sendResult?.rawPayload?.messages?.[0]?.id ||
+				replyMessageId ||
+				null,
+			rawPayload: sendResult?.rawPayload || null,
+		},
 	});
 
 	await prisma.conversation.update({
-		where: { id: conversationId },
-		data: { lastMessageAt: new Date() }
+		where: { id: conversation.id },
+		data: {
+			lastMessageAt: createdMessage.createdAt,
+		},
 	});
 
-	if (waResult?.ok === false) {
-		console.error('Error enviando WhatsApp:', waResult.error || waResult);
-	}
-
-	return waResult;
+	return {
+		ok: true,
+		message: createdMessage,
+		sendResult,
+	};
 }
 
 async function resolveIntentAction({ intent, messageBody, explicitOrderNumber, currentState }) {
