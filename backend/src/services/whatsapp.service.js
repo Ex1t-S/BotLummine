@@ -24,6 +24,7 @@ export function normalizeWhatsAppNumber(fromRaw) {
 		const numeroLocal = cuerpo.substring(codArea.length);
 
 
+
 		return `54${codArea}15${numeroLocal}`;
 	}
 

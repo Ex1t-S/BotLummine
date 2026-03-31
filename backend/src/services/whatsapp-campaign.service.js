@@ -6,7 +6,6 @@ import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from './whats
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
-
 	return normalized || fallback;
 }
 
@@ -16,6 +15,10 @@ function safeArray(value) {
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toUpper(value, fallback = '') {
+	return normalizeString(value, fallback).toUpperCase();
 }
 
 function buildRecipientVariables(recipient = {}) {
@@ -127,13 +130,11 @@ async function resolveCampaignRecipients(input = {}) {
 	const recipientsFromIds = await resolveRecipientsFromContacts(safeArray(input.contactIds));
 	const recipientsFromAllContacts = input.includeAllContacts ? await resolveRecipientsFromAllContacts() : [];
 
-	const merged = dedupeRecipients([
+	return dedupeRecipients([
 		...manualRecipients,
 		...recipientsFromIds,
 		...recipientsFromAllContacts
 	]);
-
-	return merged;
 }
 
 async function ensureCampaignConversation({ phone, contactId = null, contactName = null }) {
@@ -201,79 +202,29 @@ function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentS
 	if (currentStatus === 'CANCELED') {
 		return 'CANCELED';
 	}
-
 	if (pending > 0) {
 		return 'RUNNING';
 	}
-
 	if (accepted === 0 && failed > 0) {
 		return 'FAILED';
 	}
-
 	if (failed > 0 || skipped > 0) {
 		return 'PARTIAL';
 	}
-
 	return 'FINISHED';
 }
 
 async function refreshCampaignCounters(campaignId) {
-	const [
-		pending,
-		accepted,
-		delivered,
-		read,
-		failed,
-		skipped,
-		campaign
-	] = await Promise.all([
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId,
-				status: 'PENDING'
-			}
-		}),
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId,
-				status: {
-					in: ['SENT', 'DELIVERED', 'READ']
-				}
-			}
-		}),
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId,
-				status: {
-					in: ['DELIVERED', 'READ']
-				}
-			}
-		}),
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId,
-				status: 'READ'
-			}
-		}),
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId,
-				status: 'FAILED'
-			}
-		}),
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId,
-				status: 'SKIPPED'
-			}
-		}),
+	const [pending, accepted, delivered, read, failed, skipped, campaign] = await Promise.all([
+		prisma.campaignRecipient.count({ where: { campaignId, status: 'PENDING' } }),
+		prisma.campaignRecipient.count({ where: { campaignId, status: { in: ['SENT', 'DELIVERED', 'READ'] } } }),
+		prisma.campaignRecipient.count({ where: { campaignId, status: { in: ['DELIVERED', 'READ'] } } }),
+		prisma.campaignRecipient.count({ where: { campaignId, status: 'READ' } }),
+		prisma.campaignRecipient.count({ where: { campaignId, status: 'FAILED' } }),
+		prisma.campaignRecipient.count({ where: { campaignId, status: 'SKIPPED' } }),
 		prisma.campaign.findUnique({
 			where: { id: campaignId },
-			select: {
-				id: true,
-				status: true,
-				totalRecipients: true
-			}
+			select: { id: true, status: true, totalRecipients: true }
 		})
 	]);
 
@@ -320,25 +271,159 @@ function ensureApprovedTemplate(template) {
 	if (!template) {
 		throw new Error('No se encontró la plantilla de la campaña.');
 	}
-
 	if (normalizeString(template.status).toUpperCase() !== 'APPROVED') {
 		throw new Error('Sólo se pueden lanzar campañas con plantillas APPROVED.');
 	}
 }
 
-export async function listCampaigns({
-	limit = 50
-} = {}) {
+function buildBodyParametersFromText(text = '', variables = {}) {
+	const matches = [...String(text || '').matchAll(/{{\s*([^}]+?)\s*}}/g)];
+
+	return matches.map((match) => {
+		const key = normalizeString(match?.[1] || '');
+		const value = Object.prototype.hasOwnProperty.call(variables, key)
+			? variables[key]
+			: '';
+
+		return {
+			type: 'text',
+			text: String(value ?? '')
+		};
+	});
+}
+
+function buildHeaderComponentForSend(headerComponent = {}, template = {}, variables = {}) {
+	const format = toUpper(
+		headerComponent?.format ||
+		template?.headerFormat ||
+		template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.format
+	);
+
+	if (!format) {
+		return null;
+	}
+
+	if (format === 'TEXT') {
+		const headerText =
+			headerComponent?.text ||
+			template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.text ||
+			'';
+
+		const params = buildBodyParametersFromText(headerText, variables);
+
+		if (!params.length) {
+			return null;
+		}
+
+		return {
+			type: 'header',
+			parameters: params
+		};
+	}
+
+	if (format === 'IMAGE') {
+		const imageLink =
+			normalizeString(
+				variables.header_image_link ||
+				variables.image_link ||
+				headerComponent?.example?.header_handle?.[0] ||
+				headerComponent?.image?.link ||
+				template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.example?.header_handle?.[0] ||
+				''
+			) || null;
+
+		const imageId =
+			normalizeString(
+				variables.header_image_id ||
+				variables.image_id ||
+				headerComponent?.image?.id ||
+				''
+			) || null;
+
+		if (imageLink) {
+			return {
+				type: 'header',
+				parameters: [
+					{
+						type: 'image',
+						image: {
+							link: imageLink
+						}
+					}
+				]
+			};
+		}
+
+		if (imageId) {
+			return {
+				type: 'header',
+				parameters: [
+					{
+						type: 'image',
+						image: {
+							id: imageId
+						}
+					}
+				]
+			};
+		}
+
+		throw new Error(
+			`La plantilla ${template?.name || 'seleccionada'} requiere HEADER IMAGE y no tiene image.link ni image.id para enviar.`
+		);
+	}
+
+	return null;
+}
+
+function buildBodyComponentForSend(bodyComponent = {}, variables = {}) {
+	const text = normalizeString(bodyComponent?.text || '');
+	const parameters = buildBodyParametersFromText(text, variables);
+
+	if (!parameters.length) {
+		return null;
+	}
+
+	return {
+		type: 'body',
+		parameters
+	};
+}
+
+function buildSendComponentsFromTemplate({
+	template,
+	renderedComponents = [],
+	variables = {}
+}) {
+	const sourceComponents = Array.isArray(renderedComponents) && renderedComponents.length
+		? renderedComponents
+		: safeArray(template?.rawPayload?.components);
+
+	const header = sourceComponents.find((component) => toUpper(component?.type) === 'HEADER');
+	const body = sourceComponents.find((component) => toUpper(component?.type) === 'BODY');
+
+	const sendComponents = [];
+
+	const headerSendComponent = buildHeaderComponentForSend(header, template, variables);
+	if (headerSendComponent) {
+		sendComponents.push(headerSendComponent);
+	}
+
+	const bodySendComponent = buildBodyComponentForSend(body, variables);
+	if (bodySendComponent) {
+		sendComponents.push(bodySendComponent);
+	}
+
+	return sendComponents;
+}
+
+export async function listCampaigns({ limit = 50 } = {}) {
 	return prisma.campaign.findMany({
-		orderBy: [
-			{ createdAt: 'desc' }
-		],
+		orderBy: [{ createdAt: 'desc' }],
 		take: Math.max(1, Math.min(Number(limit) || 50, 200)),
 		include: {
 			recipients: {
-				orderBy: [
-					{ createdAt: 'desc' }
-				],
+				orderBy: [{ createdAt: 'desc' }],
 				take: 15
 			}
 		}
@@ -358,23 +443,13 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || 50, 200));
 
 	const [template, totalRecipients, recipients] = await Promise.all([
-		campaign.templateLocalId ? prisma.whatsAppTemplate.findUnique({
-			where: {
-				id: campaign.templateLocalId
-			}
-		}) : null,
-		prisma.campaignRecipient.count({
-			where: {
-				campaignId
-			}
-		}),
+		campaign.templateLocalId
+			? prisma.whatsAppTemplate.findUnique({ where: { id: campaign.templateLocalId } })
+			: null,
+		prisma.campaignRecipient.count({ where: { campaignId } }),
 		prisma.campaignRecipient.findMany({
-			where: {
-				campaignId
-			},
-			orderBy: [
-				{ createdAt: 'asc' }
-			],
+			where: { campaignId },
+			orderBy: [{ createdAt: 'asc' }],
 			skip: (currentPage - 1) * currentPageSize,
 			take: currentPageSize
 		})
@@ -409,12 +484,12 @@ export async function createCampaignDraft({
 	const template = templateId
 		? await getTemplateOrThrow(templateId)
 		: await prisma.whatsAppTemplate.findFirst({
-			where: {
-				name: normalizeString(templateName).toLowerCase(),
-				language: normalizeString(languageCode, 'es_AR'),
-				deletedAt: null
-			}
-		});
+				where: {
+					name: normalizeString(templateName).toLowerCase(),
+					language: normalizeString(languageCode, 'es_AR'),
+					deletedAt: null
+				}
+		  });
 
 	if (!template) {
 		throw new Error('No se encontró la plantilla seleccionada.');
@@ -432,7 +507,7 @@ export async function createCampaignDraft({
 
 	const normalizedComponents = safeArray(sendComponents);
 	const previewBase = renderTemplatePreviewFromComponents(
-		normalizedComponents,
+		normalizedComponents.length ? normalizedComponents : safeArray(template?.rawPayload?.components),
 		{}
 	);
 
@@ -451,7 +526,10 @@ export async function createCampaignDraft({
 			waId: normalizedPhone
 		});
 
-		const personalized = renderTemplatePreviewFromComponents(normalizedComponents, variables);
+		const personalized = renderTemplatePreviewFromComponents(
+			normalizedComponents.length ? normalizedComponents : safeArray(template?.rawPayload?.components),
+			variables
+		);
 
 		recipientRows.push({
 			phone: normalizedPhone,
@@ -490,7 +568,9 @@ export async function createCampaignDraft({
 			totalRecipients: recipientRows.length,
 			pendingRecipients,
 			skippedRecipients,
-			defaultComponents: normalizedComponents,
+			defaultComponents: normalizedComponents.length
+				? normalizedComponents
+				: safeArray(template?.rawPayload?.components),
 			previewText: previewBase.previewText,
 			status: 'DRAFT',
 			recipients: {
@@ -609,9 +689,7 @@ export async function claimNextCampaignForDispatch() {
 				{ dispatchLockedAt: { lt: lockExpiresBefore } }
 			]
 		},
-		orderBy: [
-			{ createdAt: 'asc' }
-		],
+		orderBy: [{ createdAt: 'asc' }],
 		take: 10
 	});
 
@@ -698,16 +776,30 @@ async function dispatchSingleRecipient(campaign, recipient) {
 		return recipient;
 	}
 
+	const componentsToSend = buildSendComponentsFromTemplate({
+		template,
+		renderedComponents: Array.isArray(recipient.renderedComponents)
+			? recipient.renderedComponents
+			: safeArray(campaign.defaultComponents),
+		variables: recipient.variables || {}
+	});
+
+	console.log('[CAMPAIGN][SEND] original phone:', recipient.phone);
+	console.log('[CAMPAIGN][SEND] normalized phone:', normalizeWhatsAppNumber(recipient.phone || ''));
+	console.log('[CAMPAIGN][SEND] template:', campaign.templateName, campaign.templateLanguage);
+	console.log('[CAMPAIGN][SEND] components:', JSON.stringify(componentsToSend, null, 2));
+
 	const sendResult = await sendWhatsAppTemplate({
 		to: recipient.phone,
 		templateName: campaign.templateName,
 		languageCode: campaign.templateLanguage,
-		components: Array.isArray(recipient.renderedComponents)
-			? recipient.renderedComponents
-			: safeArray(campaign.defaultComponents)
+		components: componentsToSend
 	});
 
 	if (!sendResult?.ok) {
+		console.log('[CAMPAIGN][SEND][ERROR] phone:', recipient.phone);
+		console.log('[CAMPAIGN][SEND][ERROR] raw:', JSON.stringify(sendResult?.error || {}, null, 2));
+
 		return prisma.campaignRecipient.update({
 			where: { id: recipient.id },
 			data: {
@@ -771,9 +863,7 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 			campaignId,
 			status: 'PENDING'
 		},
-		orderBy: [
-			{ createdAt: 'asc' }
-		],
+		orderBy: [{ createdAt: 'asc' }],
 		take: normalizeCampaignBatchSize()
 	});
 
@@ -806,6 +896,8 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 		try {
 			await dispatchSingleRecipient(campaign, recipient);
 		} catch (error) {
+			console.log('[CAMPAIGN][DISPATCH][EXCEPTION]', error.message);
+
 			await prisma.campaignRecipient.update({
 				where: { id: recipient.id },
 				data: {
@@ -914,17 +1006,14 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}) {
 		updateData.status = 'SENT';
 		updateData.sentAt = timestamp;
 	}
-
 	if (nextStatus === 'delivered') {
 		updateData.status = 'DELIVERED';
 		updateData.deliveredAt = timestamp;
 	}
-
 	if (nextStatus === 'read') {
 		updateData.status = 'READ';
 		updateData.readAt = timestamp;
 	}
-
 	if (nextStatus === 'failed') {
 		updateData.status = 'FAILED';
 		updateData.failedAt = timestamp;
