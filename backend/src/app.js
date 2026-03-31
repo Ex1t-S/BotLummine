@@ -12,13 +12,15 @@ import tiendanubeRoutes from './routes/tiendanube.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import aiLabRoutes from './routes/ai-lab.routes.js';
 import mediaRoutes from './routes/media.routes.js';
+import cookieParser from 'cookie-parser';
+
 
 dotenv.config();
 
 const app = express();
 
 app.use('/api/media', mediaRoutes);
-
+app.use(cookieParser());
 const allowedOrigins = [
 	'http://localhost:5173',
 	'http://127.0.0.1:5173',

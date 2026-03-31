@@ -1,23 +1,28 @@
 import jwt from 'jsonwebtoken';
+import cookie from 'cookie';
 import { prisma } from '../lib/prisma.js';
 
-const cookieName = process.env.COOKIE_NAME || 'wa_assistant_token';
+const cookieName = process.env.AUTH_COOKIE_NAME || 'wa_assistant_token';
 
 export async function attachUser(req, _res, next) {
 	try {
-		const token = req.cookies?.[cookieName];
+		const rawCookieHeader = req.headers?.cookie || '';
+		const parsedCookies = req.cookies && Object.keys(req.cookies).length
+			? req.cookies
+			: cookie.parse(rawCookieHeader || '');
+
+		const token = parsedCookies?.[cookieName];
 
 		console.log('---------------- AUTH DEBUG ----------------');
 		console.log('[AUTH] method:', req.method);
-		console.log('[AUTH] path:', req.originalUrl);
+		console.log('[AUTH] path:', req.originalUrl || req.url);
 		console.log('[AUTH] origin:', req.headers.origin || '(sin origin)');
-		console.log('[AUTH] cookie header:', req.headers.cookie || '(sin cookie header)');
+		console.log('[AUTH] cookie header:', rawCookieHeader || '(sin cookie header)');
 		console.log('[AUTH] cookie name esperado:', cookieName);
-		console.log('[AUTH] cookies parseadas:', req.cookies || {});
+		console.log('[AUTH] cookies parseadas:', parsedCookies);
 		console.log('[AUTH] token presente:', Boolean(token));
 
 		if (!token) {
-			console.log('[AUTH] no hay token, req.user = null');
 			req.user = null;
 			return next();
 		}
@@ -41,7 +46,6 @@ export async function attachUser(req, _res, next) {
 		return next();
 	}
 }
-
 export function requireAuth(req, res, next) {
 	if (!req.user) {
 		return res.status(401).json({
