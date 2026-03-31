@@ -1,67 +1,45 @@
 import { processInboundMessage } from '../services/chat.service.js';
 
-function extractInboundBody(message = {}) {
+function extractInboundBody(message) {
+	if (!message) return '';
+
 	if (message.type === 'text') {
 		return message.text?.body || '';
 	}
 
-	if (message.type === 'image') {
-		return message.image?.caption || '[Imagen recibida]';
+	if (message.type === 'button') {
+		return message.button?.text || '';
 	}
 
-	if (message.type === 'document') {
-		return message.document?.caption || `[Documento recibido${message.document?.filename ? `: ${message.document.filename}` : ''}]`;
+	if (message.type === 'interactive') {
+		return (
+			message.interactive?.button_reply?.title ||
+			message.interactive?.list_reply?.title ||
+			''
+		);
 	}
 
-	if (message.type === 'audio') {
-		return '[Audio recibido]';
-	}
-
-	if (message.type === 'video') {
-		return message.video?.caption || '[Video recibido]';
-	}
-
-	return `[Mensaje ${message.type || 'desconocido'} recibido]`;
+	return '';
 }
 
-function extractAttachmentMeta(message = {}) {
-	if (message.type === 'image') {
-		return {
-			attachmentUrl: null,
-			attachmentMimeType: message.image?.mime_type || 'image/*',
-			attachmentName: null
-		};
+function extractAttachmentMeta(message) {
+	if (!message) return {};
+
+	const mediaTypes = ['image', 'video', 'audio', 'document', 'sticker'];
+
+	for (const type of mediaTypes) {
+		if (message[type]) {
+			return {
+				attachmentType: type,
+				attachmentMimeType: message[type]?.mime_type || null,
+				attachmentSha256: message[type]?.sha256 || null,
+				attachmentId: message[type]?.id || null,
+				attachmentName: message[type]?.filename || null,
+			};
+		}
 	}
 
-	if (message.type === 'document') {
-		return {
-			attachmentUrl: null,
-			attachmentMimeType: message.document?.mime_type || null,
-			attachmentName: message.document?.filename || null
-		};
-	}
-
-	if (message.type === 'video') {
-		return {
-			attachmentUrl: null,
-			attachmentMimeType: message.video?.mime_type || 'video/*',
-			attachmentName: null
-		};
-	}
-
-	if (message.type === 'audio') {
-		return {
-			attachmentUrl: null,
-			attachmentMimeType: message.audio?.mime_type || 'audio/*',
-			attachmentName: null
-		};
-	}
-
-	return {
-		attachmentUrl: null,
-		attachmentMimeType: null,
-		attachmentName: null
-	};
+	return {};
 }
 
 export function verifyWhatsappWebhook(req, res) {
@@ -77,13 +55,10 @@ export function verifyWhatsappWebhook(req, res) {
 }
 
 export async function receiveWhatsappWebhook(req, res) {
-	console.log('[WEBHOOK DEBUG] inbound message', {
-	from: message?.from,
-	type: message?.type,
-	messageId: message?.id,
-	timestamp: message?.timestamp,
-	});
 	try {
+		console.log('[WEBHOOK DEBUG] POST /api/webhook/whatsapp hit');
+		console.log('[WEBHOOK DEBUG] body:', JSON.stringify(req.body, null, 2));
+
 		res.sendStatus(200);
 
 		const entries = req.body?.entry || [];
@@ -91,9 +66,21 @@ export async function receiveWhatsappWebhook(req, res) {
 		for (const entry of entries) {
 			for (const change of entry.changes || []) {
 				const value = change.value || {};
+				const messages = value.messages || [];
+				const contacts = value.contacts || [];
 
-				for (const message of value.messages || []) {
-					const contactInfo = (value.contacts || []).find((c) => c.wa_id === message.from);
+				console.log('[WEBHOOK DEBUG] change field:', change.field);
+				console.log('[WEBHOOK DEBUG] messages count:', messages.length);
+
+				for (const message of messages) {
+					console.log('[WEBHOOK DEBUG] inbound message', {
+						from: message?.from,
+						type: message?.type,
+						id: message?.id,
+						text: message?.text?.body || null,
+					});
+
+					const contactInfo = contacts.find((c) => c.wa_id === message.from);
 					const attachmentMeta = extractAttachmentMeta(message);
 
 					await processInboundMessage({
@@ -106,11 +93,11 @@ export async function receiveWhatsappWebhook(req, res) {
 							webhook: req.body,
 							message,
 							attachment: {
-								mimeType: attachmentMeta.attachmentMimeType,
-								name: attachmentMeta.attachmentName
-							}
+								mimeType: attachmentMeta.attachmentMimeType || null,
+								name: attachmentMeta.attachmentName || null,
+							},
 						},
-						metaMessageId: message.id || null
+						metaMessageId: message.id || null,
 					});
 				}
 			}
