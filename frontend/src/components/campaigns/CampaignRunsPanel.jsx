@@ -88,7 +88,10 @@ export default function CampaignRunsPanel({
               <div className="campaign-detail-actions">
                 <button
                   className="button primary"
-                  onClick={() => onDispatch(selectedCampaign.id)}
+                  onClick={() => {
+                    console.log('DISPATCH CLICK =>', selectedCampaign?.id, selectedCampaign);
+                    onDispatch(selectedCampaign.id);
+                  }}
                   disabled={actionLoading}
                 >
                   Despachar
