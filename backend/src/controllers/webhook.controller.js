@@ -1,4 +1,13 @@
 import { processInboundMessage } from '../services/chat.service.js';
+import {
+	applyCampaignMessageStatusWebhook
+} from '../services/whatsapp-campaign.service.js';
+import {
+	applyTemplateStatusWebhook,
+	applyTemplateQualityWebhook,
+	applyTemplateCategoryWebhook,
+	applyTemplateComponentsWebhook
+} from '../services/whatsapp-template.service.js';
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
@@ -19,6 +28,7 @@ function extractInboundBody(message = {}) {
 	}
 	if (message.type === 'audio') return '[Audio recibido]';
 	if (message.type === 'video') return message.video?.caption || '[Video recibido]';
+
 	return '';
 }
 
@@ -32,12 +42,68 @@ function extractAttachmentMeta(message = {}) {
 				attachmentMimeType: message[type]?.mime_type || null,
 				attachmentSha256: message[type]?.sha256 || null,
 				attachmentId: message[type]?.id || null,
-				attachmentName: message[type]?.filename || null,
+				attachmentName: message[type]?.filename || null
 			};
 		}
 	}
 
 	return {};
+}
+
+async function processInboundMessages(req, value = {}) {
+	const messages = Array.isArray(value.messages) ? value.messages : [];
+	const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+
+	for (const message of messages) {
+		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
+		const attachmentMeta = extractAttachmentMeta(message);
+
+		await processInboundMessage({
+			waId: message.from,
+			contactName: contactInfo?.profile?.name || message.from,
+			messageBody: extractInboundBody(message),
+			messageType: message.type || 'text',
+			attachmentMeta,
+			rawPayload: {
+				webhook: req.body,
+				message,
+				attachment: {
+					mimeType: attachmentMeta.attachmentMimeType || null,
+					name: attachmentMeta.attachmentName || null
+				}
+			},
+			metaMessageId: message.id || null
+		});
+	}
+}
+
+async function processOutboundStatuses(value = {}) {
+	const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+
+	for (const status of statuses) {
+		await applyCampaignMessageStatusWebhook(status);
+	}
+}
+
+async function processTemplateWebhook(change = {}) {
+	const field = String(change?.field || '').trim();
+	const value = change?.value || {};
+
+	if (field === 'message_template_status_update') {
+		await applyTemplateStatusWebhook(value);
+	}
+
+	if (field === 'message_template_quality_update') {
+		await applyTemplateQualityWebhook(value);
+	}
+
+	if (field === 'template_category_update') {
+		await applyTemplateCategoryWebhook(value);
+	}
+
+	if (field === 'message_template_components_update') {
+		await applyTemplateComponentsWebhook(value);
+	}
 }
 
 export function verifyWhatsappWebhook(req, res) {
@@ -48,7 +114,7 @@ export function verifyWhatsappWebhook(req, res) {
 	console.log('[WEBHOOK DEBUG] verify request', {
 		mode,
 		hasChallenge: Boolean(challenge),
-		tokenMatches: token === process.env.WHATSAPP_VERIFY_TOKEN,
+		tokenMatches: token === process.env.WHATSAPP_VERIFY_TOKEN
 	});
 
 	if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
@@ -65,45 +131,19 @@ export async function receiveWhatsappWebhook(req, res) {
 
 		res.sendStatus(200);
 
-		const entries = req.body?.entry || [];
+		const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
 
 		for (const entry of entries) {
 			for (const change of entry.changes || []) {
 				const value = change.value || {};
-				const messages = value.messages || [];
-				const contacts = value.contacts || [];
 
-				console.log('[WEBHOOK DEBUG] change field:', change.field);
-				console.log('[WEBHOOK DEBUG] messages count:', messages.length);
-
-				for (const message of messages) {
-					console.log('[WEBHOOK DEBUG] inbound message', {
-						from: message?.from,
-						type: message?.type,
-						id: message?.id,
-						text: message?.text?.body || null,
-					});
-
-					const contactInfo = contacts.find((c) => c.wa_id === message.from);
-					const attachmentMeta = extractAttachmentMeta(message);
-
-					await processInboundMessage({
-						waId: message.from,
-						contactName: contactInfo?.profile?.name || message.from,
-						messageBody: extractInboundBody(message),
-						messageType: message.type || 'text',
-						attachmentMeta,
-						rawPayload: {
-							webhook: req.body,
-							message,
-							attachment: {
-								mimeType: attachmentMeta.attachmentMimeType || null,
-								name: attachmentMeta.attachmentName || null,
-							},
-						},
-						metaMessageId: message.id || null,
-					});
+				if (change.field === 'messages') {
+					await processInboundMessages(req, value);
+					await processOutboundStatuses(value);
+					continue;
 				}
+
+				await processTemplateWebhook(change);
 			}
 		}
 	} catch (error) {

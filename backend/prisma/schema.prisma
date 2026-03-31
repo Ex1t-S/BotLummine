@@ -1,214 +1,348 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x", "windows"]
+	provider = "prisma-client-js"
+	binaryTargets = ["native", "debian-openssl-3.0.x", "windows"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+	provider = "postgresql"
+	url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(AGENT)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+	id           String   @id @default(cuid())
+	name         String
+	email        String   @unique
+	passwordHash String
+	role         UserRole @default(AGENT)
+	createdAt    DateTime @default(now())
+	updatedAt    DateTime @updatedAt
 }
 
 model Contact {
-  id            String         @id @default(cuid())
-  waId          String         @unique
-  phone         String?
-  name          String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  conversations Conversation[]
+	id                  String   @id @default(cuid())
+	waId                String   @unique
+	phone               String?
+	name                String?
+	marketingOptIn      Boolean  @default(true)
+	marketingOptedOutAt DateTime?
+	marketingOptOutReason String?
+	createdAt           DateTime @default(now())
+	updatedAt           DateTime @updatedAt
+
+	conversations Conversation[]
 }
 
 model Conversation {
-  id                    String             @id @default(cuid())
-  contactId             String             @unique
-  status                ConversationStatus @default(OPEN)
-  queue                 ConversationQueue  @default(AUTO)
-  aiEnabled             Boolean            @default(true)
-  lastSummary           String?
-  lastMessageAt         DateTime?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  contact               Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  state                 ConversationState?
-  messages              Message[]
+	id            String            @id @default(cuid())
+	contactId     String            @unique
+	status        ConversationStatus @default(OPEN)
+	queue         ConversationQueue @default(AUTO)
+	aiEnabled     Boolean           @default(true)
+	lastSummary   String?
+	lastMessageAt DateTime?
+	createdAt     DateTime          @default(now())
+	updatedAt     DateTime          @updatedAt
 
-  @@index([lastMessageAt])
-  @@index([queue, aiEnabled, lastMessageAt])
+	contact  Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+	state    ConversationState?
+	messages Message[]
+
+	@@index([lastMessageAt])
+	@@index([queue, aiEnabled, lastMessageAt])
 }
 
 model ConversationState {
-  id                    String   @id @default(cuid())
-  conversationId        String   @unique
-  customerName          String?
-  lastIntent            String?
-  lastDetectedIntent    String?
-  lastUserGoal          String?
-  lastOrderNumber       String?
-  lastOrderId           String?
-  preferredTone         String?
-  customerMood          String?
-  urgencyLevel          String?
-  frequentSize          String?
-  paymentPreference     String?
-  deliveryPreference    String?
-  interestedProducts    Json?
-  objections            Json?
-  needsHuman            Boolean  @default(false)
-  handoffReason         String?
-  interactionCount      Int      @default(0)
-  notes                 String?
+	id                     String   @id @default(cuid())
+	conversationId         String   @unique
+	customerName           String?
+	lastIntent             String?
+	lastDetectedIntent     String?
+	lastUserGoal           String?
+	lastOrderNumber        String?
+	lastOrderId            String?
+	preferredTone          String?
+	customerMood           String?
+	urgencyLevel           String?
+	frequentSize           String?
+	paymentPreference      String?
+	deliveryPreference     String?
+	interestedProducts     Json?
+	objections             Json?
+	needsHuman             Boolean  @default(false)
+	handoffReason          String?
+	interactionCount       Int      @default(0)
+	notes                  String?
+	currentProductFocus    String?
+	salesStage             String?
+	shownOffers            Json?
+	shownPrices            Json?
+	sharedLinks            Json?
+	lastRecommendedProduct String?
+	lastRecommendedOffer   String?
+	buyingIntentLevel      String?
+	frictionLevel          String?
+	commercialSummary      String?
+	createdAt              DateTime @default(now())
+	updatedAt              DateTime @updatedAt
 
-  currentProductFocus   String?
-  salesStage            String?
-  shownOffers           Json?
-  shownPrices           Json?
-  sharedLinks           Json?
-  lastRecommendedProduct String?
-  lastRecommendedOffer  String?
-  buyingIntentLevel     String?
-  frictionLevel         String?
-  commercialSummary     String?
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  conversation          Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+	conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model Message {
-  id                 String           @id @default(cuid())
-  conversationId     String
-  metaMessageId      String?          @unique
-  senderName         String?
-  direction          MessageDirection
-  type               String           @default("text")
-  body               String
-  provider           String?
-  model              String?
-  tokenPrompt        Int?
-  tokenCompletion    Int?
-  tokenTotal         Int?
-  attachmentUrl      String?
-  attachmentMimeType String?
-  attachmentName     String?
-  rawPayload         Json?
-  createdAt          DateTime         @default(now())
+	id                 String           @id @default(cuid())
+	conversationId     String
+	metaMessageId      String?          @unique
+	senderName         String?
+	direction          MessageDirection
+	type               String           @default("text")
+	body               String
+	provider           String?
+	model              String?
+	tokenPrompt        Int?
+	tokenCompletion    Int?
+	tokenTotal         Int?
+	attachmentUrl      String?
+	attachmentMimeType String?
+	attachmentName     String?
+	rawPayload         Json?
+	createdAt          DateTime         @default(now())
 
-  conversation       Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+	conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@index([conversationId, createdAt])
+	@@index([conversationId, createdAt])
 }
 
 model StoreInstallation {
-  id          String   @id @default(cuid())
-  storeId     String   @unique
-  accessToken String
-  scope       String?
-  storeName   String?
-  storeUrl    String?
-  installedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+	id          String   @id @default(cuid())
+	storeId      String   @unique
+	accessToken  String
+	scope        String?
+	storeName    String?
+	storeUrl     String?
+	installedAt  DateTime @default(now())
+	updatedAt    DateTime @updatedAt
 }
 
 model CatalogProduct {
-  id             String   @id @default(cuid())
-  storeId        String
-  productId      String
-  name           String
-  handle         String?
-  description    String?
-  brand          String?
-  price          Decimal? @db.Decimal(10, 2)
-  compareAtPrice Decimal? @db.Decimal(10, 2)
-  published      Boolean  @default(true)
-  tags           String?
-  featuredImage  String?
-  productUrl     String?
-  variants       Json?
-  images         Json?
-  categories     Json?
-  attributes     Json?
-  rawPayload     Json?
-  syncedAt       DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+	id             String   @id @default(cuid())
+	storeId        String
+	productId      String
+	name           String
+	handle         String?
+	description    String?
+	brand          String?
+	price          Decimal? @db.Decimal(10, 2)
+	compareAtPrice Decimal? @db.Decimal(10, 2)
+	published      Boolean  @default(true)
+	tags           String?
+	featuredImage  String?
+	productUrl     String?
+	variants       Json?
+	images         Json?
+	categories     Json?
+	attributes     Json?
+	rawPayload     Json?
+	syncedAt       DateTime @default(now())
+	createdAt      DateTime @default(now())
+	updatedAt      DateTime @updatedAt
 
-  @@unique([storeId, productId])
-  @@index([storeId, published])
-  @@index([name])
+	@@unique([storeId, productId])
+	@@index([storeId, published])
+	@@index([name])
 }
 
 model CatalogSyncLog {
-  id                String   @id @default(cuid())
-  storeId           String?
-  status            String
-  startedAt         DateTime @default(now())
-  finishedAt        DateTime?
-  productsProcessed Int      @default(0)
-  message           String?
-  createdAt         DateTime @default(now())
+	id                String   @id @default(cuid())
+	storeId           String?
+	status            String
+	startedAt         DateTime @default(now())
+	finishedAt        DateTime?
+	productsProcessed Int      @default(0)
+	message           String?
+	createdAt         DateTime @default(now())
 }
 
 model AbandonedCart {
-  id                  String   @id @default(cuid())
-  storeId             String?
-  checkoutId          String   @unique
-  token               String?
-  contactName         String?
-  contactEmail        String?
-  contactPhone        String?
-  abandonedCheckoutUrl String?
-  subtotal            Decimal? @db.Decimal(10, 2)
-  totalAmount         Decimal? @db.Decimal(10, 2)
-  currency            String?
-  gateway             String?
-  shipping            String?
-  shippingPickupType  String?
-  shippingAddress     String?
-  shippingCity        String?
-  shippingProvince    String?
-  shippingZipcode     String?
-  status              String   @default("NEW")
-  contactedAt         DateTime?
-  recoveredAt         DateTime?
-  lastMessageSentAt   DateTime?
-  rawPayload          Json?
-  products            Json?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  checkoutCreatedAt   DateTime?
+	id                 String   @id @default(cuid())
+	storeId            String?
+	checkoutId         String   @unique
+	token              String?
+	contactName        String?
+	contactEmail       String?
+	contactPhone       String?
+	abandonedCheckoutUrl String?
+	subtotal           Decimal? @db.Decimal(10, 2)
+	totalAmount        Decimal? @db.Decimal(10, 2)
+	currency           String?
+	gateway            String?
+	shipping           String?
+	shippingPickupType String?
+	shippingAddress    String?
+	shippingCity       String?
+	shippingProvince   String?
+	shippingZipcode    String?
+	status             String   @default("NEW")
+	contactedAt        DateTime?
+	recoveredAt        DateTime?
+	lastMessageSentAt  DateTime?
+	rawPayload         Json?
+	products           Json?
+	createdAt          DateTime @default(now())
+	updatedAt          DateTime @updatedAt
+	checkoutCreatedAt  DateTime?
 
-  @@index([status, updatedAt])
-  @@index([contactPhone])
+	@@index([status, updatedAt])
+	@@index([contactPhone])
+}
+
+model WhatsAppTemplate {
+	id               String   @id @default(cuid())
+	wabaId           String
+	metaTemplateId   String?  @unique
+	name             String
+	language         String
+	category         String
+	status           String
+	qualityScore     String?
+	headerFormat     String?
+	parameterFormat  String?
+	previewText      String?
+	rejectedReason   String?
+	disabledReason   String?
+	lastSyncedAt     DateTime?
+	deletedAt        DateTime?
+	rawPayload       Json?
+	createdAt        DateTime @default(now())
+	updatedAt        DateTime @updatedAt
+
+	@@unique([wabaId, name, language])
+	@@index([name])
+	@@index([status])
+	@@index([category])
+	@@index([metaTemplateId])
+}
+
+model TemplateSyncLog {
+	id            String   @id @default(cuid())
+	status        String
+	startedAt     DateTime @default(now())
+	finishedAt    DateTime?
+	fetchedCount  Int      @default(0)
+	upsertedCount Int      @default(0)
+	errorCount    Int      @default(0)
+	message       String?
+	rawPayload    Json?
+	createdAt     DateTime @default(now())
+}
+
+model Campaign {
+	id                 String        @id @default(cuid())
+	name               String
+	templateLocalId    String?
+	templateMetaId     String?
+	templateName       String
+	templateLanguage   String
+	templateCategory   String?
+	status             CampaignStatus @default(DRAFT)
+	audienceSource     String?
+	notes              String?
+	launchedByUserId   String?
+	totalRecipients    Int           @default(0)
+	pendingRecipients  Int           @default(0)
+	sentRecipients     Int           @default(0)
+	deliveredRecipients Int          @default(0)
+	readRecipients     Int           @default(0)
+	failedRecipients   Int           @default(0)
+	skippedRecipients  Int           @default(0)
+	defaultComponents  Json?
+	previewText        String?
+	lastError          String?
+	startedAt          DateTime?
+	finishedAt         DateTime?
+	dispatchLockedAt   DateTime?
+	dispatchLockId     String?
+	rawPayload         Json?
+	createdAt          DateTime      @default(now())
+	updatedAt          DateTime      @updatedAt
+
+	recipients CampaignRecipient[]
+
+	@@index([status, createdAt])
+	@@index([dispatchLockedAt])
+}
+
+model CampaignRecipient {
+	id                 String                 @id @default(cuid())
+	campaignId         String
+	phone              String
+	waId               String?
+	contactName        String?
+	contactId          String?
+	conversationId     String?
+	externalKey        String?
+	variables          Json?
+	renderedComponents Json?
+	renderedPreviewText String?
+	status             CampaignRecipientStatus @default(PENDING)
+	waMessageId        String?                @unique
+	errorCode          String?
+	errorSubcode       String?
+	errorMessage       String?
+	pricingCategory    String?
+	conversationCategory String?
+	billable           Boolean?
+	rawPayload         Json?
+	sentAt             DateTime?
+	deliveredAt        DateTime?
+	readAt             DateTime?
+	failedAt           DateTime?
+	createdAt          DateTime               @default(now())
+	updatedAt          DateTime               @updatedAt
+
+	campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+	@@index([campaignId, status])
+	@@index([phone])
+	@@index([waMessageId])
 }
 
 enum UserRole {
-  ADMIN
-  AGENT
+	ADMIN
+	AGENT
 }
 
 enum ConversationStatus {
-  OPEN
-  PENDING
-  CLOSED
+	OPEN
+	PENDING
+	CLOSED
 }
 
 enum ConversationQueue {
-  AUTO
-  HUMAN
-  PAYMENT_REVIEW
+	AUTO
+	HUMAN
+	PAYMENT_REVIEW
 }
 
 enum MessageDirection {
-  INBOUND
-  OUTBOUND
+	INBOUND
+	OUTBOUND
+}
+
+enum CampaignStatus {
+	DRAFT
+	QUEUED
+	RUNNING
+	FINISHED
+	PARTIAL
+	FAILED
+	CANCELED
+}
+
+enum CampaignRecipientStatus {
+	PENDING
+	SENT
+	DELIVERED
+	READ
+	FAILED
+	SKIPPED
 }
