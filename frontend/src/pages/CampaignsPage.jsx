@@ -32,6 +32,16 @@ function normalizeOverview(data) {
   };
 }
 
+function extractCreatedCampaignId(response) {
+  return (
+    response?.id ||
+    response?.campaign?.id ||
+    response?.data?.id ||
+    response?.data?.campaign?.id ||
+    null
+  );
+}
+
 export default function CampaignsPage() {
   const queryClient = useQueryClient();
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -181,7 +191,7 @@ export default function CampaignsPage() {
     onSuccess: async (response) => {
       invalidateAll();
 
-      const createdId = response?.campaign?.id || response?.id || null;
+      const createdId = extractCreatedCampaignId(response);
       if (createdId) {
         setSelectedCampaignId(createdId);
       }

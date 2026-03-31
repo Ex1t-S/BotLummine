@@ -16,7 +16,9 @@ function parseAudience(rawValue = '') {
     .map((row) => row.trim())
     .filter(Boolean)
     .map((row) => {
-      const [phone, contactName, productName, size, color] = row.split('|').map((value) => value?.trim() || '');
+      const [phone, contactName, productName, size, color] = row
+        .split('|')
+        .map((value) => value?.trim() || '');
 
       return {
         phone,
@@ -35,6 +37,16 @@ function parseAudience(rawValue = '') {
       };
     })
     .filter((item) => item.phone);
+}
+
+function extractCreatedCampaignId(result) {
+  return (
+    result?.id ||
+    result?.campaign?.id ||
+    result?.data?.id ||
+    result?.data?.campaign?.id ||
+    null
+  );
 }
 
 export default function CampaignComposerPanel({
@@ -71,14 +83,19 @@ export default function CampaignComposerPanel({
     };
 
     const result = await onCreateCampaign(payload);
+    const createdCampaignId = extractCreatedCampaignId(result);
 
     if (form.sendNow) {
-      const createdCampaignId = result?.campaign?.id || result?.id || null;
       if (createdCampaignId && typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('campaign:launch-requested', {
             detail: { campaignId: createdCampaignId },
           })
+        );
+      } else {
+        console.error(
+          '[CAMPAIGN] No se pudo obtener el campaignId del resultado de creación',
+          result
         );
       }
     }
@@ -101,7 +118,9 @@ export default function CampaignComposerPanel({
             <span>Nombre de campaña</span>
             <input
               value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, name: event.target.value }))
+              }
               placeholder="Recuperación abril - bodys"
             />
           </label>
@@ -128,7 +147,9 @@ export default function CampaignComposerPanel({
           <span>Descripción</span>
           <input
             value={form.description}
-            onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, description: event.target.value }))
+            }
             placeholder="Campaña para compradores que dejaron checkout a mitad de camino"
           />
         </label>
@@ -138,7 +159,9 @@ export default function CampaignComposerPanel({
           <textarea
             rows={8}
             value={form.audienceText}
-            onChange={(event) => setForm((current) => ({ ...current, audienceText: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, audienceText: event.target.value }))
+            }
             placeholder="telefono|nombre|producto|talle|color"
           />
           <small>Formato: teléfono|nombre|producto|talle|color. Una fila por destinatario.</small>
@@ -157,14 +180,20 @@ export default function CampaignComposerPanel({
             <input
               type="checkbox"
               checked={form.sendNow}
-              onChange={(event) => setForm((current) => ({ ...current, sendNow: event.target.checked }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, sendNow: event.target.checked }))
+              }
             />
             <span>Enviar apenas se cree</span>
           </label>
         </div>
 
         <div className="campaign-form-actions">
-          <button className="button primary" type="submit" disabled={creating || !selectedTemplate?.id}>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={creating || !selectedTemplate?.id}
+          >
             {creating ? 'Guardando…' : form.sendNow ? 'Crear y despachar' : 'Guardar campaña'}
           </button>
         </div>
