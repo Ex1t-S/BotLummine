@@ -6,6 +6,7 @@ import { createResetConversationState } from './conversation-turn.service.js';
 import { getAiLabFixture, AI_LAB_FIXTURES } from '../data/ai-lab-fixtures.js';
 
 const SESSIONS = new Map();
+const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
 function buildFakeWaId() {
 	const suffix = `${Date.now()}${Math.floor(Math.random() * 900 + 100)}`.slice(-10);
@@ -47,13 +48,18 @@ async function fetchSessionConversation(conversationId) {
 function serializeConversation(conversation, fixtureMeta, lastTrace = null, sessionId = null) {
 	if (!conversation) return null;
 
+	const rawName = conversation.contact?.name || 'Cliente';
+	const contactName = rawName.startsWith(AI_LAB_CONTACT_PREFIX)
+		? rawName.slice(AI_LAB_CONTACT_PREFIX.length)
+		: rawName;
+
 	return {
 		id: sessionId,
 		conversationId: conversation.id,
 		fixtureMeta,
-		contactName: conversation.contact?.name || 'Cliente',
+		contactName,
 		customerContext: {
-			name: conversation.contact?.name || 'Cliente',
+			name: contactName,
 			waId: conversation.contact?.waId || ''
 		},
 		conversationState: conversation.state || {},
@@ -84,11 +90,11 @@ async function resetConversationForFixture(conversationId, fixture) {
 		prisma.conversation.update({
 			where: { id: conversationId },
 			data: {
-			queue: 'AUTO',
-			aiEnabled: true,
-			lastSummary: null,
-			lastMessageAt: null
-		}
+				queue: 'AUTO',
+				aiEnabled: true,
+				lastSummary: null,
+				lastMessageAt: null
+			}
 		}),
 		prisma.conversationState.upsert({
 			where: { conversationId },
@@ -108,9 +114,13 @@ async function resetConversationForFixture(conversationId, fixture) {
 				direction: message.direction,
 				type: message.type || 'text',
 				body: message.body,
-				senderName: message.direction === 'OUTBOUND' ? (process.env.BUSINESS_NAME || 'Lummine') : (fixture.contactName || 'Cliente'),
+				senderName:
+					message.direction === 'OUTBOUND'
+						? (process.env.BUSINESS_NAME || 'Lummine')
+						: (fixture.contactName || 'Cliente'),
 				provider: message.direction === 'OUTBOUND' ? 'fixture' : null,
 				model: message.direction === 'OUTBOUND' ? 'fixture' : null,
+				rawPayload: message.direction === 'INBOUND' ? { source: 'ai-lab' } : null,
 				createdAt: new Date(now + index * 1000)
 			}))
 		});
@@ -137,7 +147,8 @@ export function listAiLabFixtures() {
 export async function createAiLabSession({ fixtureKey = 'blank' } = {}) {
 	const fixture = getAiLabFixture(fixtureKey);
 	const waId = buildFakeWaId();
-	const contactName = fixture.contactName || 'German';
+	const contactName = `${AI_LAB_CONTACT_PREFIX}${fixture.contactName || 'German'}`;
+
 	const conversation = await getOrCreateConversation({
 		waId,
 		contactName,
@@ -172,8 +183,10 @@ export async function createAiLabSession({ fixtureKey = 'blank' } = {}) {
 export async function getAiLabSession(sessionId) {
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) return null;
+
 	const fixture = getAiLabFixture(session.fixtureKey);
 	const conversation = await fetchSessionConversation(session.conversationId);
+
 	return serializeConversation(
 		conversation,
 		{
@@ -198,9 +211,11 @@ export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
 	const fixture = getAiLabFixture(fixtureKey || session.fixtureKey);
 	session.fixtureKey = fixture.key;
 	session.lastTrace = null;
+
 	await resetConversationForFixture(session.conversationId, fixture);
 
 	const conversation = await fetchSessionConversation(session.conversationId);
+
 	return serializeConversation(
 		conversation,
 		{
@@ -238,7 +253,7 @@ export async function sendAiLabMessage(sessionId, { body }) {
 
 	const result = await processInboundMessage({
 		waId: conversation.contact?.waId,
-		contactName: conversation.contact?.name || 'German',
+		contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
 		messageBody: cleanBody,
 		messageType: 'text',
 		attachmentMeta: null,

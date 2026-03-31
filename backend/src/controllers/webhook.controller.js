@@ -1,16 +1,8 @@
 import { processInboundMessage } from '../services/chat.service.js';
 
-function extractInboundBody(message) {
-	if (!message) return '';
-
-	if (message.type === 'text') {
-		return message.text?.body || '';
-	}
-
-	if (message.type === 'button') {
-		return message.button?.text || '';
-	}
-
+function extractInboundBody(message = {}) {
+	if (message.type === 'text') return message.text?.body || '';
+	if (message.type === 'button') return message.button?.text || '';
 	if (message.type === 'interactive') {
 		return (
 			message.interactive?.button_reply?.title ||
@@ -18,13 +10,19 @@ function extractInboundBody(message) {
 			''
 		);
 	}
-
+	if (message.type === 'image') return message.image?.caption || '[Imagen recibida]';
+	if (message.type === 'document') {
+		return (
+			message.document?.caption ||
+			`[Documento recibido${message.document?.filename ? `: ${message.document.filename}` : ''}]`
+		);
+	}
+	if (message.type === 'audio') return '[Audio recibido]';
+	if (message.type === 'video') return message.video?.caption || '[Video recibido]';
 	return '';
 }
 
-function extractAttachmentMeta(message) {
-	if (!message) return {};
-
+function extractAttachmentMeta(message = {}) {
 	const mediaTypes = ['image', 'video', 'audio', 'document', 'sticker'];
 
 	for (const type of mediaTypes) {
@@ -46,6 +44,12 @@ export function verifyWhatsappWebhook(req, res) {
 	const mode = req.query['hub.mode'];
 	const token = req.query['hub.verify_token'];
 	const challenge = req.query['hub.challenge'];
+
+	console.log('[WEBHOOK DEBUG] verify request', {
+		mode,
+		hasChallenge: Boolean(challenge),
+		tokenMatches: token === process.env.WHATSAPP_VERIFY_TOKEN,
+	});
 
 	if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
 		return res.status(200).send(challenge);

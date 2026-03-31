@@ -6,10 +6,8 @@ export function normalizeWhatsAppNumber(fromRaw) {
 
 	if (!clean) return '';
 
-	// Caso internacional con Argentina móvil: 549...
 	if (clean.startsWith('549')) {
 		const cuerpo = clean.substring(3);
-
 		const prefijosTres = [
 			'220', '221', '223', '230', '236', '237', '249', '260', '261', '263',
 			'264', '266', '280', '291', '294', '297', '298', '299', '336', '341',
@@ -25,32 +23,24 @@ export function normalizeWhatsAppNumber(fromRaw) {
 
 		const numeroLocal = cuerpo.substring(codArea.length);
 
-		// Regla especial: 2252 => sacar el 9 y no agregar nada
 		if (codArea === '2252') {
 			return `54${codArea}${numeroLocal}`;
 		}
 
-		// Regla especial: 2923 => agregar 15
 		if (codArea === '2923') {
 			return `54${codArea}15${numeroLocal}`;
 		}
 
-		// Lógica general anterior
 		return `54${codArea}15${numeroLocal}`;
 	}
 
-	// Si ya viene como 54...
 	if (clean.startsWith('54')) {
 		const cuerpo = clean.substring(2);
 
-		// Caso especial 2252:
-		// si viene como 5422529xxxxxx, sacar ese 9 después del área
 		if (cuerpo.startsWith('22529')) {
 			return `542252${cuerpo.substring(5)}`;
 		}
 
-		// Caso especial 2923:
-		// si viene como 542923xxxxxxx y no tiene 15, agregarlo
 		if (cuerpo.startsWith('2923') && !cuerpo.startsWith('292315')) {
 			return `54292315${cuerpo.substring(4)}`;
 		}
@@ -74,7 +64,7 @@ export async function sendWhatsAppText({ to, body }) {
 	const cleanBody = String(body || '').trim();
 	const finalTo = normalizeWhatsAppNumber(rawTo);
 
-	console.log('[WA DEBUG] sendWhatsAppText', {
+	debugWhatsAppRecipient('sendWhatsAppText', {
 		rawTo,
 		finalTo,
 		bodyPreview: cleanBody.slice(0, 120),
@@ -84,7 +74,7 @@ export async function sendWhatsAppText({ to, body }) {
 	});
 
 	if (!finalTo || !cleanBody) {
-		console.log('[WA DEBUG] ABORT sendWhatsAppText', {
+		debugWhatsAppRecipient('ABORT sendWhatsAppText', {
 			reason: 'missing_to_or_body',
 			rawTo,
 			finalTo,
@@ -108,8 +98,8 @@ export async function sendWhatsAppText({ to, body }) {
 		text: { body: cleanBody },
 	};
 
-	console.log('[WA DEBUG] TEXT URL', url);
-	console.log('[WA DEBUG] TEXT PAYLOAD', JSON.stringify(payload, null, 2));
+	debugWhatsAppRecipient('TEXT URL', { url });
+	debugWhatsAppRecipient('TEXT PAYLOAD', payload);
 
 	try {
 		const response = await axios.post(url, payload, {
@@ -119,7 +109,7 @@ export async function sendWhatsAppText({ to, body }) {
 			},
 		});
 
-		console.log('[WA DEBUG] TEXT RESPONSE', JSON.stringify(response.data, null, 2));
+		debugWhatsAppRecipient('TEXT RESPONSE', response.data);
 
 		return {
 			ok: true,
@@ -130,7 +120,10 @@ export async function sendWhatsAppText({ to, body }) {
 	} catch (error) {
 		console.error('[WA DEBUG] TEXT ERROR MESSAGE', error.message);
 		console.error('[WA DEBUG] TEXT ERROR STATUS', error.response?.status);
-		console.error('[WA DEBUG] TEXT ERROR DATA', JSON.stringify(error.response?.data || {}, null, 2));
+		console.error(
+			'[WA DEBUG] TEXT ERROR DATA',
+			JSON.stringify(error.response?.data || {}, null, 2)
+		);
 
 		return {
 			ok: false,
@@ -150,11 +143,11 @@ export async function sendWhatsAppTemplate({
 	const rawTo = to;
 	const finalTo = normalizeWhatsAppNumber(rawTo);
 
-	console.log('[WA DEBUG] sendWhatsAppTemplate', {
+	debugWhatsAppRecipient('sendWhatsAppTemplate', {
 		rawTo,
 		finalTo,
 		templateName,
-		componentsCount: Array.isArray(components) ? components.length : 0
+		componentsCount: Array.isArray(components) ? components.length : 0,
 	});
 
 	if (!finalTo || !templateName) {
@@ -162,7 +155,9 @@ export async function sendWhatsAppTemplate({
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
-			error: { message: 'Falta número o nombre del template para enviar por WhatsApp.' }
+			error: {
+				message: 'Falta número o nombre del template para enviar por WhatsApp.'
+			}
 		};
 	}
 
@@ -179,7 +174,8 @@ export async function sendWhatsAppTemplate({
 		}
 	};
 
-	console.log('[WA DEBUG] TEMPLATE PAYLOAD', JSON.stringify(payload, null, 2));
+	debugWhatsAppRecipient('TEMPLATE URL', { url });
+	debugWhatsAppRecipient('TEMPLATE PAYLOAD', payload);
 
 	try {
 		const response = await axios.post(url, payload, {
@@ -189,7 +185,7 @@ export async function sendWhatsAppTemplate({
 			}
 		});
 
-		console.log('[WA DEBUG] TEMPLATE RESPONSE', response.data);
+		debugWhatsAppRecipient('TEMPLATE RESPONSE', response.data);
 
 		return {
 			ok: true,
@@ -198,7 +194,12 @@ export async function sendWhatsAppTemplate({
 			rawPayload: response.data
 		};
 	} catch (error) {
-		console.error('[WA DEBUG] TEMPLATE ERROR', error.response?.data || error.message);
+		console.error('[WA DEBUG] TEMPLATE ERROR MESSAGE', error.message);
+		console.error('[WA DEBUG] TEMPLATE ERROR STATUS', error.response?.status);
+		console.error(
+			'[WA DEBUG] TEMPLATE ERROR DATA',
+			JSON.stringify(error.response?.data || {}, null, 2)
+		);
 
 		return {
 			ok: false,

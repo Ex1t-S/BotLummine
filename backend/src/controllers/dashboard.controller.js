@@ -80,40 +80,8 @@ function buildResetStateData() {
 
 	};
 }
-async function getLatestMessagesByConversationIds(conversationIds) {
-	if (!conversationIds.length) {
-		return new Map();
-	}
-
-	const messages = await prisma.message.findMany({
-		where: {
-			conversationId: {
-				in: conversationIds,
-			},
-		},
-		select: {
-			id: true,
-			conversationId: true,
-			body: true,
-			senderName: true,
-			direction: true,
-			createdAt: true,
-		},
-		orderBy: [
-			{ conversationId: 'asc' },
-			{ createdAt: 'desc' },
-		],
-	});
-
-	const latestByConversationId = new Map();
-
-	for (const message of messages) {
-		if (!latestByConversationId.has(message.conversationId)) {
-			latestByConversationId.set(message.conversationId, message);
-		}
-	}
-
-	return latestByConversationId;
+async function getLatestMessagesByConversationIds() {
+	return new Map();
 }
 
 function buildContactCard(conversation, lastMessage) {
@@ -144,7 +112,18 @@ function buildContactCard(conversation, lastMessage) {
 }
 
 async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
-	const where = queue === 'ALL' ? {} : { queue };
+	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
+
+	const where = {
+		...(queue === 'ALL' ? {} : { queue }),
+		NOT: {
+			contact: {
+				name: {
+					startsWith: AI_LAB_CONTACT_PREFIX,
+				},
+			},
+		},
+	};
 
 	const conversations = await prisma.conversation.findMany({
 		where,
@@ -167,20 +146,27 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 					handoffReason: true,
 				},
 			},
+			messages: {
+				select: {
+					id: true,
+					body: true,
+					senderName: true,
+					direction: true,
+					createdAt: true,
+				},
+				orderBy: {
+					createdAt: 'desc',
+				},
+				take: 1,
+			},
 		},
 		orderBy: {
 			lastMessageAt: 'desc',
 		},
 	});
 
-	const conversationIds = conversations.map((item) => item.id);
-	const latestMessagesByConversationId = await getLatestMessagesByConversationIds(conversationIds);
-
 	const contacts = conversations.map((conversation) =>
-		buildContactCard(
-			conversation,
-			latestMessagesByConversationId.get(conversation.id) || null
-		)
+		buildContactCard(conversation, conversation.messages?.[0] || null)
 	);
 
 	let selectedContact = null;
@@ -194,10 +180,20 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 		selectedContact = contacts[0];
 	}
 
+	const countsWhere = {
+		NOT: {
+			contact: {
+				name: {
+					startsWith: AI_LAB_CONTACT_PREFIX,
+				},
+			},
+		},
+	};
+
 	const [autoCount, humanCount, paymentCount] = await Promise.all([
-		prisma.conversation.count({ where: { queue: 'AUTO' } }),
-		prisma.conversation.count({ where: { queue: 'HUMAN' } }),
-		prisma.conversation.count({ where: { queue: 'PAYMENT_REVIEW' } }),
+		prisma.conversation.count({ where: { ...countsWhere, queue: 'AUTO' } }),
+		prisma.conversation.count({ where: { ...countsWhere, queue: 'HUMAN' } }),
+		prisma.conversation.count({ where: { ...countsWhere, queue: 'PAYMENT_REVIEW' } }),
 	]);
 
 	return {
@@ -210,7 +206,6 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 		},
 	};
 }
-
 async function ensureConversationExists(conversationId) {
 	const conversation = await prisma.conversation.findUnique({
 		where: { id: conversationId },
