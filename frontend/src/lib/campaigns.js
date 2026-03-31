@@ -68,11 +68,7 @@ export async function uploadCampaignHeaderImage(file) {
   const formData = new FormData();
   formData.append('image', file);
 
-  const response = await api.post('/media/campaign-header-image', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await api.post('/media/campaign-header-image', formData);
 
   return unwrap(response);
 }
