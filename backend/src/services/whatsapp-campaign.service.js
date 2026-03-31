@@ -328,16 +328,6 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 	}
 
 	if (format === 'IMAGE') {
-		const imageLink =
-			normalizeString(
-				variables.header_image_link ||
-				variables.image_link ||
-				headerComponent?.example?.header_handle?.[0] ||
-				headerComponent?.image?.link ||
-				template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.example?.header_handle?.[0] ||
-				''
-			) || null;
-
 		const imageId =
 			normalizeString(
 				variables.header_image_id ||
@@ -346,19 +336,14 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 				''
 			) || null;
 
-		if (imageLink) {
-			return {
-				type: 'header',
-				parameters: [
-					{
-						type: 'image',
-						image: {
-							link: imageLink
-						}
-					}
-				]
-			};
-		}
+		const imageLink =
+			normalizeString(
+				variables.header_image_link ||
+				variables.image_link ||
+				headerComponent?.image?.link ||
+				template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.image?.link ||
+				''
+			) || null;
 
 		if (imageId) {
 			return {
@@ -374,8 +359,22 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 			};
 		}
 
+		if (imageLink) {
+			return {
+				type: 'header',
+				parameters: [
+					{
+						type: 'image',
+						image: {
+							link: imageLink
+						}
+					}
+				]
+			};
+		}
+
 		throw new Error(
-			`La plantilla ${template?.name || 'seleccionada'} requiere HEADER IMAGE y no tiene image.link ni image.id para enviar.`
+			`La plantilla ${template?.name || 'seleccionada'} requiere HEADER IMAGE y no tiene image.id ni image.link para enviar.`
 		);
 	}
 
@@ -544,6 +543,9 @@ export async function createCampaignDraft({
 			variables
 		);
 
+		const shouldSkipRecipient =
+			audienceSource !== 'manual' && recipient.isOptedOut;
+
 		recipientRows.push({
 			phone: normalizedPhone,
 			waId: normalizedPhone,
@@ -553,8 +555,8 @@ export async function createCampaignDraft({
 			variables,
 			renderedComponents: personalized.components,
 			renderedPreviewText: personalized.previewText,
-			status: recipient.isOptedOut ? 'SKIPPED' : 'PENDING',
-			errorMessage: recipient.isOptedOut
+			status: shouldSkipRecipient ? 'SKIPPED' : 'PENDING',
+			errorMessage: shouldSkipRecipient
 				? normalizeString(recipient.optOutReason, 'opted_out')
 				: null
 		});

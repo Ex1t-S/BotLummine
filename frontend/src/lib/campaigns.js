@@ -63,3 +63,16 @@ export async function resumeCampaign(campaignId) {
   const response = await api.post(`/campaigns/${campaignId}/retry-failed`);
   return unwrap(response);
 }
+
+export async function uploadCampaignHeaderImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await api.post('/media/campaign-header-image', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  return unwrap(response);
+}
