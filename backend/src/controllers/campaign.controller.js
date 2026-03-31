@@ -197,18 +197,13 @@ export async function createCampaignController(req, res) {
 }
 
 export async function launchCampaignController(req, res) {
-	try {
-		const result = await launchCampaign(req.params.campaignId);
-
-		void executeCampaignDispatcherTick();
-
-		return res.json({
-			ok: true,
-			...result
-		});
-	} catch (error) {
-		return sendError(res, error);
-	}
+  try {
+    const result = await launchCampaign(req.params.campaignId);
+    return res.json(result);
+  } catch (error) {
+    console.log('[CAMPAIGN][LAUNCH][ERROR]', error.message);
+    return res.status(400).json({ error: error.message });
+  }
 }
 
 export async function cancelCampaignController(req, res) {
