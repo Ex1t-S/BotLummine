@@ -12,15 +12,11 @@ import tiendanubeRoutes from './routes/tiendanube.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import aiLabRoutes from './routes/ai-lab.routes.js';
 import mediaRoutes from './routes/media.routes.js';
-import cookieParser from 'cookie-parser';
-
 
 dotenv.config();
 
 const app = express();
 
-app.use('/api/media', mediaRoutes);
-app.use(cookieParser());
 const allowedOrigins = [
 	'http://localhost:5173',
 	'http://127.0.0.1:5173',
@@ -78,7 +74,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-/* Preflight explícito para las rutas que usa el frontend */
 app.options('/api/auth/login', cors(corsOptions));
 app.options('/api/auth/me', cors(corsOptions));
 
@@ -99,6 +94,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/tiendanube', tiendanubeRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/ai-lab', aiLabRoutes);
+app.use('/api/media', mediaRoutes);
 
 app.use((err, _req, res, _next) => {
 	console.error(err);
