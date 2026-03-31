@@ -23,13 +23,6 @@ export function normalizeWhatsAppNumber(fromRaw) {
 
 		const numeroLocal = cuerpo.substring(codArea.length);
 
-		if (codArea === '2252') {
-			return `54${codArea}${numeroLocal}`;
-		}
-
-		if (codArea === '2923') {
-			return `54${codArea}15${numeroLocal}`;
-		}
 
 		return `54${codArea}15${numeroLocal}`;
 	}
