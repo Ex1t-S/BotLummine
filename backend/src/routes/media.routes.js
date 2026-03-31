@@ -1,11 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { uploadCampaignHeaderImageController } from '../controllers/media.controller.js';
-import { requireAuth } from '../middleware/auth.js';
+import { attachUser } from '../middleware/auth.js';
 
-
-console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
-console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
 const router = Router();
 
 const upload = multer({
@@ -17,7 +14,12 @@ const upload = multer({
 
 router.post(
 	'/campaign-header-image',
-	requireAuth,
+	attachUser,
+	(req, res, next) => {
+		console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
+		console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
+		next();
+	},
 	upload.single('image'),
 	uploadCampaignHeaderImageController
 );

@@ -4,6 +4,13 @@ import { uploadWhatsAppMedia } from '../services/whatsapp-media.service.js';
 export async function uploadCampaignHeaderImageController(req, res) {
 	const file = req.file;
 
+	console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
+	console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
+
+	if (!req.user) {
+		return res.status(401).json({ error: 'No autenticado' });
+	}
+
 	if (!file) {
 		return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
 	}
