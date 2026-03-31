@@ -3,13 +3,10 @@ import { useEffect, useMemo, useState } from 'react';
 const defaultAudienceText = `5492210000000|German|Body Modelador Reductor|XL|negro
 5492210000001|Magali|Body Bretel Fino|L|beige`;
 
-const defaultVariablesText = '{"1":"German","2":"Body Modelador Reductor","3":"15% OFF"}';
-
 const initialForm = {
   name: '',
   description: '',
   audienceText: defaultAudienceText,
-  variablesText: defaultVariablesText,
   sendNow: false,
 };
 
@@ -19,24 +16,25 @@ function parseAudience(rawValue = '') {
     .map((row) => row.trim())
     .filter(Boolean)
     .map((row) => {
-      const [phone, firstName, productName, size, color] = row.split('|').map((value) => value?.trim() || '');
+      const [phone, contactName, productName, size, color] = row.split('|').map((value) => value?.trim() || '');
+
       return {
         phone,
-        firstName,
-        productName,
-        size,
-        color,
+        contactName,
+        variables: {
+          '1': contactName || '',
+          '2': productName || '',
+          '3': size || '',
+          '4': color || '',
+          contact_name: contactName || '',
+          first_name: (contactName || '').split(/\s+/).filter(Boolean)[0] || '',
+          product_name: productName || '',
+          size: size || '',
+          color: color || '',
+        },
       };
     })
     .filter((item) => item.phone);
-}
-
-function safeParseJson(rawValue, fallback) {
-  try {
-    return rawValue ? JSON.parse(rawValue) : fallback;
-  } catch (_error) {
-    return fallback;
-  }
 }
 
 export default function CampaignComposerPanel({
@@ -54,8 +52,8 @@ export default function CampaignComposerPanel({
     }
   }, [templates, selectedTemplate, onSelectTemplate]);
 
-  const audience = useMemo(() => parseAudience(form.audienceText), [form.audienceText]);
-  const estimatedCost = useMemo(() => audience.length * 0.032, [audience.length]);
+  const recipients = useMemo(() => parseAudience(form.audienceText), [form.audienceText]);
+  const estimatedCost = useMemo(() => recipients.length * 0.032, [recipients.length]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -64,14 +62,27 @@ export default function CampaignComposerPanel({
 
     const payload = {
       name: form.name.trim(),
-      description: form.description.trim(),
       templateId: selectedTemplate.id,
-      sendNow: form.sendNow,
-      audience,
-      templateVariables: safeParseJson(form.variablesText, {}),
+      languageCode: selectedTemplate.language || 'es_AR',
+      recipients,
+      audienceSource: 'manual',
+      notes: form.description.trim() || null,
+      sendComponents: Array.isArray(selectedTemplate.components) ? selectedTemplate.components : [],
     };
 
-    await onCreateCampaign(payload);
+    const result = await onCreateCampaign(payload);
+
+    if (form.sendNow) {
+      const createdCampaignId = result?.campaign?.id || result?.id || null;
+      if (createdCampaignId && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('campaign:launch-requested', {
+            detail: { campaignId: createdCampaignId },
+          })
+        );
+      }
+    }
+
     setForm(initialForm);
   }
 
@@ -133,20 +144,9 @@ export default function CampaignComposerPanel({
           <small>Formato: teléfono|nombre|producto|talle|color. Una fila por destinatario.</small>
         </label>
 
-        <label className="field">
-          <span>Variables por defecto</span>
-          <textarea
-            rows={5}
-            value={form.variablesText}
-            onChange={(event) => setForm((current) => ({ ...current, variablesText: event.target.value }))}
-            placeholder='{"1":"German","2":"Promo especial"}'
-          />
-          <small>Se usan como fallback si un destinatario no trae un valor específico.</small>
-        </label>
-
         <div className="campaign-composer-summary">
           <div>
-            <strong>{audience.length}</strong>
+            <strong>{recipients.length}</strong>
             <span>destinatarios estimados</span>
           </div>
           <div>

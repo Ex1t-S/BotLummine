@@ -71,7 +71,11 @@ export default function CampaignsPage() {
     return data?.items || data?.campaigns || [];
   }, [campaignsQuery.data]);
 
-  const selectedCampaign = campaignDetailQuery.data || campaigns.find((campaign) => campaign.id === selectedCampaignId) || null;
+  const selectedCampaign =
+    campaignDetailQuery.data ||
+    campaigns.find((campaign) => campaign.id === selectedCampaignId) ||
+    null;
+
   const overview = normalizeOverview(overviewQuery.data || {});
 
   useEffect(() => {
@@ -90,16 +94,46 @@ export default function CampaignsPage() {
     queryClient.invalidateQueries({ queryKey: ['campaigns-overview'] });
     queryClient.invalidateQueries({ queryKey: ['campaign-templates'] });
     queryClient.invalidateQueries({ queryKey: ['campaign-runs'] });
+
     if (selectedCampaignId) {
-      queryClient.invalidateQueries({ queryKey: ['campaign-detail', selectedCampaignId] });
+      queryClient.invalidateQueries({
+        queryKey: ['campaign-detail', selectedCampaignId],
+      });
     }
   }
 
   function showFeedback(type, message) {
     setFeedback({ type, message });
     window.clearTimeout(window.__campaignFeedbackTimeout);
-    window.__campaignFeedbackTimeout = window.setTimeout(() => setFeedback(null), 3500);
+    window.__campaignFeedbackTimeout = window.setTimeout(() => {
+      setFeedback(null);
+    }, 3500);
   }
+
+  useEffect(() => {
+    async function handleLaunchRequested(event) {
+      const campaignId = event?.detail?.campaignId;
+      if (!campaignId) return;
+
+      try {
+        await dispatchCampaign(campaignId);
+        invalidateAll();
+        setSelectedCampaignId(campaignId);
+        showFeedback('success', 'Campaña creada y lanzada.');
+      } catch (error) {
+        showFeedback(
+          'error',
+          error?.response?.data?.error || 'La campaña se creó pero no se pudo lanzar.'
+        );
+      }
+    }
+
+    window.addEventListener('campaign:launch-requested', handleLaunchRequested);
+
+    return () => {
+      window.removeEventListener('campaign:launch-requested', handleLaunchRequested);
+    };
+  }, [selectedCampaignId, queryClient]);
 
   const syncMutation = useMutation({
     mutationFn: syncTemplates,
@@ -107,7 +141,8 @@ export default function CampaignsPage() {
       invalidateAll();
       showFeedback('success', 'Templates sincronizados con Meta.');
     },
-    onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo sincronizar.'),
+    onError: (error) =>
+      showFeedback('error', error?.response?.data?.error || 'No se pudo sincronizar.'),
   });
 
   const createTemplateMutation = useMutation({
@@ -116,7 +151,8 @@ export default function CampaignsPage() {
       invalidateAll();
       showFeedback('success', 'Template creado correctamente.');
     },
-    onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear el template.'),
+    onError: (error) =>
+      showFeedback('error', error?.response?.data?.error || 'No se pudo crear el template.'),
   });
 
   const updateTemplateMutation = useMutation({
@@ -125,7 +161,8 @@ export default function CampaignsPage() {
       invalidateAll();
       showFeedback('success', 'Template actualizado.');
     },
-    onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar el template.'),
+    onError: (error) =>
+      showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar el template.'),
   });
 
   const deleteTemplateMutation = useMutation({
@@ -135,18 +172,24 @@ export default function CampaignsPage() {
       setSelectedTemplate(null);
       showFeedback('success', 'Template eliminado.');
     },
-    onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar el template.'),
+    onError: (error) =>
+      showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar el template.'),
   });
 
   const createCampaignMutation = useMutation({
     mutationFn: createCampaign,
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       invalidateAll();
-      const createdId = response?.id || response?.campaign?.id;
-      if (createdId) setSelectedCampaignId(createdId);
+
+      const createdId = response?.campaign?.id || response?.id || null;
+      if (createdId) {
+        setSelectedCampaignId(createdId);
+      }
+
       showFeedback('success', 'Campaña creada.');
     },
-    onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la campaña.'),
+    onError: (error) =>
+      showFeedback('error', error?.response?.data?.error || 'No se pudo crear la campaña.'),
   });
 
   const actionMutation = useMutation({
@@ -161,7 +204,8 @@ export default function CampaignsPage() {
       setSelectedCampaignId(variables.campaignId);
       showFeedback('success', 'Acción ejecutada correctamente.');
     },
-    onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar la acción.'),
+    onError: (error) =>
+      showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar la acción.'),
   });
 
   return (
@@ -171,10 +215,16 @@ export default function CampaignsPage() {
           <span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
           <h2>Módulo comercial listo para vender en serio</h2>
           <p>
-            Creá templates, sincronizalos con Meta, armá campañas, estimá costo y seguí el estado de cada envío sin salir del panel.
+            Creá templates, sincronizalos con Meta, armá campañas, estimá costo y seguí el
+            estado de cada envío sin salir del panel.
           </p>
         </div>
-        {feedback ? <div className={`campaign-feedback ${feedback.type}`}>{feedback.message}</div> : null}
+
+        {feedback ? (
+          <div className={`campaign-feedback ${feedback.type}`}>
+            {feedback.message}
+          </div>
+        ) : null}
       </div>
 
       <div className="campaign-kpi-grid">
@@ -209,7 +259,9 @@ export default function CampaignsPage() {
           syncing={syncMutation.isPending}
           onDeleteTemplate={(template) => {
             const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
-            if (confirmed) deleteTemplateMutation.mutate(template.id);
+            if (confirmed) {
+              deleteTemplateMutation.mutate(template.id);
+            }
           }}
         />
 
@@ -218,7 +270,9 @@ export default function CampaignsPage() {
           creating={createTemplateMutation.isPending}
           updating={updateTemplateMutation.isPending}
           onCreateTemplate={(payload) => createTemplateMutation.mutateAsync(payload)}
-          onUpdateTemplate={(templateId, payload) => updateTemplateMutation.mutateAsync({ templateId, payload })}
+          onUpdateTemplate={(templateId, payload) =>
+            updateTemplateMutation.mutateAsync({ templateId, payload })
+          }
         />
       </div>
 

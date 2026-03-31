@@ -5,7 +5,7 @@ function unwrap(response) {
 }
 
 export async function fetchCampaignOverview() {
-  const response = await api.get('/campaigns/overview');
+  const response = await api.get('/campaigns/stats');
   return unwrap(response);
 }
 
@@ -50,16 +50,16 @@ export async function createCampaign(payload) {
 }
 
 export async function dispatchCampaign(campaignId) {
-  const response = await api.post(`/campaigns/${campaignId}/dispatch`);
+  const response = await api.post(`/campaigns/${campaignId}/launch`);
   return unwrap(response);
 }
 
 export async function pauseCampaign(campaignId) {
-  const response = await api.post(`/campaigns/${campaignId}/pause`);
+  const response = await api.post(`/campaigns/${campaignId}/cancel`);
   return unwrap(response);
 }
 
 export async function resumeCampaign(campaignId) {
-  const response = await api.post(`/campaigns/${campaignId}/resume`);
+  const response = await api.post(`/campaigns/${campaignId}/retry-failed`);
   return unwrap(response);
 }
