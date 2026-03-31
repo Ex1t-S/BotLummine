@@ -7,9 +7,9 @@ import CampaignsPage from './pages/CampaignsPage.jsx';
 import AbandonedCartsPage from './pages/AbandonedCartsPage.jsx';
 import AiLabPage from './pages/AiLabPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
-import mediaRoutes from './routes/media.routes.js';
 
-app.use('/api/media', mediaRoutes);
+
+
 
 export default function App() {
 	return (
