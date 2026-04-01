@@ -33,22 +33,24 @@ model Contact {
 }
 
 model Conversation {
-	id            String            @id @default(cuid())
-	contactId     String            @unique
-	status        ConversationStatus @default(OPEN)
-	queue         ConversationQueue @default(AUTO)
-	aiEnabled     Boolean           @default(true)
-	lastSummary   String?
-	lastMessageAt DateTime?
-	createdAt     DateTime          @default(now())
-	updatedAt     DateTime          @updatedAt
+  id            String             @id @default(cuid())
+  contactId     String             @unique
+  status        ConversationStatus @default(OPEN)
+  queue         ConversationQueue  @default(AUTO)
+  aiEnabled     Boolean            @default(true)
+  lastSummary   String?
+  lastMessageAt DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
-	contact  Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
-	state    ConversationState?
-	messages Message[]
+  contact  Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  state    ConversationState?
+  messages Message[]
 
-	@@index([lastMessageAt])
-	@@index([queue, aiEnabled, lastMessageAt])
+  @@index([lastMessageAt])
+  @@index([archivedAt, lastMessageAt])
+  @@index([queue, aiEnabled, lastMessageAt])
 }
 
 model ConversationState {

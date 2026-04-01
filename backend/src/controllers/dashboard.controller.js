@@ -31,7 +31,7 @@ function buildAvatar(name = '', phone = '') {
 	const base = (name || phone || '?').trim();
 	const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
 	const initials = parts.length
-		? parts.map((p) => p[0]?.toUpperCase() || '').join('')
+		? parts.map((part) => part[0]?.toUpperCase() || '').join('')
 		: '?';
 
 	const palette = [
@@ -77,11 +77,400 @@ function buildResetStateData() {
 		handoffReason: null,
 		interactionCount: 0,
 		notes: null,
-
 	};
 }
-async function getLatestMessagesByConversationIds() {
-	return new Map();
+function normalizeConversationIdentity(contact = {}) {
+	return normalizeThreadPhone(contact?.waId || contact?.phone || '');
+}
+
+function getConversationSortValue(conversation = {}) {
+	return new Date(
+		conversation.lastMessageAt ||
+		conversation.updatedAt ||
+		conversation.createdAt ||
+		0
+	).getTime();
+}
+
+function sortConversationsForMerge(conversations = []) {
+	return [...conversations].sort((a, b) => {
+		const archivedDiff =
+			Number(Boolean(a.archivedAt)) - Number(Boolean(b.archivedAt));
+
+		if (archivedDiff !== 0) {
+			return archivedDiff;
+		}
+
+		return getConversationSortValue(b) - getConversationSortValue(a);
+	});
+}
+
+function getQueuePriority(queue = 'AUTO') {
+	const priorities = {
+		AUTO: 1,
+		HUMAN: 2,
+		PAYMENT_REVIEW: 3,
+	};
+
+	return priorities[String(queue || '').toUpperCase()] || 0;
+}
+
+function pickMergedQueue(conversations = []) {
+	return [...conversations].sort(
+		(a, b) => getQueuePriority(b.queue) - getQueuePriority(a.queue)
+	)[0]?.queue || 'AUTO';
+}
+
+function firstMeaningfulValue(values = []) {
+	for (const value of values) {
+		if (Array.isArray(value)) {
+			if (value.length) return value;
+			continue;
+		}
+
+		if (value instanceof Date) return value;
+		if (value === 0 || value === false) return value;
+
+		if (String(value ?? '').trim()) {
+			return value;
+		}
+	}
+
+	return null;
+}
+
+function pickLatestDate(values = []) {
+	return values
+		.filter(Boolean)
+		.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+}
+
+function mergeJsonArrays(values = []) {
+	const merged = [];
+	const seen = new Set();
+
+	for (const list of values) {
+		if (!Array.isArray(list)) continue;
+
+		for (const entry of list) {
+			const key =
+				typeof entry === 'string'
+					? `string:${entry}`
+					: JSON.stringify(entry);
+
+			if (seen.has(key)) continue;
+
+			seen.add(key);
+			merged.push(entry);
+		}
+	}
+
+	return merged;
+}
+
+function pickPreferredContactName(values = [], fallback = '') {
+	const candidates = values
+		.map((value) => String(value || '').trim())
+		.filter(Boolean);
+
+	const withLetters = candidates.filter((value) => /[A-Za-zÀ-ÿ]/.test(value));
+	const pool = withLetters.length ? withLetters : candidates;
+
+	return pool.sort((a, b) => b.length - a.length)[0] || fallback || null;
+}
+
+function buildMergedConversationState(primaryState = null, extraStates = []) {
+	const states = [primaryState, ...extraStates].filter(Boolean);
+
+	if (!states.length) return null;
+
+	return {
+		customerName: firstMeaningfulValue(states.map((item) => item.customerName)),
+		lastIntent: firstMeaningfulValue(states.map((item) => item.lastIntent)),
+		lastDetectedIntent: firstMeaningfulValue(
+			states.map((item) => item.lastDetectedIntent)
+		),
+		lastUserGoal: firstMeaningfulValue(states.map((item) => item.lastUserGoal)),
+		lastOrderNumber: firstMeaningfulValue(
+			states.map((item) => item.lastOrderNumber)
+		),
+		lastOrderId: firstMeaningfulValue(states.map((item) => item.lastOrderId)),
+		preferredTone: firstMeaningfulValue(
+			states.map((item) => item.preferredTone)
+		),
+		customerMood: firstMeaningfulValue(states.map((item) => item.customerMood)),
+		urgencyLevel: firstMeaningfulValue(states.map((item) => item.urgencyLevel)),
+		frequentSize: firstMeaningfulValue(states.map((item) => item.frequentSize)),
+		paymentPreference: firstMeaningfulValue(
+			states.map((item) => item.paymentPreference)
+		),
+		deliveryPreference: firstMeaningfulValue(
+			states.map((item) => item.deliveryPreference)
+		),
+		interestedProducts: mergeJsonArrays(
+			states.map((item) => item.interestedProducts)
+		),
+		objections: mergeJsonArrays(states.map((item) => item.objections)),
+		needsHuman: states.some((item) => Boolean(item.needsHuman)),
+		handoffReason: firstMeaningfulValue(states.map((item) => item.handoffReason)),
+		interactionCount: states.reduce(
+			(acc, item) => acc + Number(item.interactionCount || 0),
+			0
+		),
+		notes: firstMeaningfulValue(states.map((item) => item.notes)),
+		currentProductFocus: firstMeaningfulValue(
+			states.map((item) => item.currentProductFocus)
+		),
+		salesStage: firstMeaningfulValue(states.map((item) => item.salesStage)),
+		shownOffers: mergeJsonArrays(states.map((item) => item.shownOffers)),
+		shownPrices: mergeJsonArrays(states.map((item) => item.shownPrices)),
+		sharedLinks: mergeJsonArrays(states.map((item) => item.sharedLinks)),
+		lastRecommendedProduct: firstMeaningfulValue(
+			states.map((item) => item.lastRecommendedProduct)
+		),
+		lastRecommendedOffer: firstMeaningfulValue(
+			states.map((item) => item.lastRecommendedOffer)
+		),
+		buyingIntentLevel: firstMeaningfulValue(
+			states.map((item) => item.buyingIntentLevel)
+		),
+		frictionLevel: firstMeaningfulValue(
+			states.map((item) => item.frictionLevel)
+		),
+		commercialSummary: firstMeaningfulValue(
+			states.map((item) => item.commercialSummary)
+		),
+	};
+}
+
+async function deduplicateInboxContacts() {
+	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
+
+	const conversations = await prisma.conversation.findMany({
+		where: {
+			NOT: {
+				contact: {
+					name: {
+						startsWith: AI_LAB_CONTACT_PREFIX,
+					},
+				},
+			},
+		},
+		select: {
+			id: true,
+			queue: true,
+			aiEnabled: true,
+			lastSummary: true,
+			lastMessageAt: true,
+			archivedAt: true,
+			createdAt: true,
+			updatedAt: true,
+			contact: {
+				select: {
+					id: true,
+					name: true,
+					phone: true,
+					waId: true,
+				},
+			},
+			state: {
+				select: {
+					id: true,
+					customerName: true,
+					lastIntent: true,
+					lastDetectedIntent: true,
+					lastUserGoal: true,
+					lastOrderNumber: true,
+					lastOrderId: true,
+					preferredTone: true,
+					customerMood: true,
+					urgencyLevel: true,
+					frequentSize: true,
+					paymentPreference: true,
+					deliveryPreference: true,
+					interestedProducts: true,
+					objections: true,
+					needsHuman: true,
+					handoffReason: true,
+					interactionCount: true,
+					notes: true,
+					currentProductFocus: true,
+					salesStage: true,
+					shownOffers: true,
+					shownPrices: true,
+					sharedLinks: true,
+					lastRecommendedProduct: true,
+					lastRecommendedOffer: true,
+					buyingIntentLevel: true,
+					frictionLevel: true,
+					commercialSummary: true,
+				},
+			},
+		},
+	});
+
+	const groups = new Map();
+
+	for (const conversation of conversations) {
+		const identity = normalizeConversationIdentity(conversation.contact);
+
+		if (!identity) continue;
+
+		if (!groups.has(identity)) {
+			groups.set(identity, []);
+		}
+
+		groups.get(identity).push(conversation);
+	}
+
+	let mergedGroups = 0;
+	let removedConversations = 0;
+	let removedContacts = 0;
+	let movedMessages = 0;
+
+	for (const group of groups.values()) {
+		if (group.length < 2) continue;
+
+		const sorted = sortConversationsForMerge(group);
+		const primary = sorted[0];
+		const duplicates = sorted.slice(1);
+
+		if (!duplicates.length) continue;
+
+		const mergedState = buildMergedConversationState(
+			primary.state,
+			duplicates.map((item) => item.state)
+		);
+
+		const mergedQueue = pickMergedQueue(sorted);
+		const mergedAiEnabled =
+			mergedQueue === 'AUTO' ? sorted.some((item) => item.aiEnabled) : false;
+
+		const mergedLastMessageAt = pickLatestDate(
+			sorted.map((item) => item.lastMessageAt)
+		);
+
+		const mergedLastSummary = firstMeaningfulValue(
+			sorted.map((item) => item.lastSummary)
+		);
+
+		const mergedWaId =
+			normalizeConversationIdentity(primary.contact) ||
+			normalizeConversationIdentity(duplicates[0]?.contact) ||
+			primary.contact?.waId ||
+			primary.contact?.phone ||
+			'';
+
+		const mergedContactName = pickPreferredContactName(
+			sorted.map((item) => item.contact?.name),
+			primary.contact?.name || mergedWaId
+		);
+
+		const mergedArchivedAt = sorted.some((item) => !item.archivedAt)
+			? null
+			: firstMeaningfulValue(sorted.map((item) => item.archivedAt));
+
+		await prisma.$transaction(async (tx) => {
+			for (const duplicate of duplicates) {
+				const moveResult = await tx.message.updateMany({
+					where: { conversationId: duplicate.id },
+					data: { conversationId: primary.id },
+				});
+
+				movedMessages += moveResult.count;
+
+				await tx.conversationState.deleteMany({
+					where: { conversationId: duplicate.id },
+				});
+
+				await tx.conversation.delete({
+					where: { id: duplicate.id },
+				});
+
+				await tx.contact.delete({
+					where: { id: duplicate.contact.id },
+				});
+
+				removedConversations += 1;
+				removedContacts += 1;
+			}
+
+			await tx.contact.update({
+				where: { id: primary.contact.id },
+				data: {
+					name: mergedContactName || undefined,
+					phone: mergedWaId || primary.contact?.phone || undefined,
+					waId: mergedWaId || primary.contact?.waId,
+				},
+			});
+
+			await tx.conversation.update({
+				where: { id: primary.id },
+				data: {
+					queue: mergedQueue,
+					aiEnabled: mergedAiEnabled,
+					lastSummary: mergedLastSummary || undefined,
+					lastMessageAt: mergedLastMessageAt || undefined,
+					archivedAt: mergedArchivedAt || null,
+				},
+			});
+
+			if (mergedState) {
+				if (primary.state?.id) {
+					await tx.conversationState.update({
+						where: { conversationId: primary.id },
+						data: mergedState,
+					});
+				} else {
+					await tx.conversationState.create({
+						data: {
+							conversationId: primary.id,
+							...buildResetStateData(),
+							...mergedState,
+						},
+					});
+				}
+			}
+		});
+
+		mergedGroups += 1;
+	}
+
+	return {
+		mergedGroups,
+		removedConversations,
+		removedContacts,
+		movedMessages,
+	};
+}
+function buildMessagePreview(message) {
+	if (!message) return '';
+
+	const attachmentName = String(message.attachmentName || '').trim();
+	const body = String(message.body || '').trim();
+	const type = String(message.type || '').toLowerCase();
+
+	if (type === 'audio') {
+		return attachmentName ? `🎧 ${attachmentName}` : '🎧 Audio';
+	}
+
+	if (type === 'image') {
+		return attachmentName ? `🖼️ ${attachmentName}` : '🖼️ Imagen';
+	}
+
+	if (type === 'video') {
+		return attachmentName ? `🎬 ${attachmentName}` : '🎬 Video';
+	}
+
+	if (type === 'document') {
+		return attachmentName ? `📄 ${attachmentName}` : '📄 Documento';
+	}
+
+	if (type === 'sticker') {
+		return '😊 Sticker';
+	}
+
+	return body || 'Sin mensajes';
 }
 
 function buildContactCard(conversation, lastMessage) {
@@ -96,7 +485,7 @@ function buildContactCard(conversation, lastMessage) {
 		conversationId: conversation.id,
 		displayName,
 		phoneDisplay: phone,
-		preview: lastMessage?.body || '',
+		preview: buildMessagePreview(lastMessage),
 		lastMessageAt: conversation.lastMessageAt || lastMessage?.createdAt || null,
 		lastMessageTime: formatTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
 		lastMessageLabel: formatDateTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
@@ -115,6 +504,7 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
 	const where = {
+		archivedAt: null,
 		...(queue === 'ALL' ? {} : { queue }),
 		NOT: {
 			contact: {
@@ -153,6 +543,8 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 					senderName: true,
 					direction: true,
 					createdAt: true,
+					type: true,
+					attachmentName: true,
 				},
 				orderBy: {
 					createdAt: 'desc',
@@ -181,6 +573,7 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 	}
 
 	const countsWhere = {
+		archivedAt: null,
 		NOT: {
 			contact: {
 				name: {
@@ -191,9 +584,15 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 	};
 
 	const [autoCount, humanCount, paymentCount] = await Promise.all([
-		prisma.conversation.count({ where: { ...countsWhere, queue: 'AUTO' } }),
-		prisma.conversation.count({ where: { ...countsWhere, queue: 'HUMAN' } }),
-		prisma.conversation.count({ where: { ...countsWhere, queue: 'PAYMENT_REVIEW' } }),
+		prisma.conversation.count({
+			where: { ...countsWhere, queue: 'AUTO' },
+		}),
+		prisma.conversation.count({
+			where: { ...countsWhere, queue: 'HUMAN' },
+		}),
+		prisma.conversation.count({
+			where: { ...countsWhere, queue: 'PAYMENT_REVIEW' },
+		}),
 	]);
 
 	return {
@@ -206,6 +605,7 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 		},
 	};
 }
+
 async function ensureConversationExists(conversationId) {
 	const conversation = await prisma.conversation.findUnique({
 		where: { id: conversationId },
@@ -258,7 +658,11 @@ export async function getCatalog(req, res, next) {
 	try {
 		const q = String(req.query.q || '').trim();
 		const pageNumber = Math.max(1, Number(req.query.page || 1) || 1);
-		const catalog = await getCatalogPage({ q, page: pageNumber, pageSize: 24 });
+		const catalog = await getCatalogPage({
+			q,
+			page: pageNumber,
+			pageSize: 24,
+		});
 
 		return res.json({
 			ok: true,
@@ -274,7 +678,9 @@ export async function postSyncCatalog(_req, res, next) {
 	try {
 		await syncCatalogFromTiendanube();
 
-		return res.json({ ok: true });
+		return res.json({
+			ok: true,
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -307,17 +713,19 @@ export async function getConversationMessagesJson(req, res, next) {
 					},
 				},
 				messages: {
-					select: {
-						id: true,
-						direction: true,
-						body: true,
-						type: true,
-						createdAt: true,
-						senderName: true,
-						tokenTotal: true,
-						attachmentName: true,
-						attachmentMimeType: true,
-					},
+				select: {
+					id: true,
+					direction: true,
+					body: true,
+					type: true,
+					createdAt: true,
+					senderName: true,
+					tokenTotal: true,
+					attachmentName: true,
+					attachmentMimeType: true,
+					attachmentUrl: true,
+					rawPayload: true,
+				},
 					orderBy: {
 						createdAt: 'asc',
 					},
@@ -360,6 +768,8 @@ export async function getConversationMessagesJson(req, res, next) {
 					tokenTotal: msg.tokenTotal ?? null,
 					attachmentName: msg.attachmentName || null,
 					attachmentMimeType: msg.attachmentMimeType || null,
+					attachmentUrl: msg.attachmentUrl || null,
+					rawPayload: msg.rawPayload || null,
 				})),
 			},
 		});
@@ -410,7 +820,9 @@ export async function postConversationMessage(req, res, next) {
 			aiMeta: {
 				provider: 'manual',
 				model: null,
-				raw: { source: 'dashboard-manual-reply' },
+				raw: {
+					source: 'dashboard-manual-reply',
+				},
 			},
 		});
 
@@ -424,11 +836,13 @@ export async function postConversationMessage(req, res, next) {
 		await prisma.conversation.update({
 			where: { id: conversationId },
 			data: {
-				lastSummary: null
-			}
+				lastSummary: null,
+			},
 		});
 
-		return res.json({ ok: true });
+		return res.json({
+			ok: true,
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -471,10 +885,7 @@ export async function patchConversationQueue(req, res, next) {
 			await prisma.conversationState.update({
 				where: { conversationId },
 				data: {
-					needsHuman:
-						requestedQueue === 'AUTO'
-							? false
-							: requestedQueue === 'HUMAN',
+					needsHuman: requestedQueue === 'AUTO' ? false : requestedQueue === 'HUMAN',
 					handoffReason:
 						requestedQueue === 'AUTO'
 							? null
@@ -488,8 +899,7 @@ export async function patchConversationQueue(req, res, next) {
 				data: {
 					conversationId,
 					needsHuman: requestedQueue === 'HUMAN',
-					handoffReason:
-						requestedQueue === 'HUMAN' ? 'manual_handoff' : null,
+					handoffReason: requestedQueue === 'HUMAN' ? 'manual_handoff' : null,
 				},
 			});
 		}
@@ -508,7 +918,6 @@ export async function patchConversationQueue(req, res, next) {
 export async function patchConversationResetContext(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-
 		const conversation = await ensureConversationExists(conversationId);
 
 		if (!conversation) {
@@ -549,11 +958,9 @@ export async function patchConversationResetContext(req, res, next) {
 	}
 }
 
-
 export async function deleteConversationHistory(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-
 		const conversation = await ensureConversationExists(conversationId);
 
 		if (!conversation) {
@@ -563,7 +970,7 @@ export async function deleteConversationHistory(req, res, next) {
 			});
 		}
 
-		await prisma.$transaction([
+		const transaction = [
 			prisma.message.deleteMany({
 				where: { conversationId },
 			}),
@@ -574,23 +981,74 @@ export async function deleteConversationHistory(req, res, next) {
 					lastMessageAt: null,
 				},
 			}),
-			conversation.state?.id
-				? prisma.conversationState.update({
-						where: { conversationId },
-						data: buildResetStateData(),
-					})
-				: prisma.conversationState.create({
-						data: {
-							conversationId,
-							...buildResetStateData(),
-						},
-					}),
-		]);
+		];
+
+		if (conversation.state?.id) {
+			transaction.push(
+				prisma.conversationState.update({
+					where: { conversationId },
+					data: buildResetStateData(),
+				})
+			);
+		} else {
+			transaction.push(
+				prisma.conversationState.create({
+					data: {
+						conversationId,
+						...buildResetStateData(),
+					},
+				})
+			);
+		}
+
+		await prisma.$transaction(transaction);
 
 		return res.json({
 			ok: true,
 			conversationId,
 			message: 'Historial eliminado',
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+export async function patchConversationArchive(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+		const archived = req.body?.archived !== false;
+		const conversation = await ensureConversationExists(conversationId);
+
+		if (!conversation) {
+			return res.status(404).json({
+				ok: false,
+				error: 'Conversación no encontrada',
+			});
+		}
+
+		const updatedConversation = await prisma.conversation.update({
+			where: { id: conversationId },
+			data: {
+				archivedAt: archived ? new Date() : null,
+			},
+		});
+
+		return res.json({
+			ok: true,
+			conversationId,
+			archivedAt: updatedConversation.archivedAt,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function postDeduplicateInboxContacts(_req, res, next) {
+	try {
+		const result = await deduplicateInboxContacts();
+
+		return res.json({
+			ok: true,
+			...result,
 		});
 	} catch (error) {
 		next(error);

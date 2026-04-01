@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import axios from 'axios';
 
 function normalizeString(value, fallback = '') {
@@ -19,23 +20,67 @@ function getGraphBaseUrl() {
 	return `https://graph.facebook.com/${getGraphVersion()}`;
 }
 
-function getAppId() {
-	return normalizeString(
-		process.env.META_APP_ID ||
-			process.env.FACEBOOK_APP_ID ||
-			process.env.APP_ID ||
-			process.env.WHATSAPP_APP_ID ||
-			''
-	);
-}
-
 function getPhoneNumberId() {
 	return normalizeString(process.env.WHATSAPP_PHONE_NUMBER_ID || '');
 }
 
-function buildMetaError(error, context = 'meta_request_failed') {
+function getBackendPublicBaseUrl() {
+	const explicit =
+		normalizeString(process.env.BACKEND_PUBLIC_URL) ||
+		normalizeString(process.env.PUBLIC_BACKEND_URL) ||
+		normalizeString(process.env.RENDER_EXTERNAL_URL) ||
+		normalizeString(process.env.RAILWAY_STATIC_URL) ||
+		(process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${normalizeString(process.env.RAILWAY_PUBLIC_DOMAIN)}` : '');
+
+	return explicit.replace(/\/+$/, '');
+}
+
+function sanitizeFileName(value, fallback = 'file') {
+	const normalized = normalizeString(value, fallback)
+		.replace(/[\\/:*?"<>|]+/g, '-')
+		.replace(/\s+/g, '-')
+		.replace(/-+/g, '-')
+		.replace(/^\.+/, '')
+		.replace(/^-+/, '')
+		.trim();
+
+	return normalized || fallback;
+}
+
+function getExtensionFromMimeType(mimeType = '', fallback = '.bin') {
+	const normalized = normalizeString(mimeType).toLowerCase();
+
+	const known = {
+		'image/jpeg': '.jpg',
+		'image/jpg': '.jpg',
+		'image/png': '.png',
+		'image/webp': '.webp',
+		'image/gif': '.gif',
+		'video/mp4': '.mp4',
+		'video/3gpp': '.3gp',
+		'audio/ogg': '.ogg',
+		'audio/opus': '.opus',
+		'audio/mpeg': '.mp3',
+		'audio/mp3': '.mp3',
+		'audio/aac': '.aac',
+		'audio/amr': '.amr',
+		'application/pdf': '.pdf',
+		'text/plain': '.txt',
+		'application/msword': '.doc',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+		'application/vnd.ms-excel': '.xls',
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx'
+	};
+
+	if (known[normalized]) {
+		return known[normalized];
+	}
+
+	return fallback;
+}
+
+function extractMetaError(error) {
 	return {
-		context,
 		message:
 			error?.response?.data?.error?.message ||
 			error?.response?.data?.message ||
@@ -46,61 +91,67 @@ function buildMetaError(error, context = 'meta_request_failed') {
 	};
 }
 
-async function createResumableUploadSession({ appId, fileName, fileLength, mimeType, accessToken }) {
-	const url = `${getGraphBaseUrl()}/${appId}/uploads`;
+function buildPublicInboxMediaUrl(fileName) {
+	const safeFileName = encodeURIComponent(path.basename(String(fileName || '').trim()));
+	const baseUrl = getBackendPublicBaseUrl();
 
-	const response = await axios.post(url, null, {
-		params: {
-			file_name: fileName,
-			file_length: String(fileLength),
-			file_type: mimeType,
-			access_token: accessToken
-		},
-		timeout: 30_000
-	});
-
-	const sessionId =
-		normalizeString(response?.data?.id) ||
-		normalizeString(response?.data?.upload_session_id) ||
-		normalizeString(response?.data?.upload_session) ||
-		'';
-
-	if (!sessionId) {
-		throw new Error('Meta no devolvió upload session id para el Resumable Upload API.');
+	if (baseUrl) {
+		return `${baseUrl}/api/media/inbox/${safeFileName}`;
 	}
 
-	return sessionId;
+	return `/api/media/inbox/${safeFileName}`;
 }
 
-async function uploadBinaryToSession({ sessionId, buffer, accessToken }) {
-	const url = `${getGraphBaseUrl()}/${sessionId}`;
+function resolveConfiguredStorageDir() {
+	const configured = normalizeString(process.env.WHATSAPP_INBOUND_MEDIA_DIR || 'storage/inbox-media');
 
-	const response = await axios.post(url, buffer, {
-		headers: {
-			Authorization: `Bearer ${accessToken}`,
-			'Content-Type': 'application/octet-stream',
-			file_offset: '0'
-		},
-		maxContentLength: Infinity,
-		maxBodyLength: Infinity,
-		timeout: 120_000
-	});
-
-	const headerHandle =
-		normalizeString(response?.data?.h) ||
-		normalizeString(response?.data?.header_handle) ||
-		normalizeString(response?.data?.handle) ||
-		'';
-
-	if (!headerHandle) {
-		throw new Error('Meta no devolvió header handle al subir el asset de ejemplo.');
+	if (path.isAbsolute(configured)) {
+		return configured;
 	}
 
-	return headerHandle;
+	return path.resolve(process.cwd(), configured);
+}
+
+async function ensureInboundMediaDir() {
+	const storageDir = resolveConfiguredStorageDir();
+	await fs.mkdir(storageDir, { recursive: true });
+	return storageDir;
+}
+
+function buildStoredInboundFileName({
+	messageType = 'media',
+	mimeType = '',
+	preferredFileName = '',
+	metaMessageId = ''
+}) {
+	const cleanPreferred = sanitizeFileName(preferredFileName || '');
+	const preferredExt = cleanPreferred ? path.extname(cleanPreferred) : '';
+	const mimeExt = getExtensionFromMimeType(mimeType, '');
+	const finalExt = preferredExt || mimeExt || '.bin';
+
+	const preferredBase = cleanPreferred ? path.basename(cleanPreferred, preferredExt) : '';
+	const fallbackBase = sanitizeFileName(`${messageType || 'media'}-${metaMessageId || crypto.randomUUID()}`, 'media');
+	const finalBase = sanitizeFileName(preferredBase || fallbackBase, 'media');
+
+	return `${Date.now()}-${finalBase}-${crypto.randomUUID()}${finalExt}`;
+}
+
+function buildReadableAttachmentName({ messageType = 'media', mimeType = '', originalName = '' }) {
+	const cleanOriginal = sanitizeFileName(originalName || '');
+
+	if (cleanOriginal && cleanOriginal !== 'file') {
+		return cleanOriginal;
+	}
+
+	const extension = getExtensionFromMimeType(mimeType, '.bin');
+	const safeType = sanitizeFileName(messageType || 'media', 'media');
+
+	return `${safeType}${extension}`;
 }
 
 async function uploadStandardWhatsAppMedia({ phoneNumberId, fileName, mimeType, buffer, accessToken }) {
 	const url = `${getGraphBaseUrl()}/${phoneNumberId}/media`;
+
 	const formData = new FormData();
 	formData.append('messaging_product', 'whatsapp');
 	formData.append('file', new Blob([buffer], { type: mimeType }), fileName);
@@ -119,10 +170,12 @@ async function uploadStandardWhatsAppMedia({ phoneNumberId, fileName, mimeType, 
 		const error = new Error(
 			data?.error?.message || data?.message || 'No se pudo subir el media estándar a WhatsApp.'
 		);
+
 		error.response = {
 			status: response.status,
 			data
 		};
+
 		throw error;
 	}
 
@@ -131,112 +184,187 @@ async function uploadStandardWhatsAppMedia({ phoneNumberId, fileName, mimeType, 
 
 export async function uploadWhatsAppMedia({ filePath, fileName, mimeType }) {
 	const accessToken = getAccessToken();
-	const appId = getAppId();
 	const phoneNumberId = getPhoneNumberId();
 
 	if (!accessToken) {
 		return {
 			ok: false,
 			error: {
-				message: 'Falta WHATSAPP_ACCESS_TOKEN en el backend.'
+				message: 'Falta WHATSAPP_ACCESS_TOKEN o META_ACCESS_TOKEN.',
+				status: null,
+				responseData: null
 			}
 		};
 	}
 
-	if (!filePath) {
+	if (!phoneNumberId) {
 		return {
 			ok: false,
 			error: {
-				message: 'Falta filePath para subir el archivo a Meta.'
+				message: 'Falta WHATSAPP_PHONE_NUMBER_ID.',
+				status: null,
+				responseData: null
 			}
 		};
 	}
 
-	const resolvedMimeType = normalizeString(mimeType || 'application/octet-stream');
-	const resolvedFileName = normalizeString(fileName || path.basename(filePath) || 'upload.bin');
-	const warnings = [];
-
 	try {
-		const buffer = await fs.readFile(filePath);
-		const stats = await fs.stat(filePath);
+		const absolutePath = path.resolve(filePath);
+		const [buffer, stats] = await Promise.all([fs.readFile(absolutePath), fs.stat(absolutePath)]);
 
-		let headerHandle = null;
-		let mediaId = null;
+		const resolvedFileName = sanitizeFileName(fileName || path.basename(absolutePath) || 'media');
+		const resolvedMimeType = normalizeString(mimeType || 'application/octet-stream');
 
-		if (!appId) {
-			warnings.push(
-				'No se encontró META_APP_ID/FACEBOOK_APP_ID/APP_ID. No se pudo generar header_handle para templates IMAGE.'
-			);
-		} else {
-			try {
-				const sessionId = await createResumableUploadSession({
-					appId,
-					fileName: resolvedFileName,
-					fileLength: stats.size,
-					mimeType: resolvedMimeType,
-					accessToken
-				});
-
-				headerHandle = await uploadBinaryToSession({
-					sessionId,
-					buffer,
-					accessToken
-				});
-			} catch (error) {
-				return {
-					ok: false,
-					error: buildMetaError(error, 'resumable_upload_failed')
-				};
-			}
-		}
-
-		if (!phoneNumberId) {
-			warnings.push(
-				'No se encontró WHATSAPP_PHONE_NUMBER_ID. No se pudo generar mediaId estándar para futuros envíos.'
-			);
-		} else {
-			try {
-				mediaId = await uploadStandardWhatsAppMedia({
-					phoneNumberId,
-					fileName: resolvedFileName,
-					mimeType: resolvedMimeType,
-					buffer,
-					accessToken
-				});
-			} catch (error) {
-				warnings.push(
-					buildMetaError(error, 'standard_media_upload_failed')?.message ||
-						'No se pudo subir el media estándar a WhatsApp.'
-				);
-			}
-		}
-
-		if (!headerHandle) {
-			return {
-				ok: false,
-				error: {
-					message:
-						'La imagen se subió parcialmente, pero Meta no devolvió header_handle para templates IMAGE.',
-					warnings
-				}
-			};
-		}
+		const mediaId = await uploadStandardWhatsAppMedia({
+			phoneNumberId,
+			fileName: resolvedFileName,
+			mimeType: resolvedMimeType,
+			buffer,
+			accessToken
+		});
 
 		return {
 			ok: true,
-			headerHandle,
-			mediaId: mediaId || null,
+			mediaId,
+			headerHandle: null,
 			fileName: resolvedFileName,
 			mimeType: resolvedMimeType,
 			fileSize: stats.size,
-			warnings
+			warnings: []
 		};
 	} catch (error) {
 		return {
 			ok: false,
-			error: {
-				message: error.message || 'Error interno al subir media a Meta.'
-			}
+			error: extractMetaError(error)
 		};
 	}
+}
+
+export async function getWhatsAppMediaMetadata({ attachmentId, mimeType = '' }) {
+	const accessToken = getAccessToken();
+
+	if (!accessToken) {
+		throw new Error('Falta WHATSAPP_ACCESS_TOKEN o META_ACCESS_TOKEN.');
+	}
+
+	const safeAttachmentId = normalizeString(attachmentId);
+
+	if (!safeAttachmentId) {
+		throw new Error('attachmentId inválido para consultar metadata de WhatsApp.');
+	}
+
+	const url = `${getGraphBaseUrl()}/${safeAttachmentId}`;
+
+	const response = await axios.get(url, {
+		headers: {
+			Authorization: `Bearer ${accessToken}`
+		},
+		timeout: 30_000
+	});
+
+	const data = response?.data || {};
+	const downloadUrl = normalizeString(data.url || '');
+
+	if (!downloadUrl) {
+		throw new Error('Meta no devolvió la URL de descarga del media.');
+	}
+
+	return {
+		attachmentId: normalizeString(data.id || safeAttachmentId),
+		url: downloadUrl,
+		mimeType: normalizeString(data.mime_type || mimeType || 'application/octet-stream'),
+		sha256: normalizeString(data.sha256 || ''),
+		fileSize: Number(data.file_size || 0) || null
+	};
+}
+
+export async function downloadWhatsAppMediaBuffer(downloadUrl) {
+	const accessToken = getAccessToken();
+
+	if (!accessToken) {
+		throw new Error('Falta WHATSAPP_ACCESS_TOKEN o META_ACCESS_TOKEN.');
+	}
+
+	const url = normalizeString(downloadUrl);
+
+	if (!url) {
+		throw new Error('URL de descarga inválida para el media de WhatsApp.');
+	}
+
+	const response = await axios.get(url, {
+		responseType: 'arraybuffer',
+		headers: {
+			Authorization: `Bearer ${accessToken}`
+		},
+		timeout: 60_000,
+		maxContentLength: 100 * 1024 * 1024,
+		maxBodyLength: 100 * 1024 * 1024
+	});
+
+	return Buffer.from(response.data);
+}
+
+export async function saveInboundWhatsAppMedia({
+	attachmentId,
+	attachmentMimeType = '',
+	attachmentName = '',
+	messageType = 'media',
+	waId = '',
+	metaMessageId = ''
+}) {
+	const safeAttachmentId = normalizeString(attachmentId);
+
+	if (!safeAttachmentId) {
+		return null;
+	}
+
+	const metadata = await getWhatsAppMediaMetadata({
+		attachmentId: safeAttachmentId,
+		mimeType: attachmentMimeType
+	});
+
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url);
+	const storageDir = await ensureInboundMediaDir();
+
+	const effectiveMimeType = normalizeString(
+		attachmentMimeType || metadata.mimeType || 'application/octet-stream'
+	);
+
+	const storedFileName = buildStoredInboundFileName({
+		messageType,
+		mimeType: effectiveMimeType,
+		preferredFileName: attachmentName,
+		metaMessageId
+	});
+
+	const absolutePath = path.join(storageDir, storedFileName);
+	await fs.writeFile(absolutePath, buffer);
+
+	return {
+		attachmentId: safeAttachmentId,
+		attachmentUrl: buildPublicInboxMediaUrl(storedFileName),
+		attachmentMimeType: effectiveMimeType,
+		attachmentName: buildReadableAttachmentName({
+			messageType,
+			mimeType: effectiveMimeType,
+			originalName: attachmentName
+		}),
+		attachmentSha256: normalizeString(metadata.sha256 || ''),
+		attachmentSize: metadata.fileSize || buffer.length,
+		storedFileName,
+		storedAbsolutePath: absolutePath,
+		downloadSourceUrl: metadata.url,
+		waId: normalizeString(waId || '')
+	};
+}
+
+export function resolveInboxMediaAbsolutePath(fileName) {
+	const rawName = String(fileName || '').trim();
+	const safeName = path.basename(rawName);
+
+	if (!rawName || safeName !== rawName) {
+		throw new Error('Nombre de archivo inválido.');
+	}
+
+	return path.join(resolveConfiguredStorageDir(), safeName);
 }

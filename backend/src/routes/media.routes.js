@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { uploadCampaignHeaderImageController } from '../controllers/media.controller.js';
+import {
+	serveInboxMediaController,
+	uploadCampaignHeaderImageController
+} from '../controllers/media.controller.js';
 import { attachUser } from '../middleware/auth.js';
 
 const router = Router();
@@ -11,6 +14,8 @@ const upload = multer({
 		fileSize: 10 * 1024 * 1024
 	}
 });
+
+router.get('/inbox/:fileName', serveInboxMediaController);
 
 router.post(
 	'/campaign-header-image',
