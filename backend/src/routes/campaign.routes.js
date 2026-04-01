@@ -9,6 +9,7 @@ import {
 	deleteTemplateController,
 	syncTemplatesController,
 	renderTemplatePreviewController,
+	previewAbandonedCartAudienceController,
 	listCampaignsController,
 	getCampaignController,
 	createCampaignController,
@@ -30,6 +31,8 @@ router.patch('/templates/:templateId', updateTemplateController);
 router.delete('/templates/:templateId', deleteTemplateController);
 router.post('/templates/sync', syncTemplatesController);
 router.post('/templates/preview', renderTemplatePreviewController);
+
+router.post('/abandoned-carts/preview', previewAbandonedCartAudienceController);
 
 router.post('/dispatch/tick', dispatchTickController);
 router.get('/stats', getCampaignStatsController);

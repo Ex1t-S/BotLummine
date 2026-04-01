@@ -5,7 +5,8 @@ import {
 	cancelCampaign,
 	listCampaigns,
 	getCampaignDetail,
-	retryFailedCampaignRecipients
+	retryFailedCampaignRecipients,
+	previewAbandonedCartAudience
 } from '../services/whatsapp-campaign.service.js';
 import { executeCampaignDispatcherTick } from '../services/campaign-dispatcher.service.js';
 import {
@@ -140,6 +141,22 @@ export async function renderTemplatePreviewController(req, res) {
 	}
 }
 
+export async function previewAbandonedCartAudienceController(req, res) {
+	try {
+		const result = await previewAbandonedCartAudience({
+			templateId: req.body?.templateId || null,
+			filters: req.body?.filters || {}
+		});
+
+		return res.json({
+			ok: true,
+			...result
+		});
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
 export async function listCampaignsController(req, res) {
 	try {
 		const campaigns = await listCampaigns({
@@ -183,6 +200,7 @@ export async function createCampaignController(req, res) {
 			contactIds: Array.isArray(req.body?.contactIds) ? req.body.contactIds : [],
 			includeAllContacts: normalizeBoolean(req.body?.includeAllContacts),
 			audienceSource: req.body?.audienceSource || null,
+			audienceFilters: req.body?.audienceFilters || null,
 			notes: req.body?.notes || null,
 			launchedByUserId: req.user?.id || null
 		});
@@ -197,13 +215,13 @@ export async function createCampaignController(req, res) {
 }
 
 export async function launchCampaignController(req, res) {
-  try {
-    const result = await launchCampaign(req.params.campaignId);
-    return res.json(result);
-  } catch (error) {
-    console.log('[CAMPAIGN][LAUNCH][ERROR]', error.message);
-    return res.status(400).json({ error: error.message });
-  }
+	try {
+		const result = await launchCampaign(req.params.campaignId);
+		return res.json(result);
+	} catch (error) {
+		console.log('[CAMPAIGN][LAUNCH][ERROR]', error.message);
+		return res.status(400).json({ error: error.message });
+	}
 }
 
 export async function cancelCampaignController(req, res) {

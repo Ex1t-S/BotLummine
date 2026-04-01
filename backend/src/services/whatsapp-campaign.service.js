@@ -21,16 +21,98 @@ function toUpper(value, fallback = '') {
 	return normalizeString(value, fallback).toUpperCase();
 }
 
-function buildRecipientVariables(recipient = {}) {
-	const contactName = normalizeString(recipient.contactName || '');
-	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || '';
+function normalizeAudienceSource(value, fallback = 'manual') {
+	return normalizeString(value, fallback).toLowerCase();
+}
+
+function formatCurrency(value, currency = 'ARS') {
+	try {
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: currency || 'ARS',
+			maximumFractionDigits: 0
+		}).format(Number(value || 0));
+	} catch {
+		return `${value || 0} ${currency || 'ARS'}`;
+	}
+}
+
+function normalizeAbandonedCartFilters(input = {}) {
+	const daysBack = Math.max(1, Math.min(Number(input.daysBack || 7) || 7, 90));
+	const limit = Math.max(1, Math.min(Number(input.limit || 50) || 50, 500));
+	const rawStatus = normalizeString(input.status || 'NEW').toUpperCase();
+	const status = ['NEW', 'CONTACTED', 'ALL'].includes(rawStatus) ? rawStatus : 'NEW';
+
+	let minTotal = null;
+	if (input.minTotal !== '' && input.minTotal !== null && input.minTotal !== undefined) {
+		const parsed = Number(input.minTotal);
+		minTotal = Number.isFinite(parsed) ? parsed : null;
+	}
 
 	return {
+		daysBack,
+		limit,
+		status,
+		minTotal,
+		productQuery: normalizeString(input.productQuery || '')
+	};
+}
+
+function getCartProducts(cart = {}) {
+	return safeArray(cart.products);
+}
+
+function getCartProductName(product = {}) {
+	return normalizeString(
+		product?.name ||
+		product?.title ||
+		product?.productName ||
+		product?.variantName ||
+		product?.sku ||
+		'Producto'
+	);
+}
+
+function getPrimaryCartProductName(cart = {}) {
+	return getCartProductName(getCartProducts(cart)[0] || {});
+}
+
+function cartMatchesProductQuery(cart = {}, productQuery = '') {
+	const needle = normalizeString(productQuery).toLowerCase();
+	if (!needle) return true;
+
+	return getCartProducts(cart).some((product) =>
+		getCartProductName(product).toLowerCase().includes(needle)
+	);
+}
+
+function buildAbandonedCartVariables(cart = {}, contact = null) {
+	const normalizedPhone = normalizeWhatsAppNumber(cart.contactPhone || '');
+	const contactName = normalizeString(cart.contactName || contact?.name || '', normalizedPhone);
+	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
+	const checkoutUrl = normalizeString(cart.abandonedCheckoutUrl || '');
+	const primaryProductName = getPrimaryCartProductName(cart);
+	const totalFormatted = formatCurrency(cart.totalAmount, cart.currency || 'ARS');
+	const checkoutId = normalizeString(cart.checkoutId || '');
+
+	return {
+		'1': firstName,
+		'2': checkoutUrl,
+		'3': primaryProductName,
+		'4': totalFormatted,
+		'5': checkoutId,
 		contact_name: contactName,
 		first_name: firstName,
-		wa_id: normalizeString(recipient.waId || recipient.phone || ''),
-		phone: normalizeString(recipient.phone || ''),
-		...(recipient.variables || {})
+		wa_id: normalizedPhone,
+		phone: normalizedPhone,
+		checkout_url: checkoutUrl,
+		abandoned_checkout_url: checkoutUrl,
+		product_name: primaryProductName,
+		first_product_name: primaryProductName,
+		total_amount: totalFormatted,
+		total_raw: cart.totalAmount != null ? String(cart.totalAmount) : '',
+		checkout_id: checkoutId,
+		cart_status: normalizeString(cart.status || '')
 	};
 }
 
@@ -115,7 +197,134 @@ async function resolveRecipientsFromAllContacts() {
 	}));
 }
 
+async function resolveRecipientsFromAbandonedCarts(input = {}) {
+	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
+	const since = new Date();
+	since.setDate(since.getDate() - filters.daysBack);
+
+	const where = {
+		contactPhone: {
+			not: null
+		},
+		abandonedCheckoutUrl: {
+			not: null
+		},
+		checkoutCreatedAt: {
+			gte: since
+		}
+	};
+
+	if (filters.status !== 'ALL') {
+		where.status = filters.status;
+	}
+
+	if (typeof filters.minTotal === 'number' && Number.isFinite(filters.minTotal)) {
+		where.totalAmount = {
+			gte: filters.minTotal
+		};
+	}
+
+	const rawCarts = await prisma.abandonedCart.findMany({
+		where,
+		orderBy: [
+			{ checkoutCreatedAt: 'desc' },
+			{ updatedAt: 'desc' }
+		],
+		take: Math.min(filters.limit * 4, 1000)
+	});
+
+	const latestByPhone = new Map();
+
+	for (const cart of rawCarts) {
+		const normalizedPhone = normalizeWhatsAppNumber(cart.contactPhone || '');
+		const checkoutUrl = normalizeString(cart.abandonedCheckoutUrl || '');
+
+		if (!normalizedPhone || !checkoutUrl) {
+			continue;
+		}
+
+		if (!cartMatchesProductQuery(cart, filters.productQuery)) {
+			continue;
+		}
+
+		const previous = latestByPhone.get(normalizedPhone);
+		const cartTs = new Date(
+			cart.checkoutCreatedAt || cart.updatedAt || cart.createdAt || 0
+		).getTime();
+		const prevTs = previous
+			? new Date(previous.checkoutCreatedAt || previous.updatedAt || previous.createdAt || 0).getTime()
+			: -1;
+
+		if (!previous || cartTs > prevTs) {
+			latestByPhone.set(normalizedPhone, cart);
+		}
+	}
+
+	const carts = [...latestByPhone.values()].slice(0, filters.limit);
+	const normalizedPhones = carts
+		.map((cart) => normalizeWhatsAppNumber(cart.contactPhone || ''))
+		.filter(Boolean);
+
+	let contacts = [];
+	if (normalizedPhones.length) {
+		contacts = await prisma.contact.findMany({
+			where: {
+				OR: [
+					{ waId: { in: normalizedPhones } },
+					{ phone: { in: normalizedPhones } }
+				]
+			},
+			select: {
+				id: true,
+				name: true,
+				phone: true,
+				waId: true,
+				marketingOptIn: true,
+				marketingOptedOutAt: true,
+				marketingOptOutReason: true
+			}
+		});
+	}
+
+	const contactByPhone = new Map();
+	for (const contact of contacts) {
+		const keys = [
+			normalizeWhatsAppNumber(contact.waId || ''),
+			normalizeWhatsAppNumber(contact.phone || '')
+		].filter(Boolean);
+
+		for (const key of keys) {
+			if (!contactByPhone.has(key)) {
+				contactByPhone.set(key, contact);
+			}
+		}
+	}
+
+	return carts.map((cart) => {
+		const normalizedPhone = normalizeWhatsAppNumber(cart.contactPhone || '');
+		const contact = contactByPhone.get(normalizedPhone) || null;
+		const variables = buildAbandonedCartVariables(cart, contact);
+
+		return {
+			contactId: contact?.id || null,
+			contactName: variables.contact_name,
+			phone: normalizedPhone,
+			waId: normalizedPhone,
+			variables,
+			externalKey: `abandoned_cart:${normalizeString(cart.checkoutId || '')}`,
+			isOptedOut: contact ? contact.marketingOptIn === false || Boolean(contact.marketingOptedOutAt) : false,
+			optOutReason: contact?.marketingOptOutReason || null
+		};
+	});
+}
+
 async function resolveCampaignRecipients(input = {}) {
+	const audienceSource = normalizeAudienceSource(input.audienceSource || 'manual');
+
+	if (audienceSource === 'abandoned_carts') {
+		return resolveRecipientsFromAbandonedCarts(input);
+	}
+
 	const manualRecipients = safeArray(input.recipients).map((recipient) => ({
 		contactId: recipient.contactId || null,
 		contactName: recipient.contactName || recipient.name || '',
@@ -135,6 +344,54 @@ async function resolveCampaignRecipients(input = {}) {
 		...recipientsFromIds,
 		...recipientsFromAllContacts
 	]);
+}
+
+export async function previewAbandonedCartAudience({
+	templateId = null,
+	filters = {}
+} = {}) {
+	const recipients = await resolveRecipientsFromAbandonedCarts({
+		audienceSource: 'abandoned_carts',
+		audienceFilters: filters
+	});
+
+	let template = null;
+	let baseComponents = [];
+
+	if (templateId) {
+		template = await getTemplateOrThrow(templateId);
+		baseComponents = safeArray(template?.rawPayload?.components);
+	}
+
+	const previewRecipients = recipients.map((recipient) => {
+		const personalized = baseComponents.length
+			? renderTemplatePreviewFromComponents(baseComponents, buildRecipientVariables(recipient))
+			: { previewText: '', components: [] };
+
+		return {
+			phone: recipient.phone,
+			contactName: recipient.contactName,
+			externalKey: recipient.externalKey,
+			variables: recipient.variables,
+			renderedPreviewText: personalized.previewText || '',
+			primaryProductName:
+				recipient.variables?.product_name ||
+				recipient.variables?.first_product_name ||
+				'',
+			checkoutUrl:
+				recipient.variables?.checkout_url ||
+				recipient.variables?.abandoned_checkout_url ||
+				'',
+			totalAmount: recipient.variables?.total_amount || '',
+			isOptedOut: Boolean(recipient.isOptedOut)
+		};
+	});
+
+	return {
+		template,
+		total: previewRecipients.length,
+		recipients: previewRecipients
+	};
 }
 
 async function ensureCampaignConversation({ phone, contactId = null, contactName = null }) {
@@ -276,6 +533,19 @@ function ensureApprovedTemplate(template) {
 	}
 }
 
+function buildRecipientVariables(recipient = {}) {
+	const contactName = normalizeString(recipient.contactName || '');
+	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || '';
+
+	return {
+		contact_name: contactName,
+		first_name: firstName,
+		wa_id: normalizeString(recipient.waId || recipient.phone || ''),
+		phone: normalizeString(recipient.phone || ''),
+		...(recipient.variables || {})
+	};
+}
+
 function buildBodyParametersFromText(text = '', variables = {}) {
 	const matches = [...String(text || '').matchAll(/{{\s*([^}]+?)\s*}}/g)];
 
@@ -395,6 +665,40 @@ function buildBodyComponentForSend(bodyComponent = {}, variables = {}) {
 	};
 }
 
+function buildButtonComponentsForSend(template = {}, variables = {}) {
+	const buttonsComponent = safeArray(template?.rawPayload?.components).find(
+		(component) => toUpper(component?.type) === 'BUTTONS'
+	);
+
+	if (!buttonsComponent) {
+		return [];
+	}
+
+	return safeArray(buttonsComponent.buttons).flatMap((button, index) => {
+		const buttonType = toUpper(button?.type);
+
+		if (buttonType !== 'URL') {
+			return [];
+		}
+
+		const urlTemplate = normalizeString(button?.url || '');
+		const parameters = buildBodyParametersFromText(urlTemplate, variables);
+
+		if (!parameters.length) {
+			return [];
+		}
+
+		return [
+			{
+				type: 'button',
+				sub_type: 'url',
+				index: String(index),
+				parameters
+			}
+		];
+	});
+}
+
 function buildSendComponentsFromTemplate({
 	template,
 	renderedComponents = [],
@@ -424,6 +728,11 @@ function buildSendComponentsFromTemplate({
 
 	if (bodySendComponent) {
 		sendComponents.push(bodySendComponent);
+	}
+
+	const buttonSendComponents = buildButtonComponentsForSend(template, variables);
+	if (buttonSendComponents.length) {
+		sendComponents.push(...buttonSendComponents);
 	}
 
 	return sendComponents;
@@ -490,6 +799,7 @@ export async function createCampaignDraft({
 	contactIds = [],
 	includeAllContacts = false,
 	audienceSource = null,
+	audienceFilters = null,
 	notes = null,
 	launchedByUserId = null
 }) {
@@ -507,10 +817,14 @@ export async function createCampaignDraft({
 		throw new Error('No se encontró la plantilla seleccionada.');
 	}
 
+	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || 'manual');
+
 	const resolvedRecipients = await resolveCampaignRecipients({
 		recipients,
 		contactIds,
-		includeAllContacts
+		includeAllContacts,
+		audienceSource: normalizedAudienceSource,
+		audienceFilters
 	});
 
 	if (!resolvedRecipients.length) {
@@ -544,7 +858,7 @@ export async function createCampaignDraft({
 		);
 
 		const shouldSkipRecipient =
-			audienceSource !== 'manual' && recipient.isOptedOut;
+			normalizedAudienceSource !== 'manual' && recipient.isOptedOut;
 
 		recipientRows.push({
 			phone: normalizedPhone,
@@ -577,7 +891,7 @@ export async function createCampaignDraft({
 			templateName: template.name,
 			templateLanguage: template.language,
 			templateCategory: template.category,
-			audienceSource: audienceSource || 'manual',
+			audienceSource: normalizedAudienceSource,
 			notes: notes || null,
 			launchedByUserId,
 			totalRecipients: recipientRows.length,
@@ -780,6 +1094,31 @@ async function persistCampaignOutboundMessage({
 	});
 }
 
+async function markAbandonedCartAsContactedFromRecipient(recipient = {}) {
+	const externalKey = normalizeString(recipient.externalKey || '');
+
+	if (!externalKey.toLowerCase().startsWith('abandoned_cart:')) {
+		return null;
+	}
+
+	const checkoutId = normalizeString(externalKey.split(':').slice(1).join(':'));
+
+	if (!checkoutId) {
+		return null;
+	}
+
+	return prisma.abandonedCart.updateMany({
+		where: {
+			checkoutId
+		},
+		data: {
+			status: 'CONTACTED',
+			contactedAt: new Date(),
+			lastMessageSentAt: new Date()
+		}
+	});
+}
+
 async function dispatchSingleRecipient(campaign, recipient) {
 	const template = campaign.templateLocalId
 		? await getTemplateOrThrow(campaign.templateLocalId)
@@ -850,6 +1189,13 @@ async function dispatchSingleRecipient(campaign, recipient) {
 		},
 		sendResult
 	});
+
+	if (normalizeAudienceSource(campaign.audienceSource || '') === 'abandoned_carts') {
+		await markAbandonedCartAsContactedFromRecipient({
+			...recipient,
+			...updatedRecipient
+		});
+	}
 
 	return updatedRecipient;
 }
