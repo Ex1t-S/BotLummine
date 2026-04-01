@@ -9,9 +9,295 @@ const QUEUES = [
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
 
+const MEDIA_PLACEHOLDER_BODIES = new Set([
+	'[Audio recibido]',
+	'[Imagen recibida]',
+	'[Video recibido]',
+	'[Sticker recibido]',
+]);
+
 function isDocumentVisible() {
 	if (typeof document === 'undefined') return true;
 	return !document.hidden;
+}
+
+function getMediaKind(message = {}) {
+	const type = String(message.type || '').toLowerCase();
+	const mime = String(message.attachmentMimeType || '').toLowerCase();
+
+	if (type === 'audio' || mime.startsWith('audio/')) return 'audio';
+	if (type === 'image' || mime.startsWith('image/')) return 'image';
+	if (type === 'video' || mime.startsWith('video/')) return 'video';
+	if (type === 'document') return 'document';
+	if (type === 'sticker') return mime.startsWith('image/') ? 'image' : 'file';
+	if (mime === 'application/pdf') return 'document';
+	if (message.attachmentUrl) return 'file';
+
+	return null;
+}
+
+function shouldHideBodyBecauseItIsOnlyPlaceholder(message = {}) {
+	const body = String(message.body || '').trim();
+
+	if (!body) return true;
+	if (!message.attachmentUrl) return false;
+	if (MEDIA_PLACEHOLDER_BODIES.has(body)) return true;
+	if (body.startsWith('[Documento recibido')) return true;
+
+	return false;
+}
+
+function renderTextWithLinks(text = '') {
+	const value = String(text || '');
+	if (!value) return null;
+
+	const parts = value.split(/(https?:\/\/[^\s]+)/gi);
+
+	return parts.map((part, index) => {
+		if (/^https?:\/\/[^\s]+$/i.test(part)) {
+			return (
+				<a
+					key={`link-${index}`}
+					href={part}
+					target="_blank"
+					rel="noreferrer"
+					style={{
+						color: '#2563eb',
+						textDecoration: 'underline',
+						wordBreak: 'break-word',
+					}}
+				>
+					{part}
+				</a>
+			);
+		}
+
+		return (
+			<span
+				key={`text-${index}`}
+				style={{
+					whiteSpace: 'pre-wrap',
+					wordBreak: 'break-word',
+				}}
+			>
+				{part}
+			</span>
+		);
+	});
+}
+
+function AttachmentPreview({ message }) {
+	const mediaKind = getMediaKind(message);
+	const attachmentUrl = String(message.attachmentUrl || '').trim();
+	const attachmentName = String(message.attachmentName || '').trim();
+
+	if (!mediaKind || !attachmentUrl) return null;
+
+	if (mediaKind === 'audio') {
+		return (
+			<div style={{ marginTop: 10 }}>
+				<audio
+					controls
+					preload="none"
+					src={attachmentUrl}
+					style={{ width: '100%', maxWidth: 320 }}
+				>
+					Tu navegador no soporta audio HTML5.
+				</audio>
+			</div>
+		);
+	}
+
+	if (mediaKind === 'image') {
+		return (
+			<div style={{ marginTop: 10 }}>
+				<a
+					href={attachmentUrl}
+					target="_blank"
+					rel="noreferrer"
+					style={{ display: 'inline-block' }}
+				>
+					<img
+						src={attachmentUrl}
+						alt={attachmentName || 'Imagen recibida'}
+						loading="lazy"
+						style={{
+							display: 'block',
+							maxWidth: '100%',
+							width: 'min(320px, 100%)',
+							borderRadius: 14,
+							border: '1px solid rgba(15, 23, 42, 0.08)',
+							boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+						}}
+					/>
+				</a>
+			</div>
+		);
+	}
+
+	if (mediaKind === 'video') {
+		return (
+			<div style={{ marginTop: 10 }}>
+				<video
+					controls
+					preload="metadata"
+					src={attachmentUrl}
+					style={{
+						display: 'block',
+						maxWidth: '100%',
+						width: 'min(320px, 100%)',
+						borderRadius: 14,
+						border: '1px solid rgba(15, 23, 42, 0.08)',
+						background: '#000',
+					}}
+				>
+					Tu navegador no soporta video HTML5.
+				</video>
+			</div>
+		);
+	}
+
+	if (mediaKind === 'document' || mediaKind === 'file') {
+		return (
+			<div
+				style={{
+					marginTop: 10,
+					padding: '12px 14px',
+					borderRadius: 14,
+					background: 'rgba(15, 23, 42, 0.05)',
+					border: '1px solid rgba(15, 23, 42, 0.08)',
+				}}
+			>
+				<div
+					style={{
+						fontSize: 13,
+						fontWeight: 700,
+						color: '#0f172a',
+						marginBottom: 6,
+					}}
+				>
+					{attachmentName || 'Archivo adjunto'}
+				</div>
+
+				<a
+					href={attachmentUrl}
+					target="_blank"
+					rel="noreferrer"
+					style={{
+						fontSize: 13,
+						fontWeight: 600,
+						color: '#2563eb',
+						textDecoration: 'underline',
+						wordBreak: 'break-word',
+					}}
+				>
+					Abrir archivo
+				</a>
+			</div>
+		);
+	}
+
+	return null;
+}
+
+function MessageBubble({ message }) {
+	const isOutbound = message.direction === 'OUTBOUND';
+	const hideBody = shouldHideBodyBecauseItIsOnlyPlaceholder(message);
+	const bubbleBackground = isOutbound ? '#dcfce7' : '#ffffff';
+	const bubbleBorder = isOutbound
+		? '1px solid rgba(34, 197, 94, 0.18)'
+		: '1px solid rgba(15, 23, 42, 0.08)';
+
+	return (
+		<div
+			style={{
+				display: 'flex',
+				justifyContent: isOutbound ? 'flex-end' : 'flex-start',
+				marginBottom: 14,
+			}}
+		>
+			<div
+				style={{
+					maxWidth: '78%',
+					minWidth: 140,
+					padding: '14px 16px 12px',
+					borderRadius: 22,
+					background: bubbleBackground,
+					border: bubbleBorder,
+					boxShadow: '0 8px 24px rgba(15, 23, 42, 0.04)',
+				}}
+			>
+				{!hideBody ? (
+					<div
+						style={{
+							fontSize: 15,
+							lineHeight: 1.45,
+							color: '#0f172a',
+						}}
+					>
+						{renderTextWithLinks(message.body)}
+					</div>
+				) : null}
+
+				<AttachmentPreview message={message} />
+
+				<div
+					style={{
+						display: 'flex',
+						alignItems: 'center',
+						gap: 8,
+						flexWrap: 'wrap',
+						marginTop: 10,
+						fontSize: 12,
+						color: '#475569',
+					}}
+				>
+					<span
+						style={{
+							padding: '3px 8px',
+							borderRadius: 999,
+							background: 'rgba(15, 23, 42, 0.06)',
+							fontWeight: 700,
+						}}
+					>
+						{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
+					</span>
+
+					<span>{message.createdAtLabel || ''}</span>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function ActionButton({ children, danger = false, active = false, disabled = false, onClick }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			disabled={disabled}
+			style={{
+				padding: '10px 14px',
+				borderRadius: 12,
+				border: danger
+					? '1px solid rgba(239, 68, 68, 0.35)'
+					: active
+						? '1px solid rgba(37, 99, 235, 0.28)'
+						: '1px solid rgba(15, 23, 42, 0.12)',
+				background: danger
+					? '#fff5f5'
+					: active
+						? '#eff6ff'
+						: '#ffffff',
+				color: danger ? '#dc2626' : active ? '#1d4ed8' : '#0f172a',
+				fontWeight: 700,
+				cursor: disabled ? 'not-allowed' : 'pointer',
+				opacity: disabled ? 0.6 : 1,
+			}}
+		>
+			{children}
+		</button>
+	);
 }
 
 export default function InboxPage() {
@@ -92,7 +378,6 @@ export default function InboxPage() {
 	useEffect(() => {
 		const el = messagesContainerRef.current;
 		if (!el) return;
-
 		el.scrollTop = el.scrollHeight;
 	}, [conversation?.messages?.length, selectedConversationId]);
 
@@ -113,7 +398,6 @@ export default function InboxPage() {
 	const sendMessageMutation = useMutation({
 		mutationFn: async () => {
 			const body = messageText.trim();
-
 			if (!selectedConversationId || !body) return;
 
 			await api.post(
@@ -139,7 +423,10 @@ export default function InboxPage() {
 				{ queue: nextQueue }
 			);
 
-			return { nextQueue, data: res.data };
+			return {
+				nextQueue,
+				data: res.data,
+			};
 		},
 		onSuccess: async (result) => {
 			if (!result) return;
@@ -168,7 +455,6 @@ export default function InboxPage() {
 	const resetContextMutation = useMutation({
 		mutationFn: async () => {
 			if (!selectedConversationId) return;
-
 			await api.patch(
 				`/dashboard/conversations/${selectedConversationId}/reset-context`
 			);
@@ -184,7 +470,6 @@ export default function InboxPage() {
 	const clearHistoryMutation = useMutation({
 		mutationFn: async () => {
 			if (!selectedConversationId) return;
-
 			await api.delete(
 				`/dashboard/conversations/${selectedConversationId}/history`
 			);
@@ -197,11 +482,9 @@ export default function InboxPage() {
 		},
 	});
 
-	function handleSubmit(e) {
-		e.preventDefault();
-
+	function handleSubmit(event) {
+		event.preventDefault();
 		if (!messageText.trim()) return;
-
 		sendMessageMutation.mutate();
 	}
 
@@ -210,41 +493,88 @@ export default function InboxPage() {
 	}
 
 	return (
-		<div className="inbox-page">
-			<aside className="inbox-sidebar">
-				<div className="inbox-queues">
+		<div
+			style={{
+				display: 'grid',
+				gridTemplateColumns: '320px minmax(0, 1fr)',
+				gap: 16,
+				minHeight: '78vh',
+			}}
+		>
+			<aside
+				style={{
+					background: '#ffffff',
+					border: '1px solid rgba(15, 23, 42, 0.08)',
+					borderRadius: 20,
+					padding: 16,
+					display: 'flex',
+					flexDirection: 'column',
+					minHeight: 0,
+				}}
+			>
+				<div
+					style={{
+						display: 'flex',
+						flexWrap: 'wrap',
+						gap: 8,
+						marginBottom: 14,
+					}}
+				>
 					{QUEUES.map((item) => {
 						const isActive = queue === item.key;
 
 						return (
-							<button
+							<ActionButton
 								key={item.key}
-								type="button"
-								className={`queue-tab ${isActive ? 'active' : ''}`}
-								onClick={() => setQueue(item.key)}
+								active={isActive}
 								disabled={inboxQuery.isFetching && isActive}
+								onClick={() => setQueue(item.key)}
 							>
-								<span>{item.label}</span>
-								<strong>{counts[item.key] || 0}</strong>
-							</button>
+								{item.label} · {counts[item.key] || 0}
+							</ActionButton>
 						);
 					})}
 				</div>
 
-				<div className="inbox-sidebar-header">
-					<h2>Conversaciones</h2>
+				<div
+					style={{
+						fontSize: 14,
+						fontWeight: 700,
+						color: '#0f172a',
+						marginBottom: 12,
+					}}
+				>
+					Conversaciones
 					{inboxQuery.isFetching ? (
-						<span className="soft-status">Actualizando...</span>
+						<span
+							style={{
+								marginLeft: 8,
+								fontSize: 12,
+								fontWeight: 600,
+								color: '#64748b',
+							}}
+						>
+							Actualizando...
+						</span>
 					) : null}
 				</div>
 
-				<div className="inbox-contact-list">
+				<div
+					style={{
+						overflowY: 'auto',
+						display: 'flex',
+						flexDirection: 'column',
+						gap: 10,
+					}}
+				>
 					{inboxQuery.isLoading ? (
-						<div className="empty-state">Cargando conversaciones...</div>
+						<div style={{ color: '#64748b', fontSize: 14 }}>
+							Cargando conversaciones...
+						</div>
 					) : null}
 
 					{!inboxQuery.isLoading && !contacts.length ? (
-						<div className="empty-state">
+						<div style={{ color: '#64748b', fontSize: 14 }}>
 							No hay conversaciones en esta bandeja.
 						</div>
 					) : null}
@@ -257,40 +587,107 @@ export default function InboxPage() {
 							<button
 								key={contact.conversationId}
 								type="button"
-								className={`contact-card ${isSelected ? 'active' : ''}`}
 								onClick={() =>
 									setSelectedConversationId(contact.conversationId)
 								}
+								style={{
+									textAlign: 'left',
+									padding: 14,
+									borderRadius: 16,
+									border: isSelected
+										? '1px solid rgba(37, 99, 235, 0.28)'
+										: '1px solid rgba(15, 23, 42, 0.08)',
+									background: isSelected ? '#eff6ff' : '#ffffff',
+									cursor: 'pointer',
+								}}
 							>
 								<div
-									className="contact-avatar"
 									style={{
-										background:
-											contact.avatar?.style
-												?.replace('background:', '')
-												.replace(';', '') ||
-											'linear-gradient(135deg,#22c55e,#16a34a)',
+										display: 'flex',
+										alignItems: 'flex-start',
+										gap: 12,
 									}}
 								>
-									{contact.avatar?.initials || '?'}
-								</div>
-
-								<div className="contact-content">
-									<div className="contact-topline">
-										<strong className="contact-name">
-											{contact.displayName}
-										</strong>
-										<span className="contact-time">
-											{contact.lastMessageTime || ''}
-										</span>
+									<div
+										style={{
+											width: 42,
+											height: 42,
+											borderRadius: 999,
+											display: 'grid',
+											placeItems: 'center',
+											color: '#ffffff',
+											fontWeight: 700,
+											fontSize: 14,
+											flexShrink: 0,
+											...(contact.avatar?.style
+												? {
+														background: undefined,
+														backgroundImage: contact.avatar.style.replace(
+															'background:',
+															''
+														).replace(/;$/, ''),
+													}
+												: { background: '#94a3b8' }),
+										}}
+									>
+										{contact.avatar?.initials || '?'}
 									</div>
 
-									<div className="contact-phone">
-										{contact.phoneDisplay || 'Sin teléfono'}
-									</div>
+									<div style={{ minWidth: 0, flex: 1 }}>
+										<div
+											style={{
+												display: 'flex',
+												justifyContent: 'space-between',
+												gap: 10,
+												alignItems: 'center',
+												marginBottom: 4,
+											}}
+										>
+											<div
+												style={{
+													fontSize: 14,
+													fontWeight: 700,
+													color: '#0f172a',
+													overflow: 'hidden',
+													textOverflow: 'ellipsis',
+													whiteSpace: 'nowrap',
+												}}
+											>
+												{contact.displayName}
+											</div>
 
-									<div className="contact-preview">
-										{contact.preview || 'Sin mensajes'}
+											<div
+												style={{
+													fontSize: 12,
+													color: '#64748b',
+													flexShrink: 0,
+												}}
+											>
+												{contact.lastMessageTime || ''}
+											</div>
+										</div>
+
+										<div
+											style={{
+												fontSize: 12,
+												color: '#64748b',
+												marginBottom: 6,
+											}}
+										>
+											{contact.phoneDisplay || 'Sin teléfono'}
+										</div>
+
+										<div
+											style={{
+												fontSize: 13,
+												color: '#334155',
+												overflow: 'hidden',
+												textOverflow: 'ellipsis',
+												whiteSpace: 'nowrap',
+											}}
+										>
+											{contact.preview || 'Sin mensajes'}
+										</div>
 									</div>
 								</div>
 							</button>
@@ -299,77 +696,166 @@ export default function InboxPage() {
 				</div>
 			</aside>
 
-			<section className="chat-panel">
+			<section
+				style={{
+					background: '#ffffff',
+					border: '1px solid rgba(15, 23, 42, 0.08)',
+					borderRadius: 20,
+					display: 'flex',
+					flexDirection: 'column',
+					minHeight: 0,
+					overflow: 'hidden',
+				}}
+			>
 				{!selectedConversationId ? (
-					<div className="empty-state large">
+					<div
+						style={{
+							flex: 1,
+							display: 'grid',
+							placeItems: 'center',
+							padding: 24,
+							color: '#64748b',
+							fontSize: 16,
+						}}
+					>
 						Seleccioná una conversación
 					</div>
 				) : (
 					<>
-						<div className="chat-header">
-							<div>
-								<h2>
-									{conversation?.contact?.name ||
-										activeContact?.displayName ||
-										'Sin nombre'}
-								</h2>
-								<p>
-									{conversation?.contact?.phone ||
-										activeContact?.phoneDisplay ||
-										'Sin teléfono'}
-								</p>
+						<div
+							style={{
+								padding: '18px 20px 16px',
+								borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
+							}}
+						>
+							<div
+								style={{
+									display: 'flex',
+									justifyContent: 'space-between',
+									alignItems: 'flex-start',
+									gap: 16,
+									flexWrap: 'wrap',
+								}}
+							>
+								<div>
+									<div
+										style={{
+											fontSize: 18,
+											fontWeight: 800,
+											color: '#0f172a',
+											marginBottom: 4,
+										}}
+									>
+										{conversation?.contact?.name ||
+											activeContact?.displayName ||
+											'Sin nombre'}
+									</div>
+
+									<div
+										style={{
+											fontSize: 14,
+											color: '#64748b',
+										}}
+									>
+										{conversation?.contact?.phone ||
+											activeContact?.phoneDisplay ||
+											'Sin teléfono'}
+									</div>
+								</div>
+
+								<div
+									style={{
+										display: 'flex',
+										gap: 8,
+										flexWrap: 'wrap',
+										alignItems: 'center',
+									}}
+								>
+									<span
+										style={{
+											padding: '8px 12px',
+											borderRadius: 999,
+											background: '#f8fafc',
+											border: '1px solid rgba(15, 23, 42, 0.08)',
+											fontSize: 12,
+											fontWeight: 800,
+											color: '#334155',
+										}}
+									>
+										{conversation?.queue || activeContact?.queue || queue}
+									</span>
+
+									<span
+										style={{
+											padding: '8px 12px',
+											borderRadius: 999,
+											background: conversation?.aiEnabled
+												? '#eff6ff'
+												: '#fff7ed',
+											border: conversation?.aiEnabled
+												? '1px solid rgba(37, 99, 235, 0.18)'
+												: '1px solid rgba(249, 115, 22, 0.18)',
+											fontSize: 12,
+											fontWeight: 800,
+											color: conversation?.aiEnabled
+												? '#1d4ed8'
+												: '#c2410c',
+										}}
+									>
+										{conversation?.aiEnabled ? 'IA activa' : 'Humano'}
+									</span>
+								</div>
 							</div>
 
-							<div className="chat-header-actions">
-								<span className="queue-pill">
-									{conversation?.queue || activeContact?.queue || queue}
-								</span>
-								<span className="queue-pill secondary">
-									{conversation?.aiEnabled ? 'IA activa' : 'Humano'}
-								</span>
-							</div>
-						</div>
-
-						<div className="chat-toolbar">
-							<div className="toolbar-group">
-								<button
-									type="button"
-									onClick={() => handleMoveQueue('AUTO')}
+							<div
+								style={{
+									display: 'flex',
+									flexWrap: 'wrap',
+									gap: 10,
+									marginTop: 14,
+								}}
+							>
+								<ActionButton
+									active={conversation?.queue === 'AUTO'}
 									disabled={moveQueueMutation.isPending}
+									onClick={() => handleMoveQueue('AUTO')}
 								>
 									Automático
-								</button>
+								</ActionButton>
 
-								<button
-									type="button"
-									onClick={() => handleMoveQueue('HUMAN')}
+								<ActionButton
+									active={conversation?.queue === 'HUMAN'}
 									disabled={moveQueueMutation.isPending}
+									onClick={() => handleMoveQueue('HUMAN')}
 								>
 									Atención humana
-								</button>
+								</ActionButton>
 
-								<button
-									type="button"
-									onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
+								<ActionButton
+									active={conversation?.queue === 'PAYMENT_REVIEW'}
 									disabled={moveQueueMutation.isPending}
+									onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
 								>
 									Comprobantes
-								</button>
-							</div>
+								</ActionButton>
 
-							<div className="toolbar-group danger-zone">
-								<button
-									type="button"
-									onClick={() => resetContextMutation.mutate()}
+								<div style={{ flex: 1 }} />
+
+								<ActionButton
+									danger
 									disabled={
 										resetContextMutation.isPending || !selectedConversationId
 									}
+									onClick={() => resetContextMutation.mutate()}
 								>
 									Reiniciar IA
-								</button>
+								</ActionButton>
 
-								<button
-									type="button"
+								<ActionButton
+									danger
+									disabled={
+										clearHistoryMutation.isPending || !selectedConversationId
+									}
 									onClick={() => {
 										const confirmed = window.confirm(
 											'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
@@ -379,61 +865,87 @@ export default function InboxPage() {
 											clearHistoryMutation.mutate();
 										}
 									}}
-									disabled={
-										clearHistoryMutation.isPending || !selectedConversationId
-									}
 								>
 									Borrar historial
-								</button>
+								</ActionButton>
 							</div>
 						</div>
 
-						<div className="chat-messages" ref={messagesContainerRef}>
+						<div
+							ref={messagesContainerRef}
+							style={{
+								flex: 1,
+								overflowY: 'auto',
+								padding: 18,
+								background: '#f8fafc',
+							}}
+						>
 							{conversationQuery.isLoading ? (
-								<div className="empty-state">Cargando mensajes...</div>
+								<div style={{ color: '#64748b', fontSize: 14 }}>
+									Cargando mensajes...
+								</div>
 							) : null}
 
 							{!conversationQuery.isLoading &&
 							(conversation?.messages || []).length === 0 ? (
-								<div className="empty-state">
+								<div style={{ color: '#64748b', fontSize: 14 }}>
 									Esta conversación todavía no tiene mensajes.
 								</div>
 							) : null}
 
 							{(conversation?.messages || []).map((msg) => (
-								<div
-									key={msg.id}
-									className={`chat-message ${
-										msg.direction === 'OUTBOUND' ? 'outbound' : 'inbound'
-									}`}
-								>
-									<div className="chat-bubble">
-										<div className="chat-body">
-											{msg.body || 'Mensaje sin texto'}
-										</div>
-										<div className="chat-meta">
-											<span>{msg.senderName || ''}</span>
-											<span>{msg.createdAtLabel}</span>
-										</div>
-									</div>
-								</div>
+								<MessageBubble key={msg.id} message={msg} />
 							))}
 						</div>
 
-						<form className="chat-form" onSubmit={handleSubmit}>
+						<form
+							onSubmit={handleSubmit}
+							style={{
+								borderTop: '1px solid rgba(15, 23, 42, 0.08)',
+								padding: 16,
+								display: 'flex',
+								gap: 12,
+								alignItems: 'flex-end',
+								background: '#ffffff',
+							}}
+						>
 							<textarea
 								value={messageText}
-								onChange={(e) => setMessageText(e.target.value)}
+								onChange={(event) => setMessageText(event.target.value)}
 								placeholder="Escribí una respuesta..."
 								rows={3}
 								disabled={sendMessageMutation.isPending}
+								style={{
+									flex: 1,
+									resize: 'none',
+									borderRadius: 16,
+									border: '1px solid rgba(15, 23, 42, 0.12)',
+									padding: '14px 16px',
+									fontSize: 15,
+									outline: 'none',
+									minHeight: 82,
+								}}
 							/>
 
 							<button
 								type="submit"
-								disabled={
-									sendMessageMutation.isPending || !messageText.trim()
-								}
+								disabled={sendMessageMutation.isPending || !messageText.trim()}
+								style={{
+									height: 54,
+									padding: '0 24px',
+									border: 'none',
+									borderRadius: 16,
+									background:
+										sendMessageMutation.isPending || !messageText.trim()
+											? '#94a3b8'
+											: '#0f172a',
+									color: '#ffffff',
+									fontWeight: 800,
+									cursor:
+										sendMessageMutation.isPending || !messageText.trim()
+											? 'not-allowed'
+											: 'pointer',
+								}}
 							>
 								{sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
 							</button>

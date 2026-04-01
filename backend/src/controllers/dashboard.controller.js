@@ -31,7 +31,7 @@ function buildAvatar(name = '', phone = '') {
 	const base = (name || phone || '?').trim();
 	const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
 	const initials = parts.length
-		? parts.map((p) => p[0]?.toUpperCase() || '').join('')
+		? parts.map((part) => part[0]?.toUpperCase() || '').join('')
 		: '?';
 
 	const palette = [
@@ -77,11 +77,37 @@ function buildResetStateData() {
 		handoffReason: null,
 		interactionCount: 0,
 		notes: null,
-
 	};
 }
-async function getLatestMessagesByConversationIds() {
-	return new Map();
+
+function buildMessagePreview(message) {
+	if (!message) return '';
+
+	const attachmentName = String(message.attachmentName || '').trim();
+	const body = String(message.body || '').trim();
+	const type = String(message.type || '').toLowerCase();
+
+	if (type === 'audio') {
+		return attachmentName ? `🎧 ${attachmentName}` : '🎧 Audio';
+	}
+
+	if (type === 'image') {
+		return attachmentName ? `🖼️ ${attachmentName}` : '🖼️ Imagen';
+	}
+
+	if (type === 'video') {
+		return attachmentName ? `🎬 ${attachmentName}` : '🎬 Video';
+	}
+
+	if (type === 'document') {
+		return attachmentName ? `📄 ${attachmentName}` : '📄 Documento';
+	}
+
+	if (type === 'sticker') {
+		return '😊 Sticker';
+	}
+
+	return body || 'Sin mensajes';
 }
 
 function buildContactCard(conversation, lastMessage) {
@@ -96,7 +122,7 @@ function buildContactCard(conversation, lastMessage) {
 		conversationId: conversation.id,
 		displayName,
 		phoneDisplay: phone,
-		preview: lastMessage?.body || '',
+		preview: buildMessagePreview(lastMessage),
 		lastMessageAt: conversation.lastMessageAt || lastMessage?.createdAt || null,
 		lastMessageTime: formatTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
 		lastMessageLabel: formatDateTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
@@ -153,6 +179,8 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 					senderName: true,
 					direction: true,
 					createdAt: true,
+					type: true,
+					attachmentName: true,
 				},
 				orderBy: {
 					createdAt: 'desc',
@@ -191,9 +219,15 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 	};
 
 	const [autoCount, humanCount, paymentCount] = await Promise.all([
-		prisma.conversation.count({ where: { ...countsWhere, queue: 'AUTO' } }),
-		prisma.conversation.count({ where: { ...countsWhere, queue: 'HUMAN' } }),
-		prisma.conversation.count({ where: { ...countsWhere, queue: 'PAYMENT_REVIEW' } }),
+		prisma.conversation.count({
+			where: { ...countsWhere, queue: 'AUTO' },
+		}),
+		prisma.conversation.count({
+			where: { ...countsWhere, queue: 'HUMAN' },
+		}),
+		prisma.conversation.count({
+			where: { ...countsWhere, queue: 'PAYMENT_REVIEW' },
+		}),
 	]);
 
 	return {
@@ -206,6 +240,7 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
 		},
 	};
 }
+
 async function ensureConversationExists(conversationId) {
 	const conversation = await prisma.conversation.findUnique({
 		where: { id: conversationId },
@@ -258,7 +293,11 @@ export async function getCatalog(req, res, next) {
 	try {
 		const q = String(req.query.q || '').trim();
 		const pageNumber = Math.max(1, Number(req.query.page || 1) || 1);
-		const catalog = await getCatalogPage({ q, page: pageNumber, pageSize: 24 });
+		const catalog = await getCatalogPage({
+			q,
+			page: pageNumber,
+			pageSize: 24,
+		});
 
 		return res.json({
 			ok: true,
@@ -274,7 +313,9 @@ export async function postSyncCatalog(_req, res, next) {
 	try {
 		await syncCatalogFromTiendanube();
 
-		return res.json({ ok: true });
+		return res.json({
+			ok: true,
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -317,6 +358,7 @@ export async function getConversationMessagesJson(req, res, next) {
 						tokenTotal: true,
 						attachmentName: true,
 						attachmentMimeType: true,
+						attachmentUrl: true,
 					},
 					orderBy: {
 						createdAt: 'asc',
@@ -360,6 +402,7 @@ export async function getConversationMessagesJson(req, res, next) {
 					tokenTotal: msg.tokenTotal ?? null,
 					attachmentName: msg.attachmentName || null,
 					attachmentMimeType: msg.attachmentMimeType || null,
+					attachmentUrl: msg.attachmentUrl || null,
 				})),
 			},
 		});
@@ -410,7 +453,9 @@ export async function postConversationMessage(req, res, next) {
 			aiMeta: {
 				provider: 'manual',
 				model: null,
-				raw: { source: 'dashboard-manual-reply' },
+				raw: {
+					source: 'dashboard-manual-reply',
+				},
 			},
 		});
 
@@ -424,11 +469,13 @@ export async function postConversationMessage(req, res, next) {
 		await prisma.conversation.update({
 			where: { id: conversationId },
 			data: {
-				lastSummary: null
-			}
+				lastSummary: null,
+			},
 		});
 
-		return res.json({ ok: true });
+		return res.json({
+			ok: true,
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -471,10 +518,7 @@ export async function patchConversationQueue(req, res, next) {
 			await prisma.conversationState.update({
 				where: { conversationId },
 				data: {
-					needsHuman:
-						requestedQueue === 'AUTO'
-							? false
-							: requestedQueue === 'HUMAN',
+					needsHuman: requestedQueue === 'AUTO' ? false : requestedQueue === 'HUMAN',
 					handoffReason:
 						requestedQueue === 'AUTO'
 							? null
@@ -488,8 +532,7 @@ export async function patchConversationQueue(req, res, next) {
 				data: {
 					conversationId,
 					needsHuman: requestedQueue === 'HUMAN',
-					handoffReason:
-						requestedQueue === 'HUMAN' ? 'manual_handoff' : null,
+					handoffReason: requestedQueue === 'HUMAN' ? 'manual_handoff' : null,
 				},
 			});
 		}
@@ -508,7 +551,6 @@ export async function patchConversationQueue(req, res, next) {
 export async function patchConversationResetContext(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-
 		const conversation = await ensureConversationExists(conversationId);
 
 		if (!conversation) {
@@ -549,11 +591,9 @@ export async function patchConversationResetContext(req, res, next) {
 	}
 }
 
-
 export async function deleteConversationHistory(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-
 		const conversation = await ensureConversationExists(conversationId);
 
 		if (!conversation) {
@@ -563,7 +603,7 @@ export async function deleteConversationHistory(req, res, next) {
 			});
 		}
 
-		await prisma.$transaction([
+		const transaction = [
 			prisma.message.deleteMany({
 				where: { conversationId },
 			}),
@@ -574,18 +614,27 @@ export async function deleteConversationHistory(req, res, next) {
 					lastMessageAt: null,
 				},
 			}),
-			conversation.state?.id
-				? prisma.conversationState.update({
-						where: { conversationId },
-						data: buildResetStateData(),
-					})
-				: prisma.conversationState.create({
-						data: {
-							conversationId,
-							...buildResetStateData(),
-						},
-					}),
-		]);
+		];
+
+		if (conversation.state?.id) {
+			transaction.push(
+				prisma.conversationState.update({
+					where: { conversationId },
+					data: buildResetStateData(),
+				})
+			);
+		} else {
+			transaction.push(
+				prisma.conversationState.create({
+					data: {
+						conversationId,
+						...buildResetStateData(),
+					},
+				})
+			);
+		}
+
+		await prisma.$transaction(transaction);
 
 		return res.json({
 			ok: true,
