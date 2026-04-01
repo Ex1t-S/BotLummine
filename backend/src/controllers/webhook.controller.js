@@ -1,7 +1,6 @@
 import { processInboundMessage } from '../services/chat.service.js';
-import {
-	applyCampaignMessageStatusWebhook
-} from '../services/whatsapp-campaign.service.js';
+import { saveInboundWhatsAppMedia } from '../services/whatsapp-media.service.js';
+import { applyCampaignMessageStatusWebhook } from '../services/whatsapp-campaign.service.js';
 import {
 	applyTemplateStatusWebhook,
 	applyTemplateQualityWebhook,
@@ -12,22 +11,23 @@ import {
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
 	if (message.type === 'button') return message.button?.text || '';
+
 	if (message.type === 'interactive') {
-		return (
-			message.interactive?.button_reply?.title ||
-			message.interactive?.list_reply?.title ||
-			''
-		);
+		return message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || '';
 	}
+
 	if (message.type === 'image') return message.image?.caption || '[Imagen recibida]';
+
 	if (message.type === 'document') {
 		return (
 			message.document?.caption ||
 			`[Documento recibido${message.document?.filename ? `: ${message.document.filename}` : ''}]`
 		);
 	}
+
 	if (message.type === 'audio') return '[Audio recibido]';
 	if (message.type === 'video') return message.video?.caption || '[Video recibido]';
+	if (message.type === 'sticker') return '[Sticker recibido]';
 
 	return '';
 }
@@ -50,13 +50,57 @@ function extractAttachmentMeta(message = {}) {
 	return {};
 }
 
+async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}) {
+	if (!attachmentMeta?.attachmentId) {
+		return attachmentMeta;
+	}
+
+	try {
+		const savedMedia = await saveInboundWhatsAppMedia({
+			attachmentId: attachmentMeta.attachmentId,
+			attachmentMimeType: attachmentMeta.attachmentMimeType || '',
+			attachmentName: attachmentMeta.attachmentName || '',
+			messageType: attachmentMeta.attachmentType || message.type || 'media',
+			waId: message.from || '',
+			metaMessageId: message.id || ''
+		});
+
+		if (!savedMedia) {
+			return attachmentMeta;
+		}
+
+		return {
+			...attachmentMeta,
+			attachmentUrl: savedMedia.attachmentUrl || null,
+			attachmentMimeType: savedMedia.attachmentMimeType || attachmentMeta.attachmentMimeType || null,
+			attachmentName: attachmentMeta.attachmentName || savedMedia.attachmentName || null,
+			attachmentStoredFileName: savedMedia.storedFileName || null,
+			attachmentSize: savedMedia.attachmentSize || null,
+			attachmentSha256: attachmentMeta.attachmentSha256 || savedMedia.attachmentSha256 || null
+		};
+	} catch (error) {
+		console.error('[WEBHOOK][MEDIA][DOWNLOAD ERROR]', {
+			messageId: message.id || null,
+			from: message.from || null,
+			attachmentId: attachmentMeta?.attachmentId || null,
+			error: error?.message || error
+		});
+
+		return {
+			...attachmentMeta,
+			attachmentDownloadError: error?.message || 'No se pudo descargar el media entrante.'
+		};
+	}
+}
+
 async function processInboundMessages(req, value = {}) {
 	const messages = Array.isArray(value.messages) ? value.messages : [];
 	const contacts = Array.isArray(value.contacts) ? value.contacts : [];
 
 	for (const message of messages) {
 		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
-		const attachmentMeta = extractAttachmentMeta(message);
+		const baseAttachmentMeta = extractAttachmentMeta(message);
+		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta);
 
 		await processInboundMessage({
 			waId: message.from,
@@ -68,8 +112,14 @@ async function processInboundMessages(req, value = {}) {
 				webhook: req.body,
 				message,
 				attachment: {
+					id: attachmentMeta.attachmentId || null,
+					type: attachmentMeta.attachmentType || null,
 					mimeType: attachmentMeta.attachmentMimeType || null,
-					name: attachmentMeta.attachmentName || null
+					name: attachmentMeta.attachmentName || null,
+					url: attachmentMeta.attachmentUrl || null,
+					storageFileName: attachmentMeta.attachmentStoredFileName || null,
+					size: attachmentMeta.attachmentSize || null,
+					downloadError: attachmentMeta.attachmentDownloadError || null
 				}
 			},
 			metaMessageId: message.id || null
