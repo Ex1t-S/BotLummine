@@ -126,13 +126,30 @@ function buildButtonsComponent(buttons = []) {
   };
 }
 
+function buildSampleValue(variableNumber, context = 'general') {
+  if (context === 'name') return `Ejemplo ${variableNumber}`;
+  if (context === 'header') return `Dato ${variableNumber}`;
+  if (context === 'phone') return `54922100000${variableNumber}`;
+  if (context === 'url') return `ejemplo-${variableNumber}`;
+  return `Valor ${variableNumber}`;
+}
+
 function buildHeaderComponent(form) {
   if (form.headerType === 'TEXT' && form.headerText.trim()) {
-    return {
+    const headerVariables = getVariableNumbers(form.headerText);
+    const component = {
       type: 'HEADER',
       format: 'TEXT',
       text: form.headerText.trim(),
     };
+
+    if (headerVariables.length) {
+      component.example = {
+        header_text: headerVariables.map((variableNumber) => buildSampleValue(variableNumber, 'header')),
+      };
+    }
+
+    return component;
   }
 
   if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType)) {
@@ -153,6 +170,22 @@ function buildHeaderComponent(form) {
   return null;
 }
 
+function buildBodyComponent(form) {
+  const bodyVariables = getVariableNumbers(form.bodyText);
+  const component = {
+    type: 'BODY',
+    text: form.bodyText.trim(),
+  };
+
+  if (bodyVariables.length) {
+    component.example = {
+      body_text: [bodyVariables.map((variableNumber) => buildSampleValue(variableNumber, 'name'))],
+    };
+  }
+
+  return component;
+}
+
 function buildPayload(form) {
   const components = [];
   const headerComponent = buildHeaderComponent(form);
@@ -161,10 +194,7 @@ function buildPayload(form) {
     components.push(headerComponent);
   }
 
-  components.push({
-    type: 'BODY',
-    text: form.bodyText.trim(),
-  });
+  components.push(buildBodyComponent(form));
 
   if (form.footerText.trim()) {
     components.push({
@@ -357,9 +387,14 @@ export default function TemplateBuilderPanel({
       return 'Poné un nombre interno para el template.';
     }
 
-    const bodyText = payload.components.find((component) => component.type === 'BODY')?.text;
+    const bodyComponent = payload.components.find((component) => component.type === 'BODY');
+    const bodyText = bodyComponent?.text;
     if (!bodyText) {
       return 'El body del template es obligatorio.';
+    }
+
+    if (getVariableNumbers(bodyText).length && !bodyComponent?.example?.body_text?.[0]?.length) {
+      return 'Si el body usa variables como {{1}}, Meta exige examples.body_text. Ya debería armarse solo; si no, hay algo roto en el builder.';
     }
 
     if (form.headerType === 'TEXT' && !form.headerText.trim()) {
