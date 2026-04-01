@@ -19,6 +19,7 @@ const defaultForm = {
   headerText: '',
   headerMediaId: '',
   headerMediaPreviewUrl: '',
+  headerAssetHandle: '',
   bodyText: '',
   footerText: '',
   buttons: [],
@@ -51,6 +52,14 @@ function normalizeButton(button = {}, index = 0) {
   };
 }
 
+function extractHeaderHandle(header = {}, template = {}) {
+  const fromExample = safeArray(header?.example?.header_handle)[0];
+  const fromRawPayload = template?.rawPayload?.headerMedia?.headerHandle;
+  const fromTemplate = template?.headerMedia?.headerHandle;
+
+  return normalizeString(fromExample || fromRawPayload || fromTemplate || '');
+}
+
 function mapTemplateToForm(template) {
   if (!template) {
     return { ...defaultForm };
@@ -74,6 +83,7 @@ function mapTemplateToForm(template) {
     headerMediaPreviewUrl: normalizeString(
       header?.image?.link || template?.rawPayload?.headerMedia?.previewUrl || ''
     ),
+    headerAssetHandle: extractHeaderHandle(header, template),
     bodyText: normalizeString(body?.text || template.bodyText || ''),
     footerText: normalizeString(footer?.text || template.footerText || ''),
     buttons: safeArray(buttonsComponent?.buttons).map((button, index) => normalizeButton(button, index)),
@@ -116,36 +126,39 @@ function buildButtonsComponent(buttons = []) {
   };
 }
 
-function buildPayload(form) {
-  const components = [];
-
+function buildHeaderComponent(form) {
   if (form.headerType === 'TEXT' && form.headerText.trim()) {
-    components.push({
+    return {
       type: 'HEADER',
       format: 'TEXT',
       text: form.headerText.trim(),
-    });
+    };
   }
 
-  if (form.headerType === 'IMAGE') {
-    components.push({
+  if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType)) {
+    const headerComponent = {
       type: 'HEADER',
-      format: 'IMAGE',
-    });
+      format: form.headerType,
+    };
+
+    if (form.headerAssetHandle) {
+      headerComponent.example = {
+        header_handle: [form.headerAssetHandle],
+      };
+    }
+
+    return headerComponent;
   }
 
-  if (form.headerType === 'VIDEO') {
-    components.push({
-      type: 'HEADER',
-      format: 'VIDEO',
-    });
-  }
+  return null;
+}
 
-  if (form.headerType === 'DOCUMENT') {
-    components.push({
-      type: 'HEADER',
-      format: 'DOCUMENT',
-    });
+function buildPayload(form) {
+  const components = [];
+  const headerComponent = buildHeaderComponent(form);
+
+  if (headerComponent) {
+    components.push(headerComponent);
   }
 
   components.push({
@@ -175,6 +188,7 @@ function buildPayload(form) {
         ? {
             mediaId: normalizeString(form.headerMediaId || '') || null,
             previewUrl: normalizeString(form.headerMediaPreviewUrl || '') || null,
+            headerHandle: normalizeString(form.headerAssetHandle || '') || null,
           }
         : null,
   };
@@ -193,6 +207,16 @@ function describeButtonType(type = '') {
 
 function isMetaSampleTemplate(template) {
   return String(template?.name || '').trim().toLowerCase() === 'hello_world';
+}
+
+function extractUploadValue(response = {}, keys = []) {
+  for (const key of keys) {
+    const value = response?.[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
 }
 
 export default function TemplateBuilderPanel({
@@ -227,10 +251,7 @@ export default function TemplateBuilderPanel({
       .join('\n');
 
     return getVariableNumbers(
-      `${form.headerText}
-${form.bodyText}
-${form.footerText}
-${buttonUrls}`
+      `${form.headerText}\n${form.bodyText}\n${form.footerText}\n${buttonUrls}`
     );
   }, [form]);
 
@@ -300,13 +321,27 @@ ${buttonUrls}`
     try {
       const response = await uploadCampaignHeaderImage(file);
       const previewUrl = URL.createObjectURL(file);
+      const nextMediaId = extractUploadValue(response, ['mediaId', 'id']);
+      const nextHeaderHandle = extractUploadValue(response, [
+        'headerHandle',
+        'header_handle',
+        'mediaHandle',
+        'handle',
+      ]);
 
       setForm((current) => ({
         ...current,
         headerType: 'IMAGE',
-        headerMediaId: normalizeString(response?.mediaId || ''),
+        headerMediaId: nextMediaId,
         headerMediaPreviewUrl: previewUrl,
+        headerAssetHandle: nextHeaderHandle,
       }));
+
+      if (!nextHeaderHandle) {
+        setLocalError(
+          'La imagen se subió, pero el backend no devolvió un header_handle. Para templates con IMAGE, Meta exige ese handle de ejemplo.'
+        );
+      }
     } catch (error) {
       setLocalError(
         error?.response?.data?.error || 'No se pudo subir la imagen del header.'
@@ -331,8 +366,8 @@ ${buttonUrls}`
       return 'Si el header es de texto, completalo antes de guardar.';
     }
 
-    if (form.headerType === 'IMAGE' && !form.headerMediaId && !form.headerMediaPreviewUrl) {
-      return 'Subí una imagen para el header antes de guardar.';
+    if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
+      return 'Para templates con header IMAGE necesitás subir una imagen que devuelva header_handle.';
     }
 
     for (const button of safeArray(form.buttons)) {
@@ -385,7 +420,10 @@ ${buttonUrls}`
       <div className="campaign-panel-header">
         <div>
           <h3>{isEditingSelectedTemplate ? 'Editar template' : 'Crear template nuevo'}</h3>
-          <p>Ahora sí: podés crear uno nuevo aunque tengas un template seleccionado, sin quedar atrapado en modo edición.</p>
+          <p>
+            Ahora sí: podés crear uno nuevo aunque tengas un template seleccionado, con header image real,
+            botones con link y un payload que Meta no te rebote por faltarle el ejemplo.
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -417,7 +455,8 @@ ${buttonUrls}`
                 fontWeight: 600,
               }}
             >
-              Estás viendo un template sample de Meta. No se puede editar ni eliminar desde la API. Tocá <strong>+ Nuevo template</strong> y creá uno propio.
+              Estás viendo un template sample de Meta. No se puede editar ni eliminar desde la API. Tocá{' '}
+              <strong>+ Nuevo template</strong> y creá uno propio.
             </div>
           ) : null}
 
@@ -466,6 +505,13 @@ ${buttonUrls}`
                     ...current,
                     headerType: nextType,
                     headerText: nextType === 'TEXT' ? current.headerText : '',
+                    ...(nextType !== 'IMAGE'
+                      ? {
+                          headerMediaId: '',
+                          headerMediaPreviewUrl: '',
+                          headerAssetHandle: '',
+                        }
+                      : {}),
                   }));
                 }}
               >
@@ -524,7 +570,7 @@ ${buttonUrls}`
                   {uploadingImage ? 'Subiendo imagen...' : 'Subir imagen'}
                 </label>
 
-                {(form.headerMediaId || form.headerMediaPreviewUrl) ? (
+                {(form.headerMediaId || form.headerMediaPreviewUrl || form.headerAssetHandle) ? (
                   <button
                     type="button"
                     className="button ghost"
@@ -533,6 +579,7 @@ ${buttonUrls}`
                         ...current,
                         headerMediaId: '',
                         headerMediaPreviewUrl: '',
+                        headerAssetHandle: '',
                       }))
                     }
                   >
@@ -540,6 +587,16 @@ ${buttonUrls}`
                   </button>
                 ) : null}
               </div>
+
+              {form.headerAssetHandle ? (
+                <div style={{ fontSize: 12, color: '#475569' }}>
+                  Header handle listo: <strong>{form.headerAssetHandle}</strong>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#b45309' }}>
+                  Para crear un template con IMAGE, Meta exige un <strong>header_handle</strong> de ejemplo.
+                </div>
+              )}
 
               {form.headerMediaId ? (
                 <div style={{ fontSize: 12, color: '#475569' }}>
@@ -570,7 +627,7 @@ ${buttonUrls}`
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: '#64748b' }}>
-                  Subí la imagen y queda asociada al template para usarla después al enviar campañas.
+                  Subí la imagen y el editor va a intentar guardar tanto el media id como el header handle.
                 </div>
               )}
             </div>
@@ -585,8 +642,8 @@ ${buttonUrls}`
                 color: '#64748b',
               }}
             >
-              Por ahora el flujo visual queda listo sobre todo para <strong>TEXT</strong> e <strong>IMAGE</strong>.
-              Si más adelante querés, dejamos VIDEO y DOCUMENT con upload real también.
+              Por ahora el flujo fuerte queda resuelto para <strong>TEXT</strong> e <strong>IMAGE</strong>.
+              Si después querés, dejamos VIDEO y DOCUMENT con upload real y su example también.
             </div>
           )}
 
@@ -758,7 +815,7 @@ ${buttonUrls}`
                 borderRadius: 12,
                 background: '#fef2f2',
                 border: '1px solid #fecaca',
-                color: '#b91c1c',
+                color: '#991b1b',
                 fontWeight: 600,
               }}
             >
@@ -767,11 +824,7 @@ ${buttonUrls}`
           ) : null}
 
           <div className="campaign-form-actions">
-            <button
-              className="button primary"
-              type="submit"
-              disabled={creating || updating || uploadingImage}
-            >
+            <button className="button primary" type="submit" disabled={creating || updating || uploadingImage}>
               {isEditingSelectedTemplate
                 ? updating
                   ? 'Guardando…'
@@ -792,68 +845,42 @@ ${buttonUrls}`
               ) : null}
 
               {form.headerType === 'IMAGE' ? (
-                <div
-                  style={{
-                    marginBottom: 10,
-                    borderRadius: 14,
-                    overflow: 'hidden',
-                    border: '1px solid rgba(15, 23, 42, 0.08)',
-                    background: '#f1f5f9',
-                  }}
-                >
-                  {form.headerMediaPreviewUrl ? (
+                form.headerMediaPreviewUrl ? (
+                  <div style={{ marginBottom: 10 }}>
                     <img
                       src={form.headerMediaPreviewUrl}
                       alt="Header preview"
-                      style={{ width: '100%', display: 'block' }}
+                      style={{ width: '100%', display: 'block', borderRadius: 12 }}
                     />
-                  ) : (
-                    <div
-                      style={{
-                        padding: '26px 14px',
-                        textAlign: 'center',
-                        color: '#64748b',
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
-                      Header con imagen
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginBottom: 10,
+                      padding: '18px 12px',
+                      borderRadius: 12,
+                      background: '#dbeafe',
+                      color: '#1d4ed8',
+                      fontWeight: 700,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Acá se verá la imagen del header
+                  </div>
+                )
               ) : null}
 
-              <div className="campaign-preview-body">
-                {form.bodyText || 'El cuerpo del template se ve acá.'}
-              </div>
-
+              <div className="campaign-preview-body">{form.bodyText || 'El cuerpo del template se ve acá.'}</div>
               {form.footerText ? <div className="campaign-preview-footer">{form.footerText}</div> : null}
-
               {previewButtons.length ? (
-                <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                <div className="campaign-preview-buttons">
                   {previewButtons.map((button) => (
-                    <div
-                      key={button.id}
-                      style={{
-                        borderRadius: 10,
-                        border: '1px solid rgba(79, 70, 229, 0.14)',
-                        background: '#fff',
-                        padding: '9px 10px',
-                        display: 'grid',
-                        gap: 3,
-                      }}
-                    >
-                      <strong style={{ fontSize: 13, color: '#312e81' }}>{button.text}</strong>
-                      <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 700 }}>
+                    <button key={button.id} type="button">
+                      {button.text}
+                      <small style={{ display: 'block', opacity: 0.7, fontSize: 11 }}>
                         {describeButtonType(button.type)}
-                      </span>
-                      {button.type === 'URL' && button.url ? (
-                        <span style={{ fontSize: 11, color: '#64748b', wordBreak: 'break-all' }}>{button.url}</span>
-                      ) : null}
-                      {button.type === 'PHONE_NUMBER' && button.phoneNumber ? (
-                        <span style={{ fontSize: 11, color: '#64748b' }}>{button.phoneNumber}</span>
-                      ) : null}
-                    </div>
+                      </small>
+                    </button>
                   ))}
                 </div>
               ) : null}
