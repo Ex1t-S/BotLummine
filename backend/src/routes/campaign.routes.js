@@ -15,6 +15,7 @@ import {
 	createCampaignController,
 	launchCampaignController,
 	cancelCampaignController,
+	deleteCampaignController,
 	retryFailedCampaignRecipientsController,
 	dispatchTickController,
 	getCampaignStatsController
@@ -40,6 +41,7 @@ router.get('/stats', getCampaignStatsController);
 router.get('/', listCampaignsController);
 router.post('/', createCampaignController);
 router.get('/:campaignId', getCampaignController);
+router.delete('/:campaignId', deleteCampaignController);
 router.post('/:campaignId/launch', launchCampaignController);
 router.post('/:campaignId/cancel', cancelCampaignController);
 router.post('/:campaignId/retry-failed', retryFailedCampaignRecipientsController);

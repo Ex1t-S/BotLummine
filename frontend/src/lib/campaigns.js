@@ -49,6 +49,11 @@ export async function createCampaign(payload) {
   return unwrap(response);
 }
 
+export async function deleteCampaign(campaignId) {
+  const response = await api.delete(`/campaigns/${campaignId}`);
+  return unwrap(response);
+}
+
 export async function dispatchCampaign(campaignId) {
   const response = await api.post(`/campaigns/${campaignId}/launch`);
   return unwrap(response);

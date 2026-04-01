@@ -973,6 +973,40 @@ export async function cancelCampaign(campaignId) {
 	});
 }
 
+export async function deleteCampaign(campaignId) {
+	const campaign = await prisma.campaign.findUnique({
+		where: { id: campaignId },
+		select: {
+			id: true,
+			name: true,
+			status: true
+		}
+	});
+
+	if (!campaign) {
+		throw new Error('No se encontró la campaña.');
+	}
+
+	if (['RUNNING', 'QUEUED'].includes(String(campaign.status || '').toUpperCase())) {
+		throw new Error('No se puede eliminar una campaña en ejecución o en cola.');
+	}
+
+	await prisma.$transaction([
+		prisma.campaignRecipient.deleteMany({
+			where: { campaignId }
+		}),
+		prisma.campaign.delete({
+			where: { id: campaignId }
+		})
+	]);
+
+	return {
+		deleted: true,
+		campaignId: campaign.id,
+		name: campaign.name
+	};
+}
+
 export async function retryFailedCampaignRecipients(campaignId) {
 	await prisma.campaignRecipient.updateMany({
 		where: {

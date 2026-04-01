@@ -12,6 +12,16 @@ function badgeClass(value = '') {
   return `campaign-badge ${String(value).toLowerCase()}`;
 }
 
+function getMetric(campaign = {}, keys = []) {
+  for (const key of keys) {
+    if (campaign?.[key] !== undefined && campaign?.[key] !== null) {
+      return campaign[key];
+    }
+  }
+
+  return 0;
+}
+
 export default function CampaignRunsPanel({
   campaigns = [],
   selectedCampaign,
@@ -19,9 +29,14 @@ export default function CampaignRunsPanel({
   onDispatch,
   onPause,
   onResume,
+  onDelete,
   actionLoading,
+  deleteLoading,
 }) {
   const recipients = selectedCampaign?.recipients || [];
+  const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
+  const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
+  const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
 
   return (
     <section className="campaign-panel">
@@ -65,7 +80,7 @@ export default function CampaignRunsPanel({
                   </div>
 
                   <div className="campaign-inline-stats">
-                    <span>{campaign.totalRecipients || campaign.recipientCount || 0} destinatarios</span>
+                    <span>{getMetric(campaign, ['totalRecipients', 'recipientCount'])} destinatarios</span>
                     <span>Creada {formatDate(campaign.createdAt)}</span>
                   </div>
                 </article>
@@ -80,18 +95,18 @@ export default function CampaignRunsPanel({
               <div className="campaign-detail-header">
                 <div>
                   <h4>{selectedCampaign.name}</h4>
-                  <p>{selectedCampaign.description || 'Sin descripción.'}</p>
+                  <p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripción.'}</p>
                 </div>
                 <span className={badgeClass(selectedCampaign.status)}>{selectedCampaign.status || 'DRAFT'}</span>
               </div>
 
-              <div className="campaign-detail-actions">
+              <div
+                className="campaign-detail-actions"
+                style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}
+              >
                 <button
                   className="button primary"
-                  onClick={() => {
-                    console.log('DISPATCH CLICK =>', selectedCampaign?.id, selectedCampaign);
-                    onDispatch(selectedCampaign.id);
-                  }}
+                  onClick={() => onDispatch(selectedCampaign.id)}
                   disabled={actionLoading}
                 >
                   Despachar
@@ -110,23 +125,45 @@ export default function CampaignRunsPanel({
                 >
                   Reanudar
                 </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(selectedCampaign)}
+                  disabled={!canDelete || actionLoading || deleteBusy}
+                  style={{
+                    height: 42,
+                    padding: '0 14px',
+                    borderRadius: 12,
+                    border: '1px solid #fecaca',
+                    background: canDelete ? '#fff1f2' : '#f8fafc',
+                    color: canDelete ? '#be123c' : '#94a3b8',
+                    fontWeight: 800,
+                    cursor: !canDelete || actionLoading || deleteBusy ? 'not-allowed' : 'pointer',
+                  }}
+                  title={
+                    canDelete
+                      ? 'Eliminar campaña'
+                      : 'No se puede eliminar una campaña en ejecución o en cola'
+                  }
+                >
+                  {deleteBusy ? 'Eliminando…' : 'Eliminar campaña'}
+                </button>
               </div>
 
               <div className="campaign-status-grid">
                 <div>
-                  <strong>{selectedCampaign.sentCount || 0}</strong>
+                  <strong>{getMetric(selectedCampaign, ['sentRecipients', 'sentCount'])}</strong>
                   <span>Enviados</span>
                 </div>
                 <div>
-                  <strong>{selectedCampaign.deliveredCount || 0}</strong>
+                  <strong>{getMetric(selectedCampaign, ['deliveredRecipients', 'deliveredCount'])}</strong>
                   <span>Entregados</span>
                 </div>
                 <div>
-                  <strong>{selectedCampaign.readCount || 0}</strong>
+                  <strong>{getMetric(selectedCampaign, ['readRecipients', 'readCount'])}</strong>
                   <span>Leídos</span>
                 </div>
                 <div>
-                  <strong>{selectedCampaign.failedCount || 0}</strong>
+                  <strong>{getMetric(selectedCampaign, ['failedRecipients', 'failedCount'])}</strong>
                   <span>Fallidos</span>
                 </div>
               </div>
