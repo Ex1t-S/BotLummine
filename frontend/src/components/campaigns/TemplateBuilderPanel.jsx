@@ -210,8 +210,7 @@ export default function TemplateBuilderPanel({
   const variables = useMemo(() => {
     const buttonUrls = safeArray(form.buttons)
       .map((button) => button.url || '')
-      .join('
-');
+      .join('\n');
 
     return getVariableNumbers(
       `${form.headerText}
