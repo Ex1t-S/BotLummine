@@ -624,7 +624,55 @@ export default function InboxPage() {
 			console.error(error);
 		},
 	});
+		const archiveConversationMutation = useMutation({
+			mutationFn: async () => {
+				if (!selectedConversationId) return;
 
+				await api.patch(
+					`/dashboard/conversations/${selectedConversationId}/archive`,
+					{ archived: true }
+				);
+			},
+			onSuccess: async () => {
+				const archivedConversationId = selectedConversationId;
+
+				setSelectedConversationId(null);
+
+				await queryClient.invalidateQueries({
+					queryKey: ['dashboard', 'inbox'],
+				});
+
+				if (archivedConversationId) {
+					await queryClient.invalidateQueries({
+						queryKey: queryKeys.conversation(archivedConversationId),
+					});
+				}
+			},
+			onError: (error) => {
+				console.error(error);
+			},
+		});
+
+		const deduplicateContactsMutation = useMutation({
+			mutationFn: async () => {
+				const res = await api.post('/dashboard/inbox/deduplicate');
+				return res.data;
+			},
+			onSuccess: async (data) => {
+				setSelectedConversationId(null);
+
+				await queryClient.invalidateQueries({
+					queryKey: ['dashboard', 'inbox'],
+				});
+
+				window.alert(
+					`Deduplicación lista.\n\nGrupos fusionados: ${data?.mergedGroups || 0}\nConversaciones removidas: ${data?.removedConversations || 0}\nContactos removidos: ${data?.removedContacts || 0}\nMensajes movidos: ${data?.movedMessages || 0}`
+				);
+			},
+			onError: (error) => {
+				console.error(error);
+			},
+		});
 	function handleSubmit(event) {
 		event.preventDefault();
 		if (!messageText.trim()) return;
@@ -688,11 +736,19 @@ export default function InboxPage() {
 				</div>
 
 				<div
+				style={{
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'space-between',
+					gap: 10,
+					marginBottom: 12,
+				}}
+			>
+				<div
 					style={{
 						fontSize: 14,
 						fontWeight: 700,
 						color: '#0f172a',
-						marginBottom: 12,
 					}}
 				>
 					Conversaciones
@@ -709,6 +765,22 @@ export default function InboxPage() {
 						</span>
 					) : null}
 				</div>
+
+				<ActionButton
+					disabled={deduplicateContactsMutation.isPending}
+					onClick={() => {
+						const confirmed = window.confirm(
+							'Esto va a fusionar contactos y conversaciones duplicadas del inbox. ¿Continuar?'
+						);
+
+						if (confirmed) {
+							deduplicateContactsMutation.mutate();
+						}
+					}}
+				>
+					{deduplicateContactsMutation.isPending ? 'Deduplicando...' : 'Deduplicar'}
+				</ActionButton>
+			</div>
 
 				<div
 					style={{
@@ -991,7 +1063,22 @@ export default function InboxPage() {
 								</ActionButton>
 
 								<div style={{ flex: 1 }} />
+								<ActionButton
+									disabled={
+										archiveConversationMutation.isPending || !selectedConversationId
+									}
+									onClick={() => {
+										const confirmed = window.confirm(
+											'Este chat se va a sacar del inbox, pero no se va a borrar. ¿Continuar?'
+										);
 
+										if (confirmed) {
+											archiveConversationMutation.mutate();
+										}
+									}}
+								>
+									{archiveConversationMutation.isPending ? 'Archivando...' : 'Archivar chat'}
+								</ActionButton>
 								<ActionButton
 									danger
 									disabled={

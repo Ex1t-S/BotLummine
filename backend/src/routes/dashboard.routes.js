@@ -9,6 +9,8 @@ import {
 	deleteConversationHistory,
 	getCatalog,
 	postSyncCatalog,
+	patchConversationArchive,
+	postDeduplicateInboxContacts,
 } from '../controllers/dashboard.controller.js';
 import {
 	getAbandonedCarts,
@@ -26,6 +28,8 @@ router.post('/conversations/:conversationId/messages', postConversationMessage);
 router.patch('/conversations/:conversationId/queue', patchConversationQueue);
 router.patch('/conversations/:conversationId/reset-context', patchConversationResetContext);
 router.delete('/conversations/:conversationId/history', deleteConversationHistory);
+router.patch('/conversations/:conversationId/archive', patchConversationArchive);
+router.post('/inbox/deduplicate', postDeduplicateInboxContacts);
 
 router.get('/catalog', getCatalog);
 router.post('/catalog/sync', postSyncCatalog);
