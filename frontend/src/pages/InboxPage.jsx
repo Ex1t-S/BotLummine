@@ -2,11 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
+import './InboxPage.css';
 
 const QUEUES = [
 	{ key: 'AUTO', label: 'Automático' },
 	{ key: 'HUMAN', label: 'Atención humana' },
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
+];
+
+const QUICK_EMOJIS = [
+	'😊', '😂', '😍', '😉', '👍', '🙏',
+	'❤️', '🔥', '🎉', '😮', '😢', '🤝',
+	'✨', '💬', '📦', '🛍️', '✅', '🙌',
 ];
 
 const MEDIA_PLACEHOLDER_BODIES = new Set([
@@ -40,7 +47,7 @@ function shouldHideBodyBecauseItIsOnlyPlaceholder(message = {}) {
 	const body = String(message.body || '').trim();
 
 	if (!body) return true;
-	if (!message.attachmentUrl) return false;
+	if (!message.attachmentUrl && !message.rawPayload) return false;
 	if (MEDIA_PLACEHOLDER_BODIES.has(body)) return true;
 	if (body.startsWith('[Documento recibido')) return true;
 
@@ -98,7 +105,6 @@ function resolveMessageAttachmentUrl(message = {}) {
 	if (message.attachmentUrl) return message.attachmentUrl;
 
 	const rawPayload = message.rawPayload || {};
-
 	return (
 		rawPayload?.imageUrl ||
 		rawPayload?.headerImageUrl ||
@@ -172,7 +178,6 @@ function renderFormattedText(text = '') {
 						</span>
 					);
 				})}
-
 				{lineIndex < lines.length - 1 ? <br /> : null}
 			</span>
 		);
@@ -189,12 +194,7 @@ function AttachmentPreview({ message }) {
 	if (mediaKind === 'audio') {
 		return (
 			<div style={{ marginTop: 10 }}>
-				<audio
-					controls
-					preload="none"
-					src={attachmentUrl}
-					style={{ width: '100%', maxWidth: 320 }}
-				>
+				<audio controls preload="none" src={attachmentUrl} style={{ width: '100%', maxWidth: 320 }}>
 					Tu navegador no soporta audio HTML5.
 				</audio>
 			</div>
@@ -204,12 +204,7 @@ function AttachmentPreview({ message }) {
 	if (mediaKind === 'image') {
 		return (
 			<div style={{ marginTop: 10 }}>
-				<a
-					href={attachmentUrl}
-					target="_blank"
-					rel="noreferrer"
-					style={{ display: 'inline-block' }}
-				>
+				<a href={attachmentUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block' }}>
 					<img
 						src={attachmentUrl}
 						alt={attachmentName || 'Imagen recibida'}
@@ -414,30 +409,16 @@ function MessageBubble({ message }) {
 }
 
 function ActionButton({ children, danger = false, active = false, disabled = false, onClick }) {
+	const className = [
+		'inbox-action-btn',
+		active ? 'inbox-action-btn--active' : '',
+		danger ? 'inbox-action-btn--danger' : '',
+	]
+		.filter(Boolean)
+		.join(' ');
+
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			disabled={disabled}
-			style={{
-				padding: '10px 14px',
-				borderRadius: 12,
-				border: danger
-					? '1px solid rgba(239, 68, 68, 0.35)'
-					: active
-						? '1px solid rgba(37, 99, 235, 0.28)'
-						: '1px solid rgba(15, 23, 42, 0.12)',
-				background: danger
-					? '#fff5f5'
-					: active
-						? '#eff6ff'
-						: '#ffffff',
-				color: danger ? '#dc2626' : active ? '#1d4ed8' : '#0f172a',
-				fontWeight: 700,
-				cursor: disabled ? 'not-allowed' : 'pointer',
-				opacity: disabled ? 0.6 : 1,
-			}}
-		>
+		<button type="button" onClick={onClick} disabled={disabled} className={className}>
 			{children}
 		</button>
 	);
@@ -446,17 +427,25 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 export default function InboxPage() {
 	const queryClient = useQueryClient();
 	const messagesContainerRef = useRef(null);
+	const emojiPickerRef = useRef(null);
+	const textareaRef = useRef(null);
 
 	const [queue, setQueue] = useState('AUTO');
+	const [showArchived, setShowArchived] = useState(false);
+	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
 
 	const inboxQuery = useQuery({
-		queryKey: queryKeys.inbox(queue),
+		queryKey: [...queryKeys.inbox(queue), showArchived ? 'archived' : 'active'],
 		queryFn: async () => {
 			const res = await api.get('/dashboard/inbox', {
-				params: { queue },
+				params: {
+					queue,
+					archived: showArchived,
+				},
 			});
+
 			return res.data;
 		},
 		placeholderData: (previousData) => previousData,
@@ -495,9 +484,7 @@ export default function InboxPage() {
 	const conversationQuery = useQuery({
 		queryKey: queryKeys.conversation(selectedConversationId),
 		queryFn: async () => {
-			const res = await api.get(
-				`/dashboard/conversations/${selectedConversationId}/messages`
-			);
+			const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`);
 			return res.data;
 		},
 		enabled: Boolean(selectedConversationId),
@@ -524,11 +511,32 @@ export default function InboxPage() {
 		el.scrollTop = el.scrollHeight;
 	}, [conversation?.messages?.length, selectedConversationId]);
 
+	useEffect(() => {
+		function handleOutsideClick(event) {
+			if (!emojiPickerRef.current) return;
+
+			if (!emojiPickerRef.current.contains(event.target)) {
+				setShowEmojiPicker(false);
+			}
+		}
+
+		document.addEventListener('mousedown', handleOutsideClick);
+		return () => document.removeEventListener('mousedown', handleOutsideClick);
+	}, []);
+
+	useEffect(() => {
+		const el = textareaRef.current;
+		if (!el) return;
+
+		el.style.height = '24px';
+		el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+	}, [messageText]);
+
 	const invalidateInboxAndConversation = async (
 		conversationId = selectedConversationId
 	) => {
 		await queryClient.invalidateQueries({
-			queryKey: queryKeys.inbox(queue),
+			queryKey: ['dashboard', 'inbox'],
 		});
 
 		if (conversationId) {
@@ -543,13 +551,13 @@ export default function InboxPage() {
 			const body = messageText.trim();
 			if (!selectedConversationId || !body) return;
 
-			await api.post(
-				`/dashboard/conversations/${selectedConversationId}/messages`,
-				{ body }
-			);
+			await api.post(`/dashboard/conversations/${selectedConversationId}/messages`, {
+				body,
+			});
 		},
 		onSuccess: async () => {
 			setMessageText('');
+			setShowEmojiPicker(false);
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
@@ -566,20 +574,13 @@ export default function InboxPage() {
 				{ queue: nextQueue }
 			);
 
-			return {
-				nextQueue,
-				data: res.data,
-			};
+			return { nextQueue, data: res.data };
 		},
 		onSuccess: async (result) => {
 			if (!result) return;
 
 			await queryClient.invalidateQueries({
-				queryKey: queryKeys.inbox(queue),
-			});
-
-			await queryClient.invalidateQueries({
-				queryKey: queryKeys.inbox(result.nextQueue),
+				queryKey: ['dashboard', 'inbox'],
 			});
 
 			await queryClient.invalidateQueries({
@@ -613,9 +614,7 @@ export default function InboxPage() {
 	const clearHistoryMutation = useMutation({
 		mutationFn: async () => {
 			if (!selectedConversationId) return;
-			await api.delete(
-				`/dashboard/conversations/${selectedConversationId}/history`
-			);
+			await api.delete(`/dashboard/conversations/${selectedConversationId}/history`);
 		},
 		onSuccess: async () => {
 			await invalidateInboxAndConversation();
@@ -624,55 +623,47 @@ export default function InboxPage() {
 			console.error(error);
 		},
 	});
-		const archiveConversationMutation = useMutation({
-			mutationFn: async () => {
-				if (!selectedConversationId) return;
 
-				await api.patch(
-					`/dashboard/conversations/${selectedConversationId}/archive`,
-					{ archived: true }
-				);
-			},
-			onSuccess: async () => {
-				const archivedConversationId = selectedConversationId;
+	const archiveConversationMutation = useMutation({
+		mutationFn: async (archived) => {
+			if (!selectedConversationId) return;
+			await api.patch(
+				`/dashboard/conversations/${selectedConversationId}/archive`,
+				{ archived }
+			);
+		},
+		onSuccess: async () => {
+			setSelectedConversationId(null);
+			await queryClient.invalidateQueries({
+				queryKey: ['dashboard', 'inbox'],
+			});
+		},
+		onError: (error) => {
+			console.error(error);
+		},
+	});
 
-				setSelectedConversationId(null);
+	const deduplicateContactsMutation = useMutation({
+		mutationFn: async () => {
+			const res = await api.post('/dashboard/inbox/deduplicate');
+			return res.data;
+		},
+		onSuccess: async (data) => {
+			setSelectedConversationId(null);
 
-				await queryClient.invalidateQueries({
-					queryKey: ['dashboard', 'inbox'],
-				});
+			await queryClient.invalidateQueries({
+				queryKey: ['dashboard', 'inbox'],
+			});
 
-				if (archivedConversationId) {
-					await queryClient.invalidateQueries({
-						queryKey: queryKeys.conversation(archivedConversationId),
-					});
-				}
-			},
-			onError: (error) => {
-				console.error(error);
-			},
-		});
+			window.alert(
+				`Deduplicación lista.\n\nGrupos fusionados: ${data?.mergedGroups || 0}\nConversaciones removidas: ${data?.removedConversations || 0}\nContactos removidos: ${data?.removedContacts || 0}\nMensajes movidos: ${data?.movedMessages || 0}`
+			);
+		},
+		onError: (error) => {
+			console.error(error);
+		},
+	});
 
-		const deduplicateContactsMutation = useMutation({
-			mutationFn: async () => {
-				const res = await api.post('/dashboard/inbox/deduplicate');
-				return res.data;
-			},
-			onSuccess: async (data) => {
-				setSelectedConversationId(null);
-
-				await queryClient.invalidateQueries({
-					queryKey: ['dashboard', 'inbox'],
-				});
-
-				window.alert(
-					`Deduplicación lista.\n\nGrupos fusionados: ${data?.mergedGroups || 0}\nConversaciones removidas: ${data?.removedConversations || 0}\nContactos removidos: ${data?.removedContacts || 0}\nMensajes movidos: ${data?.movedMessages || 0}`
-				);
-			},
-			onError: (error) => {
-				console.error(error);
-			},
-		});
 	function handleSubmit(event) {
 		event.preventDefault();
 		if (!messageText.trim()) return;
@@ -682,6 +673,12 @@ export default function InboxPage() {
 	function handleMoveQueue(nextQueue) {
 		moveQueueMutation.mutate(nextQueue);
 	}
+
+	function insertEmoji(emoji) {
+		setMessageText((prev) => `${prev}${emoji}`);
+		setShowEmojiPicker(false);
+	}
+
 	function handleComposerKeyDown(event) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
@@ -691,34 +688,11 @@ export default function InboxPage() {
 			}
 		}
 	}
+
 	return (
-		<div
-			style={{
-				display: 'grid',
-				gridTemplateColumns: '320px minmax(0, 1fr)',
-				gap: 16,
-				minHeight: '78vh',
-			}}
-		>
-			<aside
-				style={{
-					background: '#ffffff',
-					border: '1px solid rgba(15, 23, 42, 0.08)',
-					borderRadius: 20,
-					padding: 16,
-					display: 'flex',
-					flexDirection: 'column',
-					minHeight: 0,
-				}}
-			>
-				<div
-					style={{
-						display: 'flex',
-						flexWrap: 'wrap',
-						gap: 8,
-						marginBottom: 14,
-					}}
-				>
+		<div className="inbox-page">
+			<aside className="inbox-sidebar">
+				<div className="inbox-queue-tabs">
 					{QUEUES.map((item) => {
 						const isActive = queue === item.key;
 
@@ -727,7 +701,10 @@ export default function InboxPage() {
 								key={item.key}
 								active={isActive}
 								disabled={inboxQuery.isFetching && isActive}
-								onClick={() => setQueue(item.key)}
+								onClick={() => {
+									setQueue(item.key);
+									setSelectedConversationId(null);
+								}}
 							>
 								{item.label} · {counts[item.key] || 0}
 							</ActionButton>
@@ -735,180 +712,102 @@ export default function InboxPage() {
 					})}
 				</div>
 
-				<div
-				style={{
-					display: 'flex',
-					alignItems: 'center',
-					justifyContent: 'space-between',
-					gap: 10,
-					marginBottom: 12,
-				}}
-			>
-				<div
-					style={{
-						fontSize: 14,
-						fontWeight: 700,
-						color: '#0f172a',
-					}}
-				>
-					Conversaciones
-					{inboxQuery.isFetching ? (
-						<span
-							style={{
-								marginLeft: 8,
-								fontSize: 12,
-								fontWeight: 600,
-								color: '#64748b',
+				<div className="inbox-section-header">
+					<div className="inbox-section-title">
+						Conversaciones
+						{inboxQuery.isFetching ? (
+							<span className="inbox-section-subtle">Actualizando...</span>
+						) : null}
+					</div>
+
+					<div className="inbox-section-actions">
+						<ActionButton
+							active={showArchived}
+							onClick={() => {
+								setSelectedConversationId(null);
+								setShowArchived((prev) => !prev);
 							}}
 						>
-							Actualizando...
-						</span>
-					) : null}
+							{showArchived ? 'Ver activos' : 'Archivados'}
+						</ActionButton>
+
+						<ActionButton
+							disabled={deduplicateContactsMutation.isPending}
+							onClick={() => {
+								const confirmed = window.confirm(
+									'Esto va a fusionar contactos y conversaciones duplicadas del inbox. ¿Continuar?'
+								);
+
+								if (confirmed) {
+									deduplicateContactsMutation.mutate();
+								}
+							}}
+						>
+							{deduplicateContactsMutation.isPending
+								? 'Deduplicando...'
+								: 'Deduplicar'}
+						</ActionButton>
+					</div>
 				</div>
 
-				<ActionButton
-					disabled={deduplicateContactsMutation.isPending}
-					onClick={() => {
-						const confirmed = window.confirm(
-							'Esto va a fusionar contactos y conversaciones duplicadas del inbox. ¿Continuar?'
-						);
-
-						if (confirmed) {
-							deduplicateContactsMutation.mutate();
-						}
-					}}
-				>
-					{deduplicateContactsMutation.isPending ? 'Deduplicando...' : 'Deduplicar'}
-				</ActionButton>
-			</div>
-
-				<div
-					style={{
-						overflowY: 'auto',
-						display: 'flex',
-						flexDirection: 'column',
-						gap: 10,
-					}}
-				>
+				<div className="inbox-contacts-scroll">
 					{inboxQuery.isLoading ? (
-						<div style={{ color: '#64748b', fontSize: 14 }}>
-							Cargando conversaciones...
-						</div>
+						<div className="inbox-empty">Cargando conversaciones...</div>
 					) : null}
 
 					{!inboxQuery.isLoading && !contacts.length ? (
-						<div style={{ color: '#64748b', fontSize: 14 }}>
-							No hay conversaciones en esta bandeja.
+						<div className="inbox-empty">
+							{showArchived
+								? 'No hay conversaciones archivadas.'
+								: 'No hay conversaciones en esta bandeja.'}
 						</div>
 					) : null}
 
 					{contacts.map((contact) => {
-						const isSelected =
-							contact.conversationId === selectedConversationId;
+						const isSelected = contact.conversationId === selectedConversationId;
 
 						return (
 							<button
 								key={contact.conversationId}
 								type="button"
-								onClick={() =>
-									setSelectedConversationId(contact.conversationId)
-								}
-								style={{
-									textAlign: 'left',
-									padding: 14,
-									borderRadius: 16,
-									border: isSelected
-										? '1px solid rgba(37, 99, 235, 0.28)'
-										: '1px solid rgba(15, 23, 42, 0.08)',
-									background: isSelected ? '#eff6ff' : '#ffffff',
-									cursor: 'pointer',
-								}}
+								onClick={() => setSelectedConversationId(contact.conversationId)}
+								className={`inbox-contact-card ${
+									isSelected ? 'inbox-contact-card--selected' : ''
+								}`}
 							>
-								<div
-									style={{
-										display: 'flex',
-										alignItems: 'flex-start',
-										gap: 12,
-									}}
-								>
+								<div className="inbox-contact-row">
 									<div
-										style={{
-											width: 42,
-											height: 42,
-											borderRadius: 999,
-											display: 'grid',
-											placeItems: 'center',
-											color: '#ffffff',
-											fontWeight: 700,
-											fontSize: 14,
-											flexShrink: 0,
-											...(contact.avatar?.style
+										className="inbox-contact-avatar"
+										style={
+											contact.avatar?.style
 												? {
 														background: undefined,
-														backgroundImage: contact.avatar.style.replace(
-															'background:',
-															''
-														).replace(/;$/, ''),
+														backgroundImage: contact.avatar.style
+															.replace('background:', '')
+															.replace(/;$/, ''),
 													}
-												: { background: '#94a3b8' }),
-										}}
+												: { background: '#94a3b8' }
+										}
 									>
 										{contact.avatar?.initials || '?'}
 									</div>
 
-									<div style={{ minWidth: 0, flex: 1 }}>
-										<div
-											style={{
-												display: 'flex',
-												justifyContent: 'space-between',
-												gap: 10,
-												alignItems: 'center',
-												marginBottom: 4,
-											}}
-										>
-											<div
-												style={{
-													fontSize: 14,
-													fontWeight: 700,
-													color: '#0f172a',
-													overflow: 'hidden',
-													textOverflow: 'ellipsis',
-													whiteSpace: 'nowrap',
-												}}
-											>
+									<div className="inbox-contact-content">
+										<div className="inbox-contact-top">
+											<div className="inbox-contact-name">
 												{contact.displayName}
 											</div>
 
-											<div
-												style={{
-													fontSize: 12,
-													color: '#64748b',
-													flexShrink: 0,
-												}}
-											>
+											<div className="inbox-contact-time">
 												{contact.lastMessageTime || ''}
 											</div>
 										</div>
 
-										<div
-											style={{
-												fontSize: 12,
-												color: '#64748b',
-												marginBottom: 6,
-											}}
-										>
+										<div className="inbox-contact-phone">
 											{contact.phoneDisplay || 'Sin teléfono'}
 										</div>
 
-										<div
-											style={{
-												fontSize: 13,
-												color: '#334155',
-												overflow: 'hidden',
-												textOverflow: 'ellipsis',
-												whiteSpace: 'nowrap',
-											}}
-										>
+										<div className="inbox-contact-preview">
 											{contact.preview || 'Sin mensajes'}
 										</div>
 									</div>
@@ -919,128 +818,47 @@ export default function InboxPage() {
 				</div>
 			</aside>
 
-			<section
-				style={{
-					background: '#ffffff',
-					border: '1px solid rgba(15, 23, 42, 0.08)',
-					borderRadius: 20,
-					display: 'flex',
-					flexDirection: 'column',
-					minHeight: 0,
-					overflow: 'hidden',
-				}}
-			>
+			<section className="inbox-chat-panel">
 				{!selectedConversationId ? (
-					<div
-						style={{
-							flex: 1,
-							display: 'grid',
-							placeItems: 'center',
-							padding: 24,
-							color: '#64748b',
-							fontSize: 16,
-						}}
-					>
-						Seleccioná una conversación
-					</div>
+					<div className="inbox-chat-empty">Seleccioná una conversación</div>
 				) : (
 					<>
-						<div
-							style={{
-								padding: '18px 20px 16px',
-								borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
-							}}
-						>
-							<div
-								style={{
-									display: 'flex',
-									justifyContent: 'space-between',
-									alignItems: 'flex-start',
-									gap: 16,
-									flexWrap: 'wrap',
-								}}
-							>
+						<div className="inbox-chat-header">
+							<div className="inbox-chat-header-top">
 								<div>
-									<div
-										style={{
-											fontSize: 18,
-											fontWeight: 800,
-											color: '#0f172a',
-											marginBottom: 4,
-										}}
-									>
+									<div className="inbox-chat-title">
 										{conversation?.contact?.name ||
 											activeContact?.displayName ||
 											'Sin nombre'}
 									</div>
-
-									<div
-										style={{
-											fontSize: 14,
-											color: '#64748b',
-										}}
-									>
+									<div className="inbox-chat-subtitle">
 										{conversation?.contact?.phone ||
 											activeContact?.phoneDisplay ||
 											'Sin teléfono'}
 									</div>
 								</div>
 
-								<div
-									style={{
-										display: 'flex',
-										gap: 8,
-										flexWrap: 'wrap',
-										alignItems: 'center',
-									}}
-								>
-									<span
-										style={{
-											padding: '8px 12px',
-											borderRadius: 999,
-											background: '#f8fafc',
-											border: '1px solid rgba(15, 23, 42, 0.08)',
-											fontSize: 12,
-											fontWeight: 800,
-											color: '#334155',
-										}}
-									>
+								<div className="inbox-badges">
+									<span className="inbox-badge inbox-badge--neutral">
 										{conversation?.queue || activeContact?.queue || queue}
 									</span>
 
 									<span
-										style={{
-											padding: '8px 12px',
-											borderRadius: 999,
-											background: conversation?.aiEnabled
-												? '#eff6ff'
-												: '#fff7ed',
-											border: conversation?.aiEnabled
-												? '1px solid rgba(37, 99, 235, 0.18)'
-												: '1px solid rgba(249, 115, 22, 0.18)',
-											fontSize: 12,
-											fontWeight: 800,
-											color: conversation?.aiEnabled
-												? '#1d4ed8'
-												: '#c2410c',
-										}}
+										className={`inbox-badge ${
+											conversation?.aiEnabled
+												? 'inbox-badge--ai'
+												: 'inbox-badge--human'
+										}`}
 									>
 										{conversation?.aiEnabled ? 'IA activa' : 'Humano'}
 									</span>
 								</div>
 							</div>
 
-							<div
-								style={{
-									display: 'flex',
-									flexWrap: 'wrap',
-									gap: 10,
-									marginTop: 14,
-								}}
-							>
+							<div className="inbox-actions">
 								<ActionButton
 									active={conversation?.queue === 'AUTO'}
-									disabled={moveQueueMutation.isPending}
+									disabled={moveQueueMutation.isPending || showArchived}
 									onClick={() => handleMoveQueue('AUTO')}
 								>
 									Automático
@@ -1048,7 +866,7 @@ export default function InboxPage() {
 
 								<ActionButton
 									active={conversation?.queue === 'HUMAN'}
-									disabled={moveQueueMutation.isPending}
+									disabled={moveQueueMutation.isPending || showArchived}
 									onClick={() => handleMoveQueue('HUMAN')}
 								>
 									Atención humana
@@ -1056,33 +874,45 @@ export default function InboxPage() {
 
 								<ActionButton
 									active={conversation?.queue === 'PAYMENT_REVIEW'}
-									disabled={moveQueueMutation.isPending}
+									disabled={moveQueueMutation.isPending || showArchived}
 									onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
 								>
 									Comprobantes
 								</ActionButton>
 
-								<div style={{ flex: 1 }} />
+								<div className="inbox-actions-spacer" />
+
 								<ActionButton
 									disabled={
 										archiveConversationMutation.isPending || !selectedConversationId
 									}
 									onClick={() => {
 										const confirmed = window.confirm(
-											'Este chat se va a sacar del inbox, pero no se va a borrar. ¿Continuar?'
+											showArchived
+												? 'Este chat va a volver a la bandeja activa. ¿Continuar?'
+												: 'Este chat se va a sacar del inbox, pero no se va a borrar. ¿Continuar?'
 										);
 
 										if (confirmed) {
-											archiveConversationMutation.mutate();
+											archiveConversationMutation.mutate(!showArchived);
 										}
 									}}
 								>
-									{archiveConversationMutation.isPending ? 'Archivando...' : 'Archivar chat'}
+									{archiveConversationMutation.isPending
+										? showArchived
+											? 'Restaurando...'
+											: 'Archivando...'
+										: showArchived
+											? 'Desarchivar'
+											: 'Archivar chat'}
 								</ActionButton>
+
 								<ActionButton
 									danger
 									disabled={
-										resetContextMutation.isPending || !selectedConversationId
+										resetContextMutation.isPending ||
+										!selectedConversationId ||
+										showArchived
 									}
 									onClick={() => resetContextMutation.mutate()}
 								>
@@ -1092,7 +922,9 @@ export default function InboxPage() {
 								<ActionButton
 									danger
 									disabled={
-										clearHistoryMutation.isPending || !selectedConversationId
+										clearHistoryMutation.isPending ||
+										!selectedConversationId ||
+										showArchived
 									}
 									onClick={() => {
 										const confirmed = window.confirm(
@@ -1109,24 +941,14 @@ export default function InboxPage() {
 							</div>
 						</div>
 
-						<div
-							ref={messagesContainerRef}
-							style={{
-								flex: 1,
-								overflowY: 'auto',
-								padding: 18,
-								background: '#f8fafc',
-							}}
-						>
+						<div ref={messagesContainerRef} className="inbox-messages">
 							{conversationQuery.isLoading ? (
-								<div style={{ color: '#64748b', fontSize: 14 }}>
-									Cargando mensajes...
-								</div>
+								<div className="inbox-empty">Cargando mensajes...</div>
 							) : null}
 
 							{!conversationQuery.isLoading &&
 							(conversation?.messages || []).length === 0 ? (
-								<div style={{ color: '#64748b', fontSize: 14 }}>
+								<div className="inbox-empty">
 									Esta conversación todavía no tiene mensajes.
 								</div>
 							) : null}
@@ -1136,90 +958,67 @@ export default function InboxPage() {
 							))}
 						</div>
 
-						<form
-							onSubmit={handleSubmit}
-							style={{
-								borderTop: '1px solid rgba(15, 23, 42, 0.08)',
-								padding: 12,
-								background: '#f0f2f5',
-							}}
-						>
-							<div
-								style={{
-									display: 'flex',
-									alignItems: 'flex-end',
-									gap: 10,
-									background: '#ffffff',
-									borderRadius: 28,
-									padding: '8px 10px 8px 12px',
-									border: '1px solid rgba(15, 23, 42, 0.08)',
-								}}
-							>
-								<button
-									type="button"
-									style={{
-										width: 38,
-										height: 38,
-										borderRadius: 999,
-										border: 'none',
-										background: 'transparent',
-										fontSize: 22,
-										cursor: 'pointer',
-										color: '#54656f',
-									}}
-									title="Emoji"
-								>
-									😊
-								</button>
+						{!showArchived ? (
+							<div className="inbox-composer-shell">
+								<form onSubmit={handleSubmit} className="inbox-composer">
+									<div className="inbox-composer-leading" ref={emojiPickerRef}>
+										<button
+											type="button"
+											className="inbox-emoji-trigger"
+											onClick={() => setShowEmojiPicker((prev) => !prev)}
+											title="Emoji"
+										>
+											😊
+										</button>
 
-								<textarea
-									value={messageText}
-									onChange={(event) => setMessageText(event.target.value)}
-									onKeyDown={handleComposerKeyDown}
-									placeholder="Escribe un mensaje"
-									rows={1}
-									disabled={sendMessageMutation.isPending}
-									style={{
-										flex: 1,
-										resize: 'none',
-										border: 'none',
-										outline: 'none',
-										fontSize: 15,
-										background: 'transparent',
-										padding: '10px 4px',
-										minHeight: 24,
-										maxHeight: 120,
-										lineHeight: 1.4,
-									}}
-								/>
+										{showEmojiPicker ? (
+											<div className="inbox-emoji-picker">
+												<div className="inbox-emoji-title">Elegí un emoji</div>
 
-								<button
-									type="submit"
-									disabled={sendMessageMutation.isPending || !messageText.trim()}
-									title="Enviar"
-									style={{
-										width: 42,
-										height: 42,
-										border: 'none',
-										borderRadius: 999,
-										background:
+												<div className="inbox-emoji-grid">
+													{QUICK_EMOJIS.map((emoji) => (
+														<button
+															key={emoji}
+															type="button"
+															className="inbox-emoji-btn"
+															onClick={() => insertEmoji(emoji)}
+														>
+															{emoji}
+														</button>
+													))}
+												</div>
+											</div>
+										) : null}
+									</div>
+
+									<textarea
+										ref={textareaRef}
+										value={messageText}
+										onChange={(event) => setMessageText(event.target.value)}
+										onKeyDown={handleComposerKeyDown}
+										placeholder="Escribe un mensaje"
+										rows={1}
+										disabled={sendMessageMutation.isPending}
+										className="inbox-textarea"
+									/>
+
+									<button
+										type="submit"
+										disabled={
 											sendMessageMutation.isPending || !messageText.trim()
-												? '#cbd5e1'
-												: '#00a884',
-										color: '#ffffff',
-										fontSize: 18,
-										fontWeight: 800,
-										cursor:
-											sendMessageMutation.isPending || !messageText.trim()
-												? 'not-allowed'
-												: 'pointer',
-										flexShrink: 0,
-									}}
-								>
-									➤
-								</button>
+										}
+										title="Enviar"
+										className="inbox-send-btn"
+									>
+										➤
+									</button>
+								</form>
 							</div>
-						</form>
+						) : (
+							<div className="inbox-archived-hint">
+								Estás viendo conversaciones archivadas.
+							</div>
+						)}
 					</>
 				)}
 			</section>

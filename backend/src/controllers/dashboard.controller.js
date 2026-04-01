@@ -500,11 +500,11 @@ function buildContactCard(conversation, lastMessage) {
 	};
 }
 
-async function fetchInboxData(selectedConversationId = null, queue = 'AUTO') {
+async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', archived = false) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
 	const where = {
-		archivedAt: null,
+		...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
 		...(queue === 'ALL' ? {} : { queue }),
 		NOT: {
 			contact: {
@@ -642,11 +642,18 @@ async function ensureConversationExists(conversationId) {
 export async function getInbox(req, res, next) {
 	try {
 		const currentQueue = String(req.query.queue || 'AUTO').toUpperCase();
-		const data = await fetchInboxData(req.query.conversationId || null, currentQueue);
+		const archived = String(req.query.archived || 'false') === 'true';
+
+		const data = await fetchInboxData(
+			req.query.conversationId || null,
+			currentQueue,
+			archived
+		);
 
 		return res.json({
 			ok: true,
 			currentQueue,
+			archived,
 			...data,
 		});
 	} catch (error) {
