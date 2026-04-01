@@ -191,6 +191,10 @@ function describeButtonType(type = '') {
   return 'Respuesta rápida';
 }
 
+function isMetaSampleTemplate(template) {
+  return String(template?.name || '').trim().toLowerCase() === 'hello_world';
+}
+
 export default function TemplateBuilderPanel({
   selectedTemplate,
   onCreateTemplate,
@@ -201,11 +205,21 @@ export default function TemplateBuilderPanel({
   const [form, setForm] = useState(defaultForm);
   const [localError, setLocalError] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [forcedCreateMode, setForcedCreateMode] = useState(false);
 
   useEffect(() => {
-    setForm(mapTemplateToForm(selectedTemplate));
+    if (selectedTemplate?.id) {
+      setForm(mapTemplateToForm(selectedTemplate));
+      setForcedCreateMode(false);
+    } else {
+      setForm({ ...defaultForm });
+      setForcedCreateMode(true);
+    }
     setLocalError('');
-  }, [selectedTemplate]);
+  }, [selectedTemplate?.id]);
+
+  const isEditingSelectedTemplate = Boolean(selectedTemplate?.id) && !forcedCreateMode;
+  const isReadOnlyTemplate = isEditingSelectedTemplate && isMetaSampleTemplate(selectedTemplate);
 
   const variables = useMemo(() => {
     const buttonUrls = safeArray(form.buttons)
@@ -257,6 +271,23 @@ ${buttonUrls}`
       ...current,
       buttons: safeArray(current.buttons).filter((button) => button.id !== buttonId),
     }));
+  }
+
+  function startCreateMode() {
+    setForcedCreateMode(true);
+    setForm({ ...defaultForm });
+    setLocalError('');
+  }
+
+  function restoreSelectedTemplate() {
+    if (!selectedTemplate?.id) {
+      startCreateMode();
+      return;
+    }
+
+    setForcedCreateMode(false);
+    setForm(mapTemplateToForm(selectedTemplate));
+    setLocalError('');
   }
 
   async function handleImageUpload(event) {
@@ -324,6 +355,11 @@ ${buttonUrls}`
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isReadOnlyTemplate) {
+      setLocalError('El template hello_world es de muestra de Meta y no se puede editar. Creá uno nuevo.');
+      return;
+    }
+
     const payload = buildPayload(form);
     const validationError = validatePayload(payload);
 
@@ -334,12 +370,13 @@ ${buttonUrls}`
 
     setLocalError('');
 
-    if (selectedTemplate?.id) {
+    if (isEditingSelectedTemplate) {
       await onUpdateTemplate(selectedTemplate.id, payload);
       return;
     }
 
     await onCreateTemplate(payload);
+    setForcedCreateMode(true);
     setForm({ ...defaultForm });
   }
 
@@ -347,13 +384,43 @@ ${buttonUrls}`
     <section className="campaign-panel">
       <div className="campaign-panel-header">
         <div>
-          <h3>{selectedTemplate ? 'Editar template' : 'Crear template nuevo'}</h3>
-          <p>Ahora sí: header con imagen, botones con link y una preview bastante menos de juguete.</p>
+          <h3>{isEditingSelectedTemplate ? 'Editar template' : 'Crear template nuevo'}</h3>
+          <p>Ahora sí: podés crear uno nuevo aunque tengas un template seleccionado, sin quedar atrapado en modo edición.</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {!forcedCreateMode ? (
+            <button type="button" className="button secondary" onClick={startCreateMode}>
+              + Nuevo template
+            </button>
+          ) : null}
+
+          {forcedCreateMode && selectedTemplate?.id ? (
+            <button type="button" className="button ghost" onClick={restoreSelectedTemplate}>
+              Volver a editar seleccionado
+            </button>
+          ) : null}
         </div>
       </div>
 
       <div className="campaign-builder-grid">
         <form className="campaign-form" onSubmit={handleSubmit}>
+          {isReadOnlyTemplate ? (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: '12px 14px',
+                borderRadius: 12,
+                background: '#fff7ed',
+                border: '1px solid #fdba74',
+                color: '#9a3412',
+                fontWeight: 600,
+              }}
+            >
+              Estás viendo un template sample de Meta. No se puede editar ni eliminar desde la API. Tocá <strong>+ Nuevo template</strong> y creá uno propio.
+            </div>
+          ) : null}
+
           <div className="campaign-form-grid two-columns">
             <label className="field">
               <span>Nombre interno</span>
@@ -705,7 +772,7 @@ ${buttonUrls}`
               type="submit"
               disabled={creating || updating || uploadingImage}
             >
-              {selectedTemplate
+              {isEditingSelectedTemplate
                 ? updating
                   ? 'Guardando…'
                   : 'Guardar cambios'
@@ -763,16 +830,30 @@ ${buttonUrls}`
               {form.footerText ? <div className="campaign-preview-footer">{form.footerText}</div> : null}
 
               {previewButtons.length ? (
-                <div className="campaign-preview-buttons">
+                <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                   {previewButtons.map((button) => (
-                    <button key={button.id} type="button" title={button.url || button.phoneNumber || ''}>
-                      <div style={{ display: 'grid', gap: 2, justifyItems: 'center' }}>
-                        <span>{button.text}</span>
-                        <small style={{ fontSize: 10, opacity: 0.7 }}>
-                          {describeButtonType(button.type)}
-                        </small>
-                      </div>
-                    </button>
+                    <div
+                      key={button.id}
+                      style={{
+                        borderRadius: 10,
+                        border: '1px solid rgba(79, 70, 229, 0.14)',
+                        background: '#fff',
+                        padding: '9px 10px',
+                        display: 'grid',
+                        gap: 3,
+                      }}
+                    >
+                      <strong style={{ fontSize: 13, color: '#312e81' }}>{button.text}</strong>
+                      <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 700 }}>
+                        {describeButtonType(button.type)}
+                      </span>
+                      {button.type === 'URL' && button.url ? (
+                        <span style={{ fontSize: 11, color: '#64748b', wordBreak: 'break-all' }}>{button.url}</span>
+                      ) : null}
+                      {button.type === 'PHONE_NUMBER' && button.phoneNumber ? (
+                        <span style={{ fontSize: 11, color: '#64748b' }}>{button.phoneNumber}</span>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
               ) : null}

@@ -8,7 +8,6 @@ import CampaignRunsPanel from '../components/campaigns/CampaignRunsPanel.jsx';
 import {
 	createCampaign,
 	createTemplate,
-	deleteCampaign,
 	deleteTemplate,
 	dispatchCampaign,
 	fetchCampaignDetail,
@@ -136,23 +135,17 @@ export default function CampaignsPage() {
 
 	useEffect(() => {
 		if (!selectedTemplate && templates.length) {
-			setSelectedTemplate(templates[0]);
+			const firstEditable = templates.find((template) =>
+				String(template?.name || '').trim().toLowerCase() !== 'hello_world'
+			);
+
+			setSelectedTemplate(firstEditable || templates[0]);
 		}
 	}, [templates, selectedTemplate]);
 
 	useEffect(() => {
 		if (!selectedCampaignId && campaigns.length) {
 			setSelectedCampaignId(campaigns[0].id);
-		}
-	}, [campaigns, selectedCampaignId]);
-
-	useEffect(() => {
-		if (selectedCampaignId && campaigns.length && !campaigns.some((campaign) => campaign.id === selectedCampaignId)) {
-			setSelectedCampaignId(campaigns[0]?.id || null);
-		}
-
-		if (selectedCampaignId && campaigns.length === 0) {
-			setSelectedCampaignId(null);
 		}
 	}, [campaigns, selectedCampaignId]);
 
@@ -213,8 +206,12 @@ export default function CampaignsPage() {
 
 	const createTemplateMutation = useMutation({
 		mutationFn: createTemplate,
-		onSuccess: () => {
+		onSuccess: (response) => {
 			invalidateAll();
+			const createdTemplate = response?.template || response?.data?.template || null;
+			if (createdTemplate?.id) {
+				setSelectedTemplate(createdTemplate);
+			}
 			showFeedback('success', 'Template creado correctamente.');
 		},
 		onError: (error) =>
@@ -256,17 +253,6 @@ export default function CampaignsPage() {
 		},
 		onError: (error) =>
 			showFeedback('error', error?.response?.data?.error || 'No se pudo crear la campaña.'),
-	});
-
-	const deleteCampaignMutation = useMutation({
-		mutationFn: deleteCampaign,
-		onSuccess: () => {
-			invalidateAll();
-			setSelectedCampaignId(null);
-			showFeedback('success', 'Campaña eliminada.');
-		},
-		onError: (error) =>
-			showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la campaña.'),
 	});
 
 	const abandonedCartPreviewMutation = useMutation({
@@ -815,14 +801,7 @@ export default function CampaignsPage() {
 					onDispatch={(campaignId) => actionMutation.mutate({ type: 'dispatch', campaignId })}
 					onPause={(campaignId) => actionMutation.mutate({ type: 'pause', campaignId })}
 					onResume={(campaignId) => actionMutation.mutate({ type: 'resume', campaignId })}
-					onDelete={(campaign) => {
-						const confirmed = window.confirm(`¿Eliminar la campaña ${campaign.name}? Esta acción no se puede deshacer.`);
-						if (confirmed) {
-							deleteCampaignMutation.mutate(campaign.id);
-						}
-					}}
 					actionLoading={actionMutation.isPending || campaignDetailQuery.isFetching}
-					deleteLoading={deleteCampaignMutation.isPending}
 				/>
 			</div>
 		</section>
