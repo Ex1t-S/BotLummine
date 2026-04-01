@@ -47,40 +47,133 @@ function shouldHideBodyBecauseItIsOnlyPlaceholder(message = {}) {
 	return false;
 }
 
-function renderTextWithLinks(text = '') {
+function firstUrlFromText(text = '') {
+	const match = String(text || '').match(/https?:\/\/[^\s]+/i);
+	return match ? match[0] : '';
+}
+
+function splitPromoBody(text = '') {
+	const lines = String(text || '').split('\n');
+	let actionLabel = '';
+	const cleanLines = [];
+
+	for (const rawLine of lines) {
+		const line = String(rawLine || '').trim();
+
+		if (!line) {
+			cleanLines.push(rawLine);
+			continue;
+		}
+
+		if (line.startsWith('[URL]')) {
+			actionLabel = line.replace('[URL]', '').trim() || 'Ver promo';
+			continue;
+		}
+
+		cleanLines.push(rawLine);
+	}
+
+	return {
+		bodyText: cleanLines.join('\n').trim(),
+		actionLabel,
+	};
+}
+
+function resolveRawButtonUrl(rawPayload = null) {
+	if (!rawPayload || typeof rawPayload !== 'object') return '';
+
+	return (
+		rawPayload?.buttonUrl ||
+		rawPayload?.ctaUrl ||
+		rawPayload?.url ||
+		rawPayload?.templateButtonUrl ||
+		rawPayload?.campaignButtonUrl ||
+		rawPayload?.attachment?.url ||
+		rawPayload?.interactive?.action?.parameters?.url ||
+		''
+	);
+}
+
+function resolveMessageAttachmentUrl(message = {}) {
+	if (message.attachmentUrl) return message.attachmentUrl;
+
+	const rawPayload = message.rawPayload || {};
+
+	return (
+		rawPayload?.imageUrl ||
+		rawPayload?.headerImageUrl ||
+		rawPayload?.mediaUrl ||
+		rawPayload?.attachmentUrl ||
+		rawPayload?.attachment?.url ||
+		rawPayload?.templateHeaderImageUrl ||
+		''
+	);
+}
+
+function resolvePromoAction(message = {}) {
+	const body = String(message.body || '');
+	const rawPayload = message.rawPayload || {};
+	const { bodyText, actionLabel } = splitPromoBody(body);
+
+	return {
+		bodyText,
+		actionLabel,
+		url: resolveRawButtonUrl(rawPayload) || firstUrlFromText(body),
+	};
+}
+
+function renderFormattedText(text = '') {
 	const value = String(text || '');
 	if (!value) return null;
 
-	const parts = value.split(/(https?:\/\/[^\s]+)/gi);
+	const lines = value.split('\n');
 
-	return parts.map((part, index) => {
-		if (/^https?:\/\/[^\s]+$/i.test(part)) {
-			return (
-				<a
-					key={`link-${index}`}
-					href={part}
-					target="_blank"
-					rel="noreferrer"
-					style={{
-						color: '#2563eb',
-						textDecoration: 'underline',
-						wordBreak: 'break-word',
-					}}
-				>
-					{part}
-				</a>
-			);
-		}
+	return lines.map((line, lineIndex) => {
+		const parts = line.split(/(https?:\/\/[^\s]+|\*\*[^*]+\*\*)/gi);
 
 		return (
-			<span
-				key={`text-${index}`}
-				style={{
-					whiteSpace: 'pre-wrap',
-					wordBreak: 'break-word',
-				}}
-			>
-				{part}
+			<span key={`line-${lineIndex}`}>
+				{parts.map((part, index) => {
+					if (/^https?:\/\/[^\s]+$/i.test(part)) {
+						return (
+							<a
+								key={`link-${lineIndex}-${index}`}
+								href={part}
+								target="_blank"
+								rel="noreferrer"
+								style={{
+									color: '#2563eb',
+									textDecoration: 'underline',
+									wordBreak: 'break-word',
+								}}
+							>
+								{part}
+							</a>
+						);
+					}
+
+					if (/^\*\*[^*]+\*\*$/i.test(part)) {
+						return (
+							<strong key={`strong-${lineIndex}-${index}`}>
+								{part.slice(2, -2)}
+							</strong>
+						);
+					}
+
+					return (
+						<span
+							key={`text-${lineIndex}-${index}`}
+							style={{
+								whiteSpace: 'pre-wrap',
+								wordBreak: 'break-word',
+							}}
+						>
+							{part}
+						</span>
+					);
+				})}
+
+				{lineIndex < lines.length - 1 ? <br /> : null}
 			</span>
 		);
 	});
@@ -88,7 +181,7 @@ function renderTextWithLinks(text = '') {
 
 function AttachmentPreview({ message }) {
 	const mediaKind = getMediaKind(message);
-	const attachmentUrl = String(message.attachmentUrl || '').trim();
+	const attachmentUrl = resolveMessageAttachmentUrl(message);
 	const attachmentName = String(message.attachmentName || '').trim();
 
 	if (!mediaKind || !attachmentUrl) return null;
@@ -124,8 +217,8 @@ function AttachmentPreview({ message }) {
 						style={{
 							display: 'block',
 							maxWidth: '100%',
-							width: 'min(320px, 100%)',
-							borderRadius: 14,
+							width: 'min(330px, 100%)',
+							borderRadius: 18,
 							border: '1px solid rgba(15, 23, 42, 0.08)',
 							boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
 						}}
@@ -145,8 +238,8 @@ function AttachmentPreview({ message }) {
 					style={{
 						display: 'block',
 						maxWidth: '100%',
-						width: 'min(320px, 100%)',
-						borderRadius: 14,
+						width: 'min(330px, 100%)',
+						borderRadius: 18,
 						border: '1px solid rgba(15, 23, 42, 0.08)',
 						background: '#000',
 					}}
@@ -163,7 +256,7 @@ function AttachmentPreview({ message }) {
 				style={{
 					marginTop: 10,
 					padding: '12px 14px',
-					borderRadius: 14,
+					borderRadius: 16,
 					background: 'rgba(15, 23, 42, 0.05)',
 					border: '1px solid rgba(15, 23, 42, 0.08)',
 				}}
@@ -203,67 +296,117 @@ function AttachmentPreview({ message }) {
 function MessageBubble({ message }) {
 	const isOutbound = message.direction === 'OUTBOUND';
 	const hideBody = shouldHideBodyBecauseItIsOnlyPlaceholder(message);
-	const bubbleBackground = isOutbound ? '#dcfce7' : '#ffffff';
+	const bubbleBackground = isOutbound ? '#d9fdd3' : '#ffffff';
 	const bubbleBorder = isOutbound
-		? '1px solid rgba(34, 197, 94, 0.18)'
+		? '1px solid rgba(34, 197, 94, 0.14)'
 		: '1px solid rgba(15, 23, 42, 0.08)';
+
+	const promo = resolvePromoAction(message);
+	const hasPromoButton = Boolean(promo.actionLabel);
+	const attachmentUrl = resolveMessageAttachmentUrl(message);
 
 	return (
 		<div
 			style={{
 				display: 'flex',
 				justifyContent: isOutbound ? 'flex-end' : 'flex-start',
-				marginBottom: 14,
+				marginBottom: 12,
 			}}
 		>
 			<div
 				style={{
 					maxWidth: '78%',
 					minWidth: 140,
-					padding: '14px 16px 12px',
-					borderRadius: 22,
+					borderRadius: 18,
 					background: bubbleBackground,
 					border: bubbleBorder,
-					boxShadow: '0 8px 24px rgba(15, 23, 42, 0.04)',
+					boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
+					overflow: 'hidden',
 				}}
 			>
-				{!hideBody ? (
+				<div style={{ padding: '10px 12px 8px' }}>
+					<AttachmentPreview message={message} />
+
+					{!hideBody || hasPromoButton ? (
+						<div
+							style={{
+								fontSize: 15,
+								lineHeight: 1.45,
+								color: '#0f172a',
+								marginTop: attachmentUrl ? 10 : 0,
+							}}
+						>
+							{renderFormattedText(hasPromoButton ? promo.bodyText : message.body)}
+						</div>
+					) : null}
+
+					{hasPromoButton ? (
+						promo.url ? (
+							<a
+								href={promo.url}
+								target="_blank"
+								rel="noreferrer"
+								style={{
+									marginTop: 12,
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									gap: 8,
+									padding: '10px 12px',
+									borderRadius: 12,
+									background: '#ffffff',
+									border: '1px solid rgba(22, 163, 74, 0.18)',
+									color: '#128c7e',
+									fontWeight: 700,
+									textDecoration: 'none',
+								}}
+							>
+								↗ {promo.actionLabel}
+							</a>
+						) : (
+							<div
+								style={{
+									marginTop: 12,
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									padding: '10px 12px',
+									borderRadius: 12,
+									background: '#ffffff',
+									border: '1px solid rgba(22, 163, 74, 0.18)',
+									color: '#128c7e',
+									fontWeight: 700,
+								}}
+							>
+								{promo.actionLabel}
+							</div>
+						)
+					) : null}
+
 					<div
 						style={{
-							fontSize: 15,
-							lineHeight: 1.45,
-							color: '#0f172a',
+							display: 'flex',
+							alignItems: 'center',
+							gap: 8,
+							flexWrap: 'wrap',
+							marginTop: 10,
+							fontSize: 12,
+							color: '#475569',
 						}}
 					>
-						{renderTextWithLinks(message.body)}
+						<span
+							style={{
+								padding: '3px 8px',
+								borderRadius: 999,
+								background: 'rgba(15, 23, 42, 0.06)',
+								fontWeight: 700,
+							}}
+						>
+							{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
+						</span>
+
+						<span>{message.createdAtLabel || ''}</span>
 					</div>
-				) : null}
-
-				<AttachmentPreview message={message} />
-
-				<div
-					style={{
-						display: 'flex',
-						alignItems: 'center',
-						gap: 8,
-						flexWrap: 'wrap',
-						marginTop: 10,
-						fontSize: 12,
-						color: '#475569',
-					}}
-				>
-					<span
-						style={{
-							padding: '3px 8px',
-							borderRadius: 999,
-							background: 'rgba(15, 23, 42, 0.06)',
-							fontWeight: 700,
-						}}
-					>
-						{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
-					</span>
-
-					<span>{message.createdAtLabel || ''}</span>
 				</div>
 			</div>
 		</div>
@@ -491,7 +634,15 @@ export default function InboxPage() {
 	function handleMoveQueue(nextQueue) {
 		moveQueueMutation.mutate(nextQueue);
 	}
+	function handleComposerKeyDown(event) {
+		if (event.key === 'Enter' && !event.shiftKey) {
+			event.preventDefault();
 
+			if (messageText.trim() && !sendMessageMutation.isPending) {
+				sendMessageMutation.mutate();
+			}
+		}
+	}
 	return (
 		<div
 			style={{
@@ -902,53 +1053,85 @@ export default function InboxPage() {
 							onSubmit={handleSubmit}
 							style={{
 								borderTop: '1px solid rgba(15, 23, 42, 0.08)',
-								padding: 16,
-								display: 'flex',
-								gap: 12,
-								alignItems: 'flex-end',
-								background: '#ffffff',
+								padding: 12,
+								background: '#f0f2f5',
 							}}
 						>
-							<textarea
-								value={messageText}
-								onChange={(event) => setMessageText(event.target.value)}
-								placeholder="Escribí una respuesta..."
-								rows={3}
-								disabled={sendMessageMutation.isPending}
+							<div
 								style={{
-									flex: 1,
-									resize: 'none',
-									borderRadius: 16,
-									border: '1px solid rgba(15, 23, 42, 0.12)',
-									padding: '14px 16px',
-									fontSize: 15,
-									outline: 'none',
-									minHeight: 82,
-								}}
-							/>
-
-							<button
-								type="submit"
-								disabled={sendMessageMutation.isPending || !messageText.trim()}
-								style={{
-									height: 54,
-									padding: '0 24px',
-									border: 'none',
-									borderRadius: 16,
-									background:
-										sendMessageMutation.isPending || !messageText.trim()
-											? '#94a3b8'
-											: '#0f172a',
-									color: '#ffffff',
-									fontWeight: 800,
-									cursor:
-										sendMessageMutation.isPending || !messageText.trim()
-											? 'not-allowed'
-											: 'pointer',
+									display: 'flex',
+									alignItems: 'flex-end',
+									gap: 10,
+									background: '#ffffff',
+									borderRadius: 28,
+									padding: '8px 10px 8px 12px',
+									border: '1px solid rgba(15, 23, 42, 0.08)',
 								}}
 							>
-								{sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
-							</button>
+								<button
+									type="button"
+									style={{
+										width: 38,
+										height: 38,
+										borderRadius: 999,
+										border: 'none',
+										background: 'transparent',
+										fontSize: 22,
+										cursor: 'pointer',
+										color: '#54656f',
+									}}
+									title="Emoji"
+								>
+									😊
+								</button>
+
+								<textarea
+									value={messageText}
+									onChange={(event) => setMessageText(event.target.value)}
+									onKeyDown={handleComposerKeyDown}
+									placeholder="Escribe un mensaje"
+									rows={1}
+									disabled={sendMessageMutation.isPending}
+									style={{
+										flex: 1,
+										resize: 'none',
+										border: 'none',
+										outline: 'none',
+										fontSize: 15,
+										background: 'transparent',
+										padding: '10px 4px',
+										minHeight: 24,
+										maxHeight: 120,
+										lineHeight: 1.4,
+									}}
+								/>
+
+								<button
+									type="submit"
+									disabled={sendMessageMutation.isPending || !messageText.trim()}
+									title="Enviar"
+									style={{
+										width: 42,
+										height: 42,
+										border: 'none',
+										borderRadius: 999,
+										background:
+											sendMessageMutation.isPending || !messageText.trim()
+												? '#cbd5e1'
+												: '#00a884',
+										color: '#ffffff',
+										fontSize: 18,
+										fontWeight: 800,
+										cursor:
+											sendMessageMutation.isPending || !messageText.trim()
+												? 'not-allowed'
+												: 'pointer',
+										flexShrink: 0,
+									}}
+								>
+									➤
+								</button>
+							</div>
 						</form>
 					</>
 				)}
