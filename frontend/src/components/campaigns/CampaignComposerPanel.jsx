@@ -22,7 +22,7 @@ const initialCustomerFilters = {
 	minSpent: '',
 	minOrders: '',
 	hasPhoneOnly: true,
-	hasOrders: false,
+	hasOrders: true,
 	productQuery: '',
 };
 
@@ -35,14 +35,8 @@ function normalizePhone(value = '') {
 }
 
 function getTemplateComponents(template) {
-	if (Array.isArray(template?.components)) {
-		return template.components;
-	}
-
-	if (Array.isArray(template?.rawPayload?.components)) {
-		return template.rawPayload.components;
-	}
-
+	if (Array.isArray(template?.components)) return template.components;
+	if (Array.isArray(template?.rawPayload?.components)) return template.rawPayload.components;
 	return [];
 }
 
@@ -79,8 +73,7 @@ function parseAudience(rawValue = '', extraVariables = {}) {
 					'3': size || '',
 					'4': color || '',
 					contact_name: contactName || '',
-					first_name:
-						(contactName || '').split(/\s+/).filter(Boolean)[0] || '',
+					first_name: (contactName || '').split(/\s+/).filter(Boolean)[0] || '',
 					product_name: productName || '',
 					size: size || '',
 					color: color || '',
@@ -178,6 +171,7 @@ export default function CampaignComposerPanel({
 	const [uploadedFileName, setUploadedFileName] = useState('');
 	const [imageError, setImageError] = useState('');
 	const [submitError, setSubmitError] = useState('');
+
 	const [customerFilters, setCustomerFilters] = useState(initialCustomerFilters);
 	const [customerAudience, setCustomerAudience] = useState({
 		customers: [],
@@ -228,9 +222,10 @@ export default function CampaignComposerPanel({
 		[uploadedMediaId]
 	);
 
-	const manualRecipients = useMemo(() => {
-		return parseAudience(form.audienceText, extraVariables);
-	}, [form.audienceText, extraVariables]);
+	const manualRecipients = useMemo(
+		() => parseAudience(form.audienceText, extraVariables),
+		[form.audienceText, extraVariables]
+	);
 
 	const selectedCustomers = useMemo(
 		() => Object.values(selectedCustomersMap),
@@ -256,6 +251,7 @@ export default function CampaignComposerPanel({
 	}, [customerAudience.customers]);
 
 	const selectedCustomerCount = selectedCustomers.length;
+
 	const selectedPageCount = currentPageSelectableCustomers.filter(
 		(customer) => Boolean(selectedCustomersMap[customer.id])
 	).length;
@@ -453,7 +449,6 @@ export default function CampaignComposerPanel({
 
 	async function handleImageChange(event) {
 		const file = event.target.files?.[0];
-
 		if (!file) return;
 
 		setImageError('');
@@ -501,7 +496,7 @@ export default function CampaignComposerPanel({
 		if (!recipients.length) {
 			setSubmitError(
 				form.audienceMode === 'customers'
-					? 'Seleccioná al menos un cliente para la campaña.'
+					? 'Seleccioná al menos un cliente.'
 					: 'Cargá al menos un destinatario manual.'
 			);
 			return;
@@ -544,20 +539,13 @@ export default function CampaignComposerPanel({
 						detail: { campaignId: createdCampaignId },
 					})
 				);
-			} else {
-				console.error(
-					'[CAMPAIGN] No se pudo obtener el campaignId del resultado de creación',
-					result
-				);
 			}
 		}
 
-		const nextAudienceMode = form.audienceMode;
-
-		setForm({
+		setForm((current) => ({
 			...initialForm,
-			audienceMode: nextAudienceMode,
-		});
+			audienceMode: current.audienceMode,
+		}));
 		setUploadedMediaId('');
 		setUploadedFileName('');
 		setImageError('');
@@ -566,13 +554,13 @@ export default function CampaignComposerPanel({
 	}
 
 	return (
-		<section className="campaign-panel">
+		<section className="campaign-panel campaign-panel--customers">
 			<div className="campaign-panel-header">
 				<div>
 					<h3>Crear campaña</h3>
 					<p>
-						Podés crearla con clientes reales filtrados por compras o cargar audiencia
-						manual si te hace falta.
+						Armá campañas con clientes reales filtrados por sus compras o cargá audiencia
+						manual si necesitás algo puntual.
 					</p>
 				</div>
 			</div>
@@ -586,7 +574,7 @@ export default function CampaignComposerPanel({
 							onChange={(event) =>
 								setForm((current) => ({ ...current, name: event.target.value }))
 							}
-							placeholder="Recuperación abril - clientes body negro"
+							placeholder="Clientes body negro - abril"
 						/>
 					</label>
 
@@ -614,7 +602,7 @@ export default function CampaignComposerPanel({
 
 						<div className="campaign-helper-box">
 							<div className="campaign-helper-text">
-								Esta plantilla requiere una imagen en el header para poder enviarse.
+								Esta plantilla necesita una imagen en el header para poder enviarse.
 							</div>
 
 							<div className="campaign-inline-actions">
@@ -647,9 +635,7 @@ export default function CampaignComposerPanel({
 								</div>
 							) : null}
 
-							{imageError ? (
-								<div className="campaign-inline-error">{imageError}</div>
-							) : null}
+							{imageError ? <div className="campaign-inline-error">{imageError}</div> : null}
 						</div>
 					</div>
 				) : null}
@@ -661,7 +647,7 @@ export default function CampaignComposerPanel({
 						onChange={(event) =>
 							setForm((current) => ({ ...current, description: event.target.value }))
 						}
-						placeholder="Segmento de clientes para remarketing"
+						placeholder="Segmento para remarketing"
 					/>
 				</label>
 
@@ -671,9 +657,7 @@ export default function CampaignComposerPanel({
 					<div className="campaign-audience-mode">
 						<button
 							type="button"
-							className={`campaign-mode-chip ${
-								form.audienceMode === 'customers' ? 'active' : ''
-							}`}
+							className={`campaign-mode-chip ${form.audienceMode === 'customers' ? 'active' : ''}`}
 							onClick={() => {
 								setForm((current) => ({ ...current, audienceMode: 'customers' }));
 								setSubmitError('');
@@ -684,9 +668,7 @@ export default function CampaignComposerPanel({
 
 						<button
 							type="button"
-							className={`campaign-mode-chip ${
-								form.audienceMode === 'manual' ? 'active' : ''
-							}`}
+							className={`campaign-mode-chip ${form.audienceMode === 'manual' ? 'active' : ''}`}
 							onClick={() => {
 								setForm((current) => ({ ...current, audienceMode: 'manual' }));
 								setSubmitError('');
@@ -698,16 +680,26 @@ export default function CampaignComposerPanel({
 				</div>
 
 				{form.audienceMode === 'customers' ? (
-					<div className="campaign-customer-block">
+					<div className="campaign-customer-shell">
 						<div className="campaign-customer-filters">
+							<div className="campaign-customer-filters-head">
+								<div>
+									<h4>Filtros de clientes</h4>
+									<p>Segmentá por compra, gasto y comportamiento.</p>
+								</div>
+
+								<div className="campaign-customer-kpi">
+									<strong>{customerAudience?.stats?.totalCustomers || 0}</strong>
+									<span>filtrados</span>
+								</div>
+							</div>
+
 							<div className="campaign-form-grid two-columns">
 								<label className="field">
 									<span>Buscar cliente</span>
 									<input
 										value={customerFilters.q}
-										onChange={(event) =>
-											updateCustomerFilter('q', event.target.value)
-										}
+										onChange={(event) => updateCustomerFilter('q', event.target.value)}
 										placeholder="nombre, mail o teléfono"
 									/>
 								</label>
@@ -716,9 +708,7 @@ export default function CampaignComposerPanel({
 									<span>Producto comprado</span>
 									<input
 										value={customerFilters.productQuery}
-										onChange={(event) =>
-											updateCustomerFilter('productQuery', event.target.value)
-										}
+										onChange={(event) => updateCustomerFilter('productQuery', event.target.value)}
 										placeholder="body, faja, calza"
 									/>
 								</label>
@@ -731,9 +721,7 @@ export default function CampaignComposerPanel({
 										type="number"
 										min="0"
 										value={customerFilters.minSpent}
-										onChange={(event) =>
-											updateCustomerFilter('minSpent', event.target.value)
-										}
+										onChange={(event) => updateCustomerFilter('minSpent', event.target.value)}
 										placeholder="0"
 									/>
 								</label>
@@ -744,9 +732,7 @@ export default function CampaignComposerPanel({
 										type="number"
 										min="0"
 										value={customerFilters.minOrders}
-										onChange={(event) =>
-											updateCustomerFilter('minOrders', event.target.value)
-										}
+										onChange={(event) => updateCustomerFilter('minOrders', event.target.value)}
 										placeholder="0"
 									/>
 								</label>
@@ -755,9 +741,7 @@ export default function CampaignComposerPanel({
 									<span>Orden</span>
 									<select
 										value={customerFilters.sort}
-										onChange={(event) =>
-											updateCustomerFilter('sort', event.target.value)
-										}
+										onChange={(event) => updateCustomerFilter('sort', event.target.value)}
 									>
 										<option value="updated_desc">Actualizados primero</option>
 										<option value="updated_asc">Actualizados al final</option>
@@ -789,9 +773,7 @@ export default function CampaignComposerPanel({
 									<input
 										type="checkbox"
 										checked={customerFilters.hasPhoneOnly}
-										onChange={(event) =>
-											updateCustomerFilter('hasPhoneOnly', event.target.checked)
-										}
+										onChange={(event) => updateCustomerFilter('hasPhoneOnly', event.target.checked)}
 									/>
 									<span>Solo clientes con teléfono</span>
 								</label>
@@ -800,9 +782,7 @@ export default function CampaignComposerPanel({
 									<input
 										type="checkbox"
 										checked={customerFilters.hasOrders}
-										onChange={(event) =>
-											updateCustomerFilter('hasOrders', event.target.checked)
-										}
+										onChange={(event) => updateCustomerFilter('hasOrders', event.target.checked)}
 									/>
 									<span>Solo clientes con compras</span>
 								</label>
@@ -839,9 +819,7 @@ export default function CampaignComposerPanel({
 										onClick={handleLoadAllFilteredCustomers}
 										disabled={customerAudience.loadingAll}
 									>
-										{customerAudience.loadingAll
-											? 'Cargando todos…'
-											: 'Traer todos los filtrados'}
+										{customerAudience.loadingAll ? 'Cargando…' : 'Traer todos los filtrados'}
 									</button>
 
 									<button
@@ -883,9 +861,9 @@ export default function CampaignComposerPanel({
 											<button
 												key={customer.id}
 												type="button"
-												className={`campaign-customer-card ${
-													isSelected ? 'selected' : ''
-												} ${!hasPhone ? 'disabled' : ''}`}
+												className={`campaign-customer-card ${isSelected ? 'selected' : ''} ${
+													!hasPhone ? 'disabled' : ''
+												}`}
 												onClick={() => toggleCustomerSelection(customer)}
 												disabled={!hasPhone}
 											>
@@ -904,19 +882,14 @@ export default function CampaignComposerPanel({
 														</span>
 													</div>
 
-													<input
-														type="checkbox"
-														readOnly
-														checked={isSelected}
-														tabIndex={-1}
-													/>
+													<div className="campaign-customer-checkbox">
+														<input type="checkbox" readOnly checked={isSelected} tabIndex={-1} />
+													</div>
 												</div>
 
 												<div className="campaign-customer-meta">
 													<span>{customer.orderCount || 0} pedidos</span>
-													<span>
-														{customer.distinctProductsCount || 0} productos distintos
-													</span>
+													<span>{customer.distinctProductsCount || 0} productos</span>
 													<span>{customer.lastOrderAtLabel || '-'}</span>
 												</div>
 
@@ -935,7 +908,7 @@ export default function CampaignComposerPanel({
 								</div>
 							) : (
 								<div className="campaign-empty-state">
-									<p>No hay clientes para esos filtros.</p>
+									<p>No hay clientes con esos filtros.</p>
 								</div>
 							)}
 
@@ -945,14 +918,8 @@ export default function CampaignComposerPanel({
 									className="button ghost"
 									disabled={(customerAudience.pagination?.page || 1) <= 1}
 									onClick={() => {
-										const nextPage = Math.max(
-											1,
-											(customerAudience.pagination?.page || 1) - 1
-										);
-										const nextFilters = {
-											...customerFilters,
-											page: nextPage,
-										};
+										const nextPage = Math.max(1, (customerAudience.pagination?.page || 1) - 1);
+										const nextFilters = { ...customerFilters, page: nextPage };
 										setCustomerFilters(nextFilters);
 										loadCustomers(nextFilters);
 									}}
@@ -972,10 +939,7 @@ export default function CampaignComposerPanel({
 											customerAudience.pagination?.totalPages || 1,
 											(customerAudience.pagination?.page || 1) + 1
 										);
-										const nextFilters = {
-											...customerFilters,
-											page: nextPage,
-										};
+										const nextFilters = { ...customerFilters, page: nextPage };
 										setCustomerFilters(nextFilters);
 										loadCustomers(nextFilters);
 									}}
@@ -996,15 +960,11 @@ export default function CampaignComposerPanel({
 							}
 							placeholder="telefono|nombre|producto|talle|color"
 						/>
-						<small>
-							Formato: teléfono|nombre|producto|talle|color. Una fila por destinatario.
-						</small>
+						<small>Formato: teléfono|nombre|producto|talle|color. Una fila por destinatario.</small>
 					</label>
 				)}
 
-				{submitError ? (
-					<div className="campaign-inline-error">{submitError}</div>
-				) : null}
+				{submitError ? <div className="campaign-inline-error">{submitError}</div> : null}
 
 				<div className="campaign-composer-summary">
 					<div>
