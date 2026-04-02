@@ -147,6 +147,29 @@ function stringifyProductSummary(productSummary = []) {
 		.join(' • ');
 }
 
+function resolveOrderCount(customer) {
+	const rawOrderCount = Number(customer?.orderCount || 0);
+
+	if (rawOrderCount > 0) return rawOrderCount;
+	if (customer?.lastOrderId) return 1;
+
+	return 0;
+}
+
+function resolveDistinctProductsCount(customer) {
+	const rawDistinctProductsCount = Number(customer?.distinctProductsCount || 0);
+
+	if (rawDistinctProductsCount > 0) return rawDistinctProductsCount;
+
+	if (Array.isArray(customer?.productSummary) && customer.productSummary.length > 0) {
+		return customer.productSummary.length;
+	}
+
+	if (customer?.lastOrderId) return 1;
+
+	return 0;
+}
+
 function buildCustomersWhere({
 	q = '',
 	minSpent = null,
@@ -178,11 +201,20 @@ function buildCustomersWhere({
 	}
 
 	if (minOrders !== null && minOrders > 0) {
-		and.push({
-			orderCount: {
-				gte: minOrders,
-			},
-		});
+		if (minOrders <= 1) {
+			and.push({
+				OR: [
+					{ orderCount: { gte: 1 } },
+					{ lastOrderId: { not: null } },
+				],
+			});
+		} else {
+			and.push({
+				orderCount: {
+					gte: minOrders,
+				},
+			});
+		}
 	}
 
 	if (hasPhoneOnly) {
@@ -212,14 +244,20 @@ function serializeCustomer(customer) {
 		? customer.productSummary
 		: [];
 
+	const resolvedOrderCount = resolveOrderCount(customer);
+	const resolvedDistinctProductsCount = resolveDistinctProductsCount({
+		...customer,
+		productSummary,
+	});
+
 	return {
 		id: customer.id,
 		displayName: customer.displayName || null,
 		email: customer.email || null,
 		phone: resolvedPhone,
 		hasPhone: Boolean(resolvedPhone),
-		orderCount: Number(customer.orderCount || 0),
-		distinctProductsCount: Number(customer.distinctProductsCount || 0),
+		orderCount: resolvedOrderCount,
+		distinctProductsCount: resolvedDistinctProductsCount,
 		totalSpent: Number(customer.totalSpent || 0),
 		totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
 		currency: customer.currency || 'ARS',
@@ -237,15 +275,21 @@ function serializeCustomer(customer) {
 }
 
 function buildStats(customers = [], fallbackCurrency = 'ARS', showingFrom = 0, showingTo = 0) {
+	const normalizedCustomers = customers.map((customer) => ({
+		...customer,
+		orderCount: resolveOrderCount(customer),
+	}));
+
 	return {
-		totalCustomers: customers.length,
-		repeatBuyers: customers.filter((customer) => Number(customer.orderCount || 0) > 1).length,
-		withLastOrder: customers.filter((customer) => Boolean(customer.lastOrderId)).length,
-		totalOrders: customers.reduce(
+		totalCustomers: normalizedCustomers.length,
+		repeatBuyers: normalizedCustomers.filter((customer) => Number(customer.orderCount || 0) > 1)
+			.length,
+		withLastOrder: normalizedCustomers.filter((customer) => Boolean(customer.lastOrderId)).length,
+		totalOrders: normalizedCustomers.reduce(
 			(total, customer) => total + Number(customer.orderCount || 0),
 			0
 		),
-		totalSpent: customers.reduce(
+		totalSpent: normalizedCustomers.reduce(
 			(total, customer) => total + Number(customer.totalSpent || 0),
 			0
 		),
@@ -378,13 +422,19 @@ export async function getCustomers(req, res, next) {
 		const showingFrom = totalCustomers === 0 ? 0 : skip + 1;
 		const showingTo = Math.min(skip + customers.length, totalCustomers);
 
+		const serializedCustomers = customers.map(serializeCustomer);
+
 		return res.json({
-			customers: customers.map(serializeCustomer),
+			customers: serializedCustomers,
 			stats: {
 				totalCustomers,
 				repeatBuyers,
 				withLastOrder,
-				totalOrders: Number(agg?._sum?.orderCount || 0),
+				totalOrders:
+					Number(agg?._sum?.orderCount || 0) +
+					serializedCustomers.filter(
+						(customer) => customer.orderCount === 1 && customer.lastOrderId
+					).length,
 				totalSpent: Number(agg?._sum?.totalSpent || 0),
 				currency: customers[0]?.currency || 'ARS',
 				showingFrom,

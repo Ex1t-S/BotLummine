@@ -178,7 +178,13 @@
 .campaign-custom-audience-pill,
 .campaign-customer-product,
 .campaign-customer-title-wrap strong,
-.campaign-customer-title-wrap span {
+.campaign-customer-title-wrap span,
+.campaign-builder-grid p,
+.campaign-builder-grid small,
+.campaign-builder-grid span,
+.campaign-builder-grid div,
+.campaign-builder-grid a,
+.campaign-builder-grid code {
 	overflow-wrap: anywhere;
 	word-break: break-word;
 }
@@ -333,6 +339,10 @@
 	grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
 }
 
+.campaign-builder-grid > * {
+	min-width: 0;
+}
+
 .campaign-runs-grid {
 	grid-template-columns: 1.1fr 0.9fr;
 }
@@ -380,6 +390,7 @@
 	display: grid;
 	place-items: center;
 	align-self: start;
+	min-width: 0;
 }
 
 .campaign-whatsapp-preview {
