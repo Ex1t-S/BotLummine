@@ -19,6 +19,7 @@
 	margin: 0;
 	max-width: 760px;
 	color: #475569;
+	line-height: 1.55;
 }
 
 .campaigns-eyebrow {
@@ -59,7 +60,8 @@
 }
 
 .campaign-kpi-card,
-.campaign-panel {
+.campaign-panel,
+.campaign-custom-audience {
 	background: #fff;
 	border-radius: 22px;
 	box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
@@ -95,7 +97,7 @@
 }
 
 .campaign-panel {
-	padding: 22px;
+	padding: 24px;
 }
 
 .campaign-panel-header {
@@ -116,6 +118,7 @@
 .campaign-empty-state p {
 	margin: 0;
 	color: #64748b;
+	line-height: 1.5;
 }
 
 .campaign-filters-grid,
@@ -141,11 +144,13 @@
 
 .field span {
 	font-size: 0.9rem;
-	font-weight: 600;
+	font-weight: 700;
+	color: #0f172a;
 }
 
 .field small {
 	color: #64748b;
+	line-height: 1.45;
 }
 
 .field input,
@@ -160,8 +165,34 @@
 	min-width: 0;
 }
 
+.field input,
+.field select,
+.field textarea,
+.campaign-list-body,
+.campaign-preview-header,
+.campaign-preview-body,
+.campaign-preview-footer,
+.campaign-custom-audience-recipient-preview,
+.campaign-custom-audience-recipient-product,
+.campaign-custom-audience-recipient-phone,
+.campaign-custom-audience-pill,
+.campaign-customer-product,
+.campaign-customer-title-wrap strong,
+.campaign-customer-title-wrap span {
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
 .field textarea {
 	resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+	outline: none;
+	border-color: #a78bfa;
+	box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
 }
 
 .button {
@@ -171,6 +202,12 @@
 	font: inherit;
 	font-weight: 700;
 	cursor: pointer;
+	transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
 .button.primary {
@@ -244,9 +281,7 @@
 }
 
 .campaign-list-body {
-	line-height: 1.5;
-	overflow-wrap: anywhere;
-	word-break: break-word;
+	line-height: 1.55;
 }
 
 .campaign-badge {
@@ -290,13 +325,22 @@
 .campaign-builder-grid,
 .campaign-runs-grid {
 	display: grid;
-	grid-template-columns: 1.1fr 0.9fr;
 	gap: 20px;
+	align-items: start;
+}
+
+.campaign-builder-grid {
+	grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+}
+
+.campaign-runs-grid {
+	grid-template-columns: 1.1fr 0.9fr;
 }
 
 .campaign-form {
 	display: grid;
-	gap: 14px;
+	gap: 16px;
+	min-width: 0;
 }
 
 .campaign-variable-box,
@@ -335,6 +379,7 @@
 .campaign-preview-shell {
 	display: grid;
 	place-items: center;
+	align-self: start;
 }
 
 .campaign-whatsapp-preview {
@@ -358,6 +403,7 @@
 	padding: 14px;
 	display: grid;
 	gap: 10px;
+	min-width: 0;
 }
 
 .campaign-preview-header {
@@ -448,44 +494,75 @@
 	min-height: 420px;
 }
 
-/* ===== Composer de campañas con clientes ===== */
-
-.campaign-panel--customers {
-	padding: 30px;
+.campaign-section-grid > *,
+.campaign-builder-grid > *,
+.campaign-runs-grid > * {
+	min-width: 0;
 }
 
-.campaign-panel--customers .campaign-form {
-	gap: 20px;
+/* acordeones */
+
+.campaign-accordion {
+	min-width: 0;
 }
 
-.campaign-panel--customers .campaign-form-grid.two-columns {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 18px;
+.campaign-accordion-summary {
+	list-style: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 16px;
+	margin-bottom: 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 18px;
+	background: #f8fafc;
+	cursor: pointer;
+	user-select: none;
 }
 
-.campaign-panel--customers .field span {
-	font-size: 0.95rem;
-	font-weight: 700;
+.campaign-accordion-summary::-webkit-details-marker {
+	display: none;
+}
+
+.campaign-accordion-summary:focus-visible {
+	outline: 2px solid #8b5cf6;
+	outline-offset: 2px;
+}
+
+.campaign-accordion-copy {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.campaign-accordion-copy strong {
+	font-size: 0.96rem;
 	color: #0f172a;
 }
 
-.campaign-panel--customers .field input,
-.campaign-panel--customers .field select,
-.campaign-panel--customers .field textarea {
-	padding: 14px 16px;
-	border-radius: 16px;
-	font-size: 0.97rem;
-	border: 1px solid #dbe2ea;
-	background: #fff;
+.campaign-accordion-copy span {
+	font-size: 0.84rem;
+	color: #64748b;
+	line-height: 1.4;
 }
 
-.campaign-panel--customers .field input:focus,
-.campaign-panel--customers .field select:focus,
-.campaign-panel--customers .field textarea:focus {
-	outline: none;
-	border-color: #a78bfa;
-	box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
+.campaign-accordion-chevron {
+	flex-shrink: 0;
+	font-size: 1.05rem;
+	color: #64748b;
+	transition: transform 0.2s ease;
 }
+
+.campaign-accordion[open] .campaign-accordion-chevron {
+	transform: rotate(180deg);
+}
+
+.campaign-accordion-body {
+	min-width: 0;
+}
+
+/* helper box */
 
 .campaign-helper-box {
 	border: 1px solid #d7dceb;
@@ -532,6 +609,195 @@
 	color: #92400e;
 	background: #fff7ed;
 	border: 1px solid #fed7aa;
+}
+
+/* bloque carritos abandonados */
+
+.campaign-custom-audience {
+	display: grid;
+	gap: 18px;
+	padding: 22px;
+}
+
+.campaign-custom-audience-intro {
+	display: grid;
+	gap: 8px;
+}
+
+.campaign-custom-audience-intro h3 {
+	margin: 0;
+	font-size: 1.2rem;
+	color: #0f172a;
+}
+
+.campaign-custom-audience-intro p {
+	margin: 0;
+	color: #64748b;
+	line-height: 1.55;
+}
+
+.campaign-custom-audience-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.9fr);
+	gap: 18px;
+	align-items: start;
+}
+
+.campaign-custom-audience-card {
+	display: grid;
+	gap: 14px;
+	padding: 18px;
+	border: 1px solid #e5e7eb;
+	border-radius: 20px;
+	background: #fff;
+	min-width: 0;
+}
+
+.campaign-custom-audience-grid-4 {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.campaign-custom-audience-preview {
+	align-self: start;
+	min-height: 320px;
+	background: linear-gradient(180deg, #fbfcff 0%, #f8fafc 100%);
+}
+
+.campaign-custom-audience-preview-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+}
+
+.campaign-custom-audience-preview-title {
+	font-weight: 800;
+	font-size: 1rem;
+	color: #0f172a;
+}
+
+.campaign-custom-audience-preview-subtitle {
+	color: #64748b;
+	font-size: 0.85rem;
+}
+
+.campaign-custom-audience-pill {
+	display: inline-flex;
+	align-items: center;
+	max-width: 100%;
+	padding: 6px 10px;
+	border-radius: 999px;
+	background: #eef2ff;
+	color: #4338ca;
+	font-weight: 700;
+	font-size: 12px;
+}
+
+.campaign-custom-audience-preview-list {
+	display: grid;
+	gap: 12px;
+	max-height: 560px;
+	overflow: auto;
+	padding-right: 4px;
+}
+
+.campaign-custom-audience-recipient {
+	padding: 14px;
+	border: 1px solid #e5e7eb;
+	border-radius: 16px;
+	background: #fff;
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.campaign-custom-audience-recipient-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+}
+
+.campaign-custom-audience-recipient-top strong {
+	color: #0f172a;
+	font-size: 0.95rem;
+	line-height: 1.35;
+}
+
+.campaign-custom-audience-recipient-top span {
+	color: #64748b;
+	font-size: 0.84rem;
+	flex-shrink: 0;
+}
+
+.campaign-custom-audience-recipient-product {
+	color: #334155;
+	font-size: 0.88rem;
+	line-height: 1.45;
+	padding: 10px 12px;
+	background: #f8fafc;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+}
+
+.campaign-custom-audience-recipient-phone {
+	color: #64748b;
+	font-size: 0.82rem;
+}
+
+.campaign-custom-audience-recipient-preview {
+	margin-top: 2px;
+	padding: 12px;
+	border-radius: 14px;
+	background: #f8fafc;
+	border: 1px solid #e5e7eb;
+	color: #334155;
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+.campaign-custom-audience-empty {
+	padding: 18px;
+	border: 1px dashed #cbd5e1;
+	border-radius: 14px;
+	color: #64748b;
+	background: #fff;
+	line-height: 1.5;
+}
+
+/* crear campaña con clientes */
+
+.campaign-panel--customers {
+	padding: 30px;
+}
+
+.campaign-panel--customers .campaign-form {
+	gap: 20px;
+}
+
+.campaign-panel--customers .campaign-form-grid.two-columns {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 18px;
+}
+
+.campaign-panel--customers .field span {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: #0f172a;
+}
+
+.campaign-panel--customers .field input,
+.campaign-panel--customers .field select,
+.campaign-panel--customers .field textarea {
+	padding: 14px 16px;
+	border-radius: 16px;
+	font-size: 0.97rem;
+	border: 1px solid #dbe2ea;
+	background: #fff;
 }
 
 .campaign-audience-mode {
@@ -652,12 +918,6 @@
 	color: #0f172a;
 }
 
-.campaign-inline-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 10px;
-}
-
 .campaign-customer-results-head {
 	padding-bottom: 8px;
 	border-bottom: 1px solid #e8edf5;
@@ -725,14 +985,12 @@
 	font-size: 1rem;
 	line-height: 1.25;
 	color: #0f172a;
-	overflow-wrap: anywhere;
 }
 
 .campaign-customer-title-wrap span {
 	font-size: 0.92rem;
 	line-height: 1.45;
 	color: #64748b;
-	overflow-wrap: anywhere;
 }
 
 .campaign-customer-checkbox {
@@ -774,7 +1032,6 @@
 	min-height: 52px;
 	display: flex;
 	align-items: center;
-	overflow-wrap: anywhere;
 }
 
 .campaign-customer-pagination {
@@ -801,6 +1058,20 @@
 	color: #64748b;
 }
 
+.campaign-panel--customers .campaign-form-actions {
+	padding-top: 4px;
+}
+
+/* responsive */
+
+@media (max-width: 1520px) {
+	.campaign-section-grid--editor,
+	.campaign-builder-grid,
+	.campaign-custom-audience-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
 @media (max-width: 1180px) {
 	.campaign-kpi-grid,
 	.campaign-section-grid,
@@ -810,6 +1081,7 @@
 	.campaign-status-grid,
 	.campaign-filters-grid,
 	.campaign-form-grid.two-columns,
+	.campaign-custom-audience-grid-4,
 	.campaign-customer-filter-grid,
 	.campaign-customer-grid {
 		grid-template-columns: 1fr;
@@ -826,21 +1098,26 @@
 	.campaign-customer-toolbar,
 	.campaign-customer-results-head,
 	.campaign-customer-pagination,
-	.campaign-customer-card-top {
+	.campaign-customer-card-top,
+	.campaign-custom-audience-preview-head,
+	.campaign-custom-audience-recipient-top {
 		flex-direction: column;
 		align-items: flex-start;
 	}
 }
 
 @media (max-width: 760px) {
-	.campaign-panel--customers {
+	.campaign-panel--customers,
+	.campaign-panel {
 		padding: 18px;
 	}
 
 	.campaign-customer-filters,
 	.campaign-customer-results,
 	.campaign-panel--customers .campaign-composer-summary,
-	.campaign-helper-box {
+	.campaign-helper-box,
+	.campaign-custom-audience,
+	.campaign-custom-audience-card {
 		padding: 16px;
 		border-radius: 18px;
 	}
@@ -850,7 +1127,9 @@
 	}
 
 	.campaign-inline-actions .button,
-	.campaign-customer-pagination .button {
+	.campaign-customer-pagination .button,
+	.campaign-form-actions .button {
 		width: 100%;
+		justify-content: center;
 	}
 }
