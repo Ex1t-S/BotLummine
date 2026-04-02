@@ -17,7 +17,10 @@ import {
 	postSyncAbandonedCarts,
 	postSendAbandonedCartMessage,
 } from '../controllers/abandoned-cart.controller.js';
-import { postSyncCustomers } from '../controllers/customer.controller.js';
+import {
+	getCustomers,
+	postSyncCustomers,
+} from '../controllers/customer.controller.js';
 
 const router = Router();
 
@@ -39,6 +42,7 @@ router.get('/abandoned-carts', getAbandonedCarts);
 router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
 router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
 
+router.get('/customers', getCustomers);
 router.post('/customers/sync', postSyncCustomers);
 
 export default router;
