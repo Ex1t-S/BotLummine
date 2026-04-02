@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { resolveStoreCredentials, syncCustomers } from '../services/customer.service.js';
+import { syncCustomers } from '../services/customer.service.js';
 
 function ensureCustomerModels() {
 	if (!prisma?.customerProfile) {
@@ -35,6 +35,7 @@ function formatCurrency(value, currency = 'ARS') {
 
 function formatDate(value) {
 	if (!value) return null;
+
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return null;
 
@@ -59,16 +60,30 @@ function getInitials(value = '') {
 function buildOrderBy(sort = 'updated_desc') {
 	switch (sort) {
 		case 'name_asc':
-			return [{ displayName: 'asc' }, { email: 'asc' }, { createdAt: 'desc' }];
+			return [
+				{ displayName: 'asc' },
+				{ email: 'asc' },
+				{ createdAt: 'desc' },
+			];
 
 		case 'name_desc':
-			return [{ displayName: 'desc' }, { email: 'desc' }, { createdAt: 'desc' }];
+			return [
+				{ displayName: 'desc' },
+				{ email: 'desc' },
+				{ createdAt: 'desc' },
+			];
 
 		case 'spent_desc':
-			return [{ totalSpent: 'desc' }, { updatedAt: 'desc' }];
+			return [
+				{ totalSpent: 'desc' },
+				{ updatedAt: 'desc' },
+			];
 
 		case 'spent_asc':
-			return [{ totalSpent: 'asc' }, { updatedAt: 'desc' }];
+			return [
+				{ totalSpent: 'asc' },
+				{ updatedAt: 'desc' },
+			];
 
 		case 'updated_asc':
 			return [{ updatedAt: 'asc' }];
@@ -79,61 +94,18 @@ function buildOrderBy(sort = 'updated_desc') {
 	}
 }
 
-function extractProductSummary(products) {
-	if (!Array.isArray(products)) return [];
-
-	return products
-		.map((item) => {
-			const name =
-				item?.name || item?.product_name || item?.variant_name || item?.title || item?.sku || null;
-			const quantity = Number(item?.quantity || item?.qty || 0);
-
-			if (!name) return null;
-			return quantity > 1 ? `${name} x${quantity}` : String(name);
-		})
-		.filter(Boolean)
-		.slice(0, 4);
-}
-
-function getLatestOrderData(customer) {
-	const latestOrder = Array.isArray(customer.orders) ? customer.orders[0] : null;
-	const rawLastOrderProducts = customer.rawLastOrderPayload?.products;
-	const summaryFromProfile = Array.isArray(customer.productSummary) ? customer.productSummary : [];
-
-	const orderId = latestOrder?.orderId || customer.lastOrderId || null;
-	const orderNumber = latestOrder?.orderNumber || customer.lastOrderNumber || orderId || null;
-	const orderDate = latestOrder?.orderCreatedAt || customer.lastOrderAt || null;
-	const productsFromOrder = extractProductSummary(latestOrder?.products);
-	const productsFromRawOrder = extractProductSummary(rawLastOrderProducts);
-	const orderProducts = productsFromOrder.length
-		? productsFromOrder
-		: productsFromRawOrder.length
-			? productsFromRawOrder
-			: summaryFromProfile;
-
-	return {
-		orderId,
-		orderNumber,
-		orderDate,
-		orderProducts: Array.isArray(orderProducts) ? orderProducts.slice(0, 4) : [],
-	};
-}
-
 export async function getCustomers(req, res, next) {
 	try {
 		ensureCustomerModels();
 
-		const { storeId } = await resolveStoreCredentials();
 		const q = normalizeSearch(req.query?.q);
 		const page = toPositiveInt(req.query?.page, 1);
-		const pageSize = Math.min(48, Math.max(12, toPositiveInt(req.query?.pageSize, 24)));
+		const pageSize = 12;
 		const skip = (page - 1) * pageSize;
 		const sort = normalizeSearch(req.query?.sort) || 'updated_desc';
 
-		const where = {
-			storeId,
-			...(q
-				? {
+		const where = q
+			? {
 					OR: [
 						{ displayName: { contains: q, mode: 'insensitive' } },
 						{ email: { contains: q, mode: 'insensitive' } },
@@ -143,8 +115,7 @@ export async function getCustomers(req, res, next) {
 						{ identification: { contains: q, mode: 'insensitive' } },
 					],
 				}
-				: {}),
-		};
+			: {};
 
 		const [totalCustomers, withLastOrder, moneyAgg, customers] = await Promise.all([
 			prisma.customerProfile.count({ where }),
@@ -173,23 +144,11 @@ export async function getCustomers(req, res, next) {
 					totalSpent: true,
 					currency: true,
 					lastOrderId: true,
-					lastOrderNumber: true,
-					lastOrderAt: true,
 					updatedAt: true,
 					createdAt: true,
 					productSummary: true,
-					rawLastOrderPayload: true,
 					orderCount: true,
-					orders: {
-						orderBy: [{ orderCreatedAt: 'desc' }, { createdAt: 'desc' }],
-						take: 1,
-						select: {
-							orderId: true,
-							orderNumber: true,
-							orderCreatedAt: true,
-							products: true,
-						},
-					},
+					distinctProductsCount: true,
 				},
 			}),
 		]);
@@ -198,38 +157,32 @@ export async function getCustomers(req, res, next) {
 		const showingFrom = totalCustomers === 0 ? 0 : skip + 1;
 		const showingTo = Math.min(skip + customers.length, totalCustomers);
 
-		const serialized = customers.map((customer) => {
-			const latestOrder = getLatestOrderData(customer);
-			const orderLabel = latestOrder.orderNumber ? `Orden #${latestOrder.orderNumber}` : '-';
-			const orderDateLabel = formatDate(latestOrder.orderDate);
-
-			return {
-				id: customer.id,
-				displayName: customer.displayName || null,
-				email: customer.email || null,
-				phone: customer.phone || null,
-				orderCount: Number(customer.orderCount || 0),
-				totalSpent: Number(customer.totalSpent || 0),
-				totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
-				currency: customer.currency || 'ARS',
-				lastOrderId: latestOrder.orderId,
-				lastOrderNumber: latestOrder.orderNumber,
-				lastOrderLabel: orderLabel,
-				lastOrderDate: latestOrder.orderDate,
-				lastOrderDateLabel: orderDateLabel,
-				productsPreview: latestOrder.orderProducts,
-				productsCount: latestOrder.orderProducts.length,
-				initials: getInitials(customer.displayName || customer.email || customer.phone || '?'),
-				updatedAt: customer.updatedAt,
-				updatedAtLabel: formatDate(customer.updatedAt),
-			};
-		});
+		const serialized = customers.map((customer) => ({
+			id: customer.id,
+			displayName: customer.displayName || null,
+			email: customer.email || null,
+			phone: customer.phone || null,
+			orderCount: Number(customer.orderCount || 0),
+			distinctProductsCount: Number(customer.distinctProductsCount || 0),
+			totalSpent: Number(customer.totalSpent || 0),
+			totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
+			currency: customer.currency || 'ARS',
+			lastOrderId: customer.lastOrderId || null,
+			lastOrderAt: null,
+			lastOrderAtLabel: customer.lastOrderId ? `Orden #${customer.lastOrderId}` : '-',
+			productSummary: Array.isArray(customer.productSummary) ? customer.productSummary : [],
+			initials: getInitials(customer.displayName || customer.email || customer.phone || '?'),
+			updatedAt: customer.updatedAt,
+			updatedAtLabel: formatDate(customer.updatedAt),
+		}));
 
 		return res.json({
 			customers: serialized,
 			stats: {
 				totalCustomers,
+				repeatBuyers: 0,
 				withLastOrder,
+				totalOrders: 0,
 				totalSpent: Number(moneyAgg?._sum?.totalSpent || 0),
 				currency: customers[0]?.currency || 'ARS',
 				showingFrom,
@@ -247,7 +200,7 @@ export async function getCustomers(req, res, next) {
 	}
 }
 
-export async function postSyncCustomers(req, res, next) {
+export async function postSyncCustomers(req, res) {
 	try {
 		ensureCustomerModels();
 
@@ -257,9 +210,18 @@ export async function postSyncCustomers(req, res, next) {
 		return res.json(result);
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
-
 		return res.status(500).json({
 			message: error.message || 'Error sincronizando clientes',
 		});
 	}
+}
+
+export async function postRepairCustomers(_req, res) {
+	return res.json({
+		ok: true,
+		repairedProfiles: 0,
+		mergedProfiles: 0,
+		relinkedOrders: 0,
+		message: 'Repair de clientes disponible, pero todavía no se ejecutó ninguna reparación real en esta versión.',
+	});
 }
