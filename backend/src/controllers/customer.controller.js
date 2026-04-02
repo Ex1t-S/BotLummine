@@ -9,10 +9,25 @@ function ensureCustomerModels() {
 	}
 }
 
-function toPositiveInt(value, fallback) {
+function toPositiveInt(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
 	const parsed = Number.parseInt(String(value ?? ''), 10);
+
 	if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-	return parsed;
+
+	return Math.min(max, Math.max(min, parsed));
+}
+
+function toNumberOrNull(value) {
+	if (value === '' || value === null || value === undefined) return null;
+
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeBoolean(value) {
+	return ['1', 'true', 'yes', 'si', 'on'].includes(
+		String(value || '').trim().toLowerCase()
+	);
 }
 
 function normalizeSearch(value = '') {
@@ -94,31 +109,249 @@ function buildOrderBy(sort = 'updated_desc') {
 	}
 }
 
+function getPrimaryProductLabel(productSummary = []) {
+	if (!Array.isArray(productSummary) || !productSummary.length) return '';
+
+	const first = productSummary[0];
+
+	if (typeof first === 'string') return first;
+	if (typeof first?.name === 'string') return first.name;
+	if (typeof first?.productName === 'string') return first.productName;
+	if (typeof first?.title === 'string') return first.title;
+	if (typeof first?.label === 'string') return first.label;
+
+	return '';
+}
+
+function stringifyProductSummary(productSummary = []) {
+	if (!Array.isArray(productSummary) || !productSummary.length) return '';
+
+	return productSummary
+		.map((item) => {
+			if (!item) return '';
+			if (typeof item === 'string') return item;
+
+			return [
+				item.name,
+				item.productName,
+				item.title,
+				item.label,
+				item.variant,
+				item.color,
+				item.size,
+			]
+				.filter(Boolean)
+				.join(' ');
+		})
+		.filter(Boolean)
+		.join(' • ');
+}
+
+function buildCustomersWhere({
+	q = '',
+	minSpent = null,
+	minOrders = null,
+	hasPhoneOnly = false,
+	hasOrders = false,
+}) {
+	const and = [];
+
+	if (q) {
+		and.push({
+			OR: [
+				{ displayName: { contains: q, mode: 'insensitive' } },
+				{ email: { contains: q, mode: 'insensitive' } },
+				{ phone: { contains: q, mode: 'insensitive' } },
+				{ normalizedPhone: { contains: q, mode: 'insensitive' } },
+				{ normalizedEmail: { contains: q, mode: 'insensitive' } },
+				{ identification: { contains: q, mode: 'insensitive' } },
+			],
+		});
+	}
+
+	if (minSpent !== null && minSpent > 0) {
+		and.push({
+			totalSpent: {
+				gte: minSpent,
+			},
+		});
+	}
+
+	if (minOrders !== null && minOrders > 0) {
+		and.push({
+			orderCount: {
+				gte: minOrders,
+			},
+		});
+	}
+
+	if (hasPhoneOnly) {
+		and.push({
+			OR: [
+				{ phone: { not: null } },
+				{ normalizedPhone: { not: null } },
+			],
+		});
+	}
+
+	if (hasOrders) {
+		and.push({
+			OR: [
+				{ lastOrderId: { not: null } },
+				{ orderCount: { gt: 0 } },
+			],
+		});
+	}
+
+	return and.length ? { AND: and } : {};
+}
+
+function serializeCustomer(customer) {
+	const resolvedPhone = customer.phone || customer.normalizedPhone || null;
+	const productSummary = Array.isArray(customer.productSummary)
+		? customer.productSummary
+		: [];
+
+	return {
+		id: customer.id,
+		displayName: customer.displayName || null,
+		email: customer.email || null,
+		phone: resolvedPhone,
+		hasPhone: Boolean(resolvedPhone),
+		orderCount: Number(customer.orderCount || 0),
+		distinctProductsCount: Number(customer.distinctProductsCount || 0),
+		totalSpent: Number(customer.totalSpent || 0),
+		totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
+		currency: customer.currency || 'ARS',
+		lastOrderId: customer.lastOrderId || null,
+		lastOrderAt: customer.lastOrderAt || null,
+		lastOrderAtLabel:
+			formatDate(customer.lastOrderAt) ||
+			(customer.lastOrderId ? `Orden #${customer.lastOrderId}` : '-'),
+		productSummary,
+		primaryProductLabel: getPrimaryProductLabel(productSummary),
+		initials: getInitials(customer.displayName || customer.email || resolvedPhone || '?'),
+		updatedAt: customer.updatedAt,
+		updatedAtLabel: formatDate(customer.updatedAt),
+	};
+}
+
+function buildStats(customers = [], fallbackCurrency = 'ARS', showingFrom = 0, showingTo = 0) {
+	return {
+		totalCustomers: customers.length,
+		repeatBuyers: customers.filter((customer) => Number(customer.orderCount || 0) > 1).length,
+		withLastOrder: customers.filter((customer) => Boolean(customer.lastOrderId)).length,
+		totalOrders: customers.reduce(
+			(total, customer) => total + Number(customer.orderCount || 0),
+			0
+		),
+		totalSpent: customers.reduce(
+			(total, customer) => total + Number(customer.totalSpent || 0),
+			0
+		),
+		currency: fallbackCurrency || 'ARS',
+		showingFrom,
+		showingTo,
+	};
+}
+
 export async function getCustomers(req, res, next) {
 	try {
 		ensureCustomerModels();
 
 		const q = normalizeSearch(req.query?.q);
 		const page = toPositiveInt(req.query?.page, 1);
-		const pageSize = 12;
+		const pageSize = toPositiveInt(req.query?.pageSize, 24, { min: 1, max: 100 });
 		const skip = (page - 1) * pageSize;
 		const sort = normalizeSearch(req.query?.sort) || 'updated_desc';
+		const minSpent = toNumberOrNull(req.query?.minSpent);
+		const minOrders = toNumberOrNull(req.query?.minOrders);
+		const hasPhoneOnly = normalizeBoolean(req.query?.hasPhoneOnly);
+		const hasOrders = normalizeBoolean(req.query?.hasOrders);
+		const productQuery = normalizeSearch(req.query?.productQuery).toLowerCase();
 
-		const where = q
-			? {
-					OR: [
-						{ displayName: { contains: q, mode: 'insensitive' } },
-						{ email: { contains: q, mode: 'insensitive' } },
-						{ phone: { contains: q, mode: 'insensitive' } },
-						{ normalizedPhone: { contains: q, mode: 'insensitive' } },
-						{ normalizedEmail: { contains: q, mode: 'insensitive' } },
-						{ identification: { contains: q, mode: 'insensitive' } },
-					],
-				}
-			: {};
+		const where = buildCustomersWhere({
+			q,
+			minSpent,
+			minOrders,
+			hasPhoneOnly,
+			hasOrders,
+		});
 
-		const [totalCustomers, withLastOrder, moneyAgg, customers] = await Promise.all([
+		const select = {
+			id: true,
+			displayName: true,
+			email: true,
+			phone: true,
+			normalizedPhone: true,
+			totalSpent: true,
+			currency: true,
+			lastOrderId: true,
+			lastOrderAt: true,
+			updatedAt: true,
+			createdAt: true,
+			productSummary: true,
+			orderCount: true,
+			distinctProductsCount: true,
+		};
+
+		if (productQuery) {
+			const allCustomers = await prisma.customerProfile.findMany({
+				where,
+				orderBy: buildOrderBy(sort),
+				select,
+			});
+
+			const filteredCustomers = allCustomers.filter((customer) =>
+				stringifyProductSummary(customer.productSummary).toLowerCase().includes(productQuery)
+			);
+
+			const totalCustomers = filteredCustomers.length;
+			const totalPages = Math.max(1, Math.ceil(totalCustomers / pageSize));
+			const pagedCustomers = filteredCustomers.slice(skip, skip + pageSize);
+			const showingFrom = totalCustomers === 0 ? 0 : skip + 1;
+			const showingTo = Math.min(skip + pagedCustomers.length, totalCustomers);
+
+			return res.json({
+				customers: pagedCustomers.map(serializeCustomer),
+				stats: buildStats(
+					filteredCustomers,
+					filteredCustomers[0]?.currency || 'ARS',
+					showingFrom,
+					showingTo
+				),
+				pagination: {
+					page,
+					pageSize,
+					totalPages,
+					totalItems: totalCustomers,
+				},
+				filters: {
+					q,
+					sort,
+					minSpent,
+					minOrders,
+					hasPhoneOnly,
+					hasOrders,
+					productQuery: normalizeSearch(req.query?.productQuery),
+				},
+			});
+		}
+
+		const [
+			totalCustomers,
+			repeatBuyers,
+			withLastOrder,
+			agg,
+			customers,
+		] = await Promise.all([
 			prisma.customerProfile.count({ where }),
+			prisma.customerProfile.count({
+				where: {
+					...where,
+					orderCount: { gt: 1 },
+				},
+			}),
 			prisma.customerProfile.count({
 				where: {
 					...where,
@@ -129,6 +362,7 @@ export async function getCustomers(req, res, next) {
 				where,
 				_sum: {
 					totalSpent: true,
+					orderCount: true,
 				},
 			}),
 			prisma.customerProfile.findMany({
@@ -136,20 +370,7 @@ export async function getCustomers(req, res, next) {
 				orderBy: buildOrderBy(sort),
 				skip,
 				take: pageSize,
-				select: {
-					id: true,
-					displayName: true,
-					email: true,
-					phone: true,
-					totalSpent: true,
-					currency: true,
-					lastOrderId: true,
-					updatedAt: true,
-					createdAt: true,
-					productSummary: true,
-					orderCount: true,
-					distinctProductsCount: true,
-				},
+				select,
 			}),
 		]);
 
@@ -157,33 +378,14 @@ export async function getCustomers(req, res, next) {
 		const showingFrom = totalCustomers === 0 ? 0 : skip + 1;
 		const showingTo = Math.min(skip + customers.length, totalCustomers);
 
-		const serialized = customers.map((customer) => ({
-			id: customer.id,
-			displayName: customer.displayName || null,
-			email: customer.email || null,
-			phone: customer.phone || null,
-			orderCount: Number(customer.orderCount || 0),
-			distinctProductsCount: Number(customer.distinctProductsCount || 0),
-			totalSpent: Number(customer.totalSpent || 0),
-			totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
-			currency: customer.currency || 'ARS',
-			lastOrderId: customer.lastOrderId || null,
-			lastOrderAt: null,
-			lastOrderAtLabel: customer.lastOrderId ? `Orden #${customer.lastOrderId}` : '-',
-			productSummary: Array.isArray(customer.productSummary) ? customer.productSummary : [],
-			initials: getInitials(customer.displayName || customer.email || customer.phone || '?'),
-			updatedAt: customer.updatedAt,
-			updatedAtLabel: formatDate(customer.updatedAt),
-		}));
-
 		return res.json({
-			customers: serialized,
+			customers: customers.map(serializeCustomer),
 			stats: {
 				totalCustomers,
-				repeatBuyers: 0,
+				repeatBuyers,
 				withLastOrder,
-				totalOrders: 0,
-				totalSpent: Number(moneyAgg?._sum?.totalSpent || 0),
+				totalOrders: Number(agg?._sum?.orderCount || 0),
+				totalSpent: Number(agg?._sum?.totalSpent || 0),
 				currency: customers[0]?.currency || 'ARS',
 				showingFrom,
 				showingTo,
@@ -193,6 +395,15 @@ export async function getCustomers(req, res, next) {
 				pageSize,
 				totalPages,
 				totalItems: totalCustomers,
+			},
+			filters: {
+				q,
+				sort,
+				minSpent,
+				minOrders,
+				hasPhoneOnly,
+				hasOrders,
+				productQuery: normalizeSearch(req.query?.productQuery),
 			},
 		});
 	} catch (error) {
@@ -210,6 +421,7 @@ export async function postSyncCustomers(req, res) {
 		return res.json(result);
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
+
 		return res.status(500).json({
 			message: error.message || 'Error sincronizando clientes',
 		});
@@ -222,6 +434,7 @@ export async function postRepairCustomers(_req, res) {
 		repairedProfiles: 0,
 		mergedProfiles: 0,
 		relinkedOrders: 0,
-		message: 'Repair de clientes disponible, pero todavía no se ejecutó ninguna reparación real en esta versión.',
+		message:
+			'Repair de clientes disponible, pero todavía no se ejecutó ninguna reparación real en esta versión.',
 	});
 }
