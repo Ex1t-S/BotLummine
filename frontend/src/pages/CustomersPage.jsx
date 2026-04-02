@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../lib/api.js';
 import './CustomersPage.css';
 
+const DEFAULT_PAGE_SIZE = 24;
+
 const initialFilters = {
 	q: '',
 	page: 1,
 	sort: 'updated_desc',
+	pageSize: DEFAULT_PAGE_SIZE,
 };
 
 function formatCurrency(value, currency = 'ARS') {
@@ -56,11 +59,10 @@ export default function CustomersPage() {
 	const [data, setData] = useState({
 		customers: [],
 		stats: {},
-		pagination: { page: 1, totalPages: 1, totalItems: 0 },
+		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
 	});
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
-	const [repairing, setRepairing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [syncMessage, setSyncMessage] = useState('');
 
@@ -82,13 +84,20 @@ export default function CustomersPage() {
 					q: nextFilters.q || '',
 					page: nextFilters.page || 1,
 					sort: nextFilters.sort || 'updated_desc',
+					pageSize: nextFilters.pageSize || DEFAULT_PAGE_SIZE,
 				},
 			});
 
 			setData({
 				customers: Array.isArray(response.data?.customers) ? response.data.customers : [],
 				stats: response.data?.stats || {},
-				pagination: response.data?.pagination || { page: 1, totalPages: 1, totalItems: 0 },
+				pagination:
+					response.data?.pagination || {
+						page: 1,
+						totalPages: 1,
+						totalItems: 0,
+						pageSize: DEFAULT_PAGE_SIZE,
+					},
 			});
 		} catch (error) {
 			console.error(error);
@@ -152,12 +161,11 @@ export default function CustomersPage() {
 			const pagesFetched = Number(res.data?.pagesFetched || 0);
 			const customersFetched = Number(res.data?.customersFetched || 0);
 			const customersUpserted = Number(res.data?.customersUpserted || 0);
-			const customersCreated = Number(res.data?.customersCreated || 0);
-			const customersUpdated = Number(res.data?.customersUpdated || 0);
-			const mergedDuplicates = Number(res.data?.mergedDuplicates || 0);
+			const pageSize = Number(res.data?.pageSize || 0);
+			const concurrency = Number(res.data?.concurrency || 0);
 
 			setSyncMessage(
-				`Sync terminada. Páginas: ${pagesFetched}. Leídos: ${customersFetched}. Tocadas: ${customersUpserted}. Nuevos: ${customersCreated}. Actualizados: ${customersUpdated}. Duplicados fusionados: ${mergedDuplicates}.`
+				`Sync terminada. Páginas: ${pagesFetched}. Clientes leídos: ${customersFetched}. Clientes actualizados: ${customersUpserted}.${pageSize ? ` Page size: ${pageSize}.` : ''}${concurrency ? ` Concurrency: ${concurrency}.` : ''}`
 			);
 
 			const next = {
@@ -172,24 +180,6 @@ export default function CustomersPage() {
 			setErrorMessage(error?.response?.data?.message || 'No se pudo sincronizar clientes.');
 		} finally {
 			setSyncing(false);
-		}
-	}
-
-	async function handleRepair() {
-		setRepairing(true);
-		setSyncMessage('');
-		setErrorMessage('');
-
-		try {
-			const res = await api.post('/dashboard/customers/repair');
-			const mergedDuplicates = Number(res.data?.mergedDuplicates || 0);
-			setSyncMessage(`Reparación terminada. Duplicados fusionados: ${mergedDuplicates}.`);
-			await loadCustomers({ ...filters, page: 1 });
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(error?.response?.data?.message || 'No se pudo reparar clientes.');
-		} finally {
-			setRepairing(false);
 		}
 	}
 
@@ -212,30 +202,19 @@ export default function CustomersPage() {
 					<span className="customers-kicker">CRM COMERCIAL</span>
 					<h1>Clientes</h1>
 					<p>
-						Acá vamos a concentrar cada cliente en una sola fila para después segmentarlos
-						mejor en campañas.
+						Ahora cada página trae más clientes, las tarjetas son más compactas y ya
+						queda a mano la última orden con fecha y productos.
 					</p>
 				</div>
 
-				<div className="customers-hero-actions">
-					<button
-						type="button"
-						className="secondary-link-btn"
-						onClick={handleRepair}
-						disabled={repairing || syncing}
-					>
-						{repairing ? 'Reparando...' : 'Reparar duplicados'}
-					</button>
-
-					<button
-						type="button"
-						className="primary-action-btn"
-						onClick={handleSync}
-						disabled={syncing || repairing}
-					>
-						{syncing ? 'Sincronizando...' : 'Sincronizar clientes'}
-					</button>
-				</div>
+				<button
+					type="button"
+					className="primary-action-btn"
+					onClick={handleSync}
+					disabled={syncing}
+				>
+					{syncing ? 'Sincronizando...' : 'Sincronizar clientes'}
+				</button>
 			</div>
 
 			{errorMessage ? (
@@ -316,7 +295,8 @@ export default function CustomersPage() {
 					<div>
 						<h3>Listado de clientes</h3>
 						<p>
-							Mostrando {normalizedStats.showingFrom}-{normalizedStats.showingTo}
+							Mostrando {normalizedStats.showingFrom}-{normalizedStats.showingTo} ·{' '}
+							{data.pagination?.pageSize || DEFAULT_PAGE_SIZE} por página
 						</p>
 					</div>
 				</div>
@@ -334,35 +314,54 @@ export default function CustomersPage() {
 								<div className="customer-card-topbar">
 									<div className="customer-identity">
 										<div className="customer-avatar">{customer.initials || '?'}</div>
-										<div>
+										<div className="customer-identity-copy">
 											<h4>{customer.displayName || 'Cliente sin nombre'}</h4>
 											{customer.phone ? <p>{customer.phone}</p> : null}
 											{customer.email ? <p>{customer.email}</p> : null}
 										</div>
 									</div>
 
-									{customer.lastOrderId ? (
-										<span className="customer-pill">Orden #{customer.lastOrderId}</span>
+									{customer.lastOrderNumber ? (
+										<span className="customer-pill">{customer.lastOrderLabel}</span>
 									) : (
 										<span className="customer-pill customer-pill--muted">Sin última orden</span>
 									)}
 								</div>
 
-								<div className="customer-metrics-grid">
-									<div className="customer-metric-box">
-										<span>Monto histórico</span>
+								<div className="customer-meta-row">
+									<div className="customer-meta-chip">
+										<span>Monto</span>
 										<strong>{customer.totalSpentLabel || '$0'}</strong>
 									</div>
 
-									<div className="customer-metric-box">
-										<span>Última orden</span>
-										<strong>{customer.lastOrderAtLabel || '-'}</strong>
+									<div className="customer-meta-chip">
+										<span>Fecha pedido</span>
+										<strong>{customer.lastOrderDateLabel || '-'}</strong>
 									</div>
 
-									<div className="customer-metric-box">
+									<div className="customer-meta-chip">
 										<span>Actualizado</span>
 										<strong>{customer.updatedAtLabel || '-'}</strong>
 									</div>
+								</div>
+
+								<div className="customer-products-box">
+									<div className="customer-products-header">
+										<span>Última compra</span>
+										<strong>{customer.lastOrderLabel || '-'}</strong>
+									</div>
+
+									{customer.productsPreview?.length ? (
+										<ul className="customer-products-list">
+											{customer.productsPreview.map((product) => (
+												<li key={`${customer.id}-${product}`}>{product}</li>
+											))}
+										</ul>
+									) : (
+										<p className="customer-products-empty">
+											Todavía no hay detalle de productos guardado para esa orden.
+										</p>
+									)}
 								</div>
 							</article>
 						))}

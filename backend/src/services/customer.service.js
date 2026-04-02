@@ -3,20 +3,23 @@ import { prisma } from '../lib/prisma.js';
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CUSTOMERS_PER_PAGE = Math.min(
 	200,
-	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 200))
+	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 200))
+);
+const FETCH_CONCURRENCY = Math.min(
+	8,
+	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 4))
 );
 const MAX_PAGES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_MAX_PAGES || 500));
-const RUNNING_LOCK_MINUTES = Math.max(
-	5,
-	Number(process.env.CUSTOMERS_SYNC_LOCK_MINUTES || 30)
-);
+const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_RETRIES || 4));
+const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 80));
 
-export class CustomerSyncConflictError extends Error {
-	constructor(message = 'Ya hay una sincronización de clientes en curso.') {
-		super(message);
-		this.name = 'CustomerSyncConflictError';
-		this.statusCode = 409;
-	}
+const syncState = {
+	running: false,
+	startedAt: null,
+};
+
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizePhone(value = '') {
@@ -53,25 +56,21 @@ function buildHeaders(accessToken) {
 	};
 }
 
-function hasSameLegacyIdentity(profile, payload) {
-	return Boolean(
-		(payload.normalizedEmail && profile.normalizedEmail === payload.normalizedEmail) ||
-			(payload.normalizedPhone && profile.normalizedPhone === payload.normalizedPhone)
-	);
-}
+export async function resolveStoreCredentials() {
+	const installation = await prisma.storeInstallation.findFirst({
+		orderBy: { installedAt: 'desc' },
+	});
 
-function compareProfiles(a, b) {
-	const score = (profile) => {
-		let value = 0;
-		if (profile.externalCustomerId) value += 1000;
-		if (profile.lastOrderId) value += 100;
-		value += Number(profile.orderCount || 0) * 10;
-		if (profile.totalSpent) value += Number(profile.totalSpent || 0) > 0 ? 5 : 0;
-		if (profile.updatedAt) value += new Date(profile.updatedAt).getTime() / 1e13;
-		return value;
-	};
+	const storeId = installation?.storeId || process.env.TIENDANUBE_STORE_ID || null;
+	const accessToken = installation?.accessToken || process.env.TIENDANUBE_ACCESS_TOKEN || null;
 
-	return score(b) - score(a);
+	if (!storeId || !accessToken) {
+		throw new Error(
+			'Faltan credenciales de Tiendanube. Necesitás StoreInstallation o TIENDANUBE_STORE_ID / TIENDANUBE_ACCESS_TOKEN en el .env.'
+		);
+	}
+
+	return { storeId, accessToken };
 }
 
 function buildCustomerProfilePayload(customer = {}, storeId) {
@@ -102,89 +101,197 @@ function buildCustomerProfilePayload(customer = {}, storeId) {
 		totalSpent: toDecimalOrNull(customer?.total_spent),
 		currency: cleanString(customer?.total_spent_currency),
 		lastOrderId: customer?.last_order_id ? String(customer.last_order_id) : null,
-		firstOrderAt: null,
-		lastOrderAt: null,
-		lastOrderNumber: null,
-		lastPaymentStatus: null,
-		lastShippingStatus: null,
-		productSummary: null,
 		rawCustomerPayload: customer,
-		rawLastOrderPayload: null,
 		syncedAt: new Date(),
 	};
 }
 
-function pick(existingValue, incomingValue) {
-	if (incomingValue === null || incomingValue === undefined) return existingValue;
-	if (typeof incomingValue === 'string' && !incomingValue.trim()) return existingValue;
-	return incomingValue;
+function normalizeComparable(value) {
+	if (value === undefined) return null;
+	if (value === null) return null;
+	if (value instanceof Date) return value.getTime();
+	if (typeof value === 'object') return JSON.stringify(value);
+	if (typeof value === 'number') return value;
+	return String(value);
 }
 
-async function resolveStoreCredentials() {
-	const installation = await prisma.storeInstallation.findFirst({
-		orderBy: { installedAt: 'desc' },
-	});
+function valuesEqual(left, right) {
+	return normalizeComparable(left) === normalizeComparable(right);
+}
 
-	const storeId = installation?.storeId || process.env.TIENDANUBE_STORE_ID || null;
-	const accessToken = installation?.accessToken || process.env.TIENDANUBE_ACCESS_TOKEN || null;
+function pickBestProfile(current, incoming) {
+	if (!current) return incoming;
 
-	if (!storeId || !accessToken) {
-		throw new Error(
-			'Faltan credenciales de Tiendanube. Necesitás StoreInstallation o TIENDANUBE_STORE_ID / TIENDANUBE_ACCESS_TOKEN en el .env.'
-		);
+	const currentScore =
+		Number(current.orderCount || 0) * 100 +
+		(current.lastOrderAt ? 10 : 0) +
+		(current.externalCustomerId ? 5 : 0) +
+		(current.normalizedEmail ? 2 : 0) +
+		(current.normalizedPhone ? 2 : 0);
+
+	const incomingScore =
+		Number(incoming.orderCount || 0) * 100 +
+		(incoming.lastOrderAt ? 10 : 0) +
+		(incoming.externalCustomerId ? 5 : 0) +
+		(incoming.normalizedEmail ? 2 : 0) +
+		(incoming.normalizedPhone ? 2 : 0);
+
+	if (incomingScore > currentScore) return incoming;
+	if (incomingScore < currentScore) return current;
+
+	const currentCreated = current.createdAt ? new Date(current.createdAt).getTime() : Infinity;
+	const incomingCreated = incoming.createdAt ? new Date(incoming.createdAt).getTime() : Infinity;
+	return incomingCreated < currentCreated ? incoming : current;
+}
+
+function mergePayload(base, incoming) {
+	if (!base) return incoming;
+
+	return {
+		...base,
+		externalCustomerId: incoming.externalCustomerId || base.externalCustomerId,
+		displayName: incoming.displayName || base.displayName,
+		email: incoming.email || base.email,
+		normalizedEmail: incoming.normalizedEmail || base.normalizedEmail,
+		phone: incoming.phone || base.phone,
+		normalizedPhone: incoming.normalizedPhone || base.normalizedPhone,
+		identification: incoming.identification || base.identification,
+		note: incoming.note || base.note,
+		acceptsMarketing:
+			typeof incoming.acceptsMarketing === 'boolean'
+				? incoming.acceptsMarketing
+				: base.acceptsMarketing,
+		acceptsMarketingUpdatedAt:
+			incoming.acceptsMarketingUpdatedAt || base.acceptsMarketingUpdatedAt,
+		defaultAddress: incoming.defaultAddress ?? base.defaultAddress,
+		addresses: incoming.addresses ?? base.addresses,
+		billingAddress: incoming.billingAddress || base.billingAddress,
+		billingNumber: incoming.billingNumber || base.billingNumber,
+		billingFloor: incoming.billingFloor || base.billingFloor,
+		billingLocality: incoming.billingLocality || base.billingLocality,
+		billingZipcode: incoming.billingZipcode || base.billingZipcode,
+		billingCity: incoming.billingCity || base.billingCity,
+		billingProvince: incoming.billingProvince || base.billingProvince,
+		billingCountry: incoming.billingCountry || base.billingCountry,
+		billingPhone: incoming.billingPhone || base.billingPhone,
+		totalSpent: incoming.totalSpent ?? base.totalSpent,
+		currency: incoming.currency || base.currency,
+		lastOrderId: incoming.lastOrderId || base.lastOrderId,
+		rawCustomerPayload: incoming.rawCustomerPayload || base.rawCustomerPayload,
+		syncedAt: incoming.syncedAt || base.syncedAt,
+	};
+}
+
+function dedupePayloads(payloads = []) {
+	const deduped = [];
+	const externalMap = new Map();
+	const emailMap = new Map();
+	const phoneMap = new Map();
+
+	for (const payload of payloads) {
+		const byExternal = payload.externalCustomerId
+			? externalMap.get(payload.externalCustomerId)
+			: null;
+		const byEmail = payload.normalizedEmail ? emailMap.get(payload.normalizedEmail) : null;
+		const byPhone = payload.normalizedPhone ? phoneMap.get(payload.normalizedPhone) : null;
+		const existingIndex = byExternal ?? byEmail ?? byPhone;
+
+		if (existingIndex === undefined || existingIndex === null) {
+			const nextIndex = deduped.length;
+			deduped.push(payload);
+
+			if (payload.externalCustomerId) externalMap.set(payload.externalCustomerId, nextIndex);
+			if (payload.normalizedEmail) emailMap.set(payload.normalizedEmail, nextIndex);
+			if (payload.normalizedPhone) phoneMap.set(payload.normalizedPhone, nextIndex);
+			continue;
+		}
+
+		deduped[existingIndex] = mergePayload(deduped[existingIndex], payload);
+		const merged = deduped[existingIndex];
+		if (merged.externalCustomerId) externalMap.set(merged.externalCustomerId, existingIndex);
+		if (merged.normalizedEmail) emailMap.set(merged.normalizedEmail, existingIndex);
+		if (merged.normalizedPhone) phoneMap.set(merged.normalizedPhone, existingIndex);
 	}
 
-	return { storeId, accessToken };
+	return deduped;
 }
 
-async function acquireSyncLock(storeId) {
-	const cutoff = new Date(Date.now() - RUNNING_LOCK_MINUTES * 60 * 1000);
+function buildProfileMaps(existingProfiles = []) {
+	const externalMap = new Map();
+	const emailMap = new Map();
+	const phoneMap = new Map();
 
-	await prisma.customerSyncLog.updateMany({
-		where: {
-			storeId,
-			status: 'RUNNING',
-			startedAt: { lt: cutoff },
-			finishedAt: null,
-		},
-		data: {
-			status: 'FAILED',
-			finishedAt: new Date(),
-			message: 'Se marcó como fallida por lock vencido.',
-		},
-	});
+	for (const profile of existingProfiles) {
+		if (profile.externalCustomerId) {
+			externalMap.set(
+				profile.externalCustomerId,
+				pickBestProfile(externalMap.get(profile.externalCustomerId), profile)
+			);
+		}
 
-	const running = await prisma.customerSyncLog.findFirst({
-		where: {
-			storeId,
-			status: 'RUNNING',
-			finishedAt: null,
-		},
-		orderBy: { startedAt: 'desc' },
-	});
+		if (profile.normalizedEmail) {
+			emailMap.set(
+				profile.normalizedEmail,
+				pickBestProfile(emailMap.get(profile.normalizedEmail), profile)
+			);
+		}
 
-	if (running) {
-		throw new CustomerSyncConflictError();
+		if (profile.normalizedPhone) {
+			phoneMap.set(
+				profile.normalizedPhone,
+				pickBestProfile(phoneMap.get(profile.normalizedPhone), profile)
+			);
+		}
 	}
 
-	return prisma.customerSyncLog.create({
-		data: {
-			storeId,
-			status: 'RUNNING',
-			fullSync: false,
-			message: 'Sincronización rápida de clientes iniciada.',
-		},
-	});
+	return { externalMap, emailMap, phoneMap };
 }
 
-async function finalizeSyncLog(logId, data) {
-	return prisma.customerSyncLog.update({
-		where: { id: logId },
-		data: {
-			...data,
-			finishedAt: new Date(),
-		},
-	});
+function buildUpdateData(existing, payload) {
+	const nextData = {};
+	const fields = [
+		'externalCustomerId',
+		'displayName',
+		'email',
+		'normalizedEmail',
+		'phone',
+		'normalizedPhone',
+		'identification',
+		'note',
+		'acceptsMarketing',
+		'acceptsMarketingUpdatedAt',
+		'defaultAddress',
+		'addresses',
+		'billingAddress',
+		'billingNumber',
+		'billingFloor',
+		'billingLocality',
+		'billingZipcode',
+		'billingCity',
+		'billingProvince',
+		'billingCountry',
+		'billingPhone',
+		'totalSpent',
+		'currency',
+		'lastOrderId',
+		'rawCustomerPayload',
+	];
+
+	for (const field of fields) {
+		const incomingValue = payload[field];
+		if (incomingValue === undefined) continue;
+		if (incomingValue === null) continue;
+		if (typeof incomingValue === 'string' && !incomingValue.trim()) continue;
+		if (!valuesEqual(existing[field], incomingValue)) {
+			nextData[field] = incomingValue;
+		}
+	}
+
+	if (Object.keys(nextData).length) {
+		nextData.syncedAt = new Date();
+	}
+
+	return nextData;
 }
 
 async function fetchCustomersPage({ storeId, accessToken, page, q = '' }) {
@@ -226,301 +333,207 @@ async function fetchCustomersPage({ storeId, accessToken, page, q = '' }) {
 	}
 
 	const url = `https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/customers?${params.toString()}`;
-	const response = await fetch(url, {
-		method: 'GET',
-		headers: buildHeaders(accessToken),
-	});
 
-	if (!response.ok) {
+	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
+		const response = await fetch(url, {
+			method: 'GET',
+			headers: buildHeaders(accessToken),
+		});
+
+		if (response.ok) {
+			const data = await response.json();
+
+			if (!Array.isArray(data)) {
+				throw new Error('La respuesta de Tiendanube en /customers no fue una lista.');
+			}
+
+			return data;
+		}
+
 		const text = await response.text();
-		throw new Error(`Tiendanube customers error ${response.status}: ${text}`);
+		const retryAfterHeader = Number(response.headers.get('retry-after') || 0);
+		const retryable = response.status === 429 || response.status >= 500;
+
+		if (!retryable || attempt === FETCH_RETRIES) {
+			throw new Error(`Tiendanube customers error ${response.status}: ${text}`);
+		}
+
+		const backoffMs = retryAfterHeader
+			? retryAfterHeader * 1000
+			: Math.min(8000, 500 * 2 ** (attempt - 1));
+		await sleep(backoffMs);
 	}
 
-	const data = await response.json();
-	if (!Array.isArray(data)) {
-		throw new Error('La respuesta de Tiendanube en /customers no fue una lista.');
-	}
-
-	return data;
+	return [];
 }
 
-async function findMatchingProfiles(storeId, payload) {
-	const or = [];
-
-	if (payload.externalCustomerId) {
-		or.push({ externalCustomerId: payload.externalCustomerId });
-	}
-	if (payload.normalizedEmail) {
-		or.push({ normalizedEmail: payload.normalizedEmail });
-	}
-	if (payload.normalizedPhone) {
-		or.push({ normalizedPhone: payload.normalizedPhone });
+async function processCustomerChunk({ storeId, customers }) {
+	if (!customers.length) {
+		return { created: 0, updated: 0, touched: 0 };
 	}
 
-	if (!or.length) return [];
+	const payloads = dedupePayloads(customers.map((customer) => buildCustomerProfilePayload(customer, storeId)));
+	const externalIds = [...new Set(payloads.map((item) => item.externalCustomerId).filter(Boolean))];
+	const emails = [...new Set(payloads.map((item) => item.normalizedEmail).filter(Boolean))];
+	const phones = [...new Set(payloads.map((item) => item.normalizedPhone).filter(Boolean))];
 
-	return prisma.customerProfile.findMany({
-		where: {
-			storeId,
-			OR: or,
-		},
-		select: {
-			id: true,
-			externalCustomerId: true,
-			normalizedEmail: true,
-			normalizedPhone: true,
-			orderCount: true,
-			totalSpent: true,
-			lastOrderId: true,
-			updatedAt: true,
-		},
-	});
-}
+	const whereOr = [];
+	if (externalIds.length) whereOr.push({ externalCustomerId: { in: externalIds } });
+	if (emails.length) whereOr.push({ normalizedEmail: { in: emails } });
+	if (phones.length) whereOr.push({ normalizedPhone: { in: phones } });
 
-async function mergeProfilesIntoKeeper(keeperId, duplicateIds = []) {
-	if (!duplicateIds.length) return 0;
+	const existingProfiles = whereOr.length
+		? await prisma.customerProfile.findMany({
+				where: {
+					storeId,
+					OR: whereOr,
+				},
+				select: {
+					id: true,
+					externalCustomerId: true,
+					normalizedEmail: true,
+					normalizedPhone: true,
+					displayName: true,
+					email: true,
+					phone: true,
+					identification: true,
+					note: true,
+					acceptsMarketing: true,
+					acceptsMarketingUpdatedAt: true,
+					defaultAddress: true,
+					addresses: true,
+					billingAddress: true,
+					billingNumber: true,
+					billingFloor: true,
+					billingLocality: true,
+					billingZipcode: true,
+					billingCity: true,
+					billingProvince: true,
+					billingCountry: true,
+					billingPhone: true,
+					totalSpent: true,
+					currency: true,
+					lastOrderId: true,
+					rawCustomerPayload: true,
+					orderCount: true,
+					lastOrderAt: true,
+					createdAt: true,
+				},
+			})
+		: [];
 
-	await prisma.$transaction(async (tx) => {
-		await tx.customerOrder.updateMany({
-			where: { customerProfileId: { in: duplicateIds } },
-			data: { customerProfileId: keeperId },
-		});
+	const { externalMap, emailMap, phoneMap } = buildProfileMaps(existingProfiles);
+	const updates = [];
+	const inserts = [];
 
-		await tx.customerProfile.deleteMany({
-			where: { id: { in: duplicateIds } },
-		});
-	});
+	for (const payload of payloads) {
+		const existing =
+			(payload.externalCustomerId && externalMap.get(payload.externalCustomerId)) ||
+			(payload.normalizedEmail && emailMap.get(payload.normalizedEmail)) ||
+			(payload.normalizedPhone && phoneMap.get(payload.normalizedPhone)) ||
+			null;
 
-	return duplicateIds.length;
-}
-
-function pickKeeper(candidates = []) {
-	return [...candidates].sort(compareProfiles)[0] || null;
-}
-
-async function upsertCustomerProfile(payload) {
-	const matches = await findMatchingProfiles(payload.storeId, payload);
-
-	const exactMatches = matches.filter(
-		(profile) =>
-			payload.externalCustomerId && profile.externalCustomerId === payload.externalCustomerId
-	);
-	const legacyMatches = matches.filter(
-		(profile) => !profile.externalCustomerId && hasSameLegacyIdentity(profile, payload)
-	);
-
-	const eligibleMatches = exactMatches.length ? [...exactMatches, ...legacyMatches] : legacyMatches;
-	const keeper = pickKeeper(eligibleMatches);
-
-	let mergedDuplicates = 0;
-
-	if (!keeper) {
-		const created = await prisma.customerProfile.create({
-			data: {
+		if (!existing) {
+			inserts.push({
 				...payload,
 				orderCount: 0,
 				paidOrderCount: 0,
 				distinctProductsCount: 0,
 				totalUnitsPurchased: 0,
-			},
+			});
+			continue;
+		}
+
+		const data = buildUpdateData(existing, payload);
+		if (Object.keys(data).length) {
+			updates.push({ id: existing.id, data });
+		}
+	}
+
+	if (inserts.length) {
+		await prisma.customerProfile.createMany({
+			data: inserts,
 		});
-
-		return {
-			profile: created,
-			created: true,
-			mergedDuplicates,
-		};
 	}
 
-	const duplicatesToMerge = eligibleMatches
-		.filter((profile) => profile.id !== keeper.id)
-		.map((profile) => profile.id);
-
-	if (duplicatesToMerge.length) {
-		mergedDuplicates = await mergeProfilesIntoKeeper(keeper.id, duplicatesToMerge);
+	for (let index = 0; index < updates.length; index += UPDATE_CHUNK_SIZE) {
+		const chunk = updates.slice(index, index + UPDATE_CHUNK_SIZE);
+		await prisma.$transaction(
+			chunk.map((item) =>
+				prisma.customerProfile.update({
+					where: { id: item.id },
+					data: item.data,
+				})
+			)
+		);
 	}
-
-	const updated = await prisma.customerProfile.update({
-		where: { id: keeper.id },
-		data: {
-			externalCustomerId: pick(keeper.externalCustomerId, payload.externalCustomerId),
-			displayName: payload.displayName,
-			email: payload.email,
-			normalizedEmail: payload.normalizedEmail,
-			phone: payload.phone,
-			normalizedPhone: payload.normalizedPhone,
-			identification: payload.identification,
-			note: payload.note,
-			acceptsMarketing: payload.acceptsMarketing,
-			acceptsMarketingUpdatedAt: payload.acceptsMarketingUpdatedAt,
-			defaultAddress: payload.defaultAddress,
-			addresses: payload.addresses,
-			billingAddress: payload.billingAddress,
-			billingNumber: payload.billingNumber,
-			billingFloor: payload.billingFloor,
-			billingLocality: payload.billingLocality,
-			billingZipcode: payload.billingZipcode,
-			billingCity: payload.billingCity,
-			billingProvince: payload.billingProvince,
-			billingCountry: payload.billingCountry,
-			billingPhone: payload.billingPhone,
-			totalSpent: payload.totalSpent,
-			currency: payload.currency,
-			lastOrderId: payload.lastOrderId,
-			rawCustomerPayload: payload.rawCustomerPayload,
-			syncedAt: new Date(),
-		},
-	});
 
 	return {
-		profile: updated,
-		created: false,
-		mergedDuplicates,
+		created: inserts.length,
+		updated: updates.length,
+		touched: inserts.length + updates.length,
 	};
 }
 
-async function repairCustomerProfiles(storeId) {
-	let mergedDuplicates = 0;
-
-	const profilesByExternal = await prisma.customerProfile.findMany({
-		where: { storeId, externalCustomerId: { not: null } },
-		select: {
-			id: true,
-			externalCustomerId: true,
-			orderCount: true,
-			totalSpent: true,
-			lastOrderId: true,
-			updatedAt: true,
-		},
-	});
-
-	const externalMap = new Map();
-	for (const profile of profilesByExternal) {
-		const key = profile.externalCustomerId;
-		if (!key) continue;
-		if (!externalMap.has(key)) externalMap.set(key, []);
-		externalMap.get(key).push(profile);
-	}
-
-	for (const group of externalMap.values()) {
-		if (group.length < 2) continue;
-		const keeper = pickKeeper(group);
-		const duplicates = group.filter((profile) => profile.id !== keeper.id).map((profile) => profile.id);
-		mergedDuplicates += await mergeProfilesIntoKeeper(keeper.id, duplicates);
-	}
-
-	const legacyProfiles = await prisma.customerProfile.findMany({
-		where: { storeId, externalCustomerId: null },
-		select: {
-			id: true,
-			normalizedEmail: true,
-			normalizedPhone: true,
-			orderCount: true,
-			totalSpent: true,
-			lastOrderId: true,
-			updatedAt: true,
-		},
-	});
-
-	const emailMap = new Map();
-	for (const profile of legacyProfiles) {
-		if (!profile.normalizedEmail) continue;
-		if (!emailMap.has(profile.normalizedEmail)) emailMap.set(profile.normalizedEmail, []);
-		emailMap.get(profile.normalizedEmail).push(profile);
-	}
-
-	for (const group of emailMap.values()) {
-		if (group.length < 2) continue;
-		const keeper = pickKeeper(group);
-		const duplicates = group.filter((profile) => profile.id !== keeper.id).map((profile) => profile.id);
-		mergedDuplicates += await mergeProfilesIntoKeeper(keeper.id, duplicates);
-	}
-
-	const phoneOnlyProfiles = await prisma.customerProfile.findMany({
-		where: {
-			storeId,
-			externalCustomerId: null,
-			normalizedEmail: null,
-			normalizedPhone: { not: null },
-		},
-		select: {
-			id: true,
-			normalizedPhone: true,
-			orderCount: true,
-			totalSpent: true,
-			lastOrderId: true,
-			updatedAt: true,
-		},
-	});
-
-	const phoneMap = new Map();
-	for (const profile of phoneOnlyProfiles) {
-		if (!profile.normalizedPhone) continue;
-		if (!phoneMap.has(profile.normalizedPhone)) phoneMap.set(profile.normalizedPhone, []);
-		phoneMap.get(profile.normalizedPhone).push(profile);
-	}
-
-	for (const group of phoneMap.values()) {
-		if (group.length < 2) continue;
-		const keeper = pickKeeper(group);
-		const duplicates = group.filter((profile) => profile.id !== keeper.id).map((profile) => profile.id);
-		mergedDuplicates += await mergeProfilesIntoKeeper(keeper.id, duplicates);
-	}
-
-	return { mergedDuplicates };
+function buildConcurrentPageList(startPage) {
+	return Array.from({ length: FETCH_CONCURRENCY }, (_, index) => startPage + index).filter(
+		(page) => page <= MAX_PAGES
+	);
 }
 
-export async function syncCustomers({ q = '', runRepair = true } = {}) {
-	const { storeId, accessToken } = await resolveStoreCredentials();
-	const syncLog = await acquireSyncLock(storeId);
+export function getCustomerSyncState() {
+	return { ...syncState };
+}
 
-	let pagesFetched = 0;
-	let customersFetched = 0;
-	let customersUpserted = 0;
-	let customersCreated = 0;
-	let customersUpdated = 0;
-	let mergedDuplicates = 0;
+export async function syncCustomers({ q = '' } = {}) {
+	if (syncState.running) {
+		throw new Error('Ya hay una sincronización de clientes en curso. Esperá a que termine.');
+	}
+
+	syncState.running = true;
+	syncState.startedAt = new Date();
 
 	try {
-		if (runRepair) {
-			const repairResult = await repairCustomerProfiles(storeId);
-			mergedDuplicates += repairResult.mergedDuplicates;
-		}
+		const { storeId, accessToken } = await resolveStoreCredentials();
 
-		for (let page = 1; page <= MAX_PAGES; page += 1) {
-			const customers = await fetchCustomersPage({
-				storeId,
-				accessToken,
-				page,
-				q,
-			});
+		let pagesFetched = 0;
+		let customersFetched = 0;
+		let customersUpserted = 0;
+		let nextPage = 1;
+		let shouldStop = false;
 
-			if (!customers.length) break;
+		while (nextPage <= MAX_PAGES && !shouldStop) {
+			const pages = buildConcurrentPageList(nextPage);
+			const results = await Promise.all(
+				pages.map(async (page) => ({
+					page,
+					customers: await fetchCustomersPage({ storeId, accessToken, page, q }),
+				}))
+			);
 
-			pagesFetched += 1;
-			customersFetched += customers.length;
+			results.sort((left, right) => left.page - right.page);
 
-			for (const customer of customers) {
-				const payload = buildCustomerProfilePayload(customer, storeId);
-				const result = await upsertCustomerProfile(payload);
-				customersUpserted += 1;
-				mergedDuplicates += result.mergedDuplicates;
+			for (const result of results) {
+				const batch = Array.isArray(result.customers) ? result.customers : [];
 
-				if (result.created) customersCreated += 1;
-				else customersUpdated += 1;
+				if (!batch.length) {
+					shouldStop = true;
+					continue;
+				}
+
+				pagesFetched += 1;
+				customersFetched += batch.length;
+
+				const processed = await processCustomerChunk({ storeId, customers: batch });
+				customersUpserted += processed.touched;
+
+				if (batch.length < CUSTOMERS_PER_PAGE) {
+					shouldStop = true;
+				}
 			}
 
-			if (customers.length < CUSTOMERS_PER_PAGE) break;
+			nextPage += FETCH_CONCURRENCY;
 		}
-
-		await finalizeSyncLog(syncLog.id, {
-			status: 'SUCCESS',
-			pagesFetched,
-			ordersFetched: customersFetched,
-			ordersUpserted: 0,
-			customersTouched: customersUpserted,
-			message: `Sync rápida completada. Clientes leídos: ${customersFetched}. Actualizados: ${customersUpdated}. Creados: ${customersCreated}. Duplicados fusionados: ${mergedDuplicates}.`,
-		});
 
 		return {
 			ok: true,
@@ -528,33 +541,13 @@ export async function syncCustomers({ q = '', runRepair = true } = {}) {
 			pagesFetched,
 			customersFetched,
 			customersUpserted,
-			customersCreated,
-			customersUpdated,
-			mergedDuplicates,
 			customersTouched: customersUpserted,
 			ordersUpserted: 0,
+			pageSize: CUSTOMERS_PER_PAGE,
+			concurrency: FETCH_CONCURRENCY,
 		};
-	} catch (error) {
-		await finalizeSyncLog(syncLog.id, {
-			status: 'FAILED',
-			pagesFetched,
-			ordersFetched: customersFetched,
-			ordersUpserted: 0,
-			customersTouched: customersUpserted,
-			message: error.message || 'Error en sync rápida de clientes.',
-		});
-
-		throw error;
+	} finally {
+		syncState.running = false;
+		syncState.startedAt = null;
 	}
-}
-
-export async function repairCustomers() {
-	const { storeId } = await resolveStoreCredentials();
-	const repairResult = await repairCustomerProfiles(storeId);
-
-	return {
-		ok: true,
-		storeId,
-		mergedDuplicates: repairResult.mergedDuplicates,
-	};
 }

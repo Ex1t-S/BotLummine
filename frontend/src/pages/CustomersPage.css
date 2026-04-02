@@ -25,13 +25,6 @@
 	padding: 24px;
 }
 
-.customers-hero-actions {
-	display: flex;
-	gap: 10px;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-}
-
 .customers-kicker {
 	display: inline-flex;
 	align-items: center;
@@ -54,7 +47,7 @@
 
 .customers-hero-card p {
 	margin: 12px 0 0;
-	max-width: 620px;
+	max-width: 640px;
 	color: #475569;
 	line-height: 1.6;
 }
@@ -62,7 +55,7 @@
 .primary-action-btn,
 .secondary-link-btn,
 .page-pill {
-	height: 46px;
+	height: 44px;
 	border: 0;
 	border-radius: 14px;
 	padding: 0 16px;
@@ -174,7 +167,7 @@
 .customers-filter-group input,
 .customers-filter-group select {
 	width: 100%;
-	height: 46px;
+	height: 44px;
 	border-radius: 14px;
 	border: 1px solid rgba(148, 163, 184, 0.35);
 	background: #ffffff;
@@ -225,53 +218,59 @@
 
 .customers-grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 16px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
 }
 
 .customer-card {
-	padding: 16px;
+	padding: 14px;
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: 12px;
 }
 
 .customer-card-topbar {
 	display: flex;
 	justify-content: space-between;
-	gap: 14px;
+	gap: 12px;
 	align-items: flex-start;
 }
 
 .customer-identity {
 	display: flex;
-	gap: 14px;
+	gap: 12px;
 	align-items: flex-start;
+	min-width: 0;
+	flex: 1;
+}
+
+.customer-identity-copy {
 	min-width: 0;
 }
 
 .customer-avatar {
-	width: 48px;
-	height: 48px;
+	width: 44px;
+	height: 44px;
 	border-radius: 50%;
 	flex: 0 0 auto;
 	display: grid;
 	place-items: center;
 	font-weight: 800;
-	font-size: 1rem;
+	font-size: 0.95rem;
 	color: #ffffff;
 	background: linear-gradient(135deg, #10b981, #0f766e);
 }
 
 .customer-identity h4 {
 	margin: 0;
-	font-size: 1.35rem;
+	font-size: 1.08rem;
 	line-height: 1.2;
 	color: #0f172a;
 }
 
 .customer-identity p {
-	margin: 4px 0 0;
+	margin: 3px 0 0;
+	font-size: 0.9rem;
 	color: #475569;
 	word-break: break-word;
 }
@@ -280,9 +279,9 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: 8px 12px;
+	padding: 7px 10px;
 	border-radius: 999px;
-	font-size: 0.82rem;
+	font-size: 0.76rem;
 	font-weight: 700;
 	color: #0f172a;
 	background: #eef2ff;
@@ -296,30 +295,73 @@
 	color: #64748b;
 }
 
-.customer-metrics-grid {
+.customer-meta-row {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 12px;
+	gap: 10px;
 }
 
-.customer-metric-box {
-	padding: 14px;
-	border-radius: 16px;
-	border: 1px solid rgba(148, 163, 184, 0.24);
+.customer-meta-chip {
+	padding: 10px 12px;
+	border-radius: 14px;
+	border: 1px solid rgba(148, 163, 184, 0.22);
 	background: #f8fafc;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 6px;
 }
 
-.customer-metric-box span {
-	font-size: 0.85rem;
+.customer-meta-chip span {
+	font-size: 0.78rem;
 	color: #64748b;
 }
 
-.customer-metric-box strong {
-	font-size: 1.1rem;
+.customer-meta-chip strong {
+	font-size: 1rem;
 	color: #0f172a;
+}
+
+.customer-products-box {
+	padding: 12px;
+	border-radius: 16px;
+	border: 1px solid rgba(148, 163, 184, 0.22);
+	background: #f8fafc;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.customer-products-header {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	align-items: center;
+}
+
+.customer-products-header span {
+	font-size: 0.82rem;
+	color: #64748b;
+}
+
+.customer-products-header strong {
+	font-size: 0.92rem;
+	color: #0f172a;
+}
+
+.customer-products-list {
+	margin: 0;
+	padding-left: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	color: #334155;
+	font-size: 0.88rem;
+}
+
+.customer-products-empty {
+	margin: 0;
+	font-size: 0.84rem;
+	color: #64748b;
 }
 
 .pagination-row {
@@ -351,26 +393,23 @@
 	color: #64748b;
 }
 
-@media (max-width: 1100px) {
-	.customers-stats-grid,
+@media (max-width: 1280px) {
 	.customers-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 900px) {
+	.customers-stats-grid,
+	.customer-meta-row,
+	.customers-grid {
+		grid-template-columns: 1fr;
 	}
 }
 
 @media (max-width: 760px) {
 	.customers-hero-card {
 		flex-direction: column;
-	}
-
-	.customers-hero-actions {
-		width: 100%;
-	}
-
-	.customers-stats-grid,
-	.customers-grid,
-	.customer-metrics-grid {
-		grid-template-columns: 1fr;
 	}
 
 	.customers-filter-actions {
@@ -387,8 +426,10 @@
 		flex: 1 1 auto;
 	}
 
-	.customer-card-topbar {
+	.customer-card-topbar,
+	.customer-products-header {
 		flex-direction: column;
+		align-items: flex-start;
 	}
 
 	.customer-pill {
