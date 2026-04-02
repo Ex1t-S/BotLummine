@@ -64,6 +64,31 @@ function buildAbandonedCartFilters(state) {
 	};
 }
 
+function CampaignAccordion({
+	title,
+	description,
+	defaultOpen = true,
+	className = '',
+	children,
+}) {
+	return (
+		<details className={`campaign-accordion ${className}`.trim()} open={defaultOpen}>
+			<summary className="campaign-accordion-summary">
+				<div className="campaign-accordion-copy">
+					<strong>{title}</strong>
+					{description ? <span>{description}</span> : null}
+				</div>
+
+				<span className="campaign-accordion-chevron" aria-hidden="true">
+					⌄
+				</span>
+			</summary>
+
+			<div className="campaign-accordion-body">{children}</div>
+		</details>
+	);
+}
+
 export default function CampaignsPage() {
 	const queryClient = useQueryClient();
 	const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -433,409 +458,293 @@ export default function CampaignsPage() {
 				/>
 			</div>
 
-			<div
-				className="page-card"
-				style={{
-					display: 'grid',
-					gap: 18,
-					padding: 20,
-				}}
+			<CampaignAccordion
+				title="Campañas desde carritos abandonados"
+				description="Generá audiencia automática desde AbandonedCart y ocultá este bloque cuando no lo uses."
+				defaultOpen={true}
 			>
-				<div>
-					<span className="campaigns-eyebrow">Campañas desde carritos abandonados</span>
-					<h3 style={{ margin: '6px 0 8px 0' }}>Crear audiencia automática desde AbandonedCart</h3>
-					<p style={{ margin: 0, color: '#64748b' }}>
-						Usa el template seleccionado para generar audiencia desde carritos reales, deduplicados por teléfono.
-					</p>
-				</div>
-
-				<div
-					style={{
-						display: 'grid',
-						gridTemplateColumns: '1.4fr 1fr',
-						gap: 18,
-						alignItems: 'start',
-					}}
-				>
-					<div
-						style={{
-							display: 'grid',
-							gap: 14,
-							padding: 16,
-							border: '1px solid #e5e7eb',
-							borderRadius: 16,
-							background: '#fff',
-						}}
-					>
-						<div style={{ display: 'grid', gap: 6 }}>
-							<label style={{ fontWeight: 700, fontSize: 13 }}>Template seleccionado</label>
-							<select
-								value={selectedTemplate?.id || ''}
-								onChange={(e) => {
-									const next = templates.find((template) => template.id === e.target.value) || null;
-									setSelectedTemplate(next);
-								}}
-								style={{
-									height: 42,
-									borderRadius: 12,
-									border: '1px solid #d1d5db',
-									padding: '0 12px',
-									background: '#fff',
-								}}
-							>
-								<option value="">Seleccionar template</option>
-								{templates.map((template) => (
-									<option key={template.id} value={template.id}>
-										{template.name} · {template.language} · {template.status}
-									</option>
-								))}
-							</select>
-						</div>
-
-						<div
-							style={{
-								display: 'grid',
-								gridTemplateColumns: '1fr 1fr',
-								gap: 12,
-							}}
-						>
-							<div style={{ display: 'grid', gap: 6 }}>
-								<label style={{ fontWeight: 700, fontSize: 13 }}>Nombre de campaña</label>
-								<input
-									value={abandonedCartForm.name}
-									onChange={(e) => updateAbandonedCartForm('name', e.target.value)}
-									placeholder="Recuperación carritos 7 días"
-									style={{
-										height: 42,
-										borderRadius: 12,
-										border: '1px solid #d1d5db',
-										padding: '0 12px',
-									}}
-								/>
-							</div>
-
-							<div style={{ display: 'grid', gap: 6 }}>
-								<label style={{ fontWeight: 700, fontSize: 13 }}>Ventana</label>
-								<select
-									value={abandonedCartForm.daysBack}
-									onChange={(e) => updateAbandonedCartForm('daysBack', Number(e.target.value))}
-									style={{
-										height: 42,
-										borderRadius: 12,
-										border: '1px solid #d1d5db',
-										padding: '0 12px',
-										background: '#fff',
-									}}
-								>
-									<option value={7}>7 días</option>
-									<option value={15}>15 días</option>
-									<option value={30}>30 días</option>
-								</select>
-							</div>
-						</div>
-
-						<div
-							style={{
-								display: 'grid',
-								gridTemplateColumns: 'repeat(4, 1fr)',
-								gap: 12,
-							}}
-						>
-							<div style={{ display: 'grid', gap: 6 }}>
-								<label style={{ fontWeight: 700, fontSize: 13 }}>Estado</label>
-								<select
-									value={abandonedCartForm.status}
-									onChange={(e) => updateAbandonedCartForm('status', e.target.value)}
-									style={{
-										height: 42,
-										borderRadius: 12,
-										border: '1px solid #d1d5db',
-										padding: '0 12px',
-										background: '#fff',
-									}}
-								>
-									<option value="NEW">NEW</option>
-									<option value="CONTACTED">CONTACTED</option>
-									<option value="ALL">ALL</option>
-								</select>
-							</div>
-
-							<div style={{ display: 'grid', gap: 6 }}>
-								<label style={{ fontWeight: 700, fontSize: 13 }}>Límite</label>
-								<input
-									type="number"
-									min="1"
-									max="500"
-									value={abandonedCartForm.limit}
-									onChange={(e) => updateAbandonedCartForm('limit', Number(e.target.value || 50))}
-									style={{
-										height: 42,
-										borderRadius: 12,
-										border: '1px solid #d1d5db',
-										padding: '0 12px',
-									}}
-								/>
-							</div>
-
-							<div style={{ display: 'grid', gap: 6 }}>
-								<label style={{ fontWeight: 700, fontSize: 13 }}>Monto mínimo</label>
-								<input
-									type="number"
-									min="0"
-									value={abandonedCartForm.minTotal}
-									onChange={(e) => updateAbandonedCartForm('minTotal', e.target.value)}
-									placeholder="0"
-									style={{
-										height: 42,
-										borderRadius: 12,
-										border: '1px solid #d1d5db',
-										padding: '0 12px',
-									}}
-								/>
-							</div>
-
-							<div style={{ display: 'grid', gap: 6 }}>
-								<label style={{ fontWeight: 700, fontSize: 13 }}>Producto</label>
-								<input
-									value={abandonedCartForm.productQuery}
-									onChange={(e) => updateAbandonedCartForm('productQuery', e.target.value)}
-									placeholder="body, faja, calza"
-									style={{
-										height: 42,
-										borderRadius: 12,
-										border: '1px solid #d1d5db',
-										padding: '0 12px',
-									}}
-								/>
-							</div>
-						</div>
-
-						<div style={{ display: 'grid', gap: 6 }}>
-							<label style={{ fontWeight: 700, fontSize: 13 }}>Notas</label>
-							<textarea
-								value={abandonedCartForm.notes}
-								onChange={(e) => updateAbandonedCartForm('notes', e.target.value)}
-								placeholder="Notas internas de esta campaña"
-								rows={3}
-								style={{
-									borderRadius: 12,
-									border: '1px solid #d1d5db',
-									padding: 12,
-									resize: 'vertical',
-								}}
-							/>
-						</div>
-
-						<label
-							style={{
-								display: 'inline-flex',
-								alignItems: 'center',
-								gap: 8,
-								fontWeight: 600,
-								color: '#334155',
-							}}
-						>
-							<input
-								type="checkbox"
-								checked={abandonedCartForm.launchNow}
-								onChange={(e) => updateAbandonedCartForm('launchNow', e.target.checked)}
-							/>
-							Enviar apenas se cree
-						</label>
-
-						<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-							<button
-								type="button"
-								onClick={handlePreviewAbandonedCarts}
-								disabled={abandonedCartPreviewMutation.isPending}
-								style={{
-									height: 42,
-									padding: '0 16px',
-									borderRadius: 12,
-									border: '1px solid #d1d5db',
-									background: '#fff',
-									fontWeight: 700,
-									cursor: 'pointer',
-								}}
-							>
-								{abandonedCartPreviewMutation.isPending ? 'Generando...' : 'Previsualizar audiencia'}
-							</button>
-
-							<button
-								type="button"
-								onClick={() => handleCreateAbandonedCartCampaign(abandonedCartForm.launchNow)}
-								disabled={createAbandonedCartCampaignMutation.isPending}
-								style={{
-									height: 42,
-									padding: '0 16px',
-									borderRadius: 12,
-									border: 'none',
-									background: '#0f172a',
-									color: '#fff',
-									fontWeight: 700,
-									cursor: 'pointer',
-								}}
-							>
-								{createAbandonedCartCampaignMutation.isPending
-									? 'Creando campaña...'
-									: abandonedCartForm.launchNow
-										? 'Crear y lanzar'
-										: 'Guardar campaña'}
-							</button>
-						</div>
+				<div className="campaign-custom-audience">
+					<div className="campaign-custom-audience-intro">
+						<span className="campaigns-eyebrow">Campañas desde carritos abandonados</span>
+						<h3>Crear audiencia automática desde AbandonedCart</h3>
+						<p>
+							Usa el template seleccionado para generar audiencia desde carritos reales,
+							deduplicados por teléfono.
+						</p>
 					</div>
 
-					<div
-						style={{
-							display: 'grid',
-							gap: 12,
-							padding: 16,
-							border: '1px solid #e5e7eb',
-							borderRadius: 16,
-							background: '#fff',
-							minHeight: 300,
-						}}
-					>
-						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-							<div>
-								<div style={{ fontWeight: 800, fontSize: 16 }}>Preview de audiencia</div>
-								<div style={{ color: '#64748b', fontSize: 13 }}>
-									{abandonedCartPreview.total || 0} destinatarios
-								</div>
-							</div>
-							{selectedTemplate ? (
-								<span
-									style={{
-										padding: '6px 10px',
-										borderRadius: 999,
-										background: '#eef2ff',
-										color: '#4338ca',
-										fontWeight: 700,
-										fontSize: 12,
+					<div className="campaign-custom-audience-grid">
+						<div className="campaign-custom-audience-card">
+							<div className="field">
+								<span>Template seleccionado</span>
+								<select
+									value={selectedTemplate?.id || ''}
+									onChange={(e) => {
+										const next =
+											templates.find((template) => template.id === e.target.value) || null;
+										setSelectedTemplate(next);
 									}}
 								>
-									{selectedTemplate.name}
-								</span>
-							) : null}
-						</div>
+									<option value="">Seleccionar template</option>
+									{templates.map((template) => (
+										<option key={template.id} value={template.id}>
+											{template.name} · {template.language} · {template.status}
+										</option>
+									))}
+								</select>
+							</div>
 
-						<div style={{ display: 'grid', gap: 10 }}>
-							{abandonedCartPreview.recipients?.length ? (
-								abandonedCartPreview.recipients.slice(0, 8).map((recipient, index) => (
-									<div
-										key={`${recipient.phone}-${index}`}
-										style={{
-											padding: 12,
-											border: '1px solid #e5e7eb',
-											borderRadius: 14,
-											background: '#f8fafc',
-											display: 'grid',
-											gap: 6,
-										}}
+							<div className="campaign-form-grid two-columns">
+								<div className="field">
+									<span>Nombre de campaña</span>
+									<input
+										value={abandonedCartForm.name}
+										onChange={(e) => updateAbandonedCartForm('name', e.target.value)}
+										placeholder="Recuperación carritos 7 días"
+									/>
+								</div>
+
+								<div className="field">
+									<span>Ventana</span>
+									<select
+										value={abandonedCartForm.daysBack}
+										onChange={(e) => updateAbandonedCartForm('daysBack', Number(e.target.value))}
 									>
-										<div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-											<strong>{recipient.contactName || recipient.phone}</strong>
-											<span style={{ color: '#64748b', fontSize: 13 }}>{recipient.totalAmount || ''}</span>
-										</div>
-										<div style={{ color: '#475569', fontSize: 13 }}>
-											{recipient.primaryProductName || 'Sin producto'}
-										</div>
-										<div style={{ color: '#64748b', fontSize: 12 }}>
-											{recipient.phone}
-										</div>
-										{recipient.renderedPreviewText ? (
-											<div
-												style={{
-													marginTop: 4,
-													padding: 10,
-													borderRadius: 12,
-													background: '#fff',
-													border: '1px solid #e5e7eb',
-													color: '#334155',
-													fontSize: 13,
-													lineHeight: 1.45,
-													whiteSpace: 'pre-wrap',
-												}}
-											>
-												{formatPreviewText(recipient.renderedPreviewText, 260)}
-											</div>
-										) : null}
-									</div>
-								))
-							) : (
-								<div
-									style={{
-										padding: 18,
-										border: '1px dashed #cbd5e1',
-										borderRadius: 14,
-										color: '#64748b',
-										background: '#fff',
-									}}
-								>
-									Previsualizá la audiencia para ver los primeros destinatarios y cómo se renderiza el template.
+										<option value={7}>7 días</option>
+										<option value={15}>15 días</option>
+										<option value={30}>30 días</option>
+									</select>
 								</div>
-							)}
+							</div>
+
+							<div className="campaign-custom-audience-grid-4">
+								<div className="field">
+									<span>Estado</span>
+									<select
+										value={abandonedCartForm.status}
+										onChange={(e) => updateAbandonedCartForm('status', e.target.value)}
+									>
+										<option value="NEW">NEW</option>
+										<option value="CONTACTED">CONTACTED</option>
+										<option value="ALL">ALL</option>
+									</select>
+								</div>
+
+								<div className="field">
+									<span>Límite</span>
+									<input
+										type="number"
+										min="1"
+										max="500"
+										value={abandonedCartForm.limit}
+										onChange={(e) => updateAbandonedCartForm('limit', Number(e.target.value || 50))}
+									/>
+								</div>
+
+								<div className="field">
+									<span>Monto mínimo</span>
+									<input
+										type="number"
+										min="0"
+										value={abandonedCartForm.minTotal}
+										onChange={(e) => updateAbandonedCartForm('minTotal', e.target.value)}
+										placeholder="0"
+									/>
+								</div>
+
+								<div className="field">
+									<span>Producto</span>
+									<input
+										value={abandonedCartForm.productQuery}
+										onChange={(e) => updateAbandonedCartForm('productQuery', e.target.value)}
+										placeholder="body, faja, calza"
+									/>
+								</div>
+							</div>
+
+							<div className="field">
+								<span>Notas</span>
+								<textarea
+									value={abandonedCartForm.notes}
+									onChange={(e) => updateAbandonedCartForm('notes', e.target.value)}
+									placeholder="Notas internas de esta campaña"
+									rows={3}
+								/>
+							</div>
+
+							<label className="campaign-toggle">
+								<input
+									type="checkbox"
+									checked={abandonedCartForm.launchNow}
+									onChange={(e) => updateAbandonedCartForm('launchNow', e.target.checked)}
+								/>
+								Enviar apenas se cree
+							</label>
+
+							<div className="campaign-form-actions">
+								<button
+									type="button"
+									className="button ghost"
+									onClick={handlePreviewAbandonedCarts}
+									disabled={abandonedCartPreviewMutation.isPending}
+								>
+									{abandonedCartPreviewMutation.isPending
+										? 'Generando...'
+										: 'Previsualizar audiencia'}
+								</button>
+
+								<button
+									type="button"
+									className="button primary"
+									onClick={() => handleCreateAbandonedCartCampaign(abandonedCartForm.launchNow)}
+									disabled={createAbandonedCartCampaignMutation.isPending}
+								>
+									{createAbandonedCartCampaignMutation.isPending
+										? 'Creando campaña...'
+										: abandonedCartForm.launchNow
+											? 'Crear y lanzar'
+											: 'Guardar campaña'}
+								</button>
+							</div>
+						</div>
+
+						<div className="campaign-custom-audience-card campaign-custom-audience-preview">
+							<div className="campaign-custom-audience-preview-head">
+								<div>
+									<div className="campaign-custom-audience-preview-title">
+										Preview de audiencia
+									</div>
+									<div className="campaign-custom-audience-preview-subtitle">
+										{abandonedCartPreview.total || 0} destinatarios
+									</div>
+								</div>
+
+								{selectedTemplate ? (
+									<span className="campaign-custom-audience-pill">
+										{selectedTemplate.name}
+									</span>
+								) : null}
+							</div>
+
+							<div className="campaign-custom-audience-preview-list">
+								{abandonedCartPreview.recipients?.length ? (
+									abandonedCartPreview.recipients.slice(0, 8).map((recipient, index) => (
+										<div
+											key={`${recipient.phone}-${index}`}
+											className="campaign-custom-audience-recipient"
+										>
+											<div className="campaign-custom-audience-recipient-top">
+												<strong>{recipient.contactName || recipient.phone}</strong>
+												<span>{recipient.totalAmount || ''}</span>
+											</div>
+
+											<div className="campaign-custom-audience-recipient-product">
+												{recipient.primaryProductName || 'Sin producto'}
+											</div>
+
+											<div className="campaign-custom-audience-recipient-phone">
+												{recipient.phone}
+											</div>
+
+											{recipient.renderedPreviewText ? (
+												<div className="campaign-custom-audience-recipient-preview">
+													{formatPreviewText(recipient.renderedPreviewText, 260)}
+												</div>
+											) : null}
+										</div>
+									))
+								) : (
+									<div className="campaign-custom-audience-empty">
+										Previsualizá la audiencia para ver los primeros destinatarios y
+										cómo se renderiza el template.
+									</div>
+								)}
+							</div>
 						</div>
 					</div>
 				</div>
-			</div>
+			</CampaignAccordion>
 
-			<div className="campaign-section-grid">
-				<TemplateLibraryPanel
-					templates={templates}
-					selectedTemplateId={selectedTemplate?.id}
-					onSelectTemplate={setSelectedTemplate}
-					onSync={() => syncMutation.mutate()}
-					syncing={syncMutation.isPending}
-					onDeleteTemplate={(template) => {
-						const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
-						if (confirmed) {
-							deleteTemplateMutation.mutate(template.id);
+			<div className="campaign-section-grid campaign-section-grid--editor">
+				<CampaignAccordion
+					title="Biblioteca de templates"
+					description="Mostrá u ocultá la lista y los filtros."
+					defaultOpen={true}
+				>
+					<TemplateLibraryPanel
+						templates={templates}
+						selectedTemplateId={selectedTemplate?.id}
+						onSelectTemplate={setSelectedTemplate}
+						onSync={() => syncMutation.mutate()}
+						syncing={syncMutation.isPending}
+						onDeleteTemplate={(template) => {
+							const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
+							if (confirmed) {
+								deleteTemplateMutation.mutate(template.id);
+							}
+						}}
+					/>
+				</CampaignAccordion>
+
+				<CampaignAccordion
+					title="Editor de template"
+					description="Ocultá el editor completo cuando estés mirando solo la biblioteca."
+					defaultOpen={true}
+				>
+					<TemplateBuilderPanel
+						selectedTemplate={selectedTemplate}
+						creating={createTemplateMutation.isPending}
+						updating={updateTemplateMutation.isPending}
+						onCreateTemplate={(payload) => createTemplateMutation.mutateAsync(payload)}
+						onUpdateTemplate={(templateId, payload) =>
+							updateTemplateMutation.mutateAsync({ templateId, payload })
 						}
-					}}
-				/>
-
-				<TemplateBuilderPanel
-					selectedTemplate={selectedTemplate}
-					creating={createTemplateMutation.isPending}
-					updating={updateTemplateMutation.isPending}
-					onCreateTemplate={(payload) => createTemplateMutation.mutateAsync(payload)}
-					onUpdateTemplate={(templateId, payload) =>
-						updateTemplateMutation.mutateAsync({ templateId, payload })
-					}
-				/>
+					/>
+				</CampaignAccordion>
 			</div>
 
 			<div className="campaign-section-grid two-rows">
-				<CampaignComposerPanel
-					templates={templates}
-					selectedTemplate={selectedTemplate}
-					onSelectTemplate={setSelectedTemplate}
-					onCreateCampaign={(payload) => createCampaignMutation.mutateAsync(payload)}
-					creating={createCampaignMutation.isPending}
-				/>
+				<CampaignAccordion
+					title="Crear campaña manual"
+					description="Composer y configuración de envío."
+					defaultOpen={true}
+				>
+					<CampaignComposerPanel
+						templates={templates}
+						selectedTemplate={selectedTemplate}
+						onSelectTemplate={setSelectedTemplate}
+						onCreateCampaign={(payload) => createCampaignMutation.mutateAsync(payload)}
+						creating={createCampaignMutation.isPending}
+					/>
+				</CampaignAccordion>
 
-				<CampaignRunsPanel
-					campaigns={campaigns}
-					selectedCampaign={selectedCampaign}
-					onSelectCampaign={(campaign) => setSelectedCampaignId(campaign.id)}
-					onDispatch={(campaignId) => actionMutation.mutate({ type: 'dispatch', campaignId })}
-					onPause={(campaignId) => actionMutation.mutate({ type: 'pause', campaignId })}
-					onResume={(campaignId) => actionMutation.mutate({ type: 'resume', campaignId })}
-					onDelete={(campaign) => {
-						if (!campaign?.id) return;
+				<CampaignAccordion
+					title="Historial de campañas"
+					description="Runs, estado y acciones."
+					defaultOpen={true}
+				>
+					<CampaignRunsPanel
+						campaigns={campaigns}
+						selectedCampaign={selectedCampaign}
+						onSelectCampaign={(campaign) => setSelectedCampaignId(campaign.id)}
+						onDispatch={(campaignId) => actionMutation.mutate({ type: 'dispatch', campaignId })}
+						onPause={(campaignId) => actionMutation.mutate({ type: 'pause', campaignId })}
+						onResume={(campaignId) => actionMutation.mutate({ type: 'resume', campaignId })}
+						onDelete={(campaign) => {
+							if (!campaign?.id) return;
 
-						const confirmed = window.confirm(
-							`¿Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
-						);
+							const confirmed = window.confirm(
+								`¿Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
+							);
 
-						if (!confirmed) return;
+							if (!confirmed) return;
 
-						deleteCampaignMutation.mutate(campaign.id);
-					}}
-					actionLoading={actionMutation.isPending || campaignDetailQuery.isFetching}
-					deleteLoading={deleteCampaignMutation.isPending}
-				/>
+							deleteCampaignMutation.mutate(campaign.id);
+						}}
+						actionLoading={actionMutation.isPending || campaignDetailQuery.isFetching}
+						deleteLoading={deleteCampaignMutation.isPending}
+					/>
+				</CampaignAccordion>
 			</div>
 		</section>
 	);
