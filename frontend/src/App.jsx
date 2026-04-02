@@ -1,15 +1,16 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+
 import DashboardLayout from './layout/DashboardLayout.jsx';
+
 import LoginPage from './pages/LoginPage.jsx';
 import InboxPage from './pages/InboxPage.jsx';
 import CatalogPage from './pages/CatalogPage.jsx';
 import CampaignsPage from './pages/CampaignsPage.jsx';
 import AbandonedCartsPage from './pages/AbandonedCartsPage.jsx';
+import CustomersPage from './pages/CustomersPage.jsx';
 import AiLabPage from './pages/AiLabPage.jsx';
+
 import ProtectedRoute from './components/ProtectedRoute.jsx';
-
-
-
 
 export default function App() {
 	return (
@@ -29,6 +30,7 @@ export default function App() {
 				<Route path="catalog" element={<CatalogPage />} />
 				<Route path="campaigns" element={<CampaignsPage />} />
 				<Route path="abandoned-carts" element={<AbandonedCartsPage />} />
+				<Route path="customers" element={<CustomersPage />} />
 				<Route path="ai-lab" element={<AiLabPage />} />
 			</Route>
 		</Routes>

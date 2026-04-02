@@ -52,6 +52,10 @@ export default function DashboardLayout() {
 						Carritos
 					</NavLink>
 
+					<NavLink to="/customers" className={navClass}>
+						Clientes
+					</NavLink>
+
 					<NavLink to="/ai-lab" className={navClass}>
 						AI Lab
 					</NavLink>

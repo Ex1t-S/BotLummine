@@ -196,7 +196,112 @@ model AbandonedCart {
 	@@index([status, updatedAt])
 	@@index([contactPhone])
 }
+model CustomerProfile {
+	id                        String   @id @default(cuid())
+	storeId                   String
+	externalCustomerId        String?
+	displayName               String?
+	email                     String?
+	normalizedEmail           String?
+	phone                     String?
+	normalizedPhone           String?
+	identification            String?
+	note                      String?
+	acceptsMarketing          Boolean?
+	acceptsMarketingUpdatedAt DateTime?
+	defaultAddress            Json?
+	addresses                 Json?
+	billingAddress            String?
+	billingNumber             String?
+	billingFloor              String?
+	billingLocality           String?
+	billingZipcode            String?
+	billingCity               String?
+	billingProvince           String?
+	billingCountry            String?
+	billingPhone              String?
+	orderCount                Int      @default(0)
+	paidOrderCount            Int      @default(0)
+	distinctProductsCount     Int      @default(0)
+	totalUnitsPurchased       Int      @default(0)
+	totalSpent                Decimal? @db.Decimal(12, 2)
+	currency                  String?
+	firstOrderAt              DateTime?
+	lastOrderAt               DateTime?
+	lastOrderId               String?
+	lastOrderNumber           String?
+	lastPaymentStatus         String?
+	lastShippingStatus        String?
+	productSummary            Json?
+	rawCustomerPayload        Json?
+	rawLastOrderPayload       Json?
+	syncedAt                  DateTime @default(now())
+	createdAt                 DateTime @default(now())
+	updatedAt                 DateTime @updatedAt
 
+	orders CustomerOrder[]
+
+	@@index([storeId, lastOrderAt])
+	@@index([storeId, externalCustomerId])
+	@@index([storeId, normalizedEmail])
+	@@index([storeId, normalizedPhone])
+}
+
+model CustomerOrder {
+	id                    String   @id @default(cuid())
+	customerProfileId     String
+	storeId               String
+	orderId               String
+	orderNumber           String?
+	token                 String?
+	contactName           String?
+	contactEmail          String?
+	normalizedEmail       String?
+	contactPhone          String?
+	normalizedPhone       String?
+	contactIdentification String?
+	status                String?
+	paymentStatus         String?
+	shippingStatus        String?
+	subtotal              Decimal? @db.Decimal(12, 2)
+	totalAmount           Decimal? @db.Decimal(12, 2)
+	currency              String?
+	gateway               String?
+	gatewayId             String?
+	gatewayName           String?
+	gatewayLink           String?
+	products              Json?
+	rawPayload            Json?
+	orderCreatedAt        DateTime?
+	orderUpdatedAt        DateTime?
+	createdAt             DateTime @default(now())
+	updatedAt             DateTime @updatedAt
+
+	customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+	@@unique([storeId, orderId])
+	@@index([customerProfileId, orderCreatedAt])
+	@@index([storeId, orderCreatedAt])
+	@@index([normalizedEmail])
+	@@index([normalizedPhone])
+}
+
+model CustomerSyncLog {
+	id               String   @id @default(cuid())
+	storeId          String?
+	status           String
+	fullSync         Boolean  @default(true)
+	startedAt        DateTime @default(now())
+	finishedAt       DateTime?
+	pagesFetched     Int      @default(0)
+	ordersFetched    Int      @default(0)
+	ordersUpserted   Int      @default(0)
+	customersTouched Int      @default(0)
+	message          String?
+	createdAt        DateTime @default(now())
+
+	@@index([storeId, status, startedAt])
+}
 model WhatsAppTemplate {
 	id               String   @id @default(cuid())
 	wabaId           String
