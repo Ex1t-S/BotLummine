@@ -60,6 +60,7 @@ export default function AbandonedCartsPage() {
 	const [expandedMessageId, setExpandedMessageId] = useState('');
 	const [filters, setFilters] = useState(initialFilters);
 	const [messageDrafts, setMessageDrafts] = useState({});
+	const [syncSummary, setSyncSummary] = useState(null);
 	const [data, setData] = useState({
 		carts: [],
 		stats: {
@@ -129,7 +130,15 @@ export default function AbandonedCartsPage() {
 		setSyncing(true);
 
 		try {
-			await api.post('/dashboard/abandoned-carts/sync', { daysBack });
+			const res = await api.post('/dashboard/abandoned-carts/sync', { daysBack });
+
+			setSyncSummary({
+				daysBack: res.data?.daysBack || daysBack,
+				syncedCount: res.data?.syncedCount ?? res.data?.count ?? 0,
+				deletedCount: res.data?.deletedCount ?? 0,
+				remainingCount: res.data?.remainingCount ?? 0,
+				message: res.data?.message || ''
+			});
 
 			const next = {
 				...filters,
@@ -204,20 +213,27 @@ export default function AbandonedCartsPage() {
 						Total: <strong>{data.stats?.total || 0}</strong>
 					</p>
 					<p className="muted-text">
-						La sincronización actual no borra históricos: actualiza o crea los carritos dentro
-						de la ventana elegida.
+						La sincronización ahora limpia automáticamente los carritos que quedan fuera
+						de la ventana elegida (7, 15 o 30 días).
 					</p>
+
+					{syncSummary ? (
+						<p className="muted-text">
+							Última sync {syncSummary.daysBack} días: {syncSummary.syncedCount} sincronizados,
+							{' '}{syncSummary.deletedCount} eliminados, {syncSummary.remainingCount} vigentes.
+						</p>
+					) : null}
 				</div>
 
 				<div className="inline-actions">
 					<button type="button" onClick={() => handleSync(7)} disabled={syncing}>
-						Sync 7 días
+						{syncing ? 'Sincronizando...' : 'Sync 7 días'}
 					</button>
 					<button type="button" onClick={() => handleSync(15)} disabled={syncing}>
-						Sync 15 días
+						{syncing ? 'Sincronizando...' : 'Sync 15 días'}
 					</button>
 					<button type="button" onClick={() => handleSync(30)} disabled={syncing}>
-						Sync 30 días
+						{syncing ? 'Sincronizando...' : 'Sync 30 días'}
 					</button>
 				</div>
 			</div>

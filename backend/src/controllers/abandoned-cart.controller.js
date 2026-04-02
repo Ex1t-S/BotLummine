@@ -177,7 +177,7 @@ export async function postSyncAbandonedCarts(req, res, next) {
 		return res.json({
 			ok: true,
 			...result,
-			note: 'La sync no borra históricos. Solo crea/actualiza los carritos dentro de la ventana pedida.'
+			message: `Sync ${daysBack} días completada: ${result.syncedCount || result.count || 0} sincronizados y ${result.deletedCount || 0} eliminados fuera de ventana.`
 		});
 	} catch (error) {
 		next(error);

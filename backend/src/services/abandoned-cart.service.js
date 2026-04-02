@@ -207,19 +207,40 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 			syncedCount += 1;
 		}
 
-		// Si la API viene de más nuevo a más viejo,
-		// y en esta página ya apareció uno más viejo que el corte,
-		// ya no tiene sentido seguir bajando más páginas.
+		// Si la API viene ordenada de más nuevo a más viejo,
+		// apenas aparece uno fuera del corte ya no vale la pena seguir.
 		if (foundOlderInThisPage) {
 			break;
 		}
 	}
+
+	// Limpieza real:
+	// borra de la base los carritos que quedaron fuera de la ventana elegida.
+	const cleanupResult = await prisma.abandonedCart.deleteMany({
+		where: {
+			storeId: String(storeId),
+			OR: [
+				{ checkoutCreatedAt: null },
+				{ checkoutCreatedAt: { lt: cutoff } }
+			]
+		}
+	});
+
+	const deletedCount = Number(cleanupResult?.count || 0);
+
+	const remainingCount = await prisma.abandonedCart.count({
+		where: {
+			storeId: String(storeId)
+		}
+	});
 
 	console.log('[ABANDONED CARTS] DONE', {
 		totalReceived,
 		syncedCount,
 		skippedOld,
 		pagesFetched,
+		deletedCount,
+		remainingCount,
 		daysBack: normalizedDaysBack,
 		now: now.toISOString(),
 		cutoff: cutoff.toISOString()
@@ -228,7 +249,13 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 	return {
 		ok: true,
 		count: syncedCount,
+		syncedCount,
+		deletedCount,
+		remainingCount,
+		totalReceived,
+		skippedOld,
 		pagesFetched,
-		daysBack: normalizedDaysBack
+		daysBack: normalizedDaysBack,
+		cutoff: cutoff.toISOString()
 	};
 }
