@@ -1,5 +1,9 @@
 import { prisma } from '../lib/prisma.js';
-import { syncCustomers } from '../services/customer.service.js';
+import {
+	repairCustomers,
+	syncCustomers,
+	CustomerSyncConflictError,
+} from '../services/customer.service.js';
 
 function ensureCustomerModels() {
 	if (!prisma?.customerProfile) {
@@ -84,9 +88,8 @@ export async function getCustomers(req, res, next) {
 		ensureCustomerModels();
 
 		const q = normalizeSearch(req.query?.q);
-		const page = toPositiveInt(req.query?.page, 1);
+		const requestedPage = toPositiveInt(req.query?.page, 1);
 		const pageSize = 12;
-		const skip = (page - 1) * pageSize;
 		const sort = normalizeSearch(req.query?.sort) || 'updated_desc';
 
 		const where = q
@@ -102,7 +105,7 @@ export async function getCustomers(req, res, next) {
 				}
 			: {};
 
-		const [totalCustomers, withLastOrder, moneyAgg, customers] = await Promise.all([
+		const [totalCustomers, withLastOrder, moneyAgg] = await Promise.all([
 			prisma.customerProfile.count({ where }),
 			prisma.customerProfile.count({
 				where: {
@@ -116,29 +119,29 @@ export async function getCustomers(req, res, next) {
 					totalSpent: true,
 				},
 			}),
-			prisma.customerProfile.findMany({
-				where,
-				orderBy: buildOrderBy(sort),
-				skip,
-				take: pageSize,
-				select: {
-					id: true,
-					displayName: true,
-					email: true,
-					phone: true,
-					totalSpent: true,
-					currency: true,
-					lastOrderId: true,
-					updatedAt: true,
-					createdAt: true,
-					productSummary: true,
-					orderCount: true,
-					distinctProductsCount: true,
-				},
-			}),
 		]);
 
 		const totalPages = Math.max(1, Math.ceil(totalCustomers / pageSize));
+		const page = Math.min(requestedPage, totalPages);
+		const skip = (page - 1) * pageSize;
+
+		const customers = await prisma.customerProfile.findMany({
+			where,
+			orderBy: buildOrderBy(sort),
+			skip,
+			take: pageSize,
+			select: {
+				id: true,
+				displayName: true,
+				email: true,
+				phone: true,
+				totalSpent: true,
+				currency: true,
+				lastOrderId: true,
+				updatedAt: true,
+			},
+		});
+
 		const showingFrom = totalCustomers === 0 ? 0 : skip + 1;
 		const showingTo = Math.min(skip + customers.length, totalCustomers);
 
@@ -147,15 +150,12 @@ export async function getCustomers(req, res, next) {
 			displayName: customer.displayName || null,
 			email: customer.email || null,
 			phone: customer.phone || null,
-			orderCount: Number(customer.orderCount || 0),
-			distinctProductsCount: Number(customer.distinctProductsCount || 0),
 			totalSpent: Number(customer.totalSpent || 0),
 			totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
 			currency: customer.currency || 'ARS',
 			lastOrderId: customer.lastOrderId || null,
 			lastOrderAt: null,
 			lastOrderAtLabel: customer.lastOrderId ? `Orden #${customer.lastOrderId}` : '-',
-			productSummary: Array.isArray(customer.productSummary) ? customer.productSummary : [],
 			initials: getInitials(customer.displayName || customer.email || customer.phone || '?'),
 			updatedAt: customer.updatedAt,
 			updatedAtLabel: formatDate(customer.updatedAt),
@@ -165,9 +165,7 @@ export async function getCustomers(req, res, next) {
 			customers: serialized,
 			stats: {
 				totalCustomers,
-				repeatBuyers: 0,
 				withLastOrder,
-				totalOrders: 0,
 				totalSpent: Number(moneyAgg?._sum?.totalSpent || 0),
 				currency: customers[0]?.currency || 'ARS',
 				showingFrom,
@@ -190,14 +188,32 @@ export async function postSyncCustomers(req, res, next) {
 		ensureCustomerModels();
 
 		const q = normalizeSearch(req.body?.q || '');
-		const result = await syncCustomers({ q });
-
+		const result = await syncCustomers({ q, runRepair: true });
 		return res.json(result);
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
 
+		if (error instanceof CustomerSyncConflictError || error?.statusCode === 409) {
+			return res.status(409).json({
+				message: error.message,
+			});
+		}
+
 		return res.status(500).json({
 			message: error.message || 'Error sincronizando clientes',
+		});
+	}
+}
+
+export async function postRepairCustomers(req, res, next) {
+	try {
+		ensureCustomerModels();
+		const result = await repairCustomers();
+		return res.json(result);
+	} catch (error) {
+		console.error('[CUSTOMERS REPAIR ERROR]', error);
+		return res.status(500).json({
+			message: error.message || 'Error reparando clientes',
 		});
 	}
 }

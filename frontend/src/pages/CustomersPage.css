@@ -25,6 +25,13 @@
 	padding: 24px;
 }
 
+.customers-hero-actions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
 .customers-kicker {
 	display: inline-flex;
 	align-items: center;
@@ -354,6 +361,10 @@
 @media (max-width: 760px) {
 	.customers-hero-card {
 		flex-direction: column;
+	}
+
+	.customers-hero-actions {
+		width: 100%;
 	}
 
 	.customers-stats-grid,

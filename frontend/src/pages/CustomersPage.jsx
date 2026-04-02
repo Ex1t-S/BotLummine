@@ -60,6 +60,7 @@ export default function CustomersPage() {
 	});
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
+	const [repairing, setRepairing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [syncMessage, setSyncMessage] = useState('');
 
@@ -151,9 +152,12 @@ export default function CustomersPage() {
 			const pagesFetched = Number(res.data?.pagesFetched || 0);
 			const customersFetched = Number(res.data?.customersFetched || 0);
 			const customersUpserted = Number(res.data?.customersUpserted || 0);
+			const customersCreated = Number(res.data?.customersCreated || 0);
+			const customersUpdated = Number(res.data?.customersUpdated || 0);
+			const mergedDuplicates = Number(res.data?.mergedDuplicates || 0);
 
 			setSyncMessage(
-				`Sync terminada. Páginas leídas: ${pagesFetched}. Clientes leídos: ${customersFetched}. Clientes actualizados: ${customersUpserted}.`
+				`Sync terminada. Páginas: ${pagesFetched}. Leídos: ${customersFetched}. Tocadas: ${customersUpserted}. Nuevos: ${customersCreated}. Actualizados: ${customersUpdated}. Duplicados fusionados: ${mergedDuplicates}.`
 			);
 
 			const next = {
@@ -165,11 +169,27 @@ export default function CustomersPage() {
 			await loadCustomers(next);
 		} catch (error) {
 			console.error(error);
-			setErrorMessage(
-				error?.response?.data?.message || 'No se pudo sincronizar clientes.'
-			);
+			setErrorMessage(error?.response?.data?.message || 'No se pudo sincronizar clientes.');
 		} finally {
 			setSyncing(false);
+		}
+	}
+
+	async function handleRepair() {
+		setRepairing(true);
+		setSyncMessage('');
+		setErrorMessage('');
+
+		try {
+			const res = await api.post('/dashboard/customers/repair');
+			const mergedDuplicates = Number(res.data?.mergedDuplicates || 0);
+			setSyncMessage(`Reparación terminada. Duplicados fusionados: ${mergedDuplicates}.`);
+			await loadCustomers({ ...filters, page: 1 });
+		} catch (error) {
+			console.error(error);
+			setErrorMessage(error?.response?.data?.message || 'No se pudo reparar clientes.');
+		} finally {
+			setRepairing(false);
 		}
 	}
 
@@ -197,14 +217,25 @@ export default function CustomersPage() {
 					</p>
 				</div>
 
-				<button
-					type="button"
-					className="primary-action-btn"
-					onClick={handleSync}
-					disabled={syncing}
-				>
-					{syncing ? 'Sincronizando...' : 'Sincronizar clientes'}
-				</button>
+				<div className="customers-hero-actions">
+					<button
+						type="button"
+						className="secondary-link-btn"
+						onClick={handleRepair}
+						disabled={repairing || syncing}
+					>
+						{repairing ? 'Reparando...' : 'Reparar duplicados'}
+					</button>
+
+					<button
+						type="button"
+						className="primary-action-btn"
+						onClick={handleSync}
+						disabled={syncing || repairing}
+					>
+						{syncing ? 'Sincronizando...' : 'Sincronizar clientes'}
+					</button>
+				</div>
 			</div>
 
 			{errorMessage ? (
