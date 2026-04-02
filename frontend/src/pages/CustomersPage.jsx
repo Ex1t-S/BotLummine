@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import api from '../lib/api.js';
 import './CustomersPage.css';
@@ -6,8 +7,18 @@ const DEFAULT_PAGE_SIZE = 24;
 
 const initialFilters = {
 	q: '',
+	productQuery: '',
+	orderNumber: '',
+	dateFrom: '',
+	dateTo: '',
+	paymentStatus: '',
+	shippingStatus: '',
+	minOrders: '',
+	minSpent: '',
+	hasPhoneOnly: false,
+	hasOrders: true,
+	sort: 'last_purchase_desc',
 	page: 1,
-	sort: 'updated_desc',
 	pageSize: DEFAULT_PAGE_SIZE,
 };
 
@@ -29,9 +40,12 @@ function normalizeStats(data = {}) {
 	const stats = data.stats || {};
 
 	return {
-		totalCustomers: Number(stats.totalCustomers || data.customers?.length || 0),
-		withLastOrder: Number(stats.withLastOrder || 0),
-		totalSpent: formatCurrency(stats.totalSpent || 0, stats.currency || 'ARS'),
+		totalCustomers: Number(stats.totalCustomers || 0),
+		repeatBuyers: Number(stats.repeatBuyers || 0),
+		withOrders: Number(stats.withOrders || 0),
+		totalOrders: Number(stats.totalOrders || 0),
+		paidOrders: Number(stats.paidOrders || 0),
+		totalSpentLabel: formatCurrency(stats.totalSpent || 0, stats.currency || 'ARS'),
 		showingFrom: Number(stats.showingFrom || 0),
 		showingTo: Number(stats.showingTo || 0),
 	};
@@ -54,12 +68,32 @@ function buildVisiblePages(currentPage, totalPages) {
 	return pages;
 }
 
+function normalizeRequestFilters(filters) {
+	return {
+		q: filters.q || '',
+		productQuery: filters.productQuery || '',
+		orderNumber: filters.orderNumber || '',
+		dateFrom: filters.dateFrom || '',
+		dateTo: filters.dateTo || '',
+		paymentStatus: filters.paymentStatus || '',
+		shippingStatus: filters.shippingStatus || '',
+		minOrders: filters.minOrders || '',
+		minSpent: filters.minSpent || '',
+		hasPhoneOnly: filters.hasPhoneOnly ? '1' : '',
+		hasOrders: filters.hasOrders ? '1' : '',
+		sort: filters.sort || 'last_purchase_desc',
+		page: filters.page || 1,
+		pageSize: filters.pageSize || DEFAULT_PAGE_SIZE,
+	};
+}
+
 export default function CustomersPage() {
 	const [filters, setFilters] = useState(initialFilters);
 	const [data, setData] = useState({
 		customers: [],
 		stats: {},
 		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
+		filters: initialFilters,
 	});
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
@@ -80,12 +114,7 @@ export default function CustomersPage() {
 
 		try {
 			const response = await api.get('/dashboard/customers', {
-				params: {
-					q: nextFilters.q || '',
-					page: nextFilters.page || 1,
-					sort: nextFilters.sort || 'updated_desc',
-					pageSize: nextFilters.pageSize || DEFAULT_PAGE_SIZE,
-				},
+				params: normalizeRequestFilters(nextFilters),
 			});
 
 			setData({
@@ -98,20 +127,11 @@ export default function CustomersPage() {
 						totalItems: 0,
 						pageSize: DEFAULT_PAGE_SIZE,
 					},
+				filters: response.data?.filters || nextFilters,
 			});
 		} catch (error) {
 			console.error(error);
-
-			const backendMissing =
-				error?.response?.status === 404 ||
-				error?.response?.status === 501 ||
-				error?.response?.status === 500;
-
-			setErrorMessage(
-				backendMissing
-					? 'La sección ya está visible en el frontend, pero el backend de clientes todavía no está conectado.'
-					: 'No se pudieron cargar los clientes.'
-			);
+			setErrorMessage(error?.response?.data?.message || 'No se pudieron cargar los clientes.');
 		} finally {
 			setLoading(false);
 		}
@@ -156,16 +176,17 @@ export default function CustomersPage() {
 		try {
 			const res = await api.post('/dashboard/customers/sync', {
 				q: filters.q || '',
+				dateFrom: filters.dateFrom || '',
+				dateTo: filters.dateTo || '',
 			});
 
-			const pagesFetched = Number(res.data?.pagesFetched || 0);
 			const customersFetched = Number(res.data?.customersFetched || 0);
 			const customersUpserted = Number(res.data?.customersUpserted || 0);
-			const pageSize = Number(res.data?.pageSize || 0);
-			const concurrency = Number(res.data?.concurrency || 0);
+			const ordersFetched = Number(res.data?.ordersFetched || 0);
+			const ordersUpserted = Number(res.data?.ordersUpserted || 0);
 
 			setSyncMessage(
-				`Sync terminada. Páginas: ${pagesFetched}. Clientes leídos: ${customersFetched}. Clientes actualizados: ${customersUpserted}.${pageSize ? ` Page size: ${pageSize}.` : ''}${concurrency ? ` Concurrency: ${concurrency}.` : ''}`
+				`Sync lista. Clientes leídos: ${customersFetched}. Clientes tocados: ${customersUpserted}. Pedidos leídos: ${ordersFetched}. Pedidos guardados: ${ordersUpserted}.`
 			);
 
 			const next = {
@@ -199,22 +220,34 @@ export default function CustomersPage() {
 		<section className="customers-page">
 			<div className="customers-hero-card">
 				<div>
-					<span className="customers-kicker">CRM COMERCIAL</span>
-					<h1>Clientes</h1>
+					<span className="customers-kicker">CRM CLIENTES</span>
+					<h1>Clientes y compras</h1>
 					<p>
-						Ahora cada página trae más clientes, las tarjetas son más compactas y ya
-						queda a mano la última orden con fecha y productos.
+						Ahora la sección queda pensada para vender y segmentar mejor: número de
+						pedido real, filtros por producto, fechas de compra, estado de pago y
+						estado de envío.
 					</p>
 				</div>
 
-				<button
-					type="button"
-					className="primary-action-btn"
-					onClick={handleSync}
-					disabled={syncing}
-				>
-					{syncing ? 'Sincronizando...' : 'Sincronizar clientes'}
-				</button>
+				<div className="customers-hero-actions">
+					<button
+						type="button"
+						className="primary-action-btn"
+						onClick={handleSync}
+						disabled={syncing}
+					>
+						{syncing ? 'Sincronizando...' : 'Sincronizar clientes y pedidos'}
+					</button>
+
+					<button
+						type="button"
+						className="secondary-link-btn"
+						onClick={handleResetFilters}
+						disabled={syncing}
+					>
+						Limpiar filtros
+					</button>
+				</div>
 			</div>
 
 			{errorMessage ? (
@@ -232,79 +265,210 @@ export default function CustomersPage() {
 				</div>
 
 				<div className="customers-stat-card">
-					<span className="customers-stat-label">Con última orden</span>
-					<strong>{normalizedStats.withLastOrder}</strong>
+					<span className="customers-stat-label">Con pedidos</span>
+					<strong>{normalizedStats.withOrders}</strong>
 				</div>
 
 				<div className="customers-stat-card">
-					<span className="customers-stat-label">Facturación acumulada</span>
-					<strong>{normalizedStats.totalSpent}</strong>
+					<span className="customers-stat-label">Compradores repetidos</span>
+					<strong>{normalizedStats.repeatBuyers}</strong>
 				</div>
 
 				<div className="customers-stat-card">
-					<span className="customers-stat-label">Mostrando</span>
-					<strong>
-						{normalizedStats.showingFrom}-{normalizedStats.showingTo}
-					</strong>
+					<span className="customers-stat-label">Pedidos</span>
+					<strong>{normalizedStats.totalOrders}</strong>
+				</div>
+
+				<div className="customers-stat-card">
+					<span className="customers-stat-label">Pagados</span>
+					<strong>{normalizedStats.paidOrders}</strong>
+				</div>
+
+				<div className="customers-stat-card">
+					<span className="customers-stat-label">Facturación</span>
+					<strong>{normalizedStats.totalSpentLabel}</strong>
 				</div>
 			</div>
 
 			<form className="customers-filters-card" onSubmit={handleApplyFilters}>
-				<div className="customers-filter-group customers-filter-group--grow">
-					<label htmlFor="customers-q">Buscar</label>
-					<input
-						id="customers-q"
-						type="text"
-						value={filters.q}
-						onChange={(event) => updateFilter('q', event.target.value)}
-						placeholder="Nombre, email, teléfono..."
-					/>
+				<div className="customers-filter-grid">
+					<div className="customers-filter-group customers-filter-group--grow">
+						<label htmlFor="customers-q">Buscar cliente</label>
+						<input
+							id="customers-q"
+							type="text"
+							value={filters.q}
+							onChange={(event) => updateFilter('q', event.target.value)}
+							placeholder="Nombre, email, teléfono, DNI o nro. de pedido"
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-product">Producto comprado</label>
+						<input
+							id="customers-product"
+							type="text"
+							value={filters.productQuery}
+							onChange={(event) => updateFilter('productQuery', event.target.value)}
+							placeholder="Body, calza, pack 2x1..."
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-order-number">N° pedido</label>
+						<input
+							id="customers-order-number"
+							type="text"
+							value={filters.orderNumber}
+							onChange={(event) => updateFilter('orderNumber', event.target.value)}
+							placeholder="Ej: 23015"
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-date-from">Compra desde</label>
+						<input
+							id="customers-date-from"
+							type="date"
+							value={filters.dateFrom}
+							onChange={(event) => updateFilter('dateFrom', event.target.value)}
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-date-to">Compra hasta</label>
+						<input
+							id="customers-date-to"
+							type="date"
+							value={filters.dateTo}
+							onChange={(event) => updateFilter('dateTo', event.target.value)}
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-payment-status">Pago</label>
+						<select
+							id="customers-payment-status"
+							value={filters.paymentStatus}
+							onChange={(event) => updateFilter('paymentStatus', event.target.value)}
+						>
+							<option value="">Todos</option>
+							<option value="paid">Pagado</option>
+							<option value="pending">Pendiente</option>
+							<option value="authorized">Autorizado</option>
+							<option value="refunded">Reintegrado</option>
+							<option value="voided">Anulado</option>
+							<option value="abandoned">Abandonado</option>
+						</select>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-shipping-status">Envío</label>
+						<select
+							id="customers-shipping-status"
+							value={filters.shippingStatus}
+							onChange={(event) => updateFilter('shippingStatus', event.target.value)}
+						>
+							<option value="">Todos</option>
+							<option value="fulfilled">Enviado</option>
+							<option value="unfulfilled">No enviado</option>
+							<option value="unpacked">Sin preparar</option>
+						</select>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-min-orders">Pedidos mínimos</label>
+						<input
+							id="customers-min-orders"
+							type="number"
+							min="0"
+							value={filters.minOrders}
+							onChange={(event) => updateFilter('minOrders', event.target.value)}
+							placeholder="2"
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-min-spent">Gasto mínimo</label>
+						<input
+							id="customers-min-spent"
+							type="number"
+							min="0"
+							step="1"
+							value={filters.minSpent}
+							onChange={(event) => updateFilter('minSpent', event.target.value)}
+							placeholder="50000"
+						/>
+					</div>
+
+					<div className="customers-filter-group">
+						<label htmlFor="customers-sort">Ordenar por</label>
+						<select
+							id="customers-sort"
+							value={filters.sort}
+							onChange={(event) => updateFilter('sort', event.target.value)}
+						>
+							<option value="last_purchase_desc">Última compra reciente</option>
+							<option value="last_purchase_asc">Última compra antigua</option>
+							<option value="first_purchase_desc">Primera compra reciente</option>
+							<option value="first_purchase_asc">Primera compra antigua</option>
+							<option value="orders_desc">Más pedidos</option>
+							<option value="orders_asc">Menos pedidos</option>
+							<option value="spent_desc">Mayor gasto</option>
+							<option value="spent_asc">Menor gasto</option>
+							<option value="name_asc">Nombre A-Z</option>
+							<option value="name_desc">Nombre Z-A</option>
+						</select>
+					</div>
 				</div>
 
-				<div className="customers-filter-group">
-					<label htmlFor="customers-sort">Ordenar por</label>
-					<select
-						id="customers-sort"
-						value={filters.sort}
-						onChange={(event) => updateFilter('sort', event.target.value)}
-					>
-						<option value="updated_desc">Más recientes</option>
-						<option value="name_asc">Nombre A-Z</option>
-						<option value="name_desc">Nombre Z-A</option>
-						<option value="spent_desc">Mayor gasto</option>
-						<option value="spent_asc">Menor gasto</option>
-					</select>
-				</div>
+				<div className="customers-toggle-row">
+					<label className="customers-checkbox">
+						<input
+							type="checkbox"
+							checked={filters.hasOrders}
+							onChange={(event) => updateFilter('hasOrders', event.target.checked)}
+						/>
+						<span>Solo clientes con pedidos</span>
+					</label>
 
-				<div className="customers-filter-actions">
-					<button type="submit" className="secondary-link-btn">
-						Aplicar
-					</button>
-					<button
-						type="button"
-						className="secondary-link-btn"
-						onClick={handleResetFilters}
-					>
-						Limpiar
-					</button>
+					<label className="customers-checkbox">
+						<input
+							type="checkbox"
+							checked={filters.hasPhoneOnly}
+							onChange={(event) => updateFilter('hasPhoneOnly', event.target.checked)}
+						/>
+						<span>Solo con teléfono</span>
+					</label>
+
+					<div className="customers-filter-actions">
+						<button type="submit" className="secondary-link-btn">
+							Aplicar filtros
+						</button>
+					</div>
 				</div>
 			</form>
 
 			<div className="customers-list-card">
 				<div className="customers-list-topbar">
 					<div>
-						<h3>Listado de clientes</h3>
+						<h3>Listado comercial</h3>
 						<p>
-							Mostrando {normalizedStats.showingFrom}-{normalizedStats.showingTo} ·{' '}
-							{data.pagination?.pageSize || DEFAULT_PAGE_SIZE} por página
+							Mostrando {normalizedStats.showingFrom}-{normalizedStats.showingTo} de{' '}
+							{data.pagination?.totalItems || 0}
 						</p>
 					</div>
 				</div>
 
-				{loading ? <div className="customers-empty-state">Cargando clientes...</div> : null}
+				{loading ? (
+					<div className="customers-empty-state">Cargando clientes...</div>
+				) : null}
 
 				{!loading && !data.customers?.length ? (
-					<div className="customers-empty-state">No hay clientes cargados todavía.</div>
+					<div className="customers-empty-state">
+						No hay clientes para esos filtros. Probá ampliar la búsqueda o ejecutar una
+						sync completa.
+					</div>
 				) : null}
 
 				{!loading && data.customers?.length ? (
@@ -314,6 +478,7 @@ export default function CustomersPage() {
 								<div className="customer-card-topbar">
 									<div className="customer-identity">
 										<div className="customer-avatar">{customer.initials || '?'}</div>
+
 										<div className="customer-identity-copy">
 											<h4>{customer.displayName || 'Cliente sin nombre'}</h4>
 											{customer.phone ? <p>{customer.phone}</p> : null}
@@ -321,45 +486,80 @@ export default function CustomersPage() {
 										</div>
 									</div>
 
-									{customer.lastOrderNumber ? (
-										<span className="customer-pill">{customer.lastOrderLabel}</span>
-									) : (
-										<span className="customer-pill customer-pill--muted">Sin última orden</span>
-									)}
+									<div className="customer-order-badge">
+										<span>Último pedido</span>
+										<strong>{customer.lastOrderLabel || '-'}</strong>
+									</div>
 								</div>
 
 								<div className="customer-meta-row">
 									<div className="customer-meta-chip">
-										<span>Monto</span>
+										<span>Gasto total</span>
 										<strong>{customer.totalSpentLabel || '$0'}</strong>
 									</div>
 
 									<div className="customer-meta-chip">
-										<span>Fecha pedido</span>
+										<span>Pedidos</span>
+										<strong>{customer.orderCount || 0}</strong>
+									</div>
+
+									<div className="customer-meta-chip">
+										<span>Unidades</span>
+										<strong>{customer.totalUnitsPurchased || 0}</strong>
+									</div>
+
+									<div className="customer-meta-chip">
+										<span>Primera compra</span>
+										<strong>{customer.firstOrderDateLabel || '-'}</strong>
+									</div>
+
+									<div className="customer-meta-chip">
+										<span>Última compra</span>
 										<strong>{customer.lastOrderDateLabel || '-'}</strong>
 									</div>
 
 									<div className="customer-meta-chip">
-										<span>Actualizado</span>
-										<strong>{customer.updatedAtLabel || '-'}</strong>
+										<span>Estado</span>
+										<strong>{customer.lastOrderStatusLabel || '-'}</strong>
 									</div>
 								</div>
 
-								<div className="customer-products-box">
-									<div className="customer-products-header">
-										<span>Última compra</span>
+								<div className="customer-section-box">
+									<div className="customer-section-header">
+										<span>Productos del último pedido</span>
 										<strong>{customer.lastOrderLabel || '-'}</strong>
 									</div>
 
-									{customer.productsPreview?.length ? (
+									{customer.lastOrderProductsPreview?.length ? (
 										<ul className="customer-products-list">
-											{customer.productsPreview.map((product) => (
-												<li key={`${customer.id}-${product}`}>{product}</li>
+											{customer.lastOrderProductsPreview.map((product) => (
+												<li key={`${customer.id}-last-${product}`}>{product}</li>
 											))}
 										</ul>
 									) : (
 										<p className="customer-products-empty">
-											Todavía no hay detalle de productos guardado para esa orden.
+											No quedó guardado el detalle del último pedido todavía.
+										</p>
+									)}
+								</div>
+
+								<div className="customer-section-box customer-section-box--soft">
+									<div className="customer-section-header">
+										<span>Productos más comprados</span>
+										<strong>{customer.distinctProductsCount || 0} distintos</strong>
+									</div>
+
+									{customer.topProductsPreview?.length ? (
+										<div className="customer-tag-list">
+											{customer.topProductsPreview.map((product) => (
+												<span key={`${customer.id}-top-${product}`} className="customer-tag">
+													{product}
+												</span>
+											))}
+										</div>
+									) : (
+										<p className="customer-products-empty">
+											Todavía no hay resumen histórico de productos.
 										</p>
 									)}
 								</div>

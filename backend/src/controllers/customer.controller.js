@@ -1,8 +1,9 @@
+
 import { prisma } from '../lib/prisma.js';
 import { syncCustomers } from '../services/customer.service.js';
 
 function ensureCustomerModels() {
-	if (!prisma?.customerProfile) {
+	if (!prisma?.customerProfile || !prisma?.customerOrder) {
 		throw new Error(
 			'Los modelos de clientes no están disponibles en Prisma Client. Ejecutá prisma generate y revisá la migración.'
 		);
@@ -32,6 +33,39 @@ function normalizeBoolean(value) {
 
 function normalizeSearch(value = '') {
 	return String(value || '').trim();
+}
+
+function normalizeProductSearch(value = '') {
+	return String(value || '')
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/gi, ' ')
+		.trim();
+}
+
+function normalizeStatus(value = '') {
+	return String(value || '').trim().toLowerCase() || null;
+}
+
+function parseDateQuery(value) {
+	if (!value) return null;
+
+	const raw = String(value).trim();
+	if (!raw) return null;
+
+	const hasTime = raw.includes('T');
+	const date = new Date(hasTime ? raw : `${raw}T00:00:00`);
+
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function endOfDay(date) {
+	if (!date) return null;
+
+	const copy = new Date(date);
+	copy.setHours(23, 59, 59, 999);
+	return copy;
 }
 
 function formatCurrency(value, currency = 'ARS') {
@@ -72,7 +106,7 @@ function getInitials(value = '') {
 	);
 }
 
-function buildOrderBy(sort = 'updated_desc') {
+function buildOrderBy(sort = 'last_purchase_desc') {
 	switch (sort) {
 		case 'name_asc':
 			return [
@@ -91,60 +125,79 @@ function buildOrderBy(sort = 'updated_desc') {
 		case 'spent_desc':
 			return [
 				{ totalSpent: 'desc' },
-				{ updatedAt: 'desc' },
+				{ lastOrderAt: 'desc' },
 			];
 
 		case 'spent_asc':
 			return [
 				{ totalSpent: 'asc' },
-				{ updatedAt: 'desc' },
+				{ lastOrderAt: 'desc' },
 			];
 
-		case 'updated_asc':
-			return [{ updatedAt: 'asc' }];
+		case 'orders_desc':
+			return [
+				{ orderCount: 'desc' },
+				{ totalSpent: 'desc' },
+				{ lastOrderAt: 'desc' },
+			];
 
-		case 'updated_desc':
+		case 'orders_asc':
+			return [
+				{ orderCount: 'asc' },
+				{ lastOrderAt: 'desc' },
+			];
+
+		case 'first_purchase_asc':
+			return [
+				{ firstOrderAt: 'asc' },
+				{ lastOrderAt: 'desc' },
+			];
+
+		case 'first_purchase_desc':
+			return [
+				{ firstOrderAt: 'desc' },
+				{ lastOrderAt: 'desc' },
+			];
+
+		case 'last_purchase_asc':
+			return [{ lastOrderAt: 'asc' }];
+
+		case 'last_purchase_desc':
 		default:
-			return [{ updatedAt: 'desc' }];
+			return [{ lastOrderAt: 'desc' }, { updatedAt: 'desc' }];
 	}
 }
 
-function getPrimaryProductLabel(productSummary = []) {
-	if (!Array.isArray(productSummary) || !productSummary.length) return '';
+function formatProductSummaryEntry(product) {
+	if (!product) return null;
 
-	const first = productSummary[0];
+	if (typeof product === 'string') return product;
 
-	if (typeof first === 'string') return first;
-	if (typeof first?.name === 'string') return first.name;
-	if (typeof first?.productName === 'string') return first.productName;
-	if (typeof first?.title === 'string') return first.title;
-	if (typeof first?.label === 'string') return first.label;
+	const name = product.name || product.productName || product.title || product.label;
+	if (!name) return null;
 
-	return '';
+	const variants = Array.isArray(product.variants) ? product.variants.filter(Boolean) : [];
+	const quantity = Number(product.totalQuantity || product.quantity || 0);
+
+	const suffix = [];
+	if (variants.length) suffix.push(variants.join(' / '));
+	if (quantity > 0) suffix.push(`x${quantity}`);
+
+	return [name, suffix.length ? `(${suffix.join(' · ')})` : '']
+		.filter(Boolean)
+		.join(' ')
+		.trim();
 }
 
-function stringifyProductSummary(productSummary = []) {
-	if (!Array.isArray(productSummary) || !productSummary.length) return '';
+function formatOrderItemLabel(item) {
+	if (!item) return null;
 
-	return productSummary
-		.map((item) => {
-			if (!item) return '';
-			if (typeof item === 'string') return item;
+	const name = item.name || 'Producto';
+	const variant = item.variantName ? ` · ${item.variantName}` : '';
+	const quantity = Number(item.quantity || 0);
+	const qty = quantity > 0 ? ` x${quantity}` : '';
 
-			return [
-				item.name,
-				item.productName,
-				item.title,
-				item.label,
-				item.variant,
-				item.color,
-				item.size,
-			]
-				.filter(Boolean)
-				.join(' ');
-		})
-		.filter(Boolean)
-		.join(' • ');
+	return `${name}${variant}${qty}`.trim();
 }
 
 function resolveOrderCount(customer) {
@@ -172,10 +225,16 @@ function resolveDistinctProductsCount(customer) {
 
 function buildCustomersWhere({
 	q = '',
+	productQuery = '',
+	orderNumber = '',
 	minSpent = null,
 	minOrders = null,
 	hasPhoneOnly = false,
 	hasOrders = false,
+	dateFrom = null,
+	dateTo = null,
+	paymentStatus = null,
+	shippingStatus = null,
 }) {
 	const and = [];
 
@@ -188,7 +247,47 @@ function buildCustomersWhere({
 				{ normalizedPhone: { contains: q, mode: 'insensitive' } },
 				{ normalizedEmail: { contains: q, mode: 'insensitive' } },
 				{ identification: { contains: q, mode: 'insensitive' } },
+				{ lastOrderNumber: { contains: q, mode: 'insensitive' } },
+				{
+					orders: {
+						some: {
+							OR: [
+								{ orderNumber: { contains: q, mode: 'insensitive' } },
+								{ contactEmail: { contains: q, mode: 'insensitive' } },
+								{ contactPhone: { contains: q, mode: 'insensitive' } },
+							],
+						},
+					},
+				},
 			],
+		});
+	}
+
+	if (orderNumber) {
+		and.push({
+			OR: [
+				{ lastOrderNumber: { contains: orderNumber, mode: 'insensitive' } },
+				{
+					orders: {
+						some: {
+							orderNumber: { contains: orderNumber, mode: 'insensitive' },
+						},
+					},
+				},
+			],
+		});
+	}
+
+	if (productQuery) {
+		and.push({
+			orderItems: {
+				some: {
+					normalizedName: {
+						contains: productQuery,
+						mode: 'insensitive',
+					},
+				},
+			},
 		});
 	}
 
@@ -228,21 +327,75 @@ function buildCustomersWhere({
 
 	if (hasOrders) {
 		and.push({
-			OR: [
-				{ lastOrderId: { not: null } },
-				{ orderCount: { gt: 0 } },
-			],
+			orderCount: { gt: 0 },
+		});
+	}
+
+	if (dateFrom || dateTo || paymentStatus || shippingStatus) {
+		const orderFilter = {};
+
+		if (dateFrom || dateTo) {
+			orderFilter.orderCreatedAt = {};
+			if (dateFrom) orderFilter.orderCreatedAt.gte = dateFrom;
+			if (dateTo) orderFilter.orderCreatedAt.lte = dateTo;
+		}
+
+		if (paymentStatus && paymentStatus !== 'all') {
+			orderFilter.paymentStatus = paymentStatus;
+		}
+
+		if (shippingStatus && shippingStatus !== 'all') {
+			orderFilter.shippingStatus = shippingStatus;
+		}
+
+		and.push({
+			orders: {
+				some: orderFilter,
+			},
 		});
 	}
 
 	return and.length ? { AND: and } : {};
 }
 
+function buildOrderSummary(latestOrder) {
+	if (!latestOrder) {
+		return {
+			lastOrderId: null,
+			lastOrderNumber: null,
+			lastOrderLabel: '-',
+			lastOrderDateLabel: '-',
+			lastOrderAt: null,
+			lastOrderStatusLabel: '-',
+			lastOrderProductsPreview: [],
+		};
+	}
+
+	const statusParts = [latestOrder.paymentStatus, latestOrder.shippingStatus].filter(Boolean);
+
+	return {
+		lastOrderId: latestOrder.orderId || null,
+		lastOrderNumber: latestOrder.orderNumber || null,
+		lastOrderLabel: latestOrder.orderNumber ? `#${latestOrder.orderNumber}` : '-',
+		lastOrderDateLabel: formatDate(latestOrder.orderCreatedAt) || '-',
+		lastOrderAt: latestOrder.orderCreatedAt || null,
+		lastOrderStatusLabel: statusParts.length ? statusParts.join(' · ') : '-',
+		lastOrderProductsPreview: Array.isArray(latestOrder.items)
+			? latestOrder.items.map(formatOrderItemLabel).filter(Boolean).slice(0, 4)
+			: [],
+	};
+}
+
 function serializeCustomer(customer) {
 	const resolvedPhone = customer.phone || customer.normalizedPhone || null;
-	const productSummary = Array.isArray(customer.productSummary)
-		? customer.productSummary
-		: [];
+	const productSummary = Array.isArray(customer.productSummary) ? customer.productSummary : [];
+	const topProductsPreview = productSummary
+		.map(formatProductSummaryEntry)
+		.filter(Boolean)
+		.slice(0, 4);
+
+	const latestOrder = Array.isArray(customer.orders) ? customer.orders[0] : null;
+	const lastOrder = buildOrderSummary(latestOrder);
 
 	const resolvedOrderCount = resolveOrderCount(customer);
 	const resolvedDistinctProductsCount = resolveDistinctProductsCount({
@@ -257,69 +410,104 @@ function serializeCustomer(customer) {
 		phone: resolvedPhone,
 		hasPhone: Boolean(resolvedPhone),
 		orderCount: resolvedOrderCount,
+		paidOrderCount: Number(customer.paidOrderCount || 0),
 		distinctProductsCount: resolvedDistinctProductsCount,
+		totalUnitsPurchased: Number(customer.totalUnitsPurchased || 0),
 		totalSpent: Number(customer.totalSpent || 0),
 		totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
 		currency: customer.currency || 'ARS',
-		lastOrderId: customer.lastOrderId || null,
-		lastOrderAt: customer.lastOrderAt || null,
-		lastOrderAtLabel:
-			formatDate(customer.lastOrderAt) ||
-			(customer.lastOrderId ? `Orden #${customer.lastOrderId}` : '-'),
-		productSummary,
-		primaryProductLabel: getPrimaryProductLabel(productSummary),
+		totalSpent: Number(customer.totalSpent || 0),
+		totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
+		currency: customer.currency || 'ARS',
+		firstOrderAt: customer.firstOrderAt || null,
+		firstOrderDateLabel: formatDate(customer.firstOrderAt) || '-',
+		lastOrderAt: lastOrder.lastOrderAt || customer.lastOrderAt || null,
+		lastOrderDateLabel:
+			lastOrder.lastOrderDateLabel !== '-' ? lastOrder.lastOrderDateLabel : formatDate(customer.lastOrderAt) || '-',
+		lastOrderId: lastOrder.lastOrderId || customer.lastOrderId || null,
+		lastOrderNumber: lastOrder.lastOrderNumber || customer.lastOrderNumber || null,
+		lastOrderLabel:
+			lastOrder.lastOrderLabel !== '-'
+				? lastOrder.lastOrderLabel
+				: customer.lastOrderNumber
+					? `#${customer.lastOrderNumber}`
+					: customer.lastOrderId
+						? `ID ${customer.lastOrderId}`
+						: '-',
+		lastOrderStatusLabel:
+			lastOrder.lastOrderStatusLabel !== '-'
+				? lastOrder.lastOrderStatusLabel
+				: [customer.lastPaymentStatus, customer.lastShippingStatus].filter(Boolean).join(' · ') || '-',
+		topProductsPreview,
+		lastOrderProductsPreview: lastOrder.lastOrderProductsPreview,
 		initials: getInitials(customer.displayName || customer.email || resolvedPhone || '?'),
 		updatedAt: customer.updatedAt,
 		updatedAtLabel: formatDate(customer.updatedAt),
 	};
 }
 
-function buildStats(customers = [], fallbackCurrency = 'ARS', showingFrom = 0, showingTo = 0) {
-	const normalizedCustomers = customers.map((customer) => ({
-		...customer,
-		orderCount: resolveOrderCount(customer),
-	}));
+	function buildStats(customers = [], fallbackCurrency = 'ARS', showingFrom = 0, showingTo = 0) {
+		const normalizedCustomers = customers.map((customer) => ({
+			...customer,
+			orderCount: resolveOrderCount(customer),
+			paidOrderCount: Number(customer.paidOrderCount || 0),
+			totalSpent: Number(customer.totalSpent || 0),
+		}));
 
-	return {
-		totalCustomers: normalizedCustomers.length,
-		repeatBuyers: normalizedCustomers.filter((customer) => Number(customer.orderCount || 0) > 1)
-			.length,
-		withLastOrder: normalizedCustomers.filter((customer) => Boolean(customer.lastOrderId)).length,
-		totalOrders: normalizedCustomers.reduce(
-			(total, customer) => total + Number(customer.orderCount || 0),
-			0
-		),
-		totalSpent: normalizedCustomers.reduce(
-			(total, customer) => total + Number(customer.totalSpent || 0),
-			0
-		),
-		currency: fallbackCurrency || 'ARS',
-		showingFrom,
-		showingTo,
-	};
-}
-
+		return {
+			totalCustomers: normalizedCustomers.length,
+			repeatBuyers: normalizedCustomers.filter((customer) => Number(customer.orderCount || 0) > 1).length,
+			withLastOrder: normalizedCustomers.filter((customer) => Boolean(customer.lastOrderId)).length,
+			withOrders: normalizedCustomers.filter((customer) => Number(customer.orderCount || 0) > 0).length,
+			totalOrders: normalizedCustomers.reduce(
+				(total, customer) => total + Number(customer.orderCount || 0),
+				0
+			),
+			paidOrders: normalizedCustomers.reduce(
+				(total, customer) => total + Number(customer.paidOrderCount || 0),
+				0
+			),
+			totalSpent: normalizedCustomers.reduce(
+				(total, customer) => total + Number(customer.totalSpent || 0),
+				0
+			),
+			currency: fallbackCurrency || 'ARS',
+			showingFrom,
+			showingTo,
+		};
+	}
 export async function getCustomers(req, res, next) {
 	try {
 		ensureCustomerModels();
 
 		const q = normalizeSearch(req.query?.q);
+		const productQuery = normalizeProductSearch(req.query?.productQuery);
+		const orderNumber = normalizeSearch(req.query?.orderNumber);
 		const page = toPositiveInt(req.query?.page, 1);
 		const pageSize = toPositiveInt(req.query?.pageSize, 24, { min: 1, max: 100 });
 		const skip = (page - 1) * pageSize;
-		const sort = normalizeSearch(req.query?.sort) || 'updated_desc';
+		const sort = normalizeSearch(req.query?.sort) || 'last_purchase_desc';
 		const minSpent = toNumberOrNull(req.query?.minSpent);
 		const minOrders = toNumberOrNull(req.query?.minOrders);
 		const hasPhoneOnly = normalizeBoolean(req.query?.hasPhoneOnly);
 		const hasOrders = normalizeBoolean(req.query?.hasOrders);
-		const productQuery = normalizeSearch(req.query?.productQuery).toLowerCase();
+		const dateFrom = parseDateQuery(req.query?.dateFrom);
+		const dateTo = endOfDay(parseDateQuery(req.query?.dateTo));
+		const paymentStatus = normalizeStatus(req.query?.paymentStatus);
+		const shippingStatus = normalizeStatus(req.query?.shippingStatus);
 
 		const where = buildCustomersWhere({
 			q,
+			productQuery,
+			orderNumber,
 			minSpent,
 			minOrders,
 			hasPhoneOnly,
 			hasOrders,
+			dateFrom,
+			dateTo,
+			paymentStatus,
+			shippingStatus,
 		});
 
 		const select = {
@@ -330,62 +518,50 @@ export async function getCustomers(req, res, next) {
 			normalizedPhone: true,
 			totalSpent: true,
 			currency: true,
-			lastOrderId: true,
-			lastOrderAt: true,
-			updatedAt: true,
-			createdAt: true,
-			productSummary: true,
 			orderCount: true,
+			paidOrderCount: true,
 			distinctProductsCount: true,
+			totalUnitsPurchased: true,
+			firstOrderAt: true,
+			lastOrderAt: true,
+			lastOrderId: true,
+			lastOrderNumber: true,
+			lastPaymentStatus: true,
+			lastShippingStatus: true,
+			productSummary: true,
+			updatedAt: true,
+			orders: {
+				take: 1,
+				orderBy: [
+					{ orderCreatedAt: 'desc' },
+					{ updatedAt: 'desc' },
+				],
+				select: {
+					orderId: true,
+					orderNumber: true,
+					orderCreatedAt: true,
+					paymentStatus: true,
+					shippingStatus: true,
+					items: {
+						take: 5,
+						orderBy: [
+							{ quantity: 'desc' },
+							{ name: 'asc' },
+						],
+						select: {
+							name: true,
+							variantName: true,
+							quantity: true,
+						},
+					},
+				},
+			},
 		};
-
-		if (productQuery) {
-			const allCustomers = await prisma.customerProfile.findMany({
-				where,
-				orderBy: buildOrderBy(sort),
-				select,
-			});
-
-			const filteredCustomers = allCustomers.filter((customer) =>
-				stringifyProductSummary(customer.productSummary).toLowerCase().includes(productQuery)
-			);
-
-			const totalCustomers = filteredCustomers.length;
-			const totalPages = Math.max(1, Math.ceil(totalCustomers / pageSize));
-			const pagedCustomers = filteredCustomers.slice(skip, skip + pageSize);
-			const showingFrom = totalCustomers === 0 ? 0 : skip + 1;
-			const showingTo = Math.min(skip + pagedCustomers.length, totalCustomers);
-
-			return res.json({
-				customers: pagedCustomers.map(serializeCustomer),
-				stats: buildStats(
-					filteredCustomers,
-					filteredCustomers[0]?.currency || 'ARS',
-					showingFrom,
-					showingTo
-				),
-				pagination: {
-					page,
-					pageSize,
-					totalPages,
-					totalItems: totalCustomers,
-				},
-				filters: {
-					q,
-					sort,
-					minSpent,
-					minOrders,
-					hasPhoneOnly,
-					hasOrders,
-					productQuery: normalizeSearch(req.query?.productQuery),
-				},
-			});
-		}
 
 		const [
 			totalCustomers,
 			repeatBuyers,
-			withLastOrder,
+			withOrders,
 			agg,
 			customers,
 		] = await Promise.all([
@@ -399,7 +575,7 @@ export async function getCustomers(req, res, next) {
 			prisma.customerProfile.count({
 				where: {
 					...where,
-					lastOrderId: { not: null },
+					orderCount: { gt: 0 },
 				},
 			}),
 			prisma.customerProfile.aggregate({
@@ -407,6 +583,7 @@ export async function getCustomers(req, res, next) {
 				_sum: {
 					totalSpent: true,
 					orderCount: true,
+					paidOrderCount: true,
 				},
 			}),
 			prisma.customerProfile.findMany({
@@ -430,11 +607,11 @@ export async function getCustomers(req, res, next) {
 				totalCustomers,
 				repeatBuyers,
 				withLastOrder,
-				totalOrders:
-					Number(agg?._sum?.orderCount || 0) +
-					serializedCustomers.filter(
-						(customer) => customer.orderCount === 1 && customer.lastOrderId
-					).length,
+				withOrders,
+				totalOrders: Number(agg?._sum?.orderCount || 0),
+				paidOrders: Number(agg?._sum?.paidOrderCount || 0),
+				totalSpent: Number(agg?._sum?.totalSpent || 0),
+				currency: customers[0]?.currency || 'ARS',
 				totalSpent: Number(agg?._sum?.totalSpent || 0),
 				currency: customers[0]?.currency || 'ARS',
 				showingFrom,
@@ -448,12 +625,17 @@ export async function getCustomers(req, res, next) {
 			},
 			filters: {
 				q,
+				productQuery: normalizeSearch(req.query?.productQuery),
+				orderNumber,
 				sort,
 				minSpent,
 				minOrders,
 				hasPhoneOnly,
 				hasOrders,
-				productQuery: normalizeSearch(req.query?.productQuery),
+				dateFrom: req.query?.dateFrom || '',
+				dateTo: req.query?.dateTo || '',
+				paymentStatus: paymentStatus || '',
+				shippingStatus: shippingStatus || '',
 			},
 		});
 	} catch (error) {
@@ -466,7 +648,9 @@ export async function postSyncCustomers(req, res) {
 		ensureCustomerModels();
 
 		const q = normalizeSearch(req.body?.q || '');
-		const result = await syncCustomers({ q });
+		const dateFrom = normalizeSearch(req.body?.dateFrom || '');
+		const dateTo = normalizeSearch(req.body?.dateTo || '');
+		const result = await syncCustomers({ q, dateFrom, dateTo });
 
 		return res.json(result);
 	} catch (error) {
@@ -479,12 +663,9 @@ export async function postSyncCustomers(req, res) {
 }
 
 export async function postRepairCustomers(_req, res) {
-	return res.json({
-		ok: true,
-		repairedProfiles: 0,
-		mergedProfiles: 0,
-		relinkedOrders: 0,
+	return res.status(501).json({
+		ok: false,
 		message:
-			'Repair de clientes disponible, pero todavía no se ejecutó ninguna reparación real en esta versión.',
+			'La reparación automática de perfiles duplicados no está implementada todavía en esta versión.',
 	});
 }

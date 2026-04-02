@@ -239,12 +239,16 @@ model CustomerProfile {
 	createdAt                 DateTime @default(now())
 	updatedAt                 DateTime @updatedAt
 
-	orders CustomerOrder[]
+	orders     CustomerOrder[]
+	orderItems CustomerOrderItem[]
 
 	@@index([storeId, lastOrderAt])
 	@@index([storeId, externalCustomerId])
 	@@index([storeId, normalizedEmail])
 	@@index([storeId, normalizedPhone])
+	@@index([storeId, firstOrderAt])
+	@@index([storeId, totalSpent])
+	@@index([storeId, lastOrderNumber])
 }
 
 model CustomerOrder {
@@ -277,13 +281,52 @@ model CustomerOrder {
 	createdAt             DateTime @default(now())
 	updatedAt             DateTime @updatedAt
 
-	customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+	customerProfile CustomerProfile     @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+	items           CustomerOrderItem[]
 
 	@@unique([storeId, orderId])
 	@@index([customerProfileId, orderCreatedAt])
 	@@index([storeId, orderCreatedAt])
 	@@index([normalizedEmail])
 	@@index([normalizedPhone])
+	@@index([storeId, orderNumber])
+	@@index([storeId, paymentStatus, orderCreatedAt])
+	@@index([storeId, shippingStatus, orderCreatedAt])
+}
+
+
+model CustomerOrderItem {
+	id                String   @id @default(cuid())
+	customerOrderId   String
+	customerProfileId String
+	storeId           String
+	orderId           String
+	orderNumber       String?
+	productId         String?
+	variantId         String?
+	lineItemId        String?
+	sku               String?
+	barcode           String?
+	name              String
+	normalizedName    String
+	variantName       String?
+	quantity          Int      @default(1)
+	unitPrice         Decimal? @db.Decimal(12, 2)
+	lineTotal         Decimal? @db.Decimal(12, 2)
+	imageUrl          String?
+	rawPayload        Json?
+	orderCreatedAt    DateTime?
+	createdAt         DateTime @default(now())
+	updatedAt         DateTime @updatedAt
+
+	customerOrder   CustomerOrder   @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+	customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+	@@index([customerProfileId, orderCreatedAt])
+	@@index([storeId, normalizedName])
+	@@index([storeId, productId])
+	@@index([storeId, orderNumber])
+	@@index([orderId])
 }
 
 model CustomerSyncLog {
