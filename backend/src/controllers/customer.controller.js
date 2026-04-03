@@ -635,8 +635,11 @@ export async function postSyncCustomers(req, res) {
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
 
-		return res.status(500).json({
-			message: error.message || 'Error sincronizando clientes',
+		const message = error?.message || 'Error sincronizando clientes';
+		const status = message.includes('Ya hay una sincronización de clientes en curso') ? 409 : 500;
+
+		return res.status(status).json({
+			message,
 		});
 	}
 }

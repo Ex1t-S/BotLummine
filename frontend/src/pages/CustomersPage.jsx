@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react';
 import api from '../lib/api.js';
 import './CustomersPage.css';
@@ -87,7 +86,6 @@ function normalizeRequestFilters(filters) {
 	};
 }
 
-
 function formatDateTime(value) {
 	if (!value) return '-';
 
@@ -115,23 +113,15 @@ function formatDurationMs(value) {
 	return `${seconds}s`;
 }
 
-function normalizeSyncState(payload = {}) {
-	const state = payload?.syncState || payload || {};
-	return {
-		running: Boolean(state.running),
-		startedAt: state.startedAt || null,
-		finishedAt: state.finishedAt || null,
-		lastHeartbeatAt: state.lastHeartbeatAt || null,
-		syncId: state.syncId || null,
-		query: state.query || '',
-		dateFrom: state.dateFrom || null,
-		dateTo: state.dateTo || null,
-		durationMs: Number(state.durationMs || 0),
-		idleMs: Number(state.idleMs || 0),
-		isStale: Boolean(state.isStale),
-		lastResult: state.lastResult || null,
-		lastError: state.lastError || null,
-	};
+function buildSyncMessage(payload = {}) {
+	const customersFetched = Number(payload.customersFetched || 0);
+	const customersUpserted = Number(payload.customersUpserted || 0);
+	const ordersFetched = Number(payload.ordersFetched || 0);
+	const ordersUpserted = Number(payload.ordersUpserted || 0);
+	const pagesFetched = Number(payload.pagesFetched || 0);
+	const durationLabel = formatDurationMs(payload.durationMs || 0);
+
+	return `Sync lista · páginas ${pagesFetched} · clientes leídos ${customersFetched} · perfiles tocados ${customersUpserted} · pedidos leídos ${ordersFetched} · pedidos guardados ${ordersUpserted} · duración ${durationLabel}.`;
 }
 
 export default function CustomersPage() {
@@ -144,8 +134,6 @@ export default function CustomersPage() {
 	});
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
-	const [syncState, setSyncState] = useState(() => normalizeSyncState());
-	const [resettingSyncLock, setResettingSyncLock] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [syncMessage, setSyncMessage] = useState('');
 
@@ -156,24 +144,6 @@ export default function CustomersPage() {
 		() => buildVisiblePages(currentPage, totalPages),
 		[currentPage, totalPages]
 	);
-	const backendSyncRunning = Boolean(syncState.running);
-	const syncButtonDisabled = syncing || backendSyncRunning;
-
-	async function loadSyncState({ silent = false } = {}) {
-		if (!silent) setErrorMessage('');
-
-		try {
-			const response = await api.get('/dashboard/customers/sync-state');
-			setSyncState(normalizeSyncState(response.data));
-		} catch (error) {
-			console.error(error);
-			if (!silent) {
-				setErrorMessage(
-					error?.response?.data?.message || 'No pude obtener el estado de sincronización.'
-				);
-			}
-		}
-	}
 
 	async function loadCustomers(nextFilters = filters) {
 		setLoading(true);
@@ -206,19 +176,8 @@ export default function CustomersPage() {
 
 	useEffect(() => {
 		loadCustomers(initialFilters);
-		loadSyncState({ silent: true });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
-
-	useEffect(() => {
-		if (!syncState.running) return undefined;
-
-		const timer = window.setInterval(() => {
-			loadSyncState({ silent: true });
-		}, 5000);
-
-		return () => window.clearInterval(timer);
-	}, [syncState.running]);
 
 	function updateFilter(name, value) {
 		setFilters((prev) => ({
@@ -247,31 +206,18 @@ export default function CustomersPage() {
 	}
 
 	async function handleSync() {
-		if (syncState.running) {
-			setErrorMessage('Ya hay una sincronización en curso. Esperá a que termine o liberá el bloqueo si quedó colgado.');
-			return;
-		}
-
 		setSyncing(true);
 		setSyncMessage('');
 		setErrorMessage('');
 
 		try {
-			const res = await api.post('/dashboard/customers/sync', {
+			const response = await api.post('/dashboard/customers/sync', {
 				q: filters.q || '',
 				dateFrom: filters.dateFrom || '',
 				dateTo: filters.dateTo || '',
 			});
 
-			const customersFetched = Number(res.data?.customersFetched || 0);
-			const customersUpserted = Number(res.data?.customersUpserted || 0);
-			const ordersFetched = Number(res.data?.ordersFetched || 0);
-			const ordersUpserted = Number(res.data?.ordersUpserted || 0);
-
-			setSyncMessage(
-				`Sync lista. Clientes leídos: ${customersFetched}. Clientes tocados: ${customersUpserted}. Pedidos leídos: ${ordersFetched}. Pedidos guardados: ${ordersUpserted}.`
-			);
-			await loadSyncState({ silent: true });
+			setSyncMessage(buildSyncMessage(response.data));
 
 			const next = {
 				...filters,
@@ -282,32 +228,12 @@ export default function CustomersPage() {
 			await loadCustomers(next);
 		} catch (error) {
 			console.error(error);
-			const backendState = normalizeSyncState(error?.response?.data?.syncState);
-			if (backendState.running || error?.response?.status === 409) {
-				setSyncState(backendState);
-			}
-			setErrorMessage(error?.response?.data?.message || 'No se pudo sincronizar clientes.');
+			setErrorMessage(
+				error?.response?.data?.message ||
+					'No se pudo sincronizar clientes. Revisá credenciales de Tiendanube y migraciones de Prisma.'
+			);
 		} finally {
 			setSyncing(false);
-			await loadSyncState({ silent: true });
-		}
-	}
-
-	async function handleResetSyncLock() {
-		setResettingSyncLock(true);
-		setErrorMessage('');
-		setSyncMessage('');
-
-		try {
-			const response = await api.post('/dashboard/customers/sync/reset-lock');
-			setSyncState(normalizeSyncState(response.data?.syncState));
-			setSyncMessage(response.data?.message || 'Bloqueo liberado.');
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(error?.response?.data?.message || 'No pude liberar el bloqueo de sincronización.');
-		} finally {
-			setResettingSyncLock(false);
-			await loadSyncState({ silent: true });
 		}
 	}
 
@@ -326,13 +252,13 @@ export default function CustomersPage() {
 	return (
 		<section className="customers-page">
 			<div className="customers-hero-card">
-				<div>
+				<div className="customers-hero-copy">
 					<span className="customers-kicker">CRM CLIENTES</span>
 					<h1>Clientes y compras</h1>
 					<p>
-						Ahora la sección queda pensada para vender y segmentar mejor: número de
-						pedido real, filtros por producto, fechas de compra, estado de pago y
-						estado de envío.
+						Panel comercial para segmentar mejor por producto, número real de pedido,
+						fechas de compra, pago y envío. La sync corre en paralelo desde backend,
+						así que no hace falta dejar esta vista colgada con bloqueos raros.
 					</p>
 				</div>
 
@@ -341,38 +267,20 @@ export default function CustomersPage() {
 						type="button"
 						className="primary-action-btn"
 						onClick={handleSync}
-						disabled={syncButtonDisabled}
+						disabled={syncing}
 					>
-						{backendSyncRunning ? 'Hay una sync corriendo...' : syncing ? 'Sincronizando...' : 'Sincronizar clientes y pedidos'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar clientes y pedidos'}
 					</button>
 
 					<button
 						type="button"
 						className="secondary-link-btn"
 						onClick={handleResetFilters}
-						disabled={syncButtonDisabled}
 					>
 						Limpiar filtros
 					</button>
-
-					<button
-						type="button"
-						className="secondary-link-btn"
-						onClick={handleResetSyncLock}
-						disabled={resettingSyncLock}
-					>
-						{resettingSyncLock ? 'Liberando bloqueo...' : 'Liberar bloqueo sync'}
-					</button>
 				</div>
 			</div>
-
-			{backendSyncRunning ? (
-				<div className="customers-feedback customers-feedback--success">
-					<strong>Sincronización en curso.</strong> Empezó {formatDateTime(syncState.startedAt)} · duración {formatDurationMs(syncState.durationMs)}
-					{syncState.query ? ` · filtro: ${syncState.query}` : ''}
-					{syncState.dateFrom || syncState.dateTo ? ` · rango: ${syncState.dateFrom || '-'} → ${syncState.dateTo || '-'}` : ''}
-				</div>
-			) : null}
 
 			{errorMessage ? (
 				<div className="customers-feedback customers-feedback--error">{errorMessage}</div>
@@ -415,6 +323,13 @@ export default function CustomersPage() {
 			</div>
 
 			<form className="customers-filters-card" onSubmit={handleApplyFilters}>
+				<div className="customers-filters-header">
+					<div>
+						<h3>Filtros comerciales</h3>
+						<p>Buscá clientes, pedidos y productos sin depender del ID largo de Tiendanube.</p>
+					</div>
+				</div>
+
 				<div className="customers-filter-grid">
 					<div className="customers-filter-group customers-filter-group--grow">
 						<label htmlFor="customers-q">Buscar cliente</label>
@@ -547,26 +462,28 @@ export default function CustomersPage() {
 				</div>
 
 				<div className="customers-toggle-row">
-					<label className="customers-checkbox">
-						<input
-							type="checkbox"
-							checked={filters.hasOrders}
-							onChange={(event) => updateFilter('hasOrders', event.target.checked)}
-						/>
-						<span>Solo clientes con pedidos</span>
-					</label>
+					<div className="customers-toggle-group">
+						<label className="customers-checkbox">
+							<input
+								type="checkbox"
+								checked={filters.hasOrders}
+								onChange={(event) => updateFilter('hasOrders', event.target.checked)}
+							/>
+							<span>Solo clientes con pedidos</span>
+						</label>
 
-					<label className="customers-checkbox">
-						<input
-							type="checkbox"
-							checked={filters.hasPhoneOnly}
-							onChange={(event) => updateFilter('hasPhoneOnly', event.target.checked)}
-						/>
-						<span>Solo con teléfono</span>
-					</label>
+						<label className="customers-checkbox">
+							<input
+								type="checkbox"
+								checked={filters.hasPhoneOnly}
+								onChange={(event) => updateFilter('hasPhoneOnly', event.target.checked)}
+							/>
+							<span>Solo con teléfono</span>
+						</label>
+					</div>
 
 					<div className="customers-filter-actions">
-						<button type="submit" className="secondary-link-btn">
+						<button type="submit" className="secondary-link-btn customers-apply-btn">
 							Aplicar filtros
 						</button>
 					</div>
@@ -686,6 +603,11 @@ export default function CustomersPage() {
 											Todavía no hay resumen histórico de productos.
 										</p>
 									)}
+								</div>
+
+								<div className="customer-footer-row">
+									<span>Actualizado</span>
+									<strong>{formatDateTime(customer.updatedAt)}</strong>
 								</div>
 							</article>
 						))}
