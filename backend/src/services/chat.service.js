@@ -224,7 +224,7 @@ function getMenuConfig(menuPath = MENU_PATHS.MAIN) {
 	return {
 		path: MENU_PATHS.MAIN,
 		headerText: 'Lummine',
-		body: '¡Hola! Elegí una opción para ayudarte más rápido:',
+		body: 'Elegí una opción para ayudarte más rápido:',
 		buttonText: 'Abrir menú',
 		footerText: commonFooter,
 		textFallback: [
