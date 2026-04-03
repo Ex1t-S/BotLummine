@@ -655,6 +655,9 @@ function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) 
 	if (currentState?.needsHuman) return false;
 	if (currentState?.menuActive && currentState?.menuPath) return true;
 
+	// Si saluda, abrimos menú aunque ya exista historial
+	if (isGreetingOnlyMessage(messageBody)) return true;
+
 	const inboundCount = (freshConversation?.messages || []).filter((msg) => msg.direction === 'INBOUND').length;
 	const outboundCount = (freshConversation?.messages || []).filter((msg) => msg.direction === 'OUTBOUND').length;
 	const hasNoMeaningfulHistory = !currentState?.lastIntent && (currentState?.interactionCount || 0) === 0;
