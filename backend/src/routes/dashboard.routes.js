@@ -19,7 +19,9 @@ import {
 } from '../controllers/abandoned-cart.controller.js';
 import {
 	getCustomers,
+	getCustomersSyncState,
 	postRepairCustomers,
+	postResetCustomersSync,
 	postSyncCustomers,
 } from '../controllers/customer.controller.js';
 
@@ -44,7 +46,9 @@ router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
 router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
 
 router.get('/customers', getCustomers);
+router.get('/customers/sync-state', getCustomersSyncState);
 router.post('/customers/sync', postSyncCustomers);
+router.post('/customers/sync/reset-lock', postResetCustomersSync);
 router.post('/customers/repair', postRepairCustomers);
 
 export default router;

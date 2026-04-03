@@ -87,6 +87,53 @@ function normalizeRequestFilters(filters) {
 	};
 }
 
+
+function formatDateTime(value) {
+	if (!value) return '-';
+
+	try {
+		return new Intl.DateTimeFormat('es-AR', {
+			dateStyle: 'short',
+			timeStyle: 'short',
+		}).format(new Date(value));
+	} catch {
+		return String(value);
+	}
+}
+
+function formatDurationMs(value) {
+	const totalMs = Number(value || 0);
+	if (!Number.isFinite(totalMs) || totalMs <= 0) return '0s';
+
+	const totalSeconds = Math.floor(totalMs / 1000);
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+
+	if (hours > 0) return `${hours}h ${minutes}m`;
+	if (minutes > 0) return `${minutes}m ${seconds}s`;
+	return `${seconds}s`;
+}
+
+function normalizeSyncState(payload = {}) {
+	const state = payload?.syncState || payload || {};
+	return {
+		running: Boolean(state.running),
+		startedAt: state.startedAt || null,
+		finishedAt: state.finishedAt || null,
+		lastHeartbeatAt: state.lastHeartbeatAt || null,
+		syncId: state.syncId || null,
+		query: state.query || '',
+		dateFrom: state.dateFrom || null,
+		dateTo: state.dateTo || null,
+		durationMs: Number(state.durationMs || 0),
+		idleMs: Number(state.idleMs || 0),
+		isStale: Boolean(state.isStale),
+		lastResult: state.lastResult || null,
+		lastError: state.lastError || null,
+	};
+}
+
 export default function CustomersPage() {
 	const [filters, setFilters] = useState(initialFilters);
 	const [data, setData] = useState({
@@ -97,6 +144,8 @@ export default function CustomersPage() {
 	});
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
+	const [syncState, setSyncState] = useState(() => normalizeSyncState());
+	const [resettingSyncLock, setResettingSyncLock] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [syncMessage, setSyncMessage] = useState('');
 
@@ -107,6 +156,24 @@ export default function CustomersPage() {
 		() => buildVisiblePages(currentPage, totalPages),
 		[currentPage, totalPages]
 	);
+	const backendSyncRunning = Boolean(syncState.running);
+	const syncButtonDisabled = syncing || backendSyncRunning;
+
+	async function loadSyncState({ silent = false } = {}) {
+		if (!silent) setErrorMessage('');
+
+		try {
+			const response = await api.get('/dashboard/customers/sync-state');
+			setSyncState(normalizeSyncState(response.data));
+		} catch (error) {
+			console.error(error);
+			if (!silent) {
+				setErrorMessage(
+					error?.response?.data?.message || 'No pude obtener el estado de sincronización.'
+				);
+			}
+		}
+	}
 
 	async function loadCustomers(nextFilters = filters) {
 		setLoading(true);
@@ -139,8 +206,19 @@ export default function CustomersPage() {
 
 	useEffect(() => {
 		loadCustomers(initialFilters);
+		loadSyncState({ silent: true });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	useEffect(() => {
+		if (!syncState.running) return undefined;
+
+		const timer = window.setInterval(() => {
+			loadSyncState({ silent: true });
+		}, 5000);
+
+		return () => window.clearInterval(timer);
+	}, [syncState.running]);
 
 	function updateFilter(name, value) {
 		setFilters((prev) => ({
@@ -169,6 +247,11 @@ export default function CustomersPage() {
 	}
 
 	async function handleSync() {
+		if (syncState.running) {
+			setErrorMessage('Ya hay una sincronización en curso. Esperá a que termine o liberá el bloqueo si quedó colgado.');
+			return;
+		}
+
 		setSyncing(true);
 		setSyncMessage('');
 		setErrorMessage('');
@@ -188,6 +271,7 @@ export default function CustomersPage() {
 			setSyncMessage(
 				`Sync lista. Clientes leídos: ${customersFetched}. Clientes tocados: ${customersUpserted}. Pedidos leídos: ${ordersFetched}. Pedidos guardados: ${ordersUpserted}.`
 			);
+			await loadSyncState({ silent: true });
 
 			const next = {
 				...filters,
@@ -198,9 +282,32 @@ export default function CustomersPage() {
 			await loadCustomers(next);
 		} catch (error) {
 			console.error(error);
+			const backendState = normalizeSyncState(error?.response?.data?.syncState);
+			if (backendState.running || error?.response?.status === 409) {
+				setSyncState(backendState);
+			}
 			setErrorMessage(error?.response?.data?.message || 'No se pudo sincronizar clientes.');
 		} finally {
 			setSyncing(false);
+			await loadSyncState({ silent: true });
+		}
+	}
+
+	async function handleResetSyncLock() {
+		setResettingSyncLock(true);
+		setErrorMessage('');
+		setSyncMessage('');
+
+		try {
+			const response = await api.post('/dashboard/customers/sync/reset-lock');
+			setSyncState(normalizeSyncState(response.data?.syncState));
+			setSyncMessage(response.data?.message || 'Bloqueo liberado.');
+		} catch (error) {
+			console.error(error);
+			setErrorMessage(error?.response?.data?.message || 'No pude liberar el bloqueo de sincronización.');
+		} finally {
+			setResettingSyncLock(false);
+			await loadSyncState({ silent: true });
 		}
 	}
 
@@ -234,21 +341,38 @@ export default function CustomersPage() {
 						type="button"
 						className="primary-action-btn"
 						onClick={handleSync}
-						disabled={syncing}
+						disabled={syncButtonDisabled}
 					>
-						{syncing ? 'Sincronizando...' : 'Sincronizar clientes y pedidos'}
+						{backendSyncRunning ? 'Hay una sync corriendo...' : syncing ? 'Sincronizando...' : 'Sincronizar clientes y pedidos'}
 					</button>
 
 					<button
 						type="button"
 						className="secondary-link-btn"
 						onClick={handleResetFilters}
-						disabled={syncing}
+						disabled={syncButtonDisabled}
 					>
 						Limpiar filtros
 					</button>
+
+					<button
+						type="button"
+						className="secondary-link-btn"
+						onClick={handleResetSyncLock}
+						disabled={resettingSyncLock}
+					>
+						{resettingSyncLock ? 'Liberando bloqueo...' : 'Liberar bloqueo sync'}
+					</button>
 				</div>
 			</div>
+
+			{backendSyncRunning ? (
+				<div className="customers-feedback customers-feedback--success">
+					<strong>Sincronización en curso.</strong> Empezó {formatDateTime(syncState.startedAt)} · duración {formatDurationMs(syncState.durationMs)}
+					{syncState.query ? ` · filtro: ${syncState.query}` : ''}
+					{syncState.dateFrom || syncState.dateTo ? ` · rango: ${syncState.dateFrom || '-'} → ${syncState.dateTo || '-'}` : ''}
+				</div>
+			) : null}
 
 			{errorMessage ? (
 				<div className="customers-feedback customers-feedback--error">{errorMessage}</div>

@@ -22,10 +22,59 @@ const MAX_PAGES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_MAX_P
 const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_RETRIES || 4));
 const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 50));
 
+const SYNC_STALE_MS = Math.max(60_000, Number(process.env.CUSTOMERS_SYNC_STALE_MS || 45 * 60 * 1000));
+
 const syncState = {
 	running: false,
 	startedAt: null,
+	finishedAt: null,
+	lastHeartbeatAt: null,
+	syncId: null,
+	query: '',
+	dateFrom: null,
+	dateTo: null,
+	lastResult: null,
+	lastError: null,
 };
+
+function buildSyncStateSnapshot() {
+	const now = Date.now();
+	const startedMs = syncState.startedAt ? new Date(syncState.startedAt).getTime() : null;
+	const heartbeatMs = syncState.lastHeartbeatAt ? new Date(syncState.lastHeartbeatAt).getTime() : null;
+	const durationMs = startedMs ? Math.max(0, now - startedMs) : 0;
+	const idleMs = heartbeatMs ? Math.max(0, now - heartbeatMs) : null;
+	const isStale = Boolean(syncState.running && idleMs !== null && idleMs > SYNC_STALE_MS);
+
+	return {
+		running: Boolean(syncState.running),
+		startedAt: syncState.startedAt,
+		finishedAt: syncState.finishedAt,
+		lastHeartbeatAt: syncState.lastHeartbeatAt,
+		syncId: syncState.syncId,
+		query: syncState.query,
+		dateFrom: syncState.dateFrom,
+		dateTo: syncState.dateTo,
+		durationMs,
+		idleMs,
+		isStale,
+		lastResult: syncState.lastResult,
+		lastError: syncState.lastError,
+	};
+}
+
+function touchSyncHeartbeat() {
+	syncState.lastHeartbeatAt = new Date();
+}
+
+function clearSyncState() {
+	syncState.running = false;
+	syncState.startedAt = null;
+	syncState.lastHeartbeatAt = null;
+	syncState.syncId = null;
+	syncState.query = '';
+	syncState.dateFrom = null;
+	syncState.dateTo = null;
+}
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1224,7 +1273,15 @@ async function syncOrdersAndMetrics({
 }
 
 export function getCustomerSyncState() {
-	return { ...syncState };
+	return buildSyncStateSnapshot();
+}
+
+export function resetCustomerSyncState() {
+	clearSyncState();
+	syncState.finishedAt = new Date();
+	syncState.lastError = null;
+	syncState.lastResult = null;
+	return getCustomerSyncState();
 }
 
 export async function syncCustomers({
@@ -1232,19 +1289,41 @@ export async function syncCustomers({
 	dateFrom = '',
 	dateTo = '',
 } = {}) {
-	if (syncState.running) {
-		throw new Error('Ya hay una sincronización de clientes en curso. Esperá a que termine.');
+	const currentState = getCustomerSyncState();
+
+	if (currentState.running && !currentState.isStale) {
+		const conflictError = new Error('Ya hay una sincronización de clientes en curso. Esperá a que termine.');
+		conflictError.code = 'CUSTOMER_SYNC_IN_PROGRESS';
+		conflictError.statusCode = 409;
+		conflictError.syncState = currentState;
+		throw conflictError;
+	}
+
+	if (currentState.running && currentState.isStale) {
+		console.warn('[CUSTOMERS SYNC] Detecté un lock viejo y lo libero automáticamente.', currentState);
+		clearSyncState();
 	}
 
 	syncState.running = true;
 	syncState.startedAt = new Date();
+	syncState.finishedAt = null;
+	syncState.lastHeartbeatAt = new Date();
+	syncState.syncId = `customers-sync-${Date.now()}`;
+	syncState.query = q || '';
+	syncState.dateFrom = dateFrom || null;
+	syncState.dateTo = dateTo || null;
+	syncState.lastResult = null;
+	syncState.lastError = null;
 
 	const startedAt = new Date();
 	let syncLog = null;
 
 	try {
 		const { storeId, accessToken } = await resolveStoreCredentials();
+		touchSyncHeartbeat();
+
 		const cache = await loadStoreProfiles(storeId);
+		touchSyncHeartbeat();
 
 		if (prisma.customerSyncLog) {
 			syncLog = await prisma.customerSyncLog.create({
@@ -1263,6 +1342,7 @@ export async function syncCustomers({
 			q,
 			cache,
 		});
+		touchSyncHeartbeat();
 
 		const ordersResult = await syncOrdersAndMetrics({
 			storeId,
@@ -1272,6 +1352,7 @@ export async function syncCustomers({
 			dateTo,
 			cache,
 		});
+		touchSyncHeartbeat();
 
 		const result = {
 			ok: true,
@@ -1288,7 +1369,11 @@ export async function syncCustomers({
 			concurrency: FETCH_CONCURRENCY,
 			dateFrom: dateFrom || null,
 			dateTo: dateTo || null,
+			durationMs: Date.now() - startedAt.getTime(),
 		};
+
+		syncState.lastResult = result;
+		syncState.finishedAt = new Date();
 
 		if (syncLog) {
 			await prisma.customerSyncLog.update({
@@ -1306,6 +1391,13 @@ export async function syncCustomers({
 
 		return result;
 	} catch (error) {
+		syncState.lastError = {
+			message: error.message || 'Error desconocido',
+			code: error.code || null,
+			at: new Date(),
+		};
+		syncState.finishedAt = new Date();
+
 		if (syncLog) {
 			await prisma.customerSyncLog.update({
 				where: { id: syncLog.id },
@@ -1319,7 +1411,7 @@ export async function syncCustomers({
 
 		throw error;
 	} finally {
-		syncState.running = false;
-		syncState.startedAt = null;
+		clearSyncState();
+		syncState.finishedAt = new Date();
 	}
 }

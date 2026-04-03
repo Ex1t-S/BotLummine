@@ -1,6 +1,10 @@
 
 import { prisma } from '../lib/prisma.js';
-import { syncCustomers } from '../services/customer.service.js';
+import {
+	getCustomerSyncState,
+	resetCustomerSyncState,
+	syncCustomers,
+} from '../services/customer.service.js';
 
 function ensureCustomerModels() {
 	if (!prisma?.customerProfile || !prisma?.customerOrder) {
@@ -656,8 +660,42 @@ export async function postSyncCustomers(req, res) {
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
 
-		return res.status(500).json({
+		const statusCode = Number(error?.statusCode || 500);
+		return res.status(statusCode).json({
+			ok: false,
+			code: error?.code || null,
 			message: error.message || 'Error sincronizando clientes',
+			syncState: error?.syncState || getCustomerSyncState(),
+		});
+	}
+}
+
+
+export async function getCustomersSyncState(_req, res) {
+	try {
+		return res.json({
+			ok: true,
+			syncState: getCustomerSyncState(),
+		});
+	} catch (error) {
+		console.error('[CUSTOMERS SYNC STATE ERROR]', error);
+		return res.status(500).json({
+			message: error.message || 'No pude obtener el estado de sincronización de clientes.',
+		});
+	}
+}
+
+export async function postResetCustomersSync(_req, res) {
+	try {
+		return res.json({
+			ok: true,
+			message: 'Bloqueo de sincronización liberado.',
+			syncState: resetCustomerSyncState(),
+		});
+	} catch (error) {
+		console.error('[CUSTOMERS RESET SYNC ERROR]', error);
+		return res.status(500).json({
+			message: error.message || 'No pude liberar el bloqueo de sincronización.',
 		});
 	}
 }
