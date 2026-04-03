@@ -390,51 +390,139 @@ function registerProfileInIndexes(indexes, profile) {
 		indexes.byNormalizedPhone.set(profile.normalizedPhone, profile);
 	}
 }
+function buildCustomerProfileDefaults(data) {
+	return {
+		...data,
+		orderCount: 0,
+		paidOrderCount: 0,
+		distinctProductsCount: 0,
+		totalUnitsPurchased: 0,
+		productSummary: [],
+	};
+}
 
+async function findExistingCustomerProfile(storeId, data) {
+	const or = [];
+
+	if (data.externalCustomerId) {
+		or.push({ externalCustomerId: data.externalCustomerId });
+	}
+
+	if (data.normalizedEmail) {
+		or.push({ normalizedEmail: data.normalizedEmail });
+	}
+
+	if (data.normalizedPhone) {
+		or.push({ normalizedPhone: data.normalizedPhone });
+	}
+
+	if (!or.length) return null;
+
+	return prisma.customerProfile.findFirst({
+		where: {
+			storeId,
+			OR: or,
+		},
+		select: {
+			id: true,
+			externalCustomerId: true,
+			normalizedEmail: true,
+			normalizedPhone: true,
+		},
+		orderBy: { createdAt: 'asc' },
+	});
+}
+
+async function stripConflictingUniqueFields(storeId, data, currentProfileId = null) {
+	const next = { ...data };
+
+	if (next.normalizedEmail) {
+		const emailOwner = await prisma.customerProfile.findFirst({
+			where: {
+				storeId,
+				normalizedEmail: next.normalizedEmail,
+				...(currentProfileId ? { id: { not: currentProfileId } } : {}),
+			},
+			select: { id: true },
+		});
+
+		if (emailOwner) {
+			next.normalizedEmail = null;
+		}
+	}
+
+	if (next.normalizedPhone) {
+		const phoneOwner = await prisma.customerProfile.findFirst({
+			where: {
+				storeId,
+				normalizedPhone: next.normalizedPhone,
+				...(currentProfileId ? { id: { not: currentProfileId } } : {}),
+			},
+			select: { id: true },
+		});
+
+		if (phoneOwner) {
+			next.normalizedPhone = null;
+		}
+	}
+
+	return next;
+}
+
+async function saveCustomerProfileSafely(storeId, data, indexes = null) {
+	const existing = await findExistingCustomerProfile(storeId, data);
+	const sanitized = await stripConflictingUniqueFields(storeId, data, existing?.id || null);
+
+	let profile;
+
+	if (existing) {
+		const updateData = {
+			...sanitized,
+			externalCustomerId: existing.externalCustomerId || sanitized.externalCustomerId || null,
+			normalizedEmail: existing.normalizedEmail || sanitized.normalizedEmail || null,
+			normalizedPhone: existing.normalizedPhone || sanitized.normalizedPhone || null,
+		};
+
+		profile = await prisma.customerProfile.update({
+			where: { id: existing.id },
+			data: updateData,
+			select: {
+				id: true,
+				externalCustomerId: true,
+				normalizedEmail: true,
+				normalizedPhone: true,
+			},
+		});
+	} else {
+		profile = await prisma.customerProfile.create({
+			data: buildCustomerProfileDefaults(sanitized),
+			select: {
+				id: true,
+				externalCustomerId: true,
+				normalizedEmail: true,
+				normalizedPhone: true,
+			},
+		});
+	}
+
+	if (indexes) {
+		indexProfile(indexes, profile);
+	}
+
+	return profile;
+}
 async function upsertCustomerProfiles(customers, storeId) {
 	let customersUpserted = 0;
+
 	const payloads = customers
 		.map((customer) => mapCustomerPayload(customer, storeId))
 		.filter((item) => item.externalCustomerId || item.normalizedEmail || item.normalizedPhone);
 
 	for (const batch of chunkArray(payloads, UPDATE_CHUNK_SIZE)) {
-		await prisma.$transaction(
-			batch.map((data) => {
-				const createData = {
-					...data,
-					orderCount: 0,
-					paidOrderCount: 0,
-					distinctProductsCount: 0,
-					totalUnitsPurchased: 0,
-					productSummary: [],
-				};
-
-				if (data.externalCustomerId) {
-					return prisma.customerProfile.upsert({
-						where: {
-							storeId_externalCustomerId: {
-								storeId,
-								externalCustomerId: data.externalCustomerId,
-							},
-						},
-						update: data,
-						create: createData,
-					});
-				}
-
-				const uniqueWhere = data.normalizedEmail
-					? { storeId_normalizedEmail: { storeId, normalizedEmail: data.normalizedEmail } }
-					: { storeId_normalizedPhone: { storeId, normalizedPhone: data.normalizedPhone } };
-
-				return prisma.customerProfile.upsert({
-					where: uniqueWhere,
-					update: data,
-					create: createData,
-				});
-			})
-		);
-
-		customersUpserted += batch.length;
+		for (const data of batch) {
+			await saveCustomerProfileSafely(storeId, data);
+			customersUpserted += 1;
+		}
 	}
 
 	return customersUpserted;
@@ -486,101 +574,7 @@ async function resolveProfileForOrder(order, storeId, indexes) {
 		syncedAt: new Date(),
 	};
 
-	let created;
-
-	if (payload.externalCustomerId) {
-		created = await prisma.customerProfile.upsert({
-			where: {
-				storeId_externalCustomerId: {
-					storeId,
-					externalCustomerId: payload.externalCustomerId,
-				},
-			},
-			update: payload,
-			create: {
-				...payload,
-				orderCount: 0,
-				paidOrderCount: 0,
-				distinctProductsCount: 0,
-				totalUnitsPurchased: 0,
-				productSummary: [],
-			},
-			select: {
-				id: true,
-				externalCustomerId: true,
-				normalizedEmail: true,
-				normalizedPhone: true,
-			},
-		});
-	} else if (payload.normalizedEmail) {
-		created = await prisma.customerProfile.upsert({
-			where: {
-				storeId_normalizedEmail: {
-					storeId,
-					normalizedEmail: payload.normalizedEmail,
-				},
-			},
-			update: payload,
-			create: {
-				...payload,
-				orderCount: 0,
-				paidOrderCount: 0,
-				distinctProductsCount: 0,
-				totalUnitsPurchased: 0,
-				productSummary: [],
-			},
-			select: {
-				id: true,
-				externalCustomerId: true,
-				normalizedEmail: true,
-				normalizedPhone: true,
-			},
-		});
-	} else if (payload.normalizedPhone) {
-		created = await prisma.customerProfile.upsert({
-			where: {
-				storeId_normalizedPhone: {
-					storeId,
-					normalizedPhone: payload.normalizedPhone,
-				},
-			},
-			update: payload,
-			create: {
-				...payload,
-				orderCount: 0,
-				paidOrderCount: 0,
-				distinctProductsCount: 0,
-				totalUnitsPurchased: 0,
-				productSummary: [],
-			},
-			select: {
-				id: true,
-				externalCustomerId: true,
-				normalizedEmail: true,
-				normalizedPhone: true,
-			},
-		});
-	} else {
-		created = await prisma.customerProfile.create({
-			data: {
-				...payload,
-				orderCount: 0,
-				paidOrderCount: 0,
-				distinctProductsCount: 0,
-				totalUnitsPurchased: 0,
-				productSummary: [],
-			},
-			select: {
-				id: true,
-				externalCustomerId: true,
-				normalizedEmail: true,
-				normalizedPhone: true,
-			},
-		});
-	}
-
-	registerProfileInIndexes(indexes, created);
-	return created;
+	return saveCustomerProfileSafely(storeId, payload, indexes);
 }
 
 async function upsertOrdersAndItems(orders, storeId, indexes) {
