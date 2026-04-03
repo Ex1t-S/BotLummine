@@ -1,13 +1,8 @@
-
 import { prisma } from '../lib/prisma.js';
-import {
-	getCustomerSyncState,
-	resetCustomerSyncState,
-	syncCustomers,
-} from '../services/customer.service.js';
+import { syncCustomers } from '../services/customer.service.js';
 
 function ensureCustomerModels() {
-	if (!prisma?.customerProfile || !prisma?.customerOrder) {
+	if (!prisma?.customerProfile || !prisma?.customerOrder || !prisma?.customerOrderItem) {
 		throw new Error(
 			'Los modelos de clientes no están disponibles en Prisma Client. Ejecutá prisma generate y revisá la migración.'
 		);
@@ -331,7 +326,10 @@ function buildCustomersWhere({
 
 	if (hasOrders) {
 		and.push({
-			orderCount: { gt: 0 },
+			OR: [
+				{ orderCount: { gt: 0 } },
+				{ lastOrderId: { not: null } },
+			],
 		});
 	}
 
@@ -420,14 +418,13 @@ function serializeCustomer(customer) {
 		totalSpent: Number(customer.totalSpent || 0),
 		totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
 		currency: customer.currency || 'ARS',
-		totalSpent: Number(customer.totalSpent || 0),
-		totalSpentLabel: formatCurrency(customer.totalSpent || 0, customer.currency || 'ARS'),
-		currency: customer.currency || 'ARS',
 		firstOrderAt: customer.firstOrderAt || null,
 		firstOrderDateLabel: formatDate(customer.firstOrderAt) || '-',
 		lastOrderAt: lastOrder.lastOrderAt || customer.lastOrderAt || null,
 		lastOrderDateLabel:
-			lastOrder.lastOrderDateLabel !== '-' ? lastOrder.lastOrderDateLabel : formatDate(customer.lastOrderAt) || '-',
+			lastOrder.lastOrderDateLabel !== '-'
+				? lastOrder.lastOrderDateLabel
+				: formatDate(customer.lastOrderAt) || '-',
 		lastOrderId: lastOrder.lastOrderId || customer.lastOrderId || null,
 		lastOrderNumber: lastOrder.lastOrderNumber || customer.lastOrderNumber || null,
 		lastOrderLabel:
@@ -450,36 +447,6 @@ function serializeCustomer(customer) {
 	};
 }
 
-	function buildStats(customers = [], fallbackCurrency = 'ARS', showingFrom = 0, showingTo = 0) {
-		const normalizedCustomers = customers.map((customer) => ({
-			...customer,
-			orderCount: resolveOrderCount(customer),
-			paidOrderCount: Number(customer.paidOrderCount || 0),
-			totalSpent: Number(customer.totalSpent || 0),
-		}));
-
-		return {
-			totalCustomers: normalizedCustomers.length,
-			repeatBuyers: normalizedCustomers.filter((customer) => Number(customer.orderCount || 0) > 1).length,
-			withLastOrder: normalizedCustomers.filter((customer) => Boolean(customer.lastOrderId)).length,
-			withOrders: normalizedCustomers.filter((customer) => Number(customer.orderCount || 0) > 0).length,
-			totalOrders: normalizedCustomers.reduce(
-				(total, customer) => total + Number(customer.orderCount || 0),
-				0
-			),
-			paidOrders: normalizedCustomers.reduce(
-				(total, customer) => total + Number(customer.paidOrderCount || 0),
-				0
-			),
-			totalSpent: normalizedCustomers.reduce(
-				(total, customer) => total + Number(customer.totalSpent || 0),
-				0
-			),
-			currency: fallbackCurrency || 'ARS',
-			showingFrom,
-			showingTo,
-		};
-	}
 export async function getCustomers(req, res, next) {
 	try {
 		ensureCustomerModels();
@@ -565,6 +532,7 @@ export async function getCustomers(req, res, next) {
 		const [
 			totalCustomers,
 			repeatBuyers,
+			withLastOrder,
 			withOrders,
 			agg,
 			customers,
@@ -579,7 +547,16 @@ export async function getCustomers(req, res, next) {
 			prisma.customerProfile.count({
 				where: {
 					...where,
-					orderCount: { gt: 0 },
+					lastOrderId: { not: null },
+				},
+			}),
+			prisma.customerProfile.count({
+				where: {
+					...where,
+					OR: [
+						{ orderCount: { gt: 0 } },
+						{ lastOrderId: { not: null } },
+					],
 				},
 			}),
 			prisma.customerProfile.aggregate({
@@ -614,8 +591,6 @@ export async function getCustomers(req, res, next) {
 				withOrders,
 				totalOrders: Number(agg?._sum?.orderCount || 0),
 				paidOrders: Number(agg?._sum?.paidOrderCount || 0),
-				totalSpent: Number(agg?._sum?.totalSpent || 0),
-				currency: customers[0]?.currency || 'ARS',
 				totalSpent: Number(agg?._sum?.totalSpent || 0),
 				currency: customers[0]?.currency || 'ARS',
 				showingFrom,
@@ -660,42 +635,8 @@ export async function postSyncCustomers(req, res) {
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
 
-		const statusCode = Number(error?.statusCode || 500);
-		return res.status(statusCode).json({
-			ok: false,
-			code: error?.code || null,
+		return res.status(500).json({
 			message: error.message || 'Error sincronizando clientes',
-			syncState: error?.syncState || getCustomerSyncState(),
-		});
-	}
-}
-
-
-export async function getCustomersSyncState(_req, res) {
-	try {
-		return res.json({
-			ok: true,
-			syncState: getCustomerSyncState(),
-		});
-	} catch (error) {
-		console.error('[CUSTOMERS SYNC STATE ERROR]', error);
-		return res.status(500).json({
-			message: error.message || 'No pude obtener el estado de sincronización de clientes.',
-		});
-	}
-}
-
-export async function postResetCustomersSync(_req, res) {
-	try {
-		return res.json({
-			ok: true,
-			message: 'Bloqueo de sincronización liberado.',
-			syncState: resetCustomerSyncState(),
-		});
-	} catch (error) {
-		console.error('[CUSTOMERS RESET SYNC ERROR]', error);
-		return res.status(500).json({
-			message: error.message || 'No pude liberar el bloqueo de sincronización.',
 		});
 	}
 }
