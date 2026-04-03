@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { runAssistantReply } from './ai/index.js';
-import { sendWhatsAppText } from './whatsapp.service.js';
+import { sendWhatsAppText, sendWhatsAppInteractiveList } from './whatsapp.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import {
 	detectIntent,
@@ -31,10 +31,44 @@ import {
 	resolveConversationQueue
 } from './inbox-routing.service.js';
 
+const MENU_IDS = {
+	MAIN_PRODUCTS: 'menu_main_products',
+	MAIN_ORDERS: 'menu_main_orders',
+	MAIN_SUPPORT: 'menu_main_support',
+	MAIN_HUMAN: 'menu_main_human',
+	PRODUCTS_BODYS: 'menu_products_bodys',
+	PRODUCTS_CALZAS: 'menu_products_calzas',
+	PRODUCTS_CATALOG: 'menu_products_catalog',
+	PRODUCTS_BACK: 'menu_products_back',
+	ORDERS_STATUS: 'menu_orders_status',
+	ORDERS_ISSUE: 'menu_orders_issue',
+	ORDERS_PAYMENT_PROOF: 'menu_orders_payment_proof',
+	ORDERS_BACK: 'menu_orders_back',
+	SUPPORT_PAYMENTS: 'menu_support_payments',
+	SUPPORT_SHIPPING: 'menu_support_shipping',
+	SUPPORT_SIZES: 'menu_support_sizes',
+	SUPPORT_HUMAN: 'menu_support_human',
+	SUPPORT_BACK: 'menu_support_back'
+};
+
+const MENU_PATHS = {
+	MAIN: 'MAIN_MENU',
+	PRODUCTS: 'PRODUCTS_MENU',
+	ORDERS: 'ORDERS_MENU',
+	SUPPORT: 'SUPPORT_MENU'
+};
+
 function normalizeText(value = '') {
 	return String(value || '')
 		.replace(/\s+/g, ' ')
 		.trim();
+}
+
+function normalizeLooseText(value = '') {
+	return normalizeText(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
 }
 
 function summarizeText(value = '', max = 160) {
@@ -42,6 +76,222 @@ function summarizeText(value = '', max = 160) {
 	if (!text) return '';
 	if (text.length <= max) return text;
 	return `${text.slice(0, max - 1).trim()}…`;
+}
+
+function uniqueStringArray(values = []) {
+	return [...new Set((Array.isArray(values) ? values : []).filter(Boolean).map((value) => String(value)))];
+}
+
+function isGreetingOnlyMessage(messageBody = '') {
+	const text = normalizeLooseText(messageBody);
+	if (!text) return false;
+
+	return /^(hola+|holaaa+|buenas+|buen dia|buen diaa+|buenas tardes|buenas noches|hello+|hi+|hey+|alo+|ey+)$/.test(text);
+}
+
+function isMenuResetCommand(messageBody = '') {
+	const text = normalizeLooseText(messageBody);
+	return [
+		'menu',
+		'menú',
+		'inicio',
+		'volver',
+		'volver al menu',
+		'volver al menú',
+		'opciones',
+		'0'
+	].includes(text);
+}
+
+function getInteractiveReplyId(rawPayload = null) {
+	const message = rawPayload?.message || {};
+	return (
+		message?.interactive?.list_reply?.id ||
+		message?.interactive?.button_reply?.id ||
+		message?.button?.payload ||
+		null
+	);
+}
+
+function getMenuConfig(menuPath = MENU_PATHS.MAIN) {
+	const commonFooter = 'Escribí 0 o menú para volver al inicio.';
+
+	if (menuPath === MENU_PATHS.PRODUCTS) {
+		return {
+			path: MENU_PATHS.PRODUCTS,
+			headerText: 'Productos',
+			body: 'Elegí qué querés ver:',
+			buttonText: 'Productos',
+			footerText: commonFooter,
+			textFallback: [
+				'🛍️ *Productos*',
+				'1- Bodys modeladores',
+				'2- Calzas linfáticas',
+				'3- Ver catálogo general',
+				'0- Volver al inicio'
+			].join('\n'),
+			sections: [
+				{
+					title: 'Productos',
+					rows: [
+						{ id: MENU_IDS.PRODUCTS_BODYS, title: 'Bodys modeladores', description: 'Ver opciones y promos' },
+						{ id: MENU_IDS.PRODUCTS_CALZAS, title: 'Calzas linfáticas', description: 'Consultar modelos disponibles' },
+						{ id: MENU_IDS.PRODUCTS_CATALOG, title: 'Catálogo general', description: 'Pedir catálogo o recomendación' },
+						{ id: MENU_IDS.PRODUCTS_BACK, title: 'Volver al inicio', description: 'Ir al menú principal' }
+					]
+				}
+			],
+			aliases: {
+				[MENU_IDS.PRODUCTS_BODYS]: ['1', 'body', 'bodys', 'body modelador', 'bodys modeladores', 'ver bodys'],
+				[MENU_IDS.PRODUCTS_CALZAS]: ['2', 'calza', 'calzas', 'calzas linfaticas', 'calzas linfáticas'],
+				[MENU_IDS.PRODUCTS_CATALOG]: ['3', 'catalogo', 'catálogo', 'catalogo general', 'ver catalogo', 'ver catálogo'],
+				[MENU_IDS.PRODUCTS_BACK]: ['0', 'volver', 'inicio', 'menu', 'menú']
+			}
+		};
+	}
+
+	if (menuPath === MENU_PATHS.ORDERS) {
+		return {
+			path: MENU_PATHS.ORDERS,
+			headerText: 'Pedidos',
+			body: 'Elegí qué necesitás con tu pedido:',
+			buttonText: 'Pedidos',
+			footerText: commonFooter,
+			textFallback: [
+				'📦 *Pedidos*',
+				'1- Ver estado de mi pedido',
+				'2- Tengo un problema con mi pedido',
+				'3- Enviar comprobante',
+				'0- Volver al inicio'
+			].join('\n'),
+			sections: [
+				{
+					title: 'Pedidos',
+					rows: [
+						{ id: MENU_IDS.ORDERS_STATUS, title: 'Estado de mi pedido', description: 'Consultar seguimiento o estado' },
+						{ id: MENU_IDS.ORDERS_ISSUE, title: 'Problema con mi pedido', description: 'Contar lo que pasó' },
+						{ id: MENU_IDS.ORDERS_PAYMENT_PROOF, title: 'Enviar comprobante', description: 'Mandar foto o archivo' },
+						{ id: MENU_IDS.ORDERS_BACK, title: 'Volver al inicio', description: 'Ir al menú principal' }
+					]
+				}
+			],
+			aliases: {
+				[MENU_IDS.ORDERS_STATUS]: ['1', 'estado', 'estado pedido', 'ver pedido', 'seguimiento'],
+				[MENU_IDS.ORDERS_ISSUE]: ['2', 'problema', 'reclamo', 'pedido mal', 'problema pedido'],
+				[MENU_IDS.ORDERS_PAYMENT_PROOF]: ['3', 'comprobante', 'pago', 'enviar comprobante'],
+				[MENU_IDS.ORDERS_BACK]: ['0', 'volver', 'inicio', 'menu', 'menú']
+			}
+		};
+	}
+
+	if (menuPath === MENU_PATHS.SUPPORT) {
+		return {
+			path: MENU_PATHS.SUPPORT,
+			headerText: 'Ayuda rápida',
+			body: 'Elegí la consulta que querés resolver:',
+			buttonText: 'Ayuda',
+			footerText: commonFooter,
+			textFallback: [
+				'💬 *Ayuda rápida*',
+				'1- Medios de pago',
+				'2- Envíos',
+				'3- Talles',
+				'4- Hablar con una asesora',
+				'0- Volver al inicio'
+			].join('\n'),
+			sections: [
+				{
+					title: 'Ayuda',
+					rows: [
+						{ id: MENU_IDS.SUPPORT_PAYMENTS, title: 'Medios de pago', description: 'Ver formas de pago disponibles' },
+						{ id: MENU_IDS.SUPPORT_SHIPPING, title: 'Envíos', description: 'Consultar zonas y tiempos' },
+						{ id: MENU_IDS.SUPPORT_SIZES, title: 'Talles', description: 'Pedir ayuda con el talle' },
+						{ id: MENU_IDS.SUPPORT_HUMAN, title: 'Hablar con una asesora', description: 'Pasar a atención humana' },
+						{ id: MENU_IDS.SUPPORT_BACK, title: 'Volver al inicio', description: 'Ir al menú principal' }
+					]
+				}
+			],
+			aliases: {
+				[MENU_IDS.SUPPORT_PAYMENTS]: ['1', 'pago', 'pagos', 'medios de pago'],
+				[MENU_IDS.SUPPORT_SHIPPING]: ['2', 'envio', 'envíos', 'envioo', 'envíos', 'shipping'],
+				[MENU_IDS.SUPPORT_SIZES]: ['3', 'talle', 'talles', 'size', 'sizes'],
+				[MENU_IDS.SUPPORT_HUMAN]: ['4', 'asesora', 'asesor', 'humano', 'atencion humana', 'atención humana'],
+				[MENU_IDS.SUPPORT_BACK]: ['0', 'volver', 'inicio', 'menu', 'menú']
+			}
+		};
+	}
+
+	return {
+		path: MENU_PATHS.MAIN,
+		headerText: 'Lummine',
+		body: '¡Hola! Elegí una opción para ayudarte más rápido:',
+		buttonText: 'Abrir menú',
+		footerText: commonFooter,
+		textFallback: [
+			'👋 *Bienvenida a Lummine*',
+			'1- Ver productos',
+			'2- Problemas o estado de pedido',
+			'3- Pagos, envíos o talles',
+			'4- Hablar con una asesora',
+			'',
+			'Respondé con el número de opción.'
+		].join('\n'),
+		sections: [
+			{
+				title: 'Menú principal',
+				rows: [
+					{ id: MENU_IDS.MAIN_PRODUCTS, title: 'Ver productos', description: 'Bodys, calzas y catálogo' },
+					{ id: MENU_IDS.MAIN_ORDERS, title: 'Pedidos', description: 'Estado, problema o comprobante' },
+					{ id: MENU_IDS.MAIN_SUPPORT, title: 'Pagos, envíos y talles', description: 'Resolver dudas rápidas' },
+					{ id: MENU_IDS.MAIN_HUMAN, title: 'Hablar con una asesora', description: 'Pasar a atención humana' }
+				]
+			}
+		],
+		aliases: {
+			[MENU_IDS.MAIN_PRODUCTS]: ['1', 'productos', 'ver productos', 'product', 'producto'],
+			[MENU_IDS.MAIN_ORDERS]: ['2', 'pedido', 'pedidos', 'estado pedido', 'problema pedido', 'problemas con pedido'],
+			[MENU_IDS.MAIN_SUPPORT]: ['3', 'pagos', 'envios', 'envíos', 'talles', 'ayuda'],
+			[MENU_IDS.MAIN_HUMAN]: ['4', 'asesora', 'asesor', 'humano', 'persona', 'hablar con una asesora']
+		}
+	};
+}
+
+function detectMenuSelection({ messageBody, rawPayload, menuPath }) {
+	const config = getMenuConfig(menuPath);
+	const interactiveId = getInteractiveReplyId(rawPayload);
+
+	if (interactiveId && config.aliases?.[interactiveId]) {
+		return interactiveId;
+	}
+
+	const normalized = normalizeLooseText(messageBody);
+	if (!normalized) return null;
+
+	for (const [optionId, aliases] of Object.entries(config.aliases || {})) {
+		if ((aliases || []).some((alias) => normalizeLooseText(alias) === normalized)) {
+			return optionId;
+		}
+	}
+
+	return null;
+}
+
+async function patchConversationState(conversationId, patch = {}) {
+	const safePatch = Object.fromEntries(
+		Object.entries(patch).filter(([, value]) => value !== undefined)
+	);
+
+	return prisma.conversationState.upsert({
+		where: { conversationId },
+		update: safePatch,
+		create: {
+			conversationId,
+			interactionCount: 0,
+			interestedProducts: [],
+			objections: [],
+			...safePatch
+		}
+	});
 }
 
 function buildConversationSummary({
@@ -56,6 +306,14 @@ function buildConversationSummary({
 
 	if (enrichedState?.lastUserGoal) {
 		parts.push(`Objetivo: ${enrichedState.lastUserGoal}`);
+	}
+
+	if (enrichedState?.menuPath) {
+		parts.push(`Menú: ${enrichedState.menuPath}`);
+	}
+
+	if (enrichedState?.menuLastSelection) {
+		parts.push(`Selección: ${enrichedState.menuLastSelection}`);
 	}
 
 	if (enrichedState?.interestedProducts?.length) {
@@ -347,21 +605,454 @@ async function syncHumanHandoff({ conversationId, reason = 'ai_declared_handoff'
 		}
 	});
 
-	await prisma.conversationState.upsert({
-		where: { conversationId },
-		update: {
-			needsHuman: true,
-			handoffReason: reason
+	await patchConversationState(conversationId, {
+		needsHuman: true,
+		handoffReason: reason,
+		menuActive: false,
+		menuPath: null
+	});
+}
+
+async function sendMenuPrompt({ conversationId, waId, menuPath, bodyPrefix = '' }) {
+	const menuConfig = getMenuConfig(menuPath);
+	const body = [bodyPrefix ? normalizeText(bodyPrefix) : null, menuConfig.body]
+		.filter(Boolean)
+		.join('\n\n');
+
+	return sendAndPersistOutbound({
+		conversationId,
+		body: body || menuConfig.body,
+		messageType: 'interactive',
+		interactivePayload: {
+			headerText: menuConfig.headerText,
+			footerText: menuConfig.footerText,
+			buttonText: menuConfig.buttonText,
+			sections: menuConfig.sections,
+			fallbackText: menuConfig.textFallback
 		},
-		create: {
-			conversationId,
-			needsHuman: true,
-			handoffReason: reason,
-			interactionCount: 0,
-			interestedProducts: [],
-			objections: []
+		aiMeta: {
+			provider: 'system',
+			model: `menu-${menuConfig.path.toLowerCase()}`,
+			raw: { menuPath: menuConfig.path }
 		}
 	});
+}
+
+async function sendMenuTextOnly({ conversationId, body, model = 'menu-text' }) {
+	return sendAndPersistOutbound({
+		conversationId,
+		body,
+		aiMeta: {
+			provider: 'system',
+			model,
+			raw: { kind: 'menu_text' }
+		}
+	});
+}
+
+function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) {
+	if (isMenuResetCommand(messageBody)) return true;
+	if (currentState?.needsHuman) return false;
+	if (currentState?.menuActive && currentState?.menuPath) return true;
+
+	const inboundCount = (freshConversation?.messages || []).filter((msg) => msg.direction === 'INBOUND').length;
+	const outboundCount = (freshConversation?.messages || []).filter((msg) => msg.direction === 'OUTBOUND').length;
+	const hasNoMeaningfulHistory = !currentState?.lastIntent && (currentState?.interactionCount || 0) === 0;
+
+	return inboundCount === 1 && outboundCount === 0 && hasNoMeaningfulHistory;
+}
+
+async function handleMenuSelection({
+	selectionId,
+	conversation,
+	currentState,
+	contactName,
+	waId
+}) {
+	const conversationId = conversation.id;
+
+	if (selectionId === MENU_IDS.MAIN_PRODUCTS) {
+		await patchConversationState(conversationId, {
+			menuActive: true,
+			menuPath: MENU_PATHS.PRODUCTS,
+			menuLastSelection: selectionId,
+			menuLastPromptAt: new Date(),
+			customerName: contactName || currentState.customerName || waId
+		});
+
+		await sendMenuPrompt({
+			conversationId,
+			waId,
+			menuPath: MENU_PATHS.PRODUCTS,
+			bodyPrefix: 'Perfecto. Vamos por productos.'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.MAIN_ORDERS) {
+		await patchConversationState(conversationId, {
+			menuActive: true,
+			menuPath: MENU_PATHS.ORDERS,
+			menuLastSelection: selectionId,
+			menuLastPromptAt: new Date(),
+			customerName: contactName || currentState.customerName || waId
+		});
+
+		await sendMenuPrompt({
+			conversationId,
+			waId,
+			menuPath: MENU_PATHS.ORDERS,
+			bodyPrefix: 'Dale. Veamos tu pedido.'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.MAIN_SUPPORT) {
+		await patchConversationState(conversationId, {
+			menuActive: true,
+			menuPath: MENU_PATHS.SUPPORT,
+			menuLastSelection: selectionId,
+			menuLastPromptAt: new Date(),
+			customerName: contactName || currentState.customerName || waId
+		});
+
+		await sendMenuPrompt({
+			conversationId,
+			waId,
+			menuPath: MENU_PATHS.SUPPORT,
+			bodyPrefix: 'Buenísimo. Te dejo ayuda rápida.'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.MAIN_HUMAN || selectionId === MENU_IDS.SUPPORT_HUMAN) {
+		await syncHumanHandoff({
+			conversationId,
+			reason: 'menu_requested_human'
+		});
+
+		const handoffReply = buildHandoffReply({
+			contactName: contactName || '',
+			reason: 'menu_requested_human'
+		});
+
+		await sendMenuTextOnly({
+			conversationId,
+			body: handoffReply,
+			model: 'menu-human-handoff'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.PRODUCTS_BACK || selectionId === MENU_IDS.ORDERS_BACK || selectionId === MENU_IDS.SUPPORT_BACK) {
+		await patchConversationState(conversationId, {
+			menuActive: true,
+			menuPath: MENU_PATHS.MAIN,
+			menuLastSelection: selectionId,
+			menuLastPromptAt: new Date()
+		});
+
+		await sendMenuPrompt({
+			conversationId,
+			waId,
+			menuPath: MENU_PATHS.MAIN,
+			bodyPrefix: 'Volvimos al inicio.'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.PRODUCTS_BODYS) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId,
+			currentProductFocus: 'bodys modeladores'
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Quiero ver bodys modeladores',
+			summaryUserMessage: 'Cliente eligió menú: bodys modeladores',
+			forceIntent: 'product',
+			statePatch: {
+				menuLastSelection: selectionId,
+				currentProductFocus: 'bodys modeladores',
+				interestedProducts: uniqueStringArray([
+					...(Array.isArray(currentState?.interestedProducts) ? currentState.interestedProducts : []),
+					'bodys modeladores'
+				])
+			}
+		};
+	}
+
+	if (selectionId === MENU_IDS.PRODUCTS_CALZAS) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId,
+			currentProductFocus: 'calzas linfáticas'
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Quiero ver calzas linfáticas',
+			summaryUserMessage: 'Cliente eligió menú: calzas linfáticas',
+			forceIntent: 'product',
+			statePatch: {
+				menuLastSelection: selectionId,
+				currentProductFocus: 'calzas linfáticas',
+				interestedProducts: uniqueStringArray([
+					...(Array.isArray(currentState?.interestedProducts) ? currentState.interestedProducts : []),
+					'calzas linfáticas'
+				])
+			}
+		};
+	}
+
+	if (selectionId === MENU_IDS.PRODUCTS_CATALOG) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Quiero ver el catálogo general y recibir una recomendación',
+			summaryUserMessage: 'Cliente eligió menú: catálogo general',
+			forceIntent: 'product',
+			statePatch: { menuLastSelection: selectionId }
+		};
+	}
+
+	if (selectionId === MENU_IDS.ORDERS_STATUS) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Quiero saber el estado de mi pedido',
+			summaryUserMessage: 'Cliente eligió menú: estado de pedido',
+			forceIntent: 'order_status',
+			statePatch: { menuLastSelection: selectionId }
+		};
+	}
+
+	if (selectionId === MENU_IDS.ORDERS_ISSUE) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId,
+			lastUserGoal: 'Resolver un problema con su pedido'
+		});
+
+		await sendMenuTextOnly({
+			conversationId,
+			body: 'Contame qué pasó con tu pedido y, si lo tenés, pasame también el número de pedido así lo reviso mejor.',
+			model: 'menu-order-issue'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.ORDERS_PAYMENT_PROOF) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId,
+			lastUserGoal: 'Enviar comprobante de pago'
+		});
+
+		await sendMenuTextOnly({
+			conversationId,
+			body: 'Mandame el comprobante por acá en foto o archivo y lo revisamos.',
+			model: 'menu-payment-proof'
+		});
+
+		return { handled: true };
+	}
+
+	if (selectionId === MENU_IDS.SUPPORT_PAYMENTS) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Quiero saber qué medios de pago aceptan',
+			summaryUserMessage: 'Cliente eligió menú: medios de pago',
+			forceIntent: 'payment',
+			statePatch: { menuLastSelection: selectionId }
+		};
+	}
+
+	if (selectionId === MENU_IDS.SUPPORT_SHIPPING) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Quiero consultar sobre envíos',
+			summaryUserMessage: 'Cliente eligió menú: envíos',
+			forceIntent: 'shipping',
+			statePatch: { menuLastSelection: selectionId }
+		};
+	}
+
+	if (selectionId === MENU_IDS.SUPPORT_SIZES) {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId
+		});
+
+		return {
+			handled: false,
+			effectiveMessageBody: 'Necesito ayuda con los talles',
+			summaryUserMessage: 'Cliente eligió menú: talles',
+			forceIntent: 'size_help',
+			statePatch: { menuLastSelection: selectionId }
+		};
+	}
+
+	return { handled: false };
+}
+
+async function maybeHandleMenuFlow({
+	conversation,
+	currentState,
+	contactName,
+	messageBody,
+	messageType,
+	rawPayload
+}) {
+	const waId = conversation.contact?.waId || '';
+	const wantsMenu = isMenuResetCommand(messageBody);
+	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
+	const shouldOfferMenu = shouldForceMenuFirst({
+		currentState,
+		freshConversation: conversation,
+		messageBody
+	});
+
+	if (!currentState?.needsHuman && shouldOfferMenu) {
+		const selectionId = detectMenuSelection({
+			messageBody,
+			rawPayload,
+			menuPath
+		});
+
+		if (selectionId) {
+			return handleMenuSelection({
+				selectionId,
+				conversation,
+				currentState,
+				contactName,
+				waId
+			});
+		}
+
+		await patchConversationState(conversation.id, {
+			menuActive: true,
+			menuPath: MENU_PATHS.MAIN,
+			menuLastPromptAt: new Date(),
+			customerName: contactName || currentState.customerName || waId
+		});
+
+		await sendMenuPrompt({
+			conversationId: conversation.id,
+			waId,
+			menuPath: MENU_PATHS.MAIN,
+			bodyPrefix: isGreetingOnlyMessage(messageBody)
+				? '¡Hola!'
+				: 'Antes de seguir, te dejo el menú para ayudarte más rápido.'
+		});
+
+		return { handled: true };
+	}
+
+	if (wantsMenu) {
+		await patchConversationState(conversation.id, {
+			menuActive: true,
+			menuPath: MENU_PATHS.MAIN,
+			menuLastPromptAt: new Date(),
+			customerName: contactName || currentState.customerName || waId,
+			needsHuman: false,
+			handoffReason: null
+		});
+
+		await prisma.conversation.update({
+			where: { id: conversation.id },
+			data: {
+				queue: 'AUTO',
+				aiEnabled: true,
+				lastMessageAt: new Date()
+			}
+		});
+
+		await sendMenuPrompt({
+			conversationId: conversation.id,
+			waId,
+			menuPath: MENU_PATHS.MAIN,
+			bodyPrefix: 'Perfecto, abrimos el menú de nuevo.'
+		});
+
+		return { handled: true };
+	}
+
+	if (!currentState?.needsHuman && currentState?.menuActive && currentState?.menuPath) {
+		const selectionId = detectMenuSelection({
+			messageBody,
+			rawPayload,
+			menuPath: currentState.menuPath
+		});
+
+		if (selectionId) {
+			return handleMenuSelection({
+				selectionId,
+				conversation,
+				currentState,
+				contactName,
+				waId
+			});
+		}
+
+		if (messageType === 'text' && normalizeText(messageBody)) {
+			await patchConversationState(conversation.id, {
+				menuLastPromptAt: new Date()
+			});
+
+			await sendMenuPrompt({
+				conversationId: conversation.id,
+				waId,
+				menuPath: currentState.menuPath,
+				bodyPrefix: 'No llegué a entender esa opción. Elegí una de la lista así vamos más rápido.'
+			});
+
+			return { handled: true };
+		}
+	}
+
+	return {
+		handled: false,
+		effectiveMessageBody: messageBody,
+		summaryUserMessage: messageBody,
+		forceIntent: null,
+		statePatch: null
+	};
 }
 
 export async function getOrCreateConversation({
@@ -403,7 +1094,9 @@ export async function getOrCreateConversation({
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: queue === 'HUMAN'
+						needsHuman: queue === 'HUMAN',
+						menuActive: true,
+						menuPath: MENU_PATHS.MAIN
 					}
 				}
 			},
@@ -421,7 +1114,9 @@ export async function getOrCreateConversation({
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: queue === 'HUMAN'
+						needsHuman: queue === 'HUMAN',
+						menuActive: true,
+						menuPath: MENU_PATHS.MAIN
 					}
 				}
 			},
@@ -450,6 +1145,9 @@ export async function sendAndPersistOutbound({
 	provider = 'whatsapp-cloud-api',
 	model = null,
 	replyMessageId = null,
+	aiMeta = null,
+	messageType = 'text',
+	interactivePayload = null,
 }) {
 	const cleanBody = String(body || '').trim();
 
@@ -478,6 +1176,7 @@ export async function sendAndPersistOutbound({
 		conversationId,
 		waId,
 		contactName: conversation.contact?.name || null,
+		messageType,
 		bodyPreview: cleanBody.slice(0, 160),
 		replyMessageId,
 	});
@@ -486,10 +1185,30 @@ export async function sendAndPersistOutbound({
 		throw new Error('La conversación no tiene un waId válido para enviar el mensaje.');
 	}
 
-	const sendResult = await sendWhatsAppText({
-		to: waId,
-		body: cleanBody,
-	});
+	let sendResult = null;
+
+	if (messageType === 'interactive') {
+		sendResult = await sendWhatsAppInteractiveList({
+			to: waId,
+			body: cleanBody,
+			headerText: interactivePayload?.headerText || null,
+			footerText: interactivePayload?.footerText || null,
+			buttonText: interactivePayload?.buttonText || 'Ver opciones',
+			sections: interactivePayload?.sections || []
+		});
+
+		if (!sendResult?.ok && interactivePayload?.fallbackText) {
+			sendResult = await sendWhatsAppText({
+				to: waId,
+				body: interactivePayload.fallbackText
+			});
+		}
+	} else {
+		sendResult = await sendWhatsAppText({
+			to: waId,
+			body: cleanBody,
+		});
+	}
 
 	console.log('[OUTBOUND DEBUG] send result', sendResult);
 
@@ -504,16 +1223,25 @@ export async function sendAndPersistOutbound({
 		data: {
 			conversationId: conversation.id,
 			direction: 'OUTBOUND',
-			type: 'text',
-			body: cleanBody,
+			type: messageType,
+			body: messageType === 'interactive' && interactivePayload?.fallbackText
+				? interactivePayload.fallbackText
+				: cleanBody,
 			senderName: process.env.BUSINESS_NAME || 'Lummine',
-			provider,
-			model,
+			provider: aiMeta?.provider || provider,
+			model: aiMeta?.model || model,
 			metaMessageId:
 				sendResult?.rawPayload?.messages?.[0]?.id ||
 				replyMessageId ||
 				null,
-			rawPayload: sendResult?.rawPayload || null,
+			rawPayload: aiMeta
+				? {
+					sendResult: sendResult?.rawPayload || null,
+					aiMeta: aiMeta?.raw || null,
+					userId,
+					messageType,
+				}
+				: sendResult?.rawPayload || null,
 		},
 	});
 
@@ -568,17 +1296,23 @@ function buildStatePayload({
 	intent,
 	explicitOrderNumber,
 	liveOrderContext,
-	memoryPatch
+	memoryPatch,
+	menuStatePatch = null
 }) {
 	const shouldKeepOrderContext =
 		intent === 'order_status' ||
 		(currentState?.lastIntent === 'order_status' && explicitOrderNumber);
 
+	const interestedProducts = uniqueStringArray([
+		...(Array.isArray(memoryPatch.interestedProducts) ? memoryPatch.interestedProducts : []),
+		...(Array.isArray(menuStatePatch?.interestedProducts) ? menuStatePatch.interestedProducts : [])
+	]);
+
 	return {
 		customerName: contactName || freshConversation.contact.name || normalizedWaId,
 		lastIntent: shouldKeepOrderContext ? 'order_status' : intent,
 		lastDetectedIntent: memoryPatch.lastDetectedIntent,
-		lastUserGoal: memoryPatch.lastUserGoal,
+		lastUserGoal: menuStatePatch?.lastUserGoal || memoryPatch.lastUserGoal,
 		lastOrderNumber: shouldKeepOrderContext
 			? explicitOrderNumber || currentState.lastOrderNumber || null
 			: null,
@@ -593,11 +1327,16 @@ function buildStatePayload({
 		frequentSize: memoryPatch.frequentSize,
 		paymentPreference: memoryPatch.paymentPreference,
 		deliveryPreference: memoryPatch.deliveryPreference,
-		interestedProducts: memoryPatch.interestedProducts,
+		interestedProducts,
 		objections: memoryPatch.objections,
 		needsHuman: memoryPatch.needsHuman,
 		handoffReason: memoryPatch.handoffReason,
-		interactionCount: memoryPatch.interactionCount
+		interactionCount: memoryPatch.interactionCount,
+		currentProductFocus: menuStatePatch?.currentProductFocus || currentState?.currentProductFocus || null,
+		menuActive: false,
+		menuPath: null,
+		menuLastSelection: menuStatePatch?.menuLastSelection || currentState?.menuLastSelection || null,
+		menuLastPromptAt: currentState?.menuLastPromptAt || null
 	};
 }
 
@@ -663,17 +1402,43 @@ export async function processInboundMessage({
 	}
 
 	const currentState = freshConversation.state || {};
-	const intent = detectIntent(messageBody, currentState);
+
+	const menuDecision = await maybeHandleMenuFlow({
+		conversation: freshConversation,
+		currentState,
+		contactName,
+		messageBody,
+		messageType,
+		rawPayload
+	});
+
+	if (menuDecision?.handled) {
+		return { conversation: freshConversation };
+	}
+
+	const effectiveMessageBody = normalizeText(menuDecision?.effectiveMessageBody || messageBody);
+	const summaryUserMessage = normalizeText(menuDecision?.summaryUserMessage || effectiveMessageBody || messageBody);
+	const forceIntent = menuDecision?.forceIntent || null;
+	const menuStatePatch = menuDecision?.statePatch || null;
+
+	const intent = forceIntent || detectIntent(effectiveMessageBody, currentState);
 	const explicitOrderNumber =
-		extractOrderNumber(messageBody, currentState) || extractStandaloneOrderNumber(messageBody);
+		extractOrderNumber(effectiveMessageBody, currentState) || extractStandaloneOrderNumber(effectiveMessageBody);
 
 	const recentMessages = freshConversation.messages.slice(-8).map((msg) => ({
 		role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
 		text: msg.body
 	}));
 
+	if (recentMessages.length) {
+		recentMessages[recentMessages.length - 1] = {
+			...recentMessages[recentMessages.length - 1],
+			text: summaryUserMessage
+		};
+	}
+
 	const memoryPatch = analyzeConversationTurn({
-		messageBody,
+		messageBody: effectiveMessageBody,
 		intent,
 		currentState,
 		recentMessages
@@ -686,7 +1451,7 @@ export async function processInboundMessage({
 
 	const detectedPaymentProof = isPaymentProofMessage({
 		messageType,
-		body: messageBody,
+		body: effectiveMessageBody,
 		rawPayload,
 		currentState,
 		recentMessages
@@ -701,7 +1466,7 @@ export async function processInboundMessage({
 
 	const intentResult = await resolveIntentAction({
 		intent,
-		messageBody,
+		messageBody: effectiveMessageBody,
 		explicitOrderNumber,
 		currentState
 	});
@@ -718,7 +1483,8 @@ export async function processInboundMessage({
 		intent,
 		explicitOrderNumber,
 		liveOrderContext,
-		memoryPatch
+		memoryPatch,
+		menuStatePatch
 	});
 
 	await prisma.conversationState.upsert({
@@ -749,7 +1515,6 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
-			waId: freshConversation.contact.waId,
 			body: ack,
 			aiMeta: {
 				provider: 'system',
@@ -764,7 +1529,7 @@ export async function processInboundMessage({
 				lastSummary: buildConversationSummary({
 					intent,
 					enrichedState,
-					lastUserMessage: messageBody,
+					lastUserMessage: summaryUserMessage,
 					lastAssistantMessage: ack,
 					liveOrderContext
 				})
@@ -784,7 +1549,6 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
-			waId: freshConversation.contact.waId,
 			body: handoffReply,
 			aiMeta: {
 				provider: 'system',
@@ -799,7 +1563,7 @@ export async function processInboundMessage({
 				lastSummary: buildConversationSummary({
 					intent,
 					enrichedState,
-					lastUserMessage: messageBody,
+					lastUserMessage: summaryUserMessage,
 					lastAssistantMessage: handoffReply,
 					liveOrderContext
 				})
@@ -832,6 +1596,13 @@ export async function processInboundMessage({
 		text: msg.body
 	}));
 
+	if (fullRecentMessages.length) {
+		fullRecentMessages[fullRecentMessages.length - 1] = {
+			...fullRecentMessages[fullRecentMessages.length - 1],
+			text: summaryUserMessage
+		};
+	}
+
 	let catalogProducts = [];
 	let catalogContext = '';
 	let commercialHints = [];
@@ -839,14 +1610,14 @@ export async function processInboundMessage({
 
 	try {
 		catalogProducts = await searchCatalogProducts({
-			query: messageBody,
+			query: effectiveMessageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
 			limit: 5
 		});
 
 		commercialPlan = resolveCommercialBrainV2({
 			intent,
-			messageBody,
+			messageBody: effectiveMessageBody,
 			currentState: enrichedState,
 			recentMessages: fullRecentMessages,
 			catalogProducts
@@ -1006,7 +1777,6 @@ export async function processInboundMessage({
 
 	await sendAndPersistOutbound({
 		conversationId: freshConversation.id,
-		waId: freshConversation.contact.waId,
 		body: finalReply,
 		aiMeta
 	});
@@ -1017,7 +1787,7 @@ export async function processInboundMessage({
 			lastSummary: buildConversationSummary({
 				intent,
 				enrichedState,
-				lastUserMessage: messageBody,
+				lastUserMessage: summaryUserMessage,
 				lastAssistantMessage: finalReply,
 				liveOrderContext,
 				commercialPlan

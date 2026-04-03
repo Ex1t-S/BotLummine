@@ -22,9 +22,6 @@ export function normalizeWhatsAppNumber(fromRaw) {
 				: cuerpo.substring(0, 4));
 
 		const numeroLocal = cuerpo.substring(codArea.length);
-
-
-
 		return `54${codArea}15${numeroLocal}`;
 	}
 
@@ -53,57 +50,49 @@ function debugWhatsAppRecipient(label, data = {}) {
 	}
 }
 
-export async function sendWhatsAppText({ to, body }) {
+async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	const rawTo = to;
-	const cleanBody = String(body || '').trim();
 	const finalTo = normalizeWhatsAppNumber(rawTo);
+	const graphVersion = process.env.WHATSAPP_GRAPH_VERSION || 'v25.0';
+	const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+	const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
 
-	debugWhatsAppRecipient('sendWhatsAppText', {
+	debugWhatsAppRecipient(`${debugLabel} META`, {
 		rawTo,
 		finalTo,
-		bodyPreview: cleanBody.slice(0, 120),
-		graphVersion: process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
-		phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+		graphVersion,
+		phoneNumberId,
 		tokenLoaded: Boolean(process.env.WHATSAPP_ACCESS_TOKEN),
+		payloadType: payload?.type || null,
 	});
 
-	if (!finalTo || !cleanBody) {
-		debugWhatsAppRecipient('ABORT sendWhatsAppText', {
-			reason: 'missing_to_or_body',
-			rawTo,
-			finalTo,
-			bodyLength: cleanBody.length,
-		});
-
+	if (!finalTo) {
 		return {
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
-			error: { message: 'Falta número o mensaje para enviar por WhatsApp.' },
+			error: { message: 'Falta número para enviar por WhatsApp.' },
 		};
 	}
 
-	const url = `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || 'v25.0'}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-
-	const payload = {
+	const finalPayload = {
 		messaging_product: 'whatsapp',
 		to: finalTo,
-		type: 'text',
-		text: { body: cleanBody },
+		...payload,
 	};
 
-	debugWhatsAppRecipient('TEXT URL', { url });
-	debugWhatsAppRecipient('TEXT PAYLOAD', payload);
+	debugWhatsAppRecipient(`${debugLabel} URL`, { url });
+	debugWhatsAppRecipient(`${debugLabel} PAYLOAD`, finalPayload);
 
 	try {
-		const response = await axios.post(url, payload, {
+		const response = await axios.post(url, finalPayload, {
 			headers: {
 				Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
 				'Content-Type': 'application/json',
 			},
 		});
 
-		debugWhatsAppRecipient('TEXT RESPONSE', response.data);
+		debugWhatsAppRecipient(`${debugLabel} RESPONSE`, response.data);
 
 		return {
 			ok: true,
@@ -112,10 +101,10 @@ export async function sendWhatsAppText({ to, body }) {
 			rawPayload: response.data,
 		};
 	} catch (error) {
-		console.error('[WA DEBUG] TEXT ERROR MESSAGE', error.message);
-		console.error('[WA DEBUG] TEXT ERROR STATUS', error.response?.status);
+		console.error(`[WA DEBUG] ${debugLabel} ERROR MESSAGE`, error.message);
+		console.error(`[WA DEBUG] ${debugLabel} ERROR STATUS`, error.response?.status);
 		console.error(
-			'[WA DEBUG] TEXT ERROR DATA',
+			`[WA DEBUG] ${debugLabel} ERROR DATA`,
 			JSON.stringify(error.response?.data || {}, null, 2)
 		);
 
@@ -128,78 +117,127 @@ export async function sendWhatsAppText({ to, body }) {
 	}
 }
 
+export async function sendWhatsAppText({ to, body }) {
+	const cleanBody = String(body || '').trim();
+
+	if (!cleanBody) {
+		debugWhatsAppRecipient('ABORT sendWhatsAppText', {
+			reason: 'missing_body',
+			bodyLength: cleanBody.length,
+		});
+
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta mensaje para enviar por WhatsApp.' },
+		};
+	}
+
+	return sendWhatsAppRequest({
+		to,
+		debugLabel: 'TEXT',
+		payload: {
+			type: 'text',
+			text: { body: cleanBody },
+		},
+	});
+}
+
+export async function sendWhatsAppInteractiveList({
+	to,
+	body,
+	headerText = null,
+	footerText = null,
+	buttonText = 'Ver opciones',
+	sections = [],
+}) {
+	const cleanBody = String(body || '').trim();
+	const cleanSections = Array.isArray(sections)
+		? sections
+				.map((section) => ({
+					title: String(section?.title || '').trim(),
+					rows: Array.isArray(section?.rows)
+						? section.rows
+								.map((row) => ({
+									id: String(row?.id || '').trim(),
+									title: String(row?.title || '').trim(),
+									description: row?.description ? String(row.description).trim() : undefined,
+								}))
+								.filter((row) => row.id && row.title)
+						: [],
+				}))
+				.filter((section) => section.rows.length)
+		: [];
+
+	if (!cleanBody || !cleanSections.length) {
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta contenido para enviar el menú interactivo.' },
+		};
+	}
+
+	const interactive = {
+		type: 'list',
+		body: { text: cleanBody },
+		action: {
+			button: String(buttonText || 'Ver opciones').slice(0, 20),
+			sections: cleanSections,
+		},
+	};
+
+	if (headerText) {
+		interactive.header = {
+			type: 'text',
+			text: String(headerText).slice(0, 60),
+		};
+	}
+
+	if (footerText) {
+		interactive.footer = {
+			text: String(footerText).slice(0, 60),
+		};
+	}
+
+	return sendWhatsAppRequest({
+		to,
+		debugLabel: 'INTERACTIVE_LIST',
+		payload: {
+			type: 'interactive',
+			interactive,
+		},
+	});
+}
+
 export async function sendWhatsAppTemplate({
 	to,
 	templateName,
 	languageCode = 'es_AR',
 	components = []
 }) {
-	const rawTo = to;
-	const finalTo = normalizeWhatsAppNumber(rawTo);
-
-	debugWhatsAppRecipient('sendWhatsAppTemplate', {
-		rawTo,
-		finalTo,
-		templateName,
-		componentsCount: Array.isArray(components) ? components.length : 0,
-	});
-
-	if (!finalTo || !templateName) {
+	if (!templateName) {
 		return {
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
 			error: {
-				message: 'Falta número o nombre del template para enviar por WhatsApp.'
+				message: 'Falta nombre del template para enviar por WhatsApp.'
 			}
 		};
 	}
 
-	const url = `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION || 'v25.0'}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-
-	const payload = {
-		messaging_product: 'whatsapp',
-		to: finalTo,
-		type: 'template',
-		template: {
-			name: templateName,
-			language: { code: languageCode },
-			components
-		}
-	};
-
-	debugWhatsAppRecipient('TEMPLATE URL', { url });
-	debugWhatsAppRecipient('TEMPLATE PAYLOAD', payload);
-
-	try {
-		const response = await axios.post(url, payload, {
-			headers: {
-				Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-				'Content-Type': 'application/json'
+	return sendWhatsAppRequest({
+		to,
+		debugLabel: 'TEMPLATE',
+		payload: {
+			type: 'template',
+			template: {
+				name: templateName,
+				language: { code: languageCode },
+				components,
 			}
-		});
-
-		debugWhatsAppRecipient('TEMPLATE RESPONSE', response.data);
-
-		return {
-			ok: true,
-			provider: 'whatsapp-cloud-api',
-			model: null,
-			rawPayload: response.data
-		};
-	} catch (error) {
-		console.error('[WA DEBUG] TEMPLATE ERROR MESSAGE', error.message);
-		console.error('[WA DEBUG] TEMPLATE ERROR STATUS', error.response?.status);
-		console.error(
-			'[WA DEBUG] TEMPLATE ERROR DATA',
-			JSON.stringify(error.response?.data || {}, null, 2)
-		);
-
-		return {
-			ok: false,
-			provider: 'whatsapp-cloud-api',
-			model: null,
-			error: error.response?.data || { message: error.message }
-		};
-	}
+		},
+	});
 }

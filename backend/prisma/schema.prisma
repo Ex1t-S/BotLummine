@@ -84,6 +84,10 @@ model ConversationState {
 	buyingIntentLevel      String?
 	frictionLevel          String?
 	commercialSummary      String?
+	menuActive             Boolean  @default(false)
+	menuPath               String?
+	menuLastSelection      String?
+	menuLastPromptAt       DateTime?
 	createdAt              DateTime @default(now())
 	updatedAt              DateTime @updatedAt
 

@@ -10,10 +10,16 @@ import {
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
-	if (message.type === 'button') return message.button?.text || '';
+	if (message.type === 'button') return message.button?.text || message.button?.payload || '';
 
 	if (message.type === 'interactive') {
-		return message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || '';
+		return (
+			message.interactive?.button_reply?.title ||
+			message.interactive?.list_reply?.title ||
+			message.interactive?.button_reply?.id ||
+			message.interactive?.list_reply?.id ||
+			''
+		);
 	}
 
 	if (message.type === 'image') return message.image?.caption || '[Imagen recibida]';
