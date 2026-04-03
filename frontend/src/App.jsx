@@ -32,8 +32,8 @@ export default function App() {
 				<Route path="campaigns" element={<CampaignsPage />} />
 				<Route path="abandoned-carts" element={<AbandonedCartsPage />} />
 				<Route path="customers" element={<CustomersPage />} />
-				<Route path="ai-lab" element={<AiLabPage />} />
 				<Route path="whatsapp-menu" element={<WhatsAppMenuPage />} />
+				<Route path="ai-lab" element={<AiLabPage />} />
 			</Route>
 		</Routes>
 	);
