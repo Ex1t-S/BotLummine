@@ -9,6 +9,7 @@ import CampaignsPage from './pages/CampaignsPage.jsx';
 import AbandonedCartsPage from './pages/AbandonedCartsPage.jsx';
 import CustomersPage from './pages/CustomersPage.jsx';
 import AiLabPage from './pages/AiLabPage.jsx';
+import WhatsAppMenuPage from './pages/WhatsAppMenuPage.jsx';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 
@@ -32,6 +33,7 @@ export default function App() {
 				<Route path="abandoned-carts" element={<AbandonedCartsPage />} />
 				<Route path="customers" element={<CustomersPage />} />
 				<Route path="ai-lab" element={<AiLabPage />} />
+				<Route path="whatsapp-menu" element={<WhatsAppMenuPage />} />
 			</Route>
 		</Routes>
 	);

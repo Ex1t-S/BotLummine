@@ -12,6 +12,7 @@ import tiendanubeRoutes from './routes/tiendanube.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import aiLabRoutes from './routes/ai-lab.routes.js';
 import mediaRoutes from './routes/media.routes.js';
+import whatsappMenuRoutes from './routes/whatsapp-menu.routes.js';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ app.use('/api/tiendanube', tiendanubeRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/ai-lab', aiLabRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/whatsapp-menu', whatsappMenuRoutes);
 
 app.use((err, _req, res, _next) => {
 	console.error(err);
