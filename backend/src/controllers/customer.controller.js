@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { syncCustomers } from '../services/customer.service.js';
+import { getCustomersSyncState, startCustomersSync } from '../services/customer.service.js';
 
 function ensureCustomerModels() {
 	if (!prisma?.customerProfile || !prisma?.customerOrder || !prisma?.customerOrderItem) {
@@ -622,6 +622,18 @@ export async function getCustomers(req, res, next) {
 	}
 }
 
+export async function getCustomersSyncStateHandler(_req, res) {
+	try {
+		ensureCustomerModels();
+		return res.json({ ok: true, ...getCustomersSyncState() });
+	} catch (error) {
+		console.error('[CUSTOMERS SYNC STATE ERROR]', error);
+		return res.status(500).json({
+			message: error?.message || 'No se pudo obtener el estado de sincronización.',
+		});
+	}
+}
+
 export async function postSyncCustomers(req, res) {
 	try {
 		ensureCustomerModels();
@@ -629,9 +641,13 @@ export async function postSyncCustomers(req, res) {
 		const q = normalizeSearch(req.body?.q || '');
 		const dateFrom = normalizeSearch(req.body?.dateFrom || '');
 		const dateTo = normalizeSearch(req.body?.dateTo || '');
-		const result = await syncCustomers({ q, dateFrom, dateTo });
+		const state = startCustomersSync({ q, dateFrom, dateTo });
 
-		return res.json(result);
+		return res.status(202).json({
+			ok: true,
+			message: 'Sincronización iniciada en segundo plano.',
+			...state,
+		});
 	} catch (error) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
 
@@ -640,6 +656,7 @@ export async function postSyncCustomers(req, res) {
 
 		return res.status(status).json({
 			message,
+			...getCustomersSyncState(),
 		});
 	}
 }

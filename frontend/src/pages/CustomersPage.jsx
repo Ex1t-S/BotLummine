@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../lib/api.js';
 import './CustomersPage.css';
 
@@ -136,6 +136,8 @@ export default function CustomersPage() {
 	const [syncing, setSyncing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [syncMessage, setSyncMessage] = useState('');
+	const [syncDetails, setSyncDetails] = useState(null);
+	const syncPollRef = useRef(null);
 
 	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
 	const currentPage = Number(data.pagination?.page || 1);
@@ -144,6 +146,39 @@ export default function CustomersPage() {
 		() => buildVisiblePages(currentPage, totalPages),
 		[currentPage, totalPages]
 	);
+
+	async function fetchSyncState({ silent = false } = {}) {
+		try {
+			const response = await api.get('/dashboard/customers/sync-state');
+			const payload = response.data || {};
+			setSyncDetails(payload);
+
+			if (payload.running) {
+				setSyncing(true);
+				if (!silent) {
+					setSyncMessage('Sincronización en curso. Podés seguir usando la pantalla mientras termina.');
+				}
+				return payload;
+			}
+
+			if (payload.lastResult) {
+				setSyncMessage(buildSyncMessage(payload.lastResult));
+				setSyncing(false);
+				return payload;
+			}
+
+			if (payload.lastError) {
+				setErrorMessage(payload.lastError);
+				setSyncing(false);
+			}
+
+			return payload;
+		} catch (error) {
+			console.error(error);
+			setSyncing(false);
+			return null;
+		}
+	}
 
 	async function loadCustomers(nextFilters = filters) {
 		setLoading(true);
@@ -176,8 +211,38 @@ export default function CustomersPage() {
 
 	useEffect(() => {
 		loadCustomers(initialFilters);
+		fetchSyncState({ silent: true });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	useEffect(() => {
+		if (!syncing) {
+			if (syncPollRef.current) {
+				clearInterval(syncPollRef.current);
+				syncPollRef.current = null;
+			}
+			return undefined;
+		}
+
+		const poll = async () => {
+			const state = await fetchSyncState({ silent: true });
+			if (!state?.running) {
+				setSyncing(false);
+				await loadCustomers({ ...filters, page: 1 });
+			}
+		};
+
+		syncPollRef.current = setInterval(poll, 3000);
+		poll();
+
+		return () => {
+			if (syncPollRef.current) {
+				clearInterval(syncPollRef.current);
+				syncPollRef.current = null;
+			}
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [syncing]);
 
 	function updateFilter(name, value) {
 		setFilters((prev) => ({
@@ -206,7 +271,6 @@ export default function CustomersPage() {
 	}
 
 	async function handleSync() {
-		setSyncing(true);
 		setSyncMessage('');
 		setErrorMessage('');
 
@@ -217,23 +281,16 @@ export default function CustomersPage() {
 				dateTo: filters.dateTo || '',
 			});
 
-			setSyncMessage(buildSyncMessage(response.data));
-
-			const next = {
-				...filters,
-				page: 1,
-			};
-
-			setFilters(next);
-			await loadCustomers(next);
+			setSyncDetails(response.data || null);
+			setSyncing(true);
+			setSyncMessage('Sincronización iniciada. Te aviso cuando termine y refresco la grilla solo.');
 		} catch (error) {
 			console.error(error);
+			setSyncing(Boolean(error?.response?.data?.running));
 			setErrorMessage(
 				error?.response?.data?.message ||
 					'No se pudo sincronizar clientes. Revisá credenciales de Tiendanube y migraciones de Prisma.'
 			);
-		} finally {
-			setSyncing(false);
 		}
 	}
 
@@ -288,6 +345,12 @@ export default function CustomersPage() {
 
 			{syncMessage ? (
 				<div className="customers-feedback customers-feedback--success">{syncMessage}</div>
+			) : null}
+
+			{syncDetails?.running ? (
+				<div className="customers-feedback customers-feedback--info">
+					Sync corriendo desde backend. No hace falta recargar la página.
+				</div>
 			) : null}
 
 			<div className="customers-stats-grid">

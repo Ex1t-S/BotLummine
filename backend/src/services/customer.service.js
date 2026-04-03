@@ -3,26 +3,30 @@ import { prisma } from '../lib/prisma.js';
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CUSTOMERS_PER_PAGE = Math.min(
 	200,
-	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 100))
+	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 200))
 );
 const ORDERS_PER_PAGE = Math.min(
 	200,
-	Math.max(50, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 100))
+	Math.max(50, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 200))
 );
 const TIENDANUBE_QUERY_RESULT_LIMIT = 10000;
 const ORDER_QUERY_PAGE_LIMIT = Math.max(1, Math.floor(TIENDANUBE_QUERY_RESULT_LIMIT / ORDERS_PER_PAGE));
 const FETCH_CONCURRENCY = Math.min(
 	6,
-	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 2))
+	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 4))
 );
 const MAX_CUSTOMER_PAGES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_MAX_PAGES || 100));
 const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_RETRIES || 3));
-const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 50));
-const ORDERS_SYNC_MONTHS_BACK = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_SYNC_MONTHS_BACK || 36));
+const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 100));
+const ORDERS_SYNC_MONTHS_BACK = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_SYNC_MONTHS_BACK || 12));
 
 const syncState = {
 	running: false,
 	startedAt: null,
+	finishedAt: null,
+	lastResult: null,
+	lastError: null,
+	currentPromise: null,
 };
 
 function sleep(ms) {
@@ -390,6 +394,36 @@ function registerProfileInIndexes(indexes, profile) {
 		indexes.byNormalizedPhone.set(profile.normalizedPhone, profile);
 	}
 }
+
+function buildCustomerIdentityKey(data = {}) {
+	if (data.externalCustomerId) return `external:${data.externalCustomerId}`;
+	if (data.normalizedEmail) return `email:${data.normalizedEmail}`;
+	if (data.normalizedPhone) return `phone:${data.normalizedPhone}`;
+	return null;
+}
+
+function dedupeCustomerPayloads(payloads = []) {
+	const deduped = new Map();
+
+	for (const payload of payloads) {
+		const key = buildCustomerIdentityKey(payload);
+		if (!key) continue;
+
+		const previous = deduped.get(key) || {};
+		deduped.set(key, {
+			...previous,
+			...Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined)),
+			storeId: payload.storeId || previous.storeId || null,
+			externalCustomerId: payload.externalCustomerId || previous.externalCustomerId || null,
+			normalizedEmail: payload.normalizedEmail || previous.normalizedEmail || null,
+			normalizedPhone: payload.normalizedPhone || previous.normalizedPhone || null,
+			rawCustomerPayload: payload.rawCustomerPayload || previous.rawCustomerPayload || null,
+			syncedAt: payload.syncedAt || previous.syncedAt || new Date(),
+		});
+	}
+
+	return Array.from(deduped.values());
+}
 function buildCustomerProfileDefaults(data) {
 	return {
 		...data,
@@ -506,7 +540,7 @@ async function saveCustomerProfileSafely(storeId, data, indexes = null) {
 	}
 
 	if (indexes) {
-		indexProfile(indexes, profile);
+		registerProfileInIndexes(indexes, profile);
 	}
 
 	return profile;
@@ -514,15 +548,19 @@ async function saveCustomerProfileSafely(storeId, data, indexes = null) {
 async function upsertCustomerProfiles(customers, storeId) {
 	let customersUpserted = 0;
 
-	const payloads = customers
-		.map((customer) => mapCustomerPayload(customer, storeId))
-		.filter((item) => item.externalCustomerId || item.normalizedEmail || item.normalizedPhone);
+	const payloads = dedupeCustomerPayloads(
+		customers
+			.map((customer) => mapCustomerPayload(customer, storeId))
+			.filter((item) => item.externalCustomerId || item.normalizedEmail || item.normalizedPhone)
+	);
 
 	for (const batch of chunkArray(payloads, UPDATE_CHUNK_SIZE)) {
-		for (const data of batch) {
-			await saveCustomerProfileSafely(storeId, data);
-			customersUpserted += 1;
-		}
+		await Promise.all(
+			batch.map(async (data) => {
+				await saveCustomerProfileSafely(storeId, data);
+				customersUpserted += 1;
+			})
+		);
 	}
 
 	return customersUpserted;
@@ -580,31 +618,51 @@ async function resolveProfileForOrder(order, storeId, indexes) {
 async function upsertOrdersAndItems(orders, storeId, indexes) {
 	let ordersUpserted = 0;
 	const touchedCustomerProfileIds = new Set();
+	const preparedOrders = [];
 
 	for (const order of orders) {
 		const profile = await resolveProfileForOrder(order, storeId, indexes);
-		const customerOrderPayload = mapOrderPayload(order, storeId, profile.id);
+		preparedOrders.push({ order, profileId: profile.id });
+		touchedCustomerProfileIds.add(profile.id);
+	}
 
-		const customerOrder = await prisma.customerOrder.upsert({
-			where: {
-				storeId_orderId: {
-					storeId,
-					orderId: String(order?.id),
-				},
-			},
-			update: customerOrderPayload,
-			create: customerOrderPayload,
-			select: {
-				id: true,
-				customerProfileId: true,
-			},
-		});
+	for (const batch of chunkArray(preparedOrders, UPDATE_CHUNK_SIZE)) {
+		const persistedOrders = await prisma.$transaction(
+			batch.map(({ order, profileId }) => {
+				const customerOrderPayload = mapOrderPayload(order, storeId, profileId);
 
-		const items = buildOrderItems(order, storeId, customerOrder.id, profile.id);
+				return prisma.customerOrder.upsert({
+					where: {
+						storeId_orderId: {
+							storeId,
+							orderId: String(order?.id),
+						},
+					},
+					update: customerOrderPayload,
+					create: customerOrderPayload,
+					select: {
+						id: true,
+						customerProfileId: true,
+					},
+				});
+			})
+		);
 
-		await prisma.customerOrderItem.deleteMany({
-			where: { customerOrderId: customerOrder.id },
-		});
+		const customerOrderIds = persistedOrders.map((item) => item.id);
+
+		if (customerOrderIds.length) {
+			await prisma.customerOrderItem.deleteMany({
+				where: { customerOrderId: { in: customerOrderIds } },
+			});
+		}
+
+		const items = [];
+
+		for (let index = 0; index < batch.length; index += 1) {
+			const { order, profileId } = batch[index];
+			const customerOrder = persistedOrders[index];
+			items.push(...buildOrderItems(order, storeId, customerOrder.id, profileId));
+		}
 
 		if (items.length) {
 			await prisma.customerOrderItem.createMany({
@@ -612,8 +670,7 @@ async function upsertOrdersAndItems(orders, storeId, indexes) {
 			});
 		}
 
-		touchedCustomerProfileIds.add(profile.id);
-		ordersUpserted += 1;
+		ordersUpserted += batch.length;
 	}
 
 	return {
@@ -936,6 +993,10 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 			finishedAt: new Date(),
 		};
 
+		syncState.finishedAt = result.finishedAt;
+		syncState.lastResult = result;
+		syncState.lastError = null;
+
 		await prisma.customerSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
@@ -951,6 +1012,10 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 
 		return result;
 	} catch (error) {
+		syncState.finishedAt = new Date();
+		syncState.lastResult = null;
+		syncState.lastError = error?.message || 'Error en sync de clientes';
+
 		await prisma.customerSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
@@ -964,5 +1029,30 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 	} finally {
 		syncState.running = false;
 		syncState.startedAt = null;
+		syncState.currentPromise = null;
 	}
 }
+
+export function getCustomersSyncState() {
+	return {
+		running: Boolean(syncState.running),
+		startedAt: syncState.startedAt,
+		finishedAt: syncState.finishedAt,
+		lastResult: syncState.lastResult,
+		lastError: syncState.lastError,
+	};
+}
+
+export function startCustomersSync(options = {}) {
+	if (syncState.running) {
+		throw new Error('Ya hay una sincronización de clientes en curso. Esperá a que termine.');
+	}
+
+	syncState.currentPromise = syncCustomers(options).catch((error) => {
+		console.error('[CUSTOMERS BACKGROUND SYNC ERROR]', error);
+		return null;
+	});
+
+	return getCustomersSyncState();
+}
+
