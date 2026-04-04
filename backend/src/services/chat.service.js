@@ -118,9 +118,147 @@ async function getMenuRuntime(menuPath = MENU_PATHS.MAIN) {
 	return { runtime, menu };
 }
 
-async function getMenuConfig(menuPath = MENU_PATHS.MAIN) {
-	const { menu } = await getMenuRuntime(menuPath);
-	return menu;
+function getMenuConfig(menuPath = MENU_PATHS.MAIN) {
+	const commonFooter = 'Escribí 0 o menú para volver al inicio.';
+
+	if (menuPath === MENU_PATHS.PRODUCTS) {
+		return {
+			path: MENU_PATHS.PRODUCTS,
+			headerText: 'Productos',
+			body: 'Elegí qué querés ver:',
+			buttonText: 'Productos',
+			footerText: commonFooter,
+			textFallback: [
+				'🛍️ *Productos*',
+				'1- Bodys modeladores',
+				'2- Calzas linfáticas',
+				'3- Catálogo general',
+				'0- Volver'
+			].join('\n'),
+			sections: [
+				{
+					title: 'Productos',
+					rows: [
+						{ id: MENU_IDS.PRODUCTS_BODYS, title: 'Bodys modeladores', description: 'Modelos y promos' },
+						{ id: MENU_IDS.PRODUCTS_CALZAS, title: 'Calzas linfáticas', description: 'Modelos disponibles' },
+						{ id: MENU_IDS.PRODUCTS_CATALOG, title: 'Catálogo general', description: 'Ver todo el catálogo' },
+						{ id: MENU_IDS.PRODUCTS_BACK, title: 'Volver', description: 'Menú principal' }
+					]
+				}
+			],
+			aliases: {
+				[MENU_IDS.PRODUCTS_BODYS]: ['1', 'body', 'bodys', 'body modelador', 'bodys modeladores', 'ver bodys'],
+				[MENU_IDS.PRODUCTS_CALZAS]: ['2', 'calza', 'calzas', 'calzas linfaticas', 'calzas linfáticas'],
+				[MENU_IDS.PRODUCTS_CATALOG]: ['3', 'catalogo', 'catálogo', 'catalogo general', 'ver catalogo', 'ver catálogo'],
+				[MENU_IDS.PRODUCTS_BACK]: ['0', 'volver', 'inicio', 'menu', 'menú']
+			}
+		};
+	}
+
+	if (menuPath === MENU_PATHS.ORDERS) {
+		return {
+			path: MENU_PATHS.ORDERS,
+			headerText: 'Pedidos',
+			body: 'Elegí qué necesitás con tu pedido:',
+			buttonText: 'Pedidos',
+			footerText: commonFooter,
+			textFallback: [
+				'📦 *Pedidos*',
+				'1- Ver estado de mi pedido',
+				'2- Tengo un problema con mi pedido',
+				'3- Enviar comprobante',
+				'0- Volver'
+			].join('\n'),
+			sections: [
+				{
+					title: 'Pedidos',
+					rows: [
+						{ id: MENU_IDS.ORDERS_STATUS, title: 'Estado de mi pedido', description: 'Seguimiento y estado' },
+						{ id: MENU_IDS.ORDERS_ISSUE, title: 'Problema con mi pedido', description: 'Contanos qué pasó' },
+						{ id: MENU_IDS.ORDERS_PAYMENT_PROOF, title: 'Enviar comprobante', description: 'Foto o archivo del pago' },
+						{ id: MENU_IDS.ORDERS_BACK, title: 'Volver', description: 'Menú principal' }
+					]
+				}
+			],
+			aliases: {
+				[MENU_IDS.ORDERS_STATUS]: ['1', 'estado', 'estado pedido', 'ver pedido', 'seguimiento'],
+				[MENU_IDS.ORDERS_ISSUE]: ['2', 'problema', 'reclamo', 'pedido mal', 'problema pedido'],
+				[MENU_IDS.ORDERS_PAYMENT_PROOF]: ['3', 'comprobante', 'pago', 'enviar comprobante'],
+				[MENU_IDS.ORDERS_BACK]: ['0', 'volver', 'inicio', 'menu', 'menú']
+			}
+		};
+	}
+
+	if (menuPath === MENU_PATHS.SUPPORT) {
+		return {
+			path: MENU_PATHS.SUPPORT,
+			headerText: 'Ayuda rápida',
+			body: 'Elegí la consulta que querés resolver:',
+			buttonText: 'Ayuda',
+			footerText: commonFooter,
+			textFallback: [
+				'💬 *Ayuda rápida*',
+				'1- Medios de pago',
+				'2- Envíos',
+				'3- Talles',
+				'4- Hablar con una asesora',
+				'0- Volver'
+			].join('\n'),
+			sections: [
+				{
+					title: 'Ayuda',
+					rows: [
+						{ id: MENU_IDS.SUPPORT_PAYMENTS, title: 'Medios de pago', description: 'Opciones disponibles' },
+						{ id: MENU_IDS.SUPPORT_SHIPPING, title: 'Envíos', description: 'Zonas y tiempos' },
+						{ id: MENU_IDS.SUPPORT_SIZES, title: 'Talles', description: 'Guía y asesoramiento' },
+						{ id: MENU_IDS.SUPPORT_HUMAN, title: 'Hablar con una asesora', description: 'Atención personalizada' },
+						{ id: MENU_IDS.SUPPORT_BACK, title: 'Volver', description: 'Menú principal' }
+					]
+				}
+			],
+			aliases: {
+				[MENU_IDS.SUPPORT_PAYMENTS]: ['1', 'pago', 'pagos', 'medios de pago'],
+				[MENU_IDS.SUPPORT_SHIPPING]: ['2', 'envio', 'envíos', 'envioo', 'shipping'],
+				[MENU_IDS.SUPPORT_SIZES]: ['3', 'talle', 'talles', 'size', 'sizes'],
+				[MENU_IDS.SUPPORT_HUMAN]: ['4', 'asesora', 'asesor', 'humano', 'atencion humana', 'atención humana'],
+				[MENU_IDS.SUPPORT_BACK]: ['0', 'volver', 'inicio', 'menu', 'menú']
+			}
+		};
+	}
+
+	return {
+		path: MENU_PATHS.MAIN,
+		headerText: 'Lummine',
+		body: 'Elegí una opción para ayudarte más rápido:',
+		buttonText: 'Abrir menú',
+		footerText: commonFooter,
+		textFallback: [
+			'👋 *Bienvenida a Lummine*',
+			'1- Ver productos',
+			'2- Pedidos',
+			'3- Pagos, envíos y talles',
+			'4- Hablar con una asesora',
+			'',
+			'Respondé con el número de opción.'
+		].join('\n'),
+		sections: [
+			{
+				title: 'Menú principal',
+				rows: [
+					{ id: MENU_IDS.MAIN_PRODUCTS, title: 'Ver productos', description: 'Bodys, calzas y catálogo' },
+					{ id: MENU_IDS.MAIN_ORDERS, title: 'Pedidos', description: 'Estado, problemas o comprobante' },
+					{ id: MENU_IDS.MAIN_SUPPORT, title: 'Ayuda rápida', description: 'Pagos, envíos y talles' },
+					{ id: MENU_IDS.MAIN_HUMAN, title: 'Hablar con una asesora', description: 'Atención personalizada' }
+				]
+			}
+		],
+		aliases: {
+			[MENU_IDS.MAIN_PRODUCTS]: ['1', 'productos', 'ver productos', 'product', 'producto'],
+			[MENU_IDS.MAIN_ORDERS]: ['2', 'pedido', 'pedidos', 'estado pedido', 'problema pedido', 'problemas con pedido'],
+			[MENU_IDS.MAIN_SUPPORT]: ['3', 'pagos', 'envios', 'envíos', 'talles', 'ayuda'],
+			[MENU_IDS.MAIN_HUMAN]: ['4', 'asesora', 'asesor', 'humano', 'persona', 'hablar con una asesora']
+		}
+	};
 }
 
 function sanitizeMenuStatePatch(statePatch = {}, currentState = {}) {
