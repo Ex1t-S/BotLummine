@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api.js';
+import './CatalogPage.css';
 
 export default function CatalogPage() {
 	const [query, setQuery] = useState('');

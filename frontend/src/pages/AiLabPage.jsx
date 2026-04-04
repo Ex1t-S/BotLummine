@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import api from '../lib/api.js';
+import './AiLabPage.css';
 
 function JsonBlock({ value }) {
 	const formatted = useMemo(() => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api.js';
+import './AbandonedCartsPage.css';
 
 const initialFilters = {
 	q: '',

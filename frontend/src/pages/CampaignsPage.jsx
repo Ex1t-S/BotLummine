@@ -21,7 +21,7 @@ import {
 	updateTemplate,
 } from '../lib/campaigns.js';
 import api from '../lib/api.js';
-import '../styles/campaigns.css';
+import './CampaignsPage.css';
 
 function normalizeOverview(data) {
 	return {

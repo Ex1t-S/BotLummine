@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import './DashboardLayout.css';
 
 function navClass({ isActive }) {
 	return `admin-menu-link${isActive ? ' active' : ''}`;

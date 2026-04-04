@@ -1,0 +1,103 @@
+.admin-shell {
+	display: grid;
+	grid-template-columns: 280px 1fr;
+	height: 100vh;
+}
+
+.admin-sidebar {
+	background: #0f172a;
+	color: #ffffff;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+}
+
+.admin-brand {
+	margin-bottom: 24px;
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.admin-brand-mark {
+	width: 44px;
+	height: 44px;
+	border-radius: 14px;
+	display: grid;
+	place-items: center;
+	font-weight: 800;
+	background: linear-gradient(180deg, #34d399, #10b981);
+	color: #03120d;
+}
+
+.admin-brand-copy h1,
+.admin-brand-copy p {
+	margin: 0;
+}
+
+.admin-menu {
+	display: grid;
+	gap: 10px;
+}
+
+.admin-menu-link {
+	color: #ffffff;
+	text-decoration: none;
+	padding: 10px 12px;
+	border-radius: 12px;
+}
+
+.admin-menu-link.active {
+	background: rgba(255, 255, 255, 0.12);
+}
+
+/* Menos padding para que el área gris no “coma” tanto espacio */
+.admin-content {
+	padding: 14px;
+	overflow: auto;
+}
+
+.admin-user-box {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 20px;
+	padding: 12px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.08);
+	color: #ffffff;
+}
+
+.admin-user-box strong {
+	font-size: 14px;
+}
+
+.admin-user-box span {
+	font-size: 12px;
+	opacity: 0.75;
+}
+
+.logout-btn {
+	margin-top: auto;
+	padding: 12px 14px;
+	border: none;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.12);
+	color: #ffffff;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.logout-btn:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 900px) {
+	.admin-shell {
+		grid-template-columns: 1fr;
+	}
+
+	.admin-sidebar {
+		display: none;
+	}
+}
