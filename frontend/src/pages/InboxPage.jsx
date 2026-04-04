@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import api from '../lib/api.js';
+import api, { resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
 
@@ -102,18 +102,18 @@ function resolveRawButtonUrl(rawPayload = null) {
 }
 
 function resolveMessageAttachmentUrl(message = {}) {
-	if (message.attachmentUrl) return message.attachmentUrl;
-
 	const rawPayload = message.rawPayload || {};
-	return (
+	const rawUrl =
+		message.attachmentUrl ||
 		rawPayload?.imageUrl ||
 		rawPayload?.headerImageUrl ||
 		rawPayload?.mediaUrl ||
 		rawPayload?.attachmentUrl ||
 		rawPayload?.attachment?.url ||
 		rawPayload?.templateHeaderImageUrl ||
-		''
-	);
+		'';
+
+	return resolveApiUrl(rawUrl);
 }
 
 function resolvePromoAction(message = {}) {
