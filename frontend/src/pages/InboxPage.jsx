@@ -147,11 +147,7 @@ function renderFormattedText(text = '') {
 								href={part}
 								target="_blank"
 								rel="noreferrer"
-								style={{
-									color: '#2563eb',
-									textDecoration: 'underline',
-									wordBreak: 'break-word',
-								}}
+								className="inbox-message-link"
 							>
 								{part}
 							</a>
@@ -169,10 +165,7 @@ function renderFormattedText(text = '') {
 					return (
 						<span
 							key={`text-${lineIndex}-${index}`}
-							style={{
-								whiteSpace: 'pre-wrap',
-								wordBreak: 'break-word',
-							}}
+							className="inbox-message-text-chunk"
 						>
 							{part}
 						</span>
@@ -193,8 +186,13 @@ function AttachmentPreview({ message }) {
 
 	if (mediaKind === 'audio') {
 		return (
-			<div style={{ marginTop: 10 }}>
-				<audio controls preload="none" src={attachmentUrl} style={{ width: '100%', maxWidth: 320 }}>
+			<div className="inbox-attachment-preview">
+				<audio
+					controls
+					preload="none"
+					src={attachmentUrl}
+					className="inbox-attachment-audio"
+				>
 					Tu navegador no soporta audio HTML5.
 				</audio>
 			</div>
@@ -203,20 +201,18 @@ function AttachmentPreview({ message }) {
 
 	if (mediaKind === 'image') {
 		return (
-			<div style={{ marginTop: 10 }}>
-				<a href={attachmentUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block' }}>
+			<div className="inbox-attachment-preview">
+				<a
+					href={attachmentUrl}
+					target="_blank"
+					rel="noreferrer"
+					className="inbox-attachment-link-wrap"
+				>
 					<img
 						src={attachmentUrl}
 						alt={attachmentName || 'Imagen recibida'}
 						loading="lazy"
-						style={{
-							display: 'block',
-							maxWidth: '100%',
-							width: 'min(330px, 100%)',
-							borderRadius: 18,
-							border: '1px solid rgba(15, 23, 42, 0.08)',
-							boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
-						}}
+						className="inbox-attachment-media inbox-attachment-image"
 					/>
 				</a>
 			</div>
@@ -225,19 +221,12 @@ function AttachmentPreview({ message }) {
 
 	if (mediaKind === 'video') {
 		return (
-			<div style={{ marginTop: 10 }}>
+			<div className="inbox-attachment-preview">
 				<video
 					controls
 					preload="metadata"
 					src={attachmentUrl}
-					style={{
-						display: 'block',
-						maxWidth: '100%',
-						width: 'min(330px, 100%)',
-						borderRadius: 18,
-						border: '1px solid rgba(15, 23, 42, 0.08)',
-						background: '#000',
-					}}
+					className="inbox-attachment-media inbox-attachment-video"
 				>
 					Tu navegador no soporta video HTML5.
 				</video>
@@ -247,40 +236,21 @@ function AttachmentPreview({ message }) {
 
 	if (mediaKind === 'document' || mediaKind === 'file') {
 		return (
-			<div
-				style={{
-					marginTop: 10,
-					padding: '12px 14px',
-					borderRadius: 16,
-					background: 'rgba(15, 23, 42, 0.05)',
-					border: '1px solid rgba(15, 23, 42, 0.08)',
-				}}
-			>
-				<div
-					style={{
-						fontSize: 13,
-						fontWeight: 700,
-						color: '#0f172a',
-						marginBottom: 6,
-					}}
-				>
-					{attachmentName || 'Archivo adjunto'}
-				</div>
+			<div className="inbox-attachment-preview">
+				<div className="inbox-attachment-file-card">
+					<div className="inbox-attachment-file-name">
+						{attachmentName || 'Archivo adjunto'}
+					</div>
 
-				<a
-					href={attachmentUrl}
-					target="_blank"
-					rel="noreferrer"
-					style={{
-						fontSize: 13,
-						fontWeight: 600,
-						color: '#2563eb',
-						textDecoration: 'underline',
-						wordBreak: 'break-word',
-					}}
-				>
-					Abrir archivo
-				</a>
+					<a
+						href={attachmentUrl}
+						target="_blank"
+						rel="noreferrer"
+						className="inbox-attachment-file-link"
+					>
+						Abrir archivo
+					</a>
+				</div>
 			</div>
 		);
 	}
@@ -291,45 +261,29 @@ function AttachmentPreview({ message }) {
 function MessageBubble({ message }) {
 	const isOutbound = message.direction === 'OUTBOUND';
 	const hideBody = shouldHideBodyBecauseItIsOnlyPlaceholder(message);
-	const bubbleBackground = isOutbound ? '#d9fdd3' : '#ffffff';
-	const bubbleBorder = isOutbound
-		? '1px solid rgba(34, 197, 94, 0.14)'
-		: '1px solid rgba(15, 23, 42, 0.08)';
-
 	const promo = resolvePromoAction(message);
 	const hasPromoButton = Boolean(promo.actionLabel);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
 
 	return (
 		<div
-			style={{
-				display: 'flex',
-				justifyContent: isOutbound ? 'flex-end' : 'flex-start',
-				marginBottom: 12,
-			}}
+			className={`inbox-message-row ${
+				isOutbound ? 'inbox-message-row--outbound' : 'inbox-message-row--inbound'
+			}`}
 		>
 			<div
-				style={{
-					maxWidth: '78%',
-					minWidth: 140,
-					borderRadius: 18,
-					background: bubbleBackground,
-					border: bubbleBorder,
-					boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
-					overflow: 'hidden',
-				}}
+				className={`inbox-message-bubble ${
+					isOutbound ? 'inbox-message-bubble--outbound' : 'inbox-message-bubble--inbound'
+				}`}
 			>
-				<div style={{ padding: '10px 12px 8px' }}>
+				<div className="inbox-message-bubble-inner">
 					<AttachmentPreview message={message} />
 
 					{!hideBody || hasPromoButton ? (
 						<div
-							style={{
-								fontSize: 15,
-								lineHeight: 1.45,
-								color: '#0f172a',
-								marginTop: attachmentUrl ? 10 : 0,
-							}}
+							className={`inbox-message-body ${
+								attachmentUrl ? 'inbox-message-body--with-attachment' : ''
+							}`}
 						>
 							{renderFormattedText(hasPromoButton ? promo.bodyText : message.body)}
 						</div>
@@ -341,62 +295,19 @@ function MessageBubble({ message }) {
 								href={promo.url}
 								target="_blank"
 								rel="noreferrer"
-								style={{
-									marginTop: 12,
-									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'center',
-									gap: 8,
-									padding: '10px 12px',
-									borderRadius: 12,
-									background: '#ffffff',
-									border: '1px solid rgba(22, 163, 74, 0.18)',
-									color: '#128c7e',
-									fontWeight: 700,
-									textDecoration: 'none',
-								}}
+								className="inbox-promo-action"
 							>
 								↗ {promo.actionLabel}
 							</a>
 						) : (
-							<div
-								style={{
-									marginTop: 12,
-									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'center',
-									padding: '10px 12px',
-									borderRadius: 12,
-									background: '#ffffff',
-									border: '1px solid rgba(22, 163, 74, 0.18)',
-									color: '#128c7e',
-									fontWeight: 700,
-								}}
-							>
+							<div className="inbox-promo-action inbox-promo-action--static">
 								{promo.actionLabel}
 							</div>
 						)
 					) : null}
 
-					<div
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							gap: 8,
-							flexWrap: 'wrap',
-							marginTop: 10,
-							fontSize: 12,
-							color: '#475569',
-						}}
-					>
-						<span
-							style={{
-								padding: '3px 8px',
-								borderRadius: 999,
-								background: 'rgba(15, 23, 42, 0.06)',
-								fontWeight: 700,
-							}}
-						>
+					<div className="inbox-message-meta">
+						<span className="inbox-message-sender-pill">
 							{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
 						</span>
 
