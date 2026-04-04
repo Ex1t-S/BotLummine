@@ -3,30 +3,26 @@ import { prisma } from '../lib/prisma.js';
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CUSTOMERS_PER_PAGE = Math.min(
 	200,
-	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 200))
+	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 100))
 );
 const ORDERS_PER_PAGE = Math.min(
 	200,
-	Math.max(50, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 200))
+	Math.max(50, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 100))
 );
 const TIENDANUBE_QUERY_RESULT_LIMIT = 10000;
 const ORDER_QUERY_PAGE_LIMIT = Math.max(1, Math.floor(TIENDANUBE_QUERY_RESULT_LIMIT / ORDERS_PER_PAGE));
 const FETCH_CONCURRENCY = Math.min(
 	6,
-	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 4))
+	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 2))
 );
 const MAX_CUSTOMER_PAGES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_MAX_PAGES || 100));
 const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_RETRIES || 3));
-const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 100));
-const ORDERS_SYNC_MONTHS_BACK = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_SYNC_MONTHS_BACK || 12));
+const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 50));
+const ORDERS_SYNC_MONTHS_BACK = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_SYNC_MONTHS_BACK || 36));
 
 const syncState = {
 	running: false,
 	startedAt: null,
-	finishedAt: null,
-	lastResult: null,
-	lastError: null,
-	currentPromise: null,
 };
 
 function sleep(ms) {
@@ -394,36 +390,6 @@ function registerProfileInIndexes(indexes, profile) {
 		indexes.byNormalizedPhone.set(profile.normalizedPhone, profile);
 	}
 }
-
-function buildCustomerIdentityKey(data = {}) {
-	if (data.externalCustomerId) return `external:${data.externalCustomerId}`;
-	if (data.normalizedEmail) return `email:${data.normalizedEmail}`;
-	if (data.normalizedPhone) return `phone:${data.normalizedPhone}`;
-	return null;
-}
-
-function dedupeCustomerPayloads(payloads = []) {
-	const deduped = new Map();
-
-	for (const payload of payloads) {
-		const key = buildCustomerIdentityKey(payload);
-		if (!key) continue;
-
-		const previous = deduped.get(key) || {};
-		deduped.set(key, {
-			...previous,
-			...Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined)),
-			storeId: payload.storeId || previous.storeId || null,
-			externalCustomerId: payload.externalCustomerId || previous.externalCustomerId || null,
-			normalizedEmail: payload.normalizedEmail || previous.normalizedEmail || null,
-			normalizedPhone: payload.normalizedPhone || previous.normalizedPhone || null,
-			rawCustomerPayload: payload.rawCustomerPayload || previous.rawCustomerPayload || null,
-			syncedAt: payload.syncedAt || previous.syncedAt || new Date(),
-		});
-	}
-
-	return Array.from(deduped.values());
-}
 function buildCustomerProfileDefaults(data) {
 	return {
 		...data,
@@ -503,23 +469,26 @@ async function stripConflictingUniqueFields(storeId, data, currentProfileId = nu
 	return next;
 }
 
-async function saveCustomerProfileSafely(storeId, data, indexes = null) {
-	const existing = await findExistingCustomerProfile(storeId, data);
-	const sanitized = await stripConflictingUniqueFields(storeId, data, existing?.id || null);
+function isUniqueConstraintError(error) {
+	return error?.code === 'P2002';
+}
 
-	let profile;
+function mergeProfileDataForUpdate(existing, incoming) {
+	return {
+		...incoming,
+		externalCustomerId: existing?.externalCustomerId || incoming.externalCustomerId || null,
+		normalizedEmail: existing?.normalizedEmail || incoming.normalizedEmail || null,
+		normalizedPhone: existing?.normalizedPhone || incoming.normalizedPhone || null,
+	};
+}
 
-	if (existing) {
-		const updateData = {
-			...sanitized,
-			externalCustomerId: existing.externalCustomerId || sanitized.externalCustomerId || null,
-			normalizedEmail: existing.normalizedEmail || sanitized.normalizedEmail || null,
-			normalizedPhone: existing.normalizedPhone || sanitized.normalizedPhone || null,
-		};
-
-		profile = await prisma.customerProfile.update({
-			where: { id: existing.id },
-			data: updateData,
+async function findProfileOwnerByUniqueFields(storeId, data) {
+	if (data.externalCustomerId) {
+		const byExternal = await prisma.customerProfile.findFirst({
+			where: {
+				storeId,
+				externalCustomerId: data.externalCustomerId,
+			},
 			select: {
 				id: true,
 				externalCustomerId: true,
@@ -527,9 +496,90 @@ async function saveCustomerProfileSafely(storeId, data, indexes = null) {
 				normalizedPhone: true,
 			},
 		});
-	} else {
-		profile = await prisma.customerProfile.create({
-			data: buildCustomerProfileDefaults(sanitized),
+
+		if (byExternal) return byExternal;
+	}
+
+	if (data.normalizedEmail) {
+		const byEmail = await prisma.customerProfile.findFirst({
+			where: {
+				storeId,
+				normalizedEmail: data.normalizedEmail,
+			},
+			select: {
+				id: true,
+				externalCustomerId: true,
+				normalizedEmail: true,
+				normalizedPhone: true,
+			},
+		});
+
+		if (byEmail) return byEmail;
+	}
+
+	if (data.normalizedPhone) {
+		const byPhone = await prisma.customerProfile.findFirst({
+			where: {
+				storeId,
+				normalizedPhone: data.normalizedPhone,
+			},
+			select: {
+				id: true,
+				externalCustomerId: true,
+				normalizedEmail: true,
+				normalizedPhone: true,
+			},
+		});
+
+		if (byPhone) return byPhone;
+	}
+
+	return null;
+}
+
+async function saveCustomerProfileSafely(storeId, data, indexes = null) {
+	const existing = await findExistingCustomerProfile(storeId, data);
+	const sanitized = await stripConflictingUniqueFields(storeId, data, existing?.id || null);
+
+	let profile;
+
+	try {
+		if (existing) {
+			profile = await prisma.customerProfile.update({
+				where: { id: existing.id },
+				data: mergeProfileDataForUpdate(existing, sanitized),
+				select: {
+					id: true,
+					externalCustomerId: true,
+					normalizedEmail: true,
+					normalizedPhone: true,
+				},
+			});
+		} else {
+			profile = await prisma.customerProfile.create({
+				data: buildCustomerProfileDefaults(sanitized),
+				select: {
+					id: true,
+					externalCustomerId: true,
+					normalizedEmail: true,
+					normalizedPhone: true,
+				},
+			});
+		}
+	} catch (error) {
+		if (!isUniqueConstraintError(error)) {
+			throw error;
+		}
+
+		const owner = await findProfileOwnerByUniqueFields(storeId, data);
+		if (!owner) {
+			throw error;
+		}
+
+		const retryData = await stripConflictingUniqueFields(storeId, data, owner.id);
+		profile = await prisma.customerProfile.update({
+			where: { id: owner.id },
+			data: mergeProfileDataForUpdate(owner, retryData),
 			select: {
 				id: true,
 				externalCustomerId: true,
@@ -548,19 +598,15 @@ async function saveCustomerProfileSafely(storeId, data, indexes = null) {
 async function upsertCustomerProfiles(customers, storeId) {
 	let customersUpserted = 0;
 
-	const payloads = dedupeCustomerPayloads(
-		customers
-			.map((customer) => mapCustomerPayload(customer, storeId))
-			.filter((item) => item.externalCustomerId || item.normalizedEmail || item.normalizedPhone)
-	);
+	const payloads = customers
+		.map((customer) => mapCustomerPayload(customer, storeId))
+		.filter((item) => item.externalCustomerId || item.normalizedEmail || item.normalizedPhone);
 
 	for (const batch of chunkArray(payloads, UPDATE_CHUNK_SIZE)) {
-		await Promise.all(
-			batch.map(async (data) => {
-				await saveCustomerProfileSafely(storeId, data);
-				customersUpserted += 1;
-			})
-		);
+		for (const data of batch) {
+			await saveCustomerProfileSafely(storeId, data);
+			customersUpserted += 1;
+		}
 	}
 
 	return customersUpserted;
@@ -618,51 +664,31 @@ async function resolveProfileForOrder(order, storeId, indexes) {
 async function upsertOrdersAndItems(orders, storeId, indexes) {
 	let ordersUpserted = 0;
 	const touchedCustomerProfileIds = new Set();
-	const preparedOrders = [];
 
 	for (const order of orders) {
 		const profile = await resolveProfileForOrder(order, storeId, indexes);
-		preparedOrders.push({ order, profileId: profile.id });
-		touchedCustomerProfileIds.add(profile.id);
-	}
+		const customerOrderPayload = mapOrderPayload(order, storeId, profile.id);
 
-	for (const batch of chunkArray(preparedOrders, UPDATE_CHUNK_SIZE)) {
-		const persistedOrders = await prisma.$transaction(
-			batch.map(({ order, profileId }) => {
-				const customerOrderPayload = mapOrderPayload(order, storeId, profileId);
+		const customerOrder = await prisma.customerOrder.upsert({
+			where: {
+				storeId_orderId: {
+					storeId,
+					orderId: String(order?.id),
+				},
+			},
+			update: customerOrderPayload,
+			create: customerOrderPayload,
+			select: {
+				id: true,
+				customerProfileId: true,
+			},
+		});
 
-				return prisma.customerOrder.upsert({
-					where: {
-						storeId_orderId: {
-							storeId,
-							orderId: String(order?.id),
-						},
-					},
-					update: customerOrderPayload,
-					create: customerOrderPayload,
-					select: {
-						id: true,
-						customerProfileId: true,
-					},
-				});
-			})
-		);
+		const items = buildOrderItems(order, storeId, customerOrder.id, profile.id);
 
-		const customerOrderIds = persistedOrders.map((item) => item.id);
-
-		if (customerOrderIds.length) {
-			await prisma.customerOrderItem.deleteMany({
-				where: { customerOrderId: { in: customerOrderIds } },
-			});
-		}
-
-		const items = [];
-
-		for (let index = 0; index < batch.length; index += 1) {
-			const { order, profileId } = batch[index];
-			const customerOrder = persistedOrders[index];
-			items.push(...buildOrderItems(order, storeId, customerOrder.id, profileId));
-		}
+		await prisma.customerOrderItem.deleteMany({
+			where: { customerOrderId: customerOrder.id },
+		});
 
 		if (items.length) {
 			await prisma.customerOrderItem.createMany({
@@ -670,7 +696,8 @@ async function upsertOrdersAndItems(orders, storeId, indexes) {
 			});
 		}
 
-		ordersUpserted += batch.length;
+		touchedCustomerProfileIds.add(profile.id);
+		ordersUpserted += 1;
 	}
 
 	return {
@@ -993,10 +1020,6 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 			finishedAt: new Date(),
 		};
 
-		syncState.finishedAt = result.finishedAt;
-		syncState.lastResult = result;
-		syncState.lastError = null;
-
 		await prisma.customerSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
@@ -1012,10 +1035,6 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 
 		return result;
 	} catch (error) {
-		syncState.finishedAt = new Date();
-		syncState.lastResult = null;
-		syncState.lastError = error?.message || 'Error en sync de clientes';
-
 		await prisma.customerSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
@@ -1029,30 +1048,5 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 	} finally {
 		syncState.running = false;
 		syncState.startedAt = null;
-		syncState.currentPromise = null;
 	}
 }
-
-export function getCustomersSyncState() {
-	return {
-		running: Boolean(syncState.running),
-		startedAt: syncState.startedAt,
-		finishedAt: syncState.finishedAt,
-		lastResult: syncState.lastResult,
-		lastError: syncState.lastError,
-	};
-}
-
-export function startCustomersSync(options = {}) {
-	if (syncState.running) {
-		throw new Error('Ya hay una sincronización de clientes en curso. Esperá a que termine.');
-	}
-
-	syncState.currentPromise = syncCustomers(options).catch((error) => {
-		console.error('[CUSTOMERS BACKGROUND SYNC ERROR]', error);
-		return null;
-	});
-
-	return getCustomersSyncState();
-}
-
