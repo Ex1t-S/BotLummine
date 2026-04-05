@@ -69,6 +69,11 @@ export async function resumeCampaign(campaignId) {
 	return unwrap(response);
 }
 
+export async function previewAbandonedCartAudience(payload) {
+	const response = await api.post('/campaigns/abandoned-carts/preview', payload);
+	return unwrap(response);
+}
+
 export async function uploadCampaignHeaderImage(file) {
 	const formData = new FormData();
 	formData.append('image', file);

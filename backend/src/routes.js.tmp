@@ -18,7 +18,7 @@ import {
 	deleteCampaignController,
 	retryFailedCampaignRecipientsController,
 	dispatchTickController,
-	getCampaignStatsController,
+	getCampaignStatsController
 } from '../controllers/campaign.controller.js';
 
 const router = Router();

@@ -1144,3 +1144,9 @@
 		justify-content: center;
 	}
 }
+/* Refactor campaigns module */
+.campaign-page-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}

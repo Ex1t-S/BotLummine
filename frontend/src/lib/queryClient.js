@@ -4,6 +4,12 @@ export const queryKeys = {
 	conversation: (conversationId) => ['dashboard', 'conversation', conversationId],
 	abandonedCarts: (filters) => ['dashboard', 'abandoned-carts', filters],
 	catalog: (params) => ['dashboard', 'catalog', params],
+	campaigns: {
+		overview: ['campaigns', 'overview'],
+		templates: (filters = {}) => ['campaigns', 'templates', filters],
+		runs: (filters = {}) => ['campaigns', 'runs', filters],
+		detail: (campaignId) => ['campaigns', 'detail', campaignId],
+	},
 };
 
 export const queryPresets = {
@@ -19,8 +25,8 @@ export const queryPresets = {
 		staleTime: 30 * 1000,
 		gcTime: 5 * 60 * 1000,
 	},
-	catalog: {
-		staleTime: 60 * 1000,
-		gcTime: 10 * 60 * 1000,
+	campaigns: {
+		staleTime: 20 * 1000,
+		gcTime: 5 * 60 * 1000,
 	},
 };

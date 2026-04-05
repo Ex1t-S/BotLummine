@@ -1,4 +1,3 @@
-import { prisma } from '../lib/prisma.js';
 import {
 	createCampaignDraft,
 	launchCampaign,
@@ -7,7 +6,7 @@ import {
 	listCampaigns,
 	getCampaignDetail,
 	retryFailedCampaignRecipients,
-	previewAbandonedCartAudience
+	previewAbandonedCartAudience,
 } from '../services/whatsapp-campaign.service.js';
 import { executeCampaignDispatcherTick } from '../services/campaign-dispatcher.service.js';
 import {
@@ -17,122 +16,14 @@ import {
 	syncTemplatesFromMeta,
 	listLocalTemplates,
 	getTemplateOrThrow,
-	renderTemplatePreviewFromComponents
+	renderTemplatePreviewFromComponents,
 } from '../services/whatsapp-template.service.js';
-
-function normalizeBoolean(value) {
-	return ['1', 'true', 'yes', 'si'].includes(String(value || '').trim().toLowerCase());
-}
-
-function sendError(res, error, status = 400) {
-	return res.status(status).json({
-		ok: false,
-		error: error.message || 'Error desconocido'
-	});
-}
-
-function normalizeString(value, fallback = '') {
-	const normalized = String(value ?? '').trim();
-	return normalized || fallback;
-}
-
-function toUpper(value, fallback = '') {
-	return normalizeString(value, fallback).toUpperCase();
-}
-
-function safeArray(value) {
-	return Array.isArray(value) ? value : [];
-}
-
-function cloneJson(value, fallback) {
-	try {
-		return JSON.parse(JSON.stringify(value ?? fallback));
-	} catch {
-		return fallback;
-	}
-}
-
-function buildTemplateRawPayloadWithLocalMedia(template = {}, { components = [], headerMedia = null } = {}) {
-	const rawPayload = cloneJson(template?.rawPayload, {}) || {};
-	const nextComponents = safeArray(components).length
-		? cloneJson(components, [])
-		: cloneJson(rawPayload.components, []) || [];
-
-	rawPayload.name = template?.name || rawPayload.name;
-	rawPayload.language = template?.language || rawPayload.language;
-	rawPayload.category = template?.category || rawPayload.category;
-	rawPayload.components = nextComponents;
-
-	const headerIndex = nextComponents.findIndex(
-		(component) => toUpper(component?.type) === 'HEADER'
-	);
-
-	if (headerIndex >= 0 && toUpper(nextComponents[headerIndex]?.format) === 'TEXT') {
-		const nextHeader = { ...nextComponents[headerIndex] };
-		delete nextHeader.image;
-		nextComponents[headerIndex] = nextHeader;
-	}
-
-	if (headerMedia && (headerMedia.mediaId || headerMedia.previewUrl)) {
-		const currentHeader =
-			headerIndex >= 0
-				? { ...nextComponents[headerIndex] }
-				: {
-					type: 'HEADER',
-					format: 'IMAGE'
-				  };
-
-		const nextHeader = {
-			...currentHeader,
-			type: 'HEADER',
-			format: 'IMAGE',
-			image: {
-				...(currentHeader.image || {}),
-				...(headerMedia.mediaId ? { id: normalizeString(headerMedia.mediaId) } : {}),
-				...(headerMedia.previewUrl ? { link: normalizeString(headerMedia.previewUrl) } : {})
-			}
-		};
-
-		if (headerIndex >= 0) {
-			nextComponents[headerIndex] = nextHeader;
-		} else {
-			nextComponents.unshift(nextHeader);
-		}
-
-		rawPayload.headerMedia = {
-			...(rawPayload.headerMedia || {}),
-			...(headerMedia.mediaId ? { mediaId: normalizeString(headerMedia.mediaId) } : {}),
-			...(headerMedia.previewUrl ? { previewUrl: normalizeString(headerMedia.previewUrl) } : {})
-		};
-	} else if (toUpper(template?.headerFormat) !== 'IMAGE') {
-		delete rawPayload.headerMedia;
-	}
-
-	return rawPayload;
-}
-
-async function persistTemplateBuilderMetadata(template = null, reqBody = {}) {
-	if (!template?.id) {
-		return template;
-	}
-
-	const nextRawPayload = buildTemplateRawPayloadWithLocalMedia(template, {
-		components: Array.isArray(reqBody?.components) ? reqBody.components : [],
-		headerMedia: reqBody?.headerMedia || null
-	});
-
-	const nextHeader = safeArray(nextRawPayload.components).find(
-		(component) => toUpper(component?.type) === 'HEADER'
-	);
-
-	return prisma.whatsAppTemplate.update({
-		where: { id: template.id },
-		data: {
-			rawPayload: nextRawPayload,
-			headerFormat: normalizeString(nextHeader?.format || template.headerFormat || '') || null
-		}
-	});
-}
+import { getCampaignStats } from '../services/campaign-stats.service.js';
+import {
+	normalizeBoolean,
+	persistTemplateBuilderMetadata,
+	sendError,
+} from './campaign.controller.utils.js';
 
 export async function listTemplates(req, res) {
 	try {
@@ -142,13 +33,10 @@ export async function listTemplates(req, res) {
 			category: req.query.category || '',
 			language: req.query.language || '',
 			includeDeleted: normalizeBoolean(req.query.includeDeleted),
-			limit: req.query.limit || 100
+			limit: req.query.limit || 100,
 		});
 
-		return res.json({
-			ok: true,
-			templates
-		});
+		return res.json({ ok: true, templates });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
@@ -157,11 +45,7 @@ export async function listTemplates(req, res) {
 export async function getTemplate(req, res) {
 	try {
 		const template = await getTemplateOrThrow(req.params.templateId);
-
-		return res.json({
-			ok: true,
-			template
-		});
+		return res.json({ ok: true, template });
 	} catch (error) {
 		return sendError(res, error, 404);
 	}
@@ -173,16 +57,11 @@ export async function createTemplateController(req, res) {
 			name: req.body?.name,
 			category: req.body?.category,
 			language: req.body?.language || 'es_AR',
-			components: Array.isArray(req.body?.components) ? req.body.components : []
+			components: Array.isArray(req.body?.components) ? req.body.components : [],
 		});
 
 		const template = await persistTemplateBuilderMetadata(result.template, req.body);
-
-		return res.status(201).json({
-			ok: true,
-			...result,
-			template
-		});
+		return res.status(201).json({ ok: true, ...result, template });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -192,16 +71,11 @@ export async function updateTemplateController(req, res) {
 	try {
 		const result = await updateTemplate(req.params.templateId, {
 			category: req.body?.category,
-			components: Array.isArray(req.body?.components) ? req.body.components : []
+			components: Array.isArray(req.body?.components) ? req.body.components : [],
 		});
 
 		const template = await persistTemplateBuilderMetadata(result.template, req.body);
-
-		return res.json({
-			ok: true,
-			...result,
-			template
-		});
+		return res.json({ ok: true, ...result, template });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -210,13 +84,10 @@ export async function updateTemplateController(req, res) {
 export async function deleteTemplateController(req, res) {
 	try {
 		const result = await deleteTemplate(req.params.templateId, {
-			deleteAllLanguages: normalizeBoolean(req.query.allLanguages || req.body?.allLanguages)
+			deleteAllLanguages: normalizeBoolean(req.query.allLanguages || req.body?.allLanguages),
 		});
 
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -225,11 +96,7 @@ export async function deleteTemplateController(req, res) {
 export async function syncTemplatesController(_req, res) {
 	try {
 		const result = await syncTemplatesFromMeta();
-
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
@@ -241,11 +108,7 @@ export async function renderTemplatePreviewController(req, res) {
 			Array.isArray(req.body?.components) ? req.body.components : [],
 			req.body?.variables || {}
 		);
-
-		return res.json({
-			ok: true,
-			preview
-		});
+		return res.json({ ok: true, preview });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -255,13 +118,9 @@ export async function previewAbandonedCartAudienceController(req, res) {
 	try {
 		const result = await previewAbandonedCartAudience({
 			templateId: req.body?.templateId || null,
-			filters: req.body?.filters || {}
+			filters: req.body?.filters || {},
 		});
-
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -269,14 +128,8 @@ export async function previewAbandonedCartAudienceController(req, res) {
 
 export async function listCampaignsController(req, res) {
 	try {
-		const campaigns = await listCampaigns({
-			limit: req.query.limit || 50
-		});
-
-		return res.json({
-			ok: true,
-			campaigns
-		});
+		const campaigns = await listCampaigns({ limit: req.query.limit || 50 });
+		return res.json({ ok: true, campaigns });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
@@ -286,13 +139,9 @@ export async function getCampaignController(req, res) {
 	try {
 		const result = await getCampaignDetail(req.params.campaignId, {
 			page: req.query.page || 1,
-			pageSize: req.query.pageSize || 50
+			pageSize: req.query.pageSize || 50,
 		});
-
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 404);
 	}
@@ -312,13 +161,10 @@ export async function createCampaignController(req, res) {
 			audienceSource: req.body?.audienceSource || null,
 			audienceFilters: req.body?.audienceFilters || null,
 			notes: req.body?.notes || null,
-			launchedByUserId: req.user?.id || null
+			launchedByUserId: req.user?.id || null,
 		});
 
-		return res.status(201).json({
-			ok: true,
-			...result
-		});
+		return res.status(201).json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -337,11 +183,7 @@ export async function launchCampaignController(req, res) {
 export async function cancelCampaignController(req, res) {
 	try {
 		const campaign = await cancelCampaign(req.params.campaignId);
-
-		return res.json({
-			ok: true,
-			campaign
-		});
+		return res.json({ ok: true, campaign });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -350,11 +192,7 @@ export async function cancelCampaignController(req, res) {
 export async function deleteCampaignController(req, res) {
 	try {
 		const result = await deleteCampaign(req.params.campaignId);
-
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -363,13 +201,8 @@ export async function deleteCampaignController(req, res) {
 export async function retryFailedCampaignRecipientsController(req, res) {
 	try {
 		const result = await retryFailedCampaignRecipients(req.params.campaignId);
-
 		void executeCampaignDispatcherTick();
-
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -378,11 +211,7 @@ export async function retryFailedCampaignRecipientsController(req, res) {
 export async function dispatchTickController(_req, res) {
 	try {
 		const result = await executeCampaignDispatcherTick();
-
-		return res.json({
-			ok: true,
-			...result
-		});
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
@@ -390,36 +219,8 @@ export async function dispatchTickController(_req, res) {
 
 export async function getCampaignStatsController(_req, res) {
 	try {
-		const [
-			draft,
-			queued,
-			running,
-			finished,
-			partial,
-			failed,
-			canceled
-		] = await Promise.all([
-			prisma.campaign.count({ where: { status: 'DRAFT' } }),
-			prisma.campaign.count({ where: { status: 'QUEUED' } }),
-			prisma.campaign.count({ where: { status: 'RUNNING' } }),
-			prisma.campaign.count({ where: { status: 'FINISHED' } }),
-			prisma.campaign.count({ where: { status: 'PARTIAL' } }),
-			prisma.campaign.count({ where: { status: 'FAILED' } }),
-			prisma.campaign.count({ where: { status: 'CANCELED' } })
-		]);
-
-		return res.json({
-			ok: true,
-			stats: {
-				draft,
-				queued,
-				running,
-				finished,
-				partial,
-				failed,
-				canceled
-			}
-		});
+		const stats = await getCampaignStats();
+		return res.json({ ok: true, stats });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}

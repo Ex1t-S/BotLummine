@@ -1,0 +1,327 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import api from '../../../lib/api.js';
+import {
+	createCampaign,
+	createTemplate,
+	deleteCampaign,
+	deleteTemplate,
+	dispatchCampaign,
+	fetchCampaignDetail,
+	fetchCampaignOverview,
+	fetchCampaigns,
+	fetchTemplates,
+	pauseCampaign,
+	previewAbandonedCartAudience,
+	resumeCampaign,
+	syncTemplates,
+	updateTemplate,
+} from '../../../lib/campaigns.js';
+import { queryKeys } from '../../../lib/queryClient.js';
+import {
+	buildAbandonedCartFilters,
+	extractCreatedCampaignId,
+	getCampaignCollection,
+	getCampaignDetailPayload,
+	getTemplateCollection,
+	normalizeOverview,
+} from '../utils.js';
+import { useCampaignFeedback } from './useCampaignFeedback.js';
+
+const initialAbandonedCartForm = {
+	name: '',
+	notes: '',
+	daysBack: 7,
+	status: 'NEW',
+	limit: 50,
+	minTotal: '',
+	productQuery: '',
+	launchNow: false,
+};
+
+export function useCampaignsDashboard() {
+	const queryClient = useQueryClient();
+	const { feedback, showFeedback } = useCampaignFeedback();
+	const [selectedTemplate, setSelectedTemplate] = useState(null);
+	const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+	const [abandonedCartForm, setAbandonedCartForm] = useState(initialAbandonedCartForm);
+	const [abandonedCartPreview, setAbandonedCartPreview] = useState({
+		total: 0,
+		recipients: [],
+	});
+
+	const overviewQuery = useQuery({
+		queryKey: queryKeys.campaigns.overview,
+		queryFn: fetchCampaignOverview,
+	});
+
+	const templatesQuery = useQuery({
+		queryKey: queryKeys.campaigns.templates(),
+		queryFn: () => fetchTemplates(),
+	});
+
+	const campaignsQuery = useQuery({
+		queryKey: queryKeys.campaigns.runs(),
+		queryFn: () => fetchCampaigns(),
+	});
+
+	const campaignDetailQuery = useQuery({
+		queryKey: queryKeys.campaigns.detail(selectedCampaignId),
+		queryFn: () => fetchCampaignDetail(selectedCampaignId),
+		enabled: Boolean(selectedCampaignId),
+	});
+
+	const templates = useMemo(() => getTemplateCollection(templatesQuery.data), [templatesQuery.data]);
+	const campaigns = useMemo(() => getCampaignCollection(campaignsQuery.data), [campaignsQuery.data]);
+	const selectedCampaign = useMemo(
+		() => getCampaignDetailPayload(campaignDetailQuery.data, campaigns, selectedCampaignId),
+		[campaignDetailQuery.data, campaigns, selectedCampaignId]
+	);
+	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
+
+	useEffect(() => {
+		if (!selectedTemplate && templates.length) {
+			const firstEditable = templates.find(
+				(template) => String(template?.name || '').trim().toLowerCase() !== 'hello_world'
+			);
+			setSelectedTemplate(firstEditable || templates[0]);
+		}
+	}, [templates, selectedTemplate]);
+
+	useEffect(() => {
+		if (!selectedCampaignId && campaigns.length) {
+			setSelectedCampaignId(campaigns[0].id);
+		}
+	}, [campaigns, selectedCampaignId]);
+
+	function invalidateAll(nextCampaignId = selectedCampaignId) {
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.overview });
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
+		if (nextCampaignId) {
+			queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.detail(nextCampaignId) });
+		}
+	}
+
+	useEffect(() => {
+		async function handleLaunchRequested(event) {
+			const campaignId = event?.detail?.campaignId;
+			if (!campaignId) return;
+
+			try {
+				await dispatchCampaign(campaignId);
+				invalidateAll(campaignId);
+				setSelectedCampaignId(campaignId);
+				showFeedback('success', 'Campaña creada y lanzada.');
+			} catch (error) {
+				showFeedback(
+					'error',
+					error?.response?.data?.error || 'La campaña se creó pero no se pudo lanzar.'
+				);
+			}
+		}
+
+		window.addEventListener('campaign:launch-requested', handleLaunchRequested);
+		return () => window.removeEventListener('campaign:launch-requested', handleLaunchRequested);
+	}, [selectedCampaignId, showFeedback]);
+
+	const syncMutation = useMutation({
+		mutationFn: syncTemplates,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Templates sincronizados con Meta.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo sincronizar.'),
+	});
+
+	const createTemplateMutation = useMutation({
+		mutationFn: createTemplate,
+		onSuccess: (response) => {
+			invalidateAll();
+			const createdTemplate = response?.template || response?.data?.template || null;
+			if (createdTemplate?.id) {
+				setSelectedTemplate(createdTemplate);
+			}
+			showFeedback('success', 'Template creado correctamente.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear el template.'),
+	});
+
+	const updateTemplateMutation = useMutation({
+		mutationFn: ({ templateId, payload }) => updateTemplate(templateId, payload),
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Template actualizado.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar el template.'),
+	});
+
+	const deleteTemplateMutation = useMutation({
+		mutationFn: deleteTemplate,
+		onSuccess: () => {
+			invalidateAll();
+			setSelectedTemplate(null);
+			showFeedback('success', 'Template eliminado.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar el template.'),
+	});
+
+	const createCampaignMutation = useMutation({
+		mutationFn: createCampaign,
+		onSuccess: async (response) => {
+			const createdId = extractCreatedCampaignId(response);
+			invalidateAll(createdId);
+			if (createdId) {
+				setSelectedCampaignId(createdId);
+			}
+			showFeedback('success', 'Campaña creada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la campaña.'),
+	});
+
+	const deleteCampaignMutation = useMutation({
+		mutationFn: deleteCampaign,
+		onSuccess: (_response, deletedCampaignId) => {
+			queryClient.removeQueries({ queryKey: queryKeys.campaigns.detail(deletedCampaignId) });
+			setSelectedCampaignId((current) => (current === deletedCampaignId ? null : current));
+			invalidateAll();
+			showFeedback('success', 'Campaña eliminada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la campaña.'),
+	});
+
+	const abandonedCartPreviewMutation = useMutation({
+		mutationFn: ({ templateId, filters }) => previewAbandonedCartAudience({ templateId, filters }),
+		onSuccess: (response) => {
+			setAbandonedCartPreview({
+				total: response?.total || 0,
+				recipients: Array.isArray(response?.recipients) ? response.recipients : [],
+			});
+			showFeedback('success', 'Audiencia generada desde carritos abandonados.');
+		},
+		onError: (error) => {
+			showFeedback(
+				'error',
+				error?.response?.data?.error || 'No se pudo generar la audiencia de carritos.'
+			);
+		},
+	});
+
+	const createAbandonedCartCampaignMutation = useMutation({
+		mutationFn: async ({ launchNow }) => {
+			if (!selectedTemplate?.id) {
+				throw new Error('Elegí un template antes de crear la campaña.');
+			}
+
+			const payload = {
+				name:
+					String(abandonedCartForm.name || '').trim() ||
+					`Recuperación ${abandonedCartForm.daysBack} días`,
+				templateId: selectedTemplate.id,
+				languageCode: selectedTemplate.language || 'es_AR',
+				audienceSource: 'abandoned_carts',
+				audienceFilters: buildAbandonedCartFilters(abandonedCartForm),
+				notes: abandonedCartForm.notes || null,
+			};
+
+			const response = await api.post('/campaigns', payload);
+			const data = response.data;
+			const createdId = extractCreatedCampaignId(data);
+
+			if (launchNow && createdId) {
+				await dispatchCampaign(createdId);
+			}
+
+			return { data, createdId, launchNow };
+		},
+		onSuccess: ({ createdId, launchNow }) => {
+			invalidateAll(createdId);
+			if (createdId) {
+				setSelectedCampaignId(createdId);
+			}
+			showFeedback(
+				'success',
+				launchNow ? 'Campaña de carritos creada y lanzada.' : 'Campaña de carritos creada.'
+			);
+		},
+		onError: (error) => {
+			showFeedback(
+				'error',
+				error?.response?.data?.error || error.message || 'No se pudo crear la campaña de carritos.'
+			);
+		},
+	});
+
+	const actionMutation = useMutation({
+		mutationFn: async ({ type, campaignId }) => {
+			if (type === 'dispatch') return dispatchCampaign(campaignId);
+			if (type === 'pause') return pauseCampaign(campaignId);
+			if (type === 'resume') return resumeCampaign(campaignId);
+			return null;
+		},
+		onSuccess: (_response, variables) => {
+			invalidateAll(variables.campaignId);
+			setSelectedCampaignId(variables.campaignId);
+			showFeedback('success', 'Acción ejecutada correctamente.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar la acción.'),
+	});
+
+	function updateAbandonedCartForm(field, value) {
+		setAbandonedCartForm((prev) => ({
+			...prev,
+			[field]: value,
+		}));
+	}
+
+	function handlePreviewAbandonedCarts() {
+		if (!selectedTemplate?.id) {
+			showFeedback('error', 'Elegí un template para previsualizar la campaña.');
+			return;
+		}
+
+		abandonedCartPreviewMutation.mutate({
+			templateId: selectedTemplate.id,
+			filters: buildAbandonedCartFilters(abandonedCartForm),
+		});
+	}
+
+	function handleCreateAbandonedCartCampaign(launchNow = false) {
+		createAbandonedCartCampaignMutation.mutate({ launchNow });
+	}
+
+	return {
+		feedback,
+		overview,
+		templates,
+		campaigns,
+		selectedTemplate,
+		setSelectedTemplate,
+		selectedCampaign,
+		setSelectedCampaignId,
+		queries: {
+			overview: overviewQuery,
+			templates: templatesQuery,
+			campaigns: campaignsQuery,
+			campaignDetail: campaignDetailQuery,
+		},
+		mutations: {
+			sync: syncMutation,
+			createTemplate: createTemplateMutation,
+			updateTemplate: updateTemplateMutation,
+			deleteTemplate: deleteTemplateMutation,
+			createCampaign: createCampaignMutation,
+			deleteCampaign: deleteCampaignMutation,
+			action: actionMutation,
+			abandonedPreview: abandonedCartPreviewMutation,
+			createAbandonedCampaign: createAbandonedCartCampaignMutation,
+		},
+		abandonedCart: {
+			form: abandonedCartForm,
+			preview: abandonedCartPreview,
+			updateField: updateAbandonedCartForm,
+			handlePreview: handlePreviewAbandonedCarts,
+			handleCreate: handleCreateAbandonedCartCampaign,
+		},
+	};
+}
