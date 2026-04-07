@@ -3,6 +3,7 @@ import {
 	getCustomerSyncStatus,
 	runCustomerOrdersSyncInBackground,
 } from '../services/customer.service.js';
+import { getCustomerSyncStatus, syncCustomers } from '../services/customer.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
