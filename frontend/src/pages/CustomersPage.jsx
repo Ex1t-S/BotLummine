@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../lib/api.js';
 import './CustomersPage.css';
@@ -34,6 +35,16 @@ const initialSyncStatus = {
   activeWindow: null,
 };
 
+const QUICK_PRODUCT_FILTERS = [
+  'body',
+  'calza',
+  'pack 3x1',
+  'corpiño',
+  'bombacha',
+  'negro',
+  'xl',
+];
+
 function formatCurrency(value, currency = 'ARS') {
   const amount = Number(value || 0);
   try {
@@ -53,6 +64,17 @@ function formatDateTime(value) {
     return new Intl.DateTimeFormat('es-AR', {
       dateStyle: 'short',
       timeStyle: 'short',
+    }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function formatDate(value) {
+  if (!value) return '-';
+  try {
+    return new Intl.DateTimeFormat('es-AR', {
+      dateStyle: 'short',
     }).format(new Date(value));
   } catch {
     return String(value);
@@ -117,8 +139,23 @@ function buildSyncBadgeLabel(syncStatus) {
   return 'Listo';
 }
 
+function buildActiveFilterTags(filters) {
+  const tags = [];
+  if (filters.q) tags.push({ key: 'q', label: `Buscar: ${filters.q}` });
+  if (filters.productQuery) tags.push({ key: 'productQuery', label: `Producto: ${filters.productQuery}` });
+  if (filters.orderNumber) tags.push({ key: 'orderNumber', label: `Pedido: ${filters.orderNumber}` });
+  if (filters.dateFrom) tags.push({ key: 'dateFrom', label: `Desde: ${filters.dateFrom}` });
+  if (filters.dateTo) tags.push({ key: 'dateTo', label: `Hasta: ${filters.dateTo}` });
+  if (filters.minSpent) tags.push({ key: 'minSpent', label: `Mínimo: ${formatCurrency(filters.minSpent)}` });
+  if (filters.paymentStatus) tags.push({ key: 'paymentStatus', label: `Pago: ${filters.paymentStatus}` });
+  if (filters.shippingStatus) tags.push({ key: 'shippingStatus', label: `Envío: ${filters.shippingStatus}` });
+  if (filters.hasPhoneOnly) tags.push({ key: 'hasPhoneOnly', label: 'Solo con teléfono' });
+  return tags;
+}
+
 export default function CustomersPage() {
-  const [filters, setFilters] = useState(initialFilters);
+  const [draftFilters, setDraftFilters] = useState(initialFilters);
+  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
   const [data, setData] = useState({
     customers: [],
     stats: {},
@@ -134,8 +171,9 @@ export default function CustomersPage() {
   const currentPage = Number(data.pagination?.page || 1);
   const totalPages = Number(data.pagination?.totalPages || 1);
   const visiblePages = useMemo(() => buildVisiblePages(currentPage, totalPages), [currentPage, totalPages]);
+  const activeFilterTags = useMemo(() => buildActiveFilterTags(appliedFilters), [appliedFilters]);
 
-  async function loadOrders(nextFilters = filters, { silent = false } = {}) {
+  async function loadOrders(nextFilters = appliedFilters, { silent = false } = {}) {
     if (!silent) setLoading(true);
     try {
       const response = await api.get('/dashboard/customers', { params: normalizeRequestFilters(nextFilters) });
@@ -180,7 +218,7 @@ export default function CustomersPage() {
     stopPolling();
     pollRef.current = setInterval(async () => {
       const status = await loadSyncStatus();
-      await loadOrders(filters, { silent: true });
+      await loadOrders(appliedFilters, { silent: true });
       if (status && !status.running) stopPolling();
     }, POLL_MS);
   }
@@ -191,22 +229,35 @@ export default function CustomersPage() {
       if (status?.running) startPolling();
     });
     return () => stopPolling();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateFilter(name, value) {
-    setFilters((prev) => ({ ...prev, [name]: value }));
+    setDraftFilters((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function removeFilterTag(key) {
+    const next = {
+      ...draftFilters,
+      [key]: key === 'hasPhoneOnly' ? false : '',
+      page: 1,
+    };
+    setDraftFilters(next);
+    setAppliedFilters(next);
+    loadOrders(next);
   }
 
   async function handleApplyFilters(event) {
     event.preventDefault();
-    const next = { ...filters, page: 1 };
-    setFilters(next);
+    setErrorMessage('');
+    const next = { ...draftFilters, page: 1 };
+    setDraftFilters(next);
+    setAppliedFilters(next);
     await loadOrders(next);
   }
 
   async function handleResetFilters() {
-    setFilters(initialFilters);
+    setDraftFilters(initialFilters);
+    setAppliedFilters(initialFilters);
     setErrorMessage('');
     await loadOrders(initialFilters);
   }
@@ -227,9 +278,15 @@ export default function CustomersPage() {
 
   async function handlePageChange(page) {
     if (page < 1 || page > totalPages || page === currentPage) return;
-    const next = { ...filters, page };
-    setFilters(next);
+    const next = { ...appliedFilters, page };
+    setAppliedFilters(next);
+    setDraftFilters(next);
     await loadOrders(next);
+  }
+
+  function applyQuickProduct(value) {
+    const next = { ...draftFilters, productQuery: value };
+    setDraftFilters(next);
   }
 
   return (
@@ -275,14 +332,17 @@ export default function CustomersPage() {
             <div><span>Ítems</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
           </div>
         </div>
+
         <div className="customers-progress-track">
           <div className="customers-progress-bar" style={{ width: syncStatus.running ? '58%' : syncStatus.ordersFetched ? '100%' : '0%' }} />
         </div>
+
         {syncStatus.activeWindow ? (
           <p className="customers-sync-window">
             Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> · {formatDateTime(syncStatus.activeWindow.from)} → {formatDateTime(syncStatus.activeWindow.to)}
           </p>
         ) : null}
+
         {syncStatus.warnings?.length ? (
           <div className="customers-sync-notes">
             {syncStatus.warnings.slice(-2).map((warning) => (
@@ -290,6 +350,7 @@ export default function CustomersPage() {
             ))}
           </div>
         ) : null}
+
         {syncStatus.errors?.length ? (
           <div className="customers-sync-notes">
             {syncStatus.errors.slice(-2).map((item) => (
@@ -312,58 +373,70 @@ export default function CustomersPage() {
         <div className="customers-filters-header">
           <div>
             <h3>Filtros comerciales</h3>
-            <p>Buscá por nombre, teléfono, producto, número de pedido o estado sin depender del CRM viejo.</p>
+            <p>Buscá por nombre, teléfono, producto o número de pedido sin depender del CRM viejo.</p>
           </div>
         </div>
 
-        <div className="customers-filter-grid">
+        <div className="customers-filter-grid customers-filter-grid--refined">
           <div className="customers-filter-group customers-filter-group--grow">
             <label htmlFor="customers-q">Buscar general</label>
-            <input id="customers-q" type="text" value={filters.q} onChange={(e) => updateFilter('q', e.target.value)} placeholder="Nombre, email, teléfono, SKU o nro. de pedido" />
+            <input
+              id="customers-q"
+              type="text"
+              value={draftFilters.q}
+              onChange={(e) => updateFilter('q', e.target.value)}
+              placeholder="Nombre, email, teléfono, SKU o nro. de pedido"
+            />
           </div>
+
           <div className="customers-filter-group">
             <label htmlFor="customers-product">Producto comprado</label>
-            <input id="customers-product" type="text" value={filters.productQuery} onChange={(e) => updateFilter('productQuery', e.target.value)} placeholder="Body, calza, pack 3x1, negro, xl..." />
+            <input
+              id="customers-product"
+              type="text"
+              value={draftFilters.productQuery}
+              onChange={(e) => updateFilter('productQuery', e.target.value)}
+              placeholder="Body, calza, pack 3x1, negro, xl..."
+            />
           </div>
+
           <div className="customers-filter-group">
             <label htmlFor="customers-order-number">N° pedido</label>
-            <input id="customers-order-number" type="text" value={filters.orderNumber} onChange={(e) => updateFilter('orderNumber', e.target.value)} placeholder="Ej: 23621" />
+            <input
+              id="customers-order-number"
+              type="text"
+              value={draftFilters.orderNumber}
+              onChange={(e) => updateFilter('orderNumber', e.target.value)}
+              placeholder="Ej: 23621"
+            />
           </div>
+
           <div className="customers-filter-group">
             <label htmlFor="customers-date-from">Compra desde</label>
-            <input id="customers-date-from" type="date" value={filters.dateFrom} onChange={(e) => updateFilter('dateFrom', e.target.value)} />
+            <input id="customers-date-from" type="date" value={draftFilters.dateFrom} onChange={(e) => updateFilter('dateFrom', e.target.value)} />
           </div>
+
           <div className="customers-filter-group">
             <label htmlFor="customers-date-to">Compra hasta</label>
-            <input id="customers-date-to" type="date" value={filters.dateTo} onChange={(e) => updateFilter('dateTo', e.target.value)} />
+            <input id="customers-date-to" type="date" value={draftFilters.dateTo} onChange={(e) => updateFilter('dateTo', e.target.value)} />
           </div>
-          <div className="customers-filter-group">
-            <label htmlFor="customers-payment-status">Pago</label>
-            <select id="customers-payment-status" value={filters.paymentStatus} onChange={(e) => updateFilter('paymentStatus', e.target.value)}>
-              <option value="">Todos</option>
-              <option value="paid">Pagado</option>
-              <option value="pending">Pendiente</option>
-              <option value="authorized">Autorizado</option>
-              <option value="refunded">Reintegrado</option>
-              <option value="voided">Anulado</option>
-            </select>
-          </div>
-          <div className="customers-filter-group">
-            <label htmlFor="customers-shipping-status">Envío</label>
-            <select id="customers-shipping-status" value={filters.shippingStatus} onChange={(e) => updateFilter('shippingStatus', e.target.value)}>
-              <option value="">Todos</option>
-              <option value="fulfilled">Enviado</option>
-              <option value="unpacked">Por empaquetar</option>
-              <option value="unfulfilled">No enviado</option>
-            </select>
-          </div>
+
           <div className="customers-filter-group">
             <label htmlFor="customers-min-spent">Total mínimo</label>
-            <input id="customers-min-spent" type="number" min="0" step="1" value={filters.minSpent} onChange={(e) => updateFilter('minSpent', e.target.value)} placeholder="50000" />
+            <input
+              id="customers-min-spent"
+              type="number"
+              min="0"
+              step="1"
+              value={draftFilters.minSpent}
+              onChange={(e) => updateFilter('minSpent', e.target.value)}
+              placeholder="50000"
+            />
           </div>
+
           <div className="customers-filter-group">
             <label htmlFor="customers-sort">Ordenar por</label>
-            <select id="customers-sort" value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)}>
+            <select id="customers-sort" value={draftFilters.sort} onChange={(e) => updateFilter('sort', e.target.value)}>
               <option value="purchase_desc">Compra más reciente</option>
               <option value="purchase_asc">Compra más antigua</option>
               <option value="total_desc">Mayor total</option>
@@ -376,10 +449,33 @@ export default function CustomersPage() {
           </div>
         </div>
 
+        <div className="customers-quick-tags">
+          {QUICK_PRODUCT_FILTERS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`customers-quick-tag ${draftFilters.productQuery === item ? 'is-active' : ''}`}
+              onClick={() => applyQuickProduct(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+
+        {activeFilterTags.length ? (
+          <div className="customers-active-filters">
+            {activeFilterTags.map((tag) => (
+              <button key={tag.key} type="button" className="customers-active-filter-chip" onClick={() => removeFilterTag(tag.key)}>
+                {tag.label} <span>×</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="customers-toggle-row">
           <div className="customers-toggle-group">
             <label className="customers-checkbox">
-              <input type="checkbox" checked={filters.hasPhoneOnly} onChange={(e) => updateFilter('hasPhoneOnly', e.target.checked)} />
+              <input type="checkbox" checked={draftFilters.hasPhoneOnly} onChange={(e) => updateFilter('hasPhoneOnly', e.target.checked)} />
               <span>Solo con teléfono</span>
             </label>
           </div>
@@ -419,11 +515,10 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div className="customer-meta-row">
+                <div className="customer-meta-row customer-meta-row--simple">
                   <div className="customer-meta-chip"><span>Total</span><strong>{customer.totalSpentLabel || '$0'}</strong></div>
                   <div className="customer-meta-chip"><span>Fecha</span><strong>{customer.lastOrderDateLabel || '-'}</strong></div>
-                  <div className="customer-meta-chip"><span>Pago</span><strong>{customer.paymentStatus || '-'}</strong></div>
-                  <div className="customer-meta-chip"><span>Envío</span><strong>{customer.shippingStatus || '-'}</strong></div>
+                  <div className="customer-meta-chip"><span>Actualizado</span><strong>{formatDate(customer.updatedAt)}</strong></div>
                 </div>
 
                 <div className="customer-section-box">
@@ -440,11 +535,6 @@ export default function CustomersPage() {
                   ) : (
                     <p className="customer-products-empty">Todavía no quedó guardado el detalle de productos.</p>
                   )}
-                </div>
-
-                <div className="customer-footer-row">
-                  <span>Actualizado</span>
-                  <strong>{formatDateTime(customer.updatedAt)}</strong>
                 </div>
               </article>
             ))}
