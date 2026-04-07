@@ -11,8 +11,6 @@ const initialFilters = {
 	orderNumber: '',
 	dateFrom: '',
 	dateTo: '',
-	paymentStatus: '',
-	shippingStatus: '',
 	minSpent: '',
 	hasPhoneOnly: false,
 	sort: 'purchase_desc',
@@ -62,14 +60,13 @@ function formatDateTime(value) {
 }
 
 function normalizeStats(payload = {}) {
-	const stats = payload.stats || payload.metrics || {};
+	const stats = payload.stats || {};
 	return {
-		totalOrders: Number(stats.totalOrders ?? stats.orders ?? 0),
-		totalCustomers: Number(stats.totalCustomers ?? stats.uniqueCustomers ?? 0),
-		paidOrders: Number(stats.paidOrders ?? 0),
+		totalOrders: Number(stats.totalOrders ?? 0),
+		totalCustomers: Number(stats.totalCustomers ?? 0),
 		withPhone: Number(stats.withPhone ?? 0),
-		totalSpentLabel: formatCurrency(stats.totalSpent ?? stats.revenue ?? 0, stats.currency || 'ARS'),
-		avgTicketLabel: formatCurrency(stats.avgTicket ?? stats.ticketAverage ?? 0, stats.currency || 'ARS'),
+		totalSpentLabel: formatCurrency(stats.totalSpent ?? 0, stats.currency || 'ARS'),
+		avgTicketLabel: formatCurrency(stats.avgTicket ?? 0, stats.currency || 'ARS'),
 		showingFrom: Number(stats.showingFrom || 0),
 		showingTo: Number(stats.showingTo || 0),
 	};
@@ -94,8 +91,6 @@ function normalizeRequestFilters(filters) {
 		orderNumber: filters.orderNumber || '',
 		dateFrom: filters.dateFrom || '',
 		dateTo: filters.dateTo || '',
-		paymentStatus: filters.paymentStatus || '',
-		shippingStatus: filters.shippingStatus || '',
 		minSpent: filters.minSpent || '',
 		hasPhoneOnly: filters.hasPhoneOnly ? '1' : '',
 		sort: filters.sort || 'purchase_desc',
@@ -119,24 +114,85 @@ function buildSyncBadgeLabel(syncStatus) {
 	return 'Listo';
 }
 
-function normalizeCustomersResponse(responseData = {}) {
-	const customers = Array.isArray(responseData.customers)
-		? responseData.customers
-		: Array.isArray(responseData.items)
-			? responseData.items
-			: [];
+function buildCatalogProducts(rawCatalog = []) {
+	const seen = new Set();
+	const options = [];
 
-	const pagination = responseData.pagination || {};
-	return {
-		customers,
-		stats: responseData.stats || responseData.metrics || {},
-		pagination: {
-			page: Number(pagination.page || 1),
-			totalPages: Number(pagination.totalPages || 1),
-			totalItems: Number(pagination.totalItems ?? pagination.total ?? 0),
-			pageSize: Number(pagination.pageSize || DEFAULT_PAGE_SIZE),
-		},
-	};
+	for (const item of rawCatalog) {
+		const label =
+			item?.name ||
+			item?.title ||
+			item?.productName ||
+			item?.displayName ||
+			'';
+
+		const normalized = String(label || '').trim();
+		if (!normalized) continue;
+		if (seen.has(normalized.toLowerCase())) continue;
+
+		seen.add(normalized.toLowerCase());
+		options.push({
+			id: item?.id || item?.productId || normalized,
+			label: normalized,
+		});
+	}
+
+	return options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
+}
+
+function ProductMultiSelect({
+	options,
+	selectedValues,
+	search,
+	onSearchChange,
+	onToggleValue,
+	onClear,
+}) {
+	const filtered = useMemo(() => {
+		const term = String(search || '').trim().toLowerCase();
+		if (!term) return options.slice(0, 80);
+		return options
+			.filter((option) => option.label.toLowerCase().includes(term))
+			.slice(0, 80);
+	}, [options, search]);
+
+	return (
+		<div className="product-multiselect">
+			<input
+				type="text"
+				className="product-multiselect-search"
+				placeholder="Buscar productos del catálogo..."
+				value={search}
+				onChange={(event) => onSearchChange(event.target.value)}
+			/>
+
+			<div className="product-multiselect-list">
+				{filtered.length ? (
+					filtered.map((option) => {
+						const checked = selectedValues.includes(option.label);
+						return (
+							<label key={option.id} className="product-option-row">
+								<input
+									type="checkbox"
+									checked={checked}
+									onChange={() => onToggleValue(option.label)}
+								/>
+								<span>{option.label}</span>
+							</label>
+						);
+					})
+				) : (
+					<div className="product-option-empty">No hay coincidencias en el catálogo.</div>
+				)}
+			</div>
+
+			<div className="product-multiselect-footer">
+				<button type="button" className="secondary-link-btn" onClick={onClear}>
+					Limpiar productos
+				</button>
+			</div>
+		</div>
+	);
 }
 
 export default function CustomersPage() {
@@ -150,6 +206,9 @@ export default function CustomersPage() {
 	const [syncing, setSyncing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [syncStatus, setSyncStatus] = useState(initialSyncStatus);
+	const [catalogOptions, setCatalogOptions] = useState([]);
+	const [selectedProducts, setSelectedProducts] = useState([]);
+	const [productSearch, setProductSearch] = useState('');
 	const pollRef = useRef(null);
 
 	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
@@ -160,6 +219,22 @@ export default function CustomersPage() {
 		[currentPage, totalPages]
 	);
 
+	async function loadCatalogOptions() {
+		try {
+			const response = await api.get('/dashboard/catalog', {
+				params: { page: 1, pageSize: 250 },
+			});
+			const rawItems =
+				response.data?.items ||
+				response.data?.products ||
+				response.data?.rows ||
+				[];
+			setCatalogOptions(buildCatalogProducts(rawItems));
+		} catch (error) {
+			console.error('[CUSTOMERS][CATALOG] error:', error);
+		}
+	}
+
 	async function loadOrders(nextFilters = filters, { silent = false } = {}) {
 		if (!silent) setLoading(true);
 
@@ -167,7 +242,16 @@ export default function CustomersPage() {
 			const response = await api.get('/dashboard/customers', {
 				params: normalizeRequestFilters(nextFilters),
 			});
-			setData(normalizeCustomersResponse(response.data));
+			setData({
+				customers: Array.isArray(response.data?.customers) ? response.data.customers : [],
+				stats: response.data?.stats || {},
+				pagination: {
+					page: Number(response.data?.pagination?.page || 1),
+					totalPages: Number(response.data?.pagination?.totalPages || 1),
+					totalItems: Number(response.data?.pagination?.totalItems || 0),
+					pageSize: Number(response.data?.pagination?.pageSize || DEFAULT_PAGE_SIZE),
+				},
+			});
 			setErrorMessage('');
 		} catch (error) {
 			console.error(error);
@@ -221,15 +305,13 @@ export default function CustomersPage() {
 	useEffect(() => {
 		loadOrders(initialFilters).catch(() => {});
 		loadSyncStatus().catch(() => {});
+		loadCatalogOptions().catch(() => {});
 		return () => stopPolling();
 	}, []);
 
 	useEffect(() => {
-		if (syncStatus.running) {
-			startPolling();
-		} else {
-			stopPolling();
-		}
+		if (syncStatus.running) startPolling();
+		else stopPolling();
 	}, [syncStatus.running]);
 
 	function handleFilterChange(event) {
@@ -241,14 +323,50 @@ export default function CustomersPage() {
 		}));
 	}
 
+	function handleToggleProduct(productName) {
+		setSelectedProducts((current) => {
+			const exists = current.includes(productName);
+			const next = exists
+				? current.filter((item) => item !== productName)
+				: [...current, productName];
+
+			setFilters((prev) => ({
+				...prev,
+				page: 1,
+				productQuery: next.join('||'),
+			}));
+
+			return next;
+		});
+	}
+
+	function handleRemoveSelectedProduct(productName) {
+		handleToggleProduct(productName);
+	}
+
+	function handleClearProducts() {
+		setSelectedProducts([]);
+		setFilters((prev) => ({
+			...prev,
+			page: 1,
+			productQuery: '',
+		}));
+	}
+
 	async function handleApplyFilters() {
-		const next = { ...filters, page: 1 };
+		const next = {
+			...filters,
+			page: 1,
+			productQuery: selectedProducts.join('||'),
+		};
 		setFilters(next);
 		await loadOrders(next);
 	}
 
 	async function handleResetFilters() {
 		setFilters(initialFilters);
+		setSelectedProducts([]);
+		setProductSearch('');
 		await loadOrders(initialFilters);
 	}
 
@@ -363,7 +481,6 @@ export default function CustomersPage() {
 			<div className="customers-stats-grid">
 				<div className="customers-stat-card"><span className="customers-stat-label">Pedidos</span><strong>{normalizedStats.totalOrders}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Clientes únicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Pagados</span><strong>{normalizedStats.paidOrders}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Con teléfono</span><strong>{normalizedStats.withPhone}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{normalizedStats.avgTicketLabel}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{normalizedStats.totalSpentLabel}</strong></div>
@@ -373,7 +490,7 @@ export default function CustomersPage() {
 				<div className="customers-list-topbar">
 					<div>
 						<h3>Filtros comerciales</h3>
-						<p>Buscá por nombre, teléfono, producto, número de pedido o estado sin depender del CRM viejo.</p>
+						<p>Filtrá por cliente, pedido, monto y productos reales del catálogo.</p>
 					</div>
 				</div>
 
@@ -389,15 +506,32 @@ export default function CustomersPage() {
 						/>
 					</div>
 
-					<div className="customers-filter-group">
+					<div className="customers-filter-group customers-filter-group--wide">
 						<label>Producto comprado</label>
-						<input
-							type="text"
-							name="productQuery"
-							placeholder="Body, calza, pack 3x1, negro, xl..."
-							value={filters.productQuery}
-							onChange={handleFilterChange}
+						<ProductMultiSelect
+							options={catalogOptions}
+							selectedValues={selectedProducts}
+							search={productSearch}
+							onSearchChange={setProductSearch}
+							onToggleValue={handleToggleProduct}
+							onClear={handleClearProducts}
 						/>
+
+						{selectedProducts.length ? (
+							<div className="selected-product-chips">
+								{selectedProducts.map((product) => (
+									<button
+										type="button"
+										key={product}
+										className="selected-product-chip"
+										onClick={() => handleRemoveSelectedProduct(product)}
+									>
+										<span>{product}</span>
+										<strong>×</strong>
+									</button>
+								))}
+							</div>
+						) : null}
 					</div>
 
 					<div className="customers-filter-group">
@@ -419,27 +553,6 @@ export default function CustomersPage() {
 					<div className="customers-filter-group">
 						<label>Compra hasta</label>
 						<input type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
-					</div>
-
-					<div className="customers-filter-group">
-						<label>Pago</label>
-						<select name="paymentStatus" value={filters.paymentStatus} onChange={handleFilterChange}>
-							<option value="">Todos</option>
-							<option value="paid">Paid</option>
-							<option value="authorized">Authorized</option>
-							<option value="pending">Pending</option>
-						</select>
-					</div>
-
-					<div className="customers-filter-group">
-						<label>Envío</label>
-						<select name="shippingStatus" value={filters.shippingStatus} onChange={handleFilterChange}>
-							<option value="">Todos</option>
-							<option value="unpacked">Unpacked</option>
-							<option value="packed">Packed</option>
-							<option value="shipped">Shipped</option>
-							<option value="delivered">Delivered</option>
-						</select>
 					</div>
 
 					<div className="customers-filter-group">

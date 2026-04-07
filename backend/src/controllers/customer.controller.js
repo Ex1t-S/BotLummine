@@ -60,8 +60,6 @@ function buildCustomersWhere({
 	orderNumber,
 	dateFrom,
 	dateTo,
-	paymentStatus,
-	shippingStatus,
 	minSpent,
 	hasPhoneOnly,
 }) {
@@ -133,18 +131,6 @@ function buildCustomersWhere({
 		if (Object.keys(createdAt).length > 0) {
 			and.push({ orderCreatedAt: createdAt });
 		}
-	}
-
-	if (paymentStatus && paymentStatus !== 'all' && paymentStatus !== 'Todos') {
-		and.push({
-			paymentStatus: { equals: paymentStatus, mode: 'insensitive' },
-		});
-	}
-
-	if (shippingStatus && shippingStatus !== 'all' && shippingStatus !== 'Todos') {
-		and.push({
-			shippingStatus: { equals: shippingStatus, mode: 'insensitive' },
-		});
 	}
 
 	if (minSpent !== undefined && minSpent !== null && String(minSpent).trim() !== '') {
@@ -226,8 +212,6 @@ function mapOrderToCard(order) {
 		lastOrderLabel: order.orderNumber ? `#${order.orderNumber}` : '-',
 		totalSpentLabel: formatCurrency(order.totalAmount || 0, order.currency || 'ARS'),
 		lastOrderDateLabel: formatDateLabel(order.orderCreatedAt),
-		paymentStatus: order.paymentStatus || '-',
-		shippingStatus: order.shippingStatus || '-',
 		totalUnitsPurchased,
 		productsPreview: productNames.slice(0, 6),
 		updatedAt: order.orderUpdatedAt || order.updatedAt || order.orderCreatedAt || null,
@@ -245,8 +229,6 @@ export async function getCustomers(req, res) {
 			orderNumber = '',
 			dateFrom = '',
 			dateTo = '',
-			paymentStatus = '',
-			shippingStatus = '',
 			minSpent = '',
 			hasPhoneOnly = '',
 			sort = 'purchase_desc',
@@ -264,8 +246,6 @@ export async function getCustomers(req, res) {
 			orderNumber,
 			dateFrom,
 			dateTo,
-			paymentStatus,
-			shippingStatus,
 			minSpent,
 			hasPhoneOnly,
 		});
@@ -292,7 +272,6 @@ export async function getCustomers(req, res) {
 					contactPhone: true,
 					contactEmail: true,
 					contactName: true,
-					paymentStatus: true,
 				},
 			}),
 		]);
@@ -322,12 +301,6 @@ export async function getCustomers(req, res) {
 			0
 		);
 
-		const paidOrders = metricsBase.filter((row) =>
-			['paid', 'authorized', 'received'].includes(
-				String(row.paymentStatus || '').toLowerCase()
-			)
-		).length;
-
 		const showingFrom = totalItems > 0 ? skip + 1 : 0;
 		const showingTo = Math.min(skip + parsedPageSize, totalItems);
 
@@ -337,7 +310,6 @@ export async function getCustomers(req, res) {
 			stats: {
 				totalOrders: totalItems,
 				totalCustomers: uniquePhones.size + uniqueFallback.size,
-				paidOrders,
 				withPhone: metricsBase.filter((row) => String(row.contactPhone || '').trim()).length,
 				totalSpent,
 				avgTicket: totalItems > 0 ? totalSpent / totalItems : 0,
