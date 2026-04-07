@@ -11,6 +11,7 @@ const initialFilters = {
 	orderNumber: '',
 	dateFrom: '',
 	dateTo: '',
+	paymentStatus: '',
 	minSpent: '',
 	hasPhoneOnly: false,
 	sort: 'purchase_desc',
@@ -91,6 +92,7 @@ function normalizeRequestFilters(filters) {
 		orderNumber: filters.orderNumber || '',
 		dateFrom: filters.dateFrom || '',
 		dateTo: filters.dateTo || '',
+		paymentStatus: filters.paymentStatus || '',
 		minSpent: filters.minSpent || '',
 		hasPhoneOnly: filters.hasPhoneOnly ? '1' : '',
 		sort: filters.sort || 'purchase_desc',
@@ -554,7 +556,22 @@ export default function CustomersPage() {
 						<label>Compra hasta</label>
 						<input type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
 					</div>
-
+            <div className="customers-filter-group">
+            <label>Pago</label>
+            <select
+              name="paymentStatus"
+              value={filters.paymentStatus}
+              onChange={handleFilterChange}
+            >
+              <option value="">Todos</option>
+              <option value="pending">Pendiente</option>
+              <option value="authorized">Autorizado</option>
+              <option value="paid">Pagado</option>
+              <option value="cancelled">Cancelado</option>
+              <option value="voided">Anulado</option>
+              <option value="refunded">Reembolsado</option>
+            </select>
+          </div>
 					<div className="customers-filter-group">
 						<label>Total mínimo</label>
 						<input

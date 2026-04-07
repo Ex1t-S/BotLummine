@@ -60,6 +60,7 @@ function buildCustomersWhere({
 	orderNumber,
 	dateFrom,
 	dateTo,
+	paymentStatus,
 	minSpent,
 	hasPhoneOnly,
 }) {
@@ -132,7 +133,11 @@ function buildCustomersWhere({
 			and.push({ orderCreatedAt: createdAt });
 		}
 	}
-
+  	if (paymentStatus && paymentStatus !== 'all') {
+		and.push({
+			paymentStatus: { equals: paymentStatus, mode: 'insensitive' },
+		});
+	}
 	if (minSpent !== undefined && minSpent !== null && String(minSpent).trim() !== '') {
 		const parsed = Number(minSpent);
 		if (!Number.isNaN(parsed) && parsed > 0) {
@@ -224,31 +229,33 @@ function mapOrderToCard(order) {
 export async function getCustomers(req, res) {
 	try {
 		const {
-			q = '',
-			productQuery = '',
-			orderNumber = '',
-			dateFrom = '',
-			dateTo = '',
-			minSpent = '',
-			hasPhoneOnly = '',
-			sort = 'purchase_desc',
-			page = '1',
-			pageSize = '24',
-		} = req.query;
+      q = '',
+      productQuery = '',
+      orderNumber = '',
+      dateFrom = '',
+      dateTo = '',
+      paymentStatus = '',
+      minSpent = '',
+      hasPhoneOnly = '',
+      sort = 'purchase_desc',
+      page = '1',
+      pageSize = '24',
+    } = req.query;
 
 		const parsedPage = Math.max(1, Number(page) || 1);
 		const parsedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 24));
 		const skip = (parsedPage - 1) * parsedPageSize;
 
 		const where = buildCustomersWhere({
-			q,
-			productQuery,
-			orderNumber,
-			dateFrom,
-			dateTo,
-			minSpent,
-			hasPhoneOnly,
-		});
+      q,
+      productQuery,
+      orderNumber,
+      dateFrom,
+      dateTo,
+      paymentStatus,
+      minSpent,
+      hasPhoneOnly,
+    });
 
 		const orderBy = buildOrderBy(sort);
 
