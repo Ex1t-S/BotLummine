@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { fetchCustomersDebugPage, syncCustomers } from '../services/customer.service.js';
+import { syncCustomers, syncCustomerOrders } from '../services/customer.service.js';
 
 function ensureCustomerModels() {
 	if (!prisma?.customerProfile || !prisma?.customerOrder || !prisma?.customerOrderItem) {
@@ -622,33 +622,6 @@ export async function getCustomers(req, res, next) {
 	}
 }
 
-
-export async function getCustomersDebugRaw(req, res) {
-	try {
-		const page = Number(req.query?.page || 1);
-		const perPage = Number(req.query?.perPage || 5);
-		const q = normalizeSearch(req.query?.q || '');
-		const dateFrom = normalizeSearch(req.query?.dateFrom || '');
-		const dateTo = normalizeSearch(req.query?.dateTo || '');
-
-		const result = await fetchCustomersDebugPage({
-			page,
-			perPage,
-			q,
-			dateFrom,
-			dateTo,
-		});
-
-		return res.json(result);
-	} catch (error) {
-		console.error('[CUSTOMERS DEBUG RAW ERROR]', error);
-		return res.status(500).json({
-			ok: false,
-			message: error?.message || 'No se pudo obtener el JSON crudo de clientes',
-		});
-	}
-}
-
 export async function postSyncCustomers(req, res) {
 	try {
 		ensureCustomerModels();
@@ -663,6 +636,29 @@ export async function postSyncCustomers(req, res) {
 		console.error('[CUSTOMERS SYNC ERROR]', error);
 
 		const message = error?.message || 'Error sincronizando clientes';
+		const status = message.includes('Ya hay una sincronización de clientes en curso') ? 409 : 500;
+
+		return res.status(status).json({
+			message,
+		});
+	}
+}
+
+
+export async function postSyncCustomerOrders(req, res) {
+	try {
+		ensureCustomerModels();
+
+		const q = normalizeSearch(req.body?.q || '');
+		const dateFrom = normalizeSearch(req.body?.dateFrom || '');
+		const dateTo = normalizeSearch(req.body?.dateTo || '');
+		const result = await syncCustomerOrders({ q, dateFrom, dateTo });
+
+		return res.json(result);
+	} catch (error) {
+		console.error('[CUSTOMER ORDERS SYNC ERROR]', error);
+
+		const message = error?.message || 'Error sincronizando pedidos de clientes';
 		const status = message.includes('Ya hay una sincronización de clientes en curso') ? 409 : 500;
 
 		return res.status(status).json({

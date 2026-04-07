@@ -1,0 +1,808 @@
+[
+  {
+    "id": 1941565456,
+    "contact_email": "marinaflorcastro@gmail.com",
+    "contact_phone": "+543388418815",
+    "subtotal": "85900.00",
+    "total": "85900.00",
+    "created_at": "2026-04-07T15:52:13+0000",
+    "updated_at": "2026-04-07T15:52:17+0000",
+    "payment_status": "paid",
+    "customer": {
+      "id": 198926833,
+      "name": "Marina Castro",
+      "email": "marinaflorcastro@gmail.com",
+      "identification": "28815748",
+      "phone": "+543388418815",
+      "note": null,
+      "default_address": {
+        "address": "Belgrano",
+        "city": "Tres Algarrobos ",
+        "country": "AR",
+        "created_at": "2026-04-07T15:52:13+0000",
+        "default": true,
+        "floor": "",
+        "id": 217309189,
+        "locality": "Tres Algarrobos ",
+        "name": "Marina Castro",
+        "number": "445",
+        "phone": "+543388418815",
+        "province": "Buenos Aires",
+        "updated_at": "2026-04-07T15:52:13+0000",
+        "zipcode": "6231"
+      },
+      "addresses": [
+        {
+          "address": "Belgrano ",
+          "city": "Tres Algarrobos ",
+          "country": "AR",
+          "created_at": "2025-02-16T23:18:25+0000",
+          "default": false,
+          "floor": "",
+          "id": 156548071,
+          "locality": "",
+          "name": "Marina Castro",
+          "number": "445",
+          "phone": "+543388418815",
+          "province": "Buenos Aires",
+          "updated_at": "2025-02-16T23:18:25+0000",
+          "zipcode": "6231"
+        },
+        {
+          "address": "Belgrano",
+          "city": "Tres Algarrobos ",
+          "country": "AR",
+          "created_at": "2026-04-07T15:52:13+0000",
+          "default": true,
+          "floor": "",
+          "id": 217309189,
+          "locality": "Tres Algarrobos ",
+          "name": "Marina Castro",
+          "number": "445",
+          "phone": "+543388418815",
+          "province": "Buenos Aires",
+          "updated_at": "2026-04-07T15:52:13+0000",
+          "zipcode": "6231"
+        }
+      ],
+      "billing_name": "Marina",
+      "billing_phone": "+543388418815",
+      "billing_address": "Belgrano",
+      "billing_number": "445",
+      "billing_floor": "",
+      "billing_locality": "Tres Algarrobos",
+      "billing_zipcode": "6231",
+      "billing_city": "Tres Algarrobos",
+      "billing_province": "Buenos Aires",
+      "billing_country": "AR",
+      "extra": {},
+      "total_spent": "59040.00",
+      "total_spent_currency": "ARS",
+      "last_order_id": 1941565456,
+      "active": false,
+      "first_interaction": "2026-04-07T15:52:13+0000",
+      "created_at": "2025-02-16T23:18:25+0000",
+      "updated_at": "2026-04-07T15:52:12+0000",
+      "customer_type": "",
+      "business_name": "",
+      "trade_name": "",
+      "state_registration": "",
+      "fiscal_regime": "",
+      "invoice_use": "",
+      "document_type": "",
+      "business_activity": "",
+      "accepts_marketing": false,
+      "accepts_marketing_updated_at": "2025-02-16T23:17:47+0000"
+    },
+    "products": [
+      {
+        "id": 3130363166,
+        "depth": "8.00",
+        "height": "8.00",
+        "name": "Pack 3x1 Calzas Linfaticas Modeladoras (Negro, S/M)",
+        "name_without_variants": "Pack 3x1 Calzas Linfaticas Modeladoras",
+        "price": "85900.00",
+        "compare_at_price": "190000.00",
+        "product_id": 314138041,
+        "image": {
+          "id": 1090525563,
+          "product_id": 314138041,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/img1calza-826770e77765bec36a17690211773099-1024-1024.png",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-01-21T18:46:17+0000",
+          "updated_at": "2026-01-21T18:47:31+0000"
+        },
+        "quantity": 1,
+        "free_shipping": true,
+        "weight": "0.050",
+        "width": "5.00",
+        "variant_id": 1392177340,
+        "variant_values": [
+          "Negro",
+          "S/M"
+        ],
+        "properties": [],
+        "sku": "CL-1000",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      }
+    ],
+    "number": 23621,
+    "shipping_status": "unpacked",
+    "fulfillments": [
+      {
+        "id": "01KNMA9W4G5H1GY7RE5N6SBF4Z",
+        "number": "1",
+        "assigned_location": {
+          "location_id": "01JEKXK9BV3HHQ9NTJT73M0MF9",
+          "name": "Av. Gobernador Vergara "
+        },
+        "status": "UNPACKED",
+        "shipping": {
+          "type": "ship",
+          "extras": {
+            "shippable": true
+          },
+          "carrier": {
+            "name": "Envío Nube"
+          },
+          "option": {
+            "name": "Envío Nube - Correo Argentino Clásico a domicilio"
+          }
+        },
+        "tracking_info": {
+          "code": "",
+          "url": ""
+        }
+      }
+    ]
+  },
+  {
+    "id": 1931064261,
+    "contact_email": "norafuentes196205@gmail.com",
+    "contact_phone": "+542233044202",
+    "subtotal": "85900.00",
+    "total": "85900.00",
+    "created_at": "2026-04-07T15:30:20+0000",
+    "updated_at": "2026-04-07T15:30:27+0000",
+    "payment_status": "paid",
+    "customer": {
+      "id": 265811147,
+      "name": "Nora elvira Fuentes",
+      "email": "norafuentes196205@gmail.com",
+      "identification": "14935277",
+      "phone": "+542233044202",
+      "note": null,
+      "default_address": {
+        "address": "La matera",
+        "city": "Mar del plata ",
+        "country": "AR",
+        "created_at": "2026-04-07T15:30:20+0000",
+        "default": true,
+        "floor": "Manzana 4 casa 114",
+        "id": 217306073,
+        "locality": "Lomas del golf ",
+        "name": "Nora elvira Fuentes",
+        "number": "SN",
+        "phone": "+542233044202",
+        "province": "Buenos Aires",
+        "updated_at": "2026-04-07T15:30:20+0000",
+        "zipcode": "7600"
+      },
+      "addresses": [
+        {
+          "address": "La matera",
+          "city": "Mar del plata ",
+          "country": "AR",
+          "created_at": "2026-04-07T15:30:20+0000",
+          "default": true,
+          "floor": "Manzana 4 casa 114",
+          "id": 217306073,
+          "locality": "Lomas del golf ",
+          "name": "Nora elvira Fuentes",
+          "number": "SN",
+          "phone": "+542233044202",
+          "province": "Buenos Aires",
+          "updated_at": "2026-04-07T15:30:20+0000",
+          "zipcode": "7600"
+        }
+      ],
+      "billing_name": "Nora elvira",
+      "billing_phone": "+542233044202",
+      "billing_address": "La matera",
+      "billing_number": "SN",
+      "billing_floor": "Manzana 4 casa 114",
+      "billing_locality": "Lomas del golf",
+      "billing_zipcode": "7600",
+      "billing_city": "Mar del plata",
+      "billing_province": "Buenos Aires",
+      "billing_country": "AR",
+      "extra": {},
+      "total_spent": "0.00",
+      "total_spent_currency": "ARS",
+      "last_order_id": 1931064261,
+      "active": false,
+      "first_interaction": "2026-04-07T15:30:20+0000",
+      "created_at": "2026-04-07T15:30:20+0000",
+      "updated_at": "2026-04-07T15:30:20+0000",
+      "customer_type": "",
+      "business_name": "",
+      "trade_name": "",
+      "state_registration": "",
+      "fiscal_regime": "",
+      "invoice_use": "",
+      "document_type": "",
+      "business_activity": "",
+      "accepts_marketing": true,
+      "accepts_marketing_updated_at": "2026-04-07T15:30:20+0000"
+    },
+    "products": [
+      {
+        "id": 3130306020,
+        "depth": "8.00",
+        "height": "8.00",
+        "name": "Pack 3x1 Calzas Linfaticas Modeladoras (Negro, L/XL)",
+        "name_without_variants": "Pack 3x1 Calzas Linfaticas Modeladoras",
+        "price": "85900.00",
+        "compare_at_price": "190000.00",
+        "product_id": 314138041,
+        "image": {
+          "id": 1090525563,
+          "product_id": 314138041,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/img1calza-826770e77765bec36a17690211773099-1024-1024.png",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-01-21T18:46:17+0000",
+          "updated_at": "2026-01-21T18:47:31+0000"
+        },
+        "quantity": 1,
+        "free_shipping": true,
+        "weight": "0.050",
+        "width": "5.00",
+        "variant_id": 1392177342,
+        "variant_values": [
+          "Negro",
+          "L/XL"
+        ],
+        "properties": [],
+        "sku": "CL-1001",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      }
+    ],
+    "number": 23620,
+    "shipping_status": "unpacked",
+    "fulfillments": [
+      {
+        "id": "01KNM91T3475ATSAHM258PPGGB",
+        "number": "1",
+        "assigned_location": {
+          "location_id": "01JEKXK9BV3HHQ9NTJT73M0MF9",
+          "name": "Av. Gobernador Vergara "
+        },
+        "status": "UNPACKED",
+        "shipping": {
+          "type": "ship",
+          "extras": {
+            "shippable": true
+          },
+          "carrier": {
+            "name": "Envío Nube"
+          },
+          "option": {
+            "name": "Envío Nube - Correo Argentino Clásico a domicilio"
+          }
+        },
+        "tracking_info": {
+          "code": "",
+          "url": ""
+        }
+      }
+    ]
+  },
+  {
+    "id": 1941537588,
+    "contact_email": "cintiabetiana1977@gmail.com",
+    "contact_phone": "+543424481199",
+    "subtotal": "85900.00",
+    "total": "85900.00",
+    "created_at": "2026-04-07T15:19:22+0000",
+    "updated_at": "2026-04-07T15:19:27+0000",
+    "payment_status": "paid",
+    "customer": {
+      "id": 265809401,
+      "name": "Cintia Santillan",
+      "email": "cintiabetiana1977@gmail.com",
+      "identification": "25651446",
+      "phone": "+543424481199",
+      "note": null,
+      "default_address": null,
+      "addresses": [],
+      "billing_name": "Cintia",
+      "billing_phone": "+543424481199",
+      "billing_address": "",
+      "billing_number": "",
+      "billing_floor": "",
+      "billing_locality": "",
+      "billing_zipcode": "",
+      "billing_city": "",
+      "billing_province": "",
+      "billing_country": "AR",
+      "extra": {},
+      "total_spent": "0.00",
+      "total_spent_currency": "ARS",
+      "last_order_id": 1941537588,
+      "active": false,
+      "first_interaction": "2026-04-07T15:19:22+0000",
+      "created_at": "2026-04-07T15:19:23+0000",
+      "updated_at": "2026-04-07T15:19:22+0000",
+      "customer_type": "",
+      "business_name": "",
+      "trade_name": "",
+      "state_registration": "",
+      "fiscal_regime": "",
+      "invoice_use": "",
+      "document_type": "",
+      "business_activity": "",
+      "accepts_marketing": false,
+      "accepts_marketing_updated_at": "2026-04-07T15:15:16+0000"
+    },
+    "products": [
+      {
+        "id": 3130271965,
+        "depth": "8.00",
+        "height": "8.00",
+        "name": "Pack 3x1 Calzas Linfaticas Modeladoras (Negro, S/M)",
+        "name_without_variants": "Pack 3x1 Calzas Linfaticas Modeladoras",
+        "price": "85900.00",
+        "compare_at_price": "190000.00",
+        "product_id": 314138041,
+        "image": {
+          "id": 1090525563,
+          "product_id": 314138041,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/img1calza-826770e77765bec36a17690211773099-1024-1024.png",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-01-21T18:46:17+0000",
+          "updated_at": "2026-01-21T18:47:31+0000"
+        },
+        "quantity": 1,
+        "free_shipping": true,
+        "weight": "0.050",
+        "width": "5.00",
+        "variant_id": 1392177340,
+        "variant_values": [
+          "Negro",
+          "S/M"
+        ],
+        "properties": [],
+        "sku": "CL-1000",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      }
+    ],
+    "number": 23619,
+    "shipping_status": "unpacked",
+    "fulfillments": [
+      {
+        "id": "01KNM8DR68QKC6MXTQS386ZWN0",
+        "number": "1",
+        "assigned_location": {
+          "location_id": "01JEKXK9BV3HHQ9NTJT73M0MF9",
+          "name": "Av. Gobernador Vergara "
+        },
+        "status": "UNPACKED",
+        "shipping": {
+          "type": "pickup",
+          "extras": {
+            "shippable": true
+          },
+          "carrier": {
+            "name": "Envío Nube"
+          },
+          "option": {
+            "name": "Envío Nube - Correo Argentino Clásico a sucursal"
+          }
+        },
+        "tracking_info": {
+          "code": "",
+          "url": ""
+        }
+      }
+    ]
+  },
+  {
+    "id": 1941532176,
+    "contact_email": "marucepeda@hotmail.com",
+    "contact_phone": "+541140468217",
+    "subtotal": "85901.00",
+    "total": "85901.00",
+    "created_at": "2026-04-07T15:08:43+0000",
+    "updated_at": "2026-04-07T15:09:24+0000",
+    "payment_status": "paid",
+    "customer": {
+      "id": 265807653,
+      "name": "Maria Cepeda",
+      "email": "marucepeda@hotmail.com",
+      "identification": "27349772405",
+      "phone": "+541140468217",
+      "note": null,
+      "default_address": {
+        "address": "Vicente Casares",
+        "city": "Moron",
+        "country": "AR",
+        "created_at": "2026-04-07T15:08:44+0000",
+        "default": true,
+        "floor": "2",
+        "id": 217303179,
+        "locality": "Haedo",
+        "name": "Maria Cepeda",
+        "number": "573",
+        "phone": "+541140468217",
+        "province": "Buenos Aires",
+        "updated_at": "2026-04-07T15:08:44+0000",
+        "zipcode": "1706"
+      },
+      "addresses": [
+        {
+          "address": "Vicente Casares",
+          "city": "Moron",
+          "country": "AR",
+          "created_at": "2026-04-07T15:08:44+0000",
+          "default": true,
+          "floor": "2",
+          "id": 217303179,
+          "locality": "Haedo",
+          "name": "Maria Cepeda",
+          "number": "573",
+          "phone": "+541140468217",
+          "province": "Buenos Aires",
+          "updated_at": "2026-04-07T15:08:44+0000",
+          "zipcode": "1706"
+        }
+      ],
+      "billing_name": "Maria",
+      "billing_phone": "+541140468217",
+      "billing_address": "Vicente Casares",
+      "billing_number": "573",
+      "billing_floor": "2",
+      "billing_locality": "Haedo",
+      "billing_zipcode": "1706",
+      "billing_city": "Moron",
+      "billing_province": "Buenos Aires",
+      "billing_country": "AR",
+      "extra": {},
+      "total_spent": "0.00",
+      "total_spent_currency": "ARS",
+      "last_order_id": 1941532176,
+      "active": false,
+      "first_interaction": "2026-04-07T15:08:43+0000",
+      "created_at": "2026-04-07T15:08:44+0000",
+      "updated_at": "2026-04-07T15:08:43+0000",
+      "customer_type": "",
+      "business_name": "",
+      "trade_name": "",
+      "state_registration": "",
+      "fiscal_regime": "",
+      "invoice_use": "",
+      "document_type": "",
+      "business_activity": "",
+      "accepts_marketing": false,
+      "accepts_marketing_updated_at": "2026-04-07T15:07:20+0000"
+    },
+    "products": [
+      {
+        "id": 3130254733,
+        "depth": "4.00",
+        "height": "4.00",
+        "name": "REGALO Mes de La Mujer - Corpiño Segunda Piel",
+        "name_without_variants": null,
+        "price": "1.00",
+        "compare_at_price": "100.00",
+        "product_id": 324280727,
+        "image": {
+          "id": 1110737354,
+          "product_id": 324280727,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/fdf_2052-1-9a50ba7433c63052ee17707702225916-1024-1024.jpg",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-02-11T00:37:02+0000",
+          "updated_at": "2026-02-11T00:41:59+0000"
+        },
+        "quantity": 1,
+        "free_shipping": false,
+        "weight": "0.010",
+        "width": "4.00",
+        "variant_id": 1437588732,
+        "variant_values": [],
+        "properties": [],
+        "sku": "C-1004",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      },
+      {
+        "id": 3130253115,
+        "depth": "8.00",
+        "height": "8.00",
+        "name": "Pack 3x1 Calzas Linfaticas Modeladoras (Negro, L/XL)",
+        "name_without_variants": "Pack 3x1 Calzas Linfaticas Modeladoras",
+        "price": "85900.00",
+        "compare_at_price": "190000.00",
+        "product_id": 314138041,
+        "image": {
+          "id": 1090525563,
+          "product_id": 314138041,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/img1calza-826770e77765bec36a17690211773099-1024-1024.png",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-01-21T18:46:17+0000",
+          "updated_at": "2026-01-21T18:47:31+0000"
+        },
+        "quantity": 1,
+        "free_shipping": true,
+        "weight": "0.050",
+        "width": "5.00",
+        "variant_id": 1392177342,
+        "variant_values": [
+          "Negro",
+          "L/XL"
+        ],
+        "properties": [],
+        "sku": "CL-1001",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      }
+    ],
+    "number": 23618,
+    "shipping_status": "unpacked",
+    "fulfillments": [
+      {
+        "id": "01KNM7T7Z1K0D2XHA5J6EM0G3K",
+        "number": "1",
+        "assigned_location": {
+          "location_id": "01JEKXK9BV3HHQ9NTJT73M0MF9",
+          "name": "Av. Gobernador Vergara "
+        },
+        "status": "UNPACKED",
+        "shipping": {
+          "type": "ship",
+          "extras": {
+            "shippable": true
+          },
+          "carrier": {
+            "name": "EnBox Envío Flex GBA 2 (24 - 48 hs) RAPIDO Y SEGURO"
+          },
+          "option": {
+            "name": "EnBox Envío Flex GBA 2 (24 - 48 hs) RAPIDO Y SEGURO"
+          }
+        },
+        "tracking_info": {
+          "code": "",
+          "url": ""
+        }
+      }
+    ]
+  },
+  {
+    "id": 1940987770,
+    "contact_email": "marlu_1522@hotmail.com",
+    "contact_phone": "+542942405299",
+    "subtotal": "85901.00",
+    "total": "85901.00",
+    "created_at": "2026-04-07T14:43:57+0000",
+    "updated_at": "2026-04-07T15:46:39+0000",
+    "payment_status": "paid",
+    "customer": {
+      "id": 211688306,
+      "name": "Marlen Castro",
+      "email": "marlu_1522@hotmail.com",
+      "identification": "36841447",
+      "phone": "+542942405299",
+      "note": null,
+      "default_address": {
+        "address": "La Esmeralda ",
+        "city": "Cipolletti ",
+        "country": "AR",
+        "created_at": "2025-05-22T21:54:00+0000",
+        "default": true,
+        "floor": "General Roca",
+        "id": 167972484,
+        "locality": "Almirante Brown",
+        "name": "Marlen Castro",
+        "number": "1366",
+        "phone": "+542942405299",
+        "province": "Rio Negro",
+        "updated_at": "2026-04-07T14:43:57+0000",
+        "zipcode": "8324"
+      },
+      "addresses": [
+        {
+          "address": "La Esmeralda ",
+          "city": "Cipolletti ",
+          "country": "AR",
+          "created_at": "2025-05-22T21:54:00+0000",
+          "default": true,
+          "floor": "General Roca",
+          "id": 167972484,
+          "locality": "Almirante Brown",
+          "name": "Marlen Castro",
+          "number": "1366",
+          "phone": "+542942405299",
+          "province": "Rio Negro",
+          "updated_at": "2026-04-07T14:43:57+0000",
+          "zipcode": "8324"
+        }
+      ],
+      "billing_name": "Marlen",
+      "billing_phone": "+542942405299",
+      "billing_address": "La Esmeralda",
+      "billing_number": "1366",
+      "billing_floor": "General Roca",
+      "billing_locality": "Almirante Brown",
+      "billing_zipcode": "8324",
+      "billing_city": "Cipolletti",
+      "billing_province": "Rio Negro",
+      "billing_country": "AR",
+      "extra": {},
+      "total_spent": "63900.00",
+      "total_spent_currency": "ARS",
+      "last_order_id": 1940987770,
+      "active": false,
+      "first_interaction": "2026-04-07T14:43:57+0000",
+      "created_at": "2025-05-22T21:54:00+0000",
+      "updated_at": "2026-04-07T14:43:57+0000",
+      "customer_type": "",
+      "business_name": "",
+      "trade_name": "",
+      "state_registration": "",
+      "fiscal_regime": "",
+      "invoice_use": "",
+      "document_type": "",
+      "business_activity": "",
+      "accepts_marketing": true,
+      "accepts_marketing_updated_at": "2026-04-07T15:56:27+0000"
+    },
+    "products": [
+      {
+        "id": 3130196124,
+        "depth": "8.00",
+        "height": "8.00",
+        "name": "Pack 3x1 Calzas Linfaticas Modeladoras (Negro, L/XL)",
+        "name_without_variants": "Pack 3x1 Calzas Linfaticas Modeladoras",
+        "price": "85900.00",
+        "compare_at_price": "190000.00",
+        "product_id": 314138041,
+        "image": {
+          "id": 1090525563,
+          "product_id": 314138041,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/img1calza-826770e77765bec36a17690211773099-1024-1024.png",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-01-21T18:46:17+0000",
+          "updated_at": "2026-01-21T18:47:31+0000"
+        },
+        "quantity": 1,
+        "free_shipping": true,
+        "weight": "0.050",
+        "width": "5.00",
+        "variant_id": 1392177342,
+        "variant_values": [
+          "Negro",
+          "L/XL"
+        ],
+        "properties": [],
+        "sku": "CL-1001",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      },
+      {
+        "id": 3128531654,
+        "depth": "4.00",
+        "height": "4.00",
+        "name": "REGALO Mes de La Mujer - Corpiño Segunda Piel",
+        "name_without_variants": null,
+        "price": "1.00",
+        "compare_at_price": "100.00",
+        "product_id": 324280727,
+        "image": {
+          "id": 1110737354,
+          "product_id": 324280727,
+          "src": "https://acdn-us.mitiendanube.com/stores/005/575/856/products/fdf_2052-1-9a50ba7433c63052ee17707702225916-1024-1024.jpg",
+          "position": 2,
+          "alt": [],
+          "height": 1080,
+          "width": 1080,
+          "thumbnails_generated": 2,
+          "created_at": "2026-02-11T00:37:02+0000",
+          "updated_at": "2026-02-11T00:41:59+0000"
+        },
+        "quantity": 1,
+        "free_shipping": false,
+        "weight": "0.010",
+        "width": "4.00",
+        "variant_id": 1437588732,
+        "variant_values": [],
+        "properties": [],
+        "sku": "C-1004",
+        "barcode": null,
+        "has_promotional_price": true,
+        "promotions": {
+          "percentage_off": 0
+        },
+        "cost": null
+      }
+    ],
+    "number": 23617,
+    "shipping_status": "unpacked",
+    "fulfillments": [
+      {
+        "id": "01KNM6CWRGRDT6K43AFYMXEQCM",
+        "number": "1",
+        "assigned_location": {
+          "location_id": "01JEKXK9BV3HHQ9NTJT73M0MF9",
+          "name": "Av. Gobernador Vergara "
+        },
+        "status": "UNPACKED",
+        "shipping": {
+          "type": "ship",
+          "extras": {
+            "shippable": true
+          },
+          "carrier": {
+            "name": "Envío Nube"
+          },
+          "option": {
+            "name": "Envío Nube - Correo Argentino Clásico a domicilio"
+          }
+        },
+        "tracking_info": {
+          "code": "",
+          "url": ""
+        }
+      }
+    ]
+  }
+]
