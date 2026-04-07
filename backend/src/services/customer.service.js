@@ -1,4 +1,4 @@
-import prisma from '../lib/prisma.js';
+import { prisma } from '../lib/prisma.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 200)));
