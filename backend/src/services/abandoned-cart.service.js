@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { resolveStoreCredentials } from './customer.service.js';
 
@@ -9,11 +8,11 @@ const CHECKOUTS_PER_PAGE = Math.min(
 );
 const FETCH_CONCURRENCY = Math.min(
 	6,
-	Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_CONCURRENCY || 5))
+	Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_CONCURRENCY || 3))
 );
 const MAX_PAGES = Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_MAX_PAGES || 80));
 const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_RETRIES || 3));
-const UPSERT_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 100));
+const UPSERT_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 200));
 const DEFAULT_DAYS_BACK = 7;
 const ALLOWED_WINDOWS = new Set([7, 15, 30]);
 
@@ -50,26 +49,27 @@ function toDecimalOrNull(value) {
 }
 
 function mapAddress(cart) {
-	return [
-		cart?.shipping_address,
-		cart?.shipping_number,
-		cart?.shipping_floor,
-		cart?.shipping_locality,
-	]
+	return [cart?.shipping_address, cart?.shipping_number, cart?.shipping_floor, cart?.shipping_locality]
 		.filter(Boolean)
 		.join(' ')
 		.trim();
 }
 
+function chunkArray(values = [], size = 50) {
+	const chunks = [];
+	for (let index = 0; index < values.length; index += size) {
+		chunks.push(values.slice(index, index + size));
+	}
+	return chunks;
+}
+
 function buildConcurrentPageList(pageStart, maxPage, concurrency) {
 	const pages = [];
-
 	for (let offset = 0; offset < concurrency; offset += 1) {
 		const nextPage = pageStart + offset;
 		if (nextPage > maxPage) break;
 		pages.push(nextPage);
 	}
-
 	return pages;
 }
 
@@ -91,37 +91,19 @@ async function fetchCheckoutsPage({ storeId, accessToken, page }) {
 
 			if (!response.ok) {
 				const text = await response.text();
-
-				if (response.status === 404) {
-					let payload = null;
-
-					try {
-						payload = JSON.parse(text);
-					} catch {
-						payload = null;
-					}
-
-					const description = payload?.description || '';
-					if (description.includes('Last page is')) {
-						return [];
-					}
+				if (response.status === 404 && text.includes('Last page is')) {
+					return [];
 				}
-
 				throw new Error(`checkouts página ${page}: Tiendanube respondió ${response.status} - ${text}`);
 			}
 
 			const payload = await response.json();
-
-			if (!Array.isArray(payload)) {
-				throw new Error('La respuesta de Tiendanube para checkouts no fue una lista.');
-			}
-
+			if (!Array.isArray(payload)) throw new Error('La respuesta de Tiendanube para checkouts no fue una lista.');
 			return payload;
 		} catch (error) {
 			lastError = error;
-
 			if (attempt < FETCH_RETRIES) {
-				await sleep(350 * attempt);
+				await sleep(300 * attempt);
 				continue;
 			}
 		}
@@ -137,12 +119,13 @@ function buildCartPayload(cart, storeId) {
 				productId: product?.product_id ?? null,
 				variantId: product?.variant_id ?? null,
 				name: product?.name || product?.name_without_variants || 'Producto sin nombre',
+				baseName: product?.name_without_variants || product?.name || 'Producto sin nombre',
 				price: product?.price ?? null,
 				quantity: Number(product?.quantity || 1),
 				sku: product?.sku || null,
 				image: product?.image?.src || null,
 				variantValues: Array.isArray(product?.variant_values) ? product.variant_values : [],
-			}))
+		  }))
 		: [];
 
 	return {
@@ -168,45 +151,31 @@ function buildCartPayload(cart, storeId) {
 	};
 }
 
-function chunkArray(values = [], size = 50) {
-	const chunks = [];
-	for (let index = 0; index < values.length; index += size) {
-		chunks.push(values.slice(index, index + size));
-	}
-	return chunks;
-}
+async function replaceCartBatch(carts, storeId) {
+	const checkoutIds = carts.map((cart) => String(cart.id));
+	await prisma.abandonedCart.deleteMany({
+		where: {
+			storeId,
+			checkoutId: { in: checkoutIds },
+		},
+	});
 
-async function upsertCartBatch(carts, storeId) {
-	let syncedCount = 0;
+	const rows = carts.map((cart) => ({
+		checkoutId: String(cart.id),
+		status: 'NEW',
+		...buildCartPayload(cart, storeId),
+	}));
 
-	for (const batch of chunkArray(carts, UPSERT_CHUNK_SIZE)) {
-		await Promise.all(
-			batch.map((cart) => {
-				const data = buildCartPayload(cart, storeId);
-
-				return prisma.abandonedCart.upsert({
-					where: { checkoutId: String(cart.id) },
-					update: data,
-					create: {
-						checkoutId: String(cart.id),
-						status: 'NEW',
-						...data,
-					},
-				});
-			})
-		);
-
-		syncedCount += batch.length;
+	for (const chunk of chunkArray(rows, UPSERT_CHUNK_SIZE)) {
+		if (!chunk.length) continue;
+		await prisma.abandonedCart.createMany({ data: chunk });
 	}
 
-	return syncedCount;
+	return rows.length;
 }
 
 export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
-	const normalizedDaysBack = ALLOWED_WINDOWS.has(Number(daysBack))
-		? Number(daysBack)
-		: DEFAULT_DAYS_BACK;
-
+	const normalizedDaysBack = ALLOWED_WINDOWS.has(Number(daysBack)) ? Number(daysBack) : DEFAULT_DAYS_BACK;
 	const { storeId, accessToken } = await resolveStoreCredentials();
 
 	const startedAt = new Date();
@@ -231,7 +200,6 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		for (const carts of pageResults) {
 			pagesFetched += 1;
 			totalReceived += carts.length;
-
 			if (!carts.length) {
 				stopSync = true;
 				continue;
@@ -239,70 +207,43 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 
 			for (const cart of carts) {
 				const checkoutDate = parseDateOrNull(cart?.created_at);
-
-				if (!checkoutDate) continue;
-
-				if (checkoutDate < cutoff) {
+				if (!checkoutDate || checkoutDate < cutoff) {
 					skippedOldCount += 1;
 					continue;
 				}
 
-				validCarts.push(cart);
 				seenCheckoutIds.add(String(cart.id));
+				validCarts.push(cart);
 			}
 
-			if (carts.length < CHECKOUTS_PER_PAGE) {
-				stopSync = true;
-			}
+			if (carts.length < CHECKOUTS_PER_PAGE) stopSync = true;
 		}
 
 		if (validCarts.length) {
-			syncedCount += await upsertCartBatch(validCarts, storeId);
+			syncedCount += await replaceCartBatch(validCarts, storeId);
 		}
 	}
 
-	const staleWhere = {
-		storeId,
-		OR: [
-			{ checkoutCreatedAt: { lt: cutoff } },
-			{ checkoutCreatedAt: null, updatedAt: { lt: cutoff } },
-		],
-	};
-
-	const deletedOutsideWindow = await prisma.abandonedCart.deleteMany({ where: staleWhere });
-	const deletedMissingFromWindow = seenCheckoutIds.size
-		? await prisma.abandonedCart.deleteMany({
-			where: {
-				storeId,
-				OR: [{ checkoutCreatedAt: { gte: cutoff } }, { checkoutCreatedAt: null }],
-				checkoutId: { notIn: Array.from(seenCheckoutIds) },
-			},
-		})
-		: { count: 0 };
-
-	const remainingCount = await prisma.abandonedCart.count({
+	const deleteResult = await prisma.abandonedCart.deleteMany({
 		where: {
 			storeId,
 			OR: [
-				{ checkoutCreatedAt: { gte: cutoff } },
-				{ checkoutCreatedAt: null },
+				{ checkoutCreatedAt: { lt: cutoff } },
+				seenCheckoutIds.size
+					? { checkoutId: { notIn: [...seenCheckoutIds] } }
+					: { checkoutCreatedAt: { lt: startedAt } },
 			],
 		},
 	});
-
-	const finishedAt = new Date();
 
 	return {
 		ok: true,
 		daysBack: normalizedDaysBack,
 		pagesFetched,
-		receivedCount: totalReceived,
+		totalReceived,
 		syncedCount,
 		skippedOldCount,
-		deletedCount: Number((deletedOutsideWindow?.count || 0) + (deletedMissingFromWindow?.count || 0)),
-		remainingCount,
-		durationMs: finishedAt.getTime() - startedAt.getTime(),
-		startedAt,
-		finishedAt,
+		deletedCount: deleteResult.count,
+		cutoff,
 	};
 }
