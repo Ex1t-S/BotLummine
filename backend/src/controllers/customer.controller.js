@@ -1,9 +1,8 @@
 import { prisma } from '../lib/prisma.js';
 import {
-	getCustomerSyncStatus,
-	runCustomerOrdersSyncInBackground,
+	getCustomerSyncStatus as getCustomerSyncStatusService,
+	syncCustomers as syncCustomersService,
 } from '../services/customer.service.js';
-import { getCustomerSyncStatus, syncCustomers } from '../services/customer.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -26,13 +25,10 @@ function buildCustomersWhere({
 	orderNumber,
 	dateFrom,
 	dateTo,
-	paymentStatus,
-	shippingStatus,
 	minSpent,
 	hasPhoneOnly,
 }) {
 	const where = {};
-
 	const and = [];
 
 	const search = String(q || '').trim();
@@ -103,18 +99,6 @@ function buildCustomersWhere({
 		if (Object.keys(createdAt).length > 0) {
 			and.push({ orderCreatedAt: createdAt });
 		}
-	}
-
-	if (paymentStatus && paymentStatus !== 'all') {
-		and.push({
-			paymentStatus: { equals: paymentStatus, mode: 'insensitive' },
-		});
-	}
-
-	if (shippingStatus && shippingStatus !== 'all') {
-		and.push({
-			shippingStatus: { equals: shippingStatus, mode: 'insensitive' },
-		});
 	}
 
 	if (minSpent !== undefined && minSpent !== null && String(minSpent).trim() !== '') {
@@ -191,8 +175,6 @@ function mapOrderCard(order) {
 		total: order.totalAmount || 0,
 		date: order.orderCreatedAt,
 		updatedAt: order.updatedAt,
-		paymentStatus: order.paymentStatus || '',
-		shippingStatus: order.shippingStatus || '',
 		products,
 		productNames: products.map((item) => item.name),
 	};
@@ -206,8 +188,6 @@ export async function getCustomers(req, res) {
 			orderNumber = '',
 			dateFrom = '',
 			dateTo = '',
-			paymentStatus = 'all',
-			shippingStatus = 'all',
 			minSpent = '',
 			hasPhoneOnly = '',
 			sort = 'recent_desc',
@@ -225,8 +205,6 @@ export async function getCustomers(req, res) {
 			orderNumber,
 			dateFrom,
 			dateTo,
-			paymentStatus,
-			shippingStatus,
 			minSpent,
 			hasPhoneOnly,
 		});
@@ -251,7 +229,6 @@ export async function getCustomers(req, res) {
 				select: {
 					id: true,
 					totalAmount: true,
-					paymentStatus: true,
 					contactPhone: true,
 					contactEmail: true,
 					contactName: true,
@@ -279,12 +256,6 @@ export async function getCustomers(req, res) {
 			}
 		}
 
-		const paidCount = metricsBase.filter((row) =>
-			['paid', 'authorized', 'received'].includes(
-				String(row.paymentStatus || '').toLowerCase()
-			)
-		).length;
-
 		const totalRevenue = metricsBase.reduce(
 			(acc, row) => acc + Number(row.totalAmount || 0),
 			0
@@ -305,7 +276,6 @@ export async function getCustomers(req, res) {
 			metrics: {
 				orders: ordersCount,
 				uniqueCustomers: uniquePhones.size + uniquePeopleFallback.size,
-				paidOrders: paidCount,
 				withPhone: metricsBase.filter((row) => String(row.contactPhone || '').trim()).length,
 				ticketAverage,
 				revenue: totalRevenue,
@@ -323,7 +293,7 @@ export async function getCustomers(req, res) {
 
 export async function syncCustomers(req, res) {
 	try {
-		const result = await runCustomerOrdersSyncInBackground({
+		const result = await syncCustomersService({
 			force: req.body?.force === true,
 		});
 
@@ -343,7 +313,7 @@ export async function syncCustomers(req, res) {
 
 export async function getCustomerSyncStatus(req, res) {
 	try {
-		const status = getCustomerSyncStatus();
+		const status = getCustomerSyncStatusService();
 		return res.json({
 			ok: true,
 			...status,
