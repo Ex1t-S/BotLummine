@@ -21,6 +21,7 @@ import {
 	getCustomers,
 	postRepairCustomers,
 	postSyncCustomers,
+	getCustomersDebugRaw,
 } from '../controllers/customer.controller.js';
 
 const router = Router();
@@ -44,6 +45,7 @@ router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
 router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
 
 router.get('/customers', getCustomers);
+router.get('/customers/debug/raw', getCustomersDebugRaw);
 router.post('/customers/sync', postSyncCustomers);
 router.post('/customers/repair', postRepairCustomers);
 

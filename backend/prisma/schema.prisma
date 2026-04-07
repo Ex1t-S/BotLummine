@@ -209,6 +209,8 @@ model AbandonedCart {
 
   @@index([status, updatedAt])
   @@index([contactPhone])
+  @@index([storeId, checkoutCreatedAt])
+  @@index([storeId, updatedAt])
 }
 
 model CustomerProfile {
@@ -264,6 +266,9 @@ model CustomerProfile {
   @@index([storeId, firstOrderAt])
   @@index([storeId, totalSpent])
   @@index([storeId, lastOrderNumber])
+  @@index([storeId, orderCount])
+  @@index([storeId, normalizedPhone])
+  @@index([storeId, normalizedEmail])
 }
 
 model CustomerOrder {

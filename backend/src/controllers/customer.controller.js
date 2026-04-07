@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { syncCustomers } from '../services/customer.service.js';
+import { fetchCustomersDebugPage, syncCustomers } from '../services/customer.service.js';
 
 function ensureCustomerModels() {
 	if (!prisma?.customerProfile || !prisma?.customerOrder || !prisma?.customerOrderItem) {
@@ -619,6 +619,33 @@ export async function getCustomers(req, res, next) {
 		});
 	} catch (error) {
 		next(error);
+	}
+}
+
+
+export async function getCustomersDebugRaw(req, res) {
+	try {
+		const page = Number(req.query?.page || 1);
+		const perPage = Number(req.query?.perPage || 5);
+		const q = normalizeSearch(req.query?.q || '');
+		const dateFrom = normalizeSearch(req.query?.dateFrom || '');
+		const dateTo = normalizeSearch(req.query?.dateTo || '');
+
+		const result = await fetchCustomersDebugPage({
+			page,
+			perPage,
+			q,
+			dateFrom,
+			dateTo,
+		});
+
+		return res.json(result);
+	} catch (error) {
+		console.error('[CUSTOMERS DEBUG RAW ERROR]', error);
+		return res.status(500).json({
+			ok: false,
+			message: error?.message || 'No se pudo obtener el JSON crudo de clientes',
+		});
 	}
 }
 

@@ -1,3 +1,5 @@
+import pkg from '@prisma/client';
+const { Prisma } = pkg;
 import { prisma } from '../lib/prisma.js';
 import { resolveStoreCredentials } from './customer.service.js';
 
@@ -7,12 +9,12 @@ const CHECKOUTS_PER_PAGE = Math.min(
 	Math.max(20, Number(process.env.TIENDANUBE_ABANDONED_SYNC_PER_PAGE || 200))
 );
 const FETCH_CONCURRENCY = Math.min(
-	6,
-	Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_CONCURRENCY || 5))
+	8,
+	Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_CONCURRENCY || 6))
 );
-const MAX_PAGES = Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_MAX_PAGES || 80));
+const MAX_PAGES = Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_MAX_PAGES || 120));
 const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_RETRIES || 3));
-const UPSERT_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 100));
+const UPSERT_CHUNK_SIZE = Math.max(25, Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 250));
 const DEFAULT_DAYS_BACK = 7;
 const ALLOWED_WINDOWS = new Set([7, 15, 30]);
 
@@ -48,6 +50,14 @@ function toDecimalOrNull(value) {
 	return String(value);
 }
 
+function jsonb(value) {
+	if (value === null || value === undefined) {
+		return Prisma.sql`NULL`;
+	}
+
+	return Prisma.sql`CAST(${JSON.stringify(value)} AS jsonb)`;
+}
+
 function mapAddress(cart) {
 	return [
 		cart?.shipping_address,
@@ -70,6 +80,14 @@ function buildConcurrentPageList(pageStart, maxPage, concurrency) {
 	}
 
 	return pages;
+}
+
+function chunkArray(values = [], size = 50) {
+	const chunks = [];
+	for (let index = 0; index < values.length; index += size) {
+		chunks.push(values.slice(index, index + size));
+	}
+	return chunks;
 }
 
 async function fetchCheckoutsPage({ storeId, accessToken, page }) {
@@ -145,6 +163,7 @@ function buildCartPayload(cart, storeId) {
 		: [];
 
 	return {
+		checkoutId: String(cart?.id),
 		storeId: String(cart?.store_id || storeId),
 		token: cleanString(cart?.token),
 		contactName: cleanString(cart?.contact_name || cart?.shipping_name),
@@ -167,33 +186,83 @@ function buildCartPayload(cart, storeId) {
 	};
 }
 
-function chunkArray(values = [], size = 50) {
-	const chunks = [];
-	for (let index = 0; index < values.length; index += size) {
-		chunks.push(values.slice(index, index + size));
-	}
-	return chunks;
-}
-
 async function upsertCartBatch(carts, storeId) {
 	let syncedCount = 0;
 
 	for (const batch of chunkArray(carts, UPSERT_CHUNK_SIZE)) {
-		await prisma.$transaction(
-			batch.map((cart) => {
-				const data = buildCartPayload(cart, storeId);
+		const payloads = batch.map((cart) => buildCartPayload(cart, storeId));
+		const valuesSql = payloads.map((item) => Prisma.sql`(
+			${item.storeId},
+			${item.checkoutId},
+			${item.token},
+			${item.contactName},
+			${item.contactEmail},
+			${item.contactPhone},
+			${item.abandonedCheckoutUrl},
+			${item.subtotal},
+			${item.totalAmount},
+			${item.currency},
+			${item.gateway},
+			${item.shipping},
+			${item.shippingPickupType},
+			${item.shippingAddress},
+			${item.shippingCity},
+			${item.shippingProvince},
+			${item.shippingZipcode},
+			${jsonb(item.rawPayload)},
+			${jsonb(item.products)},
+			${item.checkoutCreatedAt},
+			${'NEW'}
+		)`);
 
-				return prisma.abandonedCart.upsert({
-					where: { checkoutId: String(cart.id) },
-					update: data,
-					create: {
-						checkoutId: String(cart.id),
-						status: 'NEW',
-						...data,
-					},
-				});
-			})
-		);
+		await prisma.$executeRaw(Prisma.sql`
+			INSERT INTO "AbandonedCart" (
+				"storeId",
+				"checkoutId",
+				"token",
+				"contactName",
+				"contactEmail",
+				"contactPhone",
+				"abandonedCheckoutUrl",
+				"subtotal",
+				"totalAmount",
+				"currency",
+				"gateway",
+				"shipping",
+				"shippingPickupType",
+				"shippingAddress",
+				"shippingCity",
+				"shippingProvince",
+				"shippingZipcode",
+				"rawPayload",
+				"products",
+				"checkoutCreatedAt",
+				"status"
+			)
+			VALUES ${Prisma.join(valuesSql)}
+			ON CONFLICT ("checkoutId")
+			DO UPDATE SET
+				"storeId" = EXCLUDED."storeId",
+				"token" = EXCLUDED."token",
+				"contactName" = EXCLUDED."contactName",
+				"contactEmail" = EXCLUDED."contactEmail",
+				"contactPhone" = EXCLUDED."contactPhone",
+				"abandonedCheckoutUrl" = EXCLUDED."abandonedCheckoutUrl",
+				"subtotal" = EXCLUDED."subtotal",
+				"totalAmount" = EXCLUDED."totalAmount",
+				"currency" = EXCLUDED."currency",
+				"gateway" = EXCLUDED."gateway",
+				"shipping" = EXCLUDED."shipping",
+				"shippingPickupType" = EXCLUDED."shippingPickupType",
+				"shippingAddress" = EXCLUDED."shippingAddress",
+				"shippingCity" = EXCLUDED."shippingCity",
+				"shippingProvince" = EXCLUDED."shippingProvince",
+				"shippingZipcode" = EXCLUDED."shippingZipcode",
+				"rawPayload" = EXCLUDED."rawPayload",
+				"products" = EXCLUDED."products",
+				"checkoutCreatedAt" = EXCLUDED."checkoutCreatedAt",
+				"updatedAt" = NOW()
+		`);
 
 		syncedCount += batch.length;
 	}
@@ -217,6 +286,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 	let syncedCount = 0;
 	let skippedOldCount = 0;
 	let stopSync = false;
+	const syncedCheckoutIds = new Set();
 
 	for (let pageStart = 1; pageStart <= MAX_PAGES && !stopSync; pageStart += FETCH_CONCURRENCY) {
 		const pages = buildConcurrentPageList(pageStart, MAX_PAGES, FETCH_CONCURRENCY);
@@ -249,6 +319,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 				}
 
 				validCarts.push(cart);
+				syncedCheckoutIds.add(String(cart.id));
 			}
 
 			if (carts.length < CHECKOUTS_PER_PAGE || foundOlderInPage) {
@@ -261,8 +332,8 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		}
 	}
 
-	const deleted = await prisma.abandonedCart.deleteMany({
-		where: {
+	const deletionFilters = [
+		{
 			storeId,
 			OR: [
 				{
@@ -277,6 +348,20 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 					},
 				},
 			],
+		},
+	];
+
+	deletionFilters.push({
+		storeId,
+		checkoutCreatedAt: { gte: cutoff },
+		...(syncedCheckoutIds.size
+			? { checkoutId: { notIn: Array.from(syncedCheckoutIds) } }
+			: {}),
+	});
+
+	const deleted = await prisma.abandonedCart.deleteMany({
+		where: {
+			OR: deletionFilters,
 		},
 	});
 

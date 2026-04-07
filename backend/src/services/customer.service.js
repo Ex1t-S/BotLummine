@@ -1,23 +1,25 @@
+import pkg from '@prisma/client';
+const { Prisma, PrismaClientKnownRequestError } = pkg;
 import { prisma } from '../lib/prisma.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CUSTOMERS_PER_PAGE = Math.min(
 	200,
-	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 100))
+	Math.max(50, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_PER_PAGE || 200))
 );
 const ORDERS_PER_PAGE = Math.min(
 	200,
-	Math.max(50, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 100))
+	Math.max(50, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 200))
 );
 const TIENDANUBE_QUERY_RESULT_LIMIT = 10000;
 const ORDER_QUERY_PAGE_LIMIT = Math.max(1, Math.floor(TIENDANUBE_QUERY_RESULT_LIMIT / ORDERS_PER_PAGE));
 const FETCH_CONCURRENCY = Math.min(
-	6,
-	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 2))
+	8,
+	Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_CONCURRENCY || 6))
 );
-const MAX_CUSTOMER_PAGES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_MAX_PAGES || 100));
+const MAX_CUSTOMER_PAGES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_MAX_PAGES || 150));
 const FETCH_RETRIES = Math.max(1, Number(process.env.TIENDANUBE_CUSTOMERS_SYNC_RETRIES || 3));
-const UPDATE_CHUNK_SIZE = Math.max(10, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 50));
+const UPDATE_CHUNK_SIZE = Math.max(25, Number(process.env.TIENDANUBE_CUSTOMERS_UPDATE_CHUNK_SIZE || 250));
 const ORDERS_SYNC_MONTHS_BACK = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_SYNC_MONTHS_BACK || 36));
 
 const syncState = {
@@ -65,18 +67,44 @@ function toDecimalOrNull(value) {
 	return String(value);
 }
 
-function toPositiveInt(value, fallback = 0) {
-	const parsed = Number.parseInt(String(value ?? ''), 10);
-	if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-	return parsed;
-}
-
 function buildHeaders(accessToken) {
 	return {
 		Authentication: `bearer ${accessToken}`,
 		'Content-Type': 'application/json; charset=utf-8',
 		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant',
 	};
+}
+
+function chunkArray(values = [], size = 50) {
+	const chunks = [];
+	for (let index = 0; index < values.length; index += size) {
+		chunks.push(values.slice(index, index + size));
+	}
+	return chunks;
+}
+
+function buildConcurrentPageList(pageStart, maxPage, concurrency) {
+	const pages = [];
+
+	for (let offset = 0; offset < concurrency; offset += 1) {
+		const nextPage = pageStart + offset;
+		if (nextPage > maxPage) break;
+		pages.push(nextPage);
+	}
+
+	return pages;
+}
+
+function jsonb(value) {
+	if (value === null || value === undefined) {
+		return Prisma.sql`NULL`;
+	}
+
+	return Prisma.sql`CAST(${JSON.stringify(value)} AS jsonb)`;
+}
+
+function coalesceUniqueFieldSql(targetColumn, excludedColumn) {
+	return Prisma.raw(`COALESCE("CustomerProfile"."${targetColumn}", EXCLUDED."${excludedColumn}")`);
 }
 
 export async function resolveStoreCredentials() {
@@ -128,22 +156,10 @@ async function fetchJson(url, accessToken, resourceLabel) {
 	throw lastError || new Error(`No se pudo obtener ${resourceLabel} de Tiendanube.`);
 }
 
-function buildConcurrentPageList(pageStart, maxPage, concurrency) {
-	const pages = [];
-
-	for (let offset = 0; offset < concurrency; offset += 1) {
-		const nextPage = pageStart + offset;
-		if (nextPage > maxPage) break;
-		pages.push(nextPage);
-	}
-
-	return pages;
-}
-
-async function fetchCustomersPage({ storeId, accessToken, page, q = '', dateFrom = '', dateTo = '' }) {
+async function fetchCustomersPage({ storeId, accessToken, page, q = '', dateFrom = '', dateTo = '', perPage = CUSTOMERS_PER_PAGE }) {
 	const params = new URLSearchParams({
 		page: String(page),
-		per_page: String(CUSTOMERS_PER_PAGE),
+		per_page: String(Math.min(200, Math.max(1, Number(perPage) || CUSTOMERS_PER_PAGE))),
 	});
 
 	if (q) params.set('q', q);
@@ -209,6 +225,28 @@ async function fetchOrdersPage({
 	}
 
 	return payload;
+}
+
+export async function fetchCustomersDebugPage({ page = 1, q = '', dateFrom = '', dateTo = '', perPage = 5 } = {}) {
+	const { storeId, accessToken } = await resolveStoreCredentials();
+	const items = await fetchCustomersPage({
+		storeId,
+		accessToken,
+		page: Math.max(1, Number(page) || 1),
+		q,
+		dateFrom,
+		dateTo,
+		perPage,
+	});
+
+	return {
+		ok: true,
+		storeId,
+		page: Math.max(1, Number(page) || 1),
+		perPage: Math.min(200, Math.max(1, Number(perPage) || 5)),
+		count: items.length,
+		items,
+	};
 }
 
 function mapCustomerPayload(customer, storeId) {
@@ -349,14 +387,6 @@ function isPaidStatus(value = '') {
 	return ['paid', 'partially_paid'].includes(String(value || '').trim().toLowerCase());
 }
 
-function chunkArray(values = [], size = 50) {
-	const chunks = [];
-	for (let index = 0; index < values.length; index += size) {
-		chunks.push(values.slice(index, index + size));
-	}
-	return chunks;
-}
-
 function buildProfileIndexes(profiles = []) {
 	const byExternalCustomerId = new Map();
 	const byNormalizedEmail = new Map();
@@ -390,6 +420,7 @@ function registerProfileInIndexes(indexes, profile) {
 		indexes.byNormalizedPhone.set(profile.normalizedPhone, profile);
 	}
 }
+
 function buildCustomerProfileDefaults(data) {
 	return {
 		...data,
@@ -470,7 +501,7 @@ async function stripConflictingUniqueFields(storeId, data, currentProfileId = nu
 }
 
 function isUniqueConstraintError(error) {
-	return error?.code === 'P2002';
+	return error instanceof PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
 function mergeProfileDataForUpdate(existing, incoming) {
@@ -595,6 +626,114 @@ async function saveCustomerProfileSafely(storeId, data, indexes = null) {
 
 	return profile;
 }
+
+async function bulkUpsertCustomerProfilesByExternalId(payloads = []) {
+	const rows = payloads.filter((item) => item.externalCustomerId);
+	if (!rows.length) return 0;
+
+	let processed = 0;
+
+	for (const batch of chunkArray(rows, UPDATE_CHUNK_SIZE)) {
+		const valuesSql = batch.map((item) => Prisma.sql`(
+			${item.storeId},
+			${item.externalCustomerId},
+			${item.displayName},
+			${item.email},
+			${item.normalizedEmail},
+			${item.phone},
+			${item.normalizedPhone},
+			${item.identification},
+			${item.note},
+			${item.acceptsMarketing},
+			${item.acceptsMarketingUpdatedAt},
+			${jsonb(item.defaultAddress)},
+			${jsonb(item.addresses)},
+			${item.billingAddress},
+			${item.billingNumber},
+			${item.billingFloor},
+			${item.billingLocality},
+			${item.billingZipcode},
+			${item.billingCity},
+			${item.billingProvince},
+			${item.billingCountry},
+			${item.billingPhone},
+			${item.totalSpent},
+			${item.currency},
+			${item.lastOrderId},
+			${jsonb(item.rawCustomerPayload)},
+			${item.syncedAt}
+		)`);
+
+		try {
+			await prisma.$executeRaw(Prisma.sql`
+				INSERT INTO "CustomerProfile" (
+					"storeId",
+					"externalCustomerId",
+					"displayName",
+					"email",
+					"normalizedEmail",
+					"phone",
+					"normalizedPhone",
+					"identification",
+					"note",
+					"acceptsMarketing",
+					"acceptsMarketingUpdatedAt",
+					"defaultAddress",
+					"addresses",
+					"billingAddress",
+					"billingNumber",
+					"billingFloor",
+					"billingLocality",
+					"billingZipcode",
+					"billingCity",
+					"billingProvince",
+					"billingCountry",
+					"billingPhone",
+					"totalSpent",
+					"currency",
+					"lastOrderId",
+					"rawCustomerPayload",
+					"syncedAt"
+				)
+				VALUES ${Prisma.join(valuesSql)}
+				ON CONFLICT ("storeId", "externalCustomerId")
+				DO UPDATE SET
+					"displayName" = EXCLUDED."displayName",
+					"email" = EXCLUDED."email",
+					"normalizedEmail" = ${coalesceUniqueFieldSql('normalizedEmail', 'normalizedEmail')},
+					"phone" = EXCLUDED."phone",
+					"normalizedPhone" = ${coalesceUniqueFieldSql('normalizedPhone', 'normalizedPhone')},
+					"identification" = EXCLUDED."identification",
+					"note" = EXCLUDED."note",
+					"acceptsMarketing" = EXCLUDED."acceptsMarketing",
+					"acceptsMarketingUpdatedAt" = EXCLUDED."acceptsMarketingUpdatedAt",
+					"defaultAddress" = EXCLUDED."defaultAddress",
+					"addresses" = EXCLUDED."addresses",
+					"billingAddress" = EXCLUDED."billingAddress",
+					"billingNumber" = EXCLUDED."billingNumber",
+					"billingFloor" = EXCLUDED."billingFloor",
+					"billingLocality" = EXCLUDED."billingLocality",
+					"billingZipcode" = EXCLUDED."billingZipcode",
+					"billingCity" = EXCLUDED."billingCity",
+					"billingProvince" = EXCLUDED."billingProvince",
+					"billingCountry" = EXCLUDED."billingCountry",
+					"billingPhone" = EXCLUDED."billingPhone",
+					"rawCustomerPayload" = EXCLUDED."rawCustomerPayload",
+					"syncedAt" = EXCLUDED."syncedAt",
+					"updatedAt" = NOW()
+			`);
+		} catch (error) {
+			for (const item of batch) {
+				await saveCustomerProfileSafely(item.storeId, item);
+			}
+		}
+
+		processed += batch.length;
+	}
+
+	return processed;
+}
+
 async function upsertCustomerProfiles(customers, storeId) {
 	let customersUpserted = 0;
 
@@ -602,7 +741,12 @@ async function upsertCustomerProfiles(customers, storeId) {
 		.map((customer) => mapCustomerPayload(customer, storeId))
 		.filter((item) => item.externalCustomerId || item.normalizedEmail || item.normalizedPhone);
 
-	for (const batch of chunkArray(payloads, UPDATE_CHUNK_SIZE)) {
+	const withExternalId = payloads.filter((item) => item.externalCustomerId);
+	const withoutExternalId = payloads.filter((item) => !item.externalCustomerId);
+
+	customersUpserted += await bulkUpsertCustomerProfilesByExternalId(withExternalId);
+
+	for (const batch of chunkArray(withoutExternalId, UPDATE_CHUNK_SIZE)) {
 		for (const data of batch) {
 			await saveCustomerProfileSafely(storeId, data);
 			customersUpserted += 1;
@@ -661,43 +805,134 @@ async function resolveProfileForOrder(order, storeId, indexes) {
 	return saveCustomerProfileSafely(storeId, payload, indexes);
 }
 
+async function bulkUpsertOrdersReturning(ordersPayloads = []) {
+	if (!ordersPayloads.length) return [];
+
+	const valuesSql = ordersPayloads.map((item) => Prisma.sql`(
+		${item.customerProfileId},
+		${item.storeId},
+		${item.orderId},
+		${item.orderNumber},
+		${item.token},
+		${item.contactName},
+		${item.contactEmail},
+		${item.normalizedEmail},
+		${item.contactPhone},
+		${item.normalizedPhone},
+		${item.contactIdentification},
+		${item.status},
+		${item.paymentStatus},
+		${item.shippingStatus},
+		${item.subtotal},
+		${item.totalAmount},
+		${item.currency},
+		${item.gateway},
+		${item.gatewayId},
+		${item.gatewayName},
+		${item.gatewayLink},
+		${jsonb(item.products)},
+		${jsonb(item.rawPayload)},
+		${item.orderCreatedAt},
+		${item.orderUpdatedAt}
+	)`);
+
+	return prisma.$queryRaw(Prisma.sql`
+		INSERT INTO "CustomerOrder" (
+			"customerProfileId",
+			"storeId",
+			"orderId",
+			"orderNumber",
+			"token",
+			"contactName",
+			"contactEmail",
+			"normalizedEmail",
+			"contactPhone",
+			"normalizedPhone",
+			"contactIdentification",
+			"status",
+			"paymentStatus",
+			"shippingStatus",
+			"subtotal",
+			"totalAmount",
+			"currency",
+			"gateway",
+			"gatewayId",
+			"gatewayName",
+			"gatewayLink",
+			"products",
+			"rawPayload",
+			"orderCreatedAt",
+			"orderUpdatedAt"
+		)
+		VALUES ${Prisma.join(valuesSql)}
+		ON CONFLICT ("storeId", "orderId")
+		DO UPDATE SET
+			"customerProfileId" = EXCLUDED."customerProfileId",
+			"orderNumber" = EXCLUDED."orderNumber",
+			"token" = EXCLUDED."token",
+			"contactName" = EXCLUDED."contactName",
+			"contactEmail" = EXCLUDED."contactEmail",
+			"normalizedEmail" = EXCLUDED."normalizedEmail",
+			"contactPhone" = EXCLUDED."contactPhone",
+			"normalizedPhone" = EXCLUDED."normalizedPhone",
+			"contactIdentification" = EXCLUDED."contactIdentification",
+			"status" = EXCLUDED."status",
+			"paymentStatus" = EXCLUDED."paymentStatus",
+			"shippingStatus" = EXCLUDED."shippingStatus",
+			"subtotal" = EXCLUDED."subtotal",
+			"totalAmount" = EXCLUDED."totalAmount",
+			"currency" = EXCLUDED."currency",
+			"gateway" = EXCLUDED."gateway",
+			"gatewayId" = EXCLUDED."gatewayId",
+			"gatewayName" = EXCLUDED."gatewayName",
+			"gatewayLink" = EXCLUDED."gatewayLink",
+			"products" = EXCLUDED."products",
+			"rawPayload" = EXCLUDED."rawPayload",
+			"orderCreatedAt" = EXCLUDED."orderCreatedAt",
+			"orderUpdatedAt" = EXCLUDED."orderUpdatedAt",
+			"updatedAt" = NOW()
+		RETURNING "id", "customerProfileId", "orderId", "storeId"
+	`);
+}
+
 async function upsertOrdersAndItems(orders, storeId, indexes) {
 	let ordersUpserted = 0;
 	const touchedCustomerProfileIds = new Set();
 
-	for (const order of orders) {
-		const profile = await resolveProfileForOrder(order, storeId, indexes);
-		const customerOrderPayload = mapOrderPayload(order, storeId, profile.id);
+	for (const batch of chunkArray(orders, UPDATE_CHUNK_SIZE)) {
+		const ordersPayloads = [];
 
-		const customerOrder = await prisma.customerOrder.upsert({
-			where: {
-				storeId_orderId: {
-					storeId,
-					orderId: String(order?.id),
-				},
-			},
-			update: customerOrderPayload,
-			create: customerOrderPayload,
-			select: {
-				id: true,
-				customerProfileId: true,
-			},
-		});
+		for (const order of batch) {
+			const profile = await resolveProfileForOrder(order, storeId, indexes);
+			ordersPayloads.push(mapOrderPayload(order, storeId, profile.id));
+			touchedCustomerProfileIds.add(profile.id);
+		}
 
-		const items = buildOrderItems(order, storeId, customerOrder.id, profile.id);
+		const orderRows = await bulkUpsertOrdersReturning(ordersPayloads);
+		const customerOrderIdByOrderId = new Map(
+			orderRows.map((row) => [String(row.orderId), { id: row.id, customerProfileId: row.customerProfileId }])
+		);
 
-		await prisma.customerOrderItem.deleteMany({
-			where: { customerOrderId: customerOrder.id },
-		});
-
-		if (items.length) {
-			await prisma.customerOrderItem.createMany({
-				data: items,
+		const customerOrderIds = orderRows.map((row) => row.id);
+		if (customerOrderIds.length) {
+			await prisma.customerOrderItem.deleteMany({
+				where: { customerOrderId: { in: customerOrderIds } },
 			});
 		}
 
-		touchedCustomerProfileIds.add(profile.id);
-		ordersUpserted += 1;
+		const items = [];
+		for (const order of batch) {
+			const linked = customerOrderIdByOrderId.get(String(order?.id));
+			if (!linked) continue;
+			items.push(...buildOrderItems(order, storeId, linked.id, linked.customerProfileId));
+		}
+
+		for (const itemsBatch of chunkArray(items, UPDATE_CHUNK_SIZE * 4)) {
+			if (!itemsBatch.length) continue;
+			await prisma.customerOrderItem.createMany({ data: itemsBatch });
+		}
+
+		ordersUpserted += batch.length;
 	}
 
 	return {
@@ -903,8 +1138,7 @@ async function fetchAndUpsertOrders({
 			const flatOrders = [];
 			let shouldStopWindow = false;
 
-			for (let index = 0; index < pageResults.length; index += 1) {
-				const pageData = pageResults[index];
+			for (const pageData of pageResults) {
 				pagesFetched += 1;
 				ordersFetched += pageData.length;
 				flatOrders.push(...pageData);
@@ -1023,6 +1257,7 @@ export async function syncCustomers({ q = '', dateFrom = '', dateTo = '' } = {})
 		await prisma.customerSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
+				storeId,
 				status: 'SUCCESS',
 				finishedAt: new Date(),
 				pagesFetched: result.pagesFetched,
