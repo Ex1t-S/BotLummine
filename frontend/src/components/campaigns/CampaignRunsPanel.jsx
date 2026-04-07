@@ -1,212 +1,234 @@
 function formatDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('es-AR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date);
+	if (!value) return '—';
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return '—';
+	return new Intl.DateTimeFormat('es-AR', {
+		dateStyle: 'short',
+		timeStyle: 'short',
+	}).format(date);
 }
 
 function badgeClass(value = '') {
-  return `campaign-badge ${String(value).toLowerCase()}`;
+	return `campaign-badge ${String(value).toLowerCase()}`;
 }
 
 function getMetric(campaign = {}, keys = []) {
-  for (const key of keys) {
-    if (campaign?.[key] !== undefined && campaign?.[key] !== null) {
-      return campaign[key];
-    }
-  }
+	for (const key of keys) {
+		if (campaign?.[key] !== undefined && campaign?.[key] !== null) {
+			return campaign[key];
+		}
+	}
 
-  return 0;
+	return 0;
+}
+
+function getStatusTone(status = '') {
+	const normalized = String(status || '').toUpperCase();
+	if (['RUNNING', 'QUEUED', 'ACTIVE'].includes(normalized)) return 'En marcha';
+	if (['PAUSED'].includes(normalized)) return 'Pausada';
+	if (['COMPLETED', 'SENT'].includes(normalized)) return 'Finalizada';
+	return 'Borrador';
 }
 
 export default function CampaignRunsPanel({
-  campaigns = [],
-  selectedCampaign,
-  onSelectCampaign,
-  onDispatch,
-  onPause,
-  onResume,
-  onDelete,
-  actionLoading,
-  deleteLoading,
+	campaigns = [],
+	selectedCampaign,
+	onSelectCampaign,
+	onDispatch,
+	onPause,
+	onResume,
+	onDelete,
+	actionLoading,
+	deleteLoading,
 }) {
-  const recipients = selectedCampaign?.recipients || [];
-  const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
-  const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
-  const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
+	const recipients = selectedCampaign?.recipients || [];
+	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
+	const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
+	const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
+	const totalCampaignRecipients = campaigns.reduce(
+		(total, campaign) => total + Number(getMetric(campaign, ['totalRecipients', 'recipientCount'])),
+		0
+	);
 
-  return (
-    <section className="campaign-panel">
-      <div className="campaign-panel-header">
-        <div>
-          <h3>Campañas creadas</h3>
-          <p>Seguimiento de borradores, campañas en cola y resultados de envío.</p>
-        </div>
-      </div>
+	return (
+		<section className="campaign-panel campaign-panel--soft">
+			<div className="campaign-panel-header">
+				<div>
+					<h3>Historial de campañas</h3>
+					<p>
+						Seguí borradores, campañas activas y resultados desde una vista más fácil de leer
+						para operación diaria.
+					</p>
+				</div>
+			</div>
 
-      <div className="campaign-runs-grid">
-        <div className="campaign-list compact">
-          {campaigns.length === 0 ? (
-            <div className="campaign-empty-state">
-              <strong>Todavía no hay campañas.</strong>
-              <p>Creá una y te va a aparecer acá con sus métricas.</p>
-            </div>
-          ) : (
-            campaigns.map((campaign) => {
-              const isSelected = selectedCampaign?.id === campaign.id;
-              return (
-                <article
-                  key={campaign.id}
-                  className={`campaign-list-card${isSelected ? ' selected' : ''}`}
-                  onClick={() => onSelectCampaign(campaign)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onSelectCampaign(campaign);
-                    }
-                  }}
-                >
-                  <div className="campaign-list-card-top">
-                    <div>
-                      <strong>{campaign.name}</strong>
-                      <p>{campaign.templateName || campaign.template?.name || 'Sin template asociado'}</p>
-                    </div>
-                    <span className={badgeClass(campaign.status)}>{campaign.status || 'DRAFT'}</span>
-                  </div>
+			<div className="campaign-inline-summary">
+				<div className="campaign-inline-summary-item">
+					<strong>{campaigns.length}</strong>
+					<span>campañas registradas</span>
+				</div>
+				<div className="campaign-inline-summary-item">
+					<strong>{totalCampaignRecipients}</strong>
+					<span>destinatarios sumados</span>
+				</div>
+				<div className="campaign-inline-summary-item">
+					<strong>{selectedCampaign ? getStatusTone(selectedCampaign.status) : '—'}</strong>
+					<span>estado actual seleccionado</span>
+				</div>
+			</div>
 
-                  <div className="campaign-inline-stats">
-                    <span>{getMetric(campaign, ['totalRecipients', 'recipientCount'])} destinatarios</span>
-                    <span>Creada {formatDate(campaign.createdAt)}</span>
-                  </div>
-                </article>
-              );
-            })
-          )}
-        </div>
+			<div className="campaign-runs-grid campaign-runs-grid--balanced">
+				<div className="campaign-list compact campaign-list--airy">
+					{campaigns.length === 0 ? (
+						<div className="campaign-empty-state">
+							<strong>Todavía no hay campañas.</strong>
+							<p>Creá una y te va a aparecer acá con sus métricas.</p>
+						</div>
+					) : (
+						campaigns.map((campaign) => {
+							const isSelected = selectedCampaign?.id === campaign.id;
+							return (
+								<article
+									key={campaign.id}
+									className={`campaign-list-card campaign-list-card--run${isSelected ? ' selected' : ''}`}
+									onClick={() => onSelectCampaign(campaign)}
+									role="button"
+									tabIndex={0}
+									onKeyDown={(event) => {
+										if (event.key === 'Enter' || event.key === ' ') {
+											event.preventDefault();
+											onSelectCampaign(campaign);
+										}
+									}}
+								>
+									<div className="campaign-list-card-top">
+										<div>
+											<strong>{campaign.name}</strong>
+											<p>{campaign.templateName || campaign.template?.name || 'Sin template asociado'}</p>
+										</div>
+										<span className={badgeClass(campaign.status)}>{campaign.status || 'DRAFT'}</span>
+									</div>
 
-        <div className="campaign-detail-box">
-          {selectedCampaign ? (
-            <>
-              <div className="campaign-detail-header">
-                <div>
-                  <h4>{selectedCampaign.name}</h4>
-                  <p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripción.'}</p>
-                </div>
-                <span className={badgeClass(selectedCampaign.status)}>{selectedCampaign.status || 'DRAFT'}</span>
-              </div>
+									<div className="campaign-inline-stats campaign-inline-stats--stack-mobile">
+										<span>{getMetric(campaign, ['totalRecipients', 'recipientCount'])} destinatarios</span>
+										<span>{getStatusTone(campaign.status)}</span>
+										<span>Creada {formatDate(campaign.createdAt)}</span>
+									</div>
+								</article>
+							);
+						})
+					)}
+				</div>
 
-              <div
-                className="campaign-detail-actions"
-                style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}
-              >
-                <button
-                  className="button primary"
-                  onClick={() => onDispatch(selectedCampaign.id)}
-                  disabled={actionLoading}
-                >
-                  Despachar
-                </button>
-                <button
-                  className="button secondary"
-                  onClick={() => onPause(selectedCampaign.id)}
-                  disabled={actionLoading}
-                >
-                  Pausar
-                </button>
-                <button
-                  className="button ghost"
-                  onClick={() => onResume(selectedCampaign.id)}
-                  disabled={actionLoading}
-                >
-                  Reanudar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete(selectedCampaign)}
-                  disabled={!canDelete || actionLoading || deleteBusy}
-                  style={{
-                    height: 42,
-                    padding: '0 14px',
-                    borderRadius: 12,
-                    border: '1px solid #fecaca',
-                    background: canDelete ? '#fff1f2' : '#f8fafc',
-                    color: canDelete ? '#be123c' : '#94a3b8',
-                    fontWeight: 800,
-                    cursor: !canDelete || actionLoading || deleteBusy ? 'not-allowed' : 'pointer',
-                  }}
-                  title={
-                    canDelete
-                      ? 'Eliminar campaña'
-                      : 'No se puede eliminar una campaña en ejecución o en cola'
-                  }
-                >
-                  {deleteBusy ? 'Eliminando…' : 'Eliminar campaña'}
-                </button>
-              </div>
+				<div className="campaign-detail-box campaign-detail-box--elevated">
+					{selectedCampaign ? (
+						<>
+							<div className="campaign-detail-header">
+								<div>
+									<h4>{selectedCampaign.name}</h4>
+									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripción.'}</p>
+								</div>
+								<span className={badgeClass(selectedCampaign.status)}>{selectedCampaign.status || 'DRAFT'}</span>
+							</div>
 
-              <div className="campaign-status-grid">
-                <div>
-                  <strong>{getMetric(selectedCampaign, ['sentRecipients', 'sentCount'])}</strong>
-                  <span>Enviados</span>
-                </div>
-                <div>
-                  <strong>{getMetric(selectedCampaign, ['deliveredRecipients', 'deliveredCount'])}</strong>
-                  <span>Entregados</span>
-                </div>
-                <div>
-                  <strong>{getMetric(selectedCampaign, ['readRecipients', 'readCount'])}</strong>
-                  <span>Leídos</span>
-                </div>
-                <div>
-                  <strong>{getMetric(selectedCampaign, ['failedRecipients', 'failedCount'])}</strong>
-                  <span>Fallidos</span>
-                </div>
-              </div>
+							<div className="campaign-detail-meta-grid">
+								<div className="campaign-detail-meta-card">
+									<span>Template</span>
+									<strong>{selectedCampaign.templateName || selectedCampaign.template?.name || 'Sin template'}</strong>
+								</div>
+								<div className="campaign-detail-meta-card">
+									<span>Destinatarios</span>
+									<strong>{getMetric(selectedCampaign, ['totalRecipients', 'recipientCount'])}</strong>
+								</div>
+								<div className="campaign-detail-meta-card">
+									<span>Creación</span>
+									<strong>{formatDate(selectedCampaign.createdAt)}</strong>
+								</div>
+							</div>
 
-              <div className="campaign-recipient-table-wrapper">
-                <table className="campaign-table">
-                  <thead>
-                    <tr>
-                      <th>Teléfono</th>
-                      <th>Nombre</th>
-                      <th>Estado</th>
-                      <th>Último evento</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recipients.length ? (
-                      recipients.map((recipient) => (
-                        <tr key={recipient.id || recipient.phone}>
-                          <td>{recipient.phone || recipient.waId || '—'}</td>
-                          <td>{recipient.firstName || recipient.contactName || '—'}</td>
-                          <td>
-                            <span className={badgeClass(recipient.status)}>{recipient.status || 'PENDING'}</span>
-                          </td>
-                          <td>{formatDate(recipient.lastEventAt || recipient.updatedAt)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="4">Sin destinatarios cargados.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <div className="campaign-empty-state sticky">
-              <strong>Seleccioná una campaña.</strong>
-              <p>Acá vas a ver el detalle, los destinatarios y las métricas reales.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
+							<div className="campaign-detail-actions campaign-detail-actions--spaced">
+								<button
+									className="button primary"
+									onClick={() => onDispatch(selectedCampaign.id)}
+									disabled={actionLoading}
+								>
+									Despachar
+								</button>
+								<button
+									className="button secondary"
+									onClick={() => onPause(selectedCampaign.id)}
+									disabled={actionLoading}
+								>
+									Pausar
+								</button>
+								<button
+									className="button ghost"
+									onClick={() => onResume(selectedCampaign.id)}
+									disabled={actionLoading}
+								>
+									Reanudar
+								</button>
+								<button
+									type="button"
+									className="button danger"
+									onClick={() => onDelete(selectedCampaign)}
+									disabled={!canDelete || deleteBusy}
+									title={
+										canDelete
+											? 'Eliminar campaña'
+											: 'No se puede eliminar una campaña en cola o en ejecución'
+									}
+								>
+									{deleteBusy ? 'Eliminando…' : 'Eliminar'}
+								</button>
+							</div>
+
+							<div className="campaign-detail-metrics">
+								<div>
+									<span>Total</span>
+									<strong>{getMetric(selectedCampaign, ['totalRecipients', 'recipientCount'])}</strong>
+								</div>
+								<div>
+									<span>Enviados</span>
+									<strong>{getMetric(selectedCampaign, ['sentCount'])}</strong>
+								</div>
+								<div>
+									<span>Fallidos</span>
+									<strong>{getMetric(selectedCampaign, ['failedCount'])}</strong>
+								</div>
+								<div>
+									<span>Pendientes</span>
+									<strong>{getMetric(selectedCampaign, ['pendingCount'])}</strong>
+								</div>
+							</div>
+
+							<div className="campaign-recipient-list">
+								<div className="campaign-recipient-list-title">Vista rápida de destinatarios</div>
+								{recipients.length ? (
+									recipients.slice(0, 8).map((recipient) => (
+										<div key={recipient.id || recipient.phone} className="campaign-recipient-row">
+											<div>
+												<strong>{recipient.contactName || recipient.phone || 'Sin nombre'}</strong>
+												<span>{recipient.phone || 'Sin teléfono'}</span>
+											</div>
+											<span className={badgeClass(recipient.status)}>{recipient.status || 'PENDING'}</span>
+										</div>
+									))
+								) : (
+									<div className="campaign-empty-state compact">
+										<p>Esta campaña todavía no tiene detalle de destinatarios para mostrar.</p>
+									</div>
+								)}
+							</div>
+						</>
+					) : (
+						<div className="campaign-empty-state">
+							<strong>Elegí una campaña.</strong>
+							<p>Acá vas a ver el detalle, los estados y las acciones disponibles.</p>
+						</div>
+					)}
+				</div>
+			</div>
+		</section>
+	);
 }

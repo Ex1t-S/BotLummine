@@ -567,3 +567,128 @@
 		align-items: flex-start;
 	}
 }
+
+
+.customers-sync-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.96));
+  border: 1px solid rgba(148,163,184,0.2);
+  border-radius: 24px;
+  box-shadow: 0 14px 34px rgba(15,23,42,0.05);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.customers-sync-panel.is-running {
+  border-color: rgba(59,130,246,0.3);
+  box-shadow: 0 18px 40px rgba(37,99,235,0.08);
+}
+
+.customers-sync-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.customers-sync-top h3 {
+  margin: 6px 0 6px;
+  color: #0f172a;
+}
+
+.customers-sync-top p,
+.customers-sync-window {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.customers-sync-kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: #0f766e;
+  background: rgba(20,184,166,0.12);
+}
+
+.customers-sync-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 280px;
+}
+
+.customers-sync-stats div {
+  background: #f8fafc;
+  border: 1px solid rgba(148,163,184,0.18);
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.customers-sync-stats span {
+  color: #64748b;
+  font-size: .86rem;
+}
+
+.customers-sync-stats strong {
+  color: #0f172a;
+  font-size: 1.25rem;
+}
+
+.customers-progress-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.customers-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #14b8a6);
+  transition: width .4s ease;
+}
+
+.customers-sync-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customers-sync-note {
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 700;
+}
+
+.customers-sync-note--warning {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid rgba(245,158,11,.22);
+}
+
+.customers-sync-note--error {
+  color: #b91c1c;
+  background: #fff5f5;
+  border: 1px solid rgba(239,68,68,.24);
+}
+
+@media (max-width: 1100px) {
+  .customers-sync-top {
+    flex-direction: column;
+  }
+
+  .customers-sync-stats {
+    width: 100%;
+    min-width: 0;
+  }
+}

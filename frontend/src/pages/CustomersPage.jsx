@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../lib/api.js';
 import './CustomersPage.css';
 
 const DEFAULT_PAGE_SIZE = 24;
+const POLL_MS = 3500;
 
 const initialFilters = {
   q: '',
@@ -17,6 +18,20 @@ const initialFilters = {
   sort: 'purchase_desc',
   page: 1,
   pageSize: DEFAULT_PAGE_SIZE,
+};
+
+const initialSyncStatus = {
+  running: false,
+  phase: 'idle',
+  message: '',
+  pagesFetched: 0,
+  ordersFetched: 0,
+  ordersUpserted: 0,
+  itemsUpserted: 0,
+  warnings: [],
+  errors: [],
+  hasMoreHistory: false,
+  activeWindow: null,
 };
 
 function formatCurrency(value, currency = 'ARS') {
@@ -59,19 +74,14 @@ function normalizeStats(data = {}) {
 }
 
 function buildVisiblePages(currentPage, totalPages) {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
   const pages = [1];
   const start = Math.max(2, currentPage - 1);
   const end = Math.min(totalPages - 1, currentPage + 1);
-
   if (start > 2) pages.push('left-ellipsis');
   for (let page = start; page <= end; page += 1) pages.push(page);
   if (end < totalPages - 1) pages.push('right-ellipsis');
   pages.push(totalPages);
-
   return pages;
 }
 
@@ -92,30 +102,19 @@ function normalizeRequestFilters(filters) {
   };
 }
 
-function formatDurationMs(value) {
-  const totalMs = Number(value || 0);
-  if (!Number.isFinite(totalMs) || totalMs <= 0) return '0s';
-
-  const totalSeconds = Math.floor(totalMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+function formatDuration(startedAt) {
+  if (!startedAt) return '0s';
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes > 0 ? `${minutes}m ${rest}s` : `${rest}s`;
 }
 
-function buildSyncMessage(payload = {}) {
-  const pagesFetched = Number(payload.pagesFetched || 0);
-  const ordersFetched = Number(payload.ordersFetched || 0);
-  const ordersUpserted = Number(payload.ordersUpserted || 0);
-  const itemsUpserted = Number(payload.itemsUpserted || 0);
-  const localOrdersAfter = Number(payload.localOrdersAfter || 0);
-  const durationLabel = formatDurationMs(payload.durationMs || 0);
-  const historicalLabel = payload.hasMoreHistory
-    ? 'Todavía quedan páginas históricas pendientes.'
-    : 'No quedan más páginas históricas pendientes.';
-
-  return `Sync lista · páginas ${pagesFetched} · pedidos leídos ${ordersFetched} · pedidos guardados ${ordersUpserted} · ítems guardados ${itemsUpserted} · total local ${localOrdersAfter} · duración ${durationLabel}. ${historicalLabel}`;
+function buildSyncBadgeLabel(syncStatus) {
+  if (syncStatus.running) return 'Sincronizando en vivo';
+  if (syncStatus.errors?.length) return 'Sync con errores';
+  if (syncStatus.hasMoreHistory) return 'Histórico pendiente';
+  return 'Listo';
 }
 
 export default function CustomersPage() {
@@ -128,43 +127,70 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [syncMessage, setSyncMessage] = useState('');
+  const [syncStatus, setSyncStatus] = useState(initialSyncStatus);
+  const pollRef = useRef(null);
 
   const normalizedStats = useMemo(() => normalizeStats(data), [data]);
   const currentPage = Number(data.pagination?.page || 1);
   const totalPages = Number(data.pagination?.totalPages || 1);
   const visiblePages = useMemo(() => buildVisiblePages(currentPage, totalPages), [currentPage, totalPages]);
 
-  async function loadOrders(nextFilters = filters) {
-    setLoading(true);
-    setErrorMessage('');
-
+  async function loadOrders(nextFilters = filters, { silent = false } = {}) {
+    if (!silent) setLoading(true);
     try {
-      const response = await api.get('/dashboard/customers', {
-        params: normalizeRequestFilters(nextFilters),
-      });
-
+      const response = await api.get('/dashboard/customers', { params: normalizeRequestFilters(nextFilters) });
       setData({
         customers: Array.isArray(response.data?.customers) ? response.data.customers : [],
         stats: response.data?.stats || {},
-        pagination:
-          response.data?.pagination || {
-            page: 1,
-            totalPages: 1,
-            totalItems: 0,
-            pageSize: DEFAULT_PAGE_SIZE,
-          },
+        pagination: response.data?.pagination || { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
       });
+      if (response.data?.syncStatus) {
+        setSyncStatus((prev) => ({ ...prev, ...response.data.syncStatus }));
+        setSyncing(Boolean(response.data.syncStatus?.running));
+      }
     } catch (error) {
       console.error(error);
       setErrorMessage(error?.response?.data?.message || 'No se pudieron cargar las compras.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  }
+
+  async function loadSyncStatus() {
+    try {
+      const response = await api.get('/dashboard/customers/sync-status');
+      const status = response.data || initialSyncStatus;
+      setSyncStatus(status);
+      setSyncing(Boolean(status.running));
+      return status;
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
+  }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      const status = await loadSyncStatus();
+      await loadOrders(filters, { silent: true });
+      if (status && !status.running) stopPolling();
+    }, POLL_MS);
   }
 
   useEffect(() => {
     loadOrders(initialFilters);
+    loadSyncStatus().then((status) => {
+      if (status?.running) startPolling();
+    });
+    return () => stopPolling();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -182,27 +208,20 @@ export default function CustomersPage() {
   async function handleResetFilters() {
     setFilters(initialFilters);
     setErrorMessage('');
-    setSyncMessage('');
     await loadOrders(initialFilters);
   }
 
   async function handleSync() {
-    setSyncing(true);
     setErrorMessage('');
-    setSyncMessage('');
-
     try {
       const response = await api.post('/dashboard/customers/sync', {});
-      setSyncMessage(buildSyncMessage(response.data));
-      await loadOrders({ ...filters, page: 1 });
+      const status = response.data || initialSyncStatus;
+      setSyncStatus(status);
+      setSyncing(true);
+      startPolling();
     } catch (error) {
       console.error(error);
-      setErrorMessage(
-        error?.response?.data?.message ||
-          'No se pudo sincronizar pedidos. Revisá credenciales de Tiendanube o la base de datos.'
-      );
-    } finally {
-      setSyncing(false);
+      setErrorMessage(error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.');
     }
   }
 
@@ -220,24 +239,65 @@ export default function CustomersPage() {
           <span className="customers-kicker">VENTAS REALES</span>
           <h1>Clientes y compras</h1>
           <p>
-            Esta vista ahora se arma desde pedidos reales de Tiendanube. El foco ya no es un CRM
-            inflado, sino ver rápido quién compró, cuánto gastó y qué producto se llevó.
+            Vista comercial basada en pedidos reales. Vas viendo resultados mientras la sync avanza,
+            sin dejar la pantalla colgada ni depender de recargar manualmente.
           </p>
         </div>
 
         <div className="customers-hero-actions">
           <button type="button" className="primary-action-btn" onClick={handleSync} disabled={syncing}>
-            {syncing ? 'Sincronizando...' : 'Sincronizar pedidos'}
+            {syncing ? 'Sincronizando pedidos...' : 'Sincronizar pedidos'}
           </button>
-
-          <button type="button" className="secondary-link-btn" onClick={handleResetFilters}>
+          <button type="button" className="secondary-link-btn" onClick={handleResetFilters} disabled={syncing && loading}>
             Limpiar filtros
           </button>
         </div>
       </div>
 
       {errorMessage ? <div className="customers-feedback customers-feedback--error">{errorMessage}</div> : null}
-      {syncMessage ? <div className="customers-feedback customers-feedback--success">{syncMessage}</div> : null}
+
+      <div className={`customers-sync-panel ${syncStatus.running ? 'is-running' : ''}`}>
+        <div className="customers-sync-top">
+          <div>
+            <span className="customers-sync-kicker">{buildSyncBadgeLabel(syncStatus)}</span>
+            <h3>{syncStatus.message || 'Todavía no corriste una sincronización.'}</h3>
+            <p>
+              {syncStatus.running
+                ? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} · páginas ${syncStatus.pagesFetched} · pedidos leídos ${syncStatus.ordersFetched} · pedidos guardados ${syncStatus.ordersUpserted}.`
+                : syncStatus.finishedAt
+                  ? `Última finalización ${formatDateTime(syncStatus.finishedAt)}.`
+                  : 'Cuando empiece la sync, acá vas a ver el progreso en vivo.'}
+            </p>
+          </div>
+          <div className="customers-sync-stats">
+            <div><span>Páginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
+            <div><span>Pedidos</span><strong>{syncStatus.ordersFetched || 0}</strong></div>
+            <div><span>Ítems</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
+          </div>
+        </div>
+        <div className="customers-progress-track">
+          <div className="customers-progress-bar" style={{ width: syncStatus.running ? '58%' : syncStatus.ordersFetched ? '100%' : '0%' }} />
+        </div>
+        {syncStatus.activeWindow ? (
+          <p className="customers-sync-window">
+            Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> · {formatDateTime(syncStatus.activeWindow.from)} → {formatDateTime(syncStatus.activeWindow.to)}
+          </p>
+        ) : null}
+        {syncStatus.warnings?.length ? (
+          <div className="customers-sync-notes">
+            {syncStatus.warnings.slice(-2).map((warning) => (
+              <div key={`${warning.at}-${warning.message}`} className="customers-sync-note customers-sync-note--warning">{warning.message}</div>
+            ))}
+          </div>
+        ) : null}
+        {syncStatus.errors?.length ? (
+          <div className="customers-sync-notes">
+            {syncStatus.errors.slice(-2).map((item) => (
+              <div key={`${item.at}-${item.message}`} className="customers-sync-note customers-sync-note--error">{item.message}</div>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div className="customers-stats-grid">
         <div className="customers-stat-card"><span className="customers-stat-label">Pedidos</span><strong>{normalizedStats.totalOrders}</strong></div>
@@ -252,36 +312,31 @@ export default function CustomersPage() {
         <div className="customers-filters-header">
           <div>
             <h3>Filtros comerciales</h3>
-            <p>Buscá por cliente, pedido o producto usando compras reales.</p>
+            <p>Buscá por nombre, teléfono, producto, número de pedido o estado sin depender del CRM viejo.</p>
           </div>
         </div>
 
         <div className="customers-filter-grid">
           <div className="customers-filter-group customers-filter-group--grow">
-            <label htmlFor="customers-q">Buscar</label>
+            <label htmlFor="customers-q">Buscar general</label>
             <input id="customers-q" type="text" value={filters.q} onChange={(e) => updateFilter('q', e.target.value)} placeholder="Nombre, email, teléfono, SKU o nro. de pedido" />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-product">Producto comprado</label>
-            <input id="customers-product" type="text" value={filters.productQuery} onChange={(e) => updateFilter('productQuery', e.target.value)} placeholder="Body, calza, pack 3x1..." />
+            <input id="customers-product" type="text" value={filters.productQuery} onChange={(e) => updateFilter('productQuery', e.target.value)} placeholder="Body, calza, pack 3x1, negro, xl..." />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-order-number">N° pedido</label>
             <input id="customers-order-number" type="text" value={filters.orderNumber} onChange={(e) => updateFilter('orderNumber', e.target.value)} placeholder="Ej: 23621" />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-date-from">Compra desde</label>
             <input id="customers-date-from" type="date" value={filters.dateFrom} onChange={(e) => updateFilter('dateFrom', e.target.value)} />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-date-to">Compra hasta</label>
             <input id="customers-date-to" type="date" value={filters.dateTo} onChange={(e) => updateFilter('dateTo', e.target.value)} />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-payment-status">Pago</label>
             <select id="customers-payment-status" value={filters.paymentStatus} onChange={(e) => updateFilter('paymentStatus', e.target.value)}>
@@ -293,7 +348,6 @@ export default function CustomersPage() {
               <option value="voided">Anulado</option>
             </select>
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-shipping-status">Envío</label>
             <select id="customers-shipping-status" value={filters.shippingStatus} onChange={(e) => updateFilter('shippingStatus', e.target.value)}>
@@ -303,12 +357,10 @@ export default function CustomersPage() {
               <option value="unfulfilled">No enviado</option>
             </select>
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-min-spent">Total mínimo</label>
             <input id="customers-min-spent" type="number" min="0" step="1" value={filters.minSpent} onChange={(e) => updateFilter('minSpent', e.target.value)} placeholder="50000" />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-sort">Ordenar por</label>
             <select id="customers-sort" value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)}>
@@ -331,7 +383,6 @@ export default function CustomersPage() {
               <span>Solo con teléfono</span>
             </label>
           </div>
-
           <div className="customers-filter-actions">
             <button type="submit" className="secondary-link-btn customers-apply-btn">Aplicar filtros</button>
           </div>
@@ -347,10 +398,7 @@ export default function CustomersPage() {
         </div>
 
         {loading ? <div className="customers-empty-state">Cargando compras...</div> : null}
-
-        {!loading && !data.customers?.length ? (
-          <div className="customers-empty-state">No hay compras para esos filtros. Probá ampliar la búsqueda o correr una sync.</div>
-        ) : null}
+        {!loading && !data.customers?.length ? <div className="customers-empty-state">No hay compras para esos filtros. Probá ampliar la búsqueda o dejar que la sync avance un poco más.</div> : null}
 
         {!loading && data.customers?.length ? (
           <div className="customers-grid">
@@ -365,7 +413,6 @@ export default function CustomersPage() {
                       {customer.email ? <p>{customer.email}</p> : null}
                     </div>
                   </div>
-
                   <div className="customer-order-badge">
                     <span>Pedido</span>
                     <strong>{customer.lastOrderLabel || '-'}</strong>
@@ -384,15 +431,14 @@ export default function CustomersPage() {
                     <span>Productos comprados</span>
                     <strong>{customer.totalUnitsPurchased || 0} unidades</strong>
                   </div>
-
-                  {customer.lastOrderProductsPreview?.length ? (
+                  {customer.productsPreview?.length ? (
                     <ul className="customer-products-list">
-                      {customer.lastOrderProductsPreview.map((product) => (
+                      {customer.productsPreview.map((product) => (
                         <li key={`${customer.id}-${product}`}>{product}</li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="customer-products-empty">No quedó guardado el detalle del pedido todavía.</p>
+                    <p className="customer-products-empty">Todavía no quedó guardado el detalle de productos.</p>
                   )}
                 </div>
 
@@ -410,7 +456,6 @@ export default function CustomersPage() {
             <button type="button" className="pagination-btn" disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)}>
               ← Anterior
             </button>
-
             <div className="pagination-pages">
               {visiblePages.map((page) =>
                 String(page).includes('ellipsis') ? (
@@ -422,7 +467,6 @@ export default function CustomersPage() {
                 )
               )}
             </div>
-
             <button type="button" className="pagination-btn" disabled={currentPage === totalPages} onClick={() => handlePageChange(currentPage + 1)}>
               Siguiente →
             </button>

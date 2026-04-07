@@ -4,24 +4,28 @@ export default function CampaignOverviewGrid({ overview }) {
 	return (
 		<div className="campaign-kpi-grid">
 			<CampaignKpiCard
-				label="Templates totales"
+				label="Templates listos"
 				value={overview.templatesCount}
-				hint={`${overview.approvedTemplatesCount} aprobados`}
+				hint={`${overview.approvedTemplatesCount} aprobados para usar`}
+				accent="violet"
 			/>
 			<CampaignKpiCard
-				label="Campañas"
+				label="Campañas creadas"
 				value={overview.campaignsCount}
 				hint={`${overview.activeCampaignsCount} activas o en cola`}
+				accent="slate"
 			/>
 			<CampaignKpiCard
-				label="Destinatarios"
+				label="Audiencia total"
 				value={overview.recipientsCount}
-				hint="audiencia acumulada"
+				hint="destinatarios acumulados"
+				accent="emerald"
 			/>
 			<CampaignKpiCard
-				label="Costo estimado"
+				label="Actividad estimada"
 				value={`USD ${Number(overview.estimatedMonthlyCostUsd || 0).toFixed(2)}`}
-				hint="según actividad actual"
+				hint="referencia rápida del uso actual"
+				accent="amber"
 			/>
 		</div>
 	);

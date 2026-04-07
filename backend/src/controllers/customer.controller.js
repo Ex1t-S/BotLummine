@@ -1,5 +1,5 @@
-import prisma from '../lib/prisma.js';
-import { syncCustomers } from '../services/customer.service.js';
+import { prisma } from '../lib/prisma.js';
+import { getCustomerSyncStatus, syncCustomers } from '../services/customer.service.js';
 
 function cleanString(value) {
   const text = String(value ?? '').trim();
@@ -76,7 +76,7 @@ function getInitials(value) {
   const text = cleanString(value);
   if (!text) return '?';
   const parts = text.split(/\s+/).filter(Boolean);
-  return (parts[0]?.[0] || '?') + (parts[1]?.[0] || '');
+  return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase();
 }
 
 function normalizeText(value) {
@@ -95,7 +95,6 @@ function buildOrderWhere({ q, productQuery, orderNumber, minSpent, hasPhoneOnly,
         { contactName: { contains: q, mode: 'insensitive' } },
         { contactEmail: { contains: q, mode: 'insensitive' } },
         { contactPhone: { contains: q, mode: 'insensitive' } },
-        { contactIdentification: { contains: q, mode: 'insensitive' } },
         { orderNumber: { contains: q, mode: 'insensitive' } },
         {
           items: {
@@ -127,18 +126,9 @@ function buildOrderWhere({ q, productQuery, orderNumber, minSpent, hasPhoneOnly,
     });
   }
 
-  if (orderNumber) {
-    where.AND.push({ orderNumber: { contains: orderNumber, mode: 'insensitive' } });
-  }
-
-  if (minSpent !== null) {
-    where.AND.push({ totalAmount: { gte: minSpent } });
-  }
-
-  if (hasPhoneOnly) {
-    where.AND.push({ normalizedPhone: { not: null } });
-  }
-
+  if (orderNumber) where.AND.push({ orderNumber: { contains: orderNumber, mode: 'insensitive' } });
+  if (minSpent !== null) where.AND.push({ totalAmount: { gte: minSpent } });
+  if (hasPhoneOnly) where.AND.push({ normalizedPhone: { not: null } });
   if (dateFrom || dateTo) {
     where.AND.push({
       orderCreatedAt: {
@@ -147,17 +137,10 @@ function buildOrderWhere({ q, productQuery, orderNumber, minSpent, hasPhoneOnly,
       },
     });
   }
+  if (paymentStatus) where.AND.push({ paymentStatus });
+  if (shippingStatus) where.AND.push({ shippingStatus });
 
-  if (paymentStatus) {
-    where.AND.push({ paymentStatus: paymentStatus });
-  }
-
-  if (shippingStatus) {
-    where.AND.push({ shippingStatus: shippingStatus });
-  }
-
-  if (!where.AND.length) return {};
-  return where;
+  return where.AND.length ? where : {};
 }
 
 function buildOrderBy(sort) {
@@ -176,21 +159,17 @@ function buildOrderBy(sort) {
       return [{ orderNumber: 'desc' }, { orderCreatedAt: 'desc' }];
     case 'number_asc':
       return [{ orderNumber: 'asc' }, { orderCreatedAt: 'desc' }];
-    case 'purchase_desc':
     default:
       return [{ orderCreatedAt: 'desc' }, { createdAt: 'desc' }];
   }
 }
 
 function serializeOrder(order) {
-  const productsPreview = (order.items || []).map((item) => {
-    const qty = Number(item.quantity || 0);
-    const variant = cleanString(item.variantName);
-    const sku = cleanString(item.sku);
+  const items = Array.isArray(order.items) ? order.items : [];
+  const productsPreview = items.map((item) => {
     const parts = [item.name];
-    if (variant) parts.push(variant);
-    if (sku) parts.push(`SKU ${sku}`);
-    if (qty > 1) parts.push(`x${qty}`);
+    if (item.variantName) parts.push(item.variantName);
+    if (item.quantity > 1) parts.push(`x${item.quantity}`);
     return parts.join(' · ');
   });
 
@@ -206,16 +185,11 @@ function serializeOrder(order) {
     totalSpent: Number(order.totalAmount || 0),
     totalSpentLabel: formatCurrency(order.totalAmount || 0, order.currency || 'ARS'),
     currency: order.currency || 'ARS',
-    orderCount: 1,
-    totalUnitsPurchased: (order.items || []).reduce((acc, item) => acc + Number(item.quantity || 0), 0),
-    firstOrderDateLabel: formatDate(order.orderCreatedAt),
+    totalUnitsPurchased: items.reduce((acc, item) => acc + Number(item.quantity || 0), 0),
     lastOrderDateLabel: formatDate(order.orderCreatedAt),
-    lastOrderStatusLabel: [order.paymentStatus, order.shippingStatus].filter(Boolean).join(' · ') || '-',
-    lastOrderProductsPreview: productsPreview,
-    topProductsPreview: productsPreview,
-    distinctProductsCount: (order.items || []).length,
-    paymentStatus: order.paymentStatus || '',
-    shippingStatus: order.shippingStatus || '',
+    productsPreview,
+    paymentStatus: order.paymentStatus || '-',
+    shippingStatus: order.shippingStatus || '-',
     updatedAt: order.orderUpdatedAt || order.updatedAt,
   };
 }
@@ -225,8 +199,8 @@ export async function getCustomers(req, res, next) {
     const q = normalizeSearch(req.query?.q);
     const productQuery = normalizeSearch(req.query?.productQuery);
     const orderNumber = normalizeSearch(req.query?.orderNumber);
-    const page = toPositiveInt(req.query?.page, 1, { min: 1, max: 100000 }) || 1;
-    const pageSize = toPositiveInt(req.query?.pageSize, 24, { min: 1, max: 100 }) || 24;
+    const page = toPositiveInt(req.query?.page, 1, { min: 1, max: 100000 });
+    const pageSize = toPositiveInt(req.query?.pageSize, 24, { min: 1, max: 100 });
     const skip = (page - 1) * pageSize;
     const sort = normalizeSearch(req.query?.sort) || 'purchase_desc';
     const minSpent = toNumberOrNull(req.query?.minSpent);
@@ -236,26 +210,9 @@ export async function getCustomers(req, res, next) {
     const paymentStatus = normalizeStatus(req.query?.paymentStatus);
     const shippingStatus = normalizeStatus(req.query?.shippingStatus);
 
-    const where = buildOrderWhere({
-      q,
-      productQuery,
-      orderNumber,
-      minSpent,
-      hasPhoneOnly,
-      dateFrom,
-      dateTo,
-      paymentStatus,
-      shippingStatus,
-    });
+    const where = buildOrderWhere({ q, productQuery, orderNumber, minSpent, hasPhoneOnly, dateFrom, dateTo, paymentStatus, shippingStatus });
 
-    const [
-      totalOrders,
-      paidOrders,
-      withPhone,
-      totalSpentAgg,
-      orders,
-      distinctProfiles,
-    ] = await Promise.all([
+    const [totalOrders, paidOrders, withPhone, totalSpentAgg, orders, distinctProfiles] = await Promise.all([
       prisma.customerOrder.count({ where }),
       prisma.customerOrder.count({ where: { ...where, paymentStatus: 'paid' } }),
       prisma.customerOrder.count({ where: { ...where, normalizedPhone: { not: null } } }),
@@ -281,22 +238,13 @@ export async function getCustomers(req, res, next) {
           updatedAt: true,
           customerProfileId: true,
           items: {
-            take: 5,
+            take: 6,
             orderBy: [{ quantity: 'desc' }, { name: 'asc' }],
-            select: {
-              name: true,
-              sku: true,
-              variantName: true,
-              quantity: true,
-            },
+            select: { name: true, variantName: true, quantity: true },
           },
         },
       }),
-      prisma.customerOrder.findMany({
-        where,
-        distinct: ['customerProfileId'],
-        select: { customerProfileId: true },
-      }),
+      prisma.customerOrder.findMany({ where, distinct: ['customerProfileId'], select: { customerProfileId: true } }),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(totalOrders / pageSize));
@@ -318,55 +266,24 @@ export async function getCustomers(req, res, next) {
         showingFrom,
         showingTo,
       },
-      pagination: {
-        page,
-        pageSize,
-        totalPages,
-        totalItems: totalOrders,
-      },
-      filters: {
-        q,
-        productQuery,
-        orderNumber,
-        sort,
-        minSpent,
-        hasPhoneOnly,
-        dateFrom: req.query?.dateFrom || '',
-        dateTo: req.query?.dateTo || '',
-        paymentStatus,
-        shippingStatus,
-      },
+      pagination: { page, pageSize, totalPages, totalItems: totalOrders },
+      syncStatus: getCustomerSyncStatus(),
     });
   } catch (error) {
     next(error);
   }
 }
 
-export async function postSyncCustomers(req, res) {
+export async function getCustomersSyncStatus(_req, res) {
+  return res.json(getCustomerSyncStatus());
+}
+
+export async function postSyncCustomers(_req, res) {
   try {
-    const q = normalizeSearch(req.body?.q || req.query?.q || '');
-    const dateFrom = normalizeSearch(req.body?.dateFrom || req.query?.dateFrom || '');
-    const dateTo = normalizeSearch(req.body?.dateTo || req.query?.dateTo || '');
-    const result = await syncCustomers({ q, dateFrom, dateTo });
-    return res.json(result);
+    const result = await syncCustomers();
+    return res.status(result.started ? 202 : 200).json(result);
   } catch (error) {
     console.error('[CUSTOMERS SYNC ERROR]', error);
-    const message = error?.message || 'Error sincronizando pedidos';
-    const status = message.includes('Ya hay una sincronización') ? 409 : 500;
-    return res.status(status).json({ message });
+    return res.status(500).json({ message: error?.message || 'Error sincronizando pedidos' });
   }
-}
-
-export async function postFullSyncCustomers(_req, res) {
-  return res.status(410).json({
-    ok: false,
-    message: 'La sync full separada ya no se usa. Usá /customers/sync desde el único botón.',
-  });
-}
-
-export async function postRepairCustomers(_req, res) {
-  return res.status(410).json({
-    ok: false,
-    message: 'La reparación manual fue removida de esta versión.',
-  });
 }
