@@ -49,9 +49,7 @@ export default function CampaignsFeaturePage() {
 			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--clean">
 				<div className="campaigns-hero-copy">
 					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
-
 					<h2>Campañas simples de crear y fáciles de seguir</h2>
-
 					<p className="campaigns-hero-lead">
 						Elegí audiencia, mensaje y lanzamiento sin perderte en opciones técnicas.
 					</p>
