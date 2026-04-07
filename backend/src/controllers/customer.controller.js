@@ -1,289 +1,358 @@
 import { prisma } from '../lib/prisma.js';
-import { getCustomerSyncStatus, syncCustomers } from '../services/customer.service.js';
+import {
+	getCustomerSyncStatus,
+	runCustomerOrdersSyncInBackground,
+} from '../services/customer.service.js';
 
-function cleanString(value) {
-  const text = String(value ?? '').trim();
-  return text || '';
+function normalizeText(value = '') {
+	return String(value || '')
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.toLowerCase()
+		.trim();
 }
 
-function normalizeSearch(value) {
-  return cleanString(value);
+function buildProductTerms(productQuery = '') {
+	return String(productQuery || '')
+		.split('||')
+		.map((item) => item.trim())
+		.filter(Boolean);
 }
 
-function normalizeBoolean(value) {
-  if (value === true || value === 'true' || value === '1' || value === 1 || value === 'on') return true;
-  if (value === false || value === 'false' || value === '0' || value === 0 || value === '') return false;
-  return false;
+function buildCustomersWhere({
+	q,
+	productQuery,
+	orderNumber,
+	dateFrom,
+	dateTo,
+	paymentStatus,
+	shippingStatus,
+	minSpent,
+	hasPhoneOnly,
+}) {
+	const where = {};
+
+	const and = [];
+
+	const search = String(q || '').trim();
+	if (search) {
+		and.push({
+			OR: [
+				{ contactName: { contains: search, mode: 'insensitive' } },
+				{ contactEmail: { contains: search, mode: 'insensitive' } },
+				{ contactPhone: { contains: search, mode: 'insensitive' } },
+				{ orderNumber: { contains: search, mode: 'insensitive' } },
+				{
+					items: {
+						some: {
+							OR: [
+								{ name: { contains: search, mode: 'insensitive' } },
+								{ normalizedName: { contains: normalizeText(search) } },
+								{ sku: { contains: search, mode: 'insensitive' } },
+								{ variantName: { contains: search, mode: 'insensitive' } },
+							],
+						},
+					},
+				},
+			],
+		});
+	}
+
+	const terms = buildProductTerms(productQuery);
+	if (terms.length > 0) {
+		and.push({
+			items: {
+				some: {
+					OR: terms.flatMap((term) => {
+						const normalized = normalizeText(term);
+						return [
+							{ name: { contains: term, mode: 'insensitive' } },
+							{ normalizedName: { contains: normalized } },
+							{ variantName: { contains: term, mode: 'insensitive' } },
+							{ sku: { contains: term, mode: 'insensitive' } },
+						];
+					}),
+				},
+			},
+		});
+	}
+
+	const orderNumberValue = String(orderNumber || '').trim();
+	if (orderNumberValue) {
+		and.push({
+			orderNumber: { contains: orderNumberValue, mode: 'insensitive' },
+		});
+	}
+
+	if (dateFrom || dateTo) {
+		const createdAt = {};
+		if (dateFrom) {
+			const from = new Date(dateFrom);
+			if (!Number.isNaN(from.getTime())) {
+				createdAt.gte = from;
+			}
+		}
+		if (dateTo) {
+			const to = new Date(dateTo);
+			if (!Number.isNaN(to.getTime())) {
+				to.setHours(23, 59, 59, 999);
+				createdAt.lte = to;
+			}
+		}
+		if (Object.keys(createdAt).length > 0) {
+			and.push({ orderCreatedAt: createdAt });
+		}
+	}
+
+	if (paymentStatus && paymentStatus !== 'all') {
+		and.push({
+			paymentStatus: { equals: paymentStatus, mode: 'insensitive' },
+		});
+	}
+
+	if (shippingStatus && shippingStatus !== 'all') {
+		and.push({
+			shippingStatus: { equals: shippingStatus, mode: 'insensitive' },
+		});
+	}
+
+	if (minSpent !== undefined && minSpent !== null && String(minSpent).trim() !== '') {
+		const parsed = Number(minSpent);
+		if (!Number.isNaN(parsed) && parsed > 0) {
+			and.push({
+				totalAmount: { gte: parsed },
+			});
+		}
+	}
+
+	if (hasPhoneOnly === '1' || hasPhoneOnly === 'true' || hasPhoneOnly === true) {
+		and.push({
+			contactPhone: {
+				not: '',
+			},
+		});
+		and.push({
+			NOT: {
+				contactPhone: null,
+			},
+		});
+	}
+
+	if (and.length > 0) {
+		where.AND = and;
+	}
+
+	return where;
 }
 
-function toPositiveInt(value, fallback, { min = 1, max = 1000 } = {}) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(min, Math.min(max, Math.floor(number)));
+function buildOrderBy(sort = 'recent_desc') {
+	switch (sort) {
+		case 'recent_asc':
+			return [{ orderCreatedAt: 'asc' }, { id: 'asc' }];
+		case 'total_desc':
+			return [{ totalAmount: 'desc' }, { orderCreatedAt: 'desc' }];
+		case 'total_asc':
+			return [{ totalAmount: 'asc' }, { orderCreatedAt: 'desc' }];
+		case 'name_asc':
+			return [{ contactName: 'asc' }, { orderCreatedAt: 'desc' }];
+		case 'name_desc':
+			return [{ contactName: 'desc' }, { orderCreatedAt: 'desc' }];
+		case 'order_desc':
+			return [{ orderNumber: 'desc' }];
+		case 'order_asc':
+			return [{ orderNumber: 'asc' }];
+		case 'recent_desc':
+		default:
+			return [{ orderCreatedAt: 'desc' }, { id: 'desc' }];
+	}
 }
 
-function toNumberOrNull(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+function mapOrderCard(order) {
+	const products = Array.isArray(order.items)
+		? order.items.map((item) => ({
+				id: item.id,
+				name: item.name || item.normalizedName || 'Producto',
+				variantName: item.variantName || '',
+				sku: item.sku || '',
+				quantity: item.quantity || 0,
+				unitPrice: item.unitPrice || 0,
+				lineTotal: item.lineTotal || 0,
+		  }))
+		: [];
+
+	return {
+		id: order.id,
+		orderId: order.orderId,
+		orderNumber: order.orderNumber,
+		name: order.contactName || 'Sin nombre',
+		email: order.contactEmail || '',
+		phone: order.contactPhone || '',
+		total: order.totalAmount || 0,
+		date: order.orderCreatedAt,
+		updatedAt: order.updatedAt,
+		paymentStatus: order.paymentStatus || '',
+		shippingStatus: order.shippingStatus || '',
+		products,
+		productNames: products.map((item) => item.name),
+	};
 }
 
-function parseDateQuery(value) {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+export async function getCustomers(req, res) {
+	try {
+		const {
+			q = '',
+			productQuery = '',
+			orderNumber = '',
+			dateFrom = '',
+			dateTo = '',
+			paymentStatus = 'all',
+			shippingStatus = 'all',
+			minSpent = '',
+			hasPhoneOnly = '',
+			sort = 'recent_desc',
+			page = '1',
+			pageSize = '24',
+		} = req.query;
+
+		const parsedPage = Math.max(1, Number(page) || 1);
+		const parsedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 24));
+		const skip = (parsedPage - 1) * parsedPageSize;
+
+		const where = buildCustomersWhere({
+			q,
+			productQuery,
+			orderNumber,
+			dateFrom,
+			dateTo,
+			paymentStatus,
+			shippingStatus,
+			minSpent,
+			hasPhoneOnly,
+		});
+
+		const orderBy = buildOrderBy(sort);
+
+		const [total, rows, metricsBase] = await Promise.all([
+			prisma.customerOrder.count({ where }),
+			prisma.customerOrder.findMany({
+				where,
+				orderBy,
+				skip,
+				take: parsedPageSize,
+				include: {
+					items: {
+						orderBy: [{ lineTotal: 'desc' }, { quantity: 'desc' }, { name: 'asc' }],
+					},
+				},
+			}),
+			prisma.customerOrder.findMany({
+				where,
+				select: {
+					id: true,
+					totalAmount: true,
+					paymentStatus: true,
+					contactPhone: true,
+					contactEmail: true,
+					contactName: true,
+				},
+			}),
+		]);
+
+		const cards = rows.map(mapOrderCard);
+
+		const uniquePhones = new Set();
+		const uniquePeopleFallback = new Set();
+
+		for (const row of metricsBase) {
+			const normalizedPhone = String(row.contactPhone || '').trim();
+			if (normalizedPhone) {
+				uniquePhones.add(normalizedPhone);
+			} else {
+				uniquePeopleFallback.add(
+					`${String(row.contactEmail || '').trim().toLowerCase()}::${String(
+						row.contactName || ''
+					)
+						.trim()
+						.toLowerCase()}`
+				);
+			}
+		}
+
+		const paidCount = metricsBase.filter((row) =>
+			['paid', 'authorized', 'received'].includes(
+				String(row.paymentStatus || '').toLowerCase()
+			)
+		).length;
+
+		const totalRevenue = metricsBase.reduce(
+			(acc, row) => acc + Number(row.totalAmount || 0),
+			0
+		);
+
+		const ordersCount = metricsBase.length;
+		const ticketAverage = ordersCount > 0 ? totalRevenue / ordersCount : 0;
+
+		return res.json({
+			ok: true,
+			items: cards,
+			pagination: {
+				page: parsedPage,
+				pageSize: parsedPageSize,
+				total,
+				totalPages: Math.max(1, Math.ceil(total / parsedPageSize)),
+			},
+			metrics: {
+				orders: ordersCount,
+				uniqueCustomers: uniquePhones.size + uniquePeopleFallback.size,
+				paidOrders: paidCount,
+				withPhone: metricsBase.filter((row) => String(row.contactPhone || '').trim()).length,
+				ticketAverage,
+				revenue: totalRevenue,
+			},
+		});
+	} catch (error) {
+		console.error('[CUSTOMERS][GET] error:', error);
+		return res.status(500).json({
+			ok: false,
+			error: 'No se pudo cargar el listado comercial.',
+			detail: error?.message || 'Error interno',
+		});
+	}
 }
 
-function endOfDay(date) {
-  if (!date) return null;
-  const next = new Date(date);
-  next.setUTCHours(23, 59, 59, 999);
-  return next;
+export async function syncCustomers(req, res) {
+	try {
+		const result = await runCustomerOrdersSyncInBackground({
+			force: req.body?.force === true,
+		});
+
+		return res.json({
+			ok: true,
+			...result,
+		});
+	} catch (error) {
+		console.error('[CUSTOMERS][SYNC] error:', error);
+		return res.status(500).json({
+			ok: false,
+			error: 'No se pudo iniciar la sincronización.',
+			detail: error?.message || 'Error interno',
+		});
+	}
 }
 
-function normalizeStatus(value) {
-  const text = normalizeSearch(value).toLowerCase();
-  return text || '';
-}
-
-function formatCurrency(value, currency = 'ARS') {
-  const amount = Number(value || 0);
-  try {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: currency || 'ARS',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `$ ${amount.toLocaleString('es-AR')}`;
-  }
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  try {
-    return new Intl.DateTimeFormat('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    }).format(new Date(value));
-  } catch {
-    return String(value);
-  }
-}
-
-function getInitials(value) {
-  const text = cleanString(value);
-  if (!text) return '?';
-  const parts = text.split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase();
-}
-
-function normalizeText(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
-function buildOrderWhere({ q, productQuery, orderNumber, minSpent, hasPhoneOnly, dateFrom, dateTo, paymentStatus, shippingStatus }) {
-  const where = { AND: [] };
-
-  if (q) {
-    where.AND.push({
-      OR: [
-        { contactName: { contains: q, mode: 'insensitive' } },
-        { contactEmail: { contains: q, mode: 'insensitive' } },
-        { contactPhone: { contains: q, mode: 'insensitive' } },
-        { orderNumber: { contains: q, mode: 'insensitive' } },
-        {
-          items: {
-            some: {
-              OR: [
-                { name: { contains: q, mode: 'insensitive' } },
-                { sku: { contains: q, mode: 'insensitive' } },
-                { variantName: { contains: q, mode: 'insensitive' } },
-              ],
-            },
-          },
-        },
-      ],
-    });
-  }
-
-  if (productQuery) {
-    where.AND.push({
-      items: {
-        some: {
-          OR: [
-            { name: { contains: productQuery, mode: 'insensitive' } },
-            { normalizedName: { contains: normalizeText(productQuery) } },
-            { variantName: { contains: productQuery, mode: 'insensitive' } },
-            { sku: { contains: productQuery, mode: 'insensitive' } },
-          ],
-        },
-      },
-    });
-  }
-
-  if (orderNumber) where.AND.push({ orderNumber: { contains: orderNumber, mode: 'insensitive' } });
-  if (minSpent !== null) where.AND.push({ totalAmount: { gte: minSpent } });
-  if (hasPhoneOnly) where.AND.push({ normalizedPhone: { not: null } });
-  if (dateFrom || dateTo) {
-    where.AND.push({
-      orderCreatedAt: {
-        ...(dateFrom ? { gte: dateFrom } : {}),
-        ...(dateTo ? { lte: dateTo } : {}),
-      },
-    });
-  }
-  if (paymentStatus) where.AND.push({ paymentStatus });
-  if (shippingStatus) where.AND.push({ shippingStatus });
-
-  return where.AND.length ? where : {};
-}
-
-function buildOrderBy(sort) {
-  switch (sort) {
-    case 'purchase_asc':
-      return [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }];
-    case 'total_desc':
-      return [{ totalAmount: 'desc' }, { orderCreatedAt: 'desc' }];
-    case 'total_asc':
-      return [{ totalAmount: 'asc' }, { orderCreatedAt: 'desc' }];
-    case 'name_asc':
-      return [{ contactName: 'asc' }, { orderCreatedAt: 'desc' }];
-    case 'name_desc':
-      return [{ contactName: 'desc' }, { orderCreatedAt: 'desc' }];
-    case 'number_desc':
-      return [{ orderNumber: 'desc' }, { orderCreatedAt: 'desc' }];
-    case 'number_asc':
-      return [{ orderNumber: 'asc' }, { orderCreatedAt: 'desc' }];
-    default:
-      return [{ orderCreatedAt: 'desc' }, { createdAt: 'desc' }];
-  }
-}
-
-function serializeOrder(order) {
-  const items = Array.isArray(order.items) ? order.items : [];
-  const productsPreview = items.map((item) => {
-    const parts = [item.name];
-    if (item.variantName) parts.push(item.variantName);
-    if (item.quantity > 1) parts.push(`x${item.quantity}`);
-    return parts.join(' · ');
-  });
-
-  return {
-    id: order.id,
-    displayName: order.contactName || 'Cliente sin nombre',
-    email: order.contactEmail || '',
-    phone: order.contactPhone || '',
-    initials: getInitials(order.contactName || order.contactEmail || order.contactPhone),
-    orderId: order.orderId,
-    orderNumber: order.orderNumber,
-    lastOrderLabel: order.orderNumber ? `#${order.orderNumber}` : `ID ${order.orderId}`,
-    totalSpent: Number(order.totalAmount || 0),
-    totalSpentLabel: formatCurrency(order.totalAmount || 0, order.currency || 'ARS'),
-    currency: order.currency || 'ARS',
-    totalUnitsPurchased: items.reduce((acc, item) => acc + Number(item.quantity || 0), 0),
-    lastOrderDateLabel: formatDate(order.orderCreatedAt),
-    productsPreview,
-    paymentStatus: order.paymentStatus || '-',
-    shippingStatus: order.shippingStatus || '-',
-    updatedAt: order.orderUpdatedAt || order.updatedAt,
-  };
-}
-
-export async function getCustomers(req, res, next) {
-  try {
-    const q = normalizeSearch(req.query?.q);
-    const productQuery = normalizeSearch(req.query?.productQuery);
-    const orderNumber = normalizeSearch(req.query?.orderNumber);
-    const page = toPositiveInt(req.query?.page, 1, { min: 1, max: 100000 });
-    const pageSize = toPositiveInt(req.query?.pageSize, 24, { min: 1, max: 100 });
-    const skip = (page - 1) * pageSize;
-    const sort = normalizeSearch(req.query?.sort) || 'purchase_desc';
-    const minSpent = toNumberOrNull(req.query?.minSpent);
-    const hasPhoneOnly = normalizeBoolean(req.query?.hasPhoneOnly);
-    const dateFrom = parseDateQuery(req.query?.dateFrom);
-    const dateTo = endOfDay(parseDateQuery(req.query?.dateTo));
-    const paymentStatus = normalizeStatus(req.query?.paymentStatus);
-    const shippingStatus = normalizeStatus(req.query?.shippingStatus);
-
-    const where = buildOrderWhere({ q, productQuery, orderNumber, minSpent, hasPhoneOnly, dateFrom, dateTo, paymentStatus, shippingStatus });
-
-    const [totalOrders, paidOrders, withPhone, totalSpentAgg, orders, distinctProfiles] = await Promise.all([
-      prisma.customerOrder.count({ where }),
-      prisma.customerOrder.count({ where: { ...where, paymentStatus: 'paid' } }),
-      prisma.customerOrder.count({ where: { ...where, normalizedPhone: { not: null } } }),
-      prisma.customerOrder.aggregate({ where, _sum: { totalAmount: true } }),
-      prisma.customerOrder.findMany({
-        where,
-        orderBy: buildOrderBy(sort),
-        skip,
-        take: pageSize,
-        select: {
-          id: true,
-          orderId: true,
-          orderNumber: true,
-          contactName: true,
-          contactEmail: true,
-          contactPhone: true,
-          paymentStatus: true,
-          shippingStatus: true,
-          totalAmount: true,
-          currency: true,
-          orderCreatedAt: true,
-          orderUpdatedAt: true,
-          updatedAt: true,
-          customerProfileId: true,
-          items: {
-            take: 6,
-            orderBy: [{ quantity: 'desc' }, { name: 'asc' }],
-            select: { name: true, variantName: true, quantity: true },
-          },
-        },
-      }),
-      prisma.customerOrder.findMany({ where, distinct: ['customerProfileId'], select: { customerProfileId: true } }),
-    ]);
-
-    const totalPages = Math.max(1, Math.ceil(totalOrders / pageSize));
-    const showingFrom = totalOrders === 0 ? 0 : skip + 1;
-    const showingTo = Math.min(skip + orders.length, totalOrders);
-    const totalSpent = Number(totalSpentAgg?._sum?.totalAmount || 0);
-    const ticketAverage = totalOrders > 0 ? totalSpent / totalOrders : 0;
-
-    return res.json({
-      customers: orders.map(serializeOrder),
-      stats: {
-        totalOrders,
-        totalCustomers: distinctProfiles.length,
-        paidOrders,
-        withPhone,
-        totalSpent,
-        avgTicket: ticketAverage,
-        currency: orders[0]?.currency || 'ARS',
-        showingFrom,
-        showingTo,
-      },
-      pagination: { page, pageSize, totalPages, totalItems: totalOrders },
-      syncStatus: getCustomerSyncStatus(),
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getCustomersSyncStatus(_req, res) {
-  return res.json(getCustomerSyncStatus());
-}
-
-export async function postSyncCustomers(_req, res) {
-  try {
-    const result = await syncCustomers();
-    return res.status(result.started ? 202 : 200).json(result);
-  } catch (error) {
-    console.error('[CUSTOMERS SYNC ERROR]', error);
-    return res.status(500).json({ message: error?.message || 'Error sincronizando pedidos' });
-  }
+export async function getCustomerSyncStatus(req, res) {
+	try {
+		const status = getCustomerSyncStatus();
+		return res.json({
+			ok: true,
+			...status,
+		});
+	} catch (error) {
+		console.error('[CUSTOMERS][SYNC_STATUS] error:', error);
+		return res.status(500).json({
+			ok: false,
+			error: 'No se pudo obtener el estado de sincronización.',
+			detail: error?.message || 'Error interno',
+		});
+	}
 }

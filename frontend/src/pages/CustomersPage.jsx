@@ -5,6 +5,7 @@ import './CustomersPage.css';
 
 const DEFAULT_PAGE_SIZE = 24;
 const POLL_MS = 3500;
+const CATALOG_SEARCH_DEBOUNCE_MS = 280;
 
 const initialFilters = {
   q: '',
@@ -35,16 +36,6 @@ const initialSyncStatus = {
   activeWindow: null,
 };
 
-const QUICK_PRODUCT_FILTERS = [
-  'body',
-  'calza',
-  'pack 3x1',
-  'corpiño',
-  'bombacha',
-  'negro',
-  'xl',
-];
-
 function formatCurrency(value, currency = 'ARS') {
   const amount = Number(value || 0);
   try {
@@ -64,17 +55,6 @@ function formatDateTime(value) {
     return new Intl.DateTimeFormat('es-AR', {
       dateStyle: 'short',
       timeStyle: 'short',
-    }).format(new Date(value));
-  } catch {
-    return String(value);
-  }
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  try {
-    return new Intl.DateTimeFormat('es-AR', {
-      dateStyle: 'short',
     }).format(new Date(value));
   } catch {
     return String(value);
@@ -139,23 +119,53 @@ function buildSyncBadgeLabel(syncStatus) {
   return 'Listo';
 }
 
-function buildActiveFilterTags(filters) {
-  const tags = [];
-  if (filters.q) tags.push({ key: 'q', label: `Buscar: ${filters.q}` });
-  if (filters.productQuery) tags.push({ key: 'productQuery', label: `Producto: ${filters.productQuery}` });
-  if (filters.orderNumber) tags.push({ key: 'orderNumber', label: `Pedido: ${filters.orderNumber}` });
-  if (filters.dateFrom) tags.push({ key: 'dateFrom', label: `Desde: ${filters.dateFrom}` });
-  if (filters.dateTo) tags.push({ key: 'dateTo', label: `Hasta: ${filters.dateTo}` });
-  if (filters.minSpent) tags.push({ key: 'minSpent', label: `Mínimo: ${formatCurrency(filters.minSpent)}` });
-  if (filters.paymentStatus) tags.push({ key: 'paymentStatus', label: `Pago: ${filters.paymentStatus}` });
-  if (filters.shippingStatus) tags.push({ key: 'shippingStatus', label: `Envío: ${filters.shippingStatus}` });
-  if (filters.hasPhoneOnly) tags.push({ key: 'hasPhoneOnly', label: 'Solo con teléfono' });
-  return tags;
+function slugifyProduct(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function extractCatalogProducts(payload) {
+  const candidates = [
+    payload?.products,
+    payload?.items,
+    payload?.catalog,
+    payload?.rows,
+    payload?.results,
+  ];
+
+  const rawList = candidates.find((entry) => Array.isArray(entry)) || [];
+
+  return rawList
+    .map((item) => {
+      const id = String(item?.id ?? item?.productId ?? item?.externalProductId ?? item?.product_id ?? '');
+      const label = String(
+        item?.name || item?.title || item?.displayName || item?.productName || item?.label || ''
+      ).trim();
+
+      if (!label) return null;
+
+      return {
+        id: id || slugifyProduct(label),
+        label,
+        normalizedName: String(item?.normalizedName || item?.normalized_name || slugifyProduct(label)).trim(),
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeSelectedProductQuery(selectedProducts = []) {
+  return selectedProducts
+    .map((item) => String(item?.label || '').trim())
+    .filter(Boolean)
+    .join('||');
 }
 
 export default function CustomersPage() {
-  const [draftFilters, setDraftFilters] = useState(initialFilters);
-  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+  const [filters, setFilters] = useState(initialFilters);
   const [data, setData] = useState({
     customers: [],
     stats: {},
@@ -165,15 +175,25 @@ export default function CustomersPage() {
   const [syncing, setSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [syncStatus, setSyncStatus] = useState(initialSyncStatus);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogOptions, setCatalogOptions] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
   const pollRef = useRef(null);
+  const productPickerRef = useRef(null);
 
   const normalizedStats = useMemo(() => normalizeStats(data), [data]);
   const currentPage = Number(data.pagination?.page || 1);
   const totalPages = Number(data.pagination?.totalPages || 1);
   const visiblePages = useMemo(() => buildVisiblePages(currentPage, totalPages), [currentPage, totalPages]);
-  const activeFilterTags = useMemo(() => buildActiveFilterTags(appliedFilters), [appliedFilters]);
 
-  async function loadOrders(nextFilters = appliedFilters, { silent = false } = {}) {
+  const selectedProductIds = useMemo(
+    () => new Set(selectedProducts.map((item) => String(item.id))),
+    [selectedProducts]
+  );
+
+  async function loadOrders(nextFilters = filters, { silent = false } = {}) {
     if (!silent) setLoading(true);
     try {
       const response = await api.get('/dashboard/customers', { params: normalizeRequestFilters(nextFilters) });
@@ -207,6 +227,28 @@ export default function CustomersPage() {
     }
   }
 
+  async function loadCatalogOptions(searchText = '') {
+    setCatalogLoading(true);
+    try {
+      const response = await api.get('/dashboard/catalog', {
+        params: { q: searchText || '', page: 1 },
+      });
+      const options = extractCatalogProducts(response.data);
+      setCatalogOptions((prev) => {
+        const map = new Map();
+        [...selectedProducts, ...options, ...prev].forEach((item) => {
+          if (!item?.id || !item?.label) return;
+          map.set(String(item.id), item);
+        });
+        return Array.from(map.values()).slice(0, 36);
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCatalogLoading(false);
+    }
+  }
+
   function stopPolling() {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -218,7 +260,7 @@ export default function CustomersPage() {
     stopPolling();
     pollRef.current = setInterval(async () => {
       const status = await loadSyncStatus();
-      await loadOrders(appliedFilters, { silent: true });
+      await loadOrders(filters, { silent: true });
       if (status && !status.running) stopPolling();
     }, POLL_MS);
   }
@@ -228,36 +270,78 @@ export default function CustomersPage() {
     loadSyncStatus().then((status) => {
       if (status?.running) startPolling();
     });
+    loadCatalogOptions('');
     return () => stopPolling();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (productDropdownOpen) loadCatalogOptions(catalogSearch);
+    }, CATALOG_SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [catalogSearch, productDropdownOpen]);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (!productPickerRef.current?.contains(event.target)) {
+        setProductDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   function updateFilter(name, value) {
-    setDraftFilters((prev) => ({ ...prev, [name]: value }));
+    setFilters((prev) => ({ ...prev, [name]: value }));
   }
 
-  function removeFilterTag(key) {
-    const next = {
-      ...draftFilters,
-      [key]: key === 'hasPhoneOnly' ? false : '',
-      page: 1,
-    };
-    setDraftFilters(next);
-    setAppliedFilters(next);
-    loadOrders(next);
+  function toggleProductSelection(option) {
+    if (!option?.id) return;
+
+    setSelectedProducts((prev) => {
+      const exists = prev.some((item) => String(item.id) === String(option.id));
+      const next = exists
+        ? prev.filter((item) => String(item.id) !== String(option.id))
+        : [...prev, option];
+
+      setFilters((current) => ({
+        ...current,
+        productQuery: normalizeSelectedProductQuery(next),
+      }));
+
+      return next;
+    });
+  }
+
+  function removeSelectedProduct(id) {
+    setSelectedProducts((prev) => {
+      const next = prev.filter((item) => String(item.id) !== String(id));
+      setFilters((current) => ({
+        ...current,
+        productQuery: normalizeSelectedProductQuery(next),
+      }));
+      return next;
+    });
   }
 
   async function handleApplyFilters(event) {
     event.preventDefault();
-    setErrorMessage('');
-    const next = { ...draftFilters, page: 1 };
-    setDraftFilters(next);
-    setAppliedFilters(next);
+    const next = {
+      ...filters,
+      productQuery: normalizeSelectedProductQuery(selectedProducts),
+      page: 1,
+    };
+    setFilters(next);
     await loadOrders(next);
   }
 
   async function handleResetFilters() {
-    setDraftFilters(initialFilters);
-    setAppliedFilters(initialFilters);
+    setSelectedProducts([]);
+    setCatalogSearch('');
+    setFilters(initialFilters);
     setErrorMessage('');
     await loadOrders(initialFilters);
   }
@@ -278,15 +362,9 @@ export default function CustomersPage() {
 
   async function handlePageChange(page) {
     if (page < 1 || page > totalPages || page === currentPage) return;
-    const next = { ...appliedFilters, page };
-    setAppliedFilters(next);
-    setDraftFilters(next);
+    const next = { ...filters, page };
+    setFilters(next);
     await loadOrders(next);
-  }
-
-  function applyQuickProduct(value) {
-    const next = { ...draftFilters, productQuery: value };
-    setDraftFilters(next);
   }
 
   return (
@@ -332,17 +410,14 @@ export default function CustomersPage() {
             <div><span>Ítems</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
           </div>
         </div>
-
         <div className="customers-progress-track">
           <div className="customers-progress-bar" style={{ width: syncStatus.running ? '58%' : syncStatus.ordersFetched ? '100%' : '0%' }} />
         </div>
-
         {syncStatus.activeWindow ? (
           <p className="customers-sync-window">
             Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> · {formatDateTime(syncStatus.activeWindow.from)} → {formatDateTime(syncStatus.activeWindow.to)}
           </p>
         ) : null}
-
         {syncStatus.warnings?.length ? (
           <div className="customers-sync-notes">
             {syncStatus.warnings.slice(-2).map((warning) => (
@@ -350,7 +425,6 @@ export default function CustomersPage() {
             ))}
           </div>
         ) : null}
-
         {syncStatus.errors?.length ? (
           <div className="customers-sync-notes">
             {syncStatus.errors.slice(-2).map((item) => (
@@ -373,70 +447,127 @@ export default function CustomersPage() {
         <div className="customers-filters-header">
           <div>
             <h3>Filtros comerciales</h3>
-            <p>Buscá por nombre, teléfono, producto o número de pedido sin depender del CRM viejo.</p>
+            <p>Buscá por nombre, teléfono, producto, número de pedido o estado sin depender del CRM viejo.</p>
           </div>
         </div>
 
-        <div className="customers-filter-grid customers-filter-grid--refined">
+        <div className="customers-filter-grid">
           <div className="customers-filter-group customers-filter-group--grow">
             <label htmlFor="customers-q">Buscar general</label>
-            <input
-              id="customers-q"
-              type="text"
-              value={draftFilters.q}
-              onChange={(e) => updateFilter('q', e.target.value)}
-              placeholder="Nombre, email, teléfono, SKU o nro. de pedido"
-            />
+            <input id="customers-q" type="text" value={filters.q} onChange={(e) => updateFilter('q', e.target.value)} placeholder="Nombre, email, teléfono, SKU o nro. de pedido" />
           </div>
 
-          <div className="customers-filter-group">
-            <label htmlFor="customers-product">Producto comprado</label>
-            <input
-              id="customers-product"
-              type="text"
-              value={draftFilters.productQuery}
-              onChange={(e) => updateFilter('productQuery', e.target.value)}
-              placeholder="Body, calza, pack 3x1, negro, xl..."
-            />
+          <div className="customers-filter-group customers-filter-group--grow" ref={productPickerRef}>
+            <label htmlFor="catalog-product-search">Producto comprado</label>
+            <div className={`product-picker ${productDropdownOpen ? 'is-open' : ''}`}>
+              <button
+                type="button"
+                className="product-picker-trigger"
+                onClick={() => {
+                  setProductDropdownOpen((prev) => !prev);
+                  if (!productDropdownOpen) loadCatalogOptions(catalogSearch);
+                }}
+              >
+                <div className="product-picker-trigger-copy">
+                  {selectedProducts.length ? (
+                    <div className="product-picker-chip-list">
+                      {selectedProducts.slice(0, 2).map((product) => (
+                        <span key={product.id} className="product-picker-inline-chip">{product.label}</span>
+                      ))}
+                      {selectedProducts.length > 2 ? <span className="product-picker-inline-chip">+{selectedProducts.length - 2}</span> : null}
+                    </div>
+                  ) : (
+                    <span className="product-picker-placeholder">Elegí productos del catálogo…</span>
+                  )}
+                </div>
+                <span className="product-picker-arrow">▾</span>
+              </button>
+
+              {productDropdownOpen ? (
+                <div className="product-picker-dropdown">
+                  <div className="product-picker-search-row">
+                    <input
+                      id="catalog-product-search"
+                      type="text"
+                      value={catalogSearch}
+                      onChange={(e) => setCatalogSearch(e.target.value)}
+                      placeholder="Buscar en catálogo..."
+                    />
+                    <button type="button" className="product-picker-clear" onClick={() => setCatalogSearch('')}>Limpiar</button>
+                  </div>
+
+                  <div className="product-picker-options">
+                    {catalogLoading ? <div className="product-picker-empty">Buscando productos…</div> : null}
+                    {!catalogLoading && !catalogOptions.length ? <div className="product-picker-empty">No se encontraron productos del catálogo.</div> : null}
+                    {!catalogLoading && catalogOptions.map((option) => {
+                      const checked = selectedProductIds.has(String(option.id));
+                      return (
+                        <label key={option.id} className={`product-picker-option ${checked ? 'is-selected' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProductSelection(option)}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {selectedProducts.length ? (
+              <div className="product-picker-selected-row">
+                {selectedProducts.map((product) => (
+                  <button key={product.id} type="button" className="product-picker-chip" onClick={() => removeSelectedProduct(product.id)}>
+                    <span>{product.label}</span>
+                    <strong>×</strong>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="customers-filter-group">
             <label htmlFor="customers-order-number">N° pedido</label>
-            <input
-              id="customers-order-number"
-              type="text"
-              value={draftFilters.orderNumber}
-              onChange={(e) => updateFilter('orderNumber', e.target.value)}
-              placeholder="Ej: 23621"
-            />
+            <input id="customers-order-number" type="text" value={filters.orderNumber} onChange={(e) => updateFilter('orderNumber', e.target.value)} placeholder="Ej: 23621" />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-date-from">Compra desde</label>
-            <input id="customers-date-from" type="date" value={draftFilters.dateFrom} onChange={(e) => updateFilter('dateFrom', e.target.value)} />
+            <input id="customers-date-from" type="date" value={filters.dateFrom} onChange={(e) => updateFilter('dateFrom', e.target.value)} />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-date-to">Compra hasta</label>
-            <input id="customers-date-to" type="date" value={draftFilters.dateTo} onChange={(e) => updateFilter('dateTo', e.target.value)} />
+            <input id="customers-date-to" type="date" value={filters.dateTo} onChange={(e) => updateFilter('dateTo', e.target.value)} />
           </div>
-
+          <div className="customers-filter-group">
+            <label htmlFor="customers-payment-status">Pago</label>
+            <select id="customers-payment-status" value={filters.paymentStatus} onChange={(e) => updateFilter('paymentStatus', e.target.value)}>
+              <option value="">Todos</option>
+              <option value="paid">Pagado</option>
+              <option value="pending">Pendiente</option>
+              <option value="authorized">Autorizado</option>
+              <option value="refunded">Reintegrado</option>
+              <option value="voided">Anulado</option>
+            </select>
+          </div>
+          <div className="customers-filter-group">
+            <label htmlFor="customers-shipping-status">Envío</label>
+            <select id="customers-shipping-status" value={filters.shippingStatus} onChange={(e) => updateFilter('shippingStatus', e.target.value)}>
+              <option value="">Todos</option>
+              <option value="fulfilled">Enviado</option>
+              <option value="unpacked">Por empaquetar</option>
+              <option value="unfulfilled">No enviado</option>
+            </select>
+          </div>
           <div className="customers-filter-group">
             <label htmlFor="customers-min-spent">Total mínimo</label>
-            <input
-              id="customers-min-spent"
-              type="number"
-              min="0"
-              step="1"
-              value={draftFilters.minSpent}
-              onChange={(e) => updateFilter('minSpent', e.target.value)}
-              placeholder="50000"
-            />
+            <input id="customers-min-spent" type="number" min="0" step="1" value={filters.minSpent} onChange={(e) => updateFilter('minSpent', e.target.value)} placeholder="50000" />
           </div>
-
           <div className="customers-filter-group">
             <label htmlFor="customers-sort">Ordenar por</label>
-            <select id="customers-sort" value={draftFilters.sort} onChange={(e) => updateFilter('sort', e.target.value)}>
+            <select id="customers-sort" value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)}>
               <option value="purchase_desc">Compra más reciente</option>
               <option value="purchase_asc">Compra más antigua</option>
               <option value="total_desc">Mayor total</option>
@@ -449,33 +580,10 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div className="customers-quick-tags">
-          {QUICK_PRODUCT_FILTERS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`customers-quick-tag ${draftFilters.productQuery === item ? 'is-active' : ''}`}
-              onClick={() => applyQuickProduct(item)}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-
-        {activeFilterTags.length ? (
-          <div className="customers-active-filters">
-            {activeFilterTags.map((tag) => (
-              <button key={tag.key} type="button" className="customers-active-filter-chip" onClick={() => removeFilterTag(tag.key)}>
-                {tag.label} <span>×</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
         <div className="customers-toggle-row">
           <div className="customers-toggle-group">
             <label className="customers-checkbox">
-              <input type="checkbox" checked={draftFilters.hasPhoneOnly} onChange={(e) => updateFilter('hasPhoneOnly', e.target.checked)} />
+              <input type="checkbox" checked={filters.hasPhoneOnly} onChange={(e) => updateFilter('hasPhoneOnly', e.target.checked)} />
               <span>Solo con teléfono</span>
             </label>
           </div>
@@ -515,10 +623,9 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div className="customer-meta-row customer-meta-row--simple">
+                <div className="customer-meta-row customer-meta-row--compact">
                   <div className="customer-meta-chip"><span>Total</span><strong>{customer.totalSpentLabel || '$0'}</strong></div>
                   <div className="customer-meta-chip"><span>Fecha</span><strong>{customer.lastOrderDateLabel || '-'}</strong></div>
-                  <div className="customer-meta-chip"><span>Actualizado</span><strong>{formatDate(customer.updatedAt)}</strong></div>
                 </div>
 
                 <div className="customer-section-box">
@@ -535,6 +642,11 @@ export default function CustomersPage() {
                   ) : (
                     <p className="customer-products-empty">Todavía no quedó guardado el detalle de productos.</p>
                   )}
+                </div>
+
+                <div className="customer-footer-row">
+                  <span>Actualizado</span>
+                  <strong>{formatDateTime(customer.updatedAt)}</strong>
                 </div>
               </article>
             ))}
