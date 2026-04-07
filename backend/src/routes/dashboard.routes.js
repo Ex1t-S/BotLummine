@@ -19,8 +19,8 @@ import {
 } from '../controllers/abandoned-cart.controller.js';
 import {
   getCustomers,
-  getCustomersSyncStatus,
-  postSyncCustomers,
+  syncCustomers,
+  getCustomerSyncStatus,
 } from '../controllers/customer.controller.js';
 
 const router = Router();
@@ -44,7 +44,7 @@ router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
 router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
 
 router.get('/customers', getCustomers);
-router.get('/customers/sync-status', getCustomersSyncStatus);
-router.post('/customers/sync', postSyncCustomers);
+router.post('/customers/sync', syncCustomers);
+router.get('/customers/sync-status', getCustomerSyncStatus);
 
 export default router;
