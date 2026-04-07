@@ -1,5 +1,24 @@
 import { prisma } from '../lib/prisma.js';
-import { resolveStoreCredentials } from './customer.service.js';
+
+async function resolveStoreCredentials() {
+	const installation = await prisma.storeInstallation.findFirst({
+		orderBy: { installedAt: 'desc' },
+	});
+
+	const storeId = installation?.storeId || process.env.TIENDANUBE_STORE_ID || null;
+	const accessToken = installation?.accessToken || process.env.TIENDANUBE_ACCESS_TOKEN || null;
+
+	if (!storeId || !accessToken) {
+		throw new Error(
+			'Faltan credenciales de Tiendanube. Necesitás StoreInstallation cargada o TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN en el .env.'
+		);
+	}
+
+	return {
+		storeId: String(storeId),
+		accessToken,
+	};
+}
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CHECKOUTS_PER_PAGE = Math.min(
