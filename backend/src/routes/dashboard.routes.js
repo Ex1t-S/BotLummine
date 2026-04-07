@@ -1,26 +1,28 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  getInbox,
-  getConversationMessagesJson,
-  postConversationMessage,
-  patchConversationQueue,
-  patchConversationResetContext,
-  deleteConversationHistory,
-  getCatalog,
-  postSyncCatalog,
-  patchConversationArchive,
-  postDeduplicateInboxContacts,
+	getInbox,
+	getConversationMessagesJson,
+	postConversationMessage,
+	patchConversationQueue,
+	patchConversationResetContext,
+	deleteConversationHistory,
+	getCatalog,
+	postSyncCatalog,
+	patchConversationArchive,
+	postDeduplicateInboxContacts,
 } from '../controllers/dashboard.controller.js';
 import {
-  getAbandonedCarts,
-  postSyncAbandonedCarts,
-  postSendAbandonedCartMessage,
+	getAbandonedCarts,
+	postSyncAbandonedCarts,
+	postSendAbandonedCartMessage,
 } from '../controllers/abandoned-cart.controller.js';
 import {
-  getCustomers,
-  syncCustomers,
-  getCustomerSyncStatus,
+	getCustomers,
+	postFullSyncCustomers,
+	postRepairCustomers,
+	postSyncCustomers,
+	getCustomersSyncStatus,
 } from '../controllers/customer.controller.js';
 
 const router = Router();
@@ -44,7 +46,9 @@ router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
 router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
 
 router.get('/customers', getCustomers);
-router.post('/customers/sync', syncCustomers);
-router.get('/customers/sync-status', getCustomerSyncStatus);
+router.post('/customers/sync', postSyncCustomers);
+router.get('/customers/sync-status', getCustomersSyncStatus);
+router.post('/customers/sync-full', postFullSyncCustomers);
+router.post('/customers/repair', postRepairCustomers);
 
 export default router;
