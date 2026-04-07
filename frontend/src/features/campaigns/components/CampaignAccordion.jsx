@@ -7,7 +7,7 @@ export default function CampaignAccordion({
 }) {
 	return (
 		<details className={`campaign-accordion ${className}`.trim()} open={defaultOpen}>
-			<summary className="campaign-accordion-summary">
+			<summary className="campaign-accordion-summary campaign-accordion-summary--clean">
 				<div className="campaign-accordion-copy">
 					<strong>{title}</strong>
 					{description ? <span>{description}</span> : null}

@@ -25,38 +25,42 @@ export default function AbandonedCartCampaignPanel({
 }) {
 	return (
 		<div className="campaign-custom-audience campaign-custom-audience--premium">
-			<div className="campaign-custom-audience-intro">
-				<span className="campaigns-eyebrow">Audiencia inteligente</span>
-				<h3>Recuperación de carritos más entendible para negocio</h3>
-				<p>
-					Elegí una ventana, filtrá por valor o producto y revisá una vista previa antes de crear
-					la campaña. La idea es que el usuario comercial entienda qué va a pasar sin mirar código.
-				</p>
+			<div className="campaign-custom-audience-intro campaign-custom-audience-intro--compact">
+				<div className="campaign-custom-audience-title-row">
+					<div>
+						<span className="campaigns-eyebrow">Audiencia inteligente</span>
+						<h3>Recuperación de carritos</h3>
+					</div>
 
-				<div className="campaign-inline-summary campaign-inline-summary--soft">
-					<div className="campaign-inline-summary-item">
-						<strong>{form.daysBack}</strong>
-						<span>días hacia atrás</span>
-					</div>
-					<div className="campaign-inline-summary-item">
-						<strong>{form.limit || 0}</strong>
-						<span>máximo de contactos</span>
-					</div>
-					<div className="campaign-inline-summary-item">
-						<strong>{moneyLabel(form.minTotal)}</strong>
-						<span>monto mínimo</span>
-					</div>
-					<div className="campaign-inline-summary-item">
-						<strong>{preview.total || 0}</strong>
-						<span>destinatarios en preview</span>
+					<div className="campaign-inline-summary campaign-inline-summary--soft campaign-inline-summary--tight">
+						<div className="campaign-inline-summary-item">
+							<strong>{form.daysBack}</strong>
+							<span>días</span>
+						</div>
+						<div className="campaign-inline-summary-item">
+							<strong>{form.limit || 0}</strong>
+							<span>contactos</span>
+						</div>
+						<div className="campaign-inline-summary-item">
+							<strong>{moneyLabel(form.minTotal)}</strong>
+							<span>mínimo</span>
+						</div>
+						<div className="campaign-inline-summary-item">
+							<strong>{preview.total || 0}</strong>
+							<span>preview</span>
+						</div>
 					</div>
 				</div>
+
+				<p className="campaign-custom-audience-subtext">
+					Filtrá, previsualizá y creá la campaña.
+				</p>
 			</div>
 
 			<div className="campaign-custom-audience-grid campaign-custom-audience-grid--balanced">
 				<div className="campaign-custom-audience-card campaign-custom-audience-card--form">
 					<div className="field">
-						<span>Template seleccionado</span>
+						<span>Template</span>
 						<select
 							value={selectedTemplate?.id || ''}
 							onChange={(e) => {
@@ -75,7 +79,7 @@ export default function AbandonedCartCampaignPanel({
 
 					<div className="campaign-form-grid two-columns">
 						<div className="field">
-							<span>Nombre de campaña</span>
+							<span>Nombre</span>
 							<input
 								value={form.name}
 								onChange={(e) => onUpdateField('name', e.target.value)}
@@ -104,7 +108,7 @@ export default function AbandonedCartCampaignPanel({
 								onChange={(e) => onUpdateField('status', e.target.value)}
 							>
 								<option value="NEW">Nuevos</option>
-								<option value="CONTACTED">Ya contactados</option>
+								<option value="CONTACTED">Contactados</option>
 								<option value="ALL">Todos</option>
 							</select>
 						</div>
@@ -146,7 +150,7 @@ export default function AbandonedCartCampaignPanel({
 						<textarea
 							value={form.notes}
 							onChange={(e) => onUpdateField('notes', e.target.value)}
-							placeholder="Contexto interno para esta campaña"
+							placeholder="Referencia interna"
 							rows={3}
 						/>
 					</div>
@@ -158,8 +162,8 @@ export default function AbandonedCartCampaignPanel({
 							onChange={(e) => onUpdateField('launchNow', e.target.checked)}
 						/>
 						<span>
-							<strong>Lanzar apenas se cree</strong>
-							<small>Ideal para campañas rápidas de recuperación.</small>
+							<strong>Lanzar al crear</strong>
+							<small>Para recuperaciones rápidas.</small>
 						</span>
 					</label>
 
@@ -170,7 +174,7 @@ export default function AbandonedCartCampaignPanel({
 							onClick={onPreview}
 							disabled={previewing}
 						>
-							{previewing ? 'Generando...' : 'Previsualizar audiencia'}
+							{previewing ? 'Generando...' : 'Previsualizar'}
 						</button>
 
 						<button
@@ -191,9 +195,9 @@ export default function AbandonedCartCampaignPanel({
 				<div className="campaign-custom-audience-card campaign-custom-audience-preview campaign-custom-audience-preview--elevated">
 					<div className="campaign-custom-audience-preview-head">
 						<div>
-							<div className="campaign-custom-audience-preview-title">Vista previa de audiencia</div>
+							<div className="campaign-custom-audience-preview-title">Vista previa</div>
 							<div className="campaign-custom-audience-preview-subtitle">
-								{preview.total || 0} destinatarios detectados
+								{preview.total || 0} destinatarios
 							</div>
 						</div>
 
@@ -224,15 +228,14 @@ export default function AbandonedCartCampaignPanel({
 
 									{recipient.renderedPreviewText ? (
 										<div className="campaign-custom-audience-recipient-preview">
-											{formatPreviewText(recipient.renderedPreviewText, 260)}
+											{formatPreviewText(recipient.renderedPreviewText, 220)}
 										</div>
 									) : null}
 								</div>
 							))
 						) : (
 							<div className="campaign-custom-audience-empty">
-								Previsualizá la audiencia para ver los primeros destinatarios y cómo se
-								renderiza el template.
+								Hacé una previsualización para ver los primeros destinatarios.
 							</div>
 						)}
 					</div>

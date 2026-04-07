@@ -11,7 +11,7 @@ import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 function PageSection({ eyebrow, title, description, actions = null, children, className = '' }) {
 	return (
 		<section className={`campaign-stage ${className}`.trim()}>
-			<div className="campaign-stage-header">
+			<div className="campaign-stage-header campaign-stage-header--compact">
 				<div>
 					{eyebrow ? <span className="campaign-stage-eyebrow">{eyebrow}</span> : null}
 					<h3>{title}</h3>
@@ -46,91 +46,104 @@ export default function CampaignsFeaturePage() {
 
 	return (
 		<section className="campaigns-page campaign-page-stack">
-			<div className="campaigns-hero page-card campaign-shell-card">
+			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--clean">
 				<div className="campaigns-hero-copy">
 					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
-					<h2>Campañas más claras, vendibles y fáciles de operar</h2>
-					<p>
-						Ordená el trabajo comercial por pasos: elegí audiencia, definí el mensaje,
-						creá la campaña y seguí su resultado sin obligar al usuario a entender Meta por
-						dentro.
+
+					<h2>Campañas simples de crear y fáciles de seguir</h2>
+
+					<p className="campaigns-hero-lead">
+						Elegí audiencia, mensaje y lanzamiento sin perderte en opciones técnicas.
 					</p>
 
-					<div className="campaigns-hero-highlights">
+					<div className="campaigns-hero-highlights campaigns-hero-highlights--compact">
 						<div className="campaigns-hero-highlight">
 							<strong>{approvedTemplates}</strong>
 							<span>templates aprobados</span>
 						</div>
+
 						<div className="campaigns-hero-highlight">
 							<strong>{activeCampaigns}</strong>
-							<span>campañas activas o en cola</span>
+							<span>activas o en cola</span>
 						</div>
+
 						<div className="campaigns-hero-highlight">
 							<strong>{recipients}</strong>
-							<span>destinatarios acumulados</span>
+							<span>destinatarios</span>
 						</div>
+
 						<div className="campaigns-hero-highlight accent">
 							<strong>USD {estimatedCost.toFixed(2)}</strong>
-							<span>actividad estimada actual</span>
+							<span>actividad estimada</span>
 						</div>
+					</div>
+
+					<div className="campaigns-mini-steps">
+						<span>1. Audiencia</span>
+						<span>2. Mensaje</span>
+						<span>3. Lanzamiento</span>
+						<span>4. Seguimiento</span>
 					</div>
 				</div>
 
-				<div className="campaigns-hero-side">
+				<div className="campaigns-hero-side campaigns-hero-side--stack">
 					<CampaignFeedbackAlert feedback={feedback} />
 
-					<div className="campaign-quick-guide">
-						<div className="campaign-quick-guide-title">Recorrido recomendado</div>
-						<ol>
-							<li>Elegí o sincronizá un template.</li>
-							<li>Armá la audiencia manual o desde carritos.</li>
-							<li>Creá la campaña y revisá el historial.</li>
-						</ol>
+					<div className="campaign-quick-guide campaign-quick-guide--compact">
+						<div className="campaign-quick-guide-title">Inicio rápido</div>
+						<div className="campaign-quick-guide-pills">
+							<span>Elegí template</span>
+							<span>Definí audiencia</span>
+							<span>Creá campaña</span>
+						</div>
 					</div>
 				</div>
 			</div>
 
 			<CampaignOverviewGrid overview={overview} />
 
-			<div className="campaign-workflow-strip page-card campaign-shell-card">
+			<div className="campaign-workflow-strip page-card campaign-shell-card campaign-workflow-strip--clean">
 				<div className="campaign-workflow-step is-active">
 					<span>01</span>
 					<div>
 						<strong>Audiencia</strong>
-						<small>Elegí a quién escribirle.</small>
+						<small>Quién recibe</small>
 					</div>
 				</div>
+
 				<div className="campaign-workflow-step">
 					<span>02</span>
 					<div>
 						<strong>Mensaje</strong>
-						<small>Seleccioná o editá el template.</small>
+						<small>Qué se envía</small>
 					</div>
 				</div>
+
 				<div className="campaign-workflow-step">
 					<span>03</span>
 					<div>
 						<strong>Lanzamiento</strong>
-						<small>Creá la campaña y despachala.</small>
+						<small>Cuándo sale</small>
 					</div>
 				</div>
+
 				<div className="campaign-workflow-step">
 					<span>04</span>
 					<div>
 						<strong>Seguimiento</strong>
-						<small>Controlá estados y resultados.</small>
+						<small>Qué resultado tuvo</small>
 					</div>
 				</div>
 			</div>
 
 			<PageSection
 				eyebrow="Paso 1"
-				title="Audiencias y recuperación de carritos"
-				description="Este bloque está pensado para usuarios de negocio: menos configuración técnica, más foco en quién recibe la campaña y por qué."
+				title="Audiencia y recuperación"
+				description="Elegí a quién escribir con filtros simples y vista previa."
 			>
 				<CampaignAccordion
-					title="Recuperación automática desde carritos abandonados"
-					description="Generá una audiencia lista para usar con filtros simples y una vista previa clara."
+					title="Carritos abandonados"
+					description="Armá una audiencia lista para usar."
 					defaultOpen={true}
 				>
 					<AbandonedCartCampaignPanel
@@ -150,13 +163,13 @@ export default function CampaignsFeaturePage() {
 
 			<PageSection
 				eyebrow="Paso 2"
-				title="Templates y contenido del mensaje"
-				description="La biblioteca queda separada del editor para que el usuario primero encuentre el mensaje correcto y después lo ajuste si hace falta."
+				title="Templates"
+				description="Elegí o ajustá el mensaje sin salir del módulo."
 			>
 				<div className="campaign-section-grid campaign-section-grid--editor">
 					<CampaignAccordion
-						title="Biblioteca de templates"
-						description="Buscá, filtrá y elegí la plantilla correcta para cada campaña."
+						title="Biblioteca"
+						description="Buscá y seleccioná una plantilla."
 						defaultOpen={true}
 					>
 						<TemplateLibraryPanel
@@ -175,8 +188,8 @@ export default function CampaignsFeaturePage() {
 					</CampaignAccordion>
 
 					<CampaignAccordion
-						title="Editor de template"
-						description="Ajustá el contenido y dejalo listo para campañas futuras sin salir del módulo."
+						title="Editor"
+						description="Editá el contenido y dejalo listo."
 						defaultOpen={true}
 					>
 						<TemplateBuilderPanel
@@ -194,13 +207,13 @@ export default function CampaignsFeaturePage() {
 
 			<PageSection
 				eyebrow="Paso 3 y 4"
-				title="Creación de campañas y seguimiento"
-				description="Primero se arma el envío, después se monitorea. El historial queda explicado en lenguaje más comercial para que no parezca una consola técnica."
+				title="Creación y seguimiento"
+				description="Primero se arma la campaña. Después se controla su estado."
 			>
 				<div className="campaign-section-grid two-rows">
 					<CampaignAccordion
 						title="Crear campaña manual"
-						description="Elegí template, definí audiencia y dejá listo el envío."
+						description="Configurá el envío."
 						defaultOpen={true}
 					>
 						<CampaignComposerPanel
@@ -213,8 +226,8 @@ export default function CampaignsFeaturePage() {
 					</CampaignAccordion>
 
 					<CampaignAccordion
-						title="Historial de campañas"
-						description="Revisá borradores, campañas activas y resultados en una vista más clara y accionable."
+						title="Historial"
+						description="Revisá estado y resultados."
 						defaultOpen={true}
 					>
 						<CampaignRunsPanel
