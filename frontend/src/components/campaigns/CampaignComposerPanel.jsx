@@ -61,11 +61,6 @@ function normalizeText(value = '') {
 		.trim();
 }
 
-function normalizeString(value = '', fallback = '') {
-	const normalized = String(value ?? '').trim();
-	return normalized || fallback;
-}
-
 function getTemplateComponents(template) {
 	if (Array.isArray(template?.components)) return template.components;
 	if (Array.isArray(template?.rawPayload?.components)) return template.rawPayload.components;
@@ -342,7 +337,7 @@ function parseAudience(rawValue = '', extraVariables = {}, variableMapping = {},
 				variables,
 			};
 		})
-		filter((item) => item.phone);
+		.filter((item) => item.phone);
 }
 
 function customerToRecipient(customer, extraVariables = {}, variableMapping = {}, placeholders = []) {
@@ -521,11 +516,14 @@ export default function CampaignComposerPanel({
 		);
 	}, [availableProducts, productSearch]);
 
-	const visibleCustomers = useMemo(() => {
-		if (!selectedProductFilters.length) return customerAudience.customers;
-		return customerAudience.customers.filter((customer) =>
-			customerMatchesSelectedProducts(customer, selectedProductFilters)
-		);
+	const selectedVisibleProductMatchesCount = useMemo(() => {
+		if (!selectedProductFilters.length) return 0;
+
+		return customerAudience.customers.filter(
+			(customer) =>
+				Boolean(normalizePhone(customer.phone || '')) &&
+				customerMatchesSelectedProducts(customer, selectedProductFilters)
+		).length;
 	}, [customerAudience.customers, selectedProductFilters]);
 
 	const customerRecipients = useMemo(() => {
@@ -542,34 +540,16 @@ export default function CampaignComposerPanel({
 
 	const estimatedCost = useMemo(() => recipients.length * 0.032, [recipients.length]);
 
-	const currentPageSelectableCustomers = useMemo(() => {
-		return visibleCustomers.filter((customer) => Boolean(normalizePhone(customer.phone || '')));
-	}, [visibleCustomers]);
-
-	const selectedCustomerCount = selectedCustomers.length;
-
-	const selectedPageCount = currentPageSelectableCustomers.filter(
-		(customer) => Boolean(selectedCustomersMap[customer.id])
-	).length;
-
-	const allPageSelected =
-		currentPageSelectableCustomers.length > 0 &&
-		currentPageSelectableCustomers.every((customer) => selectedCustomersMap[customer.id]);
-
-	const allVisibleFilteredSelected =
-		visibleCustomers.length > 0 &&
-		visibleCustomers
-			.filter((customer) => Boolean(normalizePhone(customer.phone || '')))
-			.every((customer) => selectedCustomersMap[customer.id]);
-
 	const sampleResolvedVariables = useMemo(() => {
 		return recipients[0]?.variables || {};
 	}, [recipients]);
 
+	const selectedCustomerCount = selectedCustomers.length;
+
 	const totalFoundCount = Number(
 		customerAudience?.pagination?.totalItems ||
-			customerAudience?.stats?.totalCustomers ||
-			0
+		customerAudience?.stats?.totalCustomers ||
+		0
 	);
 
 	function buildCustomerRequestParams(nextFilters = customerFilters) {
@@ -676,70 +656,6 @@ export default function CampaignComposerPanel({
 		}));
 	}
 
-	function toggleCustomerSelection(customer) {
-		const normalizedPhone = normalizePhone(customer?.phone || '');
-
-		if (!normalizedPhone || !customer?.id) return;
-
-		setSelectedCustomersMap((current) => {
-			const next = { ...current };
-
-			if (next[customer.id]) {
-				delete next[customer.id];
-			} else {
-				next[customer.id] = customer;
-			}
-
-			return next;
-		});
-	}
-
-	function toggleCurrentPageSelection() {
-		if (!currentPageSelectableCustomers.length) return;
-
-		setSelectedCustomersMap((current) => {
-			const next = { ...current };
-
-			if (allPageSelected) {
-				for (const customer of currentPageSelectableCustomers) {
-					delete next[customer.id];
-				}
-				return next;
-			}
-
-			for (const customer of currentPageSelectableCustomers) {
-				next[customer.id] = customer;
-			}
-
-			return next;
-		});
-	}
-
-	function toggleVisibleFilteredSelection() {
-		const selectableVisibleCustomers = visibleCustomers.filter((customer) =>
-			Boolean(normalizePhone(customer.phone || ''))
-		);
-
-		if (!selectableVisibleCustomers.length) return;
-
-		setSelectedCustomersMap((current) => {
-			const next = { ...current };
-
-			if (allVisibleFilteredSelected) {
-				for (const customer of selectableVisibleCustomers) {
-					delete next[customer.id];
-				}
-				return next;
-			}
-
-			for (const customer of selectableVisibleCustomers) {
-				next[customer.id] = customer;
-			}
-
-			return next;
-		});
-	}
-
 	function toggleProductFilter(label) {
 		setSelectedProductFilters((current) => {
 			if (current.includes(label)) {
@@ -747,21 +663,6 @@ export default function CampaignComposerPanel({
 			}
 			return [...current, label];
 		});
-	}
-
-	function selectCustomersByProducts() {
-		if (!selectedProductFilters.length) return;
-
-		const matchingCustomers = customerAudience.customers.filter(
-			(customer) =>
-				Boolean(normalizePhone(customer.phone || '')) &&
-				customerMatchesSelectedProducts(customer, selectedProductFilters)
-		);
-
-		setSelectedCustomersMap((current) => ({
-			...current,
-			...mapCustomersById(matchingCustomers),
-		}));
 	}
 
 	function clearSelectedProducts() {
@@ -822,12 +723,6 @@ export default function CampaignComposerPanel({
 				for (const customerId of bulkSelectionInfo.customerIds) {
 					delete next[customerId];
 				}
-			} else {
-				for (const customer of visibleCustomers) {
-					if (customer?.id) {
-						delete next[customer.id];
-					}
-				}
 			}
 
 			return next;
@@ -863,8 +758,8 @@ export default function CampaignComposerPanel({
 			setUploadedFileName('');
 			setImageError(
 				error?.response?.data?.error ||
-					error?.message ||
-					'No se pudo subir la imagen del encabezado.'
+				error?.message ||
+				'No se pudo subir la imagen del encabezado.'
 			);
 		} finally {
 			setUploadingImage(false);
@@ -930,24 +825,24 @@ export default function CampaignComposerPanel({
 			audienceFilters:
 				form.audienceMode === 'customers'
 					? {
-							q: customerFilters.q || '',
-							sort: customerFilters.sort || 'updated_desc',
-							pageSize: customerFilters.pageSize || 24,
-							minSpent:
-								customerFilters.minSpent === '' ? null : Number(customerFilters.minSpent),
-							minOrders:
-								customerFilters.minOrders === '' ? null : Number(customerFilters.minOrders),
-							hasPhoneOnly: Boolean(customerFilters.hasPhoneOnly),
-							hasOrders: Boolean(customerFilters.hasOrders),
-							productQuery: customerFilters.productQuery || '',
-							selectedProducts: selectedProductFilters,
-							selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
-							selectedCount: selectedCustomers.length,
-							variableMapping,
-						}
+						q: customerFilters.q || '',
+						sort: customerFilters.sort || 'updated_desc',
+						pageSize: customerFilters.pageSize || 24,
+						minSpent:
+							customerFilters.minSpent === '' ? null : Number(customerFilters.minSpent),
+						minOrders:
+							customerFilters.minOrders === '' ? null : Number(customerFilters.minOrders),
+						hasPhoneOnly: Boolean(customerFilters.hasPhoneOnly),
+						hasOrders: Boolean(customerFilters.hasOrders),
+						productQuery: customerFilters.productQuery || '',
+						selectedProducts: selectedProductFilters,
+						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
+						selectedCount: selectedCustomers.length,
+						variableMapping,
+					}
 					: {
-							variableMapping,
-						},
+						variableMapping,
+					},
 			notes: form.description.trim() || null,
 			sendComponents: getTemplateComponents(selectedTemplate),
 		};
@@ -1194,7 +1089,10 @@ export default function CampaignComposerPanel({
 							<div>
 								<span className="campaign-step-badge">Paso 1</span>
 								<h4>Elegí a quién querés escribirle</h4>
-								<p>Primero filtrás, después seleccionás.</p>
+								<p>
+									La grilla de clientes quedó oculta para que la pantalla no sea infinita.
+									La selección masiva funciona en segundo plano.
+								</p>
 							</div>
 							<div className="campaign-customer-kpi campaign-customer-kpi--large">
 								<strong>{formatCompactNumber(totalFoundCount)}</strong>
@@ -1285,12 +1183,6 @@ export default function CampaignComposerPanel({
 								Quitar selección masiva
 							</button>
 						</div>
-
-						{bulkSelectionInfo.count > 0 ? (
-							<div className="campaign-inline-success">
-								Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) en segundo plano. Seguís viendo solo la página actual para que la pantalla no se vuelva eterna.
-							</div>
-						) : null}
 
 						{showAdvancedFilters ? (
 							<div className="campaign-advanced-filters">
@@ -1393,7 +1285,7 @@ export default function CampaignComposerPanel({
 												/>
 												<div>
 													<strong>{product.label}</strong>
-													<span>{product.count} clientes</span>
+													<span>{product.count} clientes en esta muestra</span>
 												</div>
 											</label>
 										))}
@@ -1403,127 +1295,64 @@ export default function CampaignComposerPanel({
 										<button type="button" className="button ghost" onClick={clearSelectedProducts}>
 											Limpiar
 										</button>
-										<button type="button" className="button secondary" onClick={selectCustomersByProducts}>
-											Seleccionar clientes de esos productos
-										</button>
 									</div>
 								</div>
 							) : null}
 						</div>
 
-						<div className="campaign-customer-toolbar campaign-customer-toolbar--friendly">
-							<div className="campaign-customer-toolbar-text">
-								<strong>{formatCompactNumber(selectedCustomerCount)}</strong> cliente(s) seleccionados
+						<div className="campaign-audience-summary-grid">
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(totalFoundCount)}</strong>
+								<span>clientes encontrados</span>
 							</div>
 
-							<div className="campaign-inline-actions campaign-inline-actions--wrap">
-								<button
-									type="button"
-									className="button ghost"
-									onClick={toggleCurrentPageSelection}
-									disabled={!currentPageSelectableCustomers.length}
-								>
-									{allPageSelected
-										? `Deseleccionar página (${selectedPageCount}/${currentPageSelectableCustomers.length})`
-										: `Seleccionar página (${selectedPageCount}/${currentPageSelectableCustomers.length})`}
-								</button>
-
-								<button
-									type="button"
-									className="button secondary"
-									onClick={toggleVisibleFilteredSelection}
-									disabled={!visibleCustomers.length}
-								>
-									{allVisibleFilteredSelected
-										? `Deseleccionar visibles (${visibleCustomers.length})`
-										: `Seleccionar visibles (${visibleCustomers.length})`}
-								</button>
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(selectedCustomerCount)}</strong>
+								<span>clientes seleccionados</span>
 							</div>
+
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(selectedProductFilters.length)}</strong>
+								<span>productos marcados</span>
+							</div>
+						</div>
+
+						<div className="campaign-helper-box">
+							<div className="campaign-helper-text">
+								No se muestran las tarjetas de clientes para que la página no se haga kilométrica.
+								La selección se hace en segundo plano según los filtros actuales.
+							</div>
+
+							{selectedProductFilters.length ? (
+								<div className="campaign-selected-products-row">
+									{selectedProductFilters.map((product) => (
+										<span key={product} className="campaign-selected-product-chip">
+											{product}
+										</span>
+									))}
+								</div>
+							) : null}
+
+							{selectedProductFilters.length ? (
+								<div className="campaign-helper-inline-text">
+									Con los productos marcados, en la muestra actual coinciden {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s).
+								</div>
+							) : null}
+
+							{bulkSelectionInfo.count > 0 ? (
+								<div className="campaign-inline-success">
+									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) con los filtros actuales.
+								</div>
+							) : (
+								<div className="campaign-inline-warning">
+									Todavía no hiciste una selección masiva. Primero filtrá, después apretá el botón de seleccionar.
+								</div>
+							)}
 						</div>
 
 						{customerAudience.error ? (
 							<div className="campaign-inline-error">{customerAudience.error}</div>
 						) : null}
-
-						<div className="campaign-customer-grid">
-							{visibleCustomers.map((customer) => {
-								const normalizedPhone = normalizePhone(customer?.phone || '');
-								const selected = Boolean(selectedCustomersMap[customer.id]);
-								const disabled = !normalizedPhone;
-
-								return (
-									<button
-										key={customer.id}
-										type="button"
-										className={`campaign-customer-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
-										onClick={() => !disabled && toggleCustomerSelection(customer)}
-									>
-										<div className="campaign-customer-card-top">
-											<div className="campaign-customer-avatar">
-												{String(customer?.displayName || customer?.email || '?')
-													.slice(0, 1)
-													.toUpperCase()}
-											</div>
-
-											<div className="campaign-customer-title-wrap">
-												<strong>{customer?.displayName || customer?.email || 'Cliente'}</strong>
-												<span>{customer?.email || normalizedPhone || 'Sin teléfono'}</span>
-											</div>
-
-											<div className="campaign-customer-checkbox">
-												<input type="checkbox" checked={selected} readOnly />
-											</div>
-										</div>
-
-										<div className="campaign-customer-meta">
-											<span>{customer?.orderCount || 0} compras</span>
-											<span>{customer?.totalSpentLabel || '$0'}</span>
-										</div>
-
-										<div className="campaign-customer-product">
-											{getPrimaryProductName(customer) || 'Sin producto principal detectado'}
-										</div>
-									</button>
-								);
-							})}
-						</div>
-
-						<div className="campaign-customer-pagination">
-							<button
-								type="button"
-								className="button ghost"
-								disabled={Number(customerAudience.pagination?.page || 1) <= 1}
-								onClick={() => {
-									const nextPage = Math.max(1, Number(customerAudience.pagination?.page || 1) - 1);
-									const nextFilters = { ...customerFilters, page: nextPage };
-									setCustomerFilters(nextFilters);
-									void loadCustomers(nextFilters);
-								}}
-							>
-								Anterior
-							</button>
-
-							<span>
-								Página {customerAudience.pagination?.page || 1} de {customerAudience.pagination?.totalPages || 1}
-							</span>
-
-							<button
-								type="button"
-								className="button ghost"
-								disabled={
-									Number(customerAudience.pagination?.page || 1) >=
-									Number(customerAudience.pagination?.totalPages || 1)
-								}
-								onClick={() => {
-									const nextPage = Number(customerAudience.pagination?.page || 1) + 1;
-									const nextFilters = { ...customerFilters, page: nextPage };
-									setCustomerFilters(nextFilters);
-									void loadCustomers(nextFilters);
-								}}
-							>
-								Siguiente
-							</button>
-						</div>
 					</div>
 				) : (
 					<div className="campaign-builder-section">
