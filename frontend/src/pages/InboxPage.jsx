@@ -848,208 +848,128 @@ export default function InboxPage() {
 				</aside>
 
 				<section className="inbox-chat-panel">
-					{!selectedConversationId ? (
-						<div className="inbox-chat-empty">
-							<div>
-								<div className="inbox-chat-empty-title">
-									Seleccioná una conversación
-								</div>
-								<div className="inbox-chat-empty-text">
-									Acá vas a ver los mensajes, archivos y acciones del chat.
-								</div>
-							</div>
-						</div>
-					) : (
-						<>
-							<header className="inbox-chat-header">
-								<div className="inbox-chat-header-main">
-									<div className="inbox-chat-title">
-										{conversation?.contact?.name ||
-											activeContact?.displayName ||
-											'Sin nombre'}
+	{!selectedConversationId ? (
+		<div className="inbox-chat-empty">
+			<div>
+				<div className="inbox-chat-empty-title">
+					Seleccioná una conversación
+				</div>
+				<div className="inbox-chat-empty-text">
+					Acá vas a ver los mensajes, archivos y acciones del chat.
+				</div>
+			</div>
+		</div>
+	) : (
+		<>
+			<div className="inbox-chat-header">
+				<div className="inbox-chat-header-main">
+					<div className="inbox-chat-title">
+						{activeContact?.displayName || conversation?.contact?.name || 'Sin nombre'}
+					</div>
+
+					<div className="inbox-chat-subtitle">
+						{activeContact?.phoneDisplay || conversation?.contact?.phone || 'Sin teléfono'}
+					</div>
+				</div>
+
+				<div className="inbox-chat-header-right">
+					<div className="inbox-chat-status">
+						<span className="inbox-status-pill">
+							{conversation?.queue || activeContact?.queue || queue}
+						</span>
+
+						<span
+							className={`inbox-status-pill ${
+								conversation?.aiEnabled
+									? 'inbox-status-pill--success'
+									: 'inbox-status-pill--muted'
+							}`}
+						>
+							{conversation?.aiEnabled ? 'IA activa' : 'Humano'}
+						</span>
+					</div>
+				</div>
+			</div>
+			<div style={{ padding: '8px 16px', fontSize: '12px', color: '#334155', background: '#fffbe6', borderBottom: '1px solid rgba(15,23,42,0.08)' }}>
+				debug → selectedConversationId: {String(selectedConversationId)} | mensajes: {(conversation?.messages || []).length}
+			</div>
+			<div className="inbox-messages" ref={messagesContainerRef}>
+				{conversationQuery.isLoading ? (
+					<div className="inbox-empty-state">Cargando mensajes...</div>
+				) : (conversation?.messages || []).length === 0 ? (
+					<div className="inbox-empty-state">
+						Esta conversación todavía no tiene mensajes.
+					</div>
+				) : (
+					(conversation?.messages || []).map((msg) => (
+						<MessageBubble key={msg.id} message={msg} />
+					))
+				)}
+			</div>
+
+			{!showArchived ? (
+				<div className="inbox-composer-shell">
+					<form className="inbox-composer" onSubmit={handleSubmit}>
+						<div className="inbox-composer-toolbar" ref={emojiPickerRef}>
+							<button
+								type="button"
+								className="inbox-emoji-toggle"
+								onClick={() => setShowEmojiPicker((prev) => !prev)}
+								title="Emoji"
+							>
+								😊
+							</button>
+
+							{showEmojiPicker ? (
+								<div className="inbox-emoji-picker">
+									<div className="inbox-emoji-picker-title">
+										Elegí un emoji
 									</div>
 
-									<div className="inbox-chat-subtitle">
-										{conversation?.contact?.phone ||
-											activeContact?.phoneDisplay ||
-											'Sin teléfono'}
-									</div>
-								</div>
-
-								<div className="inbox-chat-header-right">
-									<div className="inbox-chat-status">
-										<span className="inbox-status-pill">
-											{conversation?.queue || activeContact?.queue || queue}
-										</span>
-
-										<span
-											className={`inbox-status-pill ${
-												conversation?.aiEnabled
-													? 'inbox-status-pill--success'
-													: 'inbox-status-pill--muted'
-											}`}
-										>
-											{conversation?.aiEnabled ? 'IA activa' : 'Humano'}
-										</span>
-									</div>
-
-									<div className="inbox-chat-actions">
-										<ActionButton
-											active={(conversation?.queue || activeContact?.queue) === 'AUTO'}
-											disabled={moveQueueMutation.isPending}
-											onClick={() => handleMoveQueue('AUTO')}
-										>
-											Automático
-										</ActionButton>
-
-										<ActionButton
-											active={(conversation?.queue || activeContact?.queue) === 'HUMAN'}
-											disabled={moveQueueMutation.isPending}
-											onClick={() => handleMoveQueue('HUMAN')}
-										>
-											Atención humana
-										</ActionButton>
-
-										<ActionButton
-											active={
-												(conversation?.queue || activeContact?.queue) ===
-												'PAYMENT_REVIEW'
-											}
-											disabled={moveQueueMutation.isPending}
-											onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
-										>
-											Comprobantes
-										</ActionButton>
-
-										<ActionButton
-											disabled={archiveConversationMutation.isPending}
-											onClick={() => {
-												const confirmed = window.confirm(
-													showArchived
-														? 'Este chat va a volver a la bandeja activa. ¿Continuar?'
-														: 'Este chat se va a sacar del inbox, pero no se va a borrar.\n¿Continuar?'
-												);
-
-												if (confirmed) {
-													archiveConversationMutation.mutate(!showArchived);
-												}
-											}}
-										>
-											{archiveConversationMutation.isPending
-												? showArchived
-													? 'Restaurando...'
-													: 'Archivando...'
-												: showArchived
-													? 'Desarchivar'
-													: 'Archivar chat'}
-										</ActionButton>
-
-										<ActionButton
-											disabled={resetContextMutation.isPending}
-											onClick={() => resetContextMutation.mutate()}
-										>
-											Reiniciar IA
-										</ActionButton>
-
-										<ActionButton
-											danger
-											disabled={clearHistoryMutation.isPending}
-											onClick={() => {
-												const confirmed = window.confirm(
-													'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
-												);
-
-												if (confirmed) {
-													clearHistoryMutation.mutate();
-												}
-											}}
-										>
-											Borrar historial
-										</ActionButton>
-									</div>
-								</div>
-							</header>
-
-							<div className="inbox-messages" ref={messagesContainerRef}>
-								{conversationQuery.isLoading ? (
-									<div className="inbox-empty-state">Cargando mensajes...</div>
-								) : null}
-
-								{!conversationQuery.isLoading &&
-								(conversation?.messages || []).length === 0 ? (
-									<div className="inbox-empty-state">
-										Esta conversación todavía no tiene mensajes.
-									</div>
-								) : null}
-
-								{(conversation?.messages || []).map((msg) => (
-									<MessageBubble key={msg.id} message={msg} />
-								))}
-							</div>
-
-							{!showArchived ? (
-								<div className="inbox-composer-shell">
-									<form className="inbox-composer" onSubmit={handleSubmit}>
-										<div className="inbox-composer-toolbar" ref={emojiPickerRef}>
+									<div className="inbox-emoji-grid">
+										{QUICK_EMOJIS.map((emoji) => (
 											<button
+												key={emoji}
 												type="button"
-												className="inbox-emoji-toggle"
-												onClick={() => setShowEmojiPicker((prev) => !prev)}
-												title="Emoji"
+												className="inbox-emoji-btn"
+												onClick={() => insertEmoji(emoji)}
 											>
-												😊
+												{emoji}
 											</button>
-
-											{showEmojiPicker ? (
-												<div className="inbox-emoji-picker">
-													<div className="inbox-emoji-picker-title">
-														Elegí un emoji
-													</div>
-
-													<div className="inbox-emoji-grid">
-														{QUICK_EMOJIS.map((emoji) => (
-															<button
-																key={emoji}
-																type="button"
-																className="inbox-emoji-btn"
-																onClick={() => insertEmoji(emoji)}
-															>
-																{emoji}
-															</button>
-														))}
-													</div>
-												</div>
-											) : null}
-										</div>
-
-										<textarea
-											ref={textareaRef}
-											className="inbox-composer-textarea"
-											placeholder="Escribí un mensaje..."
-											value={messageText}
-											onChange={(event) => setMessageText(event.target.value)}
-											onKeyDown={handleComposerKeyDown}
-											rows={1}
-										/>
-
-										<button
-											type="submit"
-											className="inbox-send-btn"
-											disabled={sendMessageMutation.isPending || !messageText.trim()}
-											title={sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
-										>
-											➤
-										</button>
-									</form>
+										))}
+									</div>
 								</div>
-							) : (
-								<div className="inbox-archived-hint">
-									Este chat está archivado. Desarchivalo para volver a responder.
-								</div>
-							)}
-						</>
-					)}
-				</section>
+							) : null}
+						</div>
+
+						<textarea
+							ref={textareaRef}
+							className="inbox-composer-textarea"
+							placeholder="Escribí un mensaje..."
+							value={messageText}
+							onChange={(event) => setMessageText(event.target.value)}
+							onKeyDown={handleComposerKeyDown}
+							rows={1}
+						/>
+
+						<button
+							type="submit"
+							className="inbox-send-btn"
+							disabled={sendMessageMutation.isPending || !messageText.trim()}
+							title={sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
+						>
+							➤
+						</button>
+					</form>
+				</div>
+			) : (
+				<div className="inbox-archived-hint">
+					Este chat está archivado. Desarchivalo para volver a responder.
+				</div>
+			)}
+		</>
+	)}
+</section>
 			</div>
 		</div>
 	);
