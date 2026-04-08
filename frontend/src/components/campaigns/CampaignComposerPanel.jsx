@@ -142,7 +142,11 @@ function guessSourceForVariable(variableKey = '') {
 		return 'total_spent_label';
 	}
 
-	if (['4', 'pedido', 'order', 'order_id', 'last_order_id', 'order_number', 'last_order_number'].includes(key)) {
+	if (
+		['4', 'pedido', 'order', 'order_id', 'last_order_id', 'order_number', 'last_order_number'].includes(
+			key
+		)
+	) {
 		return 'last_order_number';
 	}
 
@@ -547,9 +551,74 @@ export default function CampaignComposerPanel({
 		currentPageSelectableCustomers.length > 0 &&
 		currentPageSelectableCustomers.every((customer) => selectedCustomersMap[customer.id]);
 
+	const allVisibleFilteredSelected =
+		visibleCustomers.length > 0 &&
+		visibleCustomers
+			.filter((customer) => Boolean(normalizePhone(customer.phone || '')))
+			.every((customer) => selectedCustomersMap[customer.id]);
+
 	const sampleResolvedVariables = useMemo(() => {
 		return recipients[0]?.variables || {};
 	}, [recipients]);
+
+	function buildCustomerRequestParams(nextFilters = customerFilters) {
+		return {
+			q: nextFilters.q || '',
+			sort: nextFilters.sort || 'updated_desc',
+			page: nextFilters.page || 1,
+			pageSize: nextFilters.pageSize || 24,
+			minSpent:
+				nextFilters.minSpent === '' || nextFilters.minSpent === null
+					? undefined
+					: Number(nextFilters.minSpent),
+			minOrders:
+				nextFilters.minOrders === '' || nextFilters.minOrders === null
+					? undefined
+					: Number(nextFilters.minOrders),
+			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
+			hasOrders: nextFilters.hasOrders ? 'true' : 'false',
+			productQuery: nextFilters.productQuery || '',
+		};
+	}
+
+	async function fetchAllFilteredCustomers(nextFilters = customerFilters) {
+		const firstPage = await fetchCampaignCustomers({
+			...buildCustomerRequestParams(nextFilters),
+			page: 1,
+		});
+
+		const pagination = firstPage?.pagination || {};
+		const totalPages = Math.min(Number(pagination.totalPages || 1), SAFE_MAX_CUSTOMER_PAGES);
+
+		let mergedCustomers = Array.isArray(firstPage?.customers) ? [...firstPage.customers] : [];
+
+		for (let page = 2; page <= totalPages; page += 1) {
+			const nextPage = await fetchCampaignCustomers({
+				...buildCustomerRequestParams(nextFilters),
+				page,
+			});
+
+			if (Array.isArray(nextPage?.customers)) {
+				mergedCustomers = mergedCustomers.concat(nextPage.customers);
+			}
+		}
+
+		const dedupedMap = new Map();
+		for (const customer of mergedCustomers) {
+			if (customer?.id) dedupedMap.set(customer.id, customer);
+		}
+
+		return {
+			customers: Array.from(dedupedMap.values()),
+			stats: firstPage?.stats || {},
+			pagination: {
+				...(firstPage?.pagination || {}),
+				page: 1,
+				totalPages: 1,
+				totalItems: dedupedMap.size,
+			},
+		};
+	}
 
 	async function loadCustomers(nextFilters = customerFilters) {
 		setCustomerAudience((current) => ({
@@ -559,23 +628,7 @@ export default function CampaignComposerPanel({
 		}));
 
 		try {
-			const data = await fetchCampaignCustomers({
-				q: nextFilters.q || '',
-				sort: nextFilters.sort || 'updated_desc',
-				page: nextFilters.page || 1,
-				pageSize: nextFilters.pageSize || 24,
-				minSpent:
-					nextFilters.minSpent === '' || nextFilters.minSpent === null
-						? undefined
-						: Number(nextFilters.minSpent),
-				minOrders:
-					nextFilters.minOrders === '' || nextFilters.minOrders === null
-						? undefined
-						: Number(nextFilters.minOrders),
-				hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
-				hasOrders: nextFilters.hasOrders ? 'true' : 'false',
-				productQuery: nextFilters.productQuery || '',
-			});
+			const data = await fetchCampaignCustomers(buildCustomerRequestParams(nextFilters));
 
 			setCustomerAudience((current) => ({
 				...current,
@@ -660,6 +713,31 @@ export default function CampaignComposerPanel({
 		});
 	}
 
+	function toggleVisibleFilteredSelection() {
+		const selectableVisibleCustomers = visibleCustomers.filter((customer) =>
+			Boolean(normalizePhone(customer.phone || ''))
+		);
+
+		if (!selectableVisibleCustomers.length) return;
+
+		setSelectedCustomersMap((current) => {
+			const next = { ...current };
+
+			if (allVisibleFilteredSelected) {
+				for (const customer of selectableVisibleCustomers) {
+					delete next[customer.id];
+				}
+				return next;
+			}
+
+			for (const customer of selectableVisibleCustomers) {
+				next[customer.id] = customer;
+			}
+
+			return next;
+		});
+	}
+
 	function toggleProductFilter(label) {
 		setSelectedProductFilters((current) => {
 			if (current.includes(label)) {
@@ -697,67 +775,13 @@ export default function CampaignComposerPanel({
 		}));
 
 		try {
-			const firstPage = await fetchCampaignCustomers({
-				q: customerFilters.q || '',
-				sort: customerFilters.sort || 'updated_desc',
-				page: 1,
-				pageSize: customerFilters.pageSize || 24,
-				minSpent:
-					customerFilters.minSpent === '' || customerFilters.minSpent === null
-						? undefined
-						: Number(customerFilters.minSpent),
-				minOrders:
-					customerFilters.minOrders === '' || customerFilters.minOrders === null
-						? undefined
-						: Number(customerFilters.minOrders),
-				hasPhoneOnly: customerFilters.hasPhoneOnly ? 'true' : 'false',
-				hasOrders: customerFilters.hasOrders ? 'true' : 'false',
-				productQuery: customerFilters.productQuery || '',
-			});
-
-			const pagination = firstPage?.pagination || {};
-			const totalPages = Math.min(Number(pagination.totalPages || 1), SAFE_MAX_CUSTOMER_PAGES);
-			let mergedCustomers = Array.isArray(firstPage?.customers) ? [...firstPage.customers] : [];
-
-			for (let page = 2; page <= totalPages; page += 1) {
-				const nextPage = await fetchCampaignCustomers({
-					q: customerFilters.q || '',
-					sort: customerFilters.sort || 'updated_desc',
-					page,
-					pageSize: customerFilters.pageSize || 24,
-					minSpent:
-						customerFilters.minSpent === '' || customerFilters.minSpent === null
-							? undefined
-							: Number(customerFilters.minSpent),
-					minOrders:
-						customerFilters.minOrders === '' || customerFilters.minOrders === null
-							? undefined
-							: Number(customerFilters.minOrders),
-					hasPhoneOnly: customerFilters.hasPhoneOnly ? 'true' : 'false',
-					hasOrders: customerFilters.hasOrders ? 'true' : 'false',
-					productQuery: customerFilters.productQuery || '',
-				});
-
-				if (Array.isArray(nextPage?.customers)) {
-					mergedCustomers = mergedCustomers.concat(nextPage.customers);
-				}
-			}
-
-			const dedupedMap = new Map();
-			for (const customer of mergedCustomers) {
-				if (customer?.id) dedupedMap.set(customer.id, customer);
-			}
+			const result = await fetchAllFilteredCustomers(customerFilters);
 
 			setCustomerAudience((current) => ({
 				...current,
-				customers: Array.from(dedupedMap.values()),
-				stats: firstPage?.stats || {},
-				pagination: {
-					...(firstPage?.pagination || current.pagination),
-					page: 1,
-					totalPages: 1,
-					totalItems: dedupedMap.size,
-				},
+				customers: result.customers,
+				stats: result.stats,
+				pagination: result.pagination,
 				loadingAll: false,
 				error: '',
 			}));
@@ -772,6 +796,62 @@ export default function CampaignComposerPanel({
 					'No se pudieron traer todos los clientes filtrados.',
 			}));
 		}
+	}
+
+	async function handleSelectAllFilteredCustomers() {
+		setCustomerAudience((current) => ({
+			...current,
+			loadingAll: true,
+			error: '',
+		}));
+
+		try {
+			const result = await fetchAllFilteredCustomers(customerFilters);
+
+			const selectableCustomers = result.customers.filter(
+				(customer) =>
+					Boolean(normalizePhone(customer.phone || '')) &&
+					customerMatchesSelectedProducts(customer, selectedProductFilters)
+			);
+
+			setCustomerAudience((current) => ({
+				...current,
+				customers: result.customers,
+				stats: result.stats,
+				pagination: result.pagination,
+				loadingAll: false,
+				error: '',
+			}));
+
+			setSelectedCustomersMap((current) => ({
+				...current,
+				...mapCustomersById(selectableCustomers),
+			}));
+		} catch (error) {
+			setCustomerAudience((current) => ({
+				...current,
+				loadingAll: false,
+				error:
+					error?.response?.data?.message ||
+					error?.response?.data?.error ||
+					error?.message ||
+					'No se pudieron seleccionar todos los clientes filtrados.',
+			}));
+		}
+	}
+
+	function clearFilteredSelection() {
+		setSelectedCustomersMap((current) => {
+			const next = { ...current };
+
+			for (const customer of visibleCustomers) {
+				if (customer?.id) {
+					delete next[customer.id];
+				}
+			}
+
+			return next;
+		});
 	}
 
 	async function handleImageChange(event) {
@@ -1200,6 +1280,24 @@ export default function CampaignComposerPanel({
 							>
 								{customerAudience.loadingAll ? 'Trayendo…' : 'Traer todos los filtrados'}
 							</button>
+
+							<button
+								type="button"
+								className="button secondary"
+								onClick={handleSelectAllFilteredCustomers}
+								disabled={customerAudience.loadingAll}
+							>
+								{customerAudience.loadingAll ? 'Seleccionando…' : 'Seleccionar todos los filtrados'}
+							</button>
+
+							<button
+								type="button"
+								className="button ghost"
+								onClick={clearFilteredSelection}
+								disabled={!visibleCustomers.length}
+							>
+								Quitar filtrados
+							</button>
 						</div>
 
 						{showAdvancedFilters ? (
@@ -1326,11 +1424,27 @@ export default function CampaignComposerPanel({
 								<strong>{formatCompactNumber(selectedCustomerCount)}</strong> cliente(s) seleccionados
 							</div>
 
-							<div className="campaign-inline-actions">
-								<button type="button" className="button ghost" onClick={toggleCurrentPageSelection}>
+							<div className="campaign-inline-actions campaign-inline-actions--wrap">
+								<button
+									type="button"
+									className="button ghost"
+									onClick={toggleCurrentPageSelection}
+									disabled={!currentPageSelectableCustomers.length}
+								>
 									{allPageSelected
-										? 'Deseleccionar página'
+										? `Deseleccionar página (${selectedPageCount}/${currentPageSelectableCustomers.length})`
 										: `Seleccionar página (${selectedPageCount}/${currentPageSelectableCustomers.length})`}
+								</button>
+
+								<button
+									type="button"
+									className="button secondary"
+									onClick={toggleVisibleFilteredSelection}
+									disabled={!visibleCustomers.length}
+								>
+									{allVisibleFilteredSelected
+										? `Deseleccionar visibles (${visibleCustomers.length})`
+										: `Seleccionar visibles (${visibleCustomers.length})`}
 								</button>
 							</div>
 						</div>
@@ -1354,7 +1468,9 @@ export default function CampaignComposerPanel({
 									>
 										<div className="campaign-customer-card-top">
 											<div className="campaign-customer-avatar">
-												{String(customer?.displayName || customer?.email || '?').slice(0, 1).toUpperCase()}
+												{String(customer?.displayName || customer?.email || '?')
+													.slice(0, 1)
+													.toUpperCase()}
 											</div>
 
 											<div className="campaign-customer-title-wrap">
