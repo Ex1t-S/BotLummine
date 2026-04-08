@@ -23,6 +23,9 @@ const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Sticker recibido]',
 ]);
 
+const UNREAD_STORAGE_KEY = 'lummine:inbox:unread-counts:v2';
+const SNAPSHOT_STORAGE_KEY = 'lummine:inbox:last-seen-snapshot:v2';
+
 function isDocumentVisible() {
 	if (typeof document === 'undefined') return true;
 	return !document.hidden;
@@ -32,6 +35,63 @@ function toTimestamp(value) {
 	if (!value) return 0;
 	const time = new Date(value).getTime();
 	return Number.isFinite(time) ? time : 0;
+}
+
+function readStoredMap(key, fallback = {}) {
+	if (typeof window === 'undefined') return fallback;
+
+	try {
+		const raw = window.localStorage.getItem(key);
+		if (!raw) return fallback;
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === 'object' ? parsed : fallback;
+	} catch {
+		return fallback;
+	}
+}
+
+function writeStoredMap(key, value) {
+	if (typeof window === 'undefined') return;
+
+	try {
+		window.localStorage.setItem(key, JSON.stringify(value || {}));
+	} catch {
+		// noop
+	}
+}
+
+function formatArgentinaTime(value) {
+	if (!value) return '';
+
+	try {
+		return new Date(value).toLocaleTimeString('es-AR', {
+			hour: '2-digit',
+			minute: '2-digit',
+			timeZone: 'America/Argentina/Buenos_Aires',
+		});
+	} catch {
+		return '';
+	}
+}
+
+function formatArgentinaDateTime(value) {
+	if (!value) return '';
+
+	try {
+		return new Date(value).toLocaleString('es-AR', {
+			timeZone: 'America/Argentina/Buenos_Aires',
+		});
+	} catch {
+		return '';
+	}
+}
+
+function cleanPreviewText(value = '') {
+	return String(value || '')
+		.replace(/^🖼️\s*/u, '')
+		.replace(/^🎧\s*/u, '')
+		.replace(/^📄\s*/u, '')
+		.trim();
 }
 
 function getMediaKind(message = {}) {
@@ -119,7 +179,23 @@ function resolveMessageAttachmentUrl(message = {}) {
 		rawPayload?.templateHeaderImageUrl ||
 		'';
 
-	return resolveApiUrl(rawUrl);
+	const resolved = resolveApiUrl(rawUrl);
+	if (!resolved) return '';
+
+	try {
+		const url = new URL(
+			resolved,
+			typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+		);
+
+		if (typeof window !== 'undefined' && url.pathname.startsWith('/api/media/inbox/')) {
+			return `${window.location.origin}${url.pathname}`;
+		}
+
+		return url.toString();
+	} catch {
+		return resolved;
+	}
 }
 
 function resolvePromoAction(message = {}) {
@@ -317,7 +393,7 @@ function MessageBubble({ message }) {
 							{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
 						</span>
 
-						<span>{message.createdAtLabel || ''}</span>
+						<span>{formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || ''}</span>
 					</div>
 				</div>
 			</div>
@@ -346,14 +422,14 @@ export default function InboxPage() {
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
-	const lastInboxSnapshotRef = useRef({});
+	const lastInboxSnapshotRef = useRef(readStoredMap(SNAPSHOT_STORAGE_KEY, {}));
 
 	const [queue, setQueue] = useState('AUTO');
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
-	const [newMessageCounts, setNewMessageCounts] = useState({});
+	const [newMessageCounts, setNewMessageCounts] = useState(() => readStoredMap(UNREAD_STORAGE_KEY, {}));
 
 	const inboxQuery = useQuery({
 		queryKey: queryKeys.inbox(queue),
@@ -382,7 +458,14 @@ export default function InboxPage() {
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const filteredContacts = useMemo(() => {
-		const sorted = [...contacts].sort(
+		const normalizedContacts = contacts.map((contact) => ({
+			...contact,
+			preview: cleanPreviewText(contact.preview || ''),
+			lastMessageTime: formatArgentinaTime(contact.lastMessageAt || contact.lastMessageTime),
+			lastMessageLabel: formatArgentinaDateTime(contact.lastMessageAt || contact.lastMessageLabel),
+		}));
+
+		const sorted = [...normalizedContacts].sort(
 			(a, b) => toTimestamp(b.lastMessageAt) - toTimestamp(a.lastMessageAt)
 		);
 
@@ -404,43 +487,62 @@ export default function InboxPage() {
 	}, [contacts, normalizedSearch]);
 
 	useEffect(() => {
+		writeStoredMap(UNREAD_STORAGE_KEY, newMessageCounts);
+	}, [newMessageCounts]);
+
+	useEffect(() => {
 		setNewMessageCounts((prev) => {
 			let next = prev;
 			let changed = false;
 			const seenConversationIds = new Set();
+			const nextSnapshot = { ...lastInboxSnapshotRef.current };
 
 			for (const contact of contacts) {
 				const conversationId = contact.conversationId;
 				const currentTimestamp = toTimestamp(contact.lastMessageAt);
-				const previousTimestamp = lastInboxSnapshotRef.current[conversationId];
+				const previousTimestamp = Number(nextSnapshot[conversationId] || 0);
+				const isInboundLastMessage = contact.lastMessageDirection === 'INBOUND';
 
 				seenConversationIds.add(conversationId);
 
 				if (
-					typeof previousTimestamp === 'number' &&
+					previousTimestamp > 0 &&
 					currentTimestamp > previousTimestamp &&
+					isInboundLastMessage &&
 					conversationId !== selectedConversationId
 				) {
 					if (next === prev) next = { ...prev };
-					next[conversationId] = (next[conversationId] || 0) + 1;
+					next[conversationId] = Number(next[conversationId] || 0) + 1;
 					changed = true;
 				}
 
-				lastInboxSnapshotRef.current[conversationId] = currentTimestamp;
+				nextSnapshot[conversationId] = currentTimestamp;
 			}
 
-			for (const storedConversationId of Object.keys(lastInboxSnapshotRef.current)) {
+			for (const storedConversationId of Object.keys(nextSnapshot)) {
 				if (!seenConversationIds.has(storedConversationId)) {
-					delete lastInboxSnapshotRef.current[storedConversationId];
+					delete nextSnapshot[storedConversationId];
 				}
 			}
+
+			lastInboxSnapshotRef.current = nextSnapshot;
+			writeStoredMap(SNAPSHOT_STORAGE_KEY, nextSnapshot);
 
 			return changed ? next : prev;
 		});
 	}, [contacts, selectedConversationId]);
 
 	useEffect(() => {
-		if (!selectedConversationId) return;
+		if (!selectedConversationId || !conversation) return;
+
+		const currentTimestamp = toTimestamp(
+			conversation?.lastMessageAt || activeContact?.lastMessageAt
+		);
+
+		if (currentTimestamp > 0) {
+			lastInboxSnapshotRef.current[selectedConversationId] = currentTimestamp;
+			writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
+		}
 
 		setNewMessageCounts((prev) => {
 			if (!prev[selectedConversationId]) return prev;
@@ -448,7 +550,7 @@ export default function InboxPage() {
 			delete next[selectedConversationId];
 			return next;
 		});
-	}, [selectedConversationId]);
+	}, [selectedConversationId, conversation?.lastMessageAt, conversation?.messages?.length, activeContact?.lastMessageAt]);
 
 	useEffect(() => {
 		if (!filteredContacts.length) {
@@ -507,10 +609,15 @@ export default function InboxPage() {
 		const el = messagesContainerRef.current;
 		if (!el) return;
 
-		requestAnimationFrame(() => {
+		const run = () => {
 			el.scrollTop = el.scrollHeight;
 			el.dataset.initialized = 'true';
-		});
+		};
+
+		requestAnimationFrame(run);
+		const timeout = window.setTimeout(run, 60);
+
+		return () => window.clearTimeout(timeout);
 	}, [selectedConversationId]);
 
 	useEffect(() => {
@@ -673,6 +780,7 @@ export default function InboxPage() {
 	function insertEmoji(emoji) {
 		setMessageText((prev) => `${prev}${emoji}`);
 		setShowEmojiPicker(false);
+		textareaRef.current?.focus();
 	}
 
 	function handleComposerKeyDown(event) {
@@ -811,8 +919,22 @@ export default function InboxPage() {
 											{contact.phoneDisplay || 'Sin teléfono'}
 										</div>
 
-										<div className="inbox-contact-preview">
-											{contact.preview || 'Sin mensajes'}
+										<div className="inbox-contact-preview-row">
+											{contact.lastMessageDirection ? (
+												<span
+													className={`inbox-contact-preview-prefix ${
+														contact.lastMessageDirection === 'OUTBOUND'
+															? 'inbox-contact-preview-prefix--outbound'
+															: 'inbox-contact-preview-prefix--inbound'
+													}`}
+												>
+													{contact.lastMessageDirection === 'OUTBOUND' ? 'Vos:' : 'Cliente:'}
+												</span>
+											) : null}
+
+											<div className="inbox-contact-preview">
+												{contact.preview || 'Sin mensajes'}
+											</div>
 										</div>
 									</div>
 								</div>
@@ -921,6 +1043,7 @@ export default function InboxPage() {
 						</div>
 
 						<div ref={messagesContainerRef} className="inbox-messages">
+						<div className="inbox-messages-list">
 							{conversationQuery.isLoading ? (
 								<div className="inbox-empty">Cargando mensajes...</div>
 							) : null}
@@ -936,7 +1059,7 @@ export default function InboxPage() {
 								<MessageBubble key={msg.id} message={msg} />
 							))}
 						</div>
-
+						</div>
 						<div className="inbox-composer-shell">
 							<form onSubmit={handleSubmit} className="inbox-composer">
 								<div className="inbox-composer-leading" ref={emojiPickerRef}>
@@ -946,7 +1069,7 @@ export default function InboxPage() {
 										onClick={() => setShowEmojiPicker((prev) => !prev)}
 										title="Emoji"
 									>
-										😊
+										🙂
 									</button>
 
 									{showEmojiPicker ? (

@@ -388,9 +388,9 @@
 	bottom: 0;
 	z-index: 5;
 	flex-shrink: 0;
-	border-top: 1px solid rgba(15, 23, 42, 0.08);
-	padding: 12px;
-	background: #f0f2f5;
+	border-top: none;
+	padding: 8px 12px 12px;
+	background: transparent;
 }
 
 .inbox-composer {
@@ -400,7 +400,8 @@
 	background: #ffffff;
 	border-radius: 28px;
 	padding: 8px 10px 8px 12px;
-	border: 1px solid rgba(15, 23, 42, 0.08);
+	border: 1px solid rgba(15, 23, 42, 0.06);
+	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 	position: relative;
 }
 
@@ -413,11 +414,19 @@
 	width: 38px;
 	height: 38px;
 	border-radius: 999px;
-	border: none;
-	background: transparent;
-	font-size: 22px;
+	border: 1px solid rgba(15, 23, 42, 0.06);
+	background: #f8fafc;
+	font-size: 20px;
 	cursor: pointer;
-	color: #54656f;
+	color: #475569;
+	display: grid;
+	place-items: center;
+	transition: 0.18s ease;
+}
+
+.inbox-emoji-trigger:hover {
+	background: #eef2ff;
+	border-color: rgba(37, 99, 235, 0.14);
 }
 
 .inbox-emoji-picker {
