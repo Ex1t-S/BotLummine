@@ -487,9 +487,8 @@ export default function InboxPage() {
 		},
 		enabled: Boolean(selectedConversationId),
 		placeholderData: (previousData) => previousData,
-		refetchInterval: () => (
-			selectedConversationId && isDocumentVisible() ? 3000 : false
-		),
+		refetchInterval: () =>
+			selectedConversationId && isDocumentVisible() ? 3000 : false,
 		refetchIntervalInBackground: false,
 		...queryPresets.conversation,
 	});
@@ -989,58 +988,65 @@ export default function InboxPage() {
 							</div>
 
 							{!showArchived ? (
-								<form className="inbox-composer" onSubmit={handleSubmit}>
-									<div className="inbox-composer-toolbar" ref={emojiPickerRef}>
+								<div className="inbox-composer-shell">
+									<form className="inbox-composer" onSubmit={handleSubmit}>
+										<div className="inbox-composer-toolbar" ref={emojiPickerRef}>
+											<button
+												type="button"
+												className="inbox-emoji-toggle"
+												onClick={() => setShowEmojiPicker((prev) => !prev)}
+												title="Emoji"
+											>
+												😊
+											</button>
+
+											{showEmojiPicker ? (
+												<div className="inbox-emoji-picker">
+													<div className="inbox-emoji-picker-title">
+														Elegí un emoji
+													</div>
+
+													<div className="inbox-emoji-grid">
+														{QUICK_EMOJIS.map((emoji) => (
+															<button
+																key={emoji}
+																type="button"
+																className="inbox-emoji-btn"
+																onClick={() => insertEmoji(emoji)}
+															>
+																{emoji}
+															</button>
+														))}
+													</div>
+												</div>
+											) : null}
+										</div>
+
+										<textarea
+											ref={textareaRef}
+											className="inbox-composer-textarea"
+											placeholder="Escribí un mensaje..."
+											value={messageText}
+											onChange={(event) => setMessageText(event.target.value)}
+											onKeyDown={handleComposerKeyDown}
+											rows={1}
+										/>
+
 										<button
-											type="button"
-											className="inbox-emoji-toggle"
-											onClick={() => setShowEmojiPicker((prev) => !prev)}
-											title="Emoji"
+											type="submit"
+											className="inbox-send-btn"
+											disabled={sendMessageMutation.isPending || !messageText.trim()}
+											title={sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
 										>
-											😊
+											➤
 										</button>
-
-										{showEmojiPicker ? (
-											<div className="inbox-emoji-picker">
-												<div className="inbox-emoji-picker-title">
-													Elegí un emoji
-												</div>
-
-												<div className="inbox-emoji-grid">
-													{QUICK_EMOJIS.map((emoji) => (
-														<button
-															key={emoji}
-															type="button"
-															className="inbox-emoji-btn"
-															onClick={() => insertEmoji(emoji)}
-														>
-															{emoji}
-														</button>
-													))}
-												</div>
-											</div>
-										) : null}
-									</div>
-
-									<textarea
-										ref={textareaRef}
-										className="inbox-composer-textarea"
-										placeholder="Escribí un mensaje..."
-										value={messageText}
-										onChange={(event) => setMessageText(event.target.value)}
-										onKeyDown={handleComposerKeyDown}
-										rows={1}
-									/>
-
-									<button
-										type="submit"
-										className="inbox-send-btn"
-										disabled={sendMessageMutation.isPending || !messageText.trim()}
-									>
-										{sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
-									</button>
-								</form>
-							) : null}
+									</form>
+								</div>
+							) : (
+								<div className="inbox-archived-hint">
+									Este chat está archivado. Desarchivalo para volver a responder.
+								</div>
+							)}
 						</>
 					)}
 				</section>
