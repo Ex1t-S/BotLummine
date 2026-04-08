@@ -8,7 +8,7 @@ function isAbsoluteUrl(value = '') {
 	return /^https?:\/\//i.test(String(value || '').trim());
 }
 
-const explicitApiBase = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || '');
+const explicitApiBase = normalizeBaseUrl(import.meta.env.VITE_API_URL || '');
 const apiBaseURL = explicitApiBase || '/api';
 
 export function getApiBaseUrl() {

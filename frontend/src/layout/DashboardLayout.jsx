@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
+import logoLummine from '../assets/lummine-logo.png';
 
 function navClass({ isActive }) {
 	return `admin-menu-link${isActive ? ' active' : ''}`;
@@ -23,14 +24,19 @@ export default function DashboardLayout() {
 		<div className="admin-shell">
 			<aside className="admin-sidebar">
 				<div className="admin-brand">
-					<div className="admin-brand-mark">L</div>
+					<div className="admin-brand-mark admin-brand-mark--logo">
+						<img
+							src={logoLummine}
+							alt="Lummine"
+							className="admin-brand-logo"
+						/>
+					</div>
 
 					<div className="admin-brand-copy">
 						<h1>Lummine</h1>
 						<p>Ventas conversacionales</p>
 					</div>
 				</div>
-
 				<div className="admin-user-box">
 					<strong>{user?.name || user?.email || 'Usuario'}</strong>
 					<span>{user?.role || 'admin'}</span>
