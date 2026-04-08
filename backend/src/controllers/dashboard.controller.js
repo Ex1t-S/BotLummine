@@ -504,6 +504,7 @@ function buildContactCard(conversation, lastMessage) {
 		lastSummary: conversation.lastSummary || '',
 	};
 }
+
 async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', archived = false) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
@@ -641,6 +642,27 @@ async function ensureConversationExists(conversationId) {
 	});
 
 	return conversation;
+}
+export async function getInbox(req, res, next) {
+	try {
+		const currentQueue = String(req.query.queue || 'AUTO').toUpperCase();
+		const archived = String(req.query.archived || 'false') === 'true';
+
+		const data = await fetchInboxData(
+			req.query.conversationId || null,
+			currentQueue,
+			archived
+		);
+
+		return res.json({
+			ok: true,
+			currentQueue,
+			archived,
+			...data,
+		});
+	} catch (error) {
+		next(error);
+	}
 }
 
 export async function getInboxStream(req, res, next) {
