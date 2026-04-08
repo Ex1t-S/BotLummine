@@ -683,6 +683,8 @@ async function maybeHandleMenuFlow({
 	const waId = conversation.contact?.waId || '';
 	const wantsMenu = isMenuResetCommand(messageBody);
 	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
+	const isAiEnabledGlobal =
+		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true';
 	const shouldOfferMenu = shouldForceMenuFirst({
 		currentState,
 		freshConversation: conversation,
@@ -726,30 +728,58 @@ async function maybeHandleMenuFlow({
 	}
 
 	if (wantsMenu) {
+		const shouldEnableAuto =
+			isAiEnabledGlobal &&
+			!currentState?.needsHuman &&
+			conversation.queue !== 'HUMAN';
+
 		await patchConversationState(conversation.id, {
 			menuActive: true,
 			menuPath: MENU_PATHS.MAIN,
 			menuLastPromptAt: new Date(),
 			customerName: contactName || currentState.customerName || waId,
-			needsHuman: false,
-			handoffReason: null
+			needsHuman: shouldEnableAuto ? false : (currentState?.needsHuman ?? true),
+			handoffReason: shouldEnableAuto ? null : currentState?.handoffReason || 'manual_human_lock'
 		});
 
-		await prisma.conversation.update({
-			where: { id: conversation.id },
-			data: {
-				queue: 'AUTO',
-				aiEnabled: true,
-				lastMessageAt: new Date()
-			}
-		});
+		if (shouldEnableAuto) {
+			await prisma.conversation.update({
+				where: { id: conversation.id },
+				data: {
+					queue: 'AUTO',
+					aiEnabled: true,
+					lastMessageAt: new Date()
+				}
+			});
 
-		await sendMenuPrompt({
-			conversationId: conversation.id,
-			waId,
-			menuPath: MENU_PATHS.MAIN,
-			bodyPrefix: 'Perfecto, abrimos el menú de nuevo.'
-		});
+			await sendMenuPrompt({
+				conversationId: conversation.id,
+				waId,
+				menuPath: MENU_PATHS.MAIN,
+				bodyPrefix: 'Perfecto, abrimos el menú de nuevo.'
+			});
+		} else {
+			await prisma.conversation.update({
+				where: { id: conversation.id },
+				data: {
+					queue: 'HUMAN',
+					aiEnabled: false,
+					lastMessageAt: new Date()
+				}
+			});
+
+			await sendMenuTextOnly({
+				conversationId: conversation.id,
+				body: 'Te dejo el menú a mano, pero la conversación sigue en atención humana.',
+				model: 'menu-human-locked'
+			});
+
+			await sendMenuPrompt({
+				conversationId: conversation.id,
+				waId,
+				menuPath: MENU_PATHS.MAIN
+			});
+		}
 
 		return { handled: true };
 	}
@@ -799,8 +829,9 @@ async function maybeHandleMenuFlow({
 export async function getOrCreateConversation({
 	waId,
 	contactName,
-	queue = 'AUTO',
-	aiEnabled = true
+	queue = 'HUMAN',
+	aiEnabled = false,
+	forceRouting = false
 }) {
 	const normalizedWaId = normalizeThreadPhone(waId);
 
@@ -835,9 +866,9 @@ export async function getOrCreateConversation({
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: queue === 'HUMAN',
-						menuActive: true,
-						menuPath: MENU_PATHS.MAIN
+						needsHuman: queue === 'HUMAN' || aiEnabled === false,
+						menuActive: false,
+						menuPath: null
 					}
 				}
 			},
@@ -855,9 +886,9 @@ export async function getOrCreateConversation({
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: queue === 'HUMAN',
-						menuActive: true,
-						menuPath: MENU_PATHS.MAIN
+						needsHuman: conversation.queue === 'HUMAN' || conversation.aiEnabled === false,
+						menuActive: false,
+						menuPath: null
 					}
 				}
 			},
@@ -865,7 +896,7 @@ export async function getOrCreateConversation({
 		});
 	}
 
-	if (conversation.queue !== queue || conversation.aiEnabled !== aiEnabled) {
+	if (forceRouting && (conversation.queue !== queue || conversation.aiEnabled !== aiEnabled)) {
 		conversation = await prisma.conversation.update({
 			where: { id: conversation.id },
 			data: {
@@ -1321,11 +1352,13 @@ export async function processInboundMessage({
 		isAiEnabledGlobal &&
 		queueDecision.aiEnabled &&
 		queueDecision.queue === 'AUTO';
+
 	console.log('[AI DEBUG] isAiEnabledGlobal:', isAiEnabledGlobal);
 	console.log('[AI DEBUG] queueDecision:', queueDecision);
 	console.log('[AI DEBUG] shouldReply:', shouldReply);
 	console.log('[AI DEBUG] intent:', intent);
 	console.log('[AI DEBUG] waId:', freshConversation.contact.waId);
+
 	if (!shouldReply) {
 		return { conversation: freshConversation };
 	}

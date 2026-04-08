@@ -191,6 +191,7 @@ function AttachmentPreview({ message }) {
 				<audio controls className="inbox-audio-player" src={attachmentUrl}>
 					Tu navegador no soporta audio HTML5.
 				</audio>
+
 				<a
 					href={attachmentUrl}
 					target="_blank"
@@ -213,6 +214,7 @@ function AttachmentPreview({ message }) {
 						className="inbox-image-preview"
 					/>
 				</a>
+
 				<a
 					href={attachmentUrl}
 					target="_blank"
@@ -231,6 +233,7 @@ function AttachmentPreview({ message }) {
 				<video controls className="inbox-video-preview" src={attachmentUrl}>
 					Tu navegador no soporta video HTML5.
 				</video>
+
 				<a
 					href={attachmentUrl}
 					target="_blank"
@@ -422,10 +425,7 @@ export default function InboxPage() {
 					currentTimestamp > previousTimestamp &&
 					conversationId !== selectedConversationId
 				) {
-					if (next === prev) {
-						next = { ...prev };
-					}
-
+					if (next === prev) next = { ...prev };
 					next[conversationId] = (next[conversationId] || 0) + 1;
 					changed = true;
 				}
@@ -448,7 +448,6 @@ export default function InboxPage() {
 
 		setNewMessageCounts((prev) => {
 			if (!prev[selectedConversationId]) return prev;
-
 			const next = { ...prev };
 			delete next[selectedConversationId];
 			return next;
@@ -483,15 +482,14 @@ export default function InboxPage() {
 	const conversationQuery = useQuery({
 		queryKey: queryKeys.conversation(selectedConversationId),
 		queryFn: async () => {
-			const res = await api.get(
-				`/dashboard/conversations/${selectedConversationId}/messages`
-			);
+			const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`);
 			return res.data;
 		},
 		enabled: Boolean(selectedConversationId),
 		placeholderData: (previousData) => previousData,
-		refetchInterval: () =>
-			selectedConversationId && isDocumentVisible() ? 3000 : false,
+		refetchInterval: () => (
+			selectedConversationId && isDocumentVisible() ? 3000 : false
+		),
 		refetchIntervalInBackground: false,
 		...queryPresets.conversation,
 	});
@@ -560,6 +558,7 @@ export default function InboxPage() {
 		mutationFn: async () => {
 			const body = messageText.trim();
 			if (!selectedConversationId || !body) return;
+
 			await api.post(`/dashboard/conversations/${selectedConversationId}/messages`, {
 				body,
 			});
@@ -752,9 +751,7 @@ export default function InboxPage() {
 									}
 								}}
 							>
-								{deduplicateContactsMutation.isPending
-									? 'Deduplicando...'
-									: 'Deduplicar'}
+								{deduplicateContactsMutation.isPending ? 'Deduplicando...' : 'Deduplicar'}
 							</ActionButton>
 						</div>
 					</div>
@@ -783,19 +780,15 @@ export default function InboxPage() {
 						) : null}
 
 						{filteredContacts.map((contact) => {
-							const isSelected =
-								contact.conversationId === selectedConversationId;
-							const unreadCount =
-								newMessageCounts[contact.conversationId] || 0;
+							const isSelected = contact.conversationId === selectedConversationId;
+							const unreadCount = newMessageCounts[contact.conversationId] || 0;
 							const hasUnread = unreadCount > 0;
 
 							return (
 								<button
 									key={contact.conversationId}
 									type="button"
-									onClick={() =>
-										setSelectedConversationId(contact.conversationId)
-									}
+									onClick={() => setSelectedConversationId(contact.conversationId)}
 									className={`inbox-contact-card ${
 										isSelected ? 'inbox-contact-card--selected' : ''
 									} ${hasUnread ? 'inbox-contact-card--unread' : ''}`}
@@ -803,9 +796,7 @@ export default function InboxPage() {
 									<div className="inbox-contact-row">
 										<div
 											className={`inbox-contact-avatar ${
-												hasUnread
-													? 'inbox-contact-avatar--unread'
-													: ''
+												hasUnread ? 'inbox-contact-avatar--unread' : ''
 											}`}
 											style={
 												contact.avatar?.style
@@ -820,9 +811,7 @@ export default function InboxPage() {
 										>
 											{contact.avatar?.initials || '?'}
 
-											{hasUnread ? (
-												<span className="inbox-contact-dot" />
-											) : null}
+											{hasUnread ? <span className="inbox-contact-dot" /> : null}
 										</div>
 
 										<div className="inbox-contact-content">
@@ -862,11 +851,13 @@ export default function InboxPage() {
 				<section className="inbox-chat-panel">
 					{!selectedConversationId ? (
 						<div className="inbox-chat-empty">
-							<div className="inbox-chat-empty-title">
-								Seleccioná una conversación
-							</div>
-							<div className="inbox-chat-empty-text">
-								Acá vas a ver los mensajes, archivos y acciones del chat.
+							<div>
+								<div className="inbox-chat-empty-title">
+									Seleccioná una conversación
+								</div>
+								<div className="inbox-chat-empty-text">
+									Acá vas a ver los mensajes, archivos y acciones del chat.
+								</div>
 							</div>
 						</div>
 					) : (
@@ -891,6 +882,7 @@ export default function InboxPage() {
 										<span className="inbox-status-pill">
 											{conversation?.queue || activeContact?.queue || queue}
 										</span>
+
 										<span
 											className={`inbox-status-pill ${
 												conversation?.aiEnabled
@@ -1043,9 +1035,7 @@ export default function InboxPage() {
 									<button
 										type="submit"
 										className="inbox-send-btn"
-										disabled={
-											sendMessageMutation.isPending || !messageText.trim()
-										}
+										disabled={sendMessageMutation.isPending || !messageText.trim()}
 									>
 										{sendMessageMutation.isPending ? 'Enviando...' : 'Enviar'}
 									</button>

@@ -4,8 +4,8 @@
 	padding: 16px;
 	box-sizing: border-box;
 	background:
-		radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 22%),
-		radial-gradient(circle at top right, rgba(16, 185, 129, 0.07), transparent 20%),
+		radial-gradient(circle at top left, rgba(59, 130, 246, 0.05), transparent 24%),
+		radial-gradient(circle at top right, rgba(16, 185, 129, 0.04), transparent 22%),
 		#f8fafc;
 }
 
@@ -13,29 +13,32 @@
 	display: grid;
 	grid-template-columns: 360px minmax(0, 1fr);
 	gap: 16px;
+	width: 100%;
 	min-height: calc(100vh - 104px);
+	align-items: stretch;
 }
 
 .inbox-sidebar,
 .inbox-chat-panel {
-	background: rgba(255, 255, 255, 0.9);
+	background: rgba(255, 255, 255, 0.92);
 	border: 1px solid rgba(148, 163, 184, 0.18);
 	border-radius: 24px;
 	box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
 	backdrop-filter: blur(10px);
+	min-width: 0;
+	min-height: 0;
 }
 
 .inbox-sidebar {
 	padding: 16px;
 	display: flex;
 	flex-direction: column;
-	min-height: 0;
+	overflow: hidden;
 }
 
 .inbox-chat-panel {
 	display: flex;
 	flex-direction: column;
-	min-height: 0;
 	overflow: hidden;
 }
 
@@ -54,6 +57,7 @@
 	padding: 10px 12px;
 	font-size: 12px;
 	font-weight: 700;
+	line-height: 1.2;
 	cursor: pointer;
 	transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -108,16 +112,16 @@
 
 .inbox-search-input {
 	width: 100%;
-	height: 42px;
+	height: 40px;
 	border-radius: 12px;
 	border: 1px solid rgba(15, 23, 42, 0.12);
-	background: #ffffff;
+	background: #fff;
 	padding: 0 14px;
 	font-size: 14px;
 	color: #0f172a;
 	outline: none;
 	box-sizing: border-box;
-	transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .inbox-search-input::placeholder {
@@ -127,7 +131,6 @@
 .inbox-search-input:focus {
 	border-color: rgba(37, 99, 235, 0.35);
 	box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
-	background: #ffffff;
 }
 
 .inbox-contacts-list {
@@ -144,7 +147,7 @@
 	width: 100%;
 	text-align: left;
 	border: 1px solid rgba(148, 163, 184, 0.18);
-	background: #ffffff;
+	background: #fff;
 	border-radius: 18px;
 	padding: 12px;
 	cursor: pointer;
@@ -169,7 +172,7 @@
 
 .inbox-contact-card--unread {
 	border-color: rgba(34, 197, 94, 0.28);
-	box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
+	box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.08);
 }
 
 .inbox-contact-row {
@@ -195,7 +198,7 @@
 
 .inbox-contact-avatar--unread {
 	box-shadow:
-		0 0 0 3px rgba(34, 197, 94, 0.2),
+		0 0 0 3px rgba(34, 197, 94, 0.18),
 		inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
@@ -207,7 +210,7 @@
 	height: 12px;
 	border-radius: 999px;
 	background: #22c55e;
-	border: 2px solid #ffffff;
+	border: 2px solid #fff;
 }
 
 .inbox-contact-content {
@@ -246,7 +249,7 @@
 	padding: 0 6px;
 	border-radius: 999px;
 	background: #22c55e;
-	color: #ffffff;
+	color: #fff;
 	font-size: 11px;
 	font-weight: 800;
 	line-height: 20px;
@@ -295,10 +298,15 @@
 
 .inbox-chat-empty {
 	flex: 1;
-	display: grid;
-	place-items: center;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	text-align: center;
 	padding: 24px;
+	color: #475569;
+	background:
+		linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.96)),
+		#fff;
 }
 
 .inbox-chat-empty-title {
@@ -322,6 +330,7 @@
 	justify-content: space-between;
 	gap: 16px;
 	flex-wrap: wrap;
+	background: rgba(255, 255, 255, 0.96);
 }
 
 .inbox-chat-header-main {

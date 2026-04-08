@@ -1,45 +1,11 @@
 import axios from 'axios';
+import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 
 export function normalizeWhatsAppNumber(fromRaw) {
 	const original = String(fromRaw || '');
-	let clean = original.replace(/\D/g, '');
+	if (!original) return '';
 
-	if (!clean) return '';
-
-	if (clean.startsWith('549')) {
-		const cuerpo = clean.substring(3);
-		const prefijosTres = [
-			'220', '221', '223', '230', '236', '237', '249', '260', '261', '263',
-			'264', '266', '280', '291', '294', '297', '298', '299', '336', '341',
-			'342', '343', '345', '348', '351', '353', '358', '362', '364', '370',
-			'376', '379', '380', '381', '383', '385', '387', '388'
-		];
-
-		const codArea = cuerpo.startsWith('11')
-			? '11'
-			: (prefijosTres.includes(cuerpo.substring(0, 3))
-				? cuerpo.substring(0, 3)
-				: cuerpo.substring(0, 4));
-
-		const numeroLocal = cuerpo.substring(codArea.length);
-		return `54${codArea}15${numeroLocal}`;
-	}
-
-	if (clean.startsWith('54')) {
-		const cuerpo = clean.substring(2);
-
-		if (cuerpo.startsWith('22529')) {
-			return `542252${cuerpo.substring(5)}`;
-		}
-
-		if (cuerpo.startsWith('2923') && !cuerpo.startsWith('292315')) {
-			return `54292315${cuerpo.substring(4)}`;
-		}
-
-		return clean;
-	}
-
-	return clean;
+	return normalizeThreadPhone(original);
 }
 
 function debugWhatsAppRecipient(label, data = {}) {
