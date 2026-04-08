@@ -51,7 +51,7 @@ export default function CampaignsFeaturePage() {
 					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
 					<h2>Campañas simples de crear y fáciles de seguir</h2>
 					<p className="campaigns-hero-lead">
-						Elegí audiencia, mensaje y lanzamiento sin perderte en opciones técnicas.
+						Elegí audiencia, mensaje y lanzamiento sin enterrarte en opciones técnicas. La idea es vender más, no pelearte con el panel.
 					</p>
 
 					<div className="campaigns-hero-highlights campaigns-hero-highlights--compact">
@@ -109,7 +109,7 @@ export default function CampaignsFeaturePage() {
 					</div>
 				</div>
 
-				<div className="campaign-workflow-step">
+				<div className="campaign-workflow-step is-active">
 					<span>02</span>
 					<div>
 						<strong>Mensaje</strong>
@@ -162,7 +162,7 @@ export default function CampaignsFeaturePage() {
 			<PageSection
 				eyebrow="Paso 2"
 				title="Templates"
-				description="Elegí o ajustá el mensaje sin salir del módulo."
+				description="Primero elegí uno de la biblioteca. Después lo editás con un flujo más claro y visual."
 			>
 				<div className="campaign-section-grid campaign-section-grid--editor">
 					<CampaignAccordion
@@ -187,7 +187,7 @@ export default function CampaignsFeaturePage() {
 
 					<CampaignAccordion
 						title="Editor"
-						description="Editá el contenido y dejalo listo."
+						description="Editá el contenido, revisá la vista previa y guardalo listo para usar."
 						defaultOpen={true}
 					>
 						<TemplateBuilderPanel

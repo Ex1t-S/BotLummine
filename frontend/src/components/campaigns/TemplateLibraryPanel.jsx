@@ -19,6 +19,14 @@ function isMetaSampleTemplate(template) {
 	return String(template?.name || '').trim().toLowerCase() === 'hello_world';
 }
 
+function getBodyPreview(template) {
+	return (
+		template.bodyText ||
+		template.rawPayload?.components?.find((item) => String(item?.type || '').toUpperCase() === 'BODY')?.text ||
+		'Sin vista previa de cuerpo.'
+	);
+}
+
 export default function TemplateLibraryPanel({
 	templates = [],
 	selectedTemplateId,
@@ -30,17 +38,18 @@ export default function TemplateLibraryPanel({
 	const [search, setSearch] = useState('');
 	const [category, setCategory] = useState('all');
 	const [status, setStatus] = useState('all');
+	const [sortBy, setSortBy] = useState('updated_desc');
 
 	const filteredTemplates = useMemo(() => {
 		const normalizedSearch = search.trim().toLowerCase();
 
-		return templates.filter((template) => {
+		const base = templates.filter((template) => {
 			const haystack = [
 				template.name,
 				template.language,
 				template.category,
 				template.status,
-				template.bodyText,
+				getBodyPreview(template),
 			]
 				.filter(Boolean)
 				.join(' ')
@@ -52,7 +61,27 @@ export default function TemplateLibraryPanel({
 
 			return matchesSearch && matchesCategory && matchesStatus;
 		});
-	}, [templates, search, category, status]);
+
+		const sorted = [...base].sort((a, b) => {
+			if (sortBy === 'name_asc') {
+				return String(a?.name || '').localeCompare(String(b?.name || ''));
+			}
+
+			if (sortBy === 'name_desc') {
+				return String(b?.name || '').localeCompare(String(a?.name || ''));
+			}
+
+			if (sortBy === 'updated_asc') {
+				return new Date(a?.updatedAt || a?.createdAt || 0).getTime()
+					- new Date(b?.updatedAt || b?.createdAt || 0).getTime();
+			}
+
+			return new Date(b?.updatedAt || b?.createdAt || 0).getTime()
+				- new Date(a?.updatedAt || a?.createdAt || 0).getTime();
+		});
+
+		return sorted;
+	}, [templates, search, category, status, sortBy]);
 
 	const categories = useMemo(() => {
 		return ['all', ...new Set(templates.map((template) => template.category).filter(Boolean))];
@@ -66,9 +95,10 @@ export default function TemplateLibraryPanel({
 		(template) => String(template?.status || '').toUpperCase() === 'APPROVED'
 	).length;
 
-	const selectedTemplate = filteredTemplates.find((template) => template.id === selectedTemplateId)
-		|| templates.find((template) => template.id === selectedTemplateId)
-		|| null;
+	const selectedTemplate =
+		filteredTemplates.find((template) => template.id === selectedTemplateId) ||
+		templates.find((template) => template.id === selectedTemplateId) ||
+		null;
 
 	return (
 		<section className="campaign-panel campaign-panel--soft template-library-shell">
@@ -77,7 +107,7 @@ export default function TemplateLibraryPanel({
 					<span className="campaigns-eyebrow">Biblioteca</span>
 					<h3>Elegí una base antes de editar</h3>
 					<p>
-						Buscá, filtrá y seleccioná el template correcto. Después lo editás sin dar vueltas.
+						Buscá, filtrá y seleccioná el template correcto. La idea es que no tengas que andar pescándolo con red y snorkel.
 					</p>
 				</div>
 
@@ -101,7 +131,7 @@ export default function TemplateLibraryPanel({
 				</div>
 			</div>
 
-			<div className="campaign-filters-grid campaign-filters-grid--three">
+			<div className="campaign-filters-grid">
 				<label className="field">
 					<span>Buscar</span>
 					<input
@@ -130,6 +160,16 @@ export default function TemplateLibraryPanel({
 								{item === 'all' ? 'Todos' : item}
 							</option>
 						))}
+					</select>
+				</label>
+
+				<label className="field">
+					<span>Orden</span>
+					<select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+						<option value="updated_desc">Más recientes</option>
+						<option value="updated_asc">Más viejos</option>
+						<option value="name_asc">Nombre A-Z</option>
+						<option value="name_desc">Nombre Z-A</option>
 					</select>
 				</label>
 			</div>
@@ -162,6 +202,7 @@ export default function TemplateLibraryPanel({
 					filteredTemplates.map((template) => {
 						const isSelected = template.id === selectedTemplateId;
 						const isMetaSample = isMetaSampleTemplate(template);
+						const bodyPreview = getBodyPreview(template);
 
 						return (
 							<article
@@ -193,14 +234,15 @@ export default function TemplateLibraryPanel({
 								<div className="template-list-card-tags">
 									<span className="template-chip">{template.category || 'MARKETING'}</span>
 									<span className="template-chip">{template.language || 'es_AR'}</span>
-									{isMetaSample ? <span className="template-chip template-chip--warning">sample Meta</span> : null}
+									{template.headerFormat ? (
+										<span className="template-chip">{template.headerFormat}</span>
+									) : null}
+									{isMetaSample ? (
+										<span className="template-chip template-chip--warning">sample Meta</span>
+									) : null}
 								</div>
 
-								<p className="campaign-list-body">
-									{template.bodyText ||
-										template.rawPayload?.components?.find((item) => String(item?.type || '').toUpperCase() === 'BODY')?.text ||
-										'Sin vista previa de cuerpo.'}
-								</p>
+								<p className="campaign-list-body">{bodyPreview}</p>
 
 								<div className="campaign-list-card-bottom">
 									<span>Actualizado: {formatDate(template.updatedAt || template.createdAt)}</span>
@@ -208,13 +250,13 @@ export default function TemplateLibraryPanel({
 									<div className="campaign-inline-actions">
 										<button
 											type="button"
-											className="button ghost"
+											className={`button ${isSelected ? 'secondary' : 'ghost'}`}
 											onClick={(event) => {
 												event.stopPropagation();
 												onSelectTemplate(template);
 											}}
 										>
-											Usar
+											{isSelected ? 'Seleccionado' : 'Usar'}
 										</button>
 
 										{!isMetaSample && template.id ? (
