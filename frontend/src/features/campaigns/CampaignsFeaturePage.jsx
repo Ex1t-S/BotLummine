@@ -26,18 +26,19 @@ function PageSection({ eyebrow, title, description, actions = null, children, cl
 
 export default function CampaignsFeaturePage() {
 	const {
-		feedback,
-		overview,
-		templates,
-		campaigns,
-		selectedTemplate,
-		setSelectedTemplate,
-		selectedCampaign,
-		setSelectedCampaignId,
-		queries,
-		mutations,
-		abandonedCart,
-	} = useCampaignsDashboard();
+	feedback,
+	overview,
+	templates,
+	campaigns,
+	selectedTemplate,
+	setSelectedTemplate,
+	selectedCampaign,
+	setSelectedCampaignId,
+	queries,
+	mutations,
+	tracking,
+	abandonedCart,
+} = useCampaignsDashboard();
 
 	const approvedTemplates = Number(overview.approvedTemplatesCount || 0);
 	const activeCampaigns = Number(overview.activeCampaignsCount || 0);
@@ -237,14 +238,18 @@ export default function CampaignsFeaturePage() {
 							onResume={(campaignId) => mutations.action.mutate({ type: 'resume', campaignId })}
 							onDelete={(campaign) => {
 								if (!campaign?.id) return;
+
 								const confirmed = window.confirm(
 									`¿Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
 								);
+
 								if (!confirmed) return;
+
 								mutations.deleteCampaign.mutate(campaign.id);
 							}}
 							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
 							deleteLoading={mutations.deleteCampaign.isPending}
+							tracking={tracking}
 						/>
 					</CampaignAccordion>
 				</div>
