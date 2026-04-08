@@ -65,6 +65,16 @@ function ensureTemplateCategory(category) {
 	return normalized;
 }
 
+function ensureParameterFormat(parameterFormat) {
+	const normalized = toUpperValue(parameterFormat || 'POSITIONAL', 'POSITIONAL');
+
+	if (!['POSITIONAL', 'NAMED'].includes(normalized)) {
+		throw new Error('parameterFormat debe ser POSITIONAL o NAMED.');
+	}
+
+	return normalized;
+}
+
 function ensureComponents(components = []) {
 	if (!Array.isArray(components) || !components.length) {
 		throw new Error('La plantilla debe tener al menos un componente.');
@@ -186,7 +196,9 @@ function buildTemplateUpsertPayload(metaTemplate, rawPayloadOverride = null) {
 		status: normalizeString(metaTemplate?.status || rawPayloadOverride?.status || 'IN_REVIEW'),
 		qualityScore: normalizeString(metaTemplate?.quality_score || metaTemplate?.qualityScore || '') || null,
 		headerFormat: extractHeaderFormat(components),
-		parameterFormat: normalizeString(metaTemplate?.parameter_format || rawPayloadOverride?.parameter_format || '') || null,
+		parameterFormat: normalizeString(
+			metaTemplate?.parameter_format || rawPayloadOverride?.parameter_format || ''
+		) || null,
 		previewText: buildTemplatePreviewText(components),
 		rejectedReason: normalizeString(metaTemplate?.rejected_reason || '') || null,
 		disabledReason: normalizeString(metaTemplate?.disabled_reason || '') || null,
@@ -354,12 +366,16 @@ export async function createTemplate({
 	name,
 	category,
 	language = 'es_AR',
+	parameterFormat = 'POSITIONAL',
 	components = []
 }) {
+	const normalizedParameterFormat = ensureParameterFormat(parameterFormat);
+
 	const payload = {
 		name: ensureTemplateName(name),
 		category: ensureTemplateCategory(category),
 		language: ensureTemplateLanguage(language),
+		parameter_format: normalizedParameterFormat,
 		components: ensureComponents(components)
 	};
 
@@ -371,6 +387,7 @@ export async function createTemplate({
 			language: payload.language,
 			category: response?.category || payload.category,
 			status: response?.status || 'IN_REVIEW',
+			parameter_format: normalizedParameterFormat,
 			components: payload.components
 		},
 		{
@@ -387,6 +404,7 @@ export async function createTemplate({
 
 export async function updateTemplate(templateId, {
 	category,
+	parameterFormat,
 	components = []
 }) {
 	const localTemplate = await getTemplateOrThrow(templateId);
@@ -395,8 +413,16 @@ export async function updateTemplate(templateId, {
 		throw new Error('La plantilla local no tiene metaTemplateId para editar en Meta.');
 	}
 
+	const normalizedParameterFormat = ensureParameterFormat(
+		parameterFormat ||
+			localTemplate.parameterFormat ||
+			localTemplate.rawPayload?.parameter_format ||
+			'POSITIONAL'
+	);
+
 	const payload = {
 		category: ensureTemplateCategory(category || localTemplate.category),
+		parameter_format: normalizedParameterFormat,
 		components: ensureComponents(components)
 	};
 
@@ -408,10 +434,11 @@ export async function updateTemplate(templateId, {
 			language: localTemplate.language,
 			category: response?.category || payload.category,
 			status: response?.status || 'IN_REVIEW',
+			parameter_format: normalizedParameterFormat,
 			components: payload.components
 		},
 		{
-			...localTemplate.rawPayload,
+			...(localTemplate.rawPayload || {}),
 			...payload,
 			...response,
 			name: localTemplate.name,

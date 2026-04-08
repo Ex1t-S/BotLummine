@@ -57,6 +57,7 @@ export async function createTemplateController(req, res) {
 			name: req.body?.name,
 			category: req.body?.category,
 			language: req.body?.language || 'es_AR',
+			parameterFormat: req.body?.parameterFormat || 'POSITIONAL',
 			components: Array.isArray(req.body?.components) ? req.body.components : [],
 		});
 
@@ -71,6 +72,7 @@ export async function updateTemplateController(req, res) {
 	try {
 		const result = await updateTemplate(req.params.templateId, {
 			category: req.body?.category,
+			parameterFormat: req.body?.parameterFormat || 'POSITIONAL',
 			components: Array.isArray(req.body?.components) ? req.body.components : [],
 		});
 

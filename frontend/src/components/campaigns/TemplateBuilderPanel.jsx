@@ -15,6 +15,7 @@ const defaultForm = {
 	name: '',
 	language: 'es_AR',
 	category: 'MARKETING',
+	parameterFormat: 'POSITIONAL',
 	headerType: 'TEXT',
 	headerText: '',
 	headerMediaId: '',
@@ -56,7 +57,16 @@ function extractHeaderHandle(header = {}, template = {}) {
 	const fromExample = safeArray(header?.example?.header_handle)[0];
 	const fromRawPayload = template?.rawPayload?.headerMedia?.headerHandle;
 	const fromTemplate = template?.headerMedia?.headerHandle;
+
 	return normalizeString(fromExample || fromRawPayload || fromTemplate || '');
+}
+
+function detectParameterFormatFromText(text = '') {
+	const numeric = [...String(text).matchAll(/\{\{\s*(\d+)\s*\}\}/g)];
+	const named = [...String(text).matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)];
+
+	if (named.length && !numeric.length) return 'NAMED';
+	return 'POSITIONAL';
 }
 
 function mapTemplateToForm(template) {
@@ -70,12 +80,22 @@ function mapTemplateToForm(template) {
 	const footer = getComponentByType(components, 'FOOTER');
 	const buttonsComponent = getComponentByType(components, 'BUTTONS');
 
+	const bodyText = normalizeString(body?.text || template.bodyText || '');
+	const headerText = normalizeString(header?.text || template.headerText || '');
+	const parameterFormat = toUpper(
+		template?.parameterFormat ||
+			template?.rawPayload?.parameter_format ||
+			detectParameterFormatFromText(`${headerText}\n${bodyText}`),
+		'POSITIONAL'
+	);
+
 	return {
 		name: normalizeString(template.name || ''),
 		language: normalizeString(template.language || 'es_AR', 'es_AR'),
 		category: toUpper(template.category || 'MARKETING', 'MARKETING'),
+		parameterFormat,
 		headerType: toUpper(header?.format || template.headerFormat || 'TEXT', 'TEXT'),
-		headerText: normalizeString(header?.text || template.headerText || ''),
+		headerText,
 		headerMediaId: normalizeString(
 			header?.image?.id || template?.rawPayload?.headerMedia?.mediaId || ''
 		),
@@ -83,9 +103,11 @@ function mapTemplateToForm(template) {
 			header?.image?.link || template?.rawPayload?.headerMedia?.previewUrl || ''
 		),
 		headerAssetHandle: extractHeaderHandle(header, template),
-		bodyText: normalizeString(body?.text || template.bodyText || ''),
+		bodyText,
 		footerText: normalizeString(footer?.text || template.footerText || ''),
-		buttons: safeArray(buttonsComponent?.buttons).map((button, index) => normalizeButton(button, index)),
+		buttons: safeArray(buttonsComponent?.buttons).map((button, index) =>
+			normalizeButton(button, index)
+		),
 	};
 }
 
@@ -125,22 +147,46 @@ function buildButtonsComponent(buttons = []) {
 	};
 }
 
-function buildSampleValue(variableNumber, context = 'general') {
-	if (context === 'name') return `Ejemplo ${variableNumber}`;
-	if (context === 'header') return `Dato ${variableNumber}`;
-	if (context === 'phone') return `54922100000${variableNumber}`;
-	if (context === 'url') return `ejemplo-${variableNumber}`;
-	return `Valor ${variableNumber}`;
+function buildSampleValue(variableKey, context = 'general') {
+	if (context === 'name') return `Ejemplo ${variableKey}`;
+	if (context === 'header') return `Dato ${variableKey}`;
+	if (context === 'phone') return `54922100000${variableKey}`;
+	if (context === 'url') return `ejemplo-${variableKey}`;
+	return `Valor ${variableKey}`;
 }
 
-function getVariableNumbers(text = '') {
-	const matches = [...String(text || '').matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((match) => Number(match[1]));
-	return [...new Set(matches)].sort((a, b) => a - b);
+function getPositionalVariables(text = '') {
+	const matches = [...String(text || '').matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(
+		(match) => match[1]
+	);
+	return [...new Set(matches)].sort((a, b) => Number(a) - Number(b));
+}
+
+function getNamedVariables(text = '') {
+	const matches = [
+		...String(text || '').matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g),
+	].map((match) => match[1]);
+	return [...new Set(matches)].sort((a, b) => a.localeCompare(b));
+}
+
+function getVariables(text = '', parameterFormat = 'POSITIONAL') {
+	if (toUpper(parameterFormat) === 'NAMED') {
+		return getNamedVariables(text);
+	}
+
+	return getPositionalVariables(text);
+}
+
+function buildNamedExamples(keys = [], context = 'general') {
+	return keys.map((key) => ({
+		param_name: key,
+		example: buildSampleValue(key, context),
+	}));
 }
 
 function buildHeaderComponent(form) {
 	if (form.headerType === 'TEXT' && form.headerText.trim()) {
-		const headerVariables = getVariableNumbers(form.headerText);
+		const headerVariables = getVariables(form.headerText, form.parameterFormat);
 		const component = {
 			type: 'HEADER',
 			format: 'TEXT',
@@ -148,9 +194,17 @@ function buildHeaderComponent(form) {
 		};
 
 		if (headerVariables.length) {
-			component.example = {
-				header_text: headerVariables.map((variableNumber) => buildSampleValue(variableNumber, 'header')),
-			};
+			if (form.parameterFormat === 'NAMED') {
+				component.example = {
+					header_text_named_params: buildNamedExamples(headerVariables, 'header'),
+				};
+			} else {
+				component.example = {
+					header_text: headerVariables.map((variableKey) =>
+						buildSampleValue(variableKey, 'header')
+					),
+				};
+			}
 		}
 
 		return component;
@@ -175,17 +229,22 @@ function buildHeaderComponent(form) {
 }
 
 function buildBodyComponent(form) {
-	const bodyVariables = getVariableNumbers(form.bodyText);
-
+	const bodyVariables = getVariables(form.bodyText, form.parameterFormat);
 	const component = {
 		type: 'BODY',
 		text: form.bodyText.trim(),
 	};
 
 	if (bodyVariables.length) {
-		component.example = {
-			body_text: [bodyVariables.map((variableNumber) => buildSampleValue(variableNumber, 'name'))],
-		};
+		if (form.parameterFormat === 'NAMED') {
+			component.example = {
+				body_text_named_params: buildNamedExamples(bodyVariables, 'name'),
+			};
+		} else {
+			component.example = {
+				body_text: [bodyVariables.map((variableKey) => buildSampleValue(variableKey, 'name'))],
+			};
+		}
 	}
 
 	return component;
@@ -217,14 +276,15 @@ function buildPayload(form) {
 		name: form.name.trim(),
 		language: form.language,
 		category: form.category,
+		parameterFormat: form.parameterFormat,
 		components,
 		headerMedia:
 			form.headerType === 'IMAGE'
 				? {
-					mediaId: normalizeString(form.headerMediaId || '') || null,
-					previewUrl: normalizeString(form.headerMediaPreviewUrl || '') || null,
-					headerHandle: normalizeString(form.headerAssetHandle || '') || null,
-				}
+						mediaId: normalizeString(form.headerMediaId || '') || null,
+						previewUrl: normalizeString(form.headerMediaPreviewUrl || '') || null,
+						headerHandle: normalizeString(form.headerAssetHandle || '') || null,
+					}
 				: null,
 	};
 }
@@ -247,59 +307,6 @@ function extractUploadValue(response = {}, keys = []) {
 		}
 	}
 	return '';
-}
-
-function getCompletionSteps(form) {
-	return [
-		Boolean(form.name.trim() && form.language && form.category),
-		form.headerType === 'TEXT'
-			? true
-			: form.headerType === 'IMAGE'
-				? Boolean(form.headerAssetHandle)
-				: true,
-		Boolean(form.bodyText.trim()),
-		safeArray(form.buttons).every((button) => {
-			if (!button.text.trim()) return false;
-			if (button.type === 'URL') return Boolean(button.url.trim());
-			if (button.type === 'PHONE_NUMBER') return Boolean(button.phoneNumber.trim());
-			return true;
-		}),
-	];
-}
-
-function getReviewItems(form, variables) {
-	return [
-		{ label: 'Categoría', value: form.category || '—' },
-		{ label: 'Idioma', value: form.language || '—' },
-		{ label: 'Header', value: form.headerType || '—' },
-		{ label: 'Variables', value: variables.length ? String(variables.length) : '0' },
-	];
-}
-
-function getWarnings(form, variables) {
-	const warnings = [];
-
-	if (!form.name.trim()) {
-		warnings.push('Todavía no definiste el nombre interno del template.');
-	}
-
-	if (!form.bodyText.trim()) {
-		warnings.push('El body está vacío. Meta no te va a dejar crear la plantilla así.');
-	}
-
-	if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
-		warnings.push('Para header IMAGE necesitás subir una imagen que devuelva header_handle.');
-	}
-
-	if (variables.length > 0) {
-		warnings.push(`Se detectaron ${variables.length} variable${variables.length > 1 ? 's' : ''}. Revisá que el texto tenga sentido también con datos reales.`);
-	}
-
-	if (form.buttons.length >= 3) {
-		warnings.push('Ya llegaste al máximo de 3 botones para este builder.');
-	}
-
-	return warnings;
 }
 
 export default function TemplateBuilderPanel({
@@ -333,7 +340,10 @@ export default function TemplateBuilderPanel({
 			.map((button) => button.url || '')
 			.join('\n');
 
-		return getVariableNumbers(`${form.headerText}\n${form.bodyText}\n${form.footerText}\n${buttonUrls}`);
+		return getVariables(
+			`${form.headerText}\n${form.bodyText}\n${form.footerText}\n${buttonUrls}`,
+			form.parameterFormat
+		);
 	}, [form]);
 
 	const previewButtons = useMemo(() => {
@@ -341,11 +351,6 @@ export default function TemplateBuilderPanel({
 			.map((button, index) => normalizeButton(button, index))
 			.filter((button) => button.text);
 	}, [form.buttons]);
-
-	const stepCompletion = useMemo(() => getCompletionSteps(form), [form]);
-	const completedCount = stepCompletion.filter(Boolean).length;
-	const reviewItems = useMemo(() => getReviewItems(form, variables), [form, variables]);
-	const warnings = useMemo(() => getWarnings(form, variables), [form, variables]);
 
 	function updateForm(field, value) {
 		setForm((current) => ({ ...current, [field]: value }));
@@ -436,48 +441,92 @@ export default function TemplateBuilderPanel({
 		}
 	}
 
+	function validateVariableUsage() {
+		const allText = `${form.headerText}\n${form.bodyText}\n${form.footerText}\n${safeArray(
+			form.buttons
+		)
+			.map((button) => button.url || '')
+			.join('\n')}`;
+
+		const hasPositional = /\{\{\s*\d+\s*\}\}/.test(allText);
+		const hasNamed = /\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}/.test(allText);
+
+		if (hasPositional && hasNamed) {
+			return 'No mezcles variables numéricas y nombradas en el mismo template.';
+		}
+
+		if (form.parameterFormat === 'POSITIONAL' && hasNamed) {
+			return 'Elegiste POSITIONAL pero el texto usa variables nombradas como {{nombre}}.';
+		}
+
+		if (form.parameterFormat === 'NAMED' && hasPositional) {
+			return 'Elegiste NAMED pero el texto usa variables numéricas como {{1}}.';
+		}
+
+		return '';
+	}
+
 	function validatePayload(payload) {
-	if (!payload.name) {
-		return 'Poné un nombre interno para el template.';
-	}
-
-	const bodyComponent = payload.components.find((component) => component.type === 'BODY');
-	const bodyText = bodyComponent?.text;
-
-	if (!bodyText) {
-		return 'El body del template es obligatorio.';
-	}
-
-	if (getVariableNumbers(bodyText).length && !bodyComponent?.example?.body_text?.[0]?.length) {
-		return 'El body usa variables, pero faltan ejemplos. El builder debería armarlos solo.';
-	}
-
-	if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
-		return 'Para templates con header IMAGE necesitás una imagen que devuelva header_handle.';
-	}
-
-	for (const button of safeArray(form.buttons)) {
-		if (!button.text.trim()) {
-			return 'Todos los botones tienen que tener texto.';
+		if (!payload.name) {
+			return 'Poné un nombre interno para el template.';
 		}
 
-		if (button.type === 'URL' && !button.url.trim()) {
-			return 'Los botones de enlace necesitan una URL.';
+		const bodyComponent = payload.components.find((component) => component.type === 'BODY');
+		const bodyText = bodyComponent?.text;
+
+		if (!bodyText) {
+			return 'El body del template es obligatorio.';
 		}
 
-		if (button.type === 'PHONE_NUMBER' && !button.phoneNumber.trim()) {
-			return 'Los botones de llamada necesitan un número.';
+		const variableError = validateVariableUsage();
+		if (variableError) {
+			return variableError;
 		}
+
+		if (form.parameterFormat === 'POSITIONAL') {
+			if (
+				getPositionalVariables(bodyText).length &&
+				!bodyComponent?.example?.body_text?.[0]?.length
+			) {
+				return 'El body usa variables posicionales, pero faltan examples.body_text.';
+			}
+		} else {
+			if (
+				getNamedVariables(bodyText).length &&
+				!bodyComponent?.example?.body_text_named_params?.length
+			) {
+				return 'El body usa variables nombradas, pero faltan examples.body_text_named_params.';
+			}
+		}
+
+		if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
+			return 'Para templates con header IMAGE necesitás una imagen que devuelva header_handle.';
+		}
+
+		for (const button of safeArray(form.buttons)) {
+			if (!button.text.trim()) {
+				return 'Todos los botones tienen que tener texto.';
+			}
+
+			if (button.type === 'URL' && !button.url.trim()) {
+				return 'Los botones de enlace necesitan una URL.';
+			}
+
+			if (button.type === 'PHONE_NUMBER' && !button.phoneNumber.trim()) {
+				return 'Los botones de llamada necesitan un número.';
+			}
+		}
+
+		return '';
 	}
-
-	return '';
-}
 
 	async function handleSubmit(event) {
 		event.preventDefault();
 
 		if (isReadOnlyTemplate) {
-			setLocalError('El template hello_world es de muestra de Meta y no se puede editar. Creá uno nuevo.');
+			setLocalError(
+				'El template hello_world es de muestra de Meta y no se puede editar. Creá uno nuevo.'
+			);
 			return;
 		}
 
@@ -503,16 +552,16 @@ export default function TemplateBuilderPanel({
 
 	return (
 		<section className="campaign-panel campaign-panel--soft template-builder-shell">
-			<div className="template-builder-topbar">
+			<div className="campaign-panel-header">
 				<div>
-					<span className="campaigns-eyebrow">Editor</span>
 					<h3>{isEditingSelectedTemplate ? 'Editar template' : 'Crear template nuevo'}</h3>
 					<p>
-						Armalo por bloques: estructura, contenido, botones y revisión final. Mucho más cerca de Meta y mucho menos dolor de cabeza.
+						Ahora el builder soporta variables posicionales y nombradas. Header y footer
+						siguen siendo opcionales.
 					</p>
 				</div>
 
-				<div className="template-builder-topbar-actions">
+				<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 					{!forcedCreateMode ? (
 						<button type="button" className="button secondary" onClick={startCreateMode}>
 							+ Nuevo template
@@ -527,251 +576,258 @@ export default function TemplateBuilderPanel({
 				</div>
 			</div>
 
-			<div className="template-builder-progress">
-				<div className={`template-builder-progress-step ${stepCompletion[0] ? 'is-done' : ''}`}>
-					1. Base
-				</div>
-				<div className={`template-builder-progress-step ${stepCompletion[1] ? 'is-done' : ''}`}>
-					2. Header
-				</div>
-				<div className={`template-builder-progress-step ${stepCompletion[2] ? 'is-done' : ''}`}>
-					3. Contenido
-				</div>
-				<div className={`template-builder-progress-step ${stepCompletion[3] ? 'is-done' : ''}`}>
-					4. Botones
-				</div>
-			</div>
-
-			<div className="template-builder-layout">
-				<form className="campaign-form template-builder-form" onSubmit={handleSubmit}>
+			<div className="campaign-builder-grid">
+				<form className="campaign-form" onSubmit={handleSubmit}>
 					{isReadOnlyTemplate ? (
-						<div className="template-builder-warning">
-							<strong>Template de muestra de Meta.</strong>
-							<span>
-								`hello_world` se puede mirar, pero no editar. Apretá <strong>+ Nuevo template</strong> y armá uno propio.
-							</span>
+						<div className="campaign-inline-warning">
+							Estás viendo un template sample de Meta. No se puede editar ni eliminar desde la
+							API.
 						</div>
 					) : null}
 
-					<section className={`template-builder-section ${stepCompletion[0] ? 'is-active' : ''}`}>
-						<div className="template-builder-section-head">
-							<div className="template-builder-section-step">1</div>
-							<div>
-								<h4>Estructura base</h4>
-								<p>Definí nombre interno, idioma, categoría y el tipo de header.</p>
-							</div>
-						</div>
+					<div className="campaign-form-grid two-columns">
+						<label className="field">
+							<span>Nombre interno</span>
+							<input
+								value={form.name}
+								onChange={(event) => updateForm('name', event.target.value)}
+								placeholder="promo_body_abril"
+							/>
+						</label>
 
-						<div className="template-builder-section-body">
-							<div className="campaign-form-grid two-columns">
-								<label className="field">
-									<span>Nombre interno</span>
+						<label className="field">
+							<span>Idioma</span>
+							<select
+								value={form.language}
+								onChange={(event) => updateForm('language', event.target.value)}
+							>
+								<option value="es_AR">es_AR</option>
+								<option value="es_ES">es_ES</option>
+								<option value="en_US">en_US</option>
+								<option value="pt_BR">pt_BR</option>
+							</select>
+						</label>
+
+						<label className="field">
+							<span>Categoría</span>
+							<select
+								value={form.category}
+								onChange={(event) => updateForm('category', event.target.value)}
+							>
+								<option value="MARKETING">MARKETING</option>
+								<option value="UTILITY">UTILITY</option>
+								<option value="AUTHENTICATION">AUTHENTICATION</option>
+							</select>
+						</label>
+
+						<label className="field">
+							<span>Formato de variables</span>
+							<select
+								value={form.parameterFormat}
+								onChange={(event) => updateForm('parameterFormat', event.target.value)}
+							>
+								<option value="POSITIONAL">POSITIONAL ({"{{1}}, {{2}}"})</option>
+								<option value="NAMED">NAMED ({"{{nombre}}, {{producto}}"})</option>
+							</select>
+							<small>
+								Los botones siguen usando parámetros posicionales en Meta aunque el body sea
+								NAMED.
+							</small>
+						</label>
+
+						<label className="field">
+							<span>Tipo de header</span>
+							<select
+								value={form.headerType}
+								onChange={(event) => {
+									const nextType = event.target.value;
+									setForm((current) => ({
+										...current,
+										headerType: nextType,
+										headerText: nextType === 'TEXT' ? current.headerText : '',
+										...(nextType !== 'IMAGE'
+											? {
+													headerMediaId: '',
+													headerMediaPreviewUrl: '',
+													headerAssetHandle: '',
+												}
+											: {}),
+									}));
+								}}
+							>
+								<option value="TEXT">TEXT</option>
+								<option value="IMAGE">IMAGE</option>
+								<option value="VIDEO">VIDEO</option>
+								<option value="DOCUMENT">DOCUMENT</option>
+							</select>
+						</label>
+					</div>
+
+					{form.headerType === 'TEXT' ? (
+						<label className="field">
+							<span>Header opcional</span>
+							<input
+								value={form.headerText}
+								onChange={(event) => updateForm('headerText', event.target.value)}
+								placeholder={
+									form.parameterFormat === 'NAMED' ? 'Hola {{nombre}}' : 'Hola {{1}}'
+								}
+							/>
+						</label>
+					) : form.headerType === 'IMAGE' ? (
+						<div
+							className="field"
+							style={{
+								display: 'grid',
+								gap: 12,
+								padding: 14,
+								border: '1px solid #e5e7eb',
+								borderRadius: 14,
+								background: '#fff',
+							}}
+						>
+							<span>Imagen de header</span>
+
+							<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+								<label
+									style={{
+										height: 42,
+										padding: '0 14px',
+										borderRadius: 12,
+										border: '1px solid #d1d5db',
+										background: '#fff',
+										fontWeight: 700,
+										display: 'inline-flex',
+										alignItems: 'center',
+										cursor: uploadingImage ? 'wait' : 'pointer',
+									}}
+								>
 									<input
-										value={form.name}
-										onChange={(event) => updateForm('name', event.target.value)}
-										placeholder="promo_invierno_body"
+										type="file"
+										accept="image/*"
+										onChange={handleImageUpload}
+										style={{ display: 'none' }}
+										disabled={uploadingImage}
 									/>
-									<small>Usá nombres cortos, claros y sin espacios raros.</small>
+									{uploadingImage ? 'Subiendo imagen...' : 'Subir imagen'}
 								</label>
 
-								<label className="field">
-									<span>Idioma</span>
-									<select
-										value={form.language}
-										onChange={(event) => updateForm('language', event.target.value)}
-									>
-										<option value="es_AR">es_AR</option>
-										<option value="es_ES">es_ES</option>
-										<option value="en_US">en_US</option>
-										<option value="pt_BR">pt_BR</option>
-									</select>
-								</label>
-
-								<label className="field">
-									<span>Categoría</span>
-									<select
-										value={form.category}
-										onChange={(event) => updateForm('category', event.target.value)}
-									>
-										<option value="MARKETING">MARKETING</option>
-										<option value="UTILITY">UTILITY</option>
-										<option value="AUTHENTICATION">AUTHENTICATION</option>
-									</select>
-								</label>
-							</div>
-
-							<div className="template-toggle-grid">
-								{['TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].map((type) => (
+								{form.headerMediaId || form.headerMediaPreviewUrl || form.headerAssetHandle ? (
 									<button
-										key={type}
 										type="button"
-										className={`template-type-card ${form.headerType === type ? 'active' : ''}`}
-										onClick={() => {
+										className="button ghost"
+										onClick={() =>
 											setForm((current) => ({
 												...current,
-												headerType: type,
-												headerText: type === 'TEXT' ? current.headerText : '',
-												...(type !== 'IMAGE'
-													? {
-														headerMediaId: '',
-														headerMediaPreviewUrl: '',
-														headerAssetHandle: '',
-													}
-													: {}),
-											}));
-										}}
+												headerMediaId: '',
+												headerMediaPreviewUrl: '',
+												headerAssetHandle: '',
+											}))
+										}
 									>
-										<strong>{type}</strong>
-										<span>
-											{type === 'TEXT' && 'Título corto arriba del mensaje.'}
-											{type === 'IMAGE' && 'Imagen destacada como cabecera.'}
-											{type === 'VIDEO' && 'Preparado para ampliar después.'}
-											{type === 'DOCUMENT' && 'Preparado para ampliar después.'}
-										</span>
+										Quitar imagen
 									</button>
-								))}
+								) : null}
 							</div>
-						</div>
-					</section>
 
-					<section className={`template-builder-section ${stepCompletion[1] ? 'is-active' : ''}`}>
-						<div className="template-builder-section-head">
-							<div className="template-builder-section-step">2</div>
-							<div>
-								<h4>Header</h4>
-								<p>Elegí si querés texto o una imagen. Para IMAGE, Meta pide un handle de ejemplo.</p>
-							</div>
-						</div>
+							{form.headerAssetHandle ? (
+								<div style={{ fontSize: 12, color: '#475569' }}>
+									Header handle listo: <strong>{form.headerAssetHandle}</strong>
+								</div>
+							) : (
+								<div style={{ fontSize: 12, color: '#b45309' }}>
+									Para templates con IMAGE, Meta exige un <strong>header_handle</strong> de
+									ejemplo.
+								</div>
+							)}
 
-						<div className="template-builder-section-body">
-							{form.headerType === 'TEXT' ? (
-								<label className="field">
-									<span>Texto del header</span>
-									<input
-										value={form.headerText}
-										onChange={(event) => updateForm('headerText', event.target.value)}
-										placeholder="Hola {{1}}"
+							{form.headerMediaId ? (
+								<div style={{ fontSize: 12, color: '#475569' }}>
+									Media ID guardado: <strong>{form.headerMediaId}</strong>
+								</div>
+							) : null}
+
+							{form.headerMediaPreviewUrl ? (
+								<div
+									style={{
+										borderRadius: 14,
+										border: '1px solid #e5e7eb',
+										padding: 10,
+										background: '#f8fafc',
+										width: 'fit-content',
+									}}
+								>
+									<img
+										src={form.headerMediaPreviewUrl}
+										alt="Preview header"
+										style={{
+											width: 220,
+											maxWidth: '100%',
+											display: 'block',
+											borderRadius: 12,
+										}}
 									/>
-									<small>Ideal para un título corto. No lo conviertas en una tesis.</small>
-								</label>
-							) : null}
-
-							{form.headerType === 'IMAGE' ? (
-								<div className="template-media-upload-box">
-									<div className="template-media-upload-top">
-										<div>
-											<strong>Imagen del header</strong>
-											<p>Subila acá y el builder intentará guardar tanto el media id como el header_handle.</p>
-										</div>
-
-										<label className="button ghost template-upload-button">
-											<input
-												type="file"
-												accept="image/*"
-												onChange={handleImageUpload}
-												disabled={uploadingImage}
-												style={{ display: 'none' }}
-											/>
-											{uploadingImage ? 'Subiendo…' : 'Subir imagen'}
-										</label>
-									</div>
-
-									{form.headerMediaPreviewUrl ? (
-										<div className="template-media-preview-card">
-											<img src={form.headerMediaPreviewUrl} alt="Header preview" />
-											<div className="template-media-preview-meta">
-												<div>
-													<div><strong>Vista previa cargada</strong></div>
-													<div>{form.headerAssetHandle ? 'Header handle listo.' : 'Falta header handle.'}</div>
-												</div>
-
-												{form.headerAssetHandle ? <code>{form.headerAssetHandle}</code> : null}
-											</div>
-										</div>
-									) : (
-										<div className="template-media-empty">
-											No hay imagen cargada todavía. Acá debería aparecer la vista previa.
-										</div>
-									)}
-
-									<div className="template-helper-inline">
-										<div><strong>Media ID:</strong> {form.headerMediaId || 'todavía no disponible'}</div>
-										<div><strong>Header handle:</strong> {form.headerAssetHandle || 'todavía no disponible'}</div>
-									</div>
-
-									{form.headerMediaPreviewUrl || form.headerMediaId || form.headerAssetHandle ? (
-										<div className="campaign-inline-actions">
-											<button
-												type="button"
-												className="button ghost"
-												onClick={() =>
-													setForm((current) => ({
-														...current,
-														headerMediaId: '',
-														headerMediaPreviewUrl: '',
-														headerAssetHandle: '',
-													}))
-												}
-											>
-												Quitar imagen
-											</button>
-										</div>
-									) : null}
 								</div>
-							) : null}
-
-							{['VIDEO', 'DOCUMENT'].includes(form.headerType) ? (
-								<div className="template-soft-empty">
-									Dejé el camino listo para VIDEO y DOCUMENT, pero por ahora el flujo más sólido queda en TEXT e IMAGE. Primero resolvemos lo que más vende; después le metemos nitro al resto.
+							) : (
+								<div style={{ fontSize: 12, color: '#64748b' }}>
+									Subí la imagen y el editor va a intentar guardar tanto el media id como el
+									header handle.
 								</div>
-							) : null}
+							)}
 						</div>
-					</section>
-
-					<section className={`template-builder-section ${stepCompletion[2] ? 'is-active' : ''}`}>
-						<div className="template-builder-section-head">
-							<div className="template-builder-section-step">3</div>
-							<div>
-								<h4>Contenido</h4>
-								<p>Escribí el mensaje principal y el pie. Las variables se detectan solas.</p>
-							</div>
+					) : (
+						<div
+							className="field"
+							style={{
+								padding: 14,
+								border: '1px dashed #cbd5e1',
+								borderRadius: 14,
+								background: '#fff',
+								color: '#64748b',
+							}}
+						>
+							Por ahora el flujo fuerte queda resuelto para <strong>TEXT</strong> e{' '}
+							<strong>IMAGE</strong>.
 						</div>
+					)}
 
-						<div className="template-builder-section-body">
-							<label className="field">
-								<span>Body</span>
-								<textarea
-									rows={8}
-									value={form.bodyText}
-									onChange={(event) => updateForm('bodyText', event.target.value)}
-									placeholder="Hola {{1}}, tenemos una promo especial para vos..."
-								/>
-								<small>Este bloque es obligatorio. Acá vive el corazón del mensaje.</small>
-							</label>
+					<label className="field">
+						<span>Body</span>
+						<textarea
+							rows={7}
+							value={form.bodyText}
+							onChange={(event) => updateForm('bodyText', event.target.value)}
+							placeholder={
+								form.parameterFormat === 'NAMED'
+									? 'Hola {{nombre}}, tenemos una promo para {{producto}}'
+									: 'Hola {{1}}, tenemos una promo para {{2}}'
+							}
+						/>
+					</label>
 
-							<label className="field">
-								<span>Footer</span>
-								<input
-									value={form.footerText}
-									onChange={(event) => updateForm('footerText', event.target.value)}
-									placeholder="Lummine · Atención por WhatsApp"
-								/>
-								<small>Opcional. Mejor si es corto.</small>
-							</label>
-						</div>
-					</section>
+					<label className="field">
+						<span>Footer opcional</span>
+						<input
+							value={form.footerText}
+							onChange={(event) => updateForm('footerText', event.target.value)}
+							placeholder="Lummine · Atención por WhatsApp"
+						/>
+					</label>
 
-					<section className={`template-builder-section ${stepCompletion[3] ? 'is-active' : ''}`}>
-						<div className="template-builder-section-head">
-							<div className="template-builder-section-step">4</div>
-							<div>
-								<h4>Botones y variables</h4>
-								<p>Agregá llamadas a la acción claras. Máximo 3 botones.</p>
-							</div>
-						</div>
-
-						<div className="template-builder-section-body">
-							<div className="template-button-toolbar">
+					<div
+						className="field"
+						style={{
+							display: 'grid',
+							gap: 12,
+							padding: 14,
+							border: '1px solid #e5e7eb',
+							borderRadius: 14,
+							background: '#fff',
+						}}
+					>
+						<div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+							<span>Botones</span>
+							<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
 								<button
 									type="button"
 									className="button secondary"
@@ -797,144 +853,131 @@ export default function TemplateBuilderPanel({
 									+ Llamada
 								</button>
 							</div>
+						</div>
 
-							<div className="template-button-limit">
-								{form.buttons.length}/3 botones usados
-							</div>
-
-							{form.buttons.length ? (
-								<div className="template-button-list">
-									{form.buttons.map((button, index) => (
-										<div key={button.id} className="template-button-card">
-											<div className="template-button-card-head">
-												<strong>Botón {index + 1}</strong>
-												<button
-													type="button"
-													className="button ghost"
-													onClick={() => removeButton(button.id)}
+						{form.buttons.length ? (
+							<div style={{ display: 'grid', gap: 12 }}>
+								{form.buttons.map((button, index) => (
+									<div
+										key={button.id}
+										style={{
+											display: 'grid',
+											gap: 10,
+											padding: 12,
+											border: '1px solid #e5e7eb',
+											borderRadius: 12,
+											background: '#f8fafc',
+										}}
+									>
+										<div
+											style={{
+												display: 'grid',
+												gridTemplateColumns: '1fr 1fr auto',
+												gap: 10,
+												alignItems: 'end',
+											}}
+										>
+											<label className="field" style={{ margin: 0 }}>
+												<span>Tipo</span>
+												<select
+													value={button.type}
+													onChange={(event) =>
+														updateButton(button.id, {
+															type: event.target.value,
+															url: event.target.value === 'URL' ? button.url : '',
+															phoneNumber:
+																event.target.value === 'PHONE_NUMBER'
+																	? button.phoneNumber
+																	: '',
+														})
+													}
 												>
-													Quitar
-												</button>
-											</div>
+													<option value="QUICK_REPLY">QUICK_REPLY</option>
+													<option value="URL">URL</option>
+													<option value="PHONE_NUMBER">PHONE_NUMBER</option>
+												</select>
+											</label>
 
-											<div className="template-button-card-grid">
-												<label className="field">
-													<span>Tipo</span>
-													<select
-														value={button.type}
-														onChange={(event) =>
-															updateButton(button.id, {
-																type: event.target.value,
-																url: event.target.value === 'URL' ? button.url : '',
-																phoneNumber:
-																	event.target.value === 'PHONE_NUMBER'
-																		? button.phoneNumber
-																		: '',
-															})
-														}
-													>
-														<option value="QUICK_REPLY">QUICK_REPLY</option>
-														<option value="URL">URL</option>
-														<option value="PHONE_NUMBER">PHONE_NUMBER</option>
-													</select>
-												</label>
+											<label className="field" style={{ margin: 0 }}>
+												<span>Texto del botón</span>
+												<input
+													value={button.text}
+													onChange={(event) =>
+														updateButton(button.id, { text: event.target.value })
+													}
+													placeholder={`Botón ${index + 1}`}
+												/>
+											</label>
 
-												<label className="field">
-													<span>Texto</span>
-													<input
-														value={button.text}
-														onChange={(event) => updateButton(button.id, { text: event.target.value })}
-														placeholder={`Botón ${index + 1}`}
-													/>
-												</label>
-											</div>
-
-											{button.type === 'URL' ? (
-												<label className="field">
-													<span>Enlace</span>
-													<input
-														value={button.url}
-														onChange={(event) => updateButton(button.id, { url: event.target.value })}
-														placeholder="https://tu-sitio.com/catalogo/{{1}}"
-													/>
-												</label>
-											) : null}
-
-											{button.type === 'PHONE_NUMBER' ? (
-												<label className="field">
-													<span>Número</span>
-													<input
-														value={button.phoneNumber}
-														onChange={(event) =>
-															updateButton(button.id, { phoneNumber: event.target.value })
-														}
-														placeholder="+5492210000000"
-													/>
-												</label>
-											) : null}
+											<button
+												type="button"
+												className="button ghost"
+												onClick={() => removeButton(button.id)}
+												style={{ height: 42 }}
+											>
+												Quitar
+											</button>
 										</div>
-									))}
-								</div>
-							) : (
-								<div className="template-soft-empty">
-									Podés dejar el template sin botones o sumar hasta 3. Menos es más cuando el mensaje está bien pensado.
-								</div>
-							)}
 
-							<div className="campaign-variable-box">
-								<strong>Variables detectadas</strong>
-								<div className="campaign-variable-list">
-									{variables.length ? (
-										variables.map((variable) => <span key={variable}>{`{{${variable}}}`}</span>)
-									) : (
-										<span className="template-variable-empty">Sin variables</span>
-									)}
-								</div>
-							</div>
-						</div>
-					</section>
+										{button.type === 'URL' ? (
+											<label className="field" style={{ margin: 0 }}>
+												<span>Enlace</span>
+												<input
+													value={button.url}
+													onChange={(event) =>
+														updateButton(button.id, { url: event.target.value })
+													}
+													placeholder="https://tu-sitio.com/catalogo/{{1}}"
+												/>
+												<small>
+													Meta sigue usando parámetros posicionales en URLs de botones.
+												</small>
+											</label>
+										) : null}
 
-					<section className="template-builder-section is-active">
-						<div className="template-builder-section-head">
-							<div className="template-builder-section-step">5</div>
-							<div>
-								<h4>Revisión final</h4>
-								<p>Antes de guardar, mirá si la estructura cierra y si Meta no te va a escupir el payload en la cara.</p>
-							</div>
-						</div>
-
-						<div className="template-builder-section-body">
-							<div className="template-review-grid">
-								{reviewItems.map((item) => (
-									<div key={item.label} className="template-review-card">
-										<span>{item.label}</span>
-										<strong>{item.value}</strong>
+										{button.type === 'PHONE_NUMBER' ? (
+											<label className="field" style={{ margin: 0 }}>
+												<span>Número</span>
+												<input
+													value={button.phoneNumber}
+													onChange={(event) =>
+														updateButton(button.id, {
+															phoneNumber: event.target.value,
+														})
+													}
+													placeholder="+5492210000000"
+												/>
+											</label>
+										) : null}
 									</div>
 								))}
 							</div>
+						) : (
+							<div style={{ fontSize: 13, color: '#64748b' }}>
+								Podés dejarlo sin botones o agregar hasta 3.
+							</div>
+						)}
+					</div>
 
-							{warnings.length ? (
-								<div className="template-builder-warning">
-									<strong>Chequeos rápidos</strong>
-									<ul>
-										{warnings.map((warning) => (
-											<li key={warning}>{warning}</li>
-										))}
-									</ul>
-								</div>
-							) : null}
-
-							{localError ? (
-								<div className="template-builder-error">
-									<strong>No se puede guardar todavía.</strong>
-									<span>{localError}</span>
-								</div>
-							) : null}
+					<div className="campaign-variable-box">
+						<strong>Variables detectadas</strong>
+						<div className="campaign-variable-list">
+							{variables.length ? (
+								variables.map((variable) => <span key={variable}>{`{{${variable}}}`}</span>)
+							) : (
+								<span>Sin variables</span>
+							)}
 						</div>
-					</section>
+					</div>
 
-					<div className="template-builder-submit-row campaign-form-actions">
-						<button className="button primary" type="submit" disabled={creating || updating || uploadingImage}>
+					{localError ? <div className="campaign-inline-error">{localError}</div> : null}
+
+					<div className="campaign-form-actions">
+						<button
+							className="button primary"
+							type="submit"
+							disabled={creating || updating || uploadingImage}
+						>
 							{isEditingSelectedTemplate
 								? updating
 									? 'Guardando…'
@@ -946,86 +989,61 @@ export default function TemplateBuilderPanel({
 					</div>
 				</form>
 
-				<aside className="template-preview-sidebar">
-					<div className="template-preview-card-sticky">
-						<div className="template-preview-meta">
-							<div>
-								<span className="template-preview-meta-label">Vista previa</span>
-								<strong>{form.name || 'Template sin nombre todavía'}</strong>
-							</div>
+				<div className="campaign-preview-shell">
+					<div className="campaign-whatsapp-preview">
+						<div className="campaign-preview-phone-bar">WhatsApp preview</div>
+						<div className="campaign-preview-bubble">
+							{form.headerType === 'TEXT' && form.headerText ? (
+								<div className="campaign-preview-header">{form.headerText}</div>
+							) : null}
 
-							<span className="campaign-badge draft">
-								{isEditingSelectedTemplate ? 'EDITANDO' : 'NUEVO'}
-							</span>
-						</div>
-
-						<div className="template-preview-stat-grid">
-							<div className="template-preview-stat">
-								<span>Completado</span>
-								<strong>{completedCount}/4</strong>
-							</div>
-							<div className="template-preview-stat">
-								<span>Botones</span>
-								<strong>{previewButtons.length}</strong>
-							</div>
-							<div className="template-preview-stat">
-								<span>Variables</span>
-								<strong>{variables.length}</strong>
-							</div>
-						</div>
-
-						<div className="campaign-preview-shell template-preview-shell--sticky">
-							<div className="campaign-whatsapp-preview">
-								<div className="campaign-preview-phone-bar">WhatsApp preview</div>
-
-								<div className="campaign-preview-bubble">
-									{form.headerType === 'TEXT' && form.headerText ? (
-										<div className="campaign-preview-header">{form.headerText}</div>
-									) : null}
-
-									{form.headerType === 'IMAGE' ? (
-										form.headerMediaPreviewUrl ? (
-											<div className="template-preview-image-wrap">
-												<img
-													src={form.headerMediaPreviewUrl}
-													alt="Header preview"
-													className="template-preview-image"
-												/>
-											</div>
-										) : (
-											<div className="template-preview-image-empty">
-												Acá se va a ver la imagen del header.
-											</div>
-										)
-									) : null}
-
-									<div className="campaign-preview-body">
-										{form.bodyText || 'El cuerpo del template se ve acá.'}
+							{form.headerType === 'IMAGE' ? (
+								form.headerMediaPreviewUrl ? (
+									<div style={{ marginBottom: 10 }}>
+										<img
+											src={form.headerMediaPreviewUrl}
+											alt="Header preview"
+											style={{ width: '100%', display: 'block', borderRadius: 12 }}
+										/>
 									</div>
+								) : (
+									<div
+										style={{
+											marginBottom: 10,
+											padding: '18px 12px',
+											borderRadius: 12,
+											background: '#dbeafe',
+											color: '#1d4ed8',
+											fontWeight: 700,
+											textAlign: 'center',
+										}}
+									>
+										Acá se verá la imagen del header
+									</div>
+								)
+							) : null}
 
-									{form.footerText ? <div className="campaign-preview-footer">{form.footerText}</div> : null}
-
-									{previewButtons.length ? (
-										<div className="campaign-preview-buttons">
-											{previewButtons.map((button) => (
-												<button key={button.id} type="button">
-													{button.text}
-													<small style={{ display: 'block', opacity: 0.7, fontSize: 11 }}>
-														{describeButtonType(button.type)}
-													</small>
-												</button>
-											))}
-										</div>
-									) : null}
-								</div>
+							<div className="campaign-preview-body">
+								{form.bodyText || 'El cuerpo del template se ve acá.'}
 							</div>
-						</div>
-
-						<div className="template-preview-tip">
-							Probalo como si fueras cliente: si en menos de dos segundos no se entiende qué querés que haga, todavía le falta una vuelta.
+							{form.footerText ? (
+								<div className="campaign-preview-footer">{form.footerText}</div>
+							) : null}
+							{previewButtons.length ? (
+								<div className="campaign-preview-buttons">
+									{previewButtons.map((button) => (
+										<button key={button.id} type="button">
+											{button.text}
+											<small style={{ display: 'block', opacity: 0.7, fontSize: 11 }}>
+												{describeButtonType(button.type)}
+											</small>
+										</button>
+									))}
+								</div>
+							) : null}
 						</div>
 					</div>
-				</aside>
+				</div>
 			</div>
 		</section>
 	);

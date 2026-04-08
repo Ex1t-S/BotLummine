@@ -32,7 +32,10 @@ function cloneJson(value, fallback) {
 	}
 }
 
-function buildTemplateRawPayloadWithLocalMedia(template = {}, { components = [], headerMedia = null } = {}) {
+function buildTemplateRawPayloadWithLocalMedia(
+	template = {},
+	{ components = [], headerMedia = null, parameterFormat = null } = {}
+) {
 	const rawPayload = cloneJson(template?.rawPayload, {}) || {};
 	const nextComponents = safeArray(components).length
 		? cloneJson(components, [])
@@ -42,6 +45,10 @@ function buildTemplateRawPayloadWithLocalMedia(template = {}, { components = [],
 	rawPayload.language = template?.language || rawPayload.language;
 	rawPayload.category = template?.category || rawPayload.category;
 	rawPayload.components = nextComponents;
+
+	if (parameterFormat) {
+		rawPayload.parameter_format = normalizeString(parameterFormat);
+	}
 
 	const headerIndex = nextComponents.findIndex(
 		(component) => toUpper(component?.type) === 'HEADER'
@@ -53,14 +60,14 @@ function buildTemplateRawPayloadWithLocalMedia(template = {}, { components = [],
 		nextComponents[headerIndex] = nextHeader;
 	}
 
-	if (headerMedia && (headerMedia.mediaId || headerMedia.previewUrl)) {
+	if (headerMedia && (headerMedia.mediaId || headerMedia.previewUrl || headerMedia.headerHandle)) {
 		const currentHeader =
 			headerIndex >= 0
 				? { ...nextComponents[headerIndex] }
 				: {
-					type: 'HEADER',
-					format: 'IMAGE',
-				};
+						type: 'HEADER',
+						format: 'IMAGE',
+					};
 
 		const nextHeader = {
 			...currentHeader,
@@ -83,6 +90,7 @@ function buildTemplateRawPayloadWithLocalMedia(template = {}, { components = [],
 			...(rawPayload.headerMedia || {}),
 			...(headerMedia.mediaId ? { mediaId: normalizeString(headerMedia.mediaId) } : {}),
 			...(headerMedia.previewUrl ? { previewUrl: normalizeString(headerMedia.previewUrl) } : {}),
+			...(headerMedia.headerHandle ? { headerHandle: normalizeString(headerMedia.headerHandle) } : {}),
 		};
 	} else if (toUpper(template?.headerFormat) !== 'IMAGE') {
 		delete rawPayload.headerMedia;
@@ -99,6 +107,7 @@ export async function persistTemplateBuilderMetadata(template = null, reqBody = 
 	const nextRawPayload = buildTemplateRawPayloadWithLocalMedia(template, {
 		components: Array.isArray(reqBody?.components) ? reqBody.components : [],
 		headerMedia: reqBody?.headerMedia || null,
+		parameterFormat: reqBody?.parameterFormat || null,
 	});
 
 	const nextHeader = safeArray(nextRawPayload.components).find(
@@ -110,6 +119,13 @@ export async function persistTemplateBuilderMetadata(template = null, reqBody = 
 		data: {
 			rawPayload: nextRawPayload,
 			headerFormat: normalizeString(nextHeader?.format || template.headerFormat || '') || null,
+			parameterFormat:
+				normalizeString(
+					reqBody?.parameterFormat ||
+						nextRawPayload?.parameter_format ||
+						template?.parameterFormat ||
+						''
+				) || null,
 		},
 	});
 }
