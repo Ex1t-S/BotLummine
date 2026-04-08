@@ -215,34 +215,6 @@
 	margin-bottom: 6px;
 }
 
-.inbox-contact-preview-meta {
-	display: flex;
-	align-items: center;
-	justify-content: flex-start;
-	margin-bottom: 6px;
-}
-
-.inbox-contact-turn-badge {
-	display: inline-flex;
-	align-items: center;
-	height: 20px;
-	padding: 0 8px;
-	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 800;
-	letter-spacing: 0.01em;
-}
-
-.inbox-contact-turn-badge--waiting {
-	background: rgba(37, 99, 235, 0.1);
-	color: #1d4ed8;
-}
-
-.inbox-contact-turn-badge--incoming {
-	background: rgba(34, 197, 94, 0.12);
-	color: #15803d;
-}
-
 .inbox-contact-preview-row {
 	display: flex;
 	align-items: flex-start;
@@ -273,15 +245,6 @@
 	display: block;
 	max-height: calc(1.4em * 2);
 	word-break: break-word;
-}
-
-.inbox-contact-preview {
-	font-size: 13px;
-	color: #334155;
-	line-height: 1.4;
-	overflow: hidden;
-	display: block;
-	max-height: calc(1.4em * 2);
 }
 
 .inbox-chat-panel {
@@ -407,8 +370,17 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: 18px;
+	padding: 18px 18px 8px;
 	background: #efeae2;
+	display: flex;
+	flex-direction: column;
+}
+
+.inbox-messages-list {
+	min-height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
 }
 
 .inbox-composer-shell {

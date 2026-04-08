@@ -96,11 +96,55 @@ function buildCartPayload(cart, storeId) {
 }
 
 async function replaceCartBatch(carts, storeId) {
-  const checkoutIds = carts.map((cart) => String(cart.id));
-  await prisma.abandonedCart.deleteMany({ where: { storeId, checkoutId: { in: checkoutIds } } });
-  const rows = carts.map((cart) => ({ checkoutId: String(cart.id), status: 'NEW', ...buildCartPayload(cart, storeId) }));
-  for (const chunk of chunkArray(rows, UPSERT_CHUNK_SIZE)) if (chunk.length) await prisma.abandonedCart.createMany({ data: chunk });
-  return rows.length;
+	const rows = carts.map((cart) => ({
+		checkoutId: String(cart.id),
+		...buildCartPayload(cart, storeId),
+		syncedAt: new Date()
+	}));
+
+	for (const chunk of chunkArray(rows, UPSERT_CHUNK_SIZE)) {
+		if (!chunk.length) continue;
+
+		await Promise.all(
+			chunk.map((row) =>
+				prisma.abandonedCart.upsert({
+					where: {
+						checkoutId: row.checkoutId
+					},
+					update: {
+						storeId: row.storeId,
+						token: row.token,
+						contactName: row.contactName,
+						contactEmail: row.contactEmail,
+						contactPhone: row.contactPhone,
+						abandonedCheckoutUrl: row.abandonedCheckoutUrl,
+						subtotal: row.subtotal,
+						totalAmount: row.totalAmount,
+						currency: row.currency,
+						gateway: row.gateway,
+						shipping: row.shipping,
+						shippingPickupType: row.shippingPickupType,
+						shippingAddress: row.shippingAddress,
+						shippingCity: row.shippingCity,
+						shippingProvince: row.shippingProvince,
+						shippingZipcode: row.shippingZipcode,
+						rawPayload: row.rawPayload,
+						products: row.products,
+						checkoutCreatedAt: row.checkoutCreatedAt,
+						syncedAt: new Date()
+						// IMPORTANTE:
+						// NO pisar status, contactedAt, recoveredAt, lastMessageSentAt
+					},
+					create: {
+						...row,
+						status: 'NEW'
+					}
+				})
+			)
+		);
+	}
+
+	return rows.length;
 }
 
 export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {

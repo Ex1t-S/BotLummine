@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import api, { getApiBaseUrl, resolveApiUrl } from '../lib/api.js';
+import api, { resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
 
@@ -32,50 +32,6 @@ function toTimestamp(value) {
 	if (!value) return 0;
 	const time = new Date(value).getTime();
 	return Number.isFinite(time) ? time : 0;
-}
-
-const UNREAD_STORAGE_KEY = 'lummine:inbox:unread-counts:v2';
-const SNAPSHOT_STORAGE_KEY = 'lummine:inbox:last-seen-snapshot:v2';
-
-function readStoredMap(key, fallback = {}) {
-	if (typeof window === 'undefined') return fallback;
-
-	try {
-		const raw = window.localStorage.getItem(key);
-		if (!raw) return fallback;
-		const parsed = JSON.parse(raw);
-		return parsed && typeof parsed === 'object' ? parsed : fallback;
-	} catch {
-		return fallback;
-	}
-}
-
-function writeStoredMap(key, value) {
-	if (typeof window === 'undefined') return;
-
-	try {
-		window.localStorage.setItem(key, JSON.stringify(value || {}));
-	} catch {
-		// no-op
-	}
-}
-
-function buildInboxStreamUrl() {
-	const apiBase = String(getApiBaseUrl?.() || '').trim();
-
-	if (!apiBase || apiBase === '/api') {
-		return '/api/dashboard/inbox/stream';
-	}
-
-	return `${apiBase.replace(/\/+$/, '')}/dashboard/inbox/stream`;
-}
-
-function safeParseEventData(raw, fallback = {}) {
-	try {
-		return JSON.parse(raw);
-	} catch {
-		return fallback;
-	}
 }
 
 function getMediaKind(message = {}) {
@@ -390,17 +346,14 @@ export default function InboxPage() {
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
-	const lastInboxSnapshotRef = useRef(readStoredMap(SNAPSHOT_STORAGE_KEY, {}));
+	const lastInboxSnapshotRef = useRef({});
 
 	const [queue, setQueue] = useState('AUTO');
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
-	const [newMessageCounts, setNewMessageCounts] = useState(() =>
-		readStoredMap(UNREAD_STORAGE_KEY, {})
-	);
-	const [streamConnected, setStreamConnected] = useState(false);
+	const [newMessageCounts, setNewMessageCounts] = useState({});
 
 	const inboxQuery = useQuery({
 		queryKey: queryKeys.inbox(queue),
@@ -414,7 +367,7 @@ export default function InboxPage() {
 			return res.data;
 		},
 		placeholderData: (previousData) => previousData,
-		refetchInterval: () => (streamConnected ? false : isDocumentVisible() ? 5000 : false),
+		refetchInterval: () => (isDocumentVisible() ? 5000 : false),
 		refetchIntervalInBackground: false,
 		...queryPresets.inbox,
 	});
@@ -449,54 +402,42 @@ export default function InboxPage() {
 			return haystack.includes(normalizedSearch);
 		});
 	}, [contacts, normalizedSearch]);
-		useEffect(() => {
-		writeStoredMap(UNREAD_STORAGE_KEY, newMessageCounts);
-	}, [newMessageCounts]);
 
 	useEffect(() => {
-		writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
-	}, []);
-	useEffect(() => {
-	setNewMessageCounts((prev) => {
-		let next = prev;
-		let changed = false;
-		const seenConversationIds = new Set();
-		const nextSnapshot = { ...lastInboxSnapshotRef.current };
+		setNewMessageCounts((prev) => {
+			let next = prev;
+			let changed = false;
+			const seenConversationIds = new Set();
 
-		for (const contact of contacts) {
-			const conversationId = contact.conversationId;
-			const currentTimestamp = toTimestamp(contact.lastMessageAt);
-			const previousTimestamp = Number(nextSnapshot[conversationId] || 0);
-			const isInboundLastMessage = contact.lastMessageDirection === 'INBOUND';
+			for (const contact of contacts) {
+				const conversationId = contact.conversationId;
+				const currentTimestamp = toTimestamp(contact.lastMessageAt);
+				const previousTimestamp = lastInboxSnapshotRef.current[conversationId];
 
-			seenConversationIds.add(conversationId);
+				seenConversationIds.add(conversationId);
 
-			if (
-				previousTimestamp > 0 &&
-				currentTimestamp > previousTimestamp &&
-				isInboundLastMessage &&
-				conversationId !== selectedConversationId
-			) {
-				if (next === prev) next = { ...prev };
-				next[conversationId] = Number(next[conversationId] || 0) + 1;
-				changed = true;
+				if (
+					typeof previousTimestamp === 'number' &&
+					currentTimestamp > previousTimestamp &&
+					conversationId !== selectedConversationId
+				) {
+					if (next === prev) next = { ...prev };
+					next[conversationId] = (next[conversationId] || 0) + 1;
+					changed = true;
+				}
+
+				lastInboxSnapshotRef.current[conversationId] = currentTimestamp;
 			}
 
-			nextSnapshot[conversationId] = currentTimestamp;
-		}
-
-		for (const storedConversationId of Object.keys(nextSnapshot)) {
-			if (!seenConversationIds.has(storedConversationId)) {
-				delete nextSnapshot[storedConversationId];
+			for (const storedConversationId of Object.keys(lastInboxSnapshotRef.current)) {
+				if (!seenConversationIds.has(storedConversationId)) {
+					delete lastInboxSnapshotRef.current[storedConversationId];
+				}
 			}
-		}
 
-		lastInboxSnapshotRef.current = nextSnapshot;
-		writeStoredMap(SNAPSHOT_STORAGE_KEY, nextSnapshot);
-
-		return changed ? next : prev;
-	});
-}, [contacts, selectedConversationId]);
+			return changed ? next : prev;
+		});
+	}, [contacts, selectedConversationId]);
 
 	useEffect(() => {
 		if (!selectedConversationId) return;
@@ -508,42 +449,6 @@ export default function InboxPage() {
 			return next;
 		});
 	}, [selectedConversationId]);
-	useEffect(() => {
-		if (typeof window === 'undefined') return undefined;
-
-		const streamUrl = buildInboxStreamUrl();
-		const eventSource = new EventSource(streamUrl, { withCredentials: true });
-
-		eventSource.onopen = () => {
-			setStreamConnected(true);
-		};
-
-		eventSource.addEventListener('inbox:update', (event) => {
-			const payload = safeParseEventData(event.data, {});
-
-			queryClient.invalidateQueries({
-				queryKey: ['dashboard', 'inbox'],
-			});
-
-			if (
-				selectedConversationId &&
-				(!payload?.conversationId || payload.conversationId === selectedConversationId)
-			) {
-				queryClient.invalidateQueries({
-					queryKey: queryKeys.conversation(selectedConversationId),
-				});
-			}
-		});
-
-		eventSource.onerror = () => {
-			setStreamConnected(false);
-		};
-
-		return () => {
-			setStreamConnected(false);
-			eventSource.close();
-		};
-	}, [queryClient, selectedConversationId]);
 
 	useEffect(() => {
 		if (!filteredContacts.length) {
@@ -579,11 +484,7 @@ export default function InboxPage() {
 		enabled: Boolean(selectedConversationId),
 		placeholderData: (previousData) => previousData,
 		refetchInterval: () =>
-			streamConnected
-				? false
-				: selectedConversationId && isDocumentVisible()
-					? 3000
-					: false,
+			selectedConversationId && isDocumentVisible() ? 3000 : false,
 		refetchIntervalInBackground: false,
 		...queryPresets.conversation,
 	});
@@ -606,14 +507,24 @@ export default function InboxPage() {
 		const el = messagesContainerRef.current;
 		if (!el) return;
 
-		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-		const shouldStickToBottom = distanceFromBottom < 120;
-
-		if (shouldStickToBottom || !el.dataset.initialized) {
+		requestAnimationFrame(() => {
 			el.scrollTop = el.scrollHeight;
 			el.dataset.initialized = 'true';
+		});
+	}, [selectedConversationId]);
+
+	useEffect(() => {
+		const el = messagesContainerRef.current;
+		if (!el) return;
+
+		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+
+		if (distanceFromBottom < 140) {
+			requestAnimationFrame(() => {
+				el.scrollTop = el.scrollHeight;
+			});
 		}
-	}, [conversation?.messages?.length, selectedConversationId]);
+	}, [conversation?.messages?.length]);
 
 	useEffect(() => {
 		function handleOutsideClick(event) {
@@ -900,38 +811,8 @@ export default function InboxPage() {
 											{contact.phoneDisplay || 'Sin teléfono'}
 										</div>
 
-										<div className="inbox-contact-preview-meta">
-											{contact.lastMessageDirection ? (
-												<span
-													className={`inbox-contact-turn-badge ${
-														contact.lastMessageDirection === 'OUTBOUND'
-															? 'inbox-contact-turn-badge--waiting'
-															: 'inbox-contact-turn-badge--incoming'
-													}`}
-												>
-													{contact.lastMessageDirection === 'OUTBOUND'
-														? 'Esperando'
-														: 'Te escribió'}
-												</span>
-											) : null}
-										</div>
-
-										<div className="inbox-contact-preview-row">
-											{contact.lastMessageDirection ? (
-												<span
-													className={`inbox-contact-preview-prefix ${
-														contact.lastMessageDirection === 'OUTBOUND'
-															? 'inbox-contact-preview-prefix--outbound'
-															: 'inbox-contact-preview-prefix--inbound'
-													}`}
-												>
-													{contact.lastMessageDirection === 'OUTBOUND' ? 'Vos:' : 'Cliente:'}
-												</span>
-											) : null}
-
-											<div className="inbox-contact-preview">
-												{contact.preview || 'Sin mensajes'}
-											</div>
+										<div className="inbox-contact-preview">
+											{contact.preview || 'Sin mensajes'}
 										</div>
 									</div>
 								</div>
@@ -1070,7 +951,7 @@ export default function InboxPage() {
 
 									{showEmojiPicker ? (
 										<div className="inbox-emoji-picker">
-											<div className="inbox-emoji-title">Elegí un emoji</div>
+											<div className="inbox-emoji-title">Elegi un emoji</div>
 
 											<div className="inbox-emoji-grid">
 												{QUICK_EMOJIS.map((emoji) => (

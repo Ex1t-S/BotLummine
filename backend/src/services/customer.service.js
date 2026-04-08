@@ -239,10 +239,25 @@ async function fetchOrdersPage({
 		}
 		return payload;
 	} catch (error) {
+		const bodyText = String(error?.body || error?.message || '');
+
 		if (error?.status === 422 && perPage > 50) {
 			pushWarning(`Paginación 422 en página ${page}. Reintentando con per_page=50.`);
 			return fetchOrdersPage({ storeId, accessToken, page, createdAtMin, createdAtMax, perPage: 50 });
 		}
+
+		const isEmptyPagination404 =
+			error?.status === 404 &&
+			(
+				bodyText.includes('Last page is 0') ||
+				bodyText.includes('"Last page is 0"') ||
+				bodyText.toLowerCase().includes('last page is')
+			);
+
+		if (isEmptyPagination404) {
+			return [];
+		}
+
 		throw error;
 	}
 }

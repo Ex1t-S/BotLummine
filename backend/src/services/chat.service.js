@@ -686,6 +686,26 @@ async function maybeHandleMenuFlow({
 	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
 	const isAiEnabledGlobal =
 		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true';
+
+	const isCampaignLocked =
+		currentState?.handoffReason === 'campaign_reply_pending_human';
+
+	const isAutomaticConversation =
+		conversation?.queue === 'AUTO' &&
+		conversation?.aiEnabled !== false &&
+		currentState?.needsHuman !== true &&
+		!isCampaignLocked;
+
+	if (!isAutomaticConversation) {
+		return {
+			handled: false,
+			effectiveMessageBody: messageBody,
+			summaryUserMessage: messageBody,
+			forceIntent: null,
+			statePatch: null
+		};
+	}
+
 	const shouldOfferMenu = shouldForceMenuFirst({
 		currentState,
 		freshConversation: conversation,
@@ -732,7 +752,7 @@ async function maybeHandleMenuFlow({
 		const shouldEnableAuto =
 			isAiEnabledGlobal &&
 			!currentState?.needsHuman &&
-			conversation.queue !== 'HUMAN';
+			conversation.queue === 'AUTO';
 
 		await patchConversationState(conversation.id, {
 			menuActive: true,
@@ -743,44 +763,21 @@ async function maybeHandleMenuFlow({
 			handoffReason: shouldEnableAuto ? null : currentState?.handoffReason || 'manual_human_lock'
 		});
 
-		if (shouldEnableAuto) {
-			await prisma.conversation.update({
-				where: { id: conversation.id },
-				data: {
-					queue: 'AUTO',
-					aiEnabled: true,
-					lastMessageAt: new Date()
-				}
-			});
+		await prisma.conversation.update({
+			where: { id: conversation.id },
+			data: {
+				queue: 'AUTO',
+				aiEnabled: true,
+				lastMessageAt: new Date()
+			}
+		});
 
-			await sendMenuPrompt({
-				conversationId: conversation.id,
-				waId,
-				menuPath: MENU_PATHS.MAIN,
-				bodyPrefix: 'Perfecto, abrimos el menú de nuevo.'
-			});
-		} else {
-			await prisma.conversation.update({
-				where: { id: conversation.id },
-				data: {
-					queue: 'HUMAN',
-					aiEnabled: false,
-					lastMessageAt: new Date()
-				}
-			});
-
-			await sendMenuTextOnly({
-				conversationId: conversation.id,
-				body: 'Te dejo el menú a mano, pero la conversación sigue en atención humana.',
-				model: 'menu-human-locked'
-			});
-
-			await sendMenuPrompt({
-				conversationId: conversation.id,
-				waId,
-				menuPath: MENU_PATHS.MAIN
-			});
-		}
+		await sendMenuPrompt({
+			conversationId: conversation.id,
+			waId,
+			menuPath: MENU_PATHS.MAIN,
+			bodyPrefix: 'Perfecto, abrimos el menú de nuevo.'
+		});
 
 		return { handled: true };
 	}
