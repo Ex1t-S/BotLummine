@@ -356,12 +356,11 @@ export default function InboxPage() {
 	const [newMessageCounts, setNewMessageCounts] = useState({});
 
 	const inboxQuery = useQuery({
-		queryKey: [...queryKeys.inbox(queue), showArchived ? 'archived' : 'active'],
+		queryKey: queryKeys.inbox(queue),
 		queryFn: async () => {
 			const res = await api.get('/dashboard/inbox', {
 				params: {
 					queue,
-					archived: showArchived,
 				},
 			});
 
@@ -630,25 +629,6 @@ export default function InboxPage() {
 		},
 	});
 
-	const archiveConversationMutation = useMutation({
-		mutationFn: async (archived) => {
-			if (!selectedConversationId) return;
-			await api.patch(
-				`/dashboard/conversations/${selectedConversationId}/archive`,
-				{ archived }
-			);
-		},
-		onSuccess: async () => {
-			setSelectedConversationId(null);
-			await queryClient.invalidateQueries({
-				queryKey: ['dashboard', 'inbox'],
-			});
-		},
-		onError: (error) => {
-			console.error(error);
-		},
-	});
-
 	const deduplicateContactsMutation = useMutation({
 		mutationFn: async () => {
 			const res = await api.post('/dashboard/inbox/deduplicate');
@@ -725,16 +705,6 @@ export default function InboxPage() {
 
 					<div className="inbox-section-actions">
 						<ActionButton
-							active={showArchived}
-							onClick={() => {
-								setSelectedConversationId(null);
-								setShowArchived((prev) => !prev);
-							}}
-						>
-							{showArchived ? 'Ver activos' : 'Archivados'}
-						</ActionButton>
-
-						<ActionButton
 							disabled={deduplicateContactsMutation.isPending}
 							onClick={() => {
 								const confirmed = window.confirm(
@@ -770,9 +740,7 @@ export default function InboxPage() {
 
 					{!inboxQuery.isLoading && !filteredContacts.length ? (
 						<div className="inbox-empty">
-							{showArchived
-								? 'No hay conversaciones archivadas.'
-								: 'No hay conversaciones en esta bandeja.'}
+							No hay conversaciones en esta bandeja.
 						</div>
 					) : null}
 
@@ -886,7 +854,7 @@ export default function InboxPage() {
 							<div className="inbox-actions">
 								<ActionButton
 									active={conversation?.queue === 'AUTO'}
-									disabled={moveQueueMutation.isPending || showArchived}
+									disabled={moveQueueMutation.isPending}
 									onClick={() => handleMoveQueue('AUTO')}
 								>
 									Automático
@@ -894,7 +862,7 @@ export default function InboxPage() {
 
 								<ActionButton
 									active={conversation?.queue === 'HUMAN'}
-									disabled={moveQueueMutation.isPending || showArchived}
+									disabled={moveQueueMutation.isPending}
 									onClick={() => handleMoveQueue('HUMAN')}
 								>
 									Atención humana
@@ -902,7 +870,7 @@ export default function InboxPage() {
 
 								<ActionButton
 									active={conversation?.queue === 'PAYMENT_REVIEW'}
-									disabled={moveQueueMutation.isPending || showArchived}
+									disabled={moveQueueMutation.isPending}
 									onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
 								>
 									Comprobantes
@@ -911,36 +879,10 @@ export default function InboxPage() {
 								<div className="inbox-actions-spacer" />
 
 								<ActionButton
-									disabled={
-										archiveConversationMutation.isPending || !selectedConversationId
-									}
-									onClick={() => {
-										const confirmed = window.confirm(
-											showArchived
-												? 'Este chat va a volver a la bandeja activa. ¿Continuar?'
-												: 'Este chat se va a sacar del inbox, pero no se va a borrar. ¿Continuar?'
-										);
-
-										if (confirmed) {
-											archiveConversationMutation.mutate(!showArchived);
-										}
-									}}
-								>
-									{archiveConversationMutation.isPending
-										? showArchived
-											? 'Restaurando...'
-											: 'Archivando...'
-										: showArchived
-											? 'Desarchivar'
-											: 'Archivar chat'}
-								</ActionButton>
-
-								<ActionButton
 									danger
 									disabled={
 										resetContextMutation.isPending ||
-										!selectedConversationId ||
-										showArchived
+										!selectedConversationId
 									}
 									onClick={() => resetContextMutation.mutate()}
 								>
@@ -951,8 +893,7 @@ export default function InboxPage() {
 									danger
 									disabled={
 										clearHistoryMutation.isPending ||
-										!selectedConversationId ||
-										showArchived
+										!selectedConversationId
 									}
 									onClick={() => {
 										const confirmed = window.confirm(
@@ -986,67 +927,61 @@ export default function InboxPage() {
 							))}
 						</div>
 
-						{!showArchived ? (
-							<div className="inbox-composer-shell">
-								<form onSubmit={handleSubmit} className="inbox-composer">
-									<div className="inbox-composer-leading" ref={emojiPickerRef}>
-										<button
-											type="button"
-											className="inbox-emoji-trigger"
-											onClick={() => setShowEmojiPicker((prev) => !prev)}
-											title="Emoji"
-										>
-											😊
-										</button>
-
-										{showEmojiPicker ? (
-											<div className="inbox-emoji-picker">
-												<div className="inbox-emoji-title">Elegí un emoji</div>
-
-												<div className="inbox-emoji-grid">
-													{QUICK_EMOJIS.map((emoji) => (
-														<button
-															key={emoji}
-															type="button"
-															className="inbox-emoji-btn"
-															onClick={() => insertEmoji(emoji)}
-														>
-															{emoji}
-														</button>
-													))}
-												</div>
-											</div>
-										) : null}
-									</div>
-
-									<textarea
-										ref={textareaRef}
-										value={messageText}
-										onChange={(event) => setMessageText(event.target.value)}
-										onKeyDown={handleComposerKeyDown}
-										placeholder="Escribe un mensaje"
-										rows={1}
-										disabled={sendMessageMutation.isPending}
-										className="inbox-textarea"
-									/>
-
+						<div className="inbox-composer-shell">
+							<form onSubmit={handleSubmit} className="inbox-composer">
+								<div className="inbox-composer-leading" ref={emojiPickerRef}>
 									<button
-										type="submit"
-										disabled={
-											sendMessageMutation.isPending || !messageText.trim()
-										}
-										title="Enviar"
-										className="inbox-send-btn"
+										type="button"
+										className="inbox-emoji-trigger"
+										onClick={() => setShowEmojiPicker((prev) => !prev)}
+										title="Emoji"
 									>
-										➤
+										😊
 									</button>
-								</form>
-							</div>
-						) : (
-							<div className="inbox-archived-hint">
-								Estás viendo conversaciones archivadas.
-							</div>
-						)}
+
+									{showEmojiPicker ? (
+										<div className="inbox-emoji-picker">
+											<div className="inbox-emoji-title">Elegí un emoji</div>
+
+											<div className="inbox-emoji-grid">
+												{QUICK_EMOJIS.map((emoji) => (
+													<button
+														key={emoji}
+														type="button"
+														className="inbox-emoji-btn"
+														onClick={() => insertEmoji(emoji)}
+													>
+														{emoji}
+													</button>
+												))}
+											</div>
+										</div>
+									) : null}
+								</div>
+
+								<textarea
+									ref={textareaRef}
+									value={messageText}
+									onChange={(event) => setMessageText(event.target.value)}
+									onKeyDown={handleComposerKeyDown}
+									placeholder="Escribe un mensaje"
+									rows={1}
+									disabled={sendMessageMutation.isPending}
+									className="inbox-textarea"
+								/>
+
+								<button
+									type="submit"
+									disabled={
+										sendMessageMutation.isPending || !messageText.trim()
+									}
+									title="Enviar"
+									className="inbox-send-btn"
+								>
+									➤
+								</button>
+							</form>
+						</div>
 					</>
 				)}
 			</section>
