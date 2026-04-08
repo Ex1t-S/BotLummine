@@ -941,7 +941,7 @@ export default function InboxPage() {
 
 									{showEmojiPicker ? (
 										<div className="inbox-emoji-picker">
-											<div className="inbox-emoji-title">Elegí un emoji</div>
+											<div className="inbox-emoji-title">Elegi un emoji</div>
 
 											<div className="inbox-emoji-grid">
 												{QUICK_EMOJIS.map((emoji) => (
