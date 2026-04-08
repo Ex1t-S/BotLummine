@@ -28,6 +28,12 @@ function isDocumentVisible() {
 	return !document.hidden;
 }
 
+function toTimestamp(value) {
+	if (!value) return 0;
+	const time = new Date(value).getTime();
+	return Number.isFinite(time) ? time : 0;
+}
+
 function getMediaKind(message = {}) {
 	const type = String(message.type || '').toLowerCase();
 	const mime = String(message.attachmentMimeType || '').toLowerCase();
@@ -340,12 +346,15 @@ export default function InboxPage() {
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
+	const lastInboxSnapshotRef = useRef({});
 
 	const [queue, setQueue] = useState('AUTO');
 	const [showArchived, setShowArchived] = useState(false);
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
+	const [searchTerm, setSearchTerm] = useState('');
+	const [newMessageCounts, setNewMessageCounts] = useState({});
 
 	const inboxQuery = useQuery({
 		queryKey: [...queryKeys.inbox(queue), showArchived ? 'archived' : 'active'],
@@ -372,25 +381,101 @@ export default function InboxPage() {
 		PAYMENT_REVIEW: 0,
 	};
 
+	const normalizedSearch = searchTerm.trim().toLowerCase();
+
+	const filteredContacts = useMemo(() => {
+		const sorted = [...contacts].sort(
+			(a, b) => toTimestamp(b.lastMessageAt) - toTimestamp(a.lastMessageAt)
+		);
+
+		if (!normalizedSearch) return sorted;
+
+		return sorted.filter((contact) => {
+			const haystack = [
+				contact.displayName,
+				contact.phoneDisplay,
+				contact.preview,
+				contact.lastMessageLabel,
+			]
+				.filter(Boolean)
+				.join(' ')
+				.toLowerCase();
+
+			return haystack.includes(normalizedSearch);
+		});
+	}, [contacts, normalizedSearch]);
+
 	useEffect(() => {
-		if (!contacts.length) {
+		setNewMessageCounts((prev) => {
+			let next = prev;
+			let changed = false;
+			const seenConversationIds = new Set();
+
+			for (const contact of contacts) {
+				const conversationId = contact.conversationId;
+				const currentTimestamp = toTimestamp(contact.lastMessageAt);
+				const previousTimestamp = lastInboxSnapshotRef.current[conversationId];
+
+				seenConversationIds.add(conversationId);
+
+				if (
+					typeof previousTimestamp === 'number' &&
+					currentTimestamp > previousTimestamp &&
+					conversationId !== selectedConversationId
+				) {
+					if (next === prev) next = { ...prev };
+					next[conversationId] = (next[conversationId] || 0) + 1;
+					changed = true;
+				}
+
+				lastInboxSnapshotRef.current[conversationId] = currentTimestamp;
+			}
+
+			for (const storedConversationId of Object.keys(lastInboxSnapshotRef.current)) {
+				if (!seenConversationIds.has(storedConversationId)) {
+					delete lastInboxSnapshotRef.current[storedConversationId];
+				}
+			}
+
+			return changed ? next : prev;
+		});
+	}, [contacts, selectedConversationId]);
+
+	useEffect(() => {
+		if (!selectedConversationId) return;
+
+		setNewMessageCounts((prev) => {
+			if (!prev[selectedConversationId]) return prev;
+			const next = { ...prev };
+			delete next[selectedConversationId];
+			return next;
+		});
+	}, [selectedConversationId]);
+
+	useEffect(() => {
+		if (!filteredContacts.length) {
 			setSelectedConversationId(null);
 			return;
 		}
 
-		const stillExists = contacts.some(
+		const stillExists = filteredContacts.some(
 			(contact) => contact.conversationId === selectedConversationId
 		);
 
 		if (stillExists) return;
 
+		const preferredSelectedId = inboxQuery.data?.selectedContact?.conversationId;
+		const preferredExists = filteredContacts.some(
+			(contact) => contact.conversationId === preferredSelectedId
+		);
+
 		const preferredId =
-			inboxQuery.data?.selectedContact?.conversationId ||
-			contacts[0]?.conversationId ||
+			(preferredExists ? preferredSelectedId : null) ||
+			filteredContacts[0]?.conversationId ||
 			null;
 
 		setSelectedConversationId(preferredId);
-	}, [contacts, selectedConversationId, inboxQuery.data]);
+	}, [filteredContacts, selectedConversationId, inboxQuery.data]);
 
 	const conversationQuery = useQuery({
 		queryKey: queryKeys.conversation(selectedConversationId),
@@ -410,16 +495,27 @@ export default function InboxPage() {
 
 	const activeContact = useMemo(() => {
 		return (
+			filteredContacts.find(
+				(contact) => contact.conversationId === selectedConversationId
+			) ||
 			contacts.find(
 				(contact) => contact.conversationId === selectedConversationId
-			) || null
+			) ||
+			null
 		);
-	}, [contacts, selectedConversationId]);
+	}, [filteredContacts, contacts, selectedConversationId]);
 
 	useEffect(() => {
 		const el = messagesContainerRef.current;
 		if (!el) return;
-		el.scrollTop = el.scrollHeight;
+
+		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		const shouldStickToBottom = distanceFromBottom < 120;
+
+		if (shouldStickToBottom || !el.dataset.initialized) {
+			el.scrollTop = el.scrollHeight;
+			el.dataset.initialized = 'true';
+		}
 	}, [conversation?.messages?.length, selectedConversationId]);
 
 	useEffect(() => {
@@ -661,12 +757,22 @@ export default function InboxPage() {
 					</div>
 				</div>
 
+				<div className="inbox-search-box">
+					<input
+						type="text"
+						className="inbox-search-input"
+						placeholder="Buscar por nombre, teléfono o mensaje..."
+						value={searchTerm}
+						onChange={(event) => setSearchTerm(event.target.value)}
+					/>
+				</div>
+
 				<div className="inbox-contacts-scroll">
 					{inboxQuery.isLoading ? (
 						<div className="inbox-empty">Cargando conversaciones...</div>
 					) : null}
 
-					{!inboxQuery.isLoading && !contacts.length ? (
+					{!inboxQuery.isLoading && !filteredContacts.length ? (
 						<div className="inbox-empty">
 							{showArchived
 								? 'No hay conversaciones archivadas.'
@@ -674,8 +780,10 @@ export default function InboxPage() {
 						</div>
 					) : null}
 
-					{contacts.map((contact) => {
+					{filteredContacts.map((contact) => {
 						const isSelected = contact.conversationId === selectedConversationId;
+						const unreadCount = newMessageCounts[contact.conversationId] || 0;
+						const hasUnread = unreadCount > 0;
 
 						return (
 							<button
@@ -684,11 +792,13 @@ export default function InboxPage() {
 								onClick={() => setSelectedConversationId(contact.conversationId)}
 								className={`inbox-contact-card ${
 									isSelected ? 'inbox-contact-card--selected' : ''
-								}`}
+								} ${hasUnread ? 'inbox-contact-card--unread' : ''}`}
 							>
 								<div className="inbox-contact-row">
 									<div
-										className="inbox-contact-avatar"
+										className={`inbox-contact-avatar ${
+											hasUnread ? 'inbox-contact-avatar--unread' : ''
+										}`}
 										style={
 											contact.avatar?.style
 												? {
@@ -701,12 +811,21 @@ export default function InboxPage() {
 										}
 									>
 										{contact.avatar?.initials || '?'}
+										{hasUnread ? <span className="inbox-contact-dot" /> : null}
 									</div>
 
 									<div className="inbox-contact-content">
 										<div className="inbox-contact-top">
-											<div className="inbox-contact-name">
-												{contact.displayName}
+											<div className="inbox-contact-name-row">
+												<div className="inbox-contact-name">
+													{contact.displayName}
+												</div>
+
+												{hasUnread ? (
+													<span className="inbox-contact-unread-badge">
+														{unreadCount}
+													</span>
+												) : null}
 											</div>
 
 											<div className="inbox-contact-time">
@@ -731,7 +850,9 @@ export default function InboxPage() {
 
 			<section className="inbox-chat-panel">
 				{!selectedConversationId ? (
-					<div className="inbox-chat-empty">Seleccioná una conversación</div>
+					<div className="inbox-chat-empty">
+						Seleccioná una conversación
+					</div>
 				) : (
 					<>
 						<div className="inbox-chat-header">
