@@ -349,7 +349,6 @@ export default function InboxPage() {
 	const lastInboxSnapshotRef = useRef({});
 
 	const [queue, setQueue] = useState('AUTO');
-	const [showArchived, setShowArchived] = useState(false);
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
@@ -722,9 +721,6 @@ export default function InboxPage() {
 				<div className="inbox-section-header">
 					<div className="inbox-section-title">
 						Conversaciones
-						{inboxQuery.isFetching ? (
-							<span className="inbox-section-subtle">Actualizando...</span>
-						) : null}
 					</div>
 
 					<div className="inbox-section-actions">
