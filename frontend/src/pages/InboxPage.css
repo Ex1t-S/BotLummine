@@ -215,6 +215,66 @@
 	margin-bottom: 6px;
 }
 
+.inbox-contact-preview-meta {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	margin-bottom: 6px;
+}
+
+.inbox-contact-turn-badge {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0.01em;
+}
+
+.inbox-contact-turn-badge--waiting {
+	background: rgba(37, 99, 235, 0.1);
+	color: #1d4ed8;
+}
+
+.inbox-contact-turn-badge--incoming {
+	background: rgba(34, 197, 94, 0.12);
+	color: #15803d;
+}
+
+.inbox-contact-preview-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	min-width: 0;
+}
+
+.inbox-contact-preview-prefix {
+	flex-shrink: 0;
+	font-size: 12px;
+	font-weight: 800;
+	line-height: 1.4;
+}
+
+.inbox-contact-preview-prefix--outbound {
+	color: #2563eb;
+}
+
+.inbox-contact-preview-prefix--inbound {
+	color: #16a34a;
+}
+
+.inbox-contact-preview {
+	font-size: 13px;
+	color: #334155;
+	line-height: 1.4;
+	overflow: hidden;
+	display: block;
+	max-height: calc(1.4em * 2);
+	word-break: break-word;
+}
+
 .inbox-contact-preview {
 	font-size: 13px;
 	color: #334155;

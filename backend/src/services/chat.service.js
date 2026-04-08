@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { runAssistantReply } from './ai/index.js';
 import { sendWhatsAppText, sendWhatsAppInteractiveList } from './whatsapp.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
+import { publishInboxEvent } from '../lib/inbox-events.js';
 import {
 	detectIntent,
 	extractOrderNumber,
@@ -1024,6 +1025,16 @@ export async function sendAndPersistOutbound({
 		},
 	});
 
+	publishInboxEvent({
+	scope: 'message',
+	action: 'outbound-created',
+	conversationId: conversation.id,
+	queue: conversation.queue,
+	direction: 'OUTBOUND',
+	messageId: createdMessage.id,
+	createdAt: createdMessage.createdAt,
+	});
+
 	return {
 		ok: true,
 		message: createdMessage,
@@ -1157,7 +1168,15 @@ export async function processInboundMessage({
 		where: { id: conversation.id },
 		data: { lastMessageAt: new Date() }
 	});
-
+	publishInboxEvent({
+		scope: 'message',
+		action: 'inbound-created',
+		conversationId: conversation.id,
+		queue: conversation.queue,
+		direction: 'INBOUND',
+		metaMessageId,
+		createdAt: new Date().toISOString(),
+	});
 	const freshConversation = await prisma.conversation.findUnique({
 		where: { id: conversation.id },
 		include: {

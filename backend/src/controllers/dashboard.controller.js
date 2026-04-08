@@ -3,6 +3,7 @@ import { getCatalogPage, syncCatalogFromTiendanube } from '../services/catalog.s
 import { getQueueMeta } from '../services/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/chat.service.js';
+import { publishInboxEvent, subscribeInboxEvents } from '../lib/inbox-events.js';
 
 function formatTime(value) {
 	if (!value) return '';
@@ -489,6 +490,10 @@ function buildContactCard(conversation, lastMessage) {
 		lastMessageAt: conversation.lastMessageAt || lastMessage?.createdAt || null,
 		lastMessageTime: formatTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
 		lastMessageLabel: formatDateTime(conversation.lastMessageAt || lastMessage?.createdAt || null),
+		lastMessageDirection: lastMessage?.direction || null,
+		lastMessageSenderName: lastMessage?.senderName || '',
+		lastMessageType: lastMessage?.type || 'text',
+		awaitingCustomerReply: lastMessage?.direction === 'OUTBOUND',
 		aiEnabled: !!conversation.aiEnabled,
 		queue: conversation.queue || 'AUTO',
 		queueLabel: queueMeta.label,
@@ -499,7 +504,6 @@ function buildContactCard(conversation, lastMessage) {
 		lastSummary: conversation.lastSummary || '',
 	};
 }
-
 async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', archived = false) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
@@ -639,22 +643,42 @@ async function ensureConversationExists(conversationId) {
 	return conversation;
 }
 
-export async function getInbox(req, res, next) {
+export async function getInboxStream(req, res, next) {
 	try {
-		const currentQueue = String(req.query.queue || 'AUTO').toUpperCase();
-		const archived = String(req.query.archived || 'false') === 'true';
+		res.setHeader('Content-Type', 'text/event-stream');
+		res.setHeader('Cache-Control', 'no-cache, no-transform');
+		res.setHeader('Connection', 'keep-alive');
+		res.setHeader('X-Accel-Buffering', 'no');
 
-		const data = await fetchInboxData(
-			req.query.conversationId || null,
-			currentQueue,
-			archived
-		);
+		if (typeof res.flushHeaders === 'function') {
+			res.flushHeaders();
+		}
 
-		return res.json({
-			ok: true,
-			currentQueue,
-			archived,
-			...data,
+		res.write(`event: connected\n`);
+		res.write(`data: ${JSON.stringify({ ok: true, ts: Date.now() })}\n\n`);
+
+		const unsubscribe = subscribeInboxEvents((payload) => {
+			try {
+				res.write(`event: inbox:update\n`);
+				res.write(`data: ${JSON.stringify(payload)}\n\n`);
+			} catch (error) {
+				console.error('[SSE][INBOX] write error:', error?.message || error);
+			}
+		});
+
+		const keepAlive = setInterval(() => {
+			try {
+				res.write(`event: ping\n`);
+				res.write(`data: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+			} catch (error) {
+				console.error('[SSE][INBOX] ping error:', error?.message || error);
+			}
+		}, 25000);
+
+		req.on('close', () => {
+			clearInterval(keepAlive);
+			unsubscribe();
+			res.end();
 		});
 	} catch (error) {
 		next(error);
@@ -910,7 +934,12 @@ export async function patchConversationQueue(req, res, next) {
 				},
 			});
 		}
-
+		publishInboxEvent({
+			scope: 'conversation',
+			action: 'queue-updated',
+			conversationId: updatedConversation.id,
+			queue: updatedConversation.queue,
+		});
 		return res.json({
 			ok: true,
 			conversationId: updatedConversation.id,
@@ -954,7 +983,11 @@ export async function patchConversationResetContext(req, res, next) {
 				},
 			});
 		}
-
+		publishInboxEvent({
+				scope: 'conversation',
+				action: 'context-reset',
+				conversationId,
+		});
 		return res.json({
 			ok: true,
 			conversationId,
@@ -1009,7 +1042,11 @@ export async function deleteConversationHistory(req, res, next) {
 		}
 
 		await prisma.$transaction(transaction);
-
+		publishInboxEvent({
+			scope: 'conversation',
+			action: 'history-cleared',
+			conversationId,
+		});
 		return res.json({
 			ok: true,
 			conversationId,
@@ -1038,7 +1075,11 @@ export async function patchConversationArchive(req, res, next) {
 				archivedAt: archived ? new Date() : null,
 			},
 		});
-
+		publishInboxEvent({
+			scope: 'conversation',
+			action: archived ? 'archived' : 'unarchived',
+			conversationId,
+		});
 		return res.json({
 			ok: true,
 			conversationId,

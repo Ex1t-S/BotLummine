@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import {
 	getInbox,
+	getInboxStream,
 	getConversationMessagesJson,
 	postConversationMessage,
 	patchConversationQueue,
@@ -30,6 +31,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/inbox', getInbox);
+router.get('/inbox/stream', getInboxStream);
 router.get('/conversations/:conversationId/messages', getConversationMessagesJson);
 router.post('/conversations/:conversationId/messages', postConversationMessage);
 router.patch('/conversations/:conversationId/queue', patchConversationQueue);
