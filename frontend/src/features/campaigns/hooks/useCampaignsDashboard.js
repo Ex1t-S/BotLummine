@@ -7,7 +7,6 @@ import {
 	deleteCampaign,
 	deleteTemplate,
 	dispatchCampaign,
-	fetchCampaignDetail,
 	fetchCampaignOverview,
 	fetchCampaigns,
 	fetchTemplates,
@@ -22,7 +21,6 @@ import {
 	buildAbandonedCartFilters,
 	extractCreatedCampaignId,
 	getCampaignCollection,
-	getCampaignDetailPayload,
 	getTemplateCollection,
 	normalizeOverview,
 } from '../utils.js';
@@ -39,9 +37,92 @@ const initialAbandonedCartForm = {
 	launchNow: false,
 };
 
+const CAMPAIGN_RECIPIENT_FETCH_SIZE = 500;
+const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
+
+function normalizeRecipientStatus(status = '') {
+	const normalized = String(status || '').trim().toUpperCase();
+
+	if (['READ', 'SEEN'].includes(normalized)) return 'READ';
+	if (['DELIVERED'].includes(normalized)) return 'DELIVERED';
+	if (['SENT', 'DISPATCHED'].includes(normalized)) return 'SENT';
+	if (['FAILED', 'ERROR'].includes(normalized)) return 'FAILED';
+	if (['PENDING', 'QUEUED', 'NEW', 'CREATED'].includes(normalized)) return 'PENDING';
+
+	return normalized || 'PENDING';
+}
+
+function buildRecipientMetrics(recipients = [], fallbackCampaign = {}) {
+	if (!Array.isArray(recipients) || recipients.length === 0) {
+		return {
+			total:
+				Number(fallbackCampaign?.totalRecipients) ||
+				Number(fallbackCampaign?.recipientCount) ||
+				0,
+			sent: Number(fallbackCampaign?.sentCount) || 0,
+			delivered: Number(fallbackCampaign?.deliveredCount) || 0,
+			read: Number(fallbackCampaign?.readCount) || 0,
+			failed: Number(fallbackCampaign?.failedCount) || 0,
+			pending: Number(fallbackCampaign?.pendingCount) || 0,
+		};
+	}
+
+	let sent = 0;
+	let delivered = 0;
+	let read = 0;
+	let failed = 0;
+	let pending = 0;
+
+	for (const recipient of recipients) {
+		const status = normalizeRecipientStatus(recipient?.status);
+
+		if (status === 'READ') {
+			read += 1;
+			delivered += 1;
+			sent += 1;
+			continue;
+		}
+
+		if (status === 'DELIVERED') {
+			delivered += 1;
+			sent += 1;
+			continue;
+		}
+
+		if (status === 'SENT') {
+			sent += 1;
+			continue;
+		}
+
+		if (status === 'FAILED') {
+			failed += 1;
+			continue;
+		}
+
+		pending += 1;
+	}
+
+	return {
+		total: recipients.length,
+		sent,
+		delivered,
+		read,
+		failed,
+		pending,
+	};
+}
+
+function extractDetailResponsePayload(data) {
+	if (!data) return {};
+	if (data?.campaign || data?.recipients || data?.pagination) return data;
+	if (data?.data && (data.data.campaign || data.data.recipients || data.data.pagination)) return data.data;
+	return data;
+}
+
 export function useCampaignsDashboard() {
 	const queryClient = useQueryClient();
 	const { feedback, showFeedback } = useCampaignFeedback();
+
 	const [selectedTemplate, setSelectedTemplate] = useState(null);
 	const [selectedCampaignId, setSelectedCampaignId] = useState(null);
 	const [abandonedCartForm, setAbandonedCartForm] = useState(initialAbandonedCartForm);
@@ -49,6 +130,10 @@ export function useCampaignsDashboard() {
 		total: 0,
 		recipients: [],
 	});
+
+	const [campaignTrackingStatus, setCampaignTrackingStatus] = useState('ALL');
+	const [campaignTrackingSearch, setCampaignTrackingSearch] = useState('');
+	const [campaignTrackingPage, setCampaignTrackingPage] = useState(1);
 
 	const overviewQuery = useQuery({
 		queryKey: queryKeys.campaigns.overview,
@@ -66,18 +151,62 @@ export function useCampaignsDashboard() {
 	});
 
 	const campaignDetailQuery = useQuery({
-		queryKey: queryKeys.campaigns.detail(selectedCampaignId),
-		queryFn: () => fetchCampaignDetail(selectedCampaignId),
+		queryKey: [
+			...queryKeys.campaigns.detail(selectedCampaignId),
+			CAMPAIGN_RECIPIENT_FETCH_SIZE,
+		],
+		queryFn: async () => {
+			const response = await api.get(`/campaigns/${selectedCampaignId}`, {
+				params: {
+					page: 1,
+					pageSize: CAMPAIGN_RECIPIENT_FETCH_SIZE,
+				},
+			});
+			return response.data;
+		},
 		enabled: Boolean(selectedCampaignId),
 	});
 
 	const templates = useMemo(() => getTemplateCollection(templatesQuery.data), [templatesQuery.data]);
 	const campaigns = useMemo(() => getCampaignCollection(campaignsQuery.data), [campaignsQuery.data]);
-	const selectedCampaign = useMemo(
-		() => getCampaignDetailPayload(campaignDetailQuery.data, campaigns, selectedCampaignId),
-		[campaignDetailQuery.data, campaigns, selectedCampaignId]
-	);
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
+
+	const selectedCampaign = useMemo(() => {
+		const listCampaign = campaigns.find((campaign) => campaign.id === selectedCampaignId) || null;
+		const detailPayload = extractDetailResponsePayload(campaignDetailQuery.data);
+		const detailCampaign =
+			detailPayload?.campaign ||
+			detailPayload?.item ||
+			detailPayload?.run ||
+			null;
+
+		const detailRecipients = Array.isArray(detailPayload?.recipients)
+			? detailPayload.recipients
+			: Array.isArray(detailCampaign?.recipients)
+				? detailCampaign.recipients
+				: [];
+
+		const merged = {
+			...(listCampaign || {}),
+			...(detailCampaign || {}),
+			recipients: detailRecipients,
+			allRecipients: detailRecipients,
+			pagination: detailPayload?.pagination || detailCampaign?.pagination || null,
+		};
+
+		const metrics = buildRecipientMetrics(detailRecipients, merged);
+
+		return {
+			...merged,
+			totalRecipients: metrics.total,
+			recipientCount: metrics.total,
+			sentCount: metrics.sent,
+			deliveredCount: metrics.delivered,
+			readCount: metrics.read,
+			failedCount: metrics.failed,
+			pendingCount: metrics.pending,
+		};
+	}, [campaignDetailQuery.data, campaigns, selectedCampaignId]);
 
 	useEffect(() => {
 		if (!selectedTemplate && templates.length) {
@@ -94,12 +223,24 @@ export function useCampaignsDashboard() {
 		}
 	}, [campaigns, selectedCampaignId]);
 
+	useEffect(() => {
+		setCampaignTrackingPage(1);
+		setCampaignTrackingSearch('');
+		setCampaignTrackingStatus('ALL');
+	}, [selectedCampaignId]);
+
 	function invalidateAll(nextCampaignId = selectedCampaignId) {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.overview });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
+
 		if (nextCampaignId) {
-			queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.detail(nextCampaignId) });
+			queryClient.invalidateQueries({
+				queryKey: [...queryKeys.campaigns.detail(nextCampaignId), CAMPAIGN_RECIPIENT_FETCH_SIZE],
+			});
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.campaigns.detail(nextCampaignId),
+			});
 		}
 	}
 
@@ -315,6 +456,15 @@ export function useCampaignsDashboard() {
 			action: actionMutation,
 			abandonedPreview: abandonedCartPreviewMutation,
 			createAbandonedCampaign: createAbandonedCartCampaignMutation,
+		},
+		tracking: {
+			statusFilter: campaignTrackingStatus,
+			setStatusFilter: setCampaignTrackingStatus,
+			search: campaignTrackingSearch,
+			setSearch: setCampaignTrackingSearch,
+			page: campaignTrackingPage,
+			setPage: setCampaignTrackingPage,
+			pageSize: CAMPAIGN_TRACKING_PAGE_SIZE,
 		},
 		abandonedCart: {
 			form: abandonedCartForm,

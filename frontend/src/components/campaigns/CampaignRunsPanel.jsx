@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 function formatDate(value) {
 	if (!value) return '—';
 	const date = new Date(value);
@@ -15,19 +17,114 @@ function badgeClass(value = '') {
 function getMetric(campaign = {}, keys = []) {
 	for (const key of keys) {
 		if (campaign?.[key] !== undefined && campaign?.[key] !== null) {
-			return campaign[key];
+			return Number(campaign[key]) || 0;
 		}
 	}
-
 	return 0;
 }
 
 function getStatusTone(status = '') {
 	const normalized = String(status || '').toUpperCase();
+
 	if (['RUNNING', 'QUEUED', 'ACTIVE'].includes(normalized)) return 'En marcha';
 	if (['PAUSED'].includes(normalized)) return 'Pausada';
 	if (['COMPLETED', 'SENT'].includes(normalized)) return 'Finalizada';
+
 	return 'Borrador';
+}
+
+function normalizeRecipientStatus(status = '') {
+	const normalized = String(status || '').trim().toUpperCase();
+
+	if (['READ', 'SEEN'].includes(normalized)) return 'READ';
+	if (['DELIVERED'].includes(normalized)) return 'DELIVERED';
+	if (['SENT', 'DISPATCHED'].includes(normalized)) return 'SENT';
+	if (['FAILED', 'ERROR'].includes(normalized)) return 'FAILED';
+	if (['PENDING', 'QUEUED', 'NEW', 'CREATED'].includes(normalized)) return 'PENDING';
+
+	return normalized || 'PENDING';
+}
+
+function buildRecipientMetrics(campaign = {}) {
+	const recipients = Array.isArray(campaign?.allRecipients)
+		? campaign.allRecipients
+		: Array.isArray(campaign?.recipients)
+			? campaign.recipients
+			: [];
+
+	if (!recipients.length) {
+		return {
+			total: getMetric(campaign, ['totalRecipients', 'recipientCount']),
+			sent: getMetric(campaign, ['sentCount']),
+			delivered: getMetric(campaign, ['deliveredCount']),
+			read: getMetric(campaign, ['readCount']),
+			failed: getMetric(campaign, ['failedCount']),
+			pending: getMetric(campaign, ['pendingCount']),
+		};
+	}
+
+	let sent = 0;
+	let delivered = 0;
+	let read = 0;
+	let failed = 0;
+	let pending = 0;
+
+	for (const recipient of recipients) {
+		const status = normalizeRecipientStatus(recipient?.status);
+
+		if (status === 'READ') {
+			read += 1;
+			delivered += 1;
+			sent += 1;
+			continue;
+		}
+
+		if (status === 'DELIVERED') {
+			delivered += 1;
+			sent += 1;
+			continue;
+		}
+
+		if (status === 'SENT') {
+			sent += 1;
+			continue;
+		}
+
+		if (status === 'FAILED') {
+			failed += 1;
+			continue;
+		}
+
+		pending += 1;
+	}
+
+	return {
+		total: recipients.length,
+		sent,
+		delivered,
+		read,
+		failed,
+		pending,
+	};
+}
+
+function recipientMatchesSearch(recipient = {}, search = '') {
+	const normalizedSearch = String(search || '').trim().toLowerCase();
+	if (!normalizedSearch) return true;
+
+	const haystack = [
+		recipient.contactName,
+		recipient.name,
+		recipient.phone,
+		recipient.contactPhone,
+		recipient.status,
+		recipient.errorMessage,
+	]
+		.filter(Boolean)
+		.join(' ')
+		.toLowerCase();
+
+	return haystack.includes(normalizedSearch);
 }
 
 export default function CampaignRunsPanel({
@@ -40,24 +137,66 @@ export default function CampaignRunsPanel({
 	onDelete,
 	actionLoading,
 	deleteLoading,
+	tracking = {},
 }) {
-	const recipients = selectedCampaign?.recipients || [];
 	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
 	const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
 	const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
+
 	const totalCampaignRecipients = campaigns.reduce(
 		(total, campaign) => total + Number(getMetric(campaign, ['totalRecipients', 'recipientCount'])),
 		0
 	);
 
+	const {
+		statusFilter = 'ALL',
+		setStatusFilter = () => {},
+		search = '',
+		setSearch = () => {},
+		page = 1,
+		setPage = () => {},
+		pageSize = 24,
+	} = tracking;
+
+	const allRecipients = Array.isArray(selectedCampaign?.allRecipients)
+		? selectedCampaign.allRecipients
+		: Array.isArray(selectedCampaign?.recipients)
+			? selectedCampaign.recipients
+			: [];
+
+	const recipientMetrics = useMemo(
+		() => buildRecipientMetrics(selectedCampaign || {}),
+		[selectedCampaign]
+	);
+
+	const filteredRecipients = useMemo(() => {
+		return allRecipients.filter((recipient) => {
+			const normalizedStatus = normalizeRecipientStatus(recipient?.status);
+			const passesStatus =
+				statusFilter === 'ALL'
+					? true
+					: normalizedStatus === String(statusFilter).toUpperCase();
+
+			return passesStatus && recipientMatchesSearch(recipient, search);
+		});
+	}, [allRecipients, statusFilter, search]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredRecipients.length / pageSize));
+	const safePage = Math.min(page, totalPages);
+
+	const paginatedRecipients = filteredRecipients.slice(
+		(safePage - 1) * pageSize,
+		safePage * pageSize
+	);
+
 	return (
-		<section className="campaign-panel campaign-panel--soft">
+		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Historial de campañas</h3>
+					<h3>Historial y tracking de campañas</h3>
 					<p>
-						Seguí borradores, campañas activas y resultados desde una vista más fácil de leer
-						para operación diaria.
+						Seguí borradores, campañas activas y resultados desde una vista más clara,
+						con tracking real de envíos, entregas y lecturas.
 					</p>
 				</div>
 			</div>
@@ -87,6 +226,8 @@ export default function CampaignRunsPanel({
 					) : (
 						campaigns.map((campaign) => {
 							const isSelected = selectedCampaign?.id === campaign.id;
+							const listMetrics = buildRecipientMetrics(campaign);
+
 							return (
 								<article
 									key={campaign.id}
@@ -106,11 +247,13 @@ export default function CampaignRunsPanel({
 											<strong>{campaign.name}</strong>
 											<p>{campaign.templateName || campaign.template?.name || 'Sin template asociado'}</p>
 										</div>
-										<span className={badgeClass(campaign.status)}>{campaign.status || 'DRAFT'}</span>
+										<span className={badgeClass(campaign.status)}>
+											{campaign.status || 'DRAFT'}
+										</span>
 									</div>
 
 									<div className="campaign-inline-stats campaign-inline-stats--stack-mobile">
-										<span>{getMetric(campaign, ['totalRecipients', 'recipientCount'])} destinatarios</span>
+										<span>{listMetrics.total} destinatarios</span>
 										<span>{getStatusTone(campaign.status)}</span>
 										<span>Creada {formatDate(campaign.createdAt)}</span>
 									</div>
@@ -120,7 +263,7 @@ export default function CampaignRunsPanel({
 					)}
 				</div>
 
-				<div className="campaign-detail-box campaign-detail-box--elevated">
+				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking">
 					{selectedCampaign ? (
 						<>
 							<div className="campaign-detail-header">
@@ -128,17 +271,21 @@ export default function CampaignRunsPanel({
 									<h4>{selectedCampaign.name}</h4>
 									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripción.'}</p>
 								</div>
-								<span className={badgeClass(selectedCampaign.status)}>{selectedCampaign.status || 'DRAFT'}</span>
+								<span className={badgeClass(selectedCampaign.status)}>
+									{selectedCampaign.status || 'DRAFT'}
+								</span>
 							</div>
 
 							<div className="campaign-detail-meta-grid">
 								<div className="campaign-detail-meta-card">
 									<span>Template</span>
-									<strong>{selectedCampaign.templateName || selectedCampaign.template?.name || 'Sin template'}</strong>
+									<strong>
+										{selectedCampaign.templateName || selectedCampaign.template?.name || 'Sin template'}
+									</strong>
 								</div>
 								<div className="campaign-detail-meta-card">
 									<span>Destinatarios</span>
-									<strong>{getMetric(selectedCampaign, ['totalRecipients', 'recipientCount'])}</strong>
+									<strong>{recipientMetrics.total}</strong>
 								</div>
 								<div className="campaign-detail-meta-card">
 									<span>Creación</span>
@@ -154,6 +301,7 @@ export default function CampaignRunsPanel({
 								>
 									Despachar
 								</button>
+
 								<button
 									className="button secondary"
 									onClick={() => onPause(selectedCampaign.id)}
@@ -161,6 +309,7 @@ export default function CampaignRunsPanel({
 								>
 									Pausar
 								</button>
+
 								<button
 									className="button ghost"
 									onClick={() => onResume(selectedCampaign.id)}
@@ -168,6 +317,7 @@ export default function CampaignRunsPanel({
 								>
 									Reanudar
 								</button>
+
 								<button
 									type="button"
 									className="button danger"
@@ -183,42 +333,136 @@ export default function CampaignRunsPanel({
 								</button>
 							</div>
 
-							<div className="campaign-detail-metrics">
-								<div>
+							<div className="campaign-tracking-kpis">
+								<div className="campaign-tracking-kpi">
 									<span>Total</span>
-									<strong>{getMetric(selectedCampaign, ['totalRecipients', 'recipientCount'])}</strong>
+									<strong>{recipientMetrics.total}</strong>
 								</div>
-								<div>
+								<div className="campaign-tracking-kpi">
 									<span>Enviados</span>
-									<strong>{getMetric(selectedCampaign, ['sentCount'])}</strong>
+									<strong>{recipientMetrics.sent}</strong>
 								</div>
-								<div>
+								<div className="campaign-tracking-kpi">
+									<span>Entregados</span>
+									<strong>{recipientMetrics.delivered}</strong>
+								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Leídos</span>
+									<strong>{recipientMetrics.read}</strong>
+								</div>
+								<div className="campaign-tracking-kpi">
 									<span>Fallidos</span>
-									<strong>{getMetric(selectedCampaign, ['failedCount'])}</strong>
+									<strong>{recipientMetrics.failed}</strong>
 								</div>
-								<div>
+								<div className="campaign-tracking-kpi">
 									<span>Pendientes</span>
-									<strong>{getMetric(selectedCampaign, ['pendingCount'])}</strong>
+									<strong>{recipientMetrics.pending}</strong>
 								</div>
 							</div>
 
-							<div className="campaign-recipient-list">
-								<div className="campaign-recipient-list-title">Vista rápida de destinatarios</div>
-								{recipients.length ? (
-									recipients.slice(0, 8).map((recipient) => (
-										<div key={recipient.id || recipient.phone} className="campaign-recipient-row">
-											<div>
-												<strong>{recipient.contactName || recipient.phone || 'Sin nombre'}</strong>
-												<span>{recipient.phone || 'Sin teléfono'}</span>
-											</div>
-											<span className={badgeClass(recipient.status)}>{recipient.status || 'PENDING'}</span>
-										</div>
-									))
-								) : (
-									<div className="campaign-empty-state compact">
-										<p>Esta campaña todavía no tiene detalle de destinatarios para mostrar.</p>
-									</div>
-								)}
+							<div className="campaign-tracking-toolbar">
+								<div className="field">
+									<span>Buscar destinatario</span>
+									<input
+										type="text"
+										value={search}
+										onChange={(event) => {
+											setSearch(event.target.value);
+											setPage(1);
+										}}
+										placeholder="Nombre, teléfono o estado"
+									/>
+								</div>
+
+								<div className="field campaign-tracking-toolbar-select">
+									<span>Filtrar por estado</span>
+									<select
+										value={statusFilter}
+										onChange={(event) => {
+											setStatusFilter(event.target.value);
+											setPage(1);
+										}}
+									>
+										<option value="ALL">Todos</option>
+										<option value="PENDING">Pendientes</option>
+										<option value="SENT">Enviados</option>
+										<option value="DELIVERED">Entregados</option>
+										<option value="READ">Leídos</option>
+										<option value="FAILED">Fallidos</option>
+									</select>
+								</div>
+							</div>
+
+							<div className="campaign-recipient-table-wrapper campaign-recipient-table-wrapper--tracking">
+								<table className="campaign-table">
+									<thead>
+										<tr>
+											<th>Destinatario</th>
+											<th>Teléfono</th>
+											<th>Estado</th>
+											<th>Última actualización</th>
+										</tr>
+									</thead>
+									<tbody>
+										{paginatedRecipients.length ? (
+											paginatedRecipients.map((recipient) => (
+												<tr key={recipient.id || recipient.phone}>
+													<td>{recipient.contactName || recipient.name || 'Sin nombre'}</td>
+													<td>{recipient.phone || recipient.contactPhone || '—'}</td>
+													<td>
+														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
+															{normalizeRecipientStatus(recipient.status)}
+														</span>
+													</td>
+													<td>
+														{formatDate(
+															recipient.readAt ||
+															recipient.deliveredAt ||
+															recipient.sentAt ||
+															recipient.updatedAt ||
+															recipient.createdAt
+														)}
+													</td>
+												</tr>
+											))
+										) : (
+											<tr>
+												<td colSpan={4}>
+													<div className="campaign-empty-state compact">
+														<p>No hay destinatarios para ese filtro.</p>
+													</div>
+												</td>
+											</tr>
+										)}
+									</tbody>
+								</table>
+							</div>
+
+							<div className="campaign-customer-pagination campaign-customer-pagination--tracking">
+								<span>
+									Mostrando {filteredRecipients.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–
+									{Math.min(safePage * pageSize, filteredRecipients.length)} de {filteredRecipients.length}
+								</span>
+
+								<div className="campaign-inline-actions campaign-inline-actions--wrap">
+									<button
+										type="button"
+										className="button ghost"
+										disabled={safePage <= 1}
+										onClick={() => setPage((current) => Math.max(1, current - 1))}
+									>
+										Anterior
+									</button>
+
+									<button
+										type="button"
+										className="button ghost"
+										disabled={safePage >= totalPages}
+										onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+									>
+										Siguiente
+									</button>
+								</div>
 							</div>
 						</>
 					) : (
