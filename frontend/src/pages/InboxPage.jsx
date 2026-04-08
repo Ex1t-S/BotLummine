@@ -532,26 +532,7 @@ export default function InboxPage() {
 		});
 	}, [contacts, selectedConversationId]);
 
-	useEffect(() => {
-		if (!selectedConversationId || !conversation) return;
-
-		const currentTimestamp = toTimestamp(
-			conversation?.lastMessageAt || activeContact?.lastMessageAt
-		);
-
-		if (currentTimestamp > 0) {
-			lastInboxSnapshotRef.current[selectedConversationId] = currentTimestamp;
-			writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
-		}
-
-		setNewMessageCounts((prev) => {
-			if (!prev[selectedConversationId]) return prev;
-			const next = { ...prev };
-			delete next[selectedConversationId];
-			return next;
-		});
-	}, [selectedConversationId, conversation?.lastMessageAt, conversation?.messages?.length, activeContact?.lastMessageAt]);
-
+	
 	useEffect(() => {
 		if (!filteredContacts.length) {
 			setSelectedConversationId(null);
@@ -577,33 +558,58 @@ export default function InboxPage() {
 		setSelectedConversationId(preferredId);
 	}, [filteredContacts, selectedConversationId, inboxQuery.data]);
 
-	const conversationQuery = useQuery({
-		queryKey: queryKeys.conversation(selectedConversationId),
-		queryFn: async () => {
-			const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`);
-			return res.data;
-		},
-		enabled: Boolean(selectedConversationId),
-		placeholderData: (previousData) => previousData,
-		refetchInterval: () =>
-			selectedConversationId && isDocumentVisible() ? 3000 : false,
-		refetchIntervalInBackground: false,
-		...queryPresets.conversation,
-	});
+		const conversationQuery = useQuery({
+			queryKey: queryKeys.conversation(selectedConversationId),
+			queryFn: async () => {
+				const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`);
+				return res.data;
+			},
+			enabled: Boolean(selectedConversationId),
+			placeholderData: (previousData) => previousData,
+			refetchInterval: () =>
+				selectedConversationId && isDocumentVisible() ? 3000 : false,
+			refetchIntervalInBackground: false,
+			...queryPresets.conversation,
+		});
 
-	const conversation = conversationQuery.data?.conversation || null;
+		const conversation = conversationQuery.data?.conversation || null;
 
-	const activeContact = useMemo(() => {
-		return (
-			filteredContacts.find(
-				(contact) => contact.conversationId === selectedConversationId
-			) ||
-			contacts.find(
-				(contact) => contact.conversationId === selectedConversationId
-			) ||
-			null
-		);
-	}, [filteredContacts, contacts, selectedConversationId]);
+		const activeContact = useMemo(() => {
+			return (
+				filteredContacts.find(
+					(contact) => contact.conversationId === selectedConversationId
+				) ||
+				contacts.find(
+					(contact) => contact.conversationId === selectedConversationId
+				) ||
+				null
+			);
+		}, [filteredContacts, contacts, selectedConversationId]);
+
+		useEffect(() => {
+			if (!selectedConversationId || !conversation) return;
+
+			const currentTimestamp = toTimestamp(
+				conversation?.lastMessageAt || activeContact?.lastMessageAt
+			);
+
+			if (currentTimestamp > 0) {
+				lastInboxSnapshotRef.current[selectedConversationId] = currentTimestamp;
+				writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
+			}
+
+			setNewMessageCounts((prev) => {
+				if (!prev[selectedConversationId]) return prev;
+				const next = { ...prev };
+				delete next[selectedConversationId];
+				return next;
+			});
+		}, [
+			selectedConversationId,
+			conversation?.lastMessageAt,
+			conversation?.messages?.length,
+			activeContact?.lastMessageAt,
+		]);
 
 	useEffect(() => {
 		const el = messagesContainerRef.current;
