@@ -17,9 +17,14 @@ function badgeClass(value = '') {
 function getMetric(campaign = {}, keys = []) {
 	for (const key of keys) {
 		if (campaign?.[key] !== undefined && campaign?.[key] !== null) {
-			return Number(campaign[key]) || 0;
+			return campaign[key];
 		}
 	}
+
+	if (keys.includes('totalRecipients') && campaign?.pagination?.total !== undefined && campaign?.pagination?.total !== null) {
+		return campaign.pagination.total;
+	}
+
 	return 0;
 }
 
