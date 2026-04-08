@@ -437,45 +437,41 @@ export default function TemplateBuilderPanel({
 	}
 
 	function validatePayload(payload) {
-		if (!payload.name) {
-			return 'Poné un nombre interno para el template.';
-		}
-
-		const bodyComponent = payload.components.find((component) => component.type === 'BODY');
-		const bodyText = bodyComponent?.text;
-
-		if (!bodyText) {
-			return 'El body del template es obligatorio.';
-		}
-
-		if (getVariableNumbers(bodyText).length && !bodyComponent?.example?.body_text?.[0]?.length) {
-			return 'El body usa variables, pero faltan ejemplos. El builder debería armarlos solo.';
-		}
-
-		if (form.headerType === 'TEXT' && !form.headerText.trim()) {
-			return 'Si el header es de texto, completalo antes de guardar.';
-		}
-
-		if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
-			return 'Para templates con header IMAGE necesitás una imagen que devuelva header_handle.';
-		}
-
-		for (const button of safeArray(form.buttons)) {
-			if (!button.text.trim()) {
-				return 'Todos los botones tienen que tener texto.';
-			}
-
-			if (button.type === 'URL' && !button.url.trim()) {
-				return 'Los botones de enlace necesitan una URL.';
-			}
-
-			if (button.type === 'PHONE_NUMBER' && !button.phoneNumber.trim()) {
-				return 'Los botones de llamada necesitan un número.';
-			}
-		}
-
-		return '';
+	if (!payload.name) {
+		return 'Poné un nombre interno para el template.';
 	}
+
+	const bodyComponent = payload.components.find((component) => component.type === 'BODY');
+	const bodyText = bodyComponent?.text;
+
+	if (!bodyText) {
+		return 'El body del template es obligatorio.';
+	}
+
+	if (getVariableNumbers(bodyText).length && !bodyComponent?.example?.body_text?.[0]?.length) {
+		return 'El body usa variables, pero faltan ejemplos. El builder debería armarlos solo.';
+	}
+
+	if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
+		return 'Para templates con header IMAGE necesitás una imagen que devuelva header_handle.';
+	}
+
+	for (const button of safeArray(form.buttons)) {
+		if (!button.text.trim()) {
+			return 'Todos los botones tienen que tener texto.';
+		}
+
+		if (button.type === 'URL' && !button.url.trim()) {
+			return 'Los botones de enlace necesitan una URL.';
+		}
+
+		if (button.type === 'PHONE_NUMBER' && !button.phoneNumber.trim()) {
+			return 'Los botones de llamada necesitan un número.';
+		}
+	}
+
+	return '';
+}
 
 	async function handleSubmit(event) {
 		event.preventDefault();
