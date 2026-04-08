@@ -37,9 +37,10 @@ export default function DashboardLayout() {
 						<p>Ventas conversacionales</p>
 					</div>
 				</div>
+
 				<div className="admin-user-box">
 					<strong>{user?.name || user?.email || 'Usuario'}</strong>
-					<span>{user?.role || 'admin'}</span>
+					<span>{String(user?.role || 'admin').toUpperCase()}</span>
 				</div>
 
 				<nav className="admin-menu">
