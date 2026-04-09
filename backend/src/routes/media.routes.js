@@ -4,7 +4,7 @@ import {
 	serveInboxMediaController,
 	uploadCampaignHeaderImageController
 } from '../controllers/media.controller.js';
-import { attachUser } from '../middleware/auth.js';
+import { attachUser, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -20,11 +20,7 @@ router.get('/inbox/:fileName', serveInboxMediaController);
 router.post(
 	'/campaign-header-image',
 	attachUser,
-	(req, res, next) => {
-		console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
-		console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
-		next();
-	},
+	requireAdmin,
 	upload.single('image'),
 	uploadCampaignHeaderImageController
 );

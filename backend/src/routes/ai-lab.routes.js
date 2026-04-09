@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import {
 	getAiLabFixtures,
 	postAiLabSession,
@@ -10,7 +10,7 @@ import {
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(requireAuth, requireAdmin);
 router.get('/fixtures', getAiLabFixtures);
 router.post('/sessions', postAiLabSession);
 router.get('/sessions/:sessionId', getAiLabSessionById);

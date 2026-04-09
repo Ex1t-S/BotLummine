@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
+
+function resolveRedirectPath(user, requestedPath = '') {
+	if (requestedPath && canAccessRoute(user?.role, requestedPath)) {
+		return requestedPath;
+	}
+
+	return getDefaultRouteForRole(user?.role);
+}
 
 export default function LoginPage() {
 	const navigate = useNavigate();
@@ -14,7 +23,8 @@ export default function LoginPage() {
 	const [error, setError] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 
-	const redirectTo = location.state?.from?.pathname || '/catalog';
+	const requestedPath = location.state?.from?.pathname || '';
+	const redirectTo = resolveRedirectPath(user, requestedPath);
 
 	useEffect(() => {
 		if (!loading && user) {
@@ -28,8 +38,9 @@ export default function LoginPage() {
 		setSubmitting(true);
 
 		try {
-			await login(form);
-			navigate(redirectTo, { replace: true });
+			const result = await login(form);
+			const nextPath = resolveRedirectPath(result?.user || null, requestedPath);
+			navigate(nextPath, { replace: true });
 		} catch (err) {
 			setError(err.response?.data?.error || 'No se pudo iniciar sesión');
 		} finally {

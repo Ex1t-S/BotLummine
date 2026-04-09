@@ -4,6 +4,20 @@ import { prisma } from '../lib/prisma.js';
 
 const cookieName = process.env.AUTH_COOKIE_NAME || 'wa_assistant_token';
 
+export function normalizeRole(value = '') {
+	return String(value || '').trim().toUpperCase();
+}
+
+export function hasAnyRole(user, allowedRoles = []) {
+	if (!user) return false;
+	if (!Array.isArray(allowedRoles) || !allowedRoles.length) return true;
+
+	const currentRole = normalizeRole(user.role);
+	const normalizedAllowed = allowedRoles.map(normalizeRole);
+
+	return normalizedAllowed.includes(currentRole);
+}
+
 export async function attachUser(req, _res, next) {
 	try {
 		const rawCookieHeader = req.headers?.cookie || '';
@@ -46,6 +60,7 @@ export async function attachUser(req, _res, next) {
 		return next();
 	}
 }
+
 export function requireAuth(req, res, next) {
 	if (!req.user) {
 		return res.status(401).json({
@@ -56,6 +71,28 @@ export function requireAuth(req, res, next) {
 
 	return next();
 }
+
+export function requireAnyRole(allowedRoles = []) {
+	return (req, res, next) => {
+		if (!req.user) {
+			return res.status(401).json({
+				ok: false,
+				error: 'No autenticado'
+			});
+		}
+
+		if (!hasAnyRole(req.user, allowedRoles)) {
+			return res.status(403).json({
+				ok: false,
+				error: 'No autorizado'
+			});
+		}
+
+		return next();
+	};
+}
+
+export const requireAdmin = requireAnyRole(['ADMIN']);
 
 export function issueAuthCookie(res, user) {
 	const token = jwt.sign(

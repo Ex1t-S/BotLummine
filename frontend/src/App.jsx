@@ -12,6 +12,13 @@ import AiLabPage from './pages/AiLabPage.jsx';
 import WhatsAppMenuPage from './pages/WhatsAppMenuPage.jsx';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import { useAuth } from './context/AuthContext.jsx';
+import { getDefaultRouteForRole } from './lib/authz.js';
+
+function RoleHomeRedirect() {
+	const { user } = useAuth();
+	return <Navigate to={getDefaultRouteForRole(user?.role)} replace />;
+}
 
 export default function App() {
 	return (
@@ -26,14 +33,63 @@ export default function App() {
 					</ProtectedRoute>
 				}
 			>
-				<Route index element={<Navigate to="/catalog" replace />} />
-				<Route path="inbox" element={<InboxPage />} />
-				<Route path="catalog" element={<CatalogPage />} />
-				<Route path="campaigns" element={<CampaignsPage />} />
-				<Route path="abandoned-carts" element={<AbandonedCartsPage />} />
-				<Route path="customers" element={<CustomersPage />} />
-				<Route path="whatsapp-menu" element={<WhatsAppMenuPage />} />
-				<Route path="ai-lab" element={<AiLabPage />} />
+				<Route index element={<RoleHomeRedirect />} />
+				<Route
+					path="inbox"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
+							<InboxPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="catalog"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<CatalogPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="campaigns"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<CampaignsPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="abandoned-carts"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<AbandonedCartsPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="customers"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<CustomersPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="whatsapp-menu"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<WhatsAppMenuPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="ai-lab"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<AiLabPage />
+						</ProtectedRoute>
+					}
+				/>
 			</Route>
 		</Routes>
 	);

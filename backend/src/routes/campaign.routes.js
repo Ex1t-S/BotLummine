@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { attachUser, requireAuth } from '../middleware/auth.js';
+import { attachUser, requireAuth, requireAdmin } from '../middleware/auth.js';
 import {
 	listTemplates,
 	getTemplate,
@@ -23,7 +23,7 @@ import {
 
 const router = Router();
 
-router.use(attachUser, requireAuth);
+router.use(attachUser, requireAuth, requireAdmin);
 
 router.get('/templates', listTemplates);
 router.get('/templates/:templateId', getTemplate);

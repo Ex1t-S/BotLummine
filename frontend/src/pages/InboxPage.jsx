@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api, { resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
+import { useAuth } from '../context/AuthContext.jsx';
+import { isAdminUser } from '../lib/authz.js';
 
 const QUEUES = [
 	{ key: 'AUTO', label: 'Automático' },
@@ -419,6 +421,8 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 
 export default function InboxPage() {
 	const queryClient = useQueryClient();
+	const { user } = useAuth();
+	const isAdmin = isAdminUser(user);
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
@@ -828,9 +832,10 @@ export default function InboxPage() {
 					</div>
 
 					<div className="inbox-section-actions">
-						<ActionButton
-							disabled={deduplicateContactsMutation.isPending}
-							onClick={() => {
+						{isAdmin ? (
+							<ActionButton
+								disabled={deduplicateContactsMutation.isPending}
+								onClick={() => {
 								const confirmed = window.confirm(
 									'Esto va a fusionar contactos y conversaciones duplicadas del inbox. ¿Continuar?'
 								);
@@ -839,11 +844,12 @@ export default function InboxPage() {
 									deduplicateContactsMutation.mutate();
 								}
 							}}
-						>
-							{deduplicateContactsMutation.isPending
-								? 'Deduplicando...'
-								: 'Deduplicar'}
-						</ActionButton>
+							>
+								{deduplicateContactsMutation.isPending
+									? 'Deduplicando...'
+									: 'Deduplicar'}
+							</ActionButton>
+						) : null}
 					</div>
 				</div>
 
@@ -1016,35 +1022,39 @@ export default function InboxPage() {
 
 								<div className="inbox-actions-spacer" />
 
-								<ActionButton
-									danger
-									disabled={
-										resetContextMutation.isPending ||
-										!selectedConversationId
-									}
-									onClick={() => resetContextMutation.mutate()}
-								>
-									Reiniciar IA
-								</ActionButton>
-
-								<ActionButton
-									danger
-									disabled={
-										clearHistoryMutation.isPending ||
-										!selectedConversationId
-									}
-									onClick={() => {
-										const confirmed = window.confirm(
-											'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
-										);
-
-										if (confirmed) {
-											clearHistoryMutation.mutate();
+								{isAdmin ? (
+									<>
+										<ActionButton
+											danger
+											disabled={
+											resetContextMutation.isPending ||
+											!selectedConversationId
 										}
-									}}
-								>
-									Borrar historial
-								</ActionButton>
+											onClick={() => resetContextMutation.mutate()}
+										>
+											Reiniciar IA
+										</ActionButton>
+
+										<ActionButton
+											danger
+											disabled={
+											clearHistoryMutation.isPending ||
+											!selectedConversationId
+										}
+											onClick={() => {
+											const confirmed = window.confirm(
+												'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
+											);
+
+											if (confirmed) {
+												clearHistoryMutation.mutate();
+											}
+										}}
+										>
+											Borrar historial
+										</ActionButton>
+									</>
+								) : null}
 							</div>
 						</div>
 

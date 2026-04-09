@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, requireAnyRole } from '../middleware/auth.js';
 import {
 	getInbox,
 	getInboxStream,
@@ -27,30 +27,32 @@ import {
 } from '../controllers/customer.controller.js';
 
 const router = Router();
+const requireInboxAccess = requireAnyRole(['ADMIN', 'AGENT']);
 
 router.use(requireAuth);
 
-router.get('/inbox', getInbox);
-router.get('/inbox/stream', getInboxStream);
-router.get('/conversations/:conversationId/messages', getConversationMessagesJson);
-router.post('/conversations/:conversationId/messages', postConversationMessage);
-router.patch('/conversations/:conversationId/queue', patchConversationQueue);
-router.patch('/conversations/:conversationId/reset-context', patchConversationResetContext);
-router.delete('/conversations/:conversationId/history', deleteConversationHistory);
-router.patch('/conversations/:conversationId/archive', patchConversationArchive);
-router.post('/inbox/deduplicate', postDeduplicateInboxContacts);
+router.get('/inbox', requireInboxAccess, getInbox);
+router.get('/inbox/stream', requireInboxAccess, getInboxStream);
+router.get('/conversations/:conversationId/messages', requireInboxAccess, getConversationMessagesJson);
+router.post('/conversations/:conversationId/messages', requireInboxAccess, postConversationMessage);
+router.patch('/conversations/:conversationId/queue', requireInboxAccess, patchConversationQueue);
+router.patch('/conversations/:conversationId/archive', requireInboxAccess, patchConversationArchive);
 
-router.get('/catalog', getCatalog);
-router.post('/catalog/sync', postSyncCatalog);
+router.patch('/conversations/:conversationId/reset-context', requireAdmin, patchConversationResetContext);
+router.delete('/conversations/:conversationId/history', requireAdmin, deleteConversationHistory);
+router.post('/inbox/deduplicate', requireAdmin, postDeduplicateInboxContacts);
 
-router.get('/abandoned-carts', getAbandonedCarts);
-router.post('/abandoned-carts/sync', postSyncAbandonedCarts);
-router.post('/abandoned-carts/:id/message', postSendAbandonedCartMessage);
+router.get('/catalog', requireAdmin, getCatalog);
+router.post('/catalog/sync', requireAdmin, postSyncCatalog);
 
-router.get('/customers', getCustomers);
-router.post('/customers/sync', postSyncCustomers);
-router.get('/customers/sync-status', getCustomersSyncStatus);
-router.post('/customers/sync-full', postFullSyncCustomers);
-router.post('/customers/repair', postRepairCustomers);
+router.get('/abandoned-carts', requireAdmin, getAbandonedCarts);
+router.post('/abandoned-carts/sync', requireAdmin, postSyncAbandonedCarts);
+router.post('/abandoned-carts/:id/message', requireAdmin, postSendAbandonedCartMessage);
+
+router.get('/customers', requireAdmin, getCustomers);
+router.post('/customers/sync', requireAdmin, postSyncCustomers);
+router.get('/customers/sync-status', requireAdmin, getCustomersSyncStatus);
+router.post('/customers/sync-full', requireAdmin, postFullSyncCustomers);
+router.post('/customers/repair', requireAdmin, postRepairCustomers);
 
 export default router;

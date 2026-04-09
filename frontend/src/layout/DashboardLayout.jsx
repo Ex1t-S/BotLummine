@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
 import logoLummine from '../assets/lummine-logo.png';
+import { isAdminUser } from '../lib/authz.js';
 
 function navClass({ isActive }) {
 	return `admin-menu-link${isActive ? ' active' : ''}`;
@@ -10,6 +11,7 @@ function navClass({ isActive }) {
 export default function DashboardLayout() {
 	const navigate = useNavigate();
 	const { user, logout } = useAuth();
+	const isAdmin = isAdminUser(user);
 
 	async function handleLogout() {
 		try {
@@ -34,13 +36,13 @@ export default function DashboardLayout() {
 
 					<div className="admin-brand-copy">
 						<h1>Lummine</h1>
-						<p>Ventas conversacionales</p>
+						<p>{isAdmin ? 'Ventas conversacionales' : 'Inbox de atención'}</p>
 					</div>
 				</div>
 
 				<div className="admin-user-box">
 					<strong>{user?.name || user?.email || 'Usuario'}</strong>
-					<span>{String(user?.role || 'admin').toUpperCase()}</span>
+					<span>{isAdmin ? 'ADMIN' : 'AGENTE'}</span>
 				</div>
 
 				<nav className="admin-menu">
@@ -48,29 +50,33 @@ export default function DashboardLayout() {
 						Inbox
 					</NavLink>
 
-					<NavLink to="/catalog" className={navClass}>
-						Catálogo
-					</NavLink>
+					{isAdmin ? (
+						<>
+							<NavLink to="/catalog" className={navClass}>
+								Catálogo
+							</NavLink>
 
-					<NavLink to="/campaigns" className={navClass}>
-						Campañas
-					</NavLink>
+							<NavLink to="/campaigns" className={navClass}>
+								Campañas
+							</NavLink>
 
-					<NavLink to="/abandoned-carts" className={navClass}>
-						Carritos
-					</NavLink>
+							<NavLink to="/abandoned-carts" className={navClass}>
+								Carritos
+							</NavLink>
 
-					<NavLink to="/customers" className={navClass}>
-						Clientes
-					</NavLink>
+							<NavLink to="/customers" className={navClass}>
+								Clientes
+							</NavLink>
 
-					<NavLink to="/whatsapp-menu" className={navClass}>
-						Editar menú
-					</NavLink>
+							<NavLink to="/whatsapp-menu" className={navClass}>
+								Editar menú
+							</NavLink>
 
-					<NavLink to="/ai-lab" className={navClass}>
-						AI Lab
-					</NavLink>
+							<NavLink to="/ai-lab" className={navClass}>
+								AI Lab
+							</NavLink>
+						</>
+					) : null}
 				</nav>
 
 				<button className="logout-btn" onClick={handleLogout} type="button">
