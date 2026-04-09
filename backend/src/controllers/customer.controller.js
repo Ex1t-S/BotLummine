@@ -260,6 +260,10 @@ function mapOrderToCard(order) {
 		initials: getInitials(order.contactName),
 		phone: order.contactPhone || '',
 		email: order.contactEmail || '',
+
+		lastOrderId: order.orderId || '',
+		lastOrderNumber: order.orderNumber || '',
+
 		lastOrderLabel: order.orderNumber ? `#${order.orderNumber}` : '-',
 		totalSpentLabel: formatCurrency(order.totalAmount || 0, order.currency || 'ARS'),
 		lastOrderDateLabel: formatDateLabel(order.orderCreatedAt),
@@ -274,6 +278,7 @@ function mapOrderToCard(order) {
 		rawDate: order.orderCreatedAt || null,
 	};
 }
+
 
 export async function getCustomers(req, res) {
 	try {
