@@ -329,7 +329,6 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 	let skippedOldCount = 0;
 	let stopSync = false;
 	let effectivePerPage = CHECKOUTS_PER_PAGE;
-	const seenCheckoutIds = new Set();
 
 	for (let page = 1; page <= MAX_PAGES && !stopSync; page += 1) {
 		const pageResult = await fetchCheckoutsPage({
@@ -351,7 +350,6 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		}
 
 		const validCarts = [];
-		let foundOlderInThisPage = false;
 
 		for (const cart of carts) {
 			const checkoutId = String(cart?.id || '').trim();
@@ -360,19 +358,17 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 			const createdAt = parseDateOrNull(cart?.created_at);
 			if (createdAt && createdAt < cutoff) {
 				skippedOldCount += 1;
-				foundOlderInThisPage = true;
 				continue;
 			}
 
 			validCarts.push(cart);
-			seenCheckoutIds.add(checkoutId);
 		}
 
 		if (validCarts.length) {
 			syncedCount += await replaceCartBatch(validCarts, storeId);
 		}
 
-		if (pageResult.reachedEnd || foundOlderInThisPage) {
+		if (pageResult.reachedEnd) {
 			stopSync = true;
 		}
 	}
@@ -386,28 +382,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		select: { id: true }
 	});
 
-	const unseenNewCartsWithinWindow = await prisma.abandonedCart.findMany({
-		where: {
-			storeId,
-			status: 'NEW',
-			OR: [
-				{ checkoutCreatedAt: null },
-				{ checkoutCreatedAt: { gte: cutoff } }
-			]
-		},
-		select: {
-			id: true,
-			checkoutId: true
-		}
-	});
-
-	const idsToDelete = [
-		...oldNewCarts.map((item) => item.id),
-		...unseenNewCartsWithinWindow
-			.filter((item) => !seenCheckoutIds.has(String(item.checkoutId || '')))
-			.map((item) => item.id)
-	];
-
+	const idsToDelete = oldNewCarts.map((item) => item.id);
 	const uniqueIdsToDelete = [...new Set(idsToDelete)];
 	const deletedCount = await deleteCartIdsInChunks(uniqueIdsToDelete);
 	const remainingCount = await prisma.abandonedCart.count({ where: { storeId } });
