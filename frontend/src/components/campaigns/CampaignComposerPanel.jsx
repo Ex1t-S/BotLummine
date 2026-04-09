@@ -495,7 +495,20 @@ function extractCreatedCampaignId(result) {
 		null
 	);
 }
+function getRecipientDisplayName(customer = {}) {
+	return (
+		customer?.displayName ||
+		customer?.contactName ||
+		customer?.email ||
+		normalizePhone(customer?.phone || '') ||
+		'Sin nombre'
+	);
+}
 
+function getRecipientProductPreview(customer = {}) {
+	const labels = extractProductLabels(customer);
+	return labels.slice(0, 2).join(' · ');
+}
 export default function CampaignComposerPanel({
 	templates = [],
 	selectedTemplate,
@@ -511,12 +524,13 @@ export default function CampaignComposerPanel({
 	const [uploadedFileName, setUploadedFileName] = useState('');
 	const [imageError, setImageError] = useState('');
 	const [submitError, setSubmitError] = useState('');
-	const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 	const [showProductPicker, setShowProductPicker] = useState(false);
 	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
+	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
+	const [contactLimit, setContactLimit] = useState('');
 	const [bulkSelectionInfo, setBulkSelectionInfo] = useState({
 		count: 0,
 		customerIds: [],
@@ -645,8 +659,8 @@ export default function CampaignComposerPanel({
 	const selectedVisibleProductMatchesCount = useMemo(() => {
 		if (!selectedProductFilters.length) return 0;
 
-		return customerAudience.customers.filter(
-			(customer) => Boolean(normalizePhone(customer.phone || ''))
+		return customerAudience.customers.filter((customer) =>
+			Boolean(normalizePhone(customer.phone || ''))
 		).length;
 	}, [customerAudience.customers, selectedProductFilters]);
 
@@ -675,7 +689,41 @@ export default function CampaignComposerPanel({
 		customerAudience?.stats?.totalCustomers ||
 		0
 	);
+	const contactLimitNumber = useMemo(() => {
+		const parsed = Number(contactLimit);
+		if (!Number.isFinite(parsed) || parsed <= 0) return null;
+		return Math.floor(parsed);
+	}, [contactLimit]);
 
+	const previewCustomers = useMemo(() => {
+		if (form.audienceMode !== 'customers') return [];
+		return selectedCustomers.slice(0, 24);
+	}, [form.audienceMode, selectedCustomers]);
+
+	const effectiveSelectionCount = useMemo(() => {
+		if (!contactLimitNumber) return totalFoundCount;
+		return Math.min(totalFoundCount, contactLimitNumber);
+	}, [totalFoundCount, contactLimitNumber]);
+
+	const selectionButtonLabel = useMemo(() => {
+		if (customerAudience.loadingAll) return 'Seleccionando…';
+
+		if (contactLimitNumber) {
+			return `Seleccionar primeros ${formatCompactNumber(effectiveSelectionCount)} filtrados`;
+		}
+
+		if (selectedProductFilters.length) {
+			return 'Seleccionar todos los filtrados';
+		}
+
+		return `Seleccionar todos los encontrados (${formatCompactNumber(totalFoundCount)})`;
+	}, [
+		customerAudience.loadingAll,
+		contactLimitNumber,
+		effectiveSelectionCount,
+		selectedProductFilters.length,
+		totalFoundCount,
+	]);
 	function buildCustomerRequestParams(nextFilters = customerFilters) {
 		const mergedProductQuery = selectedProductFilters.length
 			? selectedProductFilters.join('||')
@@ -799,7 +847,7 @@ export default function CampaignComposerPanel({
 		}));
 	}
 
-	function toggleProductFilter(label) {
+		function toggleProductFilter(label) {
 		setSelectedProductFilters((current) => {
 			const next = current.includes(label)
 				? current.filter((item) => item !== label)
@@ -825,7 +873,7 @@ export default function CampaignComposerPanel({
 		}));
 	}
 
-	async function handleSelectAllFilteredCustomers() {
+		async function handleSelectAllFilteredCustomers() {
 		setCustomerAudience((current) => ({
 			...current,
 			loadingAll: true,
@@ -835,20 +883,23 @@ export default function CampaignComposerPanel({
 		try {
 			const allCustomers = await fetchAllFilteredCustomers(customerFilters);
 
-			const selectableCustomers = allCustomers.filter(
-				(customer) => Boolean(normalizePhone(customer.phone || ''))
+			const selectableCustomers = allCustomers.filter((customer) =>
+				Boolean(normalizePhone(customer.phone || ''))
 			);
 
-			setSelectedCustomersMap((current) => ({
-				...current,
-				...mapCustomersById(selectableCustomers),
-			}));
+			const limitedCustomers = contactLimitNumber
+				? selectableCustomers.slice(0, contactLimitNumber)
+				: selectableCustomers;
+
+			setSelectedCustomersMap(mapCustomersById(limitedCustomers));
 
 			setBulkSelectionInfo({
-				count: selectableCustomers.length,
-				customerIds: selectableCustomers.map((customer) => customer.id).filter(Boolean),
+				count: limitedCustomers.length,
+				customerIds: limitedCustomers.map((customer) => customer.id).filter(Boolean),
 				mode: selectedProductFilters.length ? 'products' : 'all',
 			});
+
+			setShowAudiencePreview(true);
 
 			setCustomerAudience((current) => ({
 				...current,
@@ -863,31 +914,38 @@ export default function CampaignComposerPanel({
 					error?.response?.data?.message ||
 					error?.response?.data?.error ||
 					error?.message ||
-					'No se pudieron seleccionar todos los clientes filtrados.',
+					'No se pudieron seleccionar los clientes filtrados.',
 			}));
 		}
 	}
 
 	function clearFilteredSelection() {
-		setSelectedCustomersMap((current) => {
-			const next = { ...current };
-
-			if (bulkSelectionInfo.customerIds.length) {
-				for (const customerId of bulkSelectionInfo.customerIds) {
-					delete next[customerId];
-				}
-			}
-
-			return next;
-		});
-
+		setSelectedCustomersMap({});
 		setBulkSelectionInfo({
 			count: 0,
 			customerIds: [],
 			mode: '',
 		});
+		setShowAudiencePreview(false);
 	}
+		function removeSelectedCustomer(customerId) {
+		if (!customerId) return;
 
+		setSelectedCustomersMap((current) => {
+			const next = { ...current };
+			delete next[customerId];
+			return next;
+		});
+
+		setBulkSelectionInfo((current) => {
+			const nextIds = current.customerIds.filter((id) => id !== customerId);
+			return {
+				...current,
+				customerIds: nextIds,
+				count: nextIds.length,
+			};
+		});
+	}
 	async function handleImageChange(event) {
 		const file = event.target.files?.[0];
 		if (!file) return;
@@ -1377,13 +1435,16 @@ export default function CampaignComposerPanel({
 								{customerAudience.loading ? 'Buscando…' : 'Actualizar audiencia'}
 							</button>
 
-							<button
-								type="button"
-								className="button ghost"
-								onClick={() => setShowAdvancedFilters((current) => !current)}
-							>
-								{showAdvancedFilters ? 'Ocultar opciones avanzadas' : 'Mostrar opciones avanzadas'}
-							</button>
+							<label className="field campaign-contact-limit-field">
+								<span>Cantidad a contactar</span>
+								<input
+									type="number"
+									min="1"
+									value={contactLimit}
+									onChange={(event) => setContactLimit(event.target.value)}
+									placeholder="Ej. 100"
+								/>
+							</label>
 
 							<button
 								type="button"
@@ -1391,11 +1452,16 @@ export default function CampaignComposerPanel({
 								onClick={handleSelectAllFilteredCustomers}
 								disabled={customerAudience.loadingAll || !totalFoundCount}
 							>
-								{customerAudience.loadingAll
-									? 'Seleccionando…'
-									: selectedProductFilters.length
-										? 'Seleccionar todos los filtrados por producto'
-										: `Seleccionar todos los encontrados (${formatCompactNumber(totalFoundCount)})`}
+								{selectionButtonLabel}
+							</button>
+
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => setShowAudiencePreview((current) => !current)}
+								disabled={!selectedCustomerCount}
+							>
+								{showAudiencePreview ? 'Ocultar preview' : 'Ver preview'}
 							</button>
 
 							<button
@@ -1407,67 +1473,6 @@ export default function CampaignComposerPanel({
 								Quitar selección masiva
 							</button>
 						</div>
-
-						{showAdvancedFilters ? (
-							<div className="campaign-advanced-filters">
-								<div className="campaign-builder-grid campaign-builder-grid--2">
-									<label className="field">
-										<span>Orden</span>
-										<select
-											value={customerFilters.sort}
-											onChange={(event) => updateCustomerFilter('sort', event.target.value)}
-										>
-											<option value="updated_desc">Actualizados primero</option>
-											<option value="updated_asc">Actualizados al final</option>
-											<option value="spent_desc">Mayor gasto</option>
-											<option value="spent_asc">Menor gasto</option>
-											<option value="name_asc">Nombre A-Z</option>
-											<option value="name_desc">Nombre Z-A</option>
-										</select>
-									</label>
-
-									<label className="field">
-										<span>Ver por página</span>
-										<select
-											value={customerFilters.pageSize}
-											onChange={(event) =>
-												updateCustomerFilter('pageSize', Number(event.target.value))
-											}
-										>
-											<option value={12}>12</option>
-											<option value={24}>24</option>
-											<option value={48}>48</option>
-											<option value={96}>96</option>
-										</select>
-									</label>
-								</div>
-
-								<div className="campaign-customer-checks">
-									<label className="campaign-toggle">
-										<input
-											type="checkbox"
-											checked={customerFilters.hasPhoneOnly}
-											onChange={(event) =>
-												updateCustomerFilter('hasPhoneOnly', event.target.checked)
-											}
-										/>
-										<span>Solo clientes con teléfono</span>
-									</label>
-
-									<label className="campaign-toggle">
-										<input
-											type="checkbox"
-											checked={customerFilters.hasOrders}
-											onChange={(event) =>
-												updateCustomerFilter('hasOrders', event.target.checked)
-											}
-										/>
-										<span>Solo clientes con compras</span>
-									</label>
-								</div>
-							</div>
-						) : null}
-
 
 						<div className="campaign-audience-summary-grid">
 							<div className="campaign-audience-summary-card">
@@ -1504,17 +1509,16 @@ export default function CampaignComposerPanel({
 
 							{selectedProductFilters.length ? (
 								<div className="campaign-helper-inline-text">
-									Con los productos marcados, en la muestra actual coinciden {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s).
+									Con los filtros actuales, la muestra contiene {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s) con teléfono.
 								</div>
 							) : null}
-
 							{bulkSelectionInfo.count > 0 ? (
 								<div className="campaign-inline-success">
-									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) con los filtros actuales.
+									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) para esta campaña.
 								</div>
 							) : (
 								<div className="campaign-inline-warning">
-									Todavía no hiciste una selección masiva. Primero filtrá, después apretá el botón de seleccionar.
+									Todavía no seleccionaste destinatarios. Primero filtrá y después apretá el botón de seleccionar.
 								</div>
 							)}
 						</div>
@@ -1587,7 +1591,63 @@ export default function CampaignComposerPanel({
 							</div>
 						</div>
 					) : null}
+					
+					{form.audienceMode === 'customers' && showAudiencePreview ? (
+						<div className="campaign-recipient-preview-box">
+							<div className="campaign-recipient-preview-head">
+								<div>
+									<strong>Preview de destinatarios</strong>
+									<p>
+										Acá ves a quiénes se va a contactar. Podés sacar cualquiera antes de crear la campaña.
+									</p>
+								</div>
+								<span>
+									{formatCompactNumber(selectedCustomerCount)} seleccionado(s)
+								</span>
+							</div>
 
+							<div className="campaign-recipient-preview-table">
+								<div className="campaign-recipient-preview-row campaign-recipient-preview-row--head">
+									<span>Destinatario</span>
+									<span>Teléfono</span>
+									<span>Producto</span>
+									<span>Acción</span>
+								</div>
+
+								{previewCustomers.length ? (
+									previewCustomers.map((customer) => (
+										<div
+											key={customer.id}
+											className="campaign-recipient-preview-row"
+										>
+											<span>{getRecipientDisplayName(customer)}</span>
+											<span>{normalizePhone(customer.phone || '') || '—'}</span>
+											<span>{getRecipientProductPreview(customer) || '—'}</span>
+											<span>
+												<button
+													type="button"
+													className="button ghost danger"
+													onClick={() => removeSelectedCustomer(customer.id)}
+												>
+													Eliminar
+												</button>
+											</span>
+										</div>
+									))
+								) : (
+									<div className="campaign-recipient-preview-empty">
+										No hay destinatarios seleccionados para mostrar.
+									</div>
+								)}
+							</div>
+
+							{selectedCustomerCount > previewCustomers.length ? (
+								<div className="campaign-helper-inline-text">
+									Se muestran los primeros {formatCompactNumber(previewCustomers.length)} destinatarios del total seleccionado.
+								</div>
+							) : null}
+						</div>
+					) : null}
 					<label className="campaign-toggle">
 						<input
 							type="checkbox"
