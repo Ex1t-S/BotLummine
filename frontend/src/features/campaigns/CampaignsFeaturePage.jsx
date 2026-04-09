@@ -17,14 +17,6 @@ const TAB_DEFINITIONS = [
 			'Buscá, filtrá y elegí la plantilla con la que querés trabajar. Desde acá arrancás sin dar vueltas.',
 	},
 	{
-		id: 'builder',
-		label: 'Editor de template',
-		eyebrow: 'Templates',
-		title: 'Editor de template',
-		description:
-			'Modificá el contenido del template, revisá la vista previa y dejalo listo para usar en campañas.',
-	},
-	{
 		id: 'segment',
 		label: 'Segmentar campaña',
 		eyebrow: 'Campañas',
