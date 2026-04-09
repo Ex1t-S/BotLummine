@@ -17,6 +17,34 @@ function normalizeUrl(value = '') {
 	return String(value || '').trim().replace(/\/+$/, '');
 }
 
+function getRegisterSecret() {
+	return String(
+		process.env.TIENDANUBE_REGISTER_SECRET ||
+		process.env.TIENDANUBE_CLIENT_SECRET ||
+		''
+	).trim();
+}
+
+function isAuthorizedRegisterRequest(req) {
+	if (req.user) {
+		return true;
+	}
+
+	const expected = getRegisterSecret();
+	if (!expected) {
+		return false;
+	}
+
+	const provided = String(
+		req.headers['x-admin-secret'] ||
+		req.body?.secret ||
+		req.query?.secret ||
+		''
+	).trim();
+
+	return Boolean(provided) && provided === expected;
+}
+
 function buildInstallUrl() {
 	const appId = process.env.TIENDANUBE_APP_ID;
 	const redirectUri = process.env.TIENDANUBE_REDIRECT_URI;
@@ -150,7 +178,7 @@ async function ensureTiendanubeOrderWebhooks({ storeId, accessToken, webhookUrl 
 	};
 }
 
-async function resolveInstallationForWebhook(req, requestedStoreId = null) {
+async function resolveInstallationForWebhook(requestedStoreId = null) {
 	if (requestedStoreId) {
 		const byStore = await prisma.storeInstallation.findUnique({
 			where: { storeId: String(requestedStoreId) }
@@ -241,7 +269,14 @@ export async function handleTiendanubeCallback(req, res) {
 
 export async function registerTiendanubeWebhooks(req, res) {
 	try {
-		const installation = await resolveInstallationForWebhook(req, req.body?.storeId);
+		if (!isAuthorizedRegisterRequest(req)) {
+			return res.status(401).json({
+				ok: false,
+				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+			});
+		}
+
+		const installation = await resolveInstallationForWebhook(req.body?.storeId || req.query?.storeId);
 		const webhookUrl = buildOrdersWebhookUrl(req);
 		const result = await ensureTiendanubeOrderWebhooks({
 			storeId: installation.storeId,
@@ -281,6 +316,7 @@ export async function getTiendanubeStatus(_req, res) {
 			hasDatabaseInstallation: Boolean(installation),
 			hasEnvCredentials: Boolean(process.env.TIENDANUBE_STORE_ID && process.env.TIENDANUBE_ACCESS_TOKEN),
 			hasAppSecret: Boolean(process.env.TIENDANUBE_APP_SECRET || process.env.TIENDANUBE_CLIENT_SECRET),
+			hasRegisterSecret: Boolean(getRegisterSecret()),
 			activeSource: activeConfig?.source || null,
 			storeId: activeConfig?.storeId || installation?.storeId || null,
 			scope: installation?.scope || null,

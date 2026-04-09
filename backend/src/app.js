@@ -71,13 +71,21 @@ const corsOptions = {
 	},
 	credentials: true,
 	methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-	allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+	allowedHeaders: [
+		'Origin',
+		'X-Requested-With',
+		'Content-Type',
+		'Accept',
+		'Authorization',
+		'X-Admin-Secret'
+	]
 };
 
 app.use(cors(corsOptions));
 
 app.options('/api/auth/login', cors(corsOptions));
 app.options('/api/auth/me', cors(corsOptions));
+app.options('/api/tiendanube/webhooks/register', cors(corsOptions));
 
 app.use(morgan('dev'));
 app.use('/api/webhook/tiendanube', express.raw({ type: 'application/json', limit: '2mb' }));

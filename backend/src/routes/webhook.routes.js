@@ -9,7 +9,6 @@ const router = Router();
 
 router.get('/whatsapp', verifyWhatsappWebhook);
 router.post('/whatsapp', receiveWhatsappWebhook);
-
 router.post('/tiendanube/orders', receiveTiendanubeOrderWebhook);
 
 export default router;

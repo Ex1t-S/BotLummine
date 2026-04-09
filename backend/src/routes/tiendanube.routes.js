@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { attachUser, requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import {
   startTiendanubeInstall,
   handleTiendanubeCallback,
@@ -11,9 +11,8 @@ const router = Router();
 
 router.get('/callback', handleTiendanubeCallback);
 
-router.use(attachUser, requireAuth);
-router.get('/install', startTiendanubeInstall);
-router.get('/status', getTiendanubeStatus);
+router.get('/install', requireAuth, startTiendanubeInstall);
+router.get('/status', requireAuth, getTiendanubeStatus);
 router.post('/webhooks/register', registerTiendanubeWebhooks);
 
 export default router;
