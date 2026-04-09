@@ -756,26 +756,6 @@ export default function InboxPage() {
 		},
 	});
 
-	const deduplicateContactsMutation = useMutation({
-		mutationFn: async () => {
-			const res = await api.post('/dashboard/inbox/deduplicate');
-			return res.data;
-		},
-		onSuccess: async (data) => {
-			setSelectedConversationId(null);
-
-			await queryClient.invalidateQueries({
-				queryKey: ['dashboard', 'inbox'],
-			});
-
-			window.alert(
-				`Deduplicación lista.\n\nGrupos fusionados: ${data?.mergedGroups || 0}\nConversaciones removidas: ${data?.removedConversations || 0}\nContactos removidos: ${data?.removedContacts || 0}\nMensajes movidos: ${data?.movedMessages || 0}`
-			);
-		},
-		onError: (error) => {
-			console.error(error);
-		},
-	});
 
 	function handleSubmit(event) {
 		event.preventDefault();
@@ -831,26 +811,7 @@ export default function InboxPage() {
 						Conversaciones
 					</div>
 
-					<div className="inbox-section-actions">
-						{isAdmin ? (
-							<ActionButton
-								disabled={deduplicateContactsMutation.isPending}
-								onClick={() => {
-								const confirmed = window.confirm(
-									'Esto va a fusionar contactos y conversaciones duplicadas del inbox. ¿Continuar?'
-								);
-
-								if (confirmed) {
-									deduplicateContactsMutation.mutate();
-								}
-							}}
-							>
-								{deduplicateContactsMutation.isPending
-									? 'Deduplicando...'
-									: 'Deduplicar'}
-							</ActionButton>
-						) : null}
-					</div>
+					<div className="inbox-section-actions" />
 				</div>
 
 				<div className="inbox-search-box">

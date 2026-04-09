@@ -2,8 +2,8 @@
 	display: grid;
 	grid-template-columns: 320px minmax(0, 1fr);
 	gap: 16px;
-	height: calc(100vh - 120px);
-	min-height: calc(100vh - 120px);
+	height: calc(100vh - 28px);
+	min-height: calc(100vh - 28px);
 }
 
 .inbox-sidebar,
@@ -31,7 +31,6 @@
 .inbox-section-header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: 10px;
 	margin-bottom: 12px;
 }
@@ -92,9 +91,11 @@
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
-	padding-right: 4px;
+	padding-right: 6px;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
 }
-
 .inbox-empty {
 	color: #64748b;
 	font-size: 14px;
@@ -374,6 +375,9 @@
 	background: #efeae2;
 	display: flex;
 	flex-direction: column;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
 }
 
 .inbox-messages-list {
