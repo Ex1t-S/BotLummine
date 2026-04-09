@@ -211,6 +211,7 @@ export default function CustomersPage() {
 	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [selectedProducts, setSelectedProducts] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
+	const [showProductFilter, setShowProductFilter] = useState(false);
 	const pollRef = useRef(null);
 
 	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
@@ -510,29 +511,31 @@ export default function CustomersPage() {
 
 					<div className="customers-filter-group customers-filter-group--wide">
 						<label>Producto comprado</label>
-						<ProductMultiSelect
-							options={catalogOptions}
-							selectedValues={selectedProducts}
-							search={productSearch}
-							onSearchChange={setProductSearch}
-							onToggleValue={handleToggleProduct}
-							onClear={handleClearProducts}
-						/>
-
-						{selectedProducts.length ? (
-							<div className="selected-product-chips">
-								{selectedProducts.map((product) => (
-									<button
-										type="button"
-										key={product}
-										className="selected-product-chip"
-										onClick={() => handleRemoveSelectedProduct(product)}
-									>
-										<span>{product}</span>
-										<strong>×</strong>
-									</button>
-								))}
+						<button
+							type="button"
+							className="customers-product-toggle"
+							onClick={() => setShowProductFilter((current) => !current)}
+						>
+							<div>
+								<strong>{selectedProducts.length ? `${selectedProducts.length} seleccionados` : 'Abrir selector de productos'}</strong>
+								<span>
+									{selectedProducts.length
+										? selectedProducts.slice(0, 3).join(', ')
+										: 'Tocá acá para abrir el filtro de productos comprados.'}
+								</span>
 							</div>
+							<span>{showProductFilter ? '−' : '+'}</span>
+						</button>
+
+						{showProductFilter ? (
+							<ProductMultiSelect
+								options={catalogOptions}
+								selectedValues={selectedProducts}
+								search={productSearch}
+								onSearchChange={setProductSearch}
+								onToggleValue={handleToggleProduct}
+								onClear={handleClearProducts}
+							/>
 						) : null}
 					</div>
 

@@ -177,7 +177,9 @@ export async function postSyncAbandonedCarts(req, res, next) {
 		return res.json({
 			ok: true,
 			...result,
-			message: `Sync ${daysBack} días completada: ${result.syncedCount || result.count || 0} sincronizados y ${result.deletedCount || 0} eliminados fuera de ventana.`
+			deletedCount: Number(result.deletedCount ?? result.removedCount ?? 0),
+			remainingCount: Number(result.remainingCount ?? 0),
+			message: `Sync ${daysBack} días completada: ${result.syncedCount || result.count || 0} sincronizados y ${Number(result.deletedCount ?? result.removedCount ?? 0)} eliminados fuera de ventana.`
 		});
 	} catch (error) {
 		next(error);

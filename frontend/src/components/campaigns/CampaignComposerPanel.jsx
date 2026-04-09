@@ -16,14 +16,16 @@ const initialForm = {
 
 const initialCustomerFilters = {
 	q: '',
-	sort: 'updated_desc',
+	productQuery: '',
+	orderNumber: '',
+	dateFrom: '',
+	dateTo: '',
+	paymentStatus: '',
+	sort: 'purchase_desc',
 	page: 1,
 	pageSize: 24,
 	minSpent: '',
-	minOrders: '',
 	hasPhoneOnly: true,
-	hasOrders: true,
-	productQuery: '',
 };
 
 const VARIABLE_SOURCE_OPTIONS = [
@@ -553,22 +555,25 @@ export default function CampaignComposerPanel({
 	);
 
 	function buildCustomerRequestParams(nextFilters = customerFilters) {
+		const mergedProductQuery = selectedProductFilters.length
+			? selectedProductFilters.join('||')
+			: nextFilters.productQuery || '';
+
 		return {
 			q: nextFilters.q || '',
-			sort: nextFilters.sort || 'updated_desc',
+			productQuery: mergedProductQuery,
+			orderNumber: nextFilters.orderNumber || '',
+			dateFrom: nextFilters.dateFrom || '',
+			dateTo: nextFilters.dateTo || '',
+			paymentStatus: nextFilters.paymentStatus || '',
+			sort: nextFilters.sort || 'purchase_desc',
 			page: nextFilters.page || 1,
 			pageSize: nextFilters.pageSize || 24,
 			minSpent:
 				nextFilters.minSpent === '' || nextFilters.minSpent === null
 					? undefined
 					: Number(nextFilters.minSpent),
-			minOrders:
-				nextFilters.minOrders === '' || nextFilters.minOrders === null
-					? undefined
-					: Number(nextFilters.minOrders),
 			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
-			hasOrders: nextFilters.hasOrders ? 'true' : 'false',
-			productQuery: nextFilters.productQuery || '',
 		};
 	}
 
@@ -826,7 +831,7 @@ export default function CampaignComposerPanel({
 				form.audienceMode === 'customers'
 					? {
 						q: customerFilters.q || '',
-						sort: customerFilters.sort || 'updated_desc',
+						sort: customerFilters.sort || 'purchase_desc',
 						pageSize: customerFilters.pageSize || 24,
 						minSpent:
 							customerFilters.minSpent === '' ? null : Number(customerFilters.minSpent),
@@ -1120,7 +1125,7 @@ export default function CampaignComposerPanel({
 							</label>
 						</div>
 
-						<div className="campaign-builder-grid campaign-builder-grid--2 campaign-builder-grid--compact">
+						<div className="campaign-builder-grid campaign-builder-grid--4 campaign-builder-grid--compact">
 							<label className="field">
 								<span>Gasto mínimo</span>
 								<input
@@ -1132,13 +1137,27 @@ export default function CampaignComposerPanel({
 								/>
 							</label>
 							<label className="field">
-								<span>Compras mínimas</span>
+								<span>N° pedido</span>
 								<input
-									type="number"
-									min="0"
-									value={customerFilters.minOrders}
-									onChange={(event) => updateCustomerFilter('minOrders', event.target.value)}
-									placeholder="0"
+									value={customerFilters.orderNumber}
+									onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
+									placeholder="Ej. 23621"
+								/>
+							</label>
+							<label className="field">
+								<span>Compra desde</span>
+								<input
+									type="date"
+									value={customerFilters.dateFrom}
+									onChange={(event) => updateCustomerFilter('dateFrom', event.target.value)}
+								/>
+							</label>
+							<label className="field">
+								<span>Compra hasta</span>
+								<input
+									type="date"
+									value={customerFilters.dateTo}
+									onChange={(event) => updateCustomerFilter('dateTo', event.target.value)}
 								/>
 							</label>
 						</div>

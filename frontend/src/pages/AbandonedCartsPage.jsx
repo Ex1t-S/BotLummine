@@ -57,10 +57,7 @@ function getVisiblePages(currentPage, totalPages) {
 export default function AbandonedCartsPage() {
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
-	const [sendingId, setSendingId] = useState('');
-	const [expandedMessageId, setExpandedMessageId] = useState('');
 	const [filters, setFilters] = useState(initialFilters);
-	const [messageDrafts, setMessageDrafts] = useState({});
 	const [syncSummary, setSyncSummary] = useState(null);
 	const [data, setData] = useState({
 		carts: [],
@@ -87,15 +84,6 @@ export default function AbandonedCartsPage() {
 
 			setData(res.data);
 
-			const nextDrafts = {};
-			(res.data.carts || []).forEach((cart) => {
-				nextDrafts[cart.id] = cart.suggestedMessage || '';
-			});
-
-			setMessageDrafts((prev) => ({
-				...nextDrafts,
-				...prev
-			}));
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -122,7 +110,6 @@ export default function AbandonedCartsPage() {
 	}
 
 	async function handleResetFilters() {
-		setExpandedMessageId('');
 		setFilters(initialFilters);
 		await loadAbandonedCarts(initialFilters);
 	}
@@ -148,8 +135,7 @@ export default function AbandonedCartsPage() {
 			};
 
 			setFilters(next);
-			setExpandedMessageId('');
-			await loadAbandonedCarts(next);
+				await loadAbandonedCarts(next);
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -157,27 +143,6 @@ export default function AbandonedCartsPage() {
 		}
 	}
 
-	function handleOpenMessage(cartId) {
-		setExpandedMessageId((prev) => (prev === cartId ? '' : cartId));
-	}
-
-	async function handleConfirmWhatsApp(cartId) {
-		const body = String(messageDrafts[cartId] || '').trim();
-
-		if (!body) return;
-
-		setSendingId(cartId);
-
-		try {
-			await api.post(`/dashboard/abandoned-carts/${cartId}/message`, { body });
-			setExpandedMessageId('');
-			await loadAbandonedCarts(filters);
-		} catch (error) {
-			console.error(error);
-		} finally {
-			setSendingId('');
-		}
-	}
 
 	async function handlePageChange(nextPage) {
 		const totalPages = data.pagination?.totalPages || 1;
@@ -192,7 +157,6 @@ export default function AbandonedCartsPage() {
 		};
 
 		setFilters(next);
-		setExpandedMessageId('');
 		await loadAbandonedCarts(next);
 
 		window.scrollTo({
@@ -359,66 +323,11 @@ export default function AbandonedCartsPage() {
 								</div>
 							) : null}
 
-							<div className="abandoned-actions">
-								{cart.canOpenCart ? (
-									<a
-										href={cart.abandonedCheckoutUrl}
-										target="_blank"
-										rel="noreferrer"
-										className="secondary-link-btn"
-									>
-										Abrir carrito
-									</a>
-								) : (
-									<button type="button" className="secondary-link-btn" disabled>
-										Sin link
-									</button>
-								)}
-
-								<button
-									type="button"
-									className="primary-action-btn"
-									onClick={() => handleOpenMessage(cart.id)}
-									disabled={!cart.canMessage || sendingId === cart.id}
-								>
-									{expandedMessageId === cart.id ? 'Ocultar mensaje' : 'Enviar WhatsApp'}
-								</button>
+							<div className="abandoned-actions abandoned-actions--compact">
+								<span className={`status-badge status-${String(cart.status || 'NEW').toLowerCase()}`}>
+									{cart.statusLabel || cart.status || 'Nuevo'}
+								</span>
 							</div>
-
-							{expandedMessageId === cart.id ? (
-								<div className="abandoned-message-box">
-									<textarea
-										rows={4}
-										value={messageDrafts[cart.id] || ''}
-										onChange={(e) =>
-											setMessageDrafts((prev) => ({
-												...prev,
-												[cart.id]: e.target.value
-											}))
-										}
-										placeholder="Mensaje de recuperación..."
-									/>
-
-									<div className="abandoned-message-actions">
-										<button
-											type="button"
-											className="secondary-link-btn"
-											onClick={() => setExpandedMessageId('')}
-										>
-											Cancelar
-										</button>
-
-										<button
-											type="button"
-											className="primary-action-btn"
-											onClick={() => handleConfirmWhatsApp(cart.id)}
-											disabled={!cart.canMessage || sendingId === cart.id}
-										>
-											{sendingId === cart.id ? 'Enviando...' : 'Enviar ahora'}
-										</button>
-									</div>
-								</div>
-							) : null}
 
 							{cart.productsCount > 3 ? (
 								<p className="abandoned-extra-products">
