@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { prisma } from '../../lib/prisma.js';
-import { normalizeWhatsAppNumber, sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
+import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
+import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
 import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 
 function normalizeString(value, fallback = '') {
@@ -12,6 +13,11 @@ function normalizeString(value, fallback = '') {
 function safeArray(value) {
 	return Array.isArray(value) ? value : [];
 }
+
+function normalizeCampaignPhone(value = '') {
+	return normalizeWhatsAppIdentityPhone(value);
+}
+
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -87,7 +93,7 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 }
 
 function buildAbandonedCartVariables(cart = {}, contact = null) {
-	const normalizedPhone = normalizeWhatsAppNumber(cart.contactPhone || '');
+	const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 	const contactName = normalizeString(cart.contactName || contact?.name || '', normalizedPhone);
 	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
 	const checkoutUrl = normalizeString(cart.abandonedCheckoutUrl || '');
@@ -120,7 +126,7 @@ function dedupeRecipients(recipients = []) {
 	const seen = new Map();
 
 	for (const recipient of recipients) {
-		const normalizedPhone = normalizeWhatsAppNumber(recipient.phone || recipient.waId || '');
+		const normalizedPhone = normalizeCampaignPhone(recipient.phone || recipient.waId || '');
 
 		if (!normalizedPhone) {
 			continue;
@@ -236,7 +242,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	const latestByPhone = new Map();
 
 	for (const cart of rawCarts) {
-		const normalizedPhone = normalizeWhatsAppNumber(cart.contactPhone || '');
+		const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 		const checkoutUrl = normalizeString(cart.abandonedCheckoutUrl || '');
 
 		if (!normalizedPhone || !checkoutUrl) {
@@ -262,7 +268,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 
 	const carts = [...latestByPhone.values()].slice(0, filters.limit);
 	const normalizedPhones = carts
-		.map((cart) => normalizeWhatsAppNumber(cart.contactPhone || ''))
+		.map((cart) => normalizeCampaignPhone(cart.contactPhone || ''))
 		.filter(Boolean);
 
 	let contacts = [];
@@ -289,8 +295,8 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	const contactByPhone = new Map();
 	for (const contact of contacts) {
 		const keys = [
-			normalizeWhatsAppNumber(contact.waId || ''),
-			normalizeWhatsAppNumber(contact.phone || '')
+			normalizeCampaignPhone(contact.waId || ''),
+			normalizeCampaignPhone(contact.phone || '')
 		].filter(Boolean);
 
 		for (const key of keys) {
@@ -301,7 +307,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	}
 
 	return carts.map((cart) => {
-		const normalizedPhone = normalizeWhatsAppNumber(cart.contactPhone || '');
+		const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 		const contact = contactByPhone.get(normalizedPhone) || null;
 		const variables = buildAbandonedCartVariables(cart, contact);
 
@@ -395,7 +401,7 @@ export async function previewAbandonedCartAudience({
 }
 
 async function ensureCampaignConversation({ phone, contactId = null, contactName = null }) {
-	const normalizedPhone = normalizeWhatsAppNumber(phone);
+	const normalizedPhone = normalizeCampaignPhone(phone);
 
 	if (!normalizedPhone) {
 		return {
@@ -840,7 +846,7 @@ export async function createCampaignDraft({
 	const recipientRows = [];
 
 	for (const recipient of resolvedRecipients) {
-		const normalizedPhone = normalizeWhatsAppNumber(recipient.phone || recipient.waId || '');
+		const normalizedPhone = normalizeCampaignPhone(recipient.phone || recipient.waId || '');
 
 		if (!normalizedPhone) {
 			continue;
@@ -1173,7 +1179,7 @@ async function dispatchSingleRecipient(campaign, recipient) {
 	});
 
 	console.log('[CAMPAIGN][SEND] original phone:', recipient.phone);
-	console.log('[CAMPAIGN][SEND] normalized phone:', normalizeWhatsAppNumber(recipient.phone || ''));
+	console.log('[CAMPAIGN][SEND] normalized phone:', normalizeCampaignPhone(recipient.phone || ''));
 	console.log('[CAMPAIGN][SEND] template:', campaign.templateName, campaign.templateLanguage);
 	console.log('[CAMPAIGN][SEND] components:', JSON.stringify(componentsToSend, null, 2));
 

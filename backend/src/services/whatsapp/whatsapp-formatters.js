@@ -1,9 +1,7 @@
-import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
+import { normalizeWhatsAppDeliveryPhone } from '../../lib/phone-normalization.js';
 
-export function normalizeWhatsAppNumber(fromRaw) {
-	const original = String(fromRaw || '');
-	if (!original) return '';
-	return normalizeThreadPhone(original);
+export function normalizeWhatsAppNumber(value = '') {
+	return normalizeWhatsAppDeliveryPhone(value);
 }
 
 export function debugWhatsAppRecipient(label, data = {}) {

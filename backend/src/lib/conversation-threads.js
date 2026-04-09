@@ -1,6 +1,4 @@
-function normalizeDigits(value = '') {
-	return String(value || '').replace(/\D/g, '');
-}
+import { normalizeWhatsAppIdentityPhone } from './phone-normalization.js';
 
 function normalizeName(value = '') {
 	return String(value || '')
@@ -12,41 +10,12 @@ function normalizeName(value = '') {
 		.replace(/\s+/g, ' ');
 }
 
-function normalizeArgentinaWaId(digits = '') {
-	let d = normalizeDigits(digits);
-
-	if (!d) return '';
-
-	if (!d.startsWith('54')) {
-		return d;
-	}
-
-	// Ya viene en formato WhatsApp correcto: 549...
-	if (d.startsWith('549')) {
-		return d;
-	}
-
-	// Caso típico argentino local guardado como 54 + area + 15 + number
-	// Ej: 54292315562286 -> 5492923562286
-	if (d.startsWith('54') && d.includes('15')) {
-		const afterCountry = d.slice(2);
-		const idx15 = afterCountry.indexOf('15');
-
-		if (idx15 > 0) {
-			const area = afterCountry.slice(0, idx15);
-			const subscriber = afterCountry.slice(idx15 + 2);
-
-			if (area && subscriber) {
-				return `549${area}${subscriber}`;
-			}
-		}
-	}
-
-	return d;
+export function normalizeThreadPhone(value = '') {
+	return normalizeWhatsAppIdentityPhone(value);
 }
 
-export function normalizeThreadPhone(value = '') {
-	return normalizeArgentinaWaId(value);
+export function sameThreadPhone(left = '', right = '') {
+	return normalizeThreadPhone(left) === normalizeThreadPhone(right);
 }
 
 export function getThreadKeyFromContact(contact = {}) {
