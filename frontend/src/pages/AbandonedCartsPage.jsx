@@ -57,10 +57,7 @@ function getVisiblePages(currentPage, totalPages) {
 export default function AbandonedCartsPage() {
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
-	const [sendingId, setSendingId] = useState('');
-	const [expandedMessageId, setExpandedMessageId] = useState('');
 	const [filters, setFilters] = useState(initialFilters);
-	const [messageDrafts, setMessageDrafts] = useState({});
 	const [syncSummary, setSyncSummary] = useState(null);
 	const [data, setData] = useState({
 		carts: [],
@@ -87,15 +84,6 @@ export default function AbandonedCartsPage() {
 
 			setData(res.data);
 
-			const nextDrafts = {};
-			(res.data.carts || []).forEach((cart) => {
-				nextDrafts[cart.id] = cart.suggestedMessage || '';
-			});
-
-			setMessageDrafts((prev) => ({
-				...nextDrafts,
-				...prev
-			}));
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -118,12 +106,10 @@ export default function AbandonedCartsPage() {
 		e.preventDefault();
 		const next = { ...filters, page: 1 };
 		setFilters(next);
-		setExpandedMessageId('');
 		await loadAbandonedCarts(next);
 	}
 
 	async function handleResetFilters() {
-		setExpandedMessageId('');
 		setFilters(initialFilters);
 		await loadAbandonedCarts(initialFilters);
 	}
@@ -149,7 +135,6 @@ export default function AbandonedCartsPage() {
 			};
 
 			setFilters(next);
-			setExpandedMessageId('');
 			await loadAbandonedCarts(next);
 		} catch (error) {
 			console.error(error);
@@ -160,36 +145,6 @@ export default function AbandonedCartsPage() {
 			);
 		} finally {
 			setSyncing(false);
-		}
-	}
-
-	function handleOpenMessage(cartId) {
-		setExpandedMessageId((prev) => (prev === cartId ? '' : cartId));
-	}
-
-	async function handleConfirmWhatsApp(cartId) {
-		const body = String(messageDrafts[cartId] || '').trim();
-
-		if (!body) {
-			alert('El mensaje está vacío.');
-			return;
-		}
-
-		setSendingId(cartId);
-
-		try {
-			await api.post(`/dashboard/abandoned-carts/${cartId}/message`, { body });
-			setExpandedMessageId('');
-			await loadAbandonedCarts(filters);
-		} catch (error) {
-			console.error(error);
-			alert(
-				error?.response?.data?.error ||
-				error?.response?.data?.message ||
-				'No se pudo enviar el WhatsApp.'
-			);
-		} finally {
-			setSendingId('');
 		}
 	}
 
@@ -207,7 +162,6 @@ export default function AbandonedCartsPage() {
 
 		const next = { ...filters, page: nextPage };
 		setFilters(next);
-		setExpandedMessageId('');
 		await loadAbandonedCarts(next);
 
 		window.scrollTo({
@@ -397,50 +351,7 @@ export default function AbandonedCartsPage() {
 									</button>
 								)}
 
-								<button
-									type="button"
-									className="primary-action-btn"
-									onClick={() => handleOpenMessage(cart.id)}
-									disabled={!cart.canMessage || sendingId === cart.id}
-								>
-									{expandedMessageId === cart.id ? 'Ocultar mensaje' : 'Enviar WhatsApp'}
-								</button>
 							</div>
-
-							{expandedMessageId === cart.id ? (
-								<div className="abandoned-message-box">
-									<textarea
-										rows={4}
-										value={messageDrafts[cart.id] || ''}
-										onChange={(e) =>
-											setMessageDrafts((prev) => ({
-												...prev,
-												[cart.id]: e.target.value
-											}))
-										}
-										placeholder="Mensaje de recuperación..."
-									/>
-
-									<div className="abandoned-message-actions">
-										<button
-											type="button"
-											className="secondary-link-btn"
-											onClick={() => setExpandedMessageId('')}
-										>
-											Cancelar
-										</button>
-
-										<button
-											type="button"
-											className="primary-action-btn"
-											onClick={() => handleConfirmWhatsApp(cart.id)}
-											disabled={!cart.canMessage || sendingId === cart.id}
-										>
-											{sendingId === cart.id ? 'Enviando...' : 'Enviar ahora'}
-										</button>
-									</div>
-								</div>
-							) : null}
 						</article>
 					))}
 				</div>
