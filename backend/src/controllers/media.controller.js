@@ -1,5 +1,54 @@
 import fs from 'node:fs/promises';
-import { uploadWhatsAppMedia, resolveInboxMediaAbsolutePath } from '../services/whatsapp-media.service.js';
+import path from 'node:path';
+import { prisma } from '../lib/prisma.js';
+import {
+	uploadWhatsAppMedia,
+	resolveInboxMediaAbsolutePath,
+	getWhatsAppMediaMetadata,
+	downloadWhatsAppMediaBuffer
+} from '../services/whatsapp-media.service.js';
+
+async function tryRestoreMissingInboxMedia(fileName) {
+	const safeFileName = String(fileName || '').trim();
+	if (!safeFileName) return false;
+
+	const message = await prisma.message.findFirst({
+		where: {
+			attachmentUrl: {
+				contains: safeFileName
+			}
+		},
+		select: {
+			attachmentMimeType: true,
+			attachmentName: true,
+			rawPayload: true
+		},
+		orderBy: {
+			createdAt: 'desc'
+		}
+	});
+
+	if (!message) return false;
+
+	const attachmentId =
+		message?.rawPayload?.attachment?.id ||
+		null;
+
+	if (!attachmentId) return false;
+
+	const metadata = await getWhatsAppMediaMetadata({
+		attachmentId,
+		mimeType: message.attachmentMimeType || ''
+	});
+
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url);
+	const absolutePath = resolveInboxMediaAbsolutePath(safeFileName);
+
+	await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+	await fs.writeFile(absolutePath, buffer);
+
+	return true;
+}
 
 export async function serveInboxMediaController(req, res) {
 	const fileName = String(req.params?.fileName || '').trim();
@@ -13,7 +62,18 @@ export async function serveInboxMediaController(req, res) {
 
 	try {
 		const absolutePath = resolveInboxMediaAbsolutePath(fileName);
-		const stats = await fs.stat(absolutePath).catch(() => null);
+		let stats = await fs.stat(absolutePath).catch(() => null);
+
+		if (!stats || !stats.isFile()) {
+			const restored = await tryRestoreMissingInboxMedia(fileName).catch((error) => {
+				console.error('[MEDIA][RESTORE ERROR]', fileName, error?.message || error);
+				return false;
+			});
+
+			if (restored) {
+				stats = await fs.stat(absolutePath).catch(() => null);
+			}
+		}
 
 		if (!stats || !stats.isFile()) {
 			return res.status(404).json({
