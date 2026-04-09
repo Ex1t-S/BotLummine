@@ -741,7 +741,7 @@ function buildSendComponentsFromTemplate({
 export async function listCampaigns({ limit = 50 } = {}) {
 	return prisma.campaign.findMany({
 		orderBy: [{ createdAt: 'desc' }],
-		take: Math.max(1, Math.min(Number(limit) || 50, 200)),
+		take: Math.max(1, Math.min(Number(limit) || 50, 1000)),
 		include: {
 			recipients: {
 				orderBy: [{ createdAt: 'desc' }],
@@ -761,7 +761,7 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 	}
 
 	const currentPage = Math.max(1, Number(page) || 1);
-	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || 50, 200));
+	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || 50, 1000));
 
 	const [template, totalRecipients, recipients] = await Promise.all([
 		campaign.templateLocalId
