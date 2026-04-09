@@ -537,7 +537,6 @@ export default function InboxPage() {
 		});
 	}, [contacts, selectedConversationId]);
 
-	
 	useEffect(() => {
 		if (!filteredContacts.length) {
 			setSelectedConversationId(null);
@@ -563,58 +562,58 @@ export default function InboxPage() {
 		setSelectedConversationId(preferredId);
 	}, [filteredContacts, selectedConversationId, inboxQuery.data]);
 
-		const conversationQuery = useQuery({
-			queryKey: queryKeys.conversation(selectedConversationId),
-			queryFn: async () => {
-				const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`);
-				return res.data;
-			},
-			enabled: Boolean(selectedConversationId),
-			placeholderData: (previousData) => previousData,
-			refetchInterval: () =>
-				selectedConversationId && isDocumentVisible() ? 3000 : false,
-			refetchIntervalInBackground: false,
-			...queryPresets.conversation,
+	const conversationQuery = useQuery({
+		queryKey: queryKeys.conversation(selectedConversationId),
+		queryFn: async () => {
+			const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`);
+			return res.data;
+		},
+		enabled: Boolean(selectedConversationId),
+		placeholderData: (previousData) => previousData,
+		refetchInterval: () =>
+			selectedConversationId && isDocumentVisible() ? 3000 : false,
+		refetchIntervalInBackground: false,
+		...queryPresets.conversation,
+	});
+
+	const conversation = conversationQuery.data?.conversation || null;
+
+	const activeContact = useMemo(() => {
+		return (
+			filteredContacts.find(
+				(contact) => contact.conversationId === selectedConversationId
+			) ||
+			contacts.find(
+				(contact) => contact.conversationId === selectedConversationId
+			) ||
+			null
+		);
+	}, [filteredContacts, contacts, selectedConversationId]);
+
+	useEffect(() => {
+		if (!selectedConversationId || !conversation) return;
+
+		const currentTimestamp = toTimestamp(
+			conversation?.lastMessageAt || activeContact?.lastMessageAt
+		);
+
+		if (currentTimestamp > 0) {
+			lastInboxSnapshotRef.current[selectedConversationId] = currentTimestamp;
+			writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
+		}
+
+		setNewMessageCounts((prev) => {
+			if (!prev[selectedConversationId]) return prev;
+			const next = { ...prev };
+			delete next[selectedConversationId];
+			return next;
 		});
-
-		const conversation = conversationQuery.data?.conversation || null;
-
-		const activeContact = useMemo(() => {
-			return (
-				filteredContacts.find(
-					(contact) => contact.conversationId === selectedConversationId
-				) ||
-				contacts.find(
-					(contact) => contact.conversationId === selectedConversationId
-				) ||
-				null
-			);
-		}, [filteredContacts, contacts, selectedConversationId]);
-
-		useEffect(() => {
-			if (!selectedConversationId || !conversation) return;
-
-			const currentTimestamp = toTimestamp(
-				conversation?.lastMessageAt || activeContact?.lastMessageAt
-			);
-
-			if (currentTimestamp > 0) {
-				lastInboxSnapshotRef.current[selectedConversationId] = currentTimestamp;
-				writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
-			}
-
-			setNewMessageCounts((prev) => {
-				if (!prev[selectedConversationId]) return prev;
-				const next = { ...prev };
-				delete next[selectedConversationId];
-				return next;
-			});
-		}, [
-			selectedConversationId,
-			conversation?.lastMessageAt,
-			conversation?.messages?.length,
-			activeContact?.lastMessageAt,
-		]);
+	}, [
+		selectedConversationId,
+		conversation?.lastMessageAt,
+		conversation?.messages?.length,
+		activeContact?.lastMessageAt,
+	]);
 
 	useEffect(() => {
 		const el = messagesContainerRef.current;
@@ -690,6 +689,7 @@ export default function InboxPage() {
 		onSuccess: async () => {
 			setMessageText('');
 			setShowEmojiPicker(false);
+			shouldStickToBottomRef.current = true;
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
@@ -755,6 +755,7 @@ export default function InboxPage() {
 			console.error(error);
 		},
 	});
+
 	function handleMessagesScroll() {
 		const el = messagesContainerRef.current;
 		if (!el) return;
@@ -994,9 +995,9 @@ export default function InboxPage() {
 										<ActionButton
 											danger
 											disabled={
-											resetContextMutation.isPending ||
-											!selectedConversationId
-										}
+												resetContextMutation.isPending ||
+												!selectedConversationId
+											}
 											onClick={() => resetContextMutation.mutate()}
 										>
 											Reiniciar IA
@@ -1005,18 +1006,18 @@ export default function InboxPage() {
 										<ActionButton
 											danger
 											disabled={
-											clearHistoryMutation.isPending ||
-											!selectedConversationId
-										}
-											onClick={() => {
-											const confirmed = window.confirm(
-												'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
-											);
-
-											if (confirmed) {
-												clearHistoryMutation.mutate();
+												clearHistoryMutation.isPending ||
+												!selectedConversationId
 											}
-										}}
+											onClick={() => {
+												const confirmed = window.confirm(
+													'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
+												);
+
+												if (confirmed) {
+													clearHistoryMutation.mutate();
+												}
+											}}
 										>
 											Borrar historial
 										</ActionButton>
@@ -1030,23 +1031,24 @@ export default function InboxPage() {
 							className="inbox-messages"
 							onScroll={handleMessagesScroll}
 						>
-						<div className="inbox-messages-list">
-							{conversationQuery.isLoading ? (
-								<div className="inbox-empty">Cargando mensajes...</div>
-							) : null}
+							<div className="inbox-messages-list">
+								{conversationQuery.isLoading ? (
+									<div className="inbox-empty">Cargando mensajes...</div>
+								) : null}
 
-							{!conversationQuery.isLoading &&
-							(conversation?.messages || []).length === 0 ? (
-								<div className="inbox-empty">
-									Esta conversación todavía no tiene mensajes.
-								</div>
-							) : null}
+								{!conversationQuery.isLoading &&
+								(conversation?.messages || []).length === 0 ? (
+									<div className="inbox-empty">
+										Esta conversación todavía no tiene mensajes.
+									</div>
+								) : null}
 
-							{(conversation?.messages || []).map((msg) => (
-								<MessageBubble key={msg.id} message={msg} />
-							))}
+								{(conversation?.messages || []).map((msg) => (
+									<MessageBubble key={msg.id} message={msg} />
+								))}
+							</div>
 						</div>
-						</div>
+
 						<div className="inbox-composer-shell">
 							<form onSubmit={handleSubmit} className="inbox-composer">
 								<div className="inbox-composer-leading" ref={emojiPickerRef}>

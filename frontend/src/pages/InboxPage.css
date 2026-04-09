@@ -7,6 +7,7 @@
 	min-width: 0;
 	overflow: hidden;
 }
+
 .inbox-sidebar,
 .inbox-chat-panel {
 	background: #ffffff;
@@ -17,6 +18,7 @@
 	height: 100%;
 	overflow: hidden;
 }
+
 .inbox-sidebar {
 	display: grid;
 	grid-template-rows: auto auto auto minmax(0, 1fr);
@@ -183,7 +185,7 @@
 }
 
 .inbox-contact-name {
-	font-size: 16px;
+	font-size: 17px;
 	font-weight: 700;
 	color: #0f172a;
 	overflow: hidden;
@@ -216,6 +218,7 @@
 	color: #64748b;
 	margin-bottom: 6px;
 }
+
 .inbox-contact-preview-row {
 	display: flex;
 	align-items: flex-start;
@@ -239,7 +242,7 @@
 }
 
 .inbox-contact-preview {
-	font-size: 14px;
+	font-size: 15px;
 	color: #334155;
 	line-height: 1.45;
 	overflow: hidden;
@@ -247,11 +250,13 @@
 	max-height: calc(1.45em * 2);
 	word-break: break-word;
 }
+
 .inbox-chat-panel {
 	display: flex;
 	flex-direction: column;
 	background: #f0f2f5;
 	min-height: 0;
+	overflow: hidden;
 }
 
 .inbox-chat-header {
@@ -366,6 +371,7 @@
 	background: #f0f2f5;
 	min-height: 0;
 }
+
 .inbox-messages {
 	flex: 1 1 auto;
 	min-height: 0;
@@ -379,17 +385,19 @@
 }
 
 .inbox-messages-list {
-	min-height: 100%;
 	display: flex;
 	flex-direction: column;
-	justify-content: flex-end;
+	gap: 0;
+	min-height: auto;
 }
+
 .inbox-composer-shell {
 	flex: 0 0 auto;
 	border-top: none;
 	padding: 8px 12px 12px;
 	background: transparent;
 }
+
 .inbox-composer {
 	display: flex;
 	align-items: flex-end;
