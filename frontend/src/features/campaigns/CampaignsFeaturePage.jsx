@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import CampaignComposerPanel from '../../components/campaigns/CampaignComposerPanel.jsx';
 import CampaignRunsPanel from '../../components/campaigns/CampaignRunsPanel.jsx';
 import TemplateBuilderPanel from '../../components/campaigns/TemplateBuilderPanel.jsx';
@@ -6,37 +7,78 @@ import AbandonedCartCampaignPanel from './components/AbandonedCartCampaignPanel.
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 
-function PageSection({ title, description, children, className = '' }) {
+const TAB_DEFINITIONS = [
+	{
+		id: 'library',
+		label: 'Biblioteca de templates',
+		title: 'Biblioteca de templates',
+		description:
+			'Buscá, filtrá y elegí la plantilla con la que querés trabajar. Desde acá arrancás sin dar vueltas.',
+	},
+	{
+		id: 'builder',
+		label: 'Editor de template',
+		title: 'Editor de template',
+		description:
+			'Modificá el contenido del template, revisá la vista previa y dejalo listo para usar en campañas.',
+	},
+	{
+		id: 'audience',
+		label: 'Audiencia',
+		title: 'Audiencia y recuperación',
+		description:
+			'Definí a quién escribir con filtros claros, vista previa y creación directa para carritos abandonados.',
+	},
+	{
+		id: 'launch',
+		label: 'Lanzamiento',
+		title: 'Lanzamiento',
+		description:
+			'Configurá la campaña, elegí el mensaje y dejala lista para salir sin mezclar esto con el historial.',
+	},
+	{
+		id: 'tracking',
+		label: 'Seguimiento',
+		title: 'Seguimiento',
+		description:
+			'Revisá estados, resultados y destinatarios desde una vista separada para controlar lo que ya salió.',
+	},
+];
+
+function DashboardTabButton({ tab, isActive, onClick, badge }) {
 	return (
-		<section className={`campaign-stage ${className}`.trim()}>
-			<div className="campaign-stage-header campaign-stage-header--compact campaign-stage-header--plain">
+		<button
+			type="button"
+			className={`campaigns-tab-button ${isActive ? 'is-active' : ''}`.trim()}
+			onClick={() => onClick(tab.id)}
+		>
+			<span className="campaigns-tab-button__label">{tab.label}</span>
+			{badge !== null && badge !== undefined ? (
+				<span className="campaigns-tab-button__badge">{badge}</span>
+			) : null}
+		</button>
+	);
+}
+
+function CampaignSectionShell({ eyebrow, title, description, sidebar, children }) {
+	return (
+		<section className="campaigns-tab-shell page-card campaign-shell-card">
+			<div className="campaigns-tab-shell__header">
 				<div>
+					{eyebrow ? <span className="campaigns-tab-shell__eyebrow">{eyebrow}</span> : null}
 					<h3>{title}</h3>
 					{description ? <p>{description}</p> : null}
 				</div>
+				{sidebar ? <div className="campaigns-tab-shell__sidebar">{sidebar}</div> : null}
 			</div>
-			{children}
+			<div className="campaigns-tab-shell__body">{children}</div>
 		</section>
 	);
 }
 
-function StageCard({ title, description, children, className = '' }) {
+function SummaryCard({ label, value }) {
 	return (
-		<div className={`campaign-stage-card ${className}`.trim()}>
-			<div className="campaign-stage-card-header">
-				<div>
-					<h4>{title}</h4>
-					{description ? <p>{description}</p> : null}
-				</div>
-			</div>
-			<div className="campaign-stage-card-body">{children}</div>
-		</div>
-	);
-}
-
-function SummaryItem({ label, value, muted = false }) {
-	return (
-		<div className={`campaign-summary-item${muted ? ' is-muted' : ''}`}>
+		<div className="campaigns-summary-card">
 			<span>{label}</span>
 			<strong>{value}</strong>
 		</div>
@@ -59,179 +101,201 @@ export default function CampaignsFeaturePage() {
 		abandonedCart,
 	} = useCampaignsDashboard();
 
+	const [activeTab, setActiveTab] = useState('library');
+
+	const currentTab = useMemo(
+		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
+		[activeTab]
+	);
+
 	const approvedTemplates = Number(overview.approvedTemplatesCount || 0);
-	const activeCampaigns = Number(overview.activeCampaignsCount || 0);
-	const recipients = Number(overview.recipientsCount || 0);
-	const estimatedCost = Number(overview.estimatedMonthlyCostUsd || 0);
+	const campaignsCount = Number(overview.campaignsCount || campaigns.length || 0);
+	const recipientsCount = Number(overview.recipientsCount || 0);
+	const estimatedCost = `USD ${Number(overview.estimatedMonthlyCostUsd || 0).toFixed(2)}`;
+
+	const summary = (
+		<div className="campaigns-summary-panel">
+			<SummaryCard label="Template activo" value={selectedTemplate?.name || 'Sin seleccionar'} />
+			<SummaryCard label="Campaña en foco" value={selectedCampaign?.name || 'Sin seleccionar'} />
+			<SummaryCard label="Destinatarios" value={recipientsCount} />
+			<SummaryCard label="Actividad estimada" value={estimatedCost} />
+		</div>
+	);
+
+	function renderContent() {
+		switch (activeTab) {
+			case 'library':
+				return (
+					<CampaignSectionShell
+						eyebrow="Templates"
+						title="Biblioteca de templates"
+						description={currentTab.description}
+						sidebar={summary}
+					>
+						<TemplateLibraryPanel
+							templates={templates}
+							selectedTemplateId={selectedTemplate?.id}
+							onSelectTemplate={setSelectedTemplate}
+							onSync={() => mutations.sync.mutate()}
+							syncing={mutations.sync.isPending}
+							onDeleteTemplate={(template) => {
+								const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
+								if (confirmed) {
+									mutations.deleteTemplate.mutate(template.id);
+								}
+							}}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'builder':
+				return (
+					<CampaignSectionShell
+						eyebrow="Templates"
+						title="Editor de template"
+						description={currentTab.description}
+						sidebar={summary}
+					>
+						<TemplateBuilderPanel
+							selectedTemplate={selectedTemplate}
+							creating={mutations.createTemplate.isPending}
+							updating={mutations.updateTemplate.isPending}
+							onCreateTemplate={(payload) => mutations.createTemplate.mutateAsync(payload)}
+							onUpdateTemplate={(templateId, payload) =>
+								mutations.updateTemplate.mutateAsync({ templateId, payload })
+							}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'audience':
+				return (
+					<CampaignSectionShell
+						eyebrow="Audiencia"
+						title="Audiencia y recuperación"
+						description={currentTab.description}
+						sidebar={summary}
+					>
+						<AbandonedCartCampaignPanel
+							templates={templates}
+							selectedTemplate={selectedTemplate}
+							onSelectTemplate={setSelectedTemplate}
+							form={abandonedCart.form}
+							onUpdateField={abandonedCart.updateField}
+							preview={abandonedCart.preview}
+							previewing={mutations.abandonedPreview.isPending}
+							creating={mutations.createAbandonedCampaign.isPending}
+							onPreview={abandonedCart.handlePreview}
+							onCreate={abandonedCart.handleCreate}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'launch':
+				return (
+					<CampaignSectionShell
+						eyebrow="Campañas"
+						title="Lanzamiento"
+						description={currentTab.description}
+						sidebar={summary}
+					>
+						<CampaignComposerPanel
+							templates={templates}
+							selectedTemplate={selectedTemplate}
+							onSelectTemplate={setSelectedTemplate}
+							onCreateCampaign={(payload) => mutations.createCampaign.mutateAsync(payload)}
+							creating={mutations.createCampaign.isPending}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'tracking':
+				return (
+					<CampaignSectionShell
+						eyebrow="Campañas"
+						title="Seguimiento"
+						description={currentTab.description}
+						sidebar={summary}
+					>
+						<CampaignRunsPanel
+							campaigns={campaigns}
+							selectedCampaign={selectedCampaign}
+							onSelectCampaign={(campaign) => setSelectedCampaignId(campaign.id)}
+							onDispatch={(campaignId) => mutations.action.mutate({ type: 'dispatch', campaignId })}
+							onPause={(campaignId) => mutations.action.mutate({ type: 'pause', campaignId })}
+							onResume={(campaignId) => mutations.action.mutate({ type: 'resume', campaignId })}
+							onDelete={(campaign) => {
+								if (!campaign?.id) return;
+
+								const confirmed = window.confirm(
+									`¿Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
+								);
+
+								if (!confirmed) return;
+
+								mutations.deleteCampaign.mutate(campaign.id);
+							}}
+							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
+							deleteLoading={mutations.deleteCampaign.isPending}
+							tracking={tracking}
+						/>
+					</CampaignSectionShell>
+				);
+
+			default:
+				return null;
+		}
+	}
 
 	return (
-		<section className="campaigns-page campaign-page-stack">
-			<div className="campaign-page-feedback-row">
-				<CampaignFeedbackAlert feedback={feedback} />
-			</div>
+		<section className="campaigns-page campaigns-page--tabs">
+			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--tabs">
+				<div className="campaigns-hero-copy campaigns-hero-copy--full">
+					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
+					<h2>Creación y seguimiento de campañas</h2>
+					<p className="campaigns-hero-lead">
+						Creá campañas de WhatsApp, elegí audiencia, editá templates y seguí resultados desde
+						un solo lugar sin perderte en paneles gigantes.
+					</p>
 
-			<div className="campaign-builder-layout">
-				<div className="campaign-builder-main">
-					<PageSection
-						title="Audiencia"
-						description="Definí a quién escribir sin abrir y cerrar paneles a cada rato."
-					>
-						<StageCard
-							title="Carritos abandonados"
-							description="Armá una audiencia lista para usar con filtros, vista previa y creación directa."
-						>
-							<AbandonedCartCampaignPanel
-								templates={templates}
-								selectedTemplate={selectedTemplate}
-								onSelectTemplate={setSelectedTemplate}
-								form={abandonedCart.form}
-								onUpdateField={abandonedCart.updateField}
-								preview={abandonedCart.preview}
-								previewing={mutations.abandonedPreview.isPending}
-								creating={mutations.createAbandonedCampaign.isPending}
-								onPreview={abandonedCart.handlePreview}
-								onCreate={abandonedCart.handleCreate}
-							/>
-						</StageCard>
-					</PageSection>
+					<CampaignFeedbackAlert feedback={feedback} />
 
-					<PageSection
-						title="Templates y mensaje"
-						description="Elegí una base y editála en la misma vista, sin acordeones gigantes peleando por tu atención."
-					>
-						<div className="campaign-section-grid campaign-section-grid--editor campaign-stage-cards-grid">
-							<StageCard
-								title="Biblioteca"
-								description="Buscá, filtrá y elegí la plantilla con la que querés trabajar."
-							>
-								<TemplateLibraryPanel
-									templates={templates}
-									selectedTemplateId={selectedTemplate?.id}
-									onSelectTemplate={setSelectedTemplate}
-									onSync={() => mutations.sync.mutate()}
-									syncing={mutations.sync.isPending}
-									onDeleteTemplate={(template) => {
-										const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
-										if (confirmed) {
-											mutations.deleteTemplate.mutate(template.id);
-										}
-									}}
-								/>
-							</StageCard>
-
-							<StageCard
-								title="Editor"
-								description="Modificá el contenido y dejá el template listo para usar."
-							>
-								<TemplateBuilderPanel
-									selectedTemplate={selectedTemplate}
-									creating={mutations.createTemplate.isPending}
-									updating={mutations.updateTemplate.isPending}
-									onCreateTemplate={(payload) => mutations.createTemplate.mutateAsync(payload)}
-									onUpdateTemplate={(templateId, payload) =>
-										mutations.updateTemplate.mutateAsync({ templateId, payload })
-									}
-								/>
-							</StageCard>
-						</div>
-					</PageSection>
-
-					<PageSection
-						title="Lanzamiento"
-						description="Configurá la campaña y dejala lista para salir."
-					>
-						<StageCard
-							title="Crear campaña manual"
-							description="Elegí el template, definí el envío y creá la campaña."
-						>
-							<CampaignComposerPanel
-								templates={templates}
-								selectedTemplate={selectedTemplate}
-								onSelectTemplate={setSelectedTemplate}
-								onCreateCampaign={(payload) => mutations.createCampaign.mutateAsync(payload)}
-								creating={mutations.createCampaign.isPending}
-							/>
-						</StageCard>
-					</PageSection>
-				</div>
-
-				<aside className="campaign-builder-sidebar">
-					<div className="campaign-summary-card">
-						<div className="campaign-summary-card-header">
-							<span className="campaigns-eyebrow">Resumen</span>
-							<h3>Vista general de la campaña</h3>
-							<p>
-								Mientras configurás, acá tenés a mano lo importante sin perderte entre bloques.
-							</p>
-						</div>
-
-						<div className="campaign-summary-grid">
-							<SummaryItem label="Templates aprobados" value={approvedTemplates} />
-							<SummaryItem label="Campañas activas" value={activeCampaigns} />
-							<SummaryItem label="Destinatarios" value={recipients} />
-							<SummaryItem label="Actividad estimada" value={`USD ${estimatedCost.toFixed(2)}`} />
-						</div>
-
-						<div className="campaign-summary-divider" />
-
-						<div className="campaign-summary-list">
-							<SummaryItem
-								label="Template seleccionado"
-								value={selectedTemplate?.name || 'Todavía no elegiste uno'}
-								muted={!selectedTemplate}
-							/>
-							<SummaryItem
-								label="Idioma"
-								value={selectedTemplate?.language || '—'}
-								muted={!selectedTemplate?.language}
-							/>
-							<SummaryItem
-								label="Campaña en foco"
-								value={selectedCampaign?.name || 'Todavía no seleccionaste una'}
-								muted={!selectedCampaign}
-							/>
-							<SummaryItem
-								label="Estado actual"
-								value={selectedCampaign?.status || 'Borrador'}
-								muted={!selectedCampaign?.status}
-							/>
-						</div>
+					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campañas">
+						<DashboardTabButton
+							tab={TAB_DEFINITIONS[0]}
+							isActive={activeTab === 'library'}
+							onClick={setActiveTab}
+							badge={approvedTemplates}
+						/>
+						<DashboardTabButton
+							tab={TAB_DEFINITIONS[1]}
+							isActive={activeTab === 'builder'}
+							onClick={setActiveTab}
+							badge={selectedTemplate ? 'OK' : '—'}
+						/>
+						<DashboardTabButton
+							tab={TAB_DEFINITIONS[2]}
+							isActive={activeTab === 'audience'}
+							onClick={setActiveTab}
+							badge={recipientsCount}
+						/>
+						<DashboardTabButton
+							tab={TAB_DEFINITIONS[3]}
+							isActive={activeTab === 'launch'}
+							onClick={setActiveTab}
+							badge={campaignsCount}
+						/>
+						<DashboardTabButton
+							tab={TAB_DEFINITIONS[4]}
+							isActive={activeTab === 'tracking'}
+							onClick={setActiveTab}
+							badge={campaignsCount}
+						/>
 					</div>
-				</aside>
+				</div>
 			</div>
 
-			<PageSection
-				title="Seguimiento"
-				description="Historial y estado de campañas en una sección aparte, sin mezclarlo con la creación."
-			>
-				<StageCard
-					title="Historial"
-					description="Revisá resultados, estados y acciones disponibles."
-				>
-					<CampaignRunsPanel
-						campaigns={campaigns}
-						selectedCampaign={selectedCampaign}
-						onSelectCampaign={(campaign) => setSelectedCampaignId(campaign.id)}
-						onDispatch={(campaignId) => mutations.action.mutate({ type: 'dispatch', campaignId })}
-						onPause={(campaignId) => mutations.action.mutate({ type: 'pause', campaignId })}
-						onResume={(campaignId) => mutations.action.mutate({ type: 'resume', campaignId })}
-						onDelete={(campaign) => {
-							if (!campaign?.id) return;
-
-							const confirmed = window.confirm(
-								`¿Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
-							);
-
-							if (!confirmed) return;
-
-							mutations.deleteCampaign.mutate(campaign.id);
-						}}
-						actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
-						deleteLoading={mutations.deleteCampaign.isPending}
-						tracking={tracking}
-					/>
-				</StageCard>
-			</PageSection>
+			{renderContent()}
 		</section>
 	);
 }
