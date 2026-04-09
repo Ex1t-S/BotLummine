@@ -445,14 +445,6 @@ export default function WhatsAppMenuPage() {
 
 								<div className="wam-form-grid">
 									<label>
-										<span>Clave interna</span>
-										<input
-											value={selectedMenu.key}
-											onChange={(event) => updateMenuField(selectedMenu.key, 'key', event.target.value)}
-										/>
-									</label>
-
-									<label>
 										<span>Título</span>
 										<input
 											value={selectedMenu.title}
@@ -476,6 +468,17 @@ export default function WhatsAppMenuPage() {
 										/>
 									</label>
 
+									<label>
+										<span>Orden</span>
+										<input
+											type="number"
+											value={selectedMenu.sortOrder || 1}
+											onChange={(event) =>
+												updateMenuField(selectedMenu.key, 'sortOrder', Number(event.target.value) || 1)
+											}
+										/>
+									</label>
+
 									<label className="wam-form-grid__full">
 										<span>Cuerpo</span>
 										<textarea
@@ -493,22 +496,11 @@ export default function WhatsAppMenuPage() {
 										/>
 									</label>
 
-									<label>
+									<label className="wam-form-grid__full">
 										<span>Título de sección</span>
 										<input
 											value={selectedMenu.sectionTitle || ''}
 											onChange={(event) => updateMenuField(selectedMenu.key, 'sectionTitle', event.target.value)}
-										/>
-									</label>
-
-									<label>
-										<span>Orden</span>
-										<input
-											type="number"
-											value={selectedMenu.sortOrder || 1}
-											onChange={(event) =>
-												updateMenuField(selectedMenu.key, 'sortOrder', Number(event.target.value) || 1)
-											}
 										/>
 									</label>
 								</div>
@@ -556,28 +548,10 @@ export default function WhatsAppMenuPage() {
 
 												<div className="wam-form-grid">
 													<label>
-														<span>ID</span>
-														<input
-															value={option.id}
-															onChange={(event) => updateOptionField(selectedMenu.key, option.id, 'id', event.target.value)}
-														/>
-													</label>
-
-													<label>
 														<span>Título</span>
 														<input
 															value={option.title}
 															onChange={(event) => updateOptionField(selectedMenu.key, option.id, 'title', event.target.value)}
-														/>
-													</label>
-
-													<label className="wam-form-grid__full">
-														<span>Descripción</span>
-														<input
-															value={option.description || ''}
-															onChange={(event) =>
-																updateOptionField(selectedMenu.key, option.id, 'description', event.target.value)
-															}
 														/>
 													</label>
 
@@ -609,6 +583,16 @@ export default function WhatsAppMenuPage() {
 																	'sortOrder',
 																	Number(event.target.value) || index + 1
 																)
+															}
+														/>
+													</label>
+
+													<label className="wam-form-grid__full">
+														<span>Descripción</span>
+														<input
+															value={option.description || ''}
+															onChange={(event) =>
+																updateOptionField(selectedMenu.key, option.id, 'description', event.target.value)
 															}
 														/>
 													</label>
