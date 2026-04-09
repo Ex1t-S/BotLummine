@@ -390,6 +390,8 @@ export default function CampaignComposerPanel({
 	onSelectTemplate,
 	onCreateCampaign,
 	creating,
+	audienceModeOptions = ['customers', 'manual'],
+	lockedAudienceMode = null,
 }) {
 	const [form, setForm] = useState(initialForm);
 	const [uploadingImage, setUploadingImage] = useState(false);
@@ -429,6 +431,13 @@ export default function CampaignComposerPanel({
 			onSelectTemplate(templates[0]);
 		}
 	}, [templates, selectedTemplate, onSelectTemplate]);
+
+
+	useEffect(() => {
+		if (lockedAudienceMode && form.audienceMode !== lockedAudienceMode) {
+			setForm((current) => ({ ...current, audienceMode: lockedAudienceMode }));
+		}
+	}, [lockedAudienceMode, form.audienceMode]);
 
 	useEffect(() => {
 		setUploadedMediaId('');
@@ -952,31 +961,37 @@ export default function CampaignComposerPanel({
 						/>
 					</label>
 
-					<div className="campaign-audience-choice-clean">
-						<button
-							type="button"
-							className={`campaign-choice-card ${form.audienceMode === 'customers' ? 'active' : ''}`}
-							onClick={() => {
-								setForm((current) => ({ ...current, audienceMode: 'customers' }));
-								setSubmitError('');
-							}}
-						>
-							<strong>Clientes</strong>
-							<span>Usá filtros y productos comprados</span>
-						</button>
+					{audienceModeOptions.length > 1 && !lockedAudienceMode ? (
+						<div className="campaign-audience-choice-clean">
+							{audienceModeOptions.includes('customers') ? (
+								<button
+									type="button"
+									className={`campaign-choice-card ${form.audienceMode === 'customers' ? 'active' : ''}`}
+									onClick={() => {
+										setForm((current) => ({ ...current, audienceMode: 'customers' }));
+										setSubmitError('');
+									}}
+								>
+									<strong>Clientes</strong>
+									<span>Usá filtros y productos comprados</span>
+								</button>
+							) : null}
 
-						<button
-							type="button"
-							className={`campaign-choice-card ${form.audienceMode === 'manual' ? 'active' : ''}`}
-							onClick={() => {
-								setForm((current) => ({ ...current, audienceMode: 'manual' }));
-								setSubmitError('');
-							}}
-						>
-							<strong>Lista manual</strong>
-							<span>Un contacto por línea: telefono|nombre|producto|talle|color</span>
-						</button>
-					</div>
+							{audienceModeOptions.includes('manual') ? (
+								<button
+									type="button"
+									className={`campaign-choice-card ${form.audienceMode === 'manual' ? 'active' : ''}`}
+									onClick={() => {
+										setForm((current) => ({ ...current, audienceMode: 'manual' }));
+										setSubmitError('');
+									}}
+								>
+									<strong>Lista manual</strong>
+									<span>Un contacto por línea: telefono|nombre|producto|talle|color</span>
+								</button>
+							) : null}
+						</div>
+					) : null}
 
 					{requiresHeaderImage ? (
 						<div className="field">
