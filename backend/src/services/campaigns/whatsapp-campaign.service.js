@@ -18,7 +18,6 @@ function normalizeCampaignPhone(value = '') {
 	return normalizeWhatsAppIdentityPhone(value);
 }
 
-
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -92,7 +91,7 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 	);
 }
 
-function buildAbandonedCartVariables(cart = {}, contact = null) {
+function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder = null) {
 	const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 	const contactName = normalizeString(cart.contactName || contact?.name || '', normalizedPhone);
 	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
@@ -101,24 +100,35 @@ function buildAbandonedCartVariables(cart = {}, contact = null) {
 	const totalFormatted = formatCurrency(cart.totalAmount, cart.currency || 'ARS');
 	const checkoutId = normalizeString(cart.checkoutId || '');
 
+	const lastOrderId = normalizeString(lastOrder?.orderId || '');
+	const lastOrderNumber = normalizeString(lastOrder?.orderNumber || '');
+
 	return {
 		'1': firstName,
 		'2': checkoutUrl,
 		'3': primaryProductName,
 		'4': totalFormatted,
 		'5': checkoutId,
+
 		contact_name: contactName,
 		first_name: firstName,
 		wa_id: normalizedPhone,
 		phone: normalizedPhone,
+
 		checkout_url: checkoutUrl,
 		abandoned_checkout_url: checkoutUrl,
+
 		product_name: primaryProductName,
 		first_product_name: primaryProductName,
+
 		total_amount: totalFormatted,
 		total_raw: cart.totalAmount != null ? String(cart.totalAmount) : '',
+
 		checkout_id: checkoutId,
-		cart_status: normalizeString(cart.status || '')
+		cart_status: normalizeString(cart.status || ''),
+
+		last_order_id: lastOrderId,
+		last_order_number: lastOrderNumber
 	};
 }
 
@@ -201,6 +211,53 @@ async function resolveRecipientsFromAllContacts() {
 		isOptedOut: contact.marketingOptIn === false || Boolean(contact.marketingOptedOutAt),
 		optOutReason: contact.marketingOptOutReason || 'opted_out'
 	}));
+}
+
+async function resolveLatestOrdersByPhones(normalizedPhones = []) {
+	const uniquePhones = [...new Set(
+		safeArray(normalizedPhones)
+			.map((phone) => normalizeCampaignPhone(phone))
+			.filter(Boolean)
+	)];
+
+	if (!uniquePhones.length) {
+		return new Map();
+	}
+
+	const orders = await prisma.customerOrder.findMany({
+		where: {
+			normalizedPhone: {
+				in: uniquePhones
+			}
+		},
+		select: {
+			id: true,
+			orderId: true,
+			orderNumber: true,
+			normalizedPhone: true,
+			orderCreatedAt: true,
+			orderUpdatedAt: true,
+			createdAt: true
+		},
+		orderBy: [
+			{ orderCreatedAt: 'desc' },
+			{ orderUpdatedAt: 'desc' },
+			{ createdAt: 'desc' }
+		]
+	});
+
+	const latestByPhone = new Map();
+
+	for (const order of orders) {
+		const phone = normalizeCampaignPhone(order.normalizedPhone || '');
+		if (!phone || latestByPhone.has(phone)) {
+			continue;
+		}
+
+		latestByPhone.set(phone, order);
+	}
+
+	return latestByPhone;
 }
 
 async function resolveRecipientsFromAbandonedCarts(input = {}) {
@@ -292,6 +349,8 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 		});
 	}
 
+	const latestOrderByPhone = await resolveLatestOrdersByPhones(normalizedPhones);
+
 	const contactByPhone = new Map();
 	for (const contact of contacts) {
 		const keys = [
@@ -309,7 +368,8 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	return carts.map((cart) => {
 		const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 		const contact = contactByPhone.get(normalizedPhone) || null;
-		const variables = buildAbandonedCartVariables(cart, contact);
+		const lastOrder = latestOrderByPhone.get(normalizedPhone) || null;
+		const variables = buildAbandonedCartVariables(cart, contact, lastOrder);
 
 		return {
 			contactId: contact?.id || null,
