@@ -396,17 +396,22 @@
 }
 
 .pagination-row {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	margin-top: 6px;
+	margin: 10px auto 0;
+	padding: 6px 10px;
 	flex-wrap: wrap;
+	width: fit-content;
+	max-width: 100%;
+	border-radius: 16px;
 }
 
 .pagination-row button {
 	min-width: 40px;
 	height: 40px;
+	padding: 0 12px;
 	border-radius: 12px;
 	border: 1px solid #dbe3ee;
 	background: #ffffff;
@@ -415,6 +420,7 @@
 	font-weight: 700;
 	cursor: pointer;
 	transition: 0.2s ease;
+	flex: 0 0 auto;
 }
 
 .pagination-row button:hover:not(:disabled) {
@@ -433,10 +439,15 @@
 }
 
 .pagination-ellipsis {
-	padding: 0 4px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 24px;
+	height: 40px;
 	color: #64748b;
 	font-size: 16px;
 	font-weight: 700;
+	flex: 0 0 auto;
 }
 
 @media (max-width: 1200px) {

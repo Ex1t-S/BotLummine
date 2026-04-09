@@ -60,6 +60,34 @@ function formatDateTime(value) {
 	}
 }
 
+
+function formatPaymentStatusLabel(value) {
+	const key = String(value || '').trim().toLowerCase();
+	const labels = {
+		pending: 'Pendiente',
+		authorized: 'Autorizado',
+		paid: 'Pagado',
+		partially_paid: 'Parcial',
+		abandoned: 'Abandonado',
+		refunded: 'Reembolsado',
+		partially_refunded: 'Reembolso parcial',
+		voided: 'Anulado',
+	};
+
+	return labels[key] || (value ? String(value) : 'Sin dato');
+}
+
+function getPaymentStatusTone(value) {
+	const key = String(value || '').trim().toLowerCase();
+
+	if (key === 'paid') return 'is-paid';
+	if (key === 'authorized' || key === 'partially_paid') return 'is-authorized';
+	if (key === 'pending') return 'is-pending';
+	if (key === 'refunded' || key === 'partially_refunded' || key === 'voided') return 'is-refunded';
+	if (key === 'abandoned') return 'is-abandoned';
+	return 'is-neutral';
+}
+
 function normalizeStats(payload = {}) {
 	const stats = payload.stats || {};
 	return {
@@ -516,16 +544,25 @@ export default function CustomersPage() {
 							className="customers-product-toggle"
 							onClick={() => setShowProductFilter((current) => !current)}
 						>
-							<div>
-								<strong>{selectedProducts.length ? `${selectedProducts.length} seleccionados` : 'Abrir selector de productos'}</strong>
-								<span>
-									{selectedProducts.length
-										? selectedProducts.slice(0, 3).join(', ')
-										: 'Tocá acá para abrir el filtro de productos comprados.'}
-								</span>
-							</div>
-							<span>{showProductFilter ? '−' : '+'}</span>
+							<span className="customers-product-toggle-label">Selector de productos</span>
 						</button>
+
+						{selectedProducts.length ? (
+							<div className="selected-product-chips">
+								{selectedProducts.map((productName) => (
+									<button
+										key={productName}
+										type="button"
+										className="selected-product-chip"
+										onClick={() => handleRemoveSelectedProduct(productName)}
+										title="Quitar producto"
+									>
+										<span>{productName}</span>
+										<strong>×</strong>
+									</button>
+								))}
+							</div>
+						) : null}
 
 						{showProductFilter ? (
 							<ProductMultiSelect
@@ -570,9 +607,11 @@ export default function CustomersPage() {
               <option value="pending">Pendiente</option>
               <option value="authorized">Autorizado</option>
               <option value="paid">Pagado</option>
-              <option value="cancelled">Cancelado</option>
-              <option value="voided">Anulado</option>
+              <option value="partially_paid">Pago parcial</option>
+              <option value="abandoned">Abandonado</option>
               <option value="refunded">Reembolsado</option>
+              <option value="partially_refunded">Reembolso parcial</option>
+              <option value="voided">Anulado</option>
             </select>
           </div>
 					<div className="customers-filter-group">
@@ -670,6 +709,13 @@ export default function CustomersPage() {
 									<div className="customer-meta-chip">
 										<span>Unidades</span>
 										<strong>{customer.totalUnitsPurchased || 0}</strong>
+									</div>
+								</div>
+
+								<div className="customer-status-row">
+									<div className={`customer-payment-badge ${getPaymentStatusTone(customer.paymentStatus)}`}>
+										<span>Pago</span>
+										<strong>{formatPaymentStatusLabel(customer.paymentStatus)}</strong>
 									</div>
 								</div>
 
