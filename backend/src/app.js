@@ -17,6 +17,7 @@ import whatsappMenuRoutes from './routes/whatsapp-menu.routes.js';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 
 const allowedOrigins = [
 	'http://localhost:5173',
@@ -79,6 +80,7 @@ app.options('/api/auth/login', cors(corsOptions));
 app.options('/api/auth/me', cors(corsOptions));
 
 app.use(morgan('dev'));
+app.use('/api/webhook/tiendanube', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

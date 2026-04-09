@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import { prisma } from '../lib/prisma.js';
 import { processInboundMessage } from '../services/chat.service.js';
 import { saveInboundWhatsAppMedia } from '../services/whatsapp-media.service.js';
 import { applyCampaignMessageStatusWebhook } from '../services/whatsapp-campaign.service.js';
@@ -7,6 +9,11 @@ import {
 	applyTemplateCategoryWebhook,
 	applyTemplateComponentsWebhook
 } from '../services/whatsapp-template.service.js';
+import {
+	fetchTiendanubeOrderById,
+	upsertTiendanubeOrder,
+	resolveStoreCredentials
+} from '../services/customer.service.js';
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
@@ -162,6 +169,75 @@ async function processTemplateWebhook(change = {}) {
 	}
 }
 
+function getTiendanubeAppSecret() {
+	return String(
+		process.env.TIENDANUBE_APP_SECRET ||
+		process.env.TIENDANUBE_CLIENT_SECRET ||
+		''
+	).trim();
+}
+
+function timingSafeEquals(a = '', b = '') {
+	const left = Buffer.from(String(a), 'utf8');
+	const right = Buffer.from(String(b), 'utf8');
+
+	if (left.length !== right.length) {
+		return false;
+	}
+
+	return crypto.timingSafeEqual(left, right);
+}
+
+function isSupportedTiendanubeOrderEvent(event = '') {
+	const normalized = String(event || '').trim().toLowerCase();
+	return [
+		'order/created',
+		'order/updated',
+		'order/paid',
+		'order/pending',
+		'order/voided',
+		'order/cancelled',
+		'order/edited',
+		'order/packed',
+		'order/fulfilled',
+		'order/unpacked'
+	].includes(normalized);
+}
+
+async function resolveWebhookStoreCredentials(storeId) {
+	const normalizedStoreId = String(storeId || '').trim();
+	if (!normalizedStoreId) {
+		return resolveStoreCredentials();
+	}
+
+	const installation = await prisma.storeInstallation.findFirst({
+		where: { storeId: normalizedStoreId },
+		orderBy: { updatedAt: 'desc' },
+		select: { storeId: true, accessToken: true }
+	});
+
+	if (installation?.storeId && installation?.accessToken) {
+		return {
+			storeId: installation.storeId,
+			accessToken: installation.accessToken,
+			source: 'storeInstallation'
+		};
+	}
+
+	const envStoreId = String(process.env.TIENDANUBE_STORE_ID || '').trim();
+	const envAccessToken = String(process.env.TIENDANUBE_ACCESS_TOKEN || '').trim();
+
+	if (envStoreId && envAccessToken && envStoreId === normalizedStoreId) {
+		return {
+			storeId: envStoreId,
+			accessToken: envAccessToken,
+			source: 'env'
+		};
+	}
+
+	throw new Error(`No se encontraron credenciales para la tienda ${normalizedStoreId}.`);
+}
+
 export function verifyWhatsappWebhook(req, res) {
 	const mode = req.query['hub.mode'];
 	const token = req.query['hub.verify_token'];
@@ -204,5 +280,93 @@ export async function receiveWhatsappWebhook(req, res) {
 		}
 	} catch (error) {
 		console.error('Error webhook WhatsApp:', error);
+	}
+}
+
+export async function receiveTiendanubeOrderWebhook(req, res) {
+	try {
+		const appSecret = getTiendanubeAppSecret();
+
+		if (!appSecret) {
+			return res.status(500).json({
+				ok: false,
+				error: 'Falta TIENDANUBE_APP_SECRET o TIENDANUBE_CLIENT_SECRET.'
+			});
+		}
+
+		const rawBodyBuffer = Buffer.isBuffer(req.body)
+			? req.body
+			: Buffer.from(req.body || '');
+
+		const rawBody = rawBodyBuffer.toString('utf8');
+		const signatureHeader =
+			req.headers['x-linkedstore-hmac-sha256'] ||
+			req.headers['http_x_linkedstore_hmac_sha256'];
+
+		const expectedSignature = crypto
+			.createHmac('sha256', appSecret)
+			.update(rawBodyBuffer)
+			.digest('hex');
+
+		if (!signatureHeader || !timingSafeEquals(String(signatureHeader), expectedSignature)) {
+			return res.status(401).json({
+				ok: false,
+				error: 'Firma de webhook Tiendanube inválida.'
+			});
+		}
+
+		let payload = {};
+		try {
+			payload = rawBody ? JSON.parse(rawBody) : {};
+		} catch (error) {
+			return res.status(400).json({
+				ok: false,
+				error: `Webhook Tiendanube inválido: ${error.message}`
+			});
+		}
+
+		const event = String(payload?.event || '').trim().toLowerCase();
+		const resourceId = String(payload?.id || '').trim();
+		const storeId = String(payload?.store_id || '').trim();
+
+		if (!event || !resourceId || !storeId) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Webhook Tiendanube incompleto. Se esperaba event, id y store_id.'
+			});
+		}
+
+		if (!isSupportedTiendanubeOrderEvent(event)) {
+			return res.status(200).json({
+				ok: true,
+				ignored: true,
+				reason: 'Evento no manejado'
+			});
+		}
+
+		const credentials = await resolveWebhookStoreCredentials(storeId);
+		const order = await fetchTiendanubeOrderById({
+			storeId: credentials.storeId,
+			accessToken: credentials.accessToken,
+			orderId: resourceId
+		});
+
+		const saved = await upsertTiendanubeOrder(order, credentials.storeId);
+
+		return res.status(200).json({
+			ok: true,
+			event,
+			storeId: credentials.storeId,
+			orderId: resourceId,
+			source: credentials.source,
+			ordersUpserted: saved.ordersUpserted,
+			itemsUpserted: saved.itemsUpserted
+		});
+	} catch (error) {
+		console.error('[TIENDANUBE][WEBHOOK][ERROR]', error);
+		return res.status(500).json({
+			ok: false,
+			error: error?.message || 'No se pudo procesar el webhook de Tiendanube.'
+		});
 	}
 }

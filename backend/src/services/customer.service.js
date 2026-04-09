@@ -9,6 +9,27 @@ const UPDATE_BATCH_SIZE = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_UPDAT
 const ITEM_BATCH_SIZE = Math.max(50, Number(process.env.TIENDANUBE_ORDER_ITEMS_BATCH_SIZE || 500));
 const MAX_MONTH_WINDOWS_PER_SYNC = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_MAX_MONTH_WINDOWS || 120));
 const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES_PER_WINDOW || 120));
+const ORDER_FIELDS = [
+	'id',
+	'number',
+	'created_at',
+	'updated_at',
+	'total',
+	'currency',
+	'payment_status',
+	'shipping_status',
+	'contact_name',
+	'contact_email',
+	'contact_phone',
+	'contact_identification',
+	'status',
+	'subtotal',
+	'gateway',
+	'gateway_id',
+	'gateway_name',
+	'gateway_link',
+	'products'
+].join(',');
 
 const syncState = {
 	running: false,
@@ -220,20 +241,7 @@ async function fetchOrdersPage({
 	const params = new URLSearchParams({
 		page: String(page),
 		per_page: String(perPage),
-		fields: [
-			'id',
-			'number',
-			'created_at',
-			'updated_at',
-			'total',
-			'currency',
-			'payment_status',
-			'shipping_status',
-			'contact_name',
-			'contact_email',
-			'contact_phone',
-			'products',
-		].join(','),
+		fields: ORDER_FIELDS,
 	});
 
 	if (createdAtMin) params.set('created_at_min', createdAtMin.toISOString());
@@ -544,6 +552,30 @@ async function upsertOrdersAndItems(orders, storeId) {
 	}
 
 	return { ordersUpserted: orders.length, itemsUpserted: items.length };
+}
+
+
+export async function fetchTiendanubeOrderById({ storeId, accessToken, orderId }) {
+	const normalizedOrderId = String(orderId || '').trim();
+	if (!storeId || !accessToken || !normalizedOrderId) {
+		throw new Error('fetchTiendanubeOrderById requiere storeId, accessToken y orderId.');
+	}
+
+	const params = new URLSearchParams({ fields: ORDER_FIELDS });
+	const url = `https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/orders/${normalizedOrderId}?${params.toString()}`;
+	const payload = await fetchJson(url, accessToken, `pedido ${normalizedOrderId}`);
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		throw new Error(`La respuesta de Tiendanube para el pedido ${normalizedOrderId} no fue un objeto válido.`);
+	}
+	return payload;
+}
+
+export async function upsertTiendanubeOrder(order, storeId) {
+	if (!order || !order.id) {
+		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
+	}
+
+	return upsertOrdersAndItems([order], storeId);
 }
 
 async function processWindow({ storeId, accessToken, from, to, label }) {
