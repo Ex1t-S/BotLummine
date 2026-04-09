@@ -5,7 +5,6 @@ import TemplateLibraryPanel from '../../components/campaigns/TemplateLibraryPane
 import CampaignAccordion from './components/CampaignAccordion.jsx';
 import AbandonedCartCampaignPanel from './components/AbandonedCartCampaignPanel.jsx';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
-import CampaignOverviewGrid from './components/CampaignOverviewGrid.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 
 function PageSection({ eyebrow, title, description, actions = null, children, className = '' }) {
@@ -26,56 +25,25 @@ function PageSection({ eyebrow, title, description, actions = null, children, cl
 
 export default function CampaignsFeaturePage() {
 	const {
-	feedback,
-	overview,
-	templates,
-	campaigns,
-	selectedTemplate,
-	setSelectedTemplate,
-	selectedCampaign,
-	setSelectedCampaignId,
-	queries,
-	mutations,
-	tracking,
-	abandonedCart,
-} = useCampaignsDashboard();
-
-	const approvedTemplates = Number(overview.approvedTemplatesCount || 0);
-	const activeCampaigns = Number(overview.activeCampaignsCount || 0);
-	const recipients = Number(overview.recipientsCount || 0);
-	const estimatedCost = Number(overview.estimatedMonthlyCostUsd || 0);
+		feedback,
+		templates,
+		campaigns,
+		selectedTemplate,
+		setSelectedTemplate,
+		selectedCampaign,
+		setSelectedCampaignId,
+		queries,
+		mutations,
+		tracking,
+		abandonedCart,
+	} = useCampaignsDashboard();
 
 	return (
 		<section className="campaigns-page campaign-page-stack">
 			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--clean">
 				<div className="campaigns-hero-copy">
 					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
-					<h2>Campañas simples de crear y fáciles de seguir</h2>
-					<p className="campaigns-hero-lead">
-						Elegí audiencia, mensaje y lanzamiento sin enterrarte en opciones técnicas. La idea es vender más, no pelearte con el panel.
-					</p>
-
-					<div className="campaigns-hero-highlights campaigns-hero-highlights--compact">
-						<div className="campaigns-hero-highlight">
-							<strong>{approvedTemplates}</strong>
-							<span>templates aprobados</span>
-						</div>
-
-						<div className="campaigns-hero-highlight">
-							<strong>{activeCampaigns}</strong>
-							<span>activas o en cola</span>
-						</div>
-
-						<div className="campaigns-hero-highlight">
-							<strong>{recipients}</strong>
-							<span>destinatarios</span>
-						</div>
-
-						<div className="campaigns-hero-highlight accent">
-							<strong>USD {estimatedCost.toFixed(2)}</strong>
-							<span>actividad estimada</span>
-						</div>
-					</div>
+					<h2>Creación y seguimiento de campañas</h2>
 
 					<div className="campaigns-mini-steps">
 						<span>1. Audiencia</span>
@@ -87,19 +55,8 @@ export default function CampaignsFeaturePage() {
 
 				<div className="campaigns-hero-side campaigns-hero-side--stack">
 					<CampaignFeedbackAlert feedback={feedback} />
-
-					<div className="campaign-quick-guide campaign-quick-guide--compact">
-						<div className="campaign-quick-guide-title">Inicio rápido</div>
-						<div className="campaign-quick-guide-pills">
-							<span>Elegí template</span>
-							<span>Definí audiencia</span>
-							<span>Creá campaña</span>
-						</div>
-					</div>
 				</div>
 			</div>
-
-			<CampaignOverviewGrid overview={overview} />
 
 			<div className="campaign-workflow-strip page-card campaign-shell-card campaign-workflow-strip--clean">
 				<div className="campaign-workflow-step is-active">
