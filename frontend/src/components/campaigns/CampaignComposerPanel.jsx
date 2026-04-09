@@ -305,7 +305,6 @@ function buildManualContext(row = {}, extraVariables = {}) {
 		...extraVariables,
 	};
 }
-
 function extractProductLabels(customer = {}) {
 	const labels = [];
 
@@ -321,10 +320,23 @@ function extractProductLabels(customer = {}) {
 			}
 
 			const value =
-				item?.name || item?.productName || item?.title || item?.label || item?.variantName || '';
+				item?.name ||
+				item?.productName ||
+				item?.title ||
+				item?.label ||
+				item?.variantName ||
+				'';
 
 			if (typeof value === 'string' && value.trim()) {
 				labels.push(value.trim());
+			}
+		}
+	}
+
+	if (Array.isArray(customer.productsPreview)) {
+		for (const item of customer.productsPreview) {
+			if (typeof item === 'string' && item.trim()) {
+				labels.push(item.trim());
 			}
 		}
 	}
@@ -634,9 +646,7 @@ export default function CampaignComposerPanel({
 		if (!selectedProductFilters.length) return 0;
 
 		return customerAudience.customers.filter(
-			(customer) =>
-				Boolean(normalizePhone(customer.phone || '')) &&
-				customerMatchesSelectedProducts(customer, selectedProductFilters)
+			(customer) => Boolean(normalizePhone(customer.phone || ''))
 		).length;
 	}, [customerAudience.customers, selectedProductFilters]);
 
@@ -826,9 +836,7 @@ export default function CampaignComposerPanel({
 			const allCustomers = await fetchAllFilteredCustomers(customerFilters);
 
 			const selectableCustomers = allCustomers.filter(
-				(customer) =>
-					Boolean(normalizePhone(customer.phone || '')) &&
-					customerMatchesSelectedProducts(customer, selectedProductFilters)
+				(customer) => Boolean(normalizePhone(customer.phone || ''))
 			);
 
 			setSelectedCustomersMap((current) => ({
