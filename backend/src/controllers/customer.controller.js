@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import {
 	getCustomerSyncStatus as getCustomerSyncStatusService,
 	syncCustomers as syncCustomersService,
-} from '../services/customer.service.js';
+} from '../services/customers/customer.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')

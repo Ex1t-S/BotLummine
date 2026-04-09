@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma.js';
-import { syncAbandonedCarts } from '../services/abandoned-cart.service.js';
-import { getOrCreateConversation, sendAndPersistOutbound } from '../services/chat.service.js';
+import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
+import { getOrCreateConversation, sendAndPersistOutbound } from '../services/conversation/chat.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
+
 
 function ensureAbandonedCartModel() {
 	if (!prisma?.abandonedCart) {

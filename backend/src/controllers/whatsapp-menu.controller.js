@@ -3,7 +3,7 @@ import {
 	getWhatsAppMenuRuntimeConfig,
 	resetWhatsAppMenuSettings,
 	updateWhatsAppMenuSettings
-} from '../services/whatsapp-menu.service.js';
+} from '../services/whatsapp/whatsapp-menu.service.js';
 
 export async function getWhatsAppMenu(req, res) {
 	const settings = await getWhatsAppMenuSettings();

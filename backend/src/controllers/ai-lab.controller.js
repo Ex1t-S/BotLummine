@@ -4,7 +4,8 @@ import {
 	getAiLabSession,
 	resetAiLabSession,
 	sendAiLabMessage
-} from '../services/ai-lab.service.js';
+} from '../services/ai/ai-lab.service.js';
+
 
 export async function getAiLabFixtures(_req, res, next) {
 	try {

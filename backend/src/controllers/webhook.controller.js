@@ -1,19 +1,19 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
-import { processInboundMessage } from '../services/chat.service.js';
-import { saveInboundWhatsAppMedia } from '../services/whatsapp-media.service.js';
-import { applyCampaignMessageStatusWebhook } from '../services/whatsapp-campaign.service.js';
+import { processInboundMessage } from '../services/conversation/chat.service.js';
+import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
+import { applyCampaignMessageStatusWebhook } from '../services/campaigns/whatsapp-campaign.service.js';
 import {
 	applyTemplateStatusWebhook,
 	applyTemplateQualityWebhook,
 	applyTemplateCategoryWebhook,
 	applyTemplateComponentsWebhook
-} from '../services/whatsapp-template.service.js';
+} from '../services/whatsapp/whatsapp-template.service.js';
 import {
 	fetchTiendanubeOrderById,
 	upsertTiendanubeOrder,
 	resolveStoreCredentials
-} from '../services/customer.service.js';
+} from '../services/customers/customer.service.js';
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';

@@ -6,7 +6,7 @@ import {
 	resolveInboxMediaAbsolutePath,
 	getWhatsAppMediaMetadata,
 	downloadWhatsAppMediaBuffer
-} from '../services/whatsapp-media.service.js';
+} from '../services/whatsapp/whatsapp-media.service.js';
 
 async function tryRestoreMissingInboxMedia(fileName) {
 	const safeFileName = String(fileName || '').trim();

@@ -1,5 +1,5 @@
 import app from './app.js';
-import { startCampaignDispatcher } from './services/campaign-dispatcher.service.js';
+import { startCampaignDispatcher } from './services/campaigns/campaign-dispatcher.service.js';
 
 const PORT = process.env.PORT || 3000;
 

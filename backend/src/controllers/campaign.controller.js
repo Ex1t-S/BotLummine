@@ -7,8 +7,8 @@ import {
 	getCampaignDetail,
 	retryFailedCampaignRecipients,
 	previewAbandonedCartAudience,
-} from '../services/whatsapp-campaign.service.js';
-import { executeCampaignDispatcherTick } from '../services/campaign-dispatcher.service.js';
+} from '../services/campaigns/whatsapp-campaign.service.js';
+import { executeCampaignDispatcherTick } from '../services/campaigns/campaign-dispatcher.service.js';
 import {
 	createTemplate,
 	updateTemplate,
@@ -17,8 +17,8 @@ import {
 	listLocalTemplates,
 	getTemplateOrThrow,
 	renderTemplatePreviewFromComponents,
-} from '../services/whatsapp-template.service.js';
-import { getCampaignStats } from '../services/campaign-stats.service.js';
+} from '../services/whatsapp/whatsapp-template.service.js';
+import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
 import {
 	normalizeBoolean,
 	persistTemplateBuilderMetadata,
