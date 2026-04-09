@@ -1,0 +1,30 @@
+.template-library-header-actions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.template-list-card-top-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.template-builder-header-actions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+@media (max-width: 900px) {
+	.template-library-header-actions,
+	.template-builder-header-actions,
+	.template-list-card-top-actions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+}

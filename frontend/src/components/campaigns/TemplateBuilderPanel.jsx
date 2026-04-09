@@ -311,6 +311,8 @@ function extractUploadValue(response = {}, keys = []) {
 
 export default function TemplateBuilderPanel({
 	selectedTemplate,
+	builderModeRequest = 'edit',
+	onBackToLibrary,
 	onCreateTemplate,
 	onUpdateTemplate,
 	creating,
@@ -331,7 +333,20 @@ export default function TemplateBuilderPanel({
 		}
 		setLocalError('');
 	}, [selectedTemplate?.id]);
+	useEffect(() => {
+		if (builderModeRequest === 'create') {
+			setForcedCreateMode(true);
+			setForm({ ...defaultForm });
+			setLocalError('');
+			return;
+		}
 
+		if (builderModeRequest === 'edit' && selectedTemplate?.id) {
+			setForcedCreateMode(false);
+			setForm(mapTemplateToForm(selectedTemplate));
+			setLocalError('');
+		}
+	}, [builderModeRequest, selectedTemplate]);
 	const isEditingSelectedTemplate = Boolean(selectedTemplate?.id) && !forcedCreateMode;
 	const isReadOnlyTemplate = isEditingSelectedTemplate && isMetaSampleTemplate(selectedTemplate);
 
@@ -561,7 +576,11 @@ export default function TemplateBuilderPanel({
 					</p>
 				</div>
 
-				<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+				<div className="template-builder-header-actions">
+					<button type="button" className="button ghost" onClick={onBackToLibrary}>
+						← Volver a biblioteca
+					</button>
+
 					{!forcedCreateMode ? (
 						<button type="button" className="button secondary" onClick={startCreateMode}>
 							+ Nuevo template

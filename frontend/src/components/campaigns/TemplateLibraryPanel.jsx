@@ -31,6 +31,8 @@ export default function TemplateLibraryPanel({
 	templates = [],
 	selectedTemplateId,
 	onSelectTemplate,
+	onEditTemplate,
+	onCreateTemplate,
 	onSync,
 	syncing,
 	onDeleteTemplate,
@@ -111,9 +113,15 @@ export default function TemplateLibraryPanel({
 					</p>
 				</div>
 
-				<button className="button secondary" onClick={onSync} disabled={syncing}>
-					{syncing ? 'Sincronizando…' : 'Sincronizar con Meta'}
-				</button>
+				<div className="template-library-header-actions">
+					<button className="button primary" onClick={onCreateTemplate}>
+						Crear template
+					</button>
+
+					<button className="button secondary" onClick={onSync} disabled={syncing}>
+						{syncing ? 'Sincronizando…' : 'Sincronizar con Meta'}
+					</button>
+				</div>
 			</div>
 
 			<div className="campaign-inline-summary template-library-summary">
@@ -226,9 +234,22 @@ export default function TemplateLibraryPanel({
 										</p>
 									</div>
 
-									<span className={statusClass(template.status || 'draft')}>
-										{template.status || 'draft'}
-									</span>
+									<div className="template-list-card-top-actions">
+										<button
+											type="button"
+											className="button ghost"
+											onClick={(event) => {
+												event.stopPropagation();
+												onEditTemplate?.(template);
+											}}
+										>
+											Editar
+										</button>
+
+										<span className={statusClass(template.status || 'draft')}>
+											{template.status || 'draft'}
+										</span>
+									</div>
 								</div>
 
 								<div className="template-list-card-tags">

@@ -100,3 +100,36 @@
 		grid-template-columns: 1fr;
 	}
 }
+.campaign-recipient-preview-toolbar {
+	display: flex;
+	justify-content: flex-start;
+}
+
+.campaign-recipient-preview-search {
+	min-width: min(420px, 100%);
+}
+
+.campaign-recipient-preview-pagination {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+.campaign-recipient-preview-pagination span {
+	color: #475569;
+	font-size: 14px;
+}
+
+.campaign-recipient-preview-pagination-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.campaign-recipient-preview-page-indicator {
+	font-weight: 700;
+	color: #0f172a;
+}

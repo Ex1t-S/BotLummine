@@ -85,12 +85,21 @@ export default function CampaignsFeaturePage() {
 	} = useCampaignsDashboard();
 
 	const [activeTab, setActiveTab] = useState('library');
-
+	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
 	const currentTab = useMemo(
 		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
 		[activeTab]
 	);
+	function openBuilderForEdit(template) {
+		setSelectedTemplate(template || null);
+		setBuilderModeRequest('edit');
+		setActiveTab('builder');
+	}
 
+	function openBuilderForCreate() {
+		setBuilderModeRequest('create');
+		setActiveTab('builder');
+	}
 	function renderContent() {
 		switch (activeTab) {
 			case 'library':
@@ -104,6 +113,8 @@ export default function CampaignsFeaturePage() {
 							templates={templates}
 							selectedTemplateId={selectedTemplate?.id}
 							onSelectTemplate={setSelectedTemplate}
+							onEditTemplate={openBuilderForEdit}
+							onCreateTemplate={openBuilderForCreate}
 							onSync={() => mutations.sync.mutate()}
 							syncing={mutations.sync.isPending}
 							onDeleteTemplate={(template) => {
@@ -123,6 +134,8 @@ export default function CampaignsFeaturePage() {
 					>
 						<TemplateBuilderPanel
 							selectedTemplate={selectedTemplate}
+							builderModeRequest={builderModeRequest}
+							onBackToLibrary={() => setActiveTab('library')}
 							creating={mutations.createTemplate.isPending}
 							updating={mutations.updateTemplate.isPending}
 							onCreateTemplate={(payload) => mutations.createTemplate.mutateAsync(payload)}

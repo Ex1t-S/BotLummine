@@ -531,6 +531,9 @@ export default function CampaignComposerPanel({
 	const [variableMapping, setVariableMapping] = useState({});
 	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
 	const [contactLimit, setContactLimit] = useState('');
+	const [previewSearch, setPreviewSearch] = useState('');
+	const [previewPage, setPreviewPage] = useState(1);
+	const PREVIEW_PAGE_SIZE = 10;
 	const [bulkSelectionInfo, setBulkSelectionInfo] = useState({
 		count: 0,
 		customerIds: [],
@@ -604,6 +607,15 @@ export default function CampaignComposerPanel({
 	useEffect(() => {
 		void loadCatalogOptions();
 	}, []);
+	useEffect(() => {
+		setPreviewPage(1);
+	}, [previewSearch, selectedCustomerCount]);
+
+	useEffect(() => {
+		if (previewPage > previewTotalPages) {
+			setPreviewPage(previewTotalPages);
+		}
+	}, [previewPage, previewTotalPages]);
 	const requiresHeaderImage = useMemo(
 		() => templateRequiresHeaderImage(selectedTemplate),
 		[selectedTemplate]
@@ -695,10 +707,39 @@ export default function CampaignComposerPanel({
 		return Math.floor(parsed);
 	}, [contactLimit]);
 
-	const previewCustomers = useMemo(() => {
+	const previewFilteredCustomers = useMemo(() => {
 		if (form.audienceMode !== 'customers') return [];
-		return selectedCustomers.slice(0, 24);
-	}, [form.audienceMode, selectedCustomers]);
+
+		const normalizedSearch = String(previewSearch || '').trim().toLowerCase();
+
+		if (!normalizedSearch) {
+			return selectedCustomers;
+		}
+
+		return selectedCustomers.filter((customer) => {
+			const haystack = [
+				customer?.displayName,
+				customer?.contactName,
+				customer?.email,
+				normalizePhone(customer?.phone || ''),
+				getRecipientProductPreview(customer),
+			]
+				.filter(Boolean)
+				.join(' ')
+				.toLowerCase();
+
+			return haystack.includes(normalizedSearch);
+		});
+	}, [form.audienceMode, selectedCustomers, previewSearch]);
+
+	const previewTotalPages = useMemo(() => {
+		return Math.max(1, Math.ceil(previewFilteredCustomers.length / PREVIEW_PAGE_SIZE));
+	}, [previewFilteredCustomers.length]);
+
+	const previewCustomers = useMemo(() => {
+		const start = (previewPage - 1) * PREVIEW_PAGE_SIZE;
+		return previewFilteredCustomers.slice(start, start + PREVIEW_PAGE_SIZE);
+	}, [previewFilteredCustomers, previewPage]);
 
 	const effectiveSelectionCount = useMemo(() => {
 		if (!contactLimitNumber) return totalFoundCount;
@@ -928,7 +969,7 @@ export default function CampaignComposerPanel({
 		});
 		setShowAudiencePreview(false);
 	}
-		function removeSelectedCustomer(customerId) {
+	function removeSelectedCustomer(customerId) {
 		if (!customerId) return;
 
 		setSelectedCustomersMap((current) => {
@@ -1591,7 +1632,7 @@ export default function CampaignComposerPanel({
 							</div>
 						</div>
 					) : null}
-					
+
 					{form.audienceMode === 'customers' && showAudiencePreview ? (
 						<div className="campaign-recipient-preview-box">
 							<div className="campaign-recipient-preview-head">
@@ -1601,9 +1642,19 @@ export default function CampaignComposerPanel({
 										Acá ves a quiénes se va a contactar. Podés sacar cualquiera antes de crear la campaña.
 									</p>
 								</div>
-								<span>
-									{formatCompactNumber(selectedCustomerCount)} seleccionado(s)
-								</span>
+								<span>{formatCompactNumber(selectedCustomerCount)} seleccionado(s)</span>
+							</div>
+
+							<div className="campaign-recipient-preview-toolbar">
+								<label className="field campaign-recipient-preview-search">
+									<span>Buscar destinatario</span>
+									<input
+										type="text"
+										value={previewSearch}
+										onChange={(event) => setPreviewSearch(event.target.value)}
+										placeholder="Nombre, teléfono, mail o producto"
+									/>
+								</label>
 							</div>
 
 							<div className="campaign-recipient-preview-table">
@@ -1636,16 +1687,49 @@ export default function CampaignComposerPanel({
 									))
 								) : (
 									<div className="campaign-recipient-preview-empty">
-										No hay destinatarios seleccionados para mostrar.
+										No hay destinatarios que coincidan con la búsqueda.
 									</div>
 								)}
 							</div>
 
-							{selectedCustomerCount > previewCustomers.length ? (
-								<div className="campaign-helper-inline-text">
-									Se muestran los primeros {formatCompactNumber(previewCustomers.length)} destinatarios del total seleccionado.
+							<div className="campaign-recipient-preview-pagination">
+								<span>
+									Mostrando{' '}
+									{previewFilteredCustomers.length
+										? `${(previewPage - 1) * PREVIEW_PAGE_SIZE + 1}–${Math.min(
+												previewPage * PREVIEW_PAGE_SIZE,
+												previewFilteredCustomers.length
+										)}`
+										: '0'}{' '}
+									de {formatCompactNumber(previewFilteredCustomers.length)}
+								</span>
+
+								<div className="campaign-recipient-preview-pagination-actions">
+									<button
+										type="button"
+										className="button ghost"
+										onClick={() => setPreviewPage((current) => Math.max(1, current - 1))}
+										disabled={previewPage <= 1}
+									>
+										Anterior
+									</button>
+
+									<span className="campaign-recipient-preview-page-indicator">
+										Página {previewPage} de {previewTotalPages}
+									</span>
+
+									<button
+										type="button"
+										className="button ghost"
+										onClick={() =>
+											setPreviewPage((current) => Math.min(previewTotalPages, current + 1))
+										}
+										disabled={previewPage >= previewTotalPages}
+									>
+										Siguiente
+									</button>
 								</div>
-							) : null}
+							</div>
 						</div>
 					) : null}
 					<label className="campaign-toggle">
