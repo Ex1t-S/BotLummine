@@ -1,0 +1,118 @@
+.campaign-builder-grid--filters {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+}
+
+.campaign-product-filter-group {
+	display: grid;
+	gap: 10px;
+}
+
+.campaign-product-filter-toggle {
+	width: 100%;
+	border: 1px solid #111827;
+	background: #fff;
+	color: #111827;
+	border-radius: 14px;
+	padding: 12px 14px;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: 0.18s ease;
+}
+
+.campaign-product-filter-toggle.open {
+	border-color: #818cf8;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.campaign-product-multiselect {
+	border: 1px solid #d1d5db;
+	border-radius: 14px;
+	padding: 10px;
+	background: #fff;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.campaign-product-multiselect-search {
+	width: 100%;
+	border: 1px solid #d1d5db;
+	background: #fff;
+	border-radius: 12px;
+	padding: 12px 14px;
+	font: inherit;
+	color: #111827;
+	outline: none;
+}
+
+.campaign-product-multiselect-search:focus {
+	border-color: #818cf8;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.campaign-product-multiselect-list {
+	max-height: 220px;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-right: 4px;
+}
+
+.campaign-product-option-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 10px;
+	border-radius: 10px;
+	cursor: pointer;
+	color: #111827;
+}
+
+.campaign-product-option-row:hover {
+	background: #f8fafc;
+}
+
+.campaign-product-option-row input {
+	width: 16px;
+	height: 16px;
+}
+
+.campaign-product-option-empty {
+	padding: 10px;
+	border-radius: 10px;
+	background: #f9fafb;
+	color: #6b7280;
+	font-size: 13px;
+}
+
+.campaign-product-multiselect-footer {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.campaign-selected-products-row--interactive {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.campaign-selected-products-row--interactive .campaign-selected-product-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.campaign-selected-products-row--interactive .campaign-selected-product-chip strong {
+	font-size: 16px;
+	line-height: 1;
+}
+
+@media (max-width: 900px) {
+	.campaign-builder-grid--filters {
+		grid-template-columns: 1fr;
+	}
+}

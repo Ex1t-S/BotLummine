@@ -3,6 +3,7 @@ import {
 	fetchCampaignCustomers,
 	uploadCampaignHeaderImage,
 } from '../../lib/campaigns.js';
+import api from '../../lib/api.js';
 
 const SAFE_MAX_CUSTOMER_PAGES = 20;
 
@@ -27,7 +28,106 @@ const initialCustomerFilters = {
 	minSpent: '',
 	hasPhoneOnly: true,
 };
+const PAYMENT_STATUS_OPTIONS = [
+	{ value: '', label: 'Todos' },
+	{ value: 'pending', label: 'Pendiente' },
+	{ value: 'authorized', label: 'Autorizado' },
+	{ value: 'paid', label: 'Pagado' },
+	{ value: 'partially_paid', label: 'Pago parcial' },
+	{ value: 'abandoned', label: 'Abandonado' },
+	{ value: 'refunded', label: 'Reembolsado' },
+	{ value: 'partially_refunded', label: 'Reembolso parcial' },
+	{ value: 'voided', label: 'Anulado' },
+];
 
+function buildCatalogProducts(rawCatalog = []) {
+	const seen = new Set();
+	const options = [];
+
+	for (const item of rawCatalog) {
+		const label =
+			item?.name ||
+			item?.title ||
+			item?.productName ||
+			item?.displayName ||
+			'';
+
+		const normalized = String(label || '').trim();
+		if (!normalized) continue;
+		if (seen.has(normalized.toLowerCase())) continue;
+
+		seen.add(normalized.toLowerCase());
+		options.push({
+			id: item?.id || item?.productId || normalized,
+			label: normalized,
+		});
+	}
+
+	return options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
+}
+
+function ProductMultiSelect({
+	options,
+	selectedValues,
+	search,
+	onSearchChange,
+	onToggleValue,
+	onClear,
+}) {
+	const filtered = useMemo(() => {
+		const term = String(search || '').trim().toLowerCase();
+		if (!term) return options.slice(0, 80);
+
+		return options
+			.filter((option) => option.label.toLowerCase().includes(term))
+			.slice(0, 80);
+	}, [options, search]);
+
+	return (
+		<div className="campaign-product-multiselect">
+			<input
+				type="text"
+				className="campaign-product-multiselect-search"
+				placeholder="Buscar productos del catálogo..."
+				value={search}
+				onChange={(event) => onSearchChange(event.target.value)}
+			/>
+
+			<div className="campaign-product-multiselect-list">
+				{filtered.length ? (
+					filtered.map((option) => {
+						const checked = selectedValues.includes(option.label);
+
+						return (
+							<label key={option.id} className="campaign-product-option-row">
+								<input
+									type="checkbox"
+									checked={checked}
+									onChange={() => onToggleValue(option.label)}
+								/>
+								<span>{option.label}</span>
+							</label>
+						);
+					})
+				) : (
+					<div className="campaign-product-option-empty">
+						No hay coincidencias en el catálogo.
+					</div>
+				)}
+			</div>
+
+			<div className="campaign-product-multiselect-footer">
+				<button
+					type="button"
+					className="button ghost"
+					onClick={onClear}
+				>
+					Limpiar productos
+				</button>
+			</div>
+		</div>
+	);
+}
 const VARIABLE_SOURCE_OPTIONS = [
 	{ value: 'contact_name', label: 'Nombre completo' },
 	{ value: 'first_name', label: 'Primer nombre' },
@@ -401,6 +501,7 @@ export default function CampaignComposerPanel({
 	const [submitError, setSubmitError] = useState('');
 	const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 	const [showProductPicker, setShowProductPicker] = useState(false);
+	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
@@ -474,7 +575,9 @@ export default function CampaignComposerPanel({
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [form.audienceMode]);
-
+	useEffect(() => {
+		void loadCatalogOptions();
+	}, []);
 	const requiresHeaderImage = useMemo(
 		() => templateRequiresHeaderImage(selectedTemplate),
 		[selectedTemplate]
@@ -615,7 +718,23 @@ export default function CampaignComposerPanel({
 
 		return Array.from(dedupedMap.values());
 	}
+	async function loadCatalogOptions() {
+		try {
+			const response = await api.get('/dashboard/catalog', {
+				params: { page: 1, pageSize: 250 },
+			});
 
+			const rawItems =
+				response.data?.items ||
+				response.data?.products ||
+				response.data?.rows ||
+				[];
+
+			setCatalogOptions(buildCatalogProducts(rawItems));
+		} catch (error) {
+			console.error('[CAMPAIGNS][CATALOG] error:', error);
+		}
+	}
 	async function loadCustomers(nextFilters = customerFilters) {
 		setCustomerAudience((current) => ({
 			...current,
@@ -672,16 +791,28 @@ export default function CampaignComposerPanel({
 
 	function toggleProductFilter(label) {
 		setSelectedProductFilters((current) => {
-			if (current.includes(label)) {
-				return current.filter((item) => item !== label);
-			}
-			return [...current, label];
+			const next = current.includes(label)
+				? current.filter((item) => item !== label)
+				: [...current, label];
+
+			setCustomerFilters((prev) => ({
+				...prev,
+				page: 1,
+				productQuery: next.join('||'),
+			}));
+
+			return next;
 		});
 	}
 
 	function clearSelectedProducts() {
 		setSelectedProductFilters([]);
 		setProductSearch('');
+		setCustomerFilters((prev) => ({
+			...prev,
+			page: 1,
+			productQuery: '',
+		}));
 	}
 
 	async function handleSelectAllFilteredCustomers() {
@@ -1131,16 +1262,16 @@ export default function CampaignComposerPanel({
 							</label>
 
 							<label className="field">
-								<span>Buscar producto puntual</span>
+								<span>N° pedido</span>
 								<input
-									value={customerFilters.productQuery}
-									onChange={(event) => updateCustomerFilter('productQuery', event.target.value)}
-									placeholder="Body, faja, calza..."
+									value={customerFilters.orderNumber}
+									onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
+									placeholder="Ej. 23621"
 								/>
 							</label>
 						</div>
 
-						<div className="campaign-builder-grid campaign-builder-grid--4 campaign-builder-grid--compact">
+						<div className="campaign-builder-grid campaign-builder-grid--filters">
 							<label className="field">
 								<span>Gasto mínimo</span>
 								<input
@@ -1151,14 +1282,7 @@ export default function CampaignComposerPanel({
 									placeholder="0"
 								/>
 							</label>
-							<label className="field">
-								<span>N° pedido</span>
-								<input
-									value={customerFilters.orderNumber}
-									onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
-									placeholder="Ej. 23621"
-								/>
-							</label>
+
 							<label className="field">
 								<span>Compra desde</span>
 								<input
@@ -1167,6 +1291,7 @@ export default function CampaignComposerPanel({
 									onChange={(event) => updateCustomerFilter('dateFrom', event.target.value)}
 								/>
 							</label>
+
 							<label className="field">
 								<span>Compra hasta</span>
 								<input
@@ -1175,6 +1300,63 @@ export default function CampaignComposerPanel({
 									onChange={(event) => updateCustomerFilter('dateTo', event.target.value)}
 								/>
 							</label>
+
+							<label className="field">
+								<span>Pago</span>
+								<select
+									value={customerFilters.paymentStatus}
+									onChange={(event) => updateCustomerFilter('paymentStatus', event.target.value)}
+								>
+									{PAYMENT_STATUS_OPTIONS.map((option) => (
+										<option key={option.value || 'all'} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+							</label>
+						</div>
+
+						<div className="campaign-product-filter-group">
+							<label className="field">
+								<span>Producto comprado</span>
+								<button
+									type="button"
+									className={`campaign-product-filter-toggle ${showProductPicker ? 'open' : ''}`}
+									onClick={() => setShowProductPicker((current) => !current)}
+								>
+									{selectedProductFilters.length
+										? `Selector de productos (${selectedProductFilters.length})`
+										: 'Selector de productos'}
+								</button>
+							</label>
+
+							{selectedProductFilters.length ? (
+								<div className="campaign-selected-products-row campaign-selected-products-row--interactive">
+									{selectedProductFilters.map((productName) => (
+										<button
+											key={productName}
+											type="button"
+											className="campaign-selected-product-chip"
+											onClick={() => toggleProductFilter(productName)}
+											title="Quitar producto"
+										>
+											<span>{productName}</span>
+											<strong>×</strong>
+										</button>
+									))}
+								</div>
+							) : null}
+
+							{showProductPicker ? (
+								<ProductMultiSelect
+									options={catalogOptions}
+									selectedValues={selectedProductFilters}
+									search={productSearch}
+									onSearchChange={setProductSearch}
+									onToggleValue={toggleProductFilter}
+									onClear={clearSelectedProducts}
+								/>
+							) : null}
 						</div>
 
 						<div className="campaign-inline-actions campaign-inline-actions--wrap">
