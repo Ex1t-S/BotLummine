@@ -206,3 +206,91 @@
 		min-width: 0;
 	}
 }
+
+/* selector de productos inline para segmentación */
+.campaign-builder-grid--audience-top {
+	align-items: start;
+}
+
+.campaign-field-product-picker {
+	display: grid;
+	gap: 8px;
+}
+
+.campaign-product-picker--inline {
+	gap: 10px;
+}
+
+.campaign-product-picker-trigger--field {
+	min-height: 58px;
+	padding: 14px 16px;
+	border-radius: 16px;
+	background: #fff;
+	border: 1px solid #cfd8e6;
+	box-shadow: none;
+}
+
+.campaign-product-picker-trigger--field strong {
+	margin-bottom: 2px;
+	font-size: 0.98rem;
+	color: #0f172a;
+}
+
+.campaign-product-picker-trigger--field span {
+	font-size: 0.9rem;
+	color: #64748b;
+}
+
+.campaign-product-picker-trigger--field.open {
+	border-color: #8b5cf6;
+	background: linear-gradient(180deg, #fcfbff 0%, #f7f3ff 100%);
+	box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.08);
+}
+
+.campaign-product-picker-trigger__icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	background: #f3f4f6;
+	color: #334155;
+	font-size: 1.2rem;
+	font-weight: 700;
+	flex-shrink: 0;
+}
+
+.campaign-product-picker-panel--inline {
+	padding: 14px;
+	border-radius: 18px;
+	background: #f8fafc;
+}
+
+.campaign-product-picker-search input {
+	background: #fff;
+}
+
+.campaign-product-checklist--inline {
+	grid-template-columns: 1fr;
+	max-height: 260px;
+	padding-right: 6px;
+}
+
+.campaign-product-checklist--inline .campaign-product-option {
+	padding: 12px 14px;
+	border-radius: 14px;
+}
+
+.campaign-product-checklist--inline .campaign-product-option strong {
+	font-size: 0.94rem;
+}
+
+.campaign-product-checklist--inline .campaign-product-option span {
+	font-size: 0.84rem;
+}
+
+@media (max-width: 860px) {
+	.campaign-builder-grid--audience-top {
+		grid-template-columns: 1fr;
+	}
+}

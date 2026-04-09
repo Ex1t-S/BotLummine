@@ -1278,61 +1278,6 @@ export default function CampaignComposerPanel({
 							</div>
 						) : null}
 
-						<div className="campaign-product-picker">
-							<button
-								type="button"
-								className={`campaign-product-picker-trigger ${showProductPicker ? 'open' : ''}`}
-								onClick={() => setShowProductPicker((current) => !current)}
-							>
-								<div>
-									<strong>Productos comprados</strong>
-									<span>
-										{selectedProductFilters.length
-											? `${selectedProductFilters.length} seleccionados${selectedProductSummary ? ` · ${selectedProductSummary}` : ''}`
-											: 'Abrí esta caja y marcá productos para seleccionar clientes por compra.'}
-									</span>
-								</div>
-								<span>{showProductPicker ? '−' : '+'}</span>
-							</button>
-
-							{showProductPicker ? (
-								<div className="campaign-product-picker-panel">
-									<label className="field">
-										<span>Buscar producto dentro de la lista</span>
-										<input
-											value={productSearch}
-											onChange={(event) => setProductSearch(event.target.value)}
-											placeholder="Ej. body negro"
-										/>
-									</label>
-
-									<div className="campaign-product-checklist">
-										{filteredAvailableProducts.map((product) => (
-											<label
-												key={product.label}
-												className={`campaign-product-option ${selectedProductFilters.includes(product.label) ? 'checked' : ''}`}
-											>
-												<input
-													type="checkbox"
-													checked={selectedProductFilters.includes(product.label)}
-													onChange={() => toggleProductFilter(product.label)}
-												/>
-												<div>
-													<strong>{product.label}</strong>
-													<span>{product.count} clientes en esta muestra</span>
-												</div>
-											</label>
-										))}
-									</div>
-
-									<div className="campaign-product-picker-actions">
-										<button type="button" className="button ghost" onClick={clearSelectedProducts}>
-											Limpiar
-										</button>
-									</div>
-								</div>
-							) : null}
-						</div>
 
 						<div className="campaign-audience-summary-grid">
 							<div className="campaign-audience-summary-card">

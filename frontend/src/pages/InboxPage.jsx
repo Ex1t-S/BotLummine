@@ -427,6 +427,7 @@ export default function InboxPage() {
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
 	const lastInboxSnapshotRef = useRef(readStoredMap(SNAPSHOT_STORAGE_KEY, {}));
+	const shouldStickToBottomRef = useRef(true);
 
 	const [queue, setQueue] = useState('AUTO');
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -619,9 +620,10 @@ export default function InboxPage() {
 		const el = messagesContainerRef.current;
 		if (!el) return;
 
+		shouldStickToBottomRef.current = true;
+
 		const run = () => {
 			el.scrollTop = el.scrollHeight;
-			el.dataset.initialized = 'true';
 		};
 
 		requestAnimationFrame(run);
@@ -634,13 +636,11 @@ export default function InboxPage() {
 		const el = messagesContainerRef.current;
 		if (!el) return;
 
-		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		if (!shouldStickToBottomRef.current) return;
 
-		if (distanceFromBottom < 140) {
-			requestAnimationFrame(() => {
-				el.scrollTop = el.scrollHeight;
-			});
-		}
+		requestAnimationFrame(() => {
+			el.scrollTop = el.scrollHeight;
+		});
 	}, [conversation?.messages?.length]);
 
 	useEffect(() => {
@@ -755,7 +755,13 @@ export default function InboxPage() {
 			console.error(error);
 		},
 	});
+	function handleMessagesScroll() {
+		const el = messagesContainerRef.current;
+		if (!el) return;
 
+		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		shouldStickToBottomRef.current = distanceFromBottom < 120;
+	}
 
 	function handleSubmit(event) {
 		event.preventDefault();
@@ -1019,7 +1025,11 @@ export default function InboxPage() {
 							</div>
 						</div>
 
-						<div ref={messagesContainerRef} className="inbox-messages">
+						<div
+							ref={messagesContainerRef}
+							className="inbox-messages"
+							onScroll={handleMessagesScroll}
+						>
 						<div className="inbox-messages-list">
 							{conversationQuery.isLoading ? (
 								<div className="inbox-empty">Cargando mensajes...</div>
