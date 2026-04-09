@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import api, { resolveApiUrl } from '../lib/api.js';
+import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -428,8 +428,10 @@ export default function InboxPage() {
 	const textareaRef = useRef(null);
 	const lastInboxSnapshotRef = useRef(readStoredMap(SNAPSHOT_STORAGE_KEY, {}));
 	const shouldStickToBottomRef = useRef(true);
+	const selectedConversationIdRef = useRef(null);
 
 	const [queue, setQueue] = useState('AUTO');
+	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
@@ -448,8 +450,9 @@ export default function InboxPage() {
 			return res.data;
 		},
 		placeholderData: (previousData) => previousData,
-		refetchInterval: () => (isDocumentVisible() ? 5000 : false),
+		refetchInterval: false,
 		refetchIntervalInBackground: false,
+		refetchOnWindowFocus: true,
 		...queryPresets.inbox,
 	});
 
@@ -494,6 +497,10 @@ export default function InboxPage() {
 	useEffect(() => {
 		writeStoredMap(UNREAD_STORAGE_KEY, newMessageCounts);
 	}, [newMessageCounts]);
+
+	useEffect(() => {
+		selectedConversationIdRef.current = selectedConversationId;
+	}, [selectedConversationId]);
 
 	useEffect(() => {
 		setNewMessageCounts((prev) => {
@@ -562,6 +569,99 @@ export default function InboxPage() {
 		setSelectedConversationId(preferredId);
 	}, [filteredContacts, selectedConversationId, inboxQuery.data]);
 
+	useEffect(() => {
+		if (typeof window === 'undefined') return undefined;
+
+		let isDisposed = false;
+		let fallbackIntervalId = null;
+
+		function stopFallbackPolling() {
+			if (fallbackIntervalId) {
+				window.clearInterval(fallbackIntervalId);
+				fallbackIntervalId = null;
+			}
+		}
+
+		function runFallbackRefresh() {
+			if (!isDocumentVisible()) return;
+
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.inbox(queue),
+			});
+
+			const activeConversationId = selectedConversationIdRef.current;
+			if (activeConversationId) {
+				queryClient.invalidateQueries({
+					queryKey: queryKeys.conversation(activeConversationId),
+				});
+			}
+		}
+
+		function startFallbackPolling() {
+			if (fallbackIntervalId) return;
+
+			fallbackIntervalId = window.setInterval(() => {
+				runFallbackRefresh();
+			}, 30000);
+		}
+
+		function handleInboxEvent(event) {
+			let payload = null;
+
+			try {
+				payload = JSON.parse(event.data || '{}');
+			} catch {
+				payload = null;
+			}
+
+			const eventQueue = payload?.queue || null;
+			const activeConversationId = selectedConversationIdRef.current;
+			const eventConversationId = payload?.conversationId || null;
+
+			if (!eventQueue || eventQueue === queue || eventConversationId === activeConversationId) {
+				queryClient.invalidateQueries({
+					queryKey: queryKeys.inbox(queue),
+				});
+			}
+
+			if (
+				activeConversationId &&
+				(!eventConversationId || eventConversationId === activeConversationId)
+			) {
+				queryClient.invalidateQueries({
+					queryKey: queryKeys.conversation(activeConversationId),
+				});
+			}
+		}
+
+		const eventSource = createApiEventSource('/dashboard/inbox/stream');
+
+		eventSource.onopen = () => {
+			if (isDisposed) return;
+			setIsRealtimeConnected(true);
+			stopFallbackPolling();
+
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.inbox(queue),
+			});
+		};
+
+		eventSource.onerror = () => {
+			if (isDisposed) return;
+			setIsRealtimeConnected(false);
+			startFallbackPolling();
+		};
+
+		eventSource.addEventListener('inbox:update', handleInboxEvent);
+
+		return () => {
+			isDisposed = true;
+			stopFallbackPolling();
+			eventSource.removeEventListener('inbox:update', handleInboxEvent);
+			eventSource.close();
+		};
+	}, [queryClient, queue]);
+
 	const conversationQuery = useQuery({
 		queryKey: queryKeys.conversation(selectedConversationId),
 		queryFn: async () => {
@@ -570,9 +670,9 @@ export default function InboxPage() {
 		},
 		enabled: Boolean(selectedConversationId),
 		placeholderData: (previousData) => previousData,
-		refetchInterval: () =>
-			selectedConversationId && isDocumentVisible() ? 3000 : false,
+		refetchInterval: false,
 		refetchIntervalInBackground: false,
+		refetchOnWindowFocus: true,
 		...queryPresets.conversation,
 	});
 
@@ -818,7 +918,17 @@ export default function InboxPage() {
 						Conversaciones
 					</div>
 
-					<div className="inbox-section-actions" />
+					<div className="inbox-section-actions">
+						<span
+							className={`inbox-realtime-badge ${
+								isRealtimeConnected
+									? 'inbox-realtime-badge--live'
+									: 'inbox-realtime-badge--fallback'
+							}`}
+						>
+							{isRealtimeConnected ? 'Tiempo real' : 'Respaldo'}
+						</span>
+					</div>
 				</div>
 
 				<div className="inbox-search-box">

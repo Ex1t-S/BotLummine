@@ -31,6 +31,45 @@ export function getApiOrigin() {
 	return '';
 }
 
+export function buildApiUrl(path = '') {
+	const rawPath = String(path || '').trim();
+
+	if (!rawPath) {
+		if (isAbsoluteUrl(apiBaseURL)) return apiBaseURL;
+
+		if (typeof window !== 'undefined') {
+			const basePath = apiBaseURL.startsWith('/') ? apiBaseURL : `/${apiBaseURL}`;
+			return new URL(basePath, window.location.origin).toString();
+		}
+
+		return apiBaseURL;
+	}
+
+	if (isAbsoluteUrl(rawPath) || rawPath.startsWith('blob:') || rawPath.startsWith('data:')) {
+		return rawPath;
+	}
+
+	const cleanPath = rawPath.replace(/^\/+/, '');
+
+	if (isAbsoluteUrl(apiBaseURL)) {
+		try {
+			return new URL(cleanPath, `${normalizeBaseUrl(apiBaseURL)}/`).toString();
+		} catch {
+			return rawPath;
+		}
+	}
+
+	if (typeof window !== 'undefined') {
+		const basePath = apiBaseURL.startsWith('/') ? apiBaseURL : `/${apiBaseURL}`;
+		return new URL(
+			`${basePath.replace(/\/+$/, '')}/${cleanPath}`,
+			window.location.origin
+		).toString();
+	}
+
+	return rawPath;
+}
+
 export function resolveApiUrl(value = '') {
 	const raw = String(value || '').trim();
 
@@ -54,6 +93,14 @@ export function resolveApiUrl(value = '') {
 	}
 
 	return `${origin}/${raw.replace(/^\/+/, '')}`;
+}
+
+export function createApiEventSource(path = '', options = {}) {
+	const url = buildApiUrl(path);
+	return new EventSource(url, {
+		withCredentials: true,
+		...options,
+	});
 }
 
 const api = axios.create({
