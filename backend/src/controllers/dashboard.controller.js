@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { getCatalogPage, syncCatalogFromTiendanube } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
-import { sendAndPersistOutbound } from '../services/conversation/chat.service.js';
+import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { publishInboxEvent, subscribeInboxEvents } from '../lib/inbox-events.js';
 
 function formatTime(value) {

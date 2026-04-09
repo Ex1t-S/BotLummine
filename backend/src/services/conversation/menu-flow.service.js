@@ -185,9 +185,7 @@ async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '' }) {
 
 	const body = [bodyPrefix ? normalizeText(bodyPrefix) : null, menuConfig.body]
 		.filter(Boolean)
-		.join('
-
-');
+		.join('');
 
 	return sendAndPersistOutbound({
 		conversationId,

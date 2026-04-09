@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { prisma } from '../../lib/prisma.js';
 import { getOrCreateConversation, processInboundMessage } from '../conversation/chat.service.js';
-import { createResetConversationState } from '../conversation/conversation-turn.service.js';
+import { createResetConversationState } from '../conversation/conversation-helpers.service.js';
 import { getAiLabFixture, AI_LAB_FIXTURES } from '../../data/ai-lab-fixtures.js';
 
 const SESSIONS = new Map();

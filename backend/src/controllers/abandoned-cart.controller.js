@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
-import { getOrCreateConversation, sendAndPersistOutbound } from '../services/conversation/chat.service.js';
+import { getOrCreateConversation } from '../services/conversation/chat.service.js';
+import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 
 
