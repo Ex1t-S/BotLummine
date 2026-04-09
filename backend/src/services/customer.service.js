@@ -68,6 +68,12 @@ function parseDateOrNull(value) {
 	return Number.isNaN(date.getTime()) ? null : date;
 }
 
+
+function normalizeOrderStatus(value) {
+	const normalized = cleanString(value);
+	return normalized ? normalized.toLowerCase() : null;
+}
+
 function subtractDays(date, days) {
 	return new Date(date.getTime() - days * 24 * 60 * 60 * 1000);
 }
@@ -220,6 +226,9 @@ async function fetchOrdersPage({
 			'created_at',
 			'updated_at',
 			'total',
+			'currency',
+			'payment_status',
+			'shipping_status',
 			'contact_name',
 			'contact_email',
 			'contact_phone',
@@ -410,10 +419,10 @@ function mapOrderPayload(order, storeId, customerProfileId) {
 		normalizedEmail: normalizeEmail(order?.contact_email),
 		contactPhone: cleanString(order?.contact_phone),
 		normalizedPhone: normalizePhone(order?.contact_phone),
-		paymentStatus: null,
-		shippingStatus: null,
+		paymentStatus: normalizeOrderStatus(order?.payment_status),
+		shippingStatus: normalizeOrderStatus(order?.shipping_status),
 		totalAmount: toDecimalOrNull(order?.total),
-		currency: 'ARS',
+		currency: cleanString(order?.currency) || 'ARS',
 		products: Array.isArray(order?.products) ? order.products : [],
 		rawPayload: order,
 		orderCreatedAt: parseDateOrNull(order?.created_at),

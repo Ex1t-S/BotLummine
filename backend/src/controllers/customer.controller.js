@@ -60,17 +60,37 @@ function buildPaymentStatusVariants(paymentStatus = '') {
 	if (!raw || raw === 'all') return [];
 
 	const map = {
-		pending: ['pending', 'Pago pendiente'],
-		paid: ['paid', 'Pago aprobado'],
-		authorized: ['authorized', 'Pago autorizado'],
-		cancelled: ['cancelled', 'Pago cancelado'],
-		partially_paid: ['partially_paid', 'Pago parcialmente aprobado'],
-		refunded: ['refunded', 'Pago reembolsado'],
-		partially_refunded: ['partially_refunded', 'Pago parcialmente reembolsado'],
-		voided: ['voided', 'Pago anulado'],
+		pending: ['pending', 'pending_confirmation', 'pago pendiente', 'pago en espera', 'unpaid'],
+		authorized: ['authorized', 'pago autorizado'],
+		paid: ['paid', 'pago aprobado'],
+		partially_paid: ['partially_paid', 'pago parcialmente aprobado'],
+		abandoned: ['abandoned', 'pago abandonado'],
+		refunded: ['refunded', 'pago reembolsado'],
+		partially_refunded: ['partially_refunded', 'pago parcialmente reembolsado'],
+		voided: ['voided', 'pago anulado'],
+		cancelled: ['cancelled', 'pago cancelado'],
 	};
 
-	return map[raw] || [paymentStatus];
+	return map[raw] || [raw];
+}
+
+function getPaymentStatusMeta(paymentStatus = '') {
+	const raw = String(paymentStatus || '').trim().toLowerCase();
+
+	const map = {
+		pending: { label: 'Pendiente', tone: 'warning' },
+		pending_confirmation: { label: 'Pendiente', tone: 'warning' },
+		authorized: { label: 'Autorizado', tone: 'info' },
+		paid: { label: 'Pagado', tone: 'success' },
+		partially_paid: { label: 'Parcialmente pagado', tone: 'info' },
+		abandoned: { label: 'Abandonado', tone: 'danger' },
+		refunded: { label: 'Reembolsado', tone: 'neutral' },
+		partially_refunded: { label: 'Parcialmente reembolsado', tone: 'neutral' },
+		voided: { label: 'Anulado', tone: 'neutral' },
+		cancelled: { label: 'Cancelado', tone: 'danger' },
+	};
+
+	return map[raw] || { label: raw ? raw.replace(/_/g, ' ') : 'Sin dato', tone: 'neutral' };
 }
 
 function buildCustomersWhere({
@@ -232,6 +252,8 @@ function mapOrderToCard(order) {
 		}
 	}
 
+	const paymentMeta = getPaymentStatusMeta(order.paymentStatus);
+
 	return {
 		id: order.id,
 		displayName: order.contactName || 'Cliente sin nombre',
@@ -245,6 +267,8 @@ function mapOrderToCard(order) {
 		productsPreview: productNames.slice(0, 6),
 		updatedAt: order.orderUpdatedAt || order.updatedAt || order.orderCreatedAt || null,
 		paymentStatus: order.paymentStatus || '',
+		paymentStatusLabel: paymentMeta.label,
+		paymentStatusTone: paymentMeta.tone,
 		orderNumber: order.orderNumber || '',
 		rawTotal: Number(order.totalAmount || 0),
 		rawDate: order.orderCreatedAt || null,
