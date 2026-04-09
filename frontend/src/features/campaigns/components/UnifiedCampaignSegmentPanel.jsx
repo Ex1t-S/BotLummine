@@ -6,12 +6,12 @@ const SOURCE_OPTIONS = [
 	{
 		id: 'abandoned',
 		label: 'Carritos abandonados',
-		description: 'Recuperación rápida con vista previa y filtros de ventana, monto y producto.',
+		description: 'Recuperación rápida con filtros de ventana, monto y producto.',
 	},
 	{
 		id: 'customers',
 		label: 'Clientes y compras',
-		description: 'Segmentá por clientes, productos comprados y filtros comerciales antes de lanzar.',
+		description: 'Segmentá por compras, productos y filtros comerciales antes de lanzar.',
 	},
 ];
 
@@ -19,7 +19,7 @@ function SourceButton({ option, active, onClick }) {
 	return (
 		<button
 			type="button"
-			className={`campaign-source-switch__button ${active ? 'is-active' : ''}`}
+			className={`campaign-source-switch__button ${active ? 'is-active' : ''}`.trim()}
 			onClick={() => onClick(option.id)}
 		>
 			<strong>{option.label}</strong>
@@ -43,13 +43,12 @@ export default function UnifiedCampaignSegmentPanel({
 		<div className="campaign-unified-segment">
 			<div className="campaign-source-switch">
 				<div className="campaign-source-switch__header">
-					<div>
-						<span className="campaigns-tab-shell__eyebrow">Segmentar campaña</span>
-						<h4>Elegí el origen de la audiencia</h4>
-						<p>
-							Primero decidís de dónde sale la gente. Después trabajás ese flujo sin mezclar módulos.
-						</p>
-					</div>
+					<span className="campaigns-tab-shell__eyebrow">Origen de audiencia</span>
+					<h4>Elegí de dónde sale la audiencia</h4>
+					<p>
+						Primero definís si querés trabajar con recuperación de carritos o con segmentación
+						de clientes. Después el panel cambia sin mezclar dos módulos distintos.
+					</p>
 				</div>
 
 				<div className="campaign-source-switch__grid">
@@ -85,8 +84,8 @@ export default function UnifiedCampaignSegmentPanel({
 						onSelectTemplate={onSelectTemplate}
 						onCreateCampaign={onCreateCampaign}
 						creating={creatingCampaign}
+						audienceModeOptions={['customers']}
 						lockedAudienceMode="customers"
-						audienceModeOptions={["customers"]}
 					/>
 				)}
 			</div>

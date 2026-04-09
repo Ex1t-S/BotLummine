@@ -5,11 +5,13 @@ import TemplateLibraryPanel from '../../components/campaigns/TemplateLibraryPane
 import UnifiedCampaignSegmentPanel from './components/UnifiedCampaignSegmentPanel.jsx';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
+import './CampaignsFeaturePage.css';
 
 const TAB_DEFINITIONS = [
 	{
 		id: 'library',
 		label: 'Biblioteca de templates',
+		eyebrow: 'Templates',
 		title: 'Biblioteca de templates',
 		description:
 			'Buscá, filtrá y elegí la plantilla con la que querés trabajar. Desde acá arrancás sin dar vueltas.',
@@ -17,6 +19,7 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'builder',
 		label: 'Editor de template',
+		eyebrow: 'Templates',
 		title: 'Editor de template',
 		description:
 			'Modificá el contenido del template, revisá la vista previa y dejalo listo para usar en campañas.',
@@ -24,13 +27,15 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'segment',
 		label: 'Segmentar campaña',
+		eyebrow: 'Campañas',
 		title: 'Segmentar campaña',
 		description:
-			'Unificá la selección de audiencia y la creación de campañas desde carritos abandonados o clientes.',
+			'Elegí si la audiencia sale de carritos abandonados o de clientes con compras, y armá la campaña desde un solo flujo.',
 	},
 	{
 		id: 'tracking',
 		label: 'Seguimiento',
+		eyebrow: 'Campañas',
 		title: 'Seguimiento',
 		description:
 			'Revisá estados, resultados y destinatarios desde una vista separada para controlar lo que ya salió.',
@@ -49,36 +54,26 @@ function DashboardTabButton({ tab, isActive, onClick }) {
 	);
 }
 
-function CampaignSectionShell({ eyebrow, title, description, sidebar, children }) {
+function CampaignSectionShell({ eyebrow, title, description, children }) {
 	return (
-		<section className="campaigns-tab-shell page-card campaign-shell-card">
-			<div className="campaigns-tab-shell__header">
+		<section className="campaigns-tab-shell page-card campaign-shell-card campaigns-tab-shell--clean">
+			<div className="campaigns-tab-shell__header campaigns-tab-shell__header--stacked">
 				<div>
 					{eyebrow ? <span className="campaigns-tab-shell__eyebrow">{eyebrow}</span> : null}
 					<h3>{title}</h3>
 					{description ? <p>{description}</p> : null}
 				</div>
-				{sidebar ? <div className="campaigns-tab-shell__sidebar">{sidebar}</div> : null}
 			</div>
 			<div className="campaigns-tab-shell__body">{children}</div>
 		</section>
 	);
 }
 
-function SummaryCard({ label, value }) {
-	return (
-		<div className="campaigns-summary-card">
-			<span>{label}</span>
-			<strong>{value}</strong>
-		</div>
-	);
-}
-
 export default function CampaignsFeaturePage() {
 	const {
 		feedback,
-		overview,
 		templates,
+		campaigns,
 		selectedTemplate,
 		setSelectedTemplate,
 		selectedCampaign,
@@ -96,18 +91,13 @@ export default function CampaignsFeaturePage() {
 		[activeTab]
 	);
 
-	const recipientsCount = Number(overview.recipientsCount || 0);
-	const estimatedCost = `USD ${Number(overview.estimatedMonthlyCostUsd || 0).toFixed(2)}`;
-
-
-
 	function renderContent() {
 		switch (activeTab) {
 			case 'library':
 				return (
 					<CampaignSectionShell
-						eyebrow="Templates"
-						title="Biblioteca de templates"
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
 						description={currentTab.description}
 					>
 						<TemplateLibraryPanel
@@ -118,9 +108,7 @@ export default function CampaignsFeaturePage() {
 							syncing={mutations.sync.isPending}
 							onDeleteTemplate={(template) => {
 								const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
-								if (confirmed) {
-									mutations.deleteTemplate.mutate(template.id);
-								}
+								if (confirmed) mutations.deleteTemplate.mutate(template.id);
 							}}
 						/>
 					</CampaignSectionShell>
@@ -129,8 +117,8 @@ export default function CampaignsFeaturePage() {
 			case 'builder':
 				return (
 					<CampaignSectionShell
-						eyebrow="Templates"
-						title="Editor de template"
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
 						description={currentTab.description}
 					>
 						<TemplateBuilderPanel
@@ -148,8 +136,8 @@ export default function CampaignsFeaturePage() {
 			case 'segment':
 				return (
 					<CampaignSectionShell
-						eyebrow="Campañas"
-						title="Segmentar campaña"
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
 						description={currentTab.description}
 					>
 						<UnifiedCampaignSegmentPanel
@@ -167,8 +155,8 @@ export default function CampaignsFeaturePage() {
 			case 'tracking':
 				return (
 					<CampaignSectionShell
-						eyebrow="Campañas"
-						title="Seguimiento"
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
 						description={currentTab.description}
 					>
 						<CampaignRunsPanel
@@ -186,7 +174,6 @@ export default function CampaignsFeaturePage() {
 								);
 
 								if (!confirmed) return;
-
 								mutations.deleteCampaign.mutate(campaign.id);
 							}}
 							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
@@ -202,8 +189,8 @@ export default function CampaignsFeaturePage() {
 	}
 
 	return (
-		<section className="campaigns-page campaigns-page--tabs">
-			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--tabs">
+		<section className="campaigns-page campaigns-page--tabs campaigns-page--feature-refresh">
+			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--tabs campaigns-hero--feature-refresh">
 				<div className="campaigns-hero-copy campaigns-hero-copy--full">
 					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
 					<h2>Creación y seguimiento de campañas</h2>
@@ -215,33 +202,14 @@ export default function CampaignsFeaturePage() {
 					<CampaignFeedbackAlert feedback={feedback} />
 
 					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campañas">
-						<DashboardTabButton
-							tab={TAB_DEFINITIONS[0]}
-							isActive={activeTab === 'library'}
-							onClick={setActiveTab}
-						/>
-						<DashboardTabButton
-							tab={TAB_DEFINITIONS[1]}
-							isActive={activeTab === 'builder'}
-							onClick={setActiveTab}
-						/>
-						<DashboardTabButton
-							tab={TAB_DEFINITIONS[2]}
-							isActive={activeTab === 'segment'}
-							onClick={setActiveTab}
-						/>
-						<DashboardTabButton
-							tab={TAB_DEFINITIONS[3]}
-							isActive={activeTab === 'tracking'}
-							onClick={setActiveTab}
-						/>
-					</div>
-
-					<div className="campaigns-summary-panel campaigns-summary-panel--hero">
-						<SummaryCard label="Template activo" value={selectedTemplate?.name || 'Sin seleccionar'} />
-						<SummaryCard label="Campaña en foco" value={selectedCampaign?.name || 'Sin seleccionar'} />
-						<SummaryCard label="Destinatarios" value={recipientsCount} />
-						<SummaryCard label="Actividad estimada" value={estimatedCost} />
+						{TAB_DEFINITIONS.map((tab) => (
+							<DashboardTabButton
+								key={tab.id}
+								tab={tab}
+								isActive={activeTab === tab.id}
+								onClick={setActiveTab}
+							/>
+						))}
 					</div>
 				</div>
 			</div>
