@@ -22,6 +22,12 @@
 	margin: 0;
 }
 
+.abandoned-carts-page .inline-actions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
 .abandoned-carts-page .inline-actions button {
 	height: 42px;
 	padding: 0 14px;
@@ -109,6 +115,15 @@
 
 .filters-form input,
 .filters-form select,
+.filters-form button,
+.secondary-link-btn,
+.primary-action-btn,
+.abandoned-message-box textarea {
+	font: inherit;
+}
+
+.filters-form input,
+.filters-form select,
 .filters-form button {
 	height: 44px;
 	border-radius: 12px;
@@ -117,11 +132,11 @@
 	font-size: 14px;
 	background: #ffffff;
 	color: #0f172a;
-	font: inherit;
 }
 
 .filters-form input:focus,
-.filters-form select:focus {
+.filters-form select:focus,
+.abandoned-message-box textarea:focus {
 	outline: none;
 	border-color: #94a3b8;
 	box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
@@ -277,9 +292,94 @@
 	border: 1px solid #c7d2fe;
 }
 
-.abandoned-card-footer-spacer {
+.abandoned-contact-note {
+	padding: 10px 12px;
+	border-radius: 14px;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	font-size: 12px;
+	color: #475569;
+}
+
+.abandoned-contact-note strong {
+	color: #0f172a;
+}
+
+.abandoned-card-actions {
 	margin-top: auto;
-	min-height: 8px;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+.secondary-link-btn,
+.primary-action-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 42px;
+	padding: 0 12px;
+	border-radius: 12px;
+	font-size: 13px;
+	font-weight: 700;
+	text-decoration: none;
+	transition: 0.2s ease;
+	cursor: pointer;
+}
+
+.secondary-link-btn {
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #0f172a;
+}
+
+.secondary-link-btn:hover:not(:disabled) {
+	background: #f8fafc;
+}
+
+.primary-action-btn {
+	border: 1px solid #1d4ed8;
+	background: #2563eb;
+	color: #ffffff;
+}
+
+.primary-action-btn:hover:not(:disabled) {
+	background: #1d4ed8;
+}
+
+.secondary-link-btn:disabled,
+.primary-action-btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.abandoned-message-box {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 2px;
+	padding: 12px;
+	border-radius: 16px;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+}
+
+.abandoned-message-box textarea {
+	width: 100%;
+	min-height: 100px;
+	resize: vertical;
+	padding: 12px;
+	border-radius: 12px;
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #0f172a;
+}
+
+.abandoned-message-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	flex-wrap: wrap;
 }
 
 .abandoned-empty-state {
@@ -359,6 +459,10 @@
 	}
 
 	.abandoned-carts-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.abandoned-card-actions {
 		grid-template-columns: 1fr;
 	}
 }

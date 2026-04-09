@@ -1,30 +1,9 @@
 import { prisma } from '../lib/prisma.js';
 
-async function resolveStoreCredentials() {
-	const installation = await prisma.storeInstallation.findFirst({
-		orderBy: { installedAt: 'desc' }
-	});
-
-	const storeId = installation?.storeId || process.env.TIENDANUBE_STORE_ID || null;
-	const accessToken = installation?.accessToken || process.env.TIENDANUBE_ACCESS_TOKEN || null;
-
-	if (!storeId || !accessToken) {
-		throw new Error(
-			'Faltan credenciales de Tiendanube. Necesitás StoreInstallation o TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN.'
-		);
-	}
-
-	return { storeId: String(storeId), accessToken };
-}
-
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CHECKOUTS_PER_PAGE = Math.min(
-	200,
-	Math.max(20, Number(process.env.TIENDANUBE_ABANDONED_SYNC_PER_PAGE || 200))
-);
-const FETCH_CONCURRENCY = Math.min(
-	6,
-	Math.max(1, Number(process.env.TIENDANUBE_ABANDONED_SYNC_CONCURRENCY || 3))
+	50,
+	Math.max(20, Number(process.env.TIENDANUBE_ABANDONED_SYNC_PER_PAGE || 50))
 );
 const MAX_PAGES = Math.max(
 	1,
@@ -36,7 +15,11 @@ const FETCH_RETRIES = Math.max(
 );
 const UPSERT_CHUNK_SIZE = Math.max(
 	10,
-	Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 200)
+	Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 100)
+);
+const DELETE_CHUNK_SIZE = Math.max(
+	25,
+	Number(process.env.TIENDANUBE_ABANDONED_DELETE_CHUNK_SIZE || 250)
 );
 const DEFAULT_DAYS_BACK = 7;
 const ALLOWED_WINDOWS = new Set([7, 15, 30]);
@@ -93,20 +76,44 @@ function chunkArray(values = [], size = 50) {
 	return chunks;
 }
 
-function buildConcurrentPageList(pageStart, maxPage, concurrency) {
-	const pages = [];
-	for (let offset = 0; offset < concurrency; offset += 1) {
-		const next = pageStart + offset;
-		if (next > maxPage) break;
-		pages.push(next);
+function isLastPageResponse(status, bodyText = '') {
+	if (status !== 404) return false;
+
+	const text = String(bodyText || '');
+	if (text.toLowerCase().includes('last page is')) {
+		return true;
 	}
-	return pages;
+
+	try {
+		const parsed = JSON.parse(text);
+		const description = String(parsed?.description || '');
+		return description.toLowerCase().includes('last page is');
+	} catch {
+		return false;
+	}
 }
 
-async function fetchCheckoutsPage({ storeId, accessToken, page }) {
+async function resolveStoreCredentials() {
+	const installation = await prisma.storeInstallation.findFirst({
+		orderBy: { installedAt: 'desc' }
+	});
+
+	const storeId = installation?.storeId || process.env.TIENDANUBE_STORE_ID || null;
+	const accessToken = installation?.accessToken || process.env.TIENDANUBE_ACCESS_TOKEN || null;
+
+	if (!storeId || !accessToken) {
+		throw new Error(
+			'Faltan credenciales de Tiendanube. Necesitás StoreInstallation o TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN.'
+		);
+	}
+
+	return { storeId: String(storeId), accessToken };
+}
+
+async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKOUTS_PER_PAGE }) {
 	const params = new URLSearchParams({
 		page: String(page),
-		per_page: String(CHECKOUTS_PER_PAGE)
+		per_page: String(perPage)
 	});
 
 	const url = `https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/checkouts?${params.toString()}`;
@@ -120,19 +127,45 @@ async function fetchCheckoutsPage({ storeId, accessToken, page }) {
 				headers: buildHeaders(accessToken)
 			});
 
-			if (!response.ok) {
-				const text = await response.text();
+			const text = await response.text();
 
-				if (response.status === 404 && text.includes('Last page is')) {
-					return [];
+			if (!response.ok) {
+				if (isLastPageResponse(response.status, text)) {
+					return {
+						items: [],
+						reachedEnd: true,
+						perPageUsed: perPage
+					};
 				}
 
-				throw new Error(
+				if ((response.status === 400 || response.status === 422) && perPage > 20) {
+					const fallbackPerPage = perPage > 50 ? 50 : 20;
+					if (fallbackPerPage !== perPage) {
+						return fetchCheckoutsPage({
+							storeId,
+							accessToken,
+							page,
+							perPage: fallbackPerPage
+						});
+					}
+				}
+
+				const error = new Error(
 					`checkouts página ${page}: Tiendanube respondió ${response.status} - ${text}`
 				);
+				error.status = response.status;
+				error.body = text;
+				throw error;
 			}
 
-			const payload = await response.json();
+			let payload = null;
+			try {
+				payload = text ? JSON.parse(text) : [];
+			} catch (parseError) {
+				throw new Error(
+					`La respuesta de Tiendanube para checkouts no se pudo parsear como JSON: ${parseError.message}`
+				);
+			}
 
 			if (!Array.isArray(payload)) {
 				throw new Error(
@@ -140,7 +173,11 @@ async function fetchCheckoutsPage({ storeId, accessToken, page }) {
 				);
 			}
 
-			return payload;
+			return {
+				items: payload,
+				reachedEnd: payload.length < perPage,
+				perPageUsed: perPage
+			};
 		} catch (error) {
 			lastError = error;
 			if (attempt < FETCH_RETRIES) {
@@ -215,8 +252,7 @@ async function replaceCartBatch(carts, storeId) {
 	const rows = carts
 		.map((cart) => ({
 			checkoutId: String(cart?.id || '').trim(),
-			...buildCartPayload(cart, storeId),
-			syncedAt: new Date()
+			...buildCartPayload(cart, storeId)
 		}))
 		.filter((row) => row.checkoutId);
 
@@ -247,8 +283,7 @@ async function replaceCartBatch(carts, storeId) {
 					shippingZipcode: row.shippingZipcode,
 					rawPayload: row.rawPayload,
 					products: row.products,
-					checkoutCreatedAt: row.checkoutCreatedAt,
-					syncedAt: new Date()
+					checkoutCreatedAt: row.checkoutCreatedAt
 				},
 				create: {
 					...row,
@@ -259,6 +294,22 @@ async function replaceCartBatch(carts, storeId) {
 	}
 
 	return rows.length;
+}
+
+async function deleteCartIdsInChunks(ids = []) {
+	let deletedCount = 0;
+
+	for (const chunk of chunkArray(ids, DELETE_CHUNK_SIZE)) {
+		if (!chunk.length) continue;
+		const removed = await prisma.abandonedCart.deleteMany({
+			where: {
+				id: { in: chunk }
+			}
+		});
+		deletedCount += Number(removed?.count || 0);
+	}
+
+	return deletedCount;
 }
 
 export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
@@ -277,69 +328,88 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 	let syncedCount = 0;
 	let skippedOldCount = 0;
 	let stopSync = false;
+	let effectivePerPage = CHECKOUTS_PER_PAGE;
 	const seenCheckoutIds = new Set();
 
-	for (
-		let pageStart = 1;
-		pageStart <= MAX_PAGES && !stopSync;
-		pageStart += FETCH_CONCURRENCY
-	) {
-		const pages = buildConcurrentPageList(
-			pageStart,
-			MAX_PAGES,
-			FETCH_CONCURRENCY
-		);
+	for (let page = 1; page <= MAX_PAGES && !stopSync; page += 1) {
+		const pageResult = await fetchCheckoutsPage({
+			storeId,
+			accessToken,
+			page,
+			perPage: effectivePerPage
+		});
 
-		const pageResults = await Promise.all(
-			pages.map((page) =>
-				fetchCheckoutsPage({ storeId, accessToken, page })
-			)
-		);
+		effectivePerPage = pageResult.perPageUsed || effectivePerPage;
+		pagesFetched += 1;
+
+		const carts = Array.isArray(pageResult.items) ? pageResult.items : [];
+		totalReceived += carts.length;
+
+		if (!carts.length) {
+			stopSync = true;
+			continue;
+		}
 
 		const validCarts = [];
+		let foundOlderInThisPage = false;
 
-		for (const carts of pageResults) {
-			pagesFetched += 1;
-			totalReceived += carts.length;
+		for (const cart of carts) {
+			const checkoutId = String(cart?.id || '').trim();
+			if (!checkoutId) continue;
 
-			if (!carts.length) {
-				stopSync = true;
+			const createdAt = parseDateOrNull(cart?.created_at);
+			if (createdAt && createdAt < cutoff) {
+				skippedOldCount += 1;
+				foundOlderInThisPage = true;
 				continue;
 			}
 
-			for (const cart of carts) {
-				const createdAt = parseDateOrNull(cart?.created_at);
-
-				if (createdAt && createdAt < cutoff) {
-					skippedOldCount += 1;
-					continue;
-				}
-
-				validCarts.push(cart);
-				seenCheckoutIds.add(String(cart.id));
-			}
+			validCarts.push(cart);
+			seenCheckoutIds.add(checkoutId);
 		}
 
 		if (validCarts.length) {
 			syncedCount += await replaceCartBatch(validCarts, storeId);
 		}
 
-		if (pageResults.every((items) => items.length < CHECKOUTS_PER_PAGE)) {
+		if (pageResult.reachedEnd || foundOlderInThisPage) {
 			stopSync = true;
 		}
 	}
 
-	const staleWhere = {
-		storeId,
-		OR: [
-			{ checkoutCreatedAt: { lt: cutoff } },
-			seenCheckoutIds.size
-				? { checkoutId: { notIn: Array.from(seenCheckoutIds) } }
-				: null
-		].filter(Boolean)
-	};
+	const oldNewCarts = await prisma.abandonedCart.findMany({
+		where: {
+			storeId,
+			status: 'NEW',
+			checkoutCreatedAt: { lt: cutoff }
+		},
+		select: { id: true }
+	});
 
-	const removed = await prisma.abandonedCart.deleteMany({ where: staleWhere });
+	const unseenNewCartsWithinWindow = await prisma.abandonedCart.findMany({
+		where: {
+			storeId,
+			status: 'NEW',
+			OR: [
+				{ checkoutCreatedAt: null },
+				{ checkoutCreatedAt: { gte: cutoff } }
+			]
+		},
+		select: {
+			id: true,
+			checkoutId: true
+		}
+	});
+
+	const idsToDelete = [
+		...oldNewCarts.map((item) => item.id),
+		...unseenNewCartsWithinWindow
+			.filter((item) => !seenCheckoutIds.has(String(item.checkoutId || '')))
+			.map((item) => item.id)
+	];
+
+	const uniqueIdsToDelete = [...new Set(idsToDelete)];
+	const deletedCount = await deleteCartIdsInChunks(uniqueIdsToDelete);
 	const remainingCount = await prisma.abandonedCart.count({ where: { storeId } });
 
 	return {
@@ -349,9 +419,9 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		totalReceived,
 		syncedCount,
 		skippedOldCount,
-		removedCount: removed.count,
-		deletedCount: removed.count,
+		removedCount: deletedCount,
+		deletedCount,
 		remainingCount,
-		message: `Sync lista · páginas ${pagesFetched} · checkouts leídos ${totalReceived} · carritos guardados ${syncedCount} · limpiados ${removed.count}.`
+		message: `Sync lista · páginas ${pagesFetched} · checkouts leídos ${totalReceived} · carritos guardados ${syncedCount} · limpiados ${deletedCount}.`
 	};
 }

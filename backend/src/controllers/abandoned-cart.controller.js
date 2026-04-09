@@ -41,7 +41,33 @@ function buildSuggestedMessage(cart) {
 	].join('\n\n');
 }
 
-function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '' }) {
+function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = 7 }) {
+	const useManualDates = Boolean(dateFrom || dateTo);
+	const window = {};
+
+	if (useManualDates) {
+		if (dateFrom) {
+			window.gte = new Date(`${dateFrom}T00:00:00.000Z`);
+		}
+
+		if (dateTo) {
+			window.lte = new Date(`${dateTo}T23:59:59.999Z`);
+		}
+
+		return Object.keys(window).length ? window : null;
+	}
+
+	if (![7, 15, 30].includes(Number(syncWindow))) {
+		return null;
+	}
+
+	const cutoff = new Date();
+	cutoff.setDate(cutoff.getDate() - Number(syncWindow));
+	window.gte = cutoff;
+	return window;
+}
+
+function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '', syncWindow = 7 }) {
 	const where = {};
 
 	if (status && status !== 'ALL') {
@@ -61,16 +87,9 @@ function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '' }
 		];
 	}
 
-	if (dateFrom || dateTo) {
-		where.checkoutCreatedAt = {};
-
-		if (dateFrom) {
-			where.checkoutCreatedAt.gte = new Date(`${dateFrom}T00:00:00.000Z`);
-		}
-
-		if (dateTo) {
-			where.checkoutCreatedAt.lte = new Date(`${dateTo}T23:59:59.999Z`);
-		}
+	const dateWindow = buildDateWindow({ dateFrom, dateTo, syncWindow });
+	if (dateWindow) {
+		where.checkoutCreatedAt = dateWindow;
 	}
 
 	return where;
@@ -123,7 +142,14 @@ export async function getAbandonedCarts(req, res, next) {
 			? Number(req.query.syncWindow)
 			: 7;
 
-		const where = buildWhereClause({ q, status, dateFrom, dateTo });
+		const where = buildWhereClause({ q, status, dateFrom, dateTo, syncWindow });
+		const statsBaseWhere = buildWhereClause({
+			q,
+			status: 'ALL',
+			dateFrom,
+			dateTo,
+			syncWindow
+		});
 		const skip = (page - 1) * pageSize;
 
 		const [items, total, totalNew, totalContacted] = await Promise.all([
@@ -134,8 +160,8 @@ export async function getAbandonedCarts(req, res, next) {
 				take: pageSize
 			}),
 			prisma.abandonedCart.count({ where }),
-			prisma.abandonedCart.count({ where: { status: 'NEW' } }),
-			prisma.abandonedCart.count({ where: { status: 'CONTACTED' } })
+			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'NEW' } }),
+			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'CONTACTED' } })
 		]);
 
 		const carts = items.map(mapCartForView);
@@ -144,7 +170,7 @@ export async function getAbandonedCarts(req, res, next) {
 		return res.json({
 			ok: true,
 			carts,
-			filters: { q, status, dateFrom, dateTo },
+			filters: { q, status, dateFrom, dateTo, syncWindow },
 			syncWindow,
 			pagination: {
 				page,
