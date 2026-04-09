@@ -140,7 +140,7 @@ export async function getAbandonedCarts(req, res, next) {
 		const dateTo = String(req.query.dateTo || '');
 		const syncWindow = [7, 15, 30].includes(Number(req.query.syncWindow))
 			? Number(req.query.syncWindow)
-			: 7;
+			: 31;
 
 		const where = buildWhereClause({ q, status, dateFrom, dateTo, syncWindow });
 		const statsBaseWhere = buildWhereClause({
