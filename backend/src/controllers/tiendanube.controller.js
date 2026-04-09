@@ -57,7 +57,10 @@ function buildInstallUrl() {
 	url.searchParams.set('client_id', appId);
 	url.searchParams.set('redirect_uri', redirectUri);
 	url.searchParams.set('response_type', 'code');
-	url.searchParams.set('scope', process.env.TIENDANUBE_APP_SCOPES || 'read_orders read_products');
+	url.searchParams.set(
+		'scope',
+		process.env.TIENDANUBE_APP_SCOPES || 'read_orders read_products'
+	);
 	return url.toString();
 }
 
@@ -85,7 +88,9 @@ function buildTiendanubeHeaders(accessToken) {
 	return {
 		Authentication: `bearer ${accessToken}`,
 		'Content-Type': 'application/json',
-		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant (soporte@lummine.com)'
+		'User-Agent':
+			process.env.TIENDANUBE_USER_AGENT ||
+			'Lummine IA Assistant (soporte@lummine.com)'
 	};
 }
 
@@ -96,9 +101,15 @@ function resolvePublicBackendBaseUrl(req) {
 		process.env.BACKEND_URL,
 		process.env.PUBLIC_APP_URL,
 		process.env.APP_URL,
-		process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null,
-		req ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}` : null
-	].map(normalizeUrl).filter(Boolean);
+		process.env.RAILWAY_STATIC_URL
+			? `https://${process.env.RAILWAY_STATIC_URL}`
+			: null,
+		req
+			? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`
+			: null
+	]
+		.map(normalizeUrl)
+		.filter(Boolean);
 
 	const baseUrl = candidates[0] || null;
 	if (!baseUrl) {
@@ -148,7 +159,10 @@ async function createTiendanubeWebhook({ storeId, accessToken, event, url }) {
 async function ensureTiendanubeOrderWebhooks({ storeId, accessToken, webhookUrl }) {
 	const existing = await listTiendanubeWebhooks({ storeId, accessToken });
 	const existingKeys = new Set(
-		existing.map((item) => `${String(item?.event || '').trim()}::${normalizeUrl(item?.url || '')}`)
+		existing.map(
+			(item) =>
+				`${String(item?.event || '').trim()}::${normalizeUrl(item?.url || '')}`
+		)
 	);
 
 	const created = [];
@@ -179,25 +193,57 @@ async function ensureTiendanubeOrderWebhooks({ storeId, accessToken, webhookUrl 
 }
 
 async function resolveInstallationForWebhook(requestedStoreId = null) {
-	if (requestedStoreId) {
+	const requested = requestedStoreId ? String(requestedStoreId).trim() : null;
+
+	if (requested) {
 		const byStore = await prisma.storeInstallation.findUnique({
-			where: { storeId: String(requestedStoreId) }
+			where: { storeId: requested }
 		});
 
 		if (byStore?.storeId && byStore?.accessToken) {
-			return byStore;
+			return {
+				storeId: String(byStore.storeId),
+				accessToken: String(byStore.accessToken),
+				scope: byStore.scope || null,
+				source: 'database:requested'
+			};
 		}
 	}
 
-	const installation = await prisma.storeInstallation.findFirst({
+	const latestInstallation = await prisma.storeInstallation.findFirst({
 		orderBy: { installedAt: 'desc' }
 	});
 
-	if (!installation?.storeId || !installation?.accessToken) {
-		throw new Error('No hay una instalación activa de Tiendanube para registrar webhooks.');
+	if (latestInstallation?.storeId && latestInstallation?.accessToken) {
+		return {
+			storeId: String(latestInstallation.storeId),
+			accessToken: String(latestInstallation.accessToken),
+			scope: latestInstallation.scope || null,
+			source: 'database:latest'
+		};
 	}
 
-	return installation;
+	const envStoreId = String(process.env.TIENDANUBE_STORE_ID || '').trim();
+	const envAccessToken = String(process.env.TIENDANUBE_ACCESS_TOKEN || '').trim();
+
+	if (requested && envStoreId && requested !== envStoreId) {
+		throw new Error(
+			`No existe una instalación guardada para storeId ${requested} y el TIENDANUBE_STORE_ID del entorno es ${envStoreId}.`
+		);
+	}
+
+	if (envStoreId && envAccessToken) {
+		return {
+			storeId: envStoreId,
+			accessToken: envAccessToken,
+			scope: null,
+			source: 'env'
+		};
+	}
+
+	throw new Error(
+		'No hay credenciales activas de Tiendanube para registrar webhooks. Necesitás StoreInstallation o TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN.'
+	);
 }
 
 export async function startTiendanubeInstall(_req, res) {
@@ -243,7 +289,9 @@ export async function handleTiendanubeCallback(req, res) {
 				webhookUrl
 			});
 		} catch (error) {
-			webhookError = error?.message || 'No se pudieron registrar webhooks automáticamente.';
+			webhookError =
+				error?.message ||
+				'No se pudieron registrar webhooks automáticamente.';
 			console.error('[TIENDANUBE][CALLBACK][WEBHOOKS]', webhookError);
 		}
 
@@ -259,7 +307,10 @@ export async function handleTiendanubeCallback(req, res) {
 			}</p>
 		`);
 	} catch (error) {
-		console.error('Error en callback Tiendanube:', error.response?.data || error.message);
+		console.error(
+			'Error en callback Tiendanube:',
+			error.response?.data || error.message
+		);
 		return res.status(500).json({
 			ok: false,
 			error: error.response?.data || error.message
@@ -276,7 +327,10 @@ export async function registerTiendanubeWebhooks(req, res) {
 			});
 		}
 
-		const installation = await resolveInstallationForWebhook(req.body?.storeId || req.query?.storeId);
+		const installation = await resolveInstallationForWebhook(
+			req.body?.storeId || req.query?.storeId
+		);
+
 		const webhookUrl = buildOrdersWebhookUrl(req);
 		const result = await ensureTiendanubeOrderWebhooks({
 			storeId: installation.storeId,
@@ -287,10 +341,14 @@ export async function registerTiendanubeWebhooks(req, res) {
 		return res.json({
 			ok: true,
 			storeId: installation.storeId,
+			source: installation.source || 'unknown',
 			...result
 		});
 	} catch (error) {
-		console.error('[TIENDANUBE][REGISTER WEBHOOKS]', error.response?.data || error.message);
+		console.error(
+			'[TIENDANUBE][REGISTER WEBHOOKS]',
+			error.response?.data || error.message
+		);
 		return res.status(500).json({
 			ok: false,
 			error: error.response?.data || error.message
@@ -314,8 +372,14 @@ export async function getTiendanubeStatus(_req, res) {
 		return res.json({
 			ok: true,
 			hasDatabaseInstallation: Boolean(installation),
-			hasEnvCredentials: Boolean(process.env.TIENDANUBE_STORE_ID && process.env.TIENDANUBE_ACCESS_TOKEN),
-			hasAppSecret: Boolean(process.env.TIENDANUBE_APP_SECRET || process.env.TIENDANUBE_CLIENT_SECRET),
+			hasEnvCredentials: Boolean(
+				process.env.TIENDANUBE_STORE_ID &&
+				process.env.TIENDANUBE_ACCESS_TOKEN
+			),
+			hasAppSecret: Boolean(
+				process.env.TIENDANUBE_APP_SECRET ||
+				process.env.TIENDANUBE_CLIENT_SECRET
+			),
 			hasRegisterSecret: Boolean(getRegisterSecret()),
 			activeSource: activeConfig?.source || null,
 			storeId: activeConfig?.storeId || installation?.storeId || null,
