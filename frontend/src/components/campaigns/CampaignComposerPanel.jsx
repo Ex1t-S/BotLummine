@@ -607,15 +607,6 @@ export default function CampaignComposerPanel({
 	useEffect(() => {
 		void loadCatalogOptions();
 	}, []);
-	useEffect(() => {
-		setPreviewPage(1);
-	}, [previewSearch, selectedCustomerCount]);
-
-	useEffect(() => {
-		if (previewPage > previewTotalPages) {
-			setPreviewPage(previewTotalPages);
-		}
-	}, [previewPage, previewTotalPages]);
 	const requiresHeaderImage = useMemo(
 		() => templateRequiresHeaderImage(selectedTemplate),
 		[selectedTemplate]
@@ -740,6 +731,16 @@ export default function CampaignComposerPanel({
 		const start = (previewPage - 1) * PREVIEW_PAGE_SIZE;
 		return previewFilteredCustomers.slice(start, start + PREVIEW_PAGE_SIZE);
 	}, [previewFilteredCustomers, previewPage]);
+
+	useEffect(() => {
+		setPreviewPage(1);
+	}, [previewSearch, selectedCustomerCount]);
+
+	useEffect(() => {
+		if (previewPage > previewTotalPages) {
+			setPreviewPage(previewTotalPages);
+		}
+	}, [previewPage, previewTotalPages]);
 
 	const effectiveSelectionCount = useMemo(() => {
 		if (!contactLimitNumber) return totalFoundCount;
