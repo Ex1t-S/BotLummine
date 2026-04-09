@@ -130,10 +130,17 @@
 
 .admin-content {
 	padding: 14px;
-	overflow: auto;
+	overflow: hidden;
 	background: #f8fafc;
+	height: 100vh;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
-
+.admin-content > * {
+	flex: 1;
+	min-height: 0;
+}
 .logout-btn {
 	margin-top: auto;
 	padding: 12px 14px;

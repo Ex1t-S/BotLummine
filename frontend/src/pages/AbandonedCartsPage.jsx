@@ -7,7 +7,7 @@ const initialFilters = {
 	status: 'ALL',
 	dateFrom: '',
 	dateTo: '',
-	syncWindow: 7,
+	syncWindow: 31,
 	page: 1
 };
 
