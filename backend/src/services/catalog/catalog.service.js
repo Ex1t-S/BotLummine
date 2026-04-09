@@ -1,5 +1,5 @@
-import { prisma } from '../lib/prisma.js';
-import { getTiendanubeClient } from './tiendanube/client.js';
+import { prisma } from '../../lib/prisma.js';
+import { getTiendanubeClient } from '../tiendanube/client.js';
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));

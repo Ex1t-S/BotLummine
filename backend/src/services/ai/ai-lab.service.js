@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { prisma } from '../lib/prisma.js';
-import { getOrCreateConversation, processInboundMessage } from './chat.service.js';
-import { createResetConversationState } from './conversation-turn.service.js';
-import { getAiLabFixture, AI_LAB_FIXTURES } from '../data/ai-lab-fixtures.js';
+import { prisma } from '../../lib/prisma.js';
+import { getOrCreateConversation, processInboundMessage } from '../conversation/chat.service.js';
+import { createResetConversationState } from '../conversation/conversation-turn.service.js';
+import { getAiLabFixture, AI_LAB_FIXTURES } from '../../data/ai-lab-fixtures.js';
 
 const SESSIONS = new Map();
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';

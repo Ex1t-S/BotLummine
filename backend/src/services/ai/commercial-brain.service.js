@@ -1,4 +1,4 @@
-import { getCommercialProfile, inferCommercialFamily, scoreProductAgainstCommercialProfile } from '../data/catalog-commercial-map.js';
+import { getCommercialProfile, inferCommercialFamily, scoreProductAgainstCommercialProfile } from '../../data/catalog-commercial-map.js';
 
 function normalizeText(value = '') {
 	return String(value || '')

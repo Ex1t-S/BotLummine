@@ -1,13 +1,13 @@
-import { prisma } from '../lib/prisma.js';
-import { runAssistantReply } from './ai/index.js';
-import { sendWhatsAppText, sendWhatsAppInteractiveList } from './whatsapp.service.js';
-import { normalizeThreadPhone } from '../lib/conversation-threads.js';
-import { publishInboxEvent } from '../lib/inbox-events.js';
+import { prisma } from '../../lib/prisma.js';
+import { runAssistantReply } from '../ai/index.js';
+import { sendWhatsAppText, sendWhatsAppInteractiveList } from '../whatsapp/whatsapp.service.js';
+import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
+import { publishInboxEvent } from '../../lib/inbox-events.js';
 import {
 	detectIntent,
 	extractOrderNumber,
 	extractStandaloneOrderNumber
-} from '../lib/intent.js';
+} from '../../lib/intent.js';
 import {
 	analyzeConversationTurn,
 	buildHandoffReply
@@ -15,17 +15,17 @@ import {
 import {
 	handleOrderStatusIntent,
 	buildFixedOrderReply
-} from './intents/order-status.service.js';
-import { handlePaymentIntent } from './intents/payment.service.js';
-import { handleShippingIntent } from './intents/shipping.service.js';
-import { handleSizeHelpIntent } from './intents/size-help.service.js';
-import { handleProductRecommendationIntent } from './intents/product-recommendation.service.js';
+} from '../intents/order-status.service.js';
+import { handlePaymentIntent } from '../intents/payment.service.js';
+import { handleShippingIntent } from '../intents/shipping.service.js';
+import { handleSizeHelpIntent } from '../intents/size-help.service.js';
+import { handleProductRecommendationIntent } from '../intents/product-recommendation.service.js';
 import {
 	searchCatalogProducts,
 	buildCatalogContext,
 	pickCommercialHints
-} from './catalog-search.service.js';
-import { resolveCommercialBrainV2 } from './commercial-brain.service.js';
+} from '../catalog/catalog-search.service.js';
+import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
 import {
 	isPaymentProofMessage,
 	buildPaymentReviewAck,
@@ -35,7 +35,7 @@ import {
 	getWhatsAppMenuRuntimeConfig,
 	DEFAULT_MAIN_MENU_KEY,
 	DEFAULT_MENU_PATHS
-} from './whatsapp-menu.service.js';
+} from '../whatsapp/whatsapp-menu.service.js';
 
 const MENU_PATHS = DEFAULT_MENU_PATHS;
 

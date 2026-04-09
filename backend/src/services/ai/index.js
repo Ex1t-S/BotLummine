@@ -1,6 +1,6 @@
 import { runGeminiReply, isRetryableGeminiError } from './gemini.service.js';
 import { runOpenAIReply } from './openai.service.js';
-import { buildPrompt } from './prompt-builder.js';
+import { buildPrompt } from '../common/prompt-builder.js';
 
 function buildProviderChain() {
 	const preferred = String(process.env.AI_PROVIDER || 'gemini').toLowerCase();

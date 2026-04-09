@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import { prisma } from '../lib/prisma.js';
-import { normalizeWhatsAppNumber, sendWhatsAppTemplate } from './whatsapp.service.js';
-import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from './whatsapp-template.service.js';
+import { prisma } from '../../lib/prisma.js';
+import { normalizeWhatsAppNumber, sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
+import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();

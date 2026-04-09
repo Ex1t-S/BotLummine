@@ -1,9 +1,9 @@
-import { prisma } from '../lib/prisma.js';
+import { prisma } from '../../lib/prisma.js';
 import {
 	getCommercialProfile,
 	inferCommercialFamily,
 	scoreProductAgainstCommercialProfile
-} from '../data/catalog-commercial-map.js';
+} from '../../data/catalog-commercial-map.js';
 
 function normalizeText(value = '') {
 	return String(value || '')

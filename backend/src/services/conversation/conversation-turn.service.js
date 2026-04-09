@@ -1,11 +1,11 @@
-import { runAssistantReply } from './ai/index.js';
-import { buildPrompt } from './ai/prompt-builder.js';
-import { normalizeThreadPhone } from '../lib/conversation-threads.js';
+import { runAssistantReply } from '../ai/index.js';
+import { buildPrompt } from '../common/prompt-builder.js';
+import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import {
 	detectIntent,
 	extractOrderNumber,
 	extractStandaloneOrderNumber
-} from '../lib/intent.js';
+} from '../../lib/intent.js';
 import {
 	analyzeConversationTurn,
 	buildHandoffReply
@@ -13,17 +13,17 @@ import {
 import {
 	handleOrderStatusIntent,
 	buildFixedOrderReply
-} from './intents/order-status.service.js';
-import { handlePaymentIntent } from './intents/payment.service.js';
-import { handleShippingIntent } from './intents/shipping.service.js';
-import { handleSizeHelpIntent } from './intents/size-help.service.js';
-import { handleProductRecommendationIntent } from './intents/product-recommendation.service.js';
+} from '../intents/order-status.service.js';
+import { handlePaymentIntent } from '../intents/payment.service.js';
+import { handleShippingIntent } from '../intents/shipping.service.js';
+import { handleSizeHelpIntent } from '../intents/size-help.service.js';
+import { handleProductRecommendationIntent } from '../intents/product-recommendation.service.js';
 import {
 	searchCatalogProducts,
 	buildCatalogContext,
 	pickCommercialHints
-} from './catalog-search.service.js';
-import { resolveCommercialBrainV2 } from './commercial-brain.service.js';
+} from '../catalog/catalog-search.service.js';
+import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
 import {
 	isPaymentProofMessage,
 	buildPaymentReviewAck,

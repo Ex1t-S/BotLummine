@@ -1,20 +1,11 @@
 import axios from 'axios';
-import { normalizeThreadPhone } from '../lib/conversation-threads.js';
-
-export function normalizeWhatsAppNumber(fromRaw) {
-	const original = String(fromRaw || '');
-	if (!original) return '';
-
-	return normalizeThreadPhone(original);
-}
-
-function debugWhatsAppRecipient(label, data = {}) {
-	try {
-		console.log(`[WA DEBUG] ${label}`, JSON.stringify(data, null, 2));
-	} catch {
-		console.log(`[WA DEBUG] ${label}`, data);
-	}
-}
+import {
+	normalizeWhatsAppNumber,
+	debugWhatsAppRecipient,
+	buildTextPayload,
+	buildInteractiveListPayload,
+	buildTemplatePayload,
+} from './whatsapp-formatters.js';
 
 async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	const rawTo = to;
@@ -42,7 +33,6 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	}
 
 	const finalPayload = {
-		messaging_product: 'whatsapp',
 		to: finalTo,
 		...payload,
 	};
@@ -83,6 +73,8 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	}
 }
 
+export { normalizeWhatsAppNumber } from './whatsapp-formatters.js';
+
 export async function sendWhatsAppText({ to, body }) {
 	const cleanBody = String(body || '').trim();
 
@@ -105,7 +97,7 @@ export async function sendWhatsAppText({ to, body }) {
 		debugLabel: 'TEXT',
 		payload: {
 			type: 'text',
-			text: { body: cleanBody },
+			...buildTextPayload(cleanBody),
 		},
 	});
 }
@@ -145,25 +137,17 @@ export async function sendWhatsAppInteractiveList({
 		};
 	}
 
-	const interactive = {
-		type: 'list',
-		body: { text: cleanBody },
-		action: {
-			button: String(buttonText || 'Ver opciones').slice(0, 20),
-			sections: cleanSections,
-		},
-	};
+	const payload = buildInteractiveListPayload({
+		body: cleanBody,
+		buttonText: String(buttonText || 'Ver opciones').slice(0, 20),
+		sections: cleanSections,
+		footer: footerText ? String(footerText).slice(0, 60) : '',
+	});
 
 	if (headerText) {
-		interactive.header = {
+		payload.interactive.header = {
 			type: 'text',
 			text: String(headerText).slice(0, 60),
-		};
-	}
-
-	if (footerText) {
-		interactive.footer = {
-			text: String(footerText).slice(0, 60),
 		};
 	}
 
@@ -172,7 +156,7 @@ export async function sendWhatsAppInteractiveList({
 		debugLabel: 'INTERACTIVE_LIST',
 		payload: {
 			type: 'interactive',
-			interactive,
+			...payload,
 		},
 	});
 }
@@ -197,13 +181,10 @@ export async function sendWhatsAppTemplate({
 	return sendWhatsAppRequest({
 		to,
 		debugLabel: 'TEMPLATE',
-		payload: {
-			type: 'template',
-			template: {
-				name: templateName,
-				language: { code: languageCode },
-				components,
-			}
-		},
+		payload: buildTemplatePayload({
+			name: templateName,
+			languageCode,
+			components,
+		}),
 	});
 }

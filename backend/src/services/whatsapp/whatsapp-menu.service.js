@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma.js';
+import { prisma } from '../../lib/prisma.js';
 
 export const DEFAULT_MENU_PATHS = {
 	MAIN: 'MAIN_MENU',

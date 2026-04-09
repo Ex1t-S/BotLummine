@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma.js';
+import { prisma } from '../../lib/prisma.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -72,7 +72,7 @@ function normalizePhone(value) {
 function normalizeText(value) {
 	return String(value ?? '')
 		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/[̀-ͯ]/g, '')
 		.toLowerCase()
 		.trim();
 }
@@ -88,7 +88,6 @@ function parseDateOrNull(value) {
 	const date = new Date(value);
 	return Number.isNaN(date.getTime()) ? null : date;
 }
-
 
 function normalizeOrderStatus(value) {
 	const normalized = cleanString(value);
@@ -170,11 +169,7 @@ export async function resolveStoreCredentials() {
 	const envAccessToken = cleanString(process.env.TIENDANUBE_ACCESS_TOKEN);
 
 	if (envStoreId && envAccessToken) {
-		return {
-			storeId: envStoreId,
-			accessToken: envAccessToken,
-			source: 'env',
-		};
+		return { storeId: envStoreId, accessToken: envAccessToken, source: 'env' };
 	}
 
 	const installation = await prisma.storeInstallation.findFirst({
@@ -195,8 +190,8 @@ export async function resolveStoreCredentials() {
 
 async function fetchJson(url, accessToken, resourceLabel) {
 	const userAgent = process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant';
-
 	let lastError = null;
+
 	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
 		try {
 			const response = await fetch(url, {
@@ -216,8 +211,7 @@ async function fetchJson(url, accessToken, resourceLabel) {
 				throw error;
 			}
 
-			const payload = await response.json();
-			return payload;
+			return await response.json();
 		} catch (error) {
 			lastError = error;
 			if (attempt < FETCH_RETRIES) {
@@ -230,14 +224,7 @@ async function fetchJson(url, accessToken, resourceLabel) {
 	throw lastError || new Error(`No se pudo obtener ${resourceLabel} de Tiendanube.`);
 }
 
-async function fetchOrdersPage({
-	storeId,
-	accessToken,
-	page,
-	createdAtMin = null,
-	createdAtMax = null,
-	perPage = ORDERS_PER_PAGE,
-}) {
+async function fetchOrdersPage({ storeId, accessToken, page, createdAtMin = null, createdAtMax = null, perPage = ORDERS_PER_PAGE }) {
 	const params = new URLSearchParams({
 		page: String(page),
 		per_page: String(perPage),
@@ -257,24 +244,12 @@ async function fetchOrdersPage({
 		return payload;
 	} catch (error) {
 		const bodyText = String(error?.body || error?.message || '');
-
 		if (error?.status === 422 && perPage > 50) {
 			pushWarning(`Paginación 422 en página ${page}. Reintentando con per_page=50.`);
 			return fetchOrdersPage({ storeId, accessToken, page, createdAtMin, createdAtMax, perPage: 50 });
 		}
-
-		const isEmptyPagination404 =
-			error?.status === 404 &&
-			(
-				bodyText.includes('Last page is 0') ||
-				bodyText.includes('"Last page is 0"') ||
-				bodyText.toLowerCase().includes('last page is')
-			);
-
-		if (isEmptyPagination404) {
-			return [];
-		}
-
+		const isEmptyPagination404 = error?.status === 404 && (bodyText.includes('Last page is 0') || bodyText.includes('"Last page is 0"') || bodyText.toLowerCase().includes('last page is'));
+		if (isEmptyPagination404) return [];
 		throw error;
 	}
 }
@@ -303,10 +278,7 @@ async function getLocalOrderBounds(storeId) {
 }
 
 function buildProfileIdentity(order) {
-	const identityBase =
-		cleanString(order?.contact_email) ||
-		cleanString(order?.contact_phone) ||
-		String(order?.id || Date.now());
+	const identityBase = cleanString(order?.contact_email) || cleanString(order?.contact_phone) || String(order?.id || Date.now());
 
 	return {
 		externalCustomerId: `order-profile-${identityBase}`,
@@ -407,10 +379,7 @@ async function ensureProfilesForOrders(orders, storeId) {
 			(candidate.externalCustomerId ? byExternal.get(candidate.externalCustomerId) : null) ||
 			(candidate.normalizedEmail ? byEmail.get(candidate.normalizedEmail) : null) ||
 			(candidate.normalizedPhone ? byPhone.get(candidate.normalizedPhone) : null);
-
-		if (profileId) {
-			orderToProfileId.set(String(order?.id), profileId);
-		}
+		if (profileId) orderToProfileId.set(String(order?.id), profileId);
 	}
 
 	return orderToProfileId;
@@ -493,33 +462,21 @@ async function upsertOrdersAndItems(orders, storeId) {
 		const orderId = String(order.id);
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerProfileId) continue;
-
 		const payload = mapOrderPayload(order, storeId, customerProfileId);
-		if (existingMap.has(orderId)) {
-			updates.push({ id: existingMap.get(orderId), data: payload });
-		} else {
-			createData.push(payload);
-		}
+		if (existingMap.has(orderId)) updates.push({ id: existingMap.get(orderId), data: payload });
+		else createData.push(payload);
 	}
 
 	for (let index = 0; index < createData.length; index += UPDATE_BATCH_SIZE) {
 		const batch = createData.slice(index, index + UPDATE_BATCH_SIZE);
-		if (batch.length) {
-			await prisma.customerOrder.createMany({ data: batch, skipDuplicates: true });
-		}
+		if (batch.length) await prisma.customerOrder.createMany({ data: batch, skipDuplicates: true });
 	}
 
 	for (let index = 0; index < updates.length; index += UPDATE_BATCH_SIZE) {
 		const batch = updates.slice(index, index + UPDATE_BATCH_SIZE);
 		if (!batch.length) continue;
-
 		await prisma.$transaction(
-			batch.map((item) =>
-				prisma.customerOrder.update({
-					where: { id: item.id },
-					data: item.data,
-				})
-			)
+			batch.map((item) => prisma.customerOrder.update({ where: { id: item.id }, data: item.data }))
 		);
 	}
 
@@ -530,9 +487,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 	const savedOrderMap = new Map(savedOrders.map((item) => [item.orderId, item.id]));
 
 	if (savedOrders.length) {
-		await prisma.customerOrderItem.deleteMany({
-			where: { customerOrderId: { in: savedOrders.map((row) => row.id) } },
-		});
+		await prisma.customerOrderItem.deleteMany({ where: { customerOrderId: { in: savedOrders.map((row) => row.id) } } });
 	}
 
 	const items = [];
@@ -546,36 +501,24 @@ async function upsertOrdersAndItems(orders, storeId) {
 
 	for (let index = 0; index < items.length; index += ITEM_BATCH_SIZE) {
 		const batch = items.slice(index, index + ITEM_BATCH_SIZE);
-		if (batch.length) {
-			await prisma.customerOrderItem.createMany({ data: batch });
-		}
+		if (batch.length) await prisma.customerOrderItem.createMany({ data: batch });
 	}
 
 	return { ordersUpserted: orders.length, itemsUpserted: items.length };
 }
 
-
-export async function fetchTiendanubeOrderById({ storeId, accessToken, orderId }) {
-	const normalizedOrderId = String(orderId || '').trim();
-	if (!storeId || !accessToken || !normalizedOrderId) {
-		throw new Error('fetchTiendanubeOrderById requiere storeId, accessToken y orderId.');
-	}
-
-	const params = new URLSearchParams({ fields: ORDER_FIELDS });
-	const url = `https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/orders/${normalizedOrderId}?${params.toString()}`;
-	const payload = await fetchJson(url, accessToken, `pedido ${normalizedOrderId}`);
-	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-		throw new Error(`La respuesta de Tiendanube para el pedido ${normalizedOrderId} no fue un objeto válido.`);
-	}
-	return payload;
-}
-
-export async function upsertTiendanubeOrder(order, storeId) {
-	if (!order || !order.id) {
-		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
-	}
-
-	return upsertOrdersAndItems([order], storeId);
+function safeSyncLogData(data) {
+	return {
+		status: data.status,
+		fullSync: Boolean(data.fullSync),
+		startedAt: data.startedAt,
+		finishedAt: data.finishedAt ?? null,
+		pagesFetched: Number(data.pagesFetched || 0),
+		ordersFetched: Number(data.ordersFetched || 0),
+		ordersUpserted: Number(data.ordersUpserted || 0),
+		customersTouched: Number(data.customersTouched || 0),
+		message: data.message || null,
+	};
 }
 
 async function processWindow({ storeId, accessToken, from, to, label }) {
@@ -603,7 +546,6 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 
 		syncState.pagesFetched += 1;
 		windowPages += 1;
-
 		if (!orders.length) break;
 
 		syncState.ordersFetched += orders.length;
@@ -614,7 +556,6 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 		syncState.itemsUpserted += saved.itemsUpserted;
 		windowUpserted += saved.ordersUpserted;
 		windowItems += saved.itemsUpserted;
-
 		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { storeId } });
 		syncState.message = `Ventana ${label}: página ${page} · pedidos ${syncState.ordersFetched} · guardados ${syncState.ordersUpserted}.`;
 
@@ -626,27 +567,7 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 		pushWarning(`Ventana ${label}: se alcanzó el límite de ${MAX_PAGES_PER_WINDOW} páginas en una sola corrida.`);
 	}
 
-	return {
-		label,
-		pagesFetched: windowPages,
-		ordersFetched: windowOrders,
-		ordersUpserted: windowUpserted,
-		itemsUpserted: windowItems,
-	};
-}
-
-function safeSyncLogData(data) {
-	return {
-		status: data.status,
-		fullSync: Boolean(data.fullSync),
-		startedAt: data.startedAt,
-		finishedAt: data.finishedAt ?? null,
-		pagesFetched: Number(data.pagesFetched || 0),
-		ordersFetched: Number(data.ordersFetched || 0),
-		ordersUpserted: Number(data.ordersUpserted || 0),
-		customersTouched: Number(data.customersTouched || 0),
-		message: data.message || null,
-	};
+	return { label, pagesFetched: windowPages, ordersFetched: windowOrders, ordersUpserted: windowUpserted, itemsUpserted: windowItems };
 }
 
 async function runSyncJob() {
@@ -676,15 +597,7 @@ async function runSyncJob() {
 		syncState.recentFrom = recentFrom.toISOString();
 
 		const runs = [];
-		runs.push(
-			await processWindow({
-				storeId,
-				accessToken,
-				from: recentFrom,
-				to: new Date(),
-				label: 'recent',
-			})
-		);
+		runs.push(await processWindow({ storeId, accessToken, from: recentFrom, to: new Date(), label: 'recent' }));
 
 		let cursor = boundsBefore.earliestOrderCreatedAt
 			? startOfMonthUTC(new Date(boundsBefore.earliestOrderCreatedAt.getTime() - 24 * 60 * 60 * 1000))
@@ -697,33 +610,15 @@ async function runSyncJob() {
 			const monthStart = startOfMonthUTC(cursor);
 			const monthEnd = endOfMonthUTC(cursor);
 			const label = monthLabel(monthStart);
-
-			const result = await processWindow({
-				storeId,
-				accessToken,
-				from: monthStart,
-				to: monthEnd,
-				label,
-			});
+			const result = await processWindow({ storeId, accessToken, from: monthStart, to: monthEnd, label });
 			runs.push(result);
 
-			if (result.ordersFetched === 0) {
-				emptyWindows += 1;
-			} else {
-				emptyWindows = 0;
-			}
+			if (result.ordersFetched === 0) emptyWindows += 1;
+			else emptyWindows = 0;
 
-			cursor = new Date(
-				Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() - 1, 1, 0, 0, 0, 0)
-			);
-
-			if (emptyWindows >= 2) {
-				break;
-			}
-
-			if (index === Math.min(HISTORY_MONTHS_PER_RUN, MAX_MONTH_WINDOWS_PER_SYNC) - 1) {
-				hitPerRunLimit = true;
-			}
+			cursor = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() - 1, 1, 0, 0, 0, 0));
+			if (emptyWindows >= 2) break;
+			if (index === Math.min(HISTORY_MONTHS_PER_RUN, MAX_MONTH_WINDOWS_PER_SYNC) - 1) hitPerRunLimit = true;
 		}
 
 		syncState.hasMoreHistory = hitPerRunLimit && emptyWindows < 2;
@@ -748,10 +643,7 @@ async function runSyncJob() {
 			});
 		}
 
-		return {
-			runs,
-			durationMs: Date.now() - startedAt,
-		};
+		return { runs, durationMs: Date.now() - startedAt };
 	} catch (error) {
 		pushError(error?.message || 'Error sincronizando pedidos.');
 		syncState.phase = 'error';
@@ -783,11 +675,7 @@ async function runSyncJob() {
 
 export async function syncCustomers() {
 	if (syncState.running) {
-		return {
-			ok: true,
-			started: false,
-			...getCustomerSyncStatus(),
-		};
+		return { ok: true, started: false, ...getCustomerSyncStatus() };
 	}
 
 	resetSyncState();
@@ -806,9 +694,5 @@ export async function syncCustomers() {
 		});
 	}, 0);
 
-	return {
-		ok: true,
-		started: true,
-		...getCustomerSyncStatus(),
-	};
+	return { ok: true, started: true, ...getCustomerSyncStatus() };
 }
