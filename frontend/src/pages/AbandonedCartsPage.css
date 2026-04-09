@@ -45,6 +45,28 @@
 	cursor: not-allowed;
 }
 
+.sync-summary-banner {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 14px 16px;
+	background: #eff6ff;
+	border: 1px solid #bfdbfe;
+	border-radius: 16px;
+	color: #1e3a8a;
+}
+
+.sync-summary-banner strong {
+	font-size: 14px;
+	font-weight: 800;
+}
+
+.sync-summary-banner span,
+.sync-summary-banner small {
+	font-size: 13px;
+	line-height: 1.4;
+}
+
 .stats-row {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -122,7 +144,7 @@
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(290px, 320px));
 	gap: 14px;
-	align-items: start;
+	align-items: stretch;
 }
 
 .abandoned-card {
@@ -134,7 +156,8 @@
 	border: 1px solid #e2e8f0;
 	background: #ffffff;
 	box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
-	min-height: auto;
+	min-height: 440px;
+	height: 100%;
 }
 
 .abandoned-topline {
@@ -183,10 +206,10 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: 6px 9px;
+	padding: 7px 12px;
 	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 800;
+	font-size: 13px;
+	font-weight: 900;
 	line-height: 1;
 	white-space: nowrap;
 	border: 1px solid transparent;
@@ -213,211 +236,107 @@
 .abandoned-meta-grid div {
 	background: #f8fafc;
 	border: 1px solid #e2e8f0;
-	border-radius: 12px;
-	padding: 9px 10px;
+	border-radius: 14px;
+	padding: 10px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 	min-width: 0;
 }
 
 .abandoned-meta-grid span {
-	display: block;
 	font-size: 11px;
-	font-weight: 700;
-	color: #64748b;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	margin-bottom: 3px;
+	color: #64748b;
+	font-weight: 700;
 }
 
 .abandoned-meta-grid strong {
-	display: block;
-	font-size: 14px;
-	line-height: 1.2;
+	font-size: 13px;
 	color: #0f172a;
+	line-height: 1.25;
 	word-break: break-word;
 }
 
-.product-chips {
+.abandoned-products {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
 }
 
-.product-chip {
+.abandoned-products span {
 	display: inline-flex;
 	align-items: center;
 	max-width: 100%;
-	padding: 5px 8px;
+	padding: 5px 9px;
 	border-radius: 999px;
-	background: #f1f5f9;
-	border: 1px solid #e2e8f0;
-	color: #334155;
-	font-size: 11px;
-	font-weight: 600;
-	line-height: 1.2;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	font-size: 12px;
+	background: #eef2ff;
+	color: #3730a3;
+	border: 1px solid #c7d2fe;
 }
 
-.abandoned-actions {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 8px;
+.abandoned-card-footer-spacer {
+	margin-top: auto;
+	min-height: 8px;
 }
 
-.secondary-link-btn,
-.primary-action-btn {
-	height: 40px;
-	padding: 0 12px;
-	border-radius: 10px;
-	border: 1px solid #dbe3ee;
-	font-size: 13px;
-	font-weight: 700;
-	display: inline-flex;
+.abandoned-empty-state {
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	text-decoration: none;
-	cursor: pointer;
-	transition: 0.2s ease;
-}
-
-.secondary-link-btn {
+	min-height: 180px;
+	border: 1px dashed #cbd5e1;
+	border-radius: 16px;
 	background: #ffffff;
-	color: #0f172a;
-}
-
-.secondary-link-btn:hover:not(:disabled) {
-	background: #f8fafc;
-	border-color: #cbd5e1;
-}
-
-.primary-action-btn {
-	background: #0f172a;
-	color: #ffffff;
-	border-color: #0f172a;
-}
-
-.primary-action-btn:hover:not(:disabled) {
-	background: #1e293b;
-	border-color: #1e293b;
-}
-
-.secondary-link-btn:disabled,
-.primary-action-btn:disabled {
-	opacity: 0.55;
-	cursor: not-allowed;
-}
-
-.abandoned-message-box {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-top: 2px;
-}
-
-.abandoned-message-box textarea {
-	width: 100%;
-	min-height: 96px;
-	max-height: 150px;
-	padding: 10px 12px;
-	border-radius: 12px;
-	border: 1px solid #dbe3ee;
-	background: #ffffff;
-	color: #0f172a;
-	font-size: 13px;
-	line-height: 1.4;
-	resize: vertical;
-	box-sizing: border-box;
-}
-
-.abandoned-message-box textarea:focus {
-	outline: none;
-	border-color: #94a3b8;
-	box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
-}
-
-.abandoned-message-actions {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 8px;
-}
-
-.abandoned-extra-products {
-	margin: 0;
-	font-size: 12px;
 	color: #64748b;
+	font-size: 14px;
 	font-weight: 600;
 }
 
 .pagination-row {
 	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
-	margin-top: 18px;
-}
-
-.compact-pagination {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	margin-top: 6px;
-	padding: 12px 14px;
-	background: #f8fafc;
-	border: 1px solid #e2e8f0;
-	border-radius: 16px;
-}
-
-.pagination-pages {
-	display: flex;
 	align-items: center;
 	justify-content: center;
-	flex-wrap: wrap;
 	gap: 8px;
+	margin-top: 6px;
+	flex-wrap: wrap;
 }
 
-.page-pill {
+.pagination-row button {
 	min-width: 40px;
 	height: 40px;
-	padding: 0 12px;
-	border-radius: 10px;
+	border-radius: 12px;
 	border: 1px solid #dbe3ee;
 	background: #ffffff;
 	color: #0f172a;
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 700;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
 	cursor: pointer;
 	transition: 0.2s ease;
 }
 
-.page-pill:hover:not(:disabled) {
-	background: #f1f5f9;
+.pagination-row button:hover:not(:disabled) {
+	background: #f8fafc;
 }
 
-.page-pill.active {
+.pagination-row button.is-active {
 	background: #0f172a;
 	color: #ffffff;
 	border-color: #0f172a;
 }
 
-.page-pill:disabled {
-	opacity: 0.5;
+.pagination-row button:disabled {
+	opacity: 0.45;
 	cursor: not-allowed;
 }
 
-.nav-pill {
-	min-width: 110px;
-}
-
-.page-ellipsis {
+.pagination-ellipsis {
 	padding: 0 4px;
 	color: #64748b;
-	font-weight: 800;
-	font-size: 18px;
-	line-height: 1;
+	font-size: 16px;
+	font-weight: 700;
 }
 
 @media (max-width: 1200px) {
@@ -426,59 +345,20 @@
 	}
 
 	.filters-form {
-		grid-template-columns: 1fr 1fr 1fr;
-	}
-
-	.abandoned-carts-grid {
-		grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-	}
-}
-
-@media (max-width: 900px) {
-	.stats-row {
 		grid-template-columns: 1fr 1fr;
 	}
-
-	.filters-form,
-	.abandoned-meta-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.abandoned-actions,
-	.abandoned-message-actions {
-		grid-template-columns: 1fr;
-	}
-
-	.compact-pagination {
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	.pagination-pages {
-		order: 1;
-	}
-
-	.nav-pill {
-		width: 100%;
-	}
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
 	.stats-row {
+		grid-template-columns: 1fr;
+	}
+
+	.filters-form {
 		grid-template-columns: 1fr;
 	}
 
 	.abandoned-carts-grid {
 		grid-template-columns: 1fr;
-	}
-
-	.abandoned-topline {
-		grid-template-columns: 42px 1fr;
-	}
-
-	.status-badge {
-		grid-column: 1 / -1;
-		justify-self: flex-start;
-		margin-top: 4px;
 	}
 }

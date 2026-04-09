@@ -83,7 +83,6 @@ export default function AbandonedCartsPage() {
 			});
 
 			setData(res.data);
-
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -135,94 +134,96 @@ export default function AbandonedCartsPage() {
 			};
 
 			setFilters(next);
-				await loadAbandonedCarts(next);
+			await loadAbandonedCarts(next);
 		} catch (error) {
 			console.error(error);
+			alert(
+				error?.response?.data?.error ||
+				error?.response?.data?.message ||
+				'No se pudo sincronizar carritos abandonados.'
+			);
 		} finally {
 			setSyncing(false);
 		}
 	}
 
-
 	async function handlePageChange(nextPage) {
 		const totalPages = data.pagination?.totalPages || 1;
 
-		if (nextPage < 1 || nextPage > totalPages || nextPage === filters.page) {
+		if (
+			typeof nextPage !== 'number' ||
+			nextPage < 1 ||
+			nextPage > totalPages ||
+			nextPage === filters.page
+		) {
 			return;
 		}
 
-		const next = {
-			...filters,
-			page: nextPage
-		};
-
+		const next = { ...filters, page: nextPage };
 		setFilters(next);
 		await loadAbandonedCarts(next);
-
-		window.scrollTo({
-			top: 0,
-			behavior: 'smooth'
-		});
 	}
 
-	const currentPage = data.pagination?.page || 1;
-	const totalPages = data.pagination?.totalPages || 1;
-	const visiblePages = getVisiblePages(currentPage, totalPages);
+	const carts = Array.isArray(data.carts) ? data.carts : [];
+	const stats = data.stats || {};
+	const pagination = data.pagination || { page: 1, totalPages: 1 };
+	const visiblePages = getVisiblePages(pagination.page || 1, pagination.totalPages || 1);
 
 	return (
-		<section className="page-card abandoned-carts-page">
-			<div className="page-header">
+		<div className="abandoned-carts-page">
+			<section className="page-header">
 				<div>
 					<h2>Carritos abandonados</h2>
 					<p>
-						Total: <strong>{data.stats?.total || 0}</strong>
+						Total: <strong>{stats.total || 0}</strong>
+						<br />
+						La sincronización ahora limpia automáticamente los carritos que quedan fuera de la ventana elegida (7, 15 o 30 días).
 					</p>
-					<p className="muted-text">
-						La sincronización ahora limpia automáticamente los carritos que quedan fuera
-						de la ventana elegida (7, 15 o 30 días).
-					</p>
-
-					{syncSummary ? (
-						<p className="muted-text">
-							Última sync {syncSummary.daysBack} días: {syncSummary.syncedCount} sincronizados,
-							{' '}{syncSummary.deletedCount} eliminados, {syncSummary.remainingCount} vigentes.
-						</p>
-					) : null}
 				</div>
 
 				<div className="inline-actions">
 					<button type="button" onClick={() => handleSync(7)} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sync 7 días'}
+						{syncing && filters.syncWindow === 7 ? 'Sincronizando...' : 'Sync 7 días'}
 					</button>
 					<button type="button" onClick={() => handleSync(15)} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sync 15 días'}
+						{syncing && filters.syncWindow === 15 ? 'Sincronizando...' : 'Sync 15 días'}
 					</button>
 					<button type="button" onClick={() => handleSync(30)} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sync 30 días'}
+						{syncing && filters.syncWindow === 30 ? 'Sincronizando...' : 'Sync 30 días'}
 					</button>
 				</div>
-			</div>
+			</section>
+
+			{syncSummary ? (
+				<div className="sync-summary-banner">
+					<strong>Última sync {syncSummary.daysBack} días</strong>
+					<span>{syncSummary.message || 'Sin resumen disponible.'}</span>
+					<small>
+						Guardados: {syncSummary.syncedCount} · Eliminados fuera de ventana: {syncSummary.deletedCount} · Vigentes: {syncSummary.remainingCount}
+					</small>
+				</div>
+			) : null}
 
 			<div className="stats-row">
 				<div className="stat-box">
 					<span>Total</span>
-					<strong>{data.stats?.total || 0}</strong>
+					<strong>{stats.total || 0}</strong>
 				</div>
 
 				<div className="stat-box">
 					<span>Nuevos</span>
-					<strong>{data.stats?.totalNew || 0}</strong>
+					<strong>{stats.totalNew || 0}</strong>
 				</div>
 
 				<div className="stat-box">
 					<span>Contactados</span>
-					<strong>{data.stats?.totalContacted || 0}</strong>
+					<strong>{stats.totalContacted || 0}</strong>
 				</div>
 
 				<div className="stat-box">
 					<span>Mostrando</span>
 					<strong>
-						{data.stats?.showingFrom || 0}-{data.stats?.showingTo || 0}
+						{stats.showingFrom || 0}-{stats.showingTo || 0}
 					</strong>
 				</div>
 			</div>
@@ -252,8 +253,8 @@ export default function AbandonedCartsPage() {
 					onChange={(e) => updateFilter('status', e.target.value)}
 				>
 					<option value="ALL">Todos</option>
-					<option value="NEW">Nuevos</option>
-					<option value="CONTACTED">Contactados</option>
+					<option value="NEW">Nuevo</option>
+					<option value="CONTACTED">Contactado</option>
 				</select>
 
 				<button type="submit">Aplicar</button>
@@ -262,28 +263,31 @@ export default function AbandonedCartsPage() {
 				</button>
 			</form>
 
-			{loading ? <p>Cargando carritos...</p> : null}
-
-			{!loading ? (
-				<div className="catalog-grid abandoned-carts-grid">
-					{(data.carts || []).map((cart) => (
-						<article key={cart.id} className="catalog-card abandoned-card">
+			{loading ? (
+				<div className="abandoned-empty-state">Cargando carritos abandonados...</div>
+			) : carts.length === 0 ? (
+				<div className="abandoned-empty-state">
+					No encontramos carritos abandonados con esos filtros.
+				</div>
+			) : (
+				<div className="abandoned-carts-grid">
+					{carts.map((cart) => (
+						<article key={cart.id} className="abandoned-card">
 							<div className="abandoned-topline">
-								<div className="abandoned-avatar">
-									{cart.initials ||
-										getInitials(cart.contactName || cart.contactEmail || cart.contactPhone)}
-								</div>
+								<div className="abandoned-avatar">{cart.initials || getInitials(cart.contactName)}</div>
 
 								<div className="abandoned-head-copy">
-									<h3>{cart.contactName || 'Sin nombre'}</h3>
-									<p>{cart.contactPhone || 'Sin teléfono'}</p>
-									<p>{cart.contactEmail || 'Sin email'}</p>
+									<h3>{cart.contactName || 'Cliente sin nombre'}</h3>
+									<p>{cart.contactPhone || '-'}</p>
+									{cart.contactEmail ? <p>{cart.contactEmail}</p> : null}
 								</div>
 
 								<span
-									className={`status-badge status-${String(cart.status || 'NEW').toLowerCase()}`}
+									className={`status-badge ${
+										cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
+									}`}
 								>
-									{cart.statusLabel || cart.status || 'Nuevo'}
+									{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
 								</span>
 							</div>
 
@@ -295,7 +299,7 @@ export default function AbandonedCartsPage() {
 
 								<div>
 									<span>Fecha</span>
-									<strong>{cart.displayCreatedAt}</strong>
+									<strong>{cart.displayCreatedAt || '-'}</strong>
 								</div>
 
 								<div>
@@ -309,80 +313,58 @@ export default function AbandonedCartsPage() {
 								</div>
 							</div>
 
-							{Array.isArray(cart.productsPreview) && cart.productsPreview.length > 0 ? (
-								<div className="product-chips">
-									{cart.productsPreview.map((productName, index) => (
-										<span
-											key={`${cart.id}-${index}`}
-											className="product-chip"
-											title={productName}
-										>
-											{productName}
-										</span>
-									))}
-								</div>
-							) : null}
-
-							<div className="abandoned-actions abandoned-actions--compact">
-								<span className={`status-badge status-${String(cart.status || 'NEW').toLowerCase()}`}>
-									{cart.statusLabel || cart.status || 'Nuevo'}
-								</span>
+							<div className="abandoned-products">
+								{Array.isArray(cart.productsPreview) && cart.productsPreview.length > 0 ? (
+									cart.productsPreview.map((productName, index) => (
+										<span key={`${cart.id}-${index}`}>{productName}</span>
+									))
+								) : (
+									<span>Sin productos detectados</span>
+								)}
 							</div>
 
-							{cart.productsCount > 3 ? (
-								<p className="abandoned-extra-products">
-									+{cart.productsCount - 3} producto{cart.productsCount - 3 === 1 ? '' : 's'} más
-								</p>
-							) : null}
+							<div className="abandoned-card-footer-spacer" />
 						</article>
 					))}
 				</div>
-			) : null}
+			)}
 
-			{totalPages > 1 ? (
-				<div className="pagination-row compact-pagination">
+			{(pagination.totalPages || 1) > 1 ? (
+				<div className="pagination-row">
 					<button
 						type="button"
-						className="page-pill nav-pill"
-						onClick={() => handlePageChange(currentPage - 1)}
-						disabled={currentPage === 1}
+						onClick={() => handlePageChange((pagination.page || 1) - 1)}
+						disabled={(pagination.page || 1) <= 1}
 					>
-						← Anterior
+						←
 					</button>
 
-					<div className="pagination-pages">
-						{visiblePages.map((item) => {
-							if (typeof item !== 'number') {
-								return (
-									<span key={item} className="page-ellipsis">
-										…
-									</span>
-								);
-							}
-
-							return (
-								<button
-									key={item}
-									type="button"
-									className={`page-pill${item === currentPage ? ' active' : ''}`}
-									onClick={() => handlePageChange(item)}
-								>
-									{item}
-								</button>
-							);
-						})}
-					</div>
+					{visiblePages.map((page) =>
+						typeof page === 'number' ? (
+							<button
+								key={page}
+								type="button"
+								className={page === pagination.page ? 'is-active' : ''}
+								onClick={() => handlePageChange(page)}
+							>
+								{page}
+							</button>
+						) : (
+							<span key={page} className="pagination-ellipsis">
+								…
+							</span>
+						)
+					)}
 
 					<button
 						type="button"
-						className="page-pill nav-pill"
-						onClick={() => handlePageChange(currentPage + 1)}
-						disabled={currentPage === totalPages}
+						onClick={() => handlePageChange((pagination.page || 1) + 1)}
+						disabled={(pagination.page || 1) >= (pagination.totalPages || 1)}
 					>
-						Siguiente →
+						→
 					</button>
 				</div>
 			) : null}
-		</section>
+		</div>
 	);
 }

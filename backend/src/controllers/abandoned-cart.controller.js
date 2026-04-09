@@ -165,7 +165,7 @@ export async function getAbandonedCarts(req, res, next) {
 	}
 }
 
-export async function postSyncAbandonedCarts(req, res, next) {
+export async function postSyncAbandonedCarts(req, res) {
 	try {
 		ensureAbandonedCartModel();
 
@@ -182,7 +182,11 @@ export async function postSyncAbandonedCarts(req, res, next) {
 			message: `Sync ${daysBack} días completada: ${result.syncedCount || result.count || 0} sincronizados y ${Number(result.deletedCount ?? result.removedCount ?? 0)} eliminados fuera de ventana.`
 		});
 	} catch (error) {
-		next(error);
+		console.error('[ABANDONED CARTS][SYNC ERROR]', error);
+		return res.status(500).json({
+			ok: false,
+			error: error?.message || 'No se pudo sincronizar carritos abandonados.'
+		});
 	}
 }
 

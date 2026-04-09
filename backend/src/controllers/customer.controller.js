@@ -244,6 +244,7 @@ function mapOrderToCard(order) {
 		totalUnitsPurchased,
 		productsPreview: productNames.slice(0, 6),
 		updatedAt: order.orderUpdatedAt || order.updatedAt || order.orderCreatedAt || null,
+		paymentStatus: order.paymentStatus || '',
 		orderNumber: order.orderNumber || '',
 		rawTotal: Number(order.totalAmount || 0),
 		rawDate: order.orderCreatedAt || null,
