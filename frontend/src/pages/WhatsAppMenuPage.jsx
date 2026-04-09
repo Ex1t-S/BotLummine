@@ -71,16 +71,20 @@ function updateStatePatch(menuConfig, menuKey, optionId, patchKey, value) {
 		...menuConfig,
 		menus: menuConfig.menus.map((menu) => {
 			if (menu.key !== menuKey) return menu;
+
 			return {
 				...menu,
 				options: menu.options.map((option) => {
 					if (option.id !== optionId) return option;
+
 					const nextStatePatch = { ...(option.statePatch || {}) };
+
 					if (value === '' || value === null || value === undefined) {
 						delete nextStatePatch[patchKey];
 					} else {
 						nextStatePatch[patchKey] = value;
 					}
+
 					return {
 						...option,
 						statePatch: nextStatePatch
@@ -92,11 +96,7 @@ function updateStatePatch(menuConfig, menuKey, optionId, patchKey, value) {
 }
 
 function getActionLabel(actionType) {
-	return ACTION_TYPES.find((item) => item.value === actionType)?.label || actionType;
-}
-
-function getIntentLabel(intentValue) {
-	return INTENT_OPTIONS.find((item) => item.value === intentValue)?.label || intentValue || 'No definida';
+	return ACTION_TYPES.find((action) => action.value === actionType)?.label || actionType;
 }
 
 function sortOptions(options = []) {
@@ -124,6 +124,7 @@ export default function WhatsAppMenuPage() {
 		try {
 			const response = await api.get('/whatsapp-menu');
 			const nextConfig = deepClone(response.data?.settings?.config || { version: 1, mainMenuKey: '', menus: [] });
+
 			setConfig(nextConfig);
 			setSettingsName(response.data?.settings?.name || 'Configuración principal');
 			setSelectedMenuKey(nextConfig.mainMenuKey || nextConfig.menus?.[0]?.key || '');
@@ -141,31 +142,13 @@ export default function WhatsAppMenuPage() {
 
 	const sortedSelectedOptions = useMemo(() => sortOptions(selectedMenu?.options || []), [selectedMenu]);
 
-	const stats = useMemo(() => {
-		if (!config) {
-			return {
-				totalMenus: 0,
-				totalOptions: 0,
-				activeOptions: 0
-			};
-		}
-
-		const totalMenus = config.menus.length;
-		const totalOptions = config.menus.reduce((acc, menu) => acc + (menu.options?.length || 0), 0);
-		const activeOptions = config.menus.reduce(
-			(acc, menu) => acc + (menu.options?.filter((option) => option.isActive !== false).length || 0),
-			0
-		);
-
-		return { totalMenus, totalOptions, activeOptions };
-	}, [config]);
-
 	function updateMenuField(menuKey, field, value) {
 		setConfig((current) => {
 			const nextMenus = current.menus.map((menu) => (menu.key === menuKey ? { ...menu, [field]: value } : menu));
 
 			if (field === 'key') {
 				const normalizedValue = String(value || '').trim();
+
 				const remappedMenus = nextMenus.map((menu) => ({
 					...menu,
 					options: menu.options.map((option) =>
@@ -198,6 +181,7 @@ export default function WhatsAppMenuPage() {
 			...current,
 			menus: current.menus.map((menu) => {
 				if (menu.key !== menuKey) return menu;
+
 				return {
 					...menu,
 					options: menu.options.map((option) => (option.id === optionId ? { ...option, [field]: value } : option))
@@ -213,6 +197,7 @@ export default function WhatsAppMenuPage() {
 				...current,
 				menus: [...current.menus, nextMenu]
 			};
+
 			setSelectedMenuKey(nextMenu.key);
 			return nextConfig;
 		});
@@ -221,9 +206,12 @@ export default function WhatsAppMenuPage() {
 	function removeMenu(menuKey) {
 		setConfig((current) => {
 			if (current.menus.length <= 1) return current;
+
 			const nextMenus = current.menus.filter((menu) => menu.key !== menuKey);
 			const nextMainKey = current.mainMenuKey === menuKey ? nextMenus[0]?.key || '' : current.mainMenuKey;
+
 			setSelectedMenuKey(nextMenus[0]?.key || '');
+
 			return {
 				...current,
 				mainMenuKey: nextMainKey,
@@ -237,6 +225,7 @@ export default function WhatsAppMenuPage() {
 			...current,
 			menus: current.menus.map((menu) => {
 				if (menu.key !== menuKey) return menu;
+
 				return {
 					...menu,
 					options: [...menu.options, createEmptyOption(menu.options.length + 1)]
@@ -251,6 +240,7 @@ export default function WhatsAppMenuPage() {
 			menus: current.menus.map((menu) => {
 				if (menu.key !== menuKey) return menu;
 				if (menu.options.length <= 1) return menu;
+
 				return {
 					...menu,
 					options: menu.options.filter((option) => option.id !== optionId)
@@ -261,6 +251,7 @@ export default function WhatsAppMenuPage() {
 
 	async function handleSave() {
 		if (!config) return;
+
 		setSaving(true);
 		setError('');
 		setFeedback('');
@@ -273,9 +264,10 @@ export default function WhatsAppMenuPage() {
 
 			const response = await api.put('/whatsapp-menu', payload);
 			const nextConfig = deepClone(response.data?.settings?.config || config);
+
 			setConfig(nextConfig);
 			setSelectedMenuKey(nextConfig.mainMenuKey || nextConfig.menus?.[0]?.key || '');
-			setFeedback('Menú guardado. La nueva configuración ya quedó lista para usarse.');
+			setFeedback('Menú guardado correctamente.');
 		} catch (requestError) {
 			setError(requestError?.response?.data?.error || 'No pude guardar los cambios del menú.');
 		} finally {
@@ -291,6 +283,7 @@ export default function WhatsAppMenuPage() {
 		try {
 			const response = await api.post('/whatsapp-menu/reset');
 			const nextConfig = deepClone(response.data?.settings?.config || { version: 1, mainMenuKey: '', menus: [] });
+
 			setConfig(nextConfig);
 			setSettingsName(response.data?.settings?.name || 'Configuración principal');
 			setSelectedMenuKey(nextConfig.mainMenuKey || nextConfig.menus?.[0]?.key || '');
@@ -320,65 +313,48 @@ export default function WhatsAppMenuPage() {
 
 	return (
 		<div className="wam-page">
-			<div className="wam-hero">
+			<section className="wam-hero">
 				<div className="wam-hero__content">
-					<div className="wam-eyebrow">WhatsApp Menu Builder</div>
-					<h1>Menú de WhatsApp</h1>
+					<span className="wam-hero__eyebrow">Automatización · WhatsApp</span>
+					<h1>Editor de menú</h1>
 					<p>
-						Editá la estructura del menú, el texto que ve el cliente y el flujo que dispara cada opción
-						sin perderte en un formulario eterno.
+						Editá el menú principal, los submenús y el flujo de cada opción con una interfaz más simple y
+						clara.
 					</p>
 				</div>
 
 				<div className="wam-hero__actions">
 					<button
 						type="button"
-						className="wam-button wam-button--ghost"
+						className="wam-button wam-button--secondary"
 						onClick={handleReset}
 						disabled={saving}
 					>
 						Restaurar default
 					</button>
-					<button type="button" className="wam-button" onClick={handleSave} disabled={saving}>
+
+					<button type="button" className="wam-button wam-button--primary" onClick={handleSave} disabled={saving}>
 						{saving ? 'Guardando...' : 'Guardar cambios'}
 					</button>
 				</div>
-			</div>
+			</section>
 
-			<div className="wam-stats">
-				<div className="wam-stat-card">
-					<span>Menús</span>
-					<strong>{stats.totalMenus}</strong>
-				</div>
-				<div className="wam-stat-card">
-					<span>Opciones totales</span>
-					<strong>{stats.totalOptions}</strong>
-				</div>
-				<div className="wam-stat-card">
-					<span>Opciones activas</span>
-					<strong>{stats.activeOptions}</strong>
-				</div>
-				<div className="wam-stat-card">
-					<span>Menú inicial</span>
-					<strong>{config.menus.find((menu) => menu.key === config.mainMenuKey)?.title || 'Sin definir'}</strong>
-				</div>
-			</div>
-
-			<div className="wam-toolbar wam-panel">
-				<div className="wam-section-heading">
+			<section className="wam-card wam-topbar">
+				<div className="wam-section-head">
 					<div>
-						<h2>Configuración general</h2>
-						<p>Definí el nombre interno de esta configuración y cuál es el menú que arranca primero.</p>
+						<span className="wam-section-label">Configuración general</span>
+						<h2>Ajustes base</h2>
+						<p>Definí el nombre de la configuración y cuál es el menú inicial.</p>
 					</div>
 				</div>
 
-				<div className="wam-toolbar__grid">
+				<div className="wam-form-grid">
 					<label>
 						<span>Nombre de la configuración</span>
 						<input
 							value={settingsName}
 							onChange={(event) => setSettingsName(event.target.value)}
-							placeholder="Ej: Configuración principal"
+							placeholder="Configuración principal"
 						/>
 					</label>
 
@@ -386,9 +362,7 @@ export default function WhatsAppMenuPage() {
 						<span>Menú inicial</span>
 						<select
 							value={config.mainMenuKey}
-							onChange={(event) =>
-								setConfig((current) => ({ ...current, mainMenuKey: event.target.value }))
-							}
+							onChange={(event) => setConfig((current) => ({ ...current, mainMenuKey: event.target.value }))}
 						>
 							{config.menus.map((menu) => (
 								<option key={menu.key} value={menu.key}>
@@ -398,241 +372,186 @@ export default function WhatsAppMenuPage() {
 						</select>
 					</label>
 				</div>
-			</div>
+			</section>
 
 			{feedback ? <div className="wam-alert wam-alert--success">{feedback}</div> : null}
 			{error ? <div className="wam-alert wam-alert--error">{error}</div> : null}
 
-			<div className="wam-grid">
-				<aside className="wam-sidebar">
-					<div className="wam-panel wam-panel--sticky">
-						<div className="wam-panel__header">
-							<div>
-								<h2>Menús</h2>
-								<p className="wam-panel__subtext">Elegí qué bloque querés editar.</p>
-							</div>
-							<button type="button" className="wam-link-button" onClick={addMenu}>
-								+ Agregar menú
-							</button>
+			<div className="wam-layout">
+				<aside className="wam-card wam-sidebar">
+					<div className="wam-sidebar__header">
+						<div>
+							<span className="wam-section-label">Menús</span>
+							<h2>Lista de menús</h2>
 						</div>
 
-						<div className="wam-menu-list">
-							{config.menus.map((menu, index) => {
-								const isActive = menu.key === selectedMenuKey;
-								const activeOptionsCount = menu.options?.filter((option) => option.isActive !== false).length || 0;
+						<button type="button" className="wam-button wam-button--secondary wam-button--small" onClick={addMenu}>
+							+ Agregar
+						</button>
+					</div>
 
-								return (
-									<button
-										key={menu.key}
-										type="button"
-										className={`wam-menu-card ${isActive ? 'is-active' : ''}`}
-										onClick={() => setSelectedMenuKey(menu.key)}
-									>
-										<div className="wam-menu-card__top">
-											<div className="wam-menu-card__title-wrap">
-												<span className="wam-menu-card__index">Menú {index + 1}</span>
-												<strong>{menu.title}</strong>
-											</div>
-											{config.mainMenuKey === menu.key ? <span className="wam-badge">Inicial</span> : null}
-										</div>
+					<div className="wam-menu-list">
+						{config.menus.map((menu, index) => {
+							const isSelected = menu.key === selectedMenuKey;
+							const totalOptions = menu.options?.length || 0;
 
-										<p>{menu.body || 'Sin mensaje principal.'}</p>
+							return (
+								<button
+									key={menu.key}
+									type="button"
+									className={`wam-menu-item ${isSelected ? 'is-active' : ''}`}
+									onClick={() => setSelectedMenuKey(menu.key)}
+								>
+									<div className="wam-menu-item__top">
+										<span className="wam-menu-item__index">Menú {index + 1}</span>
+										{config.mainMenuKey === menu.key ? <span className="wam-chip">Inicial</span> : null}
+									</div>
 
-										<div className="wam-menu-card__meta">
-											<span>{menu.options?.length || 0} opciones</span>
-											<span>{activeOptionsCount} activas</span>
-										</div>
-									</button>
-								);
-							})}
-						</div>
+									<strong>{menu.title}</strong>
+									<p>{menu.body || 'Sin texto principal'}</p>
+
+									<div className="wam-menu-item__meta">
+										<span>{totalOptions} opciones</span>
+									</div>
+								</button>
+							);
+						})}
 					</div>
 				</aside>
 
-				<section className="wam-editor">
+				<section className="wam-card wam-editor">
 					{selectedMenu ? (
 						<>
-							<div className="wam-panel">
-								<div className="wam-panel__header">
-									<div>
-										<h2>Editor del menú</h2>
-										<p className="wam-panel__subtext">
-											Acá definís el bloque general del menú seleccionado.
-										</p>
-									</div>
-
-									<button
-										type="button"
-										className="wam-link-button wam-link-button--danger"
-										onClick={() => removeMenu(selectedMenu.key)}
-									>
-										Eliminar menú
-									</button>
+							<div className="wam-editor__header">
+								<div>
+									<span className="wam-section-label">Menú seleccionado</span>
+									<h2>{selectedMenu.title}</h2>
+									<p>Editá los datos generales y las opciones de este menú.</p>
 								</div>
 
-								<div className="wam-section-block">
-									<div className="wam-section-heading">
-										<div>
-											<h3>Datos básicos</h3>
-											<p>Lo mínimo para identificar el menú y mostrarlo bien en WhatsApp.</p>
-										</div>
-									</div>
+								<button
+									type="button"
+									className="wam-button wam-button--danger wam-button--small"
+									onClick={() => removeMenu(selectedMenu.key)}
+								>
+									Eliminar menú
+								</button>
+							</div>
 
-									<div className="wam-form-grid">
-										<label>
-											<span>Clave interna</span>
-											<input
-												value={selectedMenu.key}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'key', event.target.value)}
-											/>
-										</label>
-
-										<label>
-											<span>Título</span>
-											<input
-												value={selectedMenu.title}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'title', event.target.value)}
-											/>
-										</label>
-
-										<label>
-											<span>Header</span>
-											<input
-												value={selectedMenu.headerText}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'headerText', event.target.value)}
-											/>
-										</label>
-
-										<label>
-											<span>Texto del botón</span>
-											<input
-												value={selectedMenu.buttonText}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'buttonText', event.target.value)}
-											/>
-										</label>
-									</div>
+							<div className="wam-block">
+								<div className="wam-block__header">
+									<h3>Datos del menú</h3>
 								</div>
 
-								<div className="wam-section-block">
-									<div className="wam-section-heading">
-										<div>
-											<h3>Mensaje visible</h3>
-											<p>Esto es lo que el cliente ve cuando se abre este menú.</p>
-										</div>
-									</div>
+								<div className="wam-form-grid">
+									<label>
+										<span>Clave interna</span>
+										<input
+											value={selectedMenu.key}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'key', event.target.value)}
+										/>
+									</label>
 
-									<div className="wam-form-grid">
-										<label className="wam-form-grid__full">
-											<span>Cuerpo</span>
-											<textarea
-												rows={4}
-												value={selectedMenu.body}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'body', event.target.value)}
-												placeholder="Ej: Elegí una opción para ayudarte más rápido:"
-											/>
-										</label>
+									<label>
+										<span>Título</span>
+										<input
+											value={selectedMenu.title}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'title', event.target.value)}
+										/>
+									</label>
 
-										<label className="wam-form-grid__full">
-											<span>Footer</span>
-											<input
-												value={selectedMenu.footerText}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'footerText', event.target.value)}
-												placeholder="Ej: Escribí 0 o menú para volver al inicio."
-											/>
-										</label>
-									</div>
-								</div>
+									<label>
+										<span>Header</span>
+										<input
+											value={selectedMenu.headerText}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'headerText', event.target.value)}
+										/>
+									</label>
 
-								<div className="wam-section-block">
-									<div className="wam-section-heading">
-										<div>
-											<h3>Organización</h3>
-											<p>Sirve para ordenar cómo aparece este menú y cómo se agrupan sus opciones.</p>
-										</div>
-									</div>
+									<label>
+										<span>Texto del botón</span>
+										<input
+											value={selectedMenu.buttonText}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'buttonText', event.target.value)}
+										/>
+									</label>
 
-									<div className="wam-form-grid">
-										<label>
-											<span>Título de sección</span>
-											<input
-												value={selectedMenu.sectionTitle || ''}
-												onChange={(event) => updateMenuField(selectedMenu.key, 'sectionTitle', event.target.value)}
-											/>
-										</label>
+									<label className="wam-form-grid__full">
+										<span>Cuerpo</span>
+										<textarea
+											rows={4}
+											value={selectedMenu.body}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'body', event.target.value)}
+										/>
+									</label>
 
-										<label>
-											<span>Orden</span>
-											<input
-												type="number"
-												value={selectedMenu.sortOrder || 1}
-												onChange={(event) =>
-													updateMenuField(selectedMenu.key, 'sortOrder', Number(event.target.value) || 1)
-												}
-											/>
-										</label>
-									</div>
+									<label className="wam-form-grid__full">
+										<span>Footer</span>
+										<input
+											value={selectedMenu.footerText}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'footerText', event.target.value)}
+										/>
+									</label>
+
+									<label>
+										<span>Título de sección</span>
+										<input
+											value={selectedMenu.sectionTitle || ''}
+											onChange={(event) => updateMenuField(selectedMenu.key, 'sectionTitle', event.target.value)}
+										/>
+									</label>
+
+									<label>
+										<span>Orden</span>
+										<input
+											type="number"
+											value={selectedMenu.sortOrder || 1}
+											onChange={(event) =>
+												updateMenuField(selectedMenu.key, 'sortOrder', Number(event.target.value) || 1)
+											}
+										/>
+									</label>
 								</div>
 							</div>
 
-							<div className="wam-panel">
-								<div className="wam-panel__header">
-									<div>
-										<h2>Opciones del menú</h2>
-										<p className="wam-panel__subtext">
-											Cada tarjeta representa una opción que puede tocar o escribir el cliente.
-										</p>
-									</div>
+							<div className="wam-block">
+								<div className="wam-block__header wam-block__header--between">
+									<h3>Opciones</h3>
 
-									<button type="button" className="wam-link-button" onClick={() => addOption(selectedMenu.key)}>
+									<button
+										type="button"
+										className="wam-button wam-button--secondary wam-button--small"
+										onClick={() => addOption(selectedMenu.key)}
+									>
 										+ Agregar opción
 									</button>
 								</div>
 
-								<div className="wam-option-list">
+								<div className="wam-options-list">
 									{sortedSelectedOptions.map((option, index) => (
-										<div key={option.id} className="wam-option-card">
-											<div className="wam-option-card__header">
-												<div className="wam-option-card__title-group">
-													<div className="wam-option-card__eyebrow">Opción {index + 1}</div>
-													<h3>{option.title || 'Nueva opción'}</h3>
-													<div className="wam-option-card__chips">
-														<span className="wam-chip">{getActionLabel(option.actionType)}</span>
-														<span className={`wam-chip ${option.isActive !== false ? 'is-success' : 'is-muted'}`}>
-															{option.isActive !== false ? 'Activa' : 'Inactiva'}
-														</span>
-													</div>
+										<details key={option.id} className="wam-option-card" open={index === 0}>
+											<summary className="wam-option-card__summary">
+												<div className="wam-option-card__summary-main">
+													<span className="wam-option-card__eyebrow">Opción {index + 1}</span>
+													<strong>{option.title || 'Nueva opción'}</strong>
+													<p>{option.description || 'Sin descripción'}</p>
 												</div>
 
-												<button
-													type="button"
-													className="wam-link-button wam-link-button--danger"
-													onClick={() => removeOption(selectedMenu.key, option.id)}
-												>
-													Eliminar
-												</button>
-											</div>
+												<div className="wam-option-card__summary-side">
+													<span className="wam-pill">{getActionLabel(option.actionType)}</span>
+													<span className="wam-pill wam-pill--soft">Orden {option.sortOrder || index + 1}</span>
+												</div>
+											</summary>
 
-											<div className="wam-option-card__summary">
-												<div>
-													<span>Descripción</span>
-													<strong>{option.description || 'Sin descripción'}</strong>
-												</div>
-												<div>
-													<span>Orden</span>
-													<strong>{option.sortOrder || index + 1}</strong>
-												</div>
-												<div>
-													<span>Alias</span>
-													<strong>{option.aliases?.length ? aliasesToText(option.aliases) : 'Sin alias'}</strong>
-												</div>
-											</div>
-
-											<div className="wam-section-block wam-section-block--soft">
-												<div className="wam-section-heading">
-													<div>
-														<h3>Contenido principal</h3>
-														<p>Lo básico para que la opción quede clara y funcione.</p>
-													</div>
+											<div className="wam-option-card__content">
+												<div className="wam-option-card__actions">
+													<button
+														type="button"
+														className="wam-button wam-button--danger wam-button--small"
+														onClick={() => removeOption(selectedMenu.key, option.id)}
+													>
+														Eliminar
+													</button>
 												</div>
 
 												<div className="wam-form-grid">
@@ -659,7 +578,6 @@ export default function WhatsAppMenuPage() {
 															onChange={(event) =>
 																updateOptionField(selectedMenu.key, option.id, 'description', event.target.value)
 															}
-															placeholder="Texto corto que el cliente ve debajo del título"
 														/>
 													</label>
 
@@ -707,129 +625,91 @@ export default function WhatsAppMenuPage() {
 																	textToAliases(event.target.value)
 																)
 															}
-															placeholder="Ej: 1, productos, ver productos"
+															placeholder="1, productos, ver productos"
 														/>
-														<small>Separalos con coma. Sirven para detectar variaciones del texto del usuario.</small>
 													</label>
-												</div>
-											</div>
 
-											{option.actionType === 'SUBMENU' ? (
-												<div className="wam-section-block">
-													<div className="wam-section-heading">
-														<div>
-															<h3>Destino del submenú</h3>
-															<p>Elegí a qué menú debe mandar esta opción.</p>
-														</div>
-													</div>
+													{option.actionType === 'SUBMENU' ? (
+														<>
+															<label>
+																<span>Ir al menú</span>
+																<select
+																	value={option.actionValue || ''}
+																	onChange={(event) =>
+																		updateOptionField(selectedMenu.key, option.id, 'actionValue', event.target.value)
+																	}
+																>
+																	{config.menus.map((menu) => (
+																		<option key={menu.key} value={menu.key}>
+																			{menu.title}
+																		</option>
+																	))}
+																</select>
+															</label>
 
-													<div className="wam-form-grid">
-														<label>
-															<span>Ir al menú</span>
-															<select
-																value={option.actionValue || ''}
-																onChange={(event) =>
-																	updateOptionField(selectedMenu.key, option.id, 'actionValue', event.target.value)
-																}
-															>
-																{config.menus.map((menu) => (
-																	<option key={menu.key} value={menu.key}>
-																		{menu.title}
-																	</option>
-																))}
-															</select>
-														</label>
+															<label className="wam-form-grid__full">
+																<span>Texto previo</span>
+																<input
+																	value={option.promptPrefix || ''}
+																	onChange={(event) =>
+																		updateOptionField(selectedMenu.key, option.id, 'promptPrefix', event.target.value)
+																	}
+																/>
+															</label>
+														</>
+													) : null}
 
-														<label className="wam-form-grid__full">
-															<span>Texto antes de mostrar submenú</span>
-															<input
-																value={option.promptPrefix || ''}
-																onChange={(event) =>
-																	updateOptionField(selectedMenu.key, option.id, 'promptPrefix', event.target.value)
-																}
-																placeholder="Ej: Perfecto. Vamos por productos."
-															/>
-														</label>
-													</div>
-												</div>
-											) : null}
+													{option.actionType === 'INTENT' ? (
+														<>
+															<label>
+																<span>Intención</span>
+																<select
+																	value={option.actionValue || ''}
+																	onChange={(event) =>
+																		updateOptionField(selectedMenu.key, option.id, 'actionValue', event.target.value)
+																	}
+																>
+																	{INTENT_OPTIONS.map((intent) => (
+																		<option key={intent.value} value={intent.value}>
+																			{intent.label}
+																		</option>
+																	))}
+																</select>
+															</label>
 
-											{option.actionType === 'INTENT' ? (
-												<div className="wam-section-block">
-													<div className="wam-section-heading">
-														<div>
-															<h3>Configuración de intención</h3>
-															<p>Esta opción dispara un flujo interno para la IA.</p>
-														</div>
-													</div>
+															<label className="wam-form-grid__full">
+																<span>Mensaje interno para IA</span>
+																<input
+																	value={option.effectiveMessageBody || ''}
+																	onChange={(event) =>
+																		updateOptionField(
+																			selectedMenu.key,
+																			option.id,
+																			'effectiveMessageBody',
+																			event.target.value
+																		)
+																	}
+																/>
+															</label>
 
-													<div className="wam-form-grid">
-														<label>
-															<span>Intención</span>
-															<select
-																value={option.actionValue || ''}
-																onChange={(event) =>
-																	updateOptionField(selectedMenu.key, option.id, 'actionValue', event.target.value)
-																}
-															>
-																{INTENT_OPTIONS.map((intent) => (
-																	<option key={intent.value} value={intent.value}>
-																		{intent.label}
-																	</option>
-																))}
-															</select>
-														</label>
+															<label className="wam-form-grid__full">
+																<span>Resumen para historial</span>
+																<input
+																	value={option.summaryUserMessage || ''}
+																	onChange={(event) =>
+																		updateOptionField(
+																			selectedMenu.key,
+																			option.id,
+																			'summaryUserMessage',
+																			event.target.value
+																		)
+																	}
+																/>
+															</label>
+														</>
+													) : null}
 
-														<div className="wam-inline-info">
-															<span>Intención actual</span>
-															<strong>{getIntentLabel(option.actionValue)}</strong>
-														</div>
-
-														<label className="wam-form-grid__full">
-															<span>Mensaje interno que usa la IA</span>
-															<input
-																value={option.effectiveMessageBody || ''}
-																onChange={(event) =>
-																	updateOptionField(
-																		selectedMenu.key,
-																		option.id,
-																		'effectiveMessageBody',
-																		event.target.value
-																	)
-																}
-																placeholder="Ej: El cliente quiere ver productos destacados."
-															/>
-														</label>
-
-														<label className="wam-form-grid__full">
-															<span>Resumen para historial</span>
-															<input
-																value={option.summaryUserMessage || ''}
-																onChange={(event) =>
-																	updateOptionField(
-																		selectedMenu.key,
-																		option.id,
-																		'summaryUserMessage',
-																		event.target.value
-																	)
-																}
-																placeholder="Ej: Consultó por productos"
-															/>
-														</label>
-													</div>
-												</div>
-											) : null}
-
-											{option.actionType === 'MESSAGE' || option.actionType === 'HUMAN' ? (
-												<div className="wam-section-block">
-													<div className="wam-section-heading">
-														<div>
-															<h3>Respuesta</h3>
-															<p>Este texto se envía como respuesta directa.</p>
-														</div>
-													</div>
-
-													<div className="wam-form-grid">
+													{option.actionType === 'MESSAGE' || option.actionType === 'HUMAN' ? (
 														<label className="wam-form-grid__full">
 															<span>Respuesta</span>
 															<textarea
@@ -838,77 +718,73 @@ export default function WhatsAppMenuPage() {
 																onChange={(event) =>
 																	updateOptionField(selectedMenu.key, option.id, 'replyBody', event.target.value)
 																}
-																placeholder="Escribí la respuesta que va a recibir el cliente"
+															/>
+														</label>
+													) : null}
+												</div>
+
+												<details className="wam-advanced">
+													<summary>Configuración avanzada</summary>
+
+													<div className="wam-form-grid">
+														<label>
+															<span>Foco de producto</span>
+															<input
+																value={option.statePatch?.currentProductFocus || ''}
+																onChange={(event) =>
+																	setConfig((current) =>
+																		updateStatePatch(
+																			current,
+																			selectedMenu.key,
+																			option.id,
+																			'currentProductFocus',
+																			event.target.value
+																		)
+																	)
+																}
+															/>
+														</label>
+
+														<label>
+															<span>Objetivo del cliente</span>
+															<input
+																value={option.statePatch?.lastUserGoal || ''}
+																onChange={(event) =>
+																	setConfig((current) =>
+																		updateStatePatch(
+																			current,
+																			selectedMenu.key,
+																			option.id,
+																			'lastUserGoal',
+																			event.target.value
+																		)
+																	)
+																}
+															/>
+														</label>
+
+														<label className="wam-form-grid__full">
+															<span>Productos de interés</span>
+															<input
+																value={aliasesToText(option.statePatch?.interestedProducts || [])}
+																onChange={(event) =>
+																	setConfig((current) =>
+																		updateStatePatch(
+																			current,
+																			selectedMenu.key,
+																			option.id,
+																			'interestedProducts',
+																			textToAliases(event.target.value)
+																		)
+																	)
+																}
+																placeholder="body, calza, conjunto"
 															/>
 														</label>
 													</div>
-												</div>
-											) : null}
-
-											<details className="wam-advanced">
-												<summary>Configuración avanzada</summary>
-
-												<div className="wam-form-grid">
-													<label>
-														<span>Foco de producto</span>
-														<input
-															value={option.statePatch?.currentProductFocus || ''}
-															onChange={(event) =>
-																setConfig((current) =>
-																	updateStatePatch(
-																		current,
-																		selectedMenu.key,
-																		option.id,
-																		'currentProductFocus',
-																		event.target.value
-																	)
-																)
-															}
-															placeholder="Ej: Bodys modeladores"
-														/>
-													</label>
-
-													<label>
-														<span>Objetivo del cliente</span>
-														<input
-															value={option.statePatch?.lastUserGoal || ''}
-															onChange={(event) =>
-																setConfig((current) =>
-																	updateStatePatch(
-																		current,
-																		selectedMenu.key,
-																		option.id,
-																		'lastUserGoal',
-																		event.target.value
-																	)
-																)
-															}
-															placeholder="Ej: Comprar, consultar, resolver pago"
-														/>
-													</label>
-
-													<label className="wam-form-grid__full">
-														<span>Productos de interés</span>
-														<input
-															value={aliasesToText(option.statePatch?.interestedProducts || [])}
-															onChange={(event) =>
-																setConfig((current) =>
-																	updateStatePatch(
-																		current,
-																		selectedMenu.key,
-																		option.id,
-																		'interestedProducts',
-																		textToAliases(event.target.value)
-																	)
-																)
-															}
-															placeholder="Ej: body reductor, calza premium"
-														/>
-														<small>Separalos con coma.</small>
-													</label>
-												</div>
-											</details>
-										</div>
+												</details>
+											</div>
+										</details>
 									))}
 								</div>
 							</div>
@@ -918,50 +794,47 @@ export default function WhatsAppMenuPage() {
 					)}
 				</section>
 
-				<aside className="wam-preview">
-					<div className="wam-panel wam-panel--sticky">
-						<div className="wam-panel__header">
-							<div>
-								<h2>Preview</h2>
-								<p className="wam-panel__subtext">Vista rápida de cómo se vería este menú.</p>
+				<aside className="wam-card wam-preview">
+					<div className="wam-preview__header">
+						<span className="wam-section-label">Preview</span>
+						<h2>Vista previa</h2>
+						<p>Una referencia rápida de cómo se va a ver el mensaje.</p>
+					</div>
+
+					{selectedMenu ? (
+						<div className="wam-phone">
+							<div className="wam-phone__top">
+								<div className="wam-phone__avatar">L</div>
+								<div>
+									<strong>{selectedMenu.headerText || selectedMenu.title || 'Lummine'}</strong>
+									<span>Mensaje interactivo</span>
+								</div>
+							</div>
+
+							<div className="wam-phone__screen">
+								<div className="wam-phone__bubble">
+									<p>{selectedMenu.body}</p>
+
+									<div className="wam-phone__options">
+										{sortedSelectedOptions
+											.filter((option) => option.isActive !== false)
+											.map((option) => (
+												<div key={option.id} className="wam-phone__option">
+													<strong>{option.title}</strong>
+													<span>{option.description || 'Sin descripción'}</span>
+												</div>
+											))}
+									</div>
+
+									<small>{selectedMenu.footerText}</small>
+								</div>
+
+								<button type="button" className="wam-phone__button">
+									{selectedMenu.buttonText}
+								</button>
 							</div>
 						</div>
-
-						{selectedMenu ? (
-							<div className="wam-phone-preview">
-								<div className="wam-phone-preview__topbar">
-									<div className="wam-phone-preview__avatar">L</div>
-									<div>
-										<div className="wam-phone-preview__brand">
-											{selectedMenu.headerText || selectedMenu.title || 'Lummine'}
-										</div>
-										<div className="wam-phone-preview__status">Mensaje interactivo</div>
-									</div>
-								</div>
-
-								<div className="wam-phone-preview__screen">
-									<div className="wam-phone-bubble">
-										<p>{selectedMenu.body}</p>
-
-										<div className="wam-phone-options">
-											{sortedSelectedOptions
-												.filter((option) => option.isActive !== false)
-												.map((option) => (
-													<div key={option.id} className="wam-phone-option">
-														<strong>{option.title}</strong>
-														<span>{option.description || 'Sin descripción'}</span>
-													</div>
-												))}
-										</div>
-
-										<small>{selectedMenu.footerText}</small>
-									</div>
-
-									<div className="wam-phone-preview__cta">{selectedMenu.buttonText}</div>
-								</div>
-							</div>
-						) : null}
-					</div>
+					) : null}
 				</aside>
 			</div>
 		</div>
