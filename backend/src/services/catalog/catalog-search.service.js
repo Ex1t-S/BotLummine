@@ -418,3 +418,34 @@ export function pickCommercialHints(products = [], commercialPlan = null) {
 	hints.push('No arranques con saludo repetido ni con claro, perfecto, genial o buenísimo.');
 	return hints;
 }
+
+export async function getCatalogLookupStatus() {
+	try {
+		const totalProducts = await prisma.catalogProduct.count();
+		const totalPublished = await prisma.catalogProduct.count({
+			where: { published: true }
+		});
+
+		return {
+			ok: true,
+			available: totalPublished > 0,
+			reason: totalPublished > 0 ? 'catalog_ready' : 'catalog_empty',
+			totalProducts,
+			totalPublished
+		};
+	} catch (error) {
+		const message = error?.message || String(error);
+		const missingTable =
+			/relation\s+"?CatalogProduct"?\s+does not exist/i.test(message) ||
+			/P2021|P2022/i.test(message);
+
+		return {
+			ok: false,
+			available: false,
+			reason: missingTable ? 'catalog_table_missing' : 'catalog_lookup_failed',
+			totalProducts: 0,
+			totalPublished: 0,
+			error: message
+		};
+	}
+}
