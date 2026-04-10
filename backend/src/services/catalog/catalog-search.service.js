@@ -5,35 +5,6 @@ import {
 	scoreProductAgainstCommercialProfile
 } from '../../data/catalog-commercial-map.js';
 
-const catalogLookupStatus = {
-	available: true,
-	reason: 'ok',
-	message: null,
-	checkedAt: null
-};
-
-function setCatalogLookupStatus(partial = {}) {
-	Object.assign(catalogLookupStatus, partial, {
-		checkedAt: new Date().toISOString()
-	});
-}
-
-function isMissingCatalogTableError(error) {
-	const message = String(error?.message || '').toLowerCase();
-	const code = String(error?.code || '').toUpperCase();
-	const metaTarget = String(error?.meta?.target || error?.meta?.table || '').toLowerCase();
-	return (
-		code in { 'P2021': 1, 'P2022': 1 } ||
-		message.includes('catalogproduct') ||
-		message.includes('relation "catalogproduct" does not exist') ||
-		metaTarget.includes('catalogproduct')
-	);
-}
-
-export function getCatalogLookupStatus() {
-	return { ...catalogLookupStatus };
-}
-
 function normalizeText(value = '') {
 	return String(value || '')
 		.toLowerCase()
@@ -133,6 +104,44 @@ const CATALOG_STOPWORDS = new Set([
 	'hola','holi','buenas','buenos','dias','dia','día','tardes','noches','gracias','ok','oka','dale','joya','bien','genial','perfecto','buenisimo','buenísimo','entiendo','barbaro','bárbaro','si','sí','claro'
 ]);
 
+function sanitizeExcludedKeyword(raw = '') {
+	return String(raw || '')
+		.toLowerCase()
+		.replace(/^[\s,.;:!?-]+/, '')
+		.replace(/^(el|la|los|las|un|una)\s+/, '')
+		.split(/(?:\s+pero\s+|\s+y\s+|\s+porque\s+|\s+que\s+trae\s+|\s+que\s+tenga\s+)/i)[0]
+		.replace(/[^a-z0-9\s]/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function extractExcludedKeywords(text = '') {
+	const normalized = normalizeText(text);
+	const patterns = [
+		/que no sea\s+([^,.!?]+)/gi,
+		/no quiero(?:\s+(?:el|la|los|las))?\s+([^,.!?]+)/gi,
+		/sin\s+([^,.!?]+)/gi,
+		/excepto\s+([^,.!?]+)/gi,
+		/menos\s+([^,.!?]+)/gi
+	];
+	const detected = [];
+	for (const pattern of patterns) {
+		for (const match of normalized.matchAll(pattern)) {
+			const cleaned = sanitizeExcludedKeyword(match?.[1] || '');
+			if (cleaned && cleaned.length >= 3) detected.push(cleaned);
+		}
+	}
+	return [...new Set(detected)];
+}
+
+function detectRequestedOfferType(text = '') {
+	const normalized = normalizeText(text);
+	if (/(3x1|tres por uno)/i.test(normalized)) return '3x1';
+	if (/(2x1|dos por uno)/i.test(normalized)) return '2x1';
+	if (/(pack|combo|promo|promocion|promoción|oferta)/i.test(normalized)) return 'pack';
+	return null;
+}
+
 function detectRequestedSignals(query = '', interestedProducts = []) {
 	const normalizedQuery = normalizeText(query);
 	const terms = [...new Set([...splitTerms(query), ...(Array.isArray(interestedProducts) ? interestedProducts.map((v) => normalizeText(v)).filter(Boolean) : [])])];
@@ -141,7 +150,9 @@ function detectRequestedSignals(query = '', interestedProducts = []) {
 		normalizedQuery,
 		terms,
 		requestedFamily,
-		asksPromo: /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(normalizedQuery),
+		requestedOfferType: detectRequestedOfferType(normalizedQuery),
+		excludedKeywords: extractExcludedKeywords(normalizedQuery),
+		asksPromo: /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1|tres por uno|dos por uno)/i.test(normalizedQuery),
 		asksPrice: /(precio|cuanto|cuánto|sale|valor)/i.test(normalizedQuery),
 		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
 		asksComparison: /(cual|cuál|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
@@ -158,11 +169,26 @@ function shouldSkipCatalogLookup(signals = {}) {
 	return !hasCommercialSignal && meaningfulTerms.length < 2;
 }
 
-function inferOfferType(name = '') {
-	const normalized = normalizeText(name);
-	if (/3x1|tres por uno/.test(normalized)) return '3x1';
-	if (/2x1|dos por uno/.test(normalized)) return '2x1';
-	if (/pack|combo|promo|promocion|promoción/.test(normalized)) return 'pack';
+function buildOfferHaystack(product = {}) {
+	return normalizeText([
+		product.name,
+		product.tags,
+		product.description,
+		product.handle,
+		JSON.stringify(product.rawPayload || {}),
+		JSON.stringify(product.attributes || []),
+		JSON.stringify(product.variants || [])
+	].filter(Boolean).join(' '));
+}
+
+function inferOfferType(productOrName = '') {
+	const haystack = typeof productOrName === 'string'
+		? normalizeText(productOrName)
+		: buildOfferHaystack(productOrName);
+
+	if (/(3x1|3 x 1|tres por uno|llevas 3 pagas 1|lleva 3 paga 1|pagas 1|paga 1)/.test(haystack)) return '3x1';
+	if (/(2x1|2 x 1|dos por uno|llevas 2 pagas 1|lleva 2 paga 1)/.test(haystack)) return '2x1';
+	if (/(pack|combo|promo|promocion|promoción|oferta)/.test(haystack)) return 'pack';
 	return 'single';
 }
 
@@ -180,6 +206,8 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	const description = normalizeText(product.description || '');
 	const handle = normalizeText(product.handle || '');
 	const variantBlob = normalizeText(JSON.stringify(product.variants || []) + ' ' + JSON.stringify(product.attributes || []));
+	const offerHaystack = buildOfferHaystack(product);
+	const offerType = inferOfferType(product);
 
 	if (!normalizedQuery && !terms.length) return 0;
 
@@ -189,6 +217,7 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	if (description.includes(normalizedQuery)) score += 6;
 	if (handle.includes(normalizedQuery)) score += 7;
 	if (variantBlob.includes(normalizedQuery)) score += 8;
+	if (offerHaystack.includes(normalizedQuery)) score += 8;
 
 	for (const term of terms) {
 		if (name.includes(term)) score += 5;
@@ -197,16 +226,29 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 		if (description.includes(term)) score += 2;
 		if (handle.includes(term)) score += 3;
 		if (variantBlob.includes(term)) score += 4;
+		if (offerHaystack.includes(term)) score += 3;
 	}
 
 	if (signals.asksPromo) {
-		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(name)) score += 20;
-		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(tags)) score += 16;
+		if (/(oferta|promo|pack|combo|2x1|3x1|tres por uno|dos por uno)/i.test(offerHaystack)) score += 28;
+		if (offerType === '3x1') score += 18;
+		if (offerType === '2x1') score += 12;
 	}
 
-	if (signals.requestedFamily === 'body_modelador' && /(body|modelador|reductor|reductora)/i.test(name)) score += 20;
-	if (signals.requestedFamily === 'calzas_linfaticas' && /(calza|linfat|modeladora)/i.test(name)) score += 20;
+	if (signals.requestedOfferType) {
+		if (offerType === signals.requestedOfferType) score += 38;
+		else score -= 20;
+	}
+
+	if (signals.requestedFamily === 'body_modelador' && /(body|bodies|modelador|reductor|reductora)/i.test(offerHaystack)) score += 24;
+	if (signals.requestedFamily === 'calzas_linfaticas' && /(calza|linfat|modeladora)/i.test(offerHaystack)) score += 24;
+	if (signals.requestedFamily === 'faja_reductora' && /(faja|ballena|corset)/i.test(offerHaystack)) score += 24;
 	if (signals.hasVariantSpecificity && /(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|xl|xxl|xxxl)/i.test(variantBlob)) score += 14;
+
+	if (Array.isArray(signals.excludedKeywords) && signals.excludedKeywords.length) {
+		const isExcluded = signals.excludedKeywords.some((keyword) => keyword && offerHaystack.includes(keyword));
+		if (isExcluded) score -= 240;
+	}
 
 	if (product.published) score += 2;
 	if (product.featuredImage) score += 1;
@@ -215,93 +257,132 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	return score;
 }
 
+function buildCatalogWhere(signals = {}) {
+	const andConditions = [{ published: true }];
+	const orConditions = [];
+
+	if (signals.requestedFamily === 'body_modelador') {
+		orConditions.push(
+			{ name: { contains: 'body', mode: 'insensitive' } },
+			{ name: { contains: 'bodies', mode: 'insensitive' } },
+			{ tags: { contains: 'body', mode: 'insensitive' } },
+			{ description: { contains: 'body', mode: 'insensitive' } }
+		);
+	}
+
+	if (signals.requestedFamily === 'calzas_linfaticas') {
+		orConditions.push(
+			{ name: { contains: 'calza', mode: 'insensitive' } },
+			{ tags: { contains: 'calza', mode: 'insensitive' } },
+			{ description: { contains: 'calza', mode: 'insensitive' } },
+			{ description: { contains: 'linfat', mode: 'insensitive' } }
+		);
+	}
+
+	if (signals.requestedFamily === 'faja_reductora') {
+		orConditions.push(
+			{ name: { contains: 'faja', mode: 'insensitive' } },
+			{ tags: { contains: 'faja', mode: 'insensitive' } },
+			{ description: { contains: 'faja', mode: 'insensitive' } }
+		);
+	}
+
+	for (const term of signals.terms || []) {
+		if (CATALOG_STOPWORDS.has(term)) continue;
+		orConditions.push(
+			{ name: { contains: term, mode: 'insensitive' } },
+			{ tags: { contains: term, mode: 'insensitive' } },
+			{ handle: { contains: term, mode: 'insensitive' } },
+			{ description: { contains: term, mode: 'insensitive' } }
+		);
+	}
+
+	if (orConditions.length) {
+		andConditions.push({ OR: orConditions });
+	}
+
+	return andConditions.length === 1 ? andConditions[0] : { AND: andConditions };
+}
+
+function resolveCatalogTake(signals = {}) {
+	if (signals.requestedFamily && signals.requestedOfferType) return 300;
+	if (signals.requestedFamily || signals.requestedOfferType) return 220;
+	return 160;
+}
+
 export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4 } = {}) {
 	const signals = detectRequestedSignals(query, interestedProducts);
-	if (shouldSkipCatalogLookup(signals)) {
-		setCatalogLookupStatus({ available: true, reason: 'skipped', message: null });
-		return [];
-	}
+	if (shouldSkipCatalogLookup(signals)) return [];
 
+	let rawProducts = [];
 	try {
-		const rawProducts = await prisma.catalogProduct.findMany({
-			where: { published: true },
+		rawProducts = await prisma.catalogProduct.findMany({
+			where: buildCatalogWhere(signals),
 			orderBy: [{ updatedAt: 'desc' }],
-			take: 120
+			take: resolveCatalogTake(signals)
 		});
-
-		setCatalogLookupStatus({
-			available: true,
-			reason: rawProducts.length ? 'ok' : 'empty',
-			message: rawProducts.length ? null : 'No hay productos publicados en el catálogo local.'
-		});
-
-		return rawProducts
-			.map((product) => ({ product, score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals) }))
-			.filter((entry) => entry.score > 0)
-			.map(({ product, score }) => {
-				const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
-				const variantMeta = extractVariantMeta(product.variants);
-				const shortDescription = buildShortDescription(product);
-				const family = inferCommercialFamily([product.name, product.tags, product.handle, shortDescription].filter(Boolean).join(' '));
-				const offerType = inferOfferType(product.name || '');
-				const profileScore = scoreProductAgainstCommercialProfile({
-					name: product.name,
-					handle: product.handle,
-					tags: product.tags,
-					shortDescription,
-					variantHints: variantMeta.variantHints,
-					colors: variantMeta.colors,
-					sizes: variantMeta.sizes
-				}, family);
-				return {
-					id: product.id,
-					productId: product.productId,
-					name: product.name,
-					brand: product.brand || null,
-					price: formatPrice(currentPrice),
-					priceValue: currentPrice,
-					originalPrice: formatPrice(originalPrice),
-					originalPriceValue: originalPrice,
-					hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
-					handle: product.handle || null,
-					productUrl: product.productUrl || null,
-					featuredImage: product.featuredImage || null,
-					shortDescription,
-					variantHints: variantMeta.variantHints,
-					colors: variantMeta.colors,
-					sizes: variantMeta.sizes,
-					tags: product.tags ? product.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6) : [],
-					score,
-					family,
-					offerType,
-					packCount: inferPackCount(offerType),
-					commercialProfile: getCommercialProfile(family),
-					commercialScoreBoost: profileScore,
-					isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(normalizeText(product.name || ''))
-				};
-			})
-			.filter((item) => !item.isGiftLike)
-			.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost))
-			.slice(0, limit);
 	} catch (error) {
-		if (isMissingCatalogTableError(error)) {
-			setCatalogLookupStatus({
-				available: false,
-				reason: 'missing_catalog_table',
-				message: 'La tabla CatalogProduct no existe en esta base.'
-			});
-			console.warn('[CATALOG] La tabla CatalogProduct no existe todavía en esta base.');
-			return [];
-		}
-
-		setCatalogLookupStatus({
-			available: false,
-			reason: 'lookup_error',
-			message: error?.message || String(error)
-		});
-		console.error('[CATALOG] Error buscando productos en catálogo local:', error);
+		console.error('[CATALOG] Error consultando catalogProduct:', error?.message || error);
 		return [];
 	}
+
+	return rawProducts
+		.map((product) => ({ product, score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals) }))
+		.filter((entry) => entry.score > 0)
+		.map(({ product, score }) => {
+			const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
+			const variantMeta = extractVariantMeta(product.variants);
+			const shortDescription = buildShortDescription(product);
+			const family = inferCommercialFamily([product.name, product.tags, product.handle, shortDescription].filter(Boolean).join(' '));
+			const offerType = inferOfferType(product);
+			const profileScore = scoreProductAgainstCommercialProfile({
+				name: product.name,
+				handle: product.handle,
+				tags: product.tags,
+				shortDescription,
+				variantHints: variantMeta.variantHints,
+				colors: variantMeta.colors,
+				sizes: variantMeta.sizes
+			}, family);
+			const haystack = buildOfferHaystack(product);
+			const isExactOfferMatch = !signals.requestedOfferType || offerType === signals.requestedOfferType;
+			const containsExcludedKeyword = (signals.excludedKeywords || []).some((keyword) => keyword && haystack.includes(keyword));
+			return {
+				id: product.id,
+				productId: product.productId,
+				name: product.name,
+				brand: product.brand || null,
+				price: formatPrice(currentPrice),
+				priceValue: currentPrice,
+				originalPrice: formatPrice(originalPrice),
+				originalPriceValue: originalPrice,
+				hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
+				handle: product.handle || null,
+				productUrl: product.productUrl || null,
+				featuredImage: product.featuredImage || null,
+				shortDescription,
+				variantHints: variantMeta.variantHints,
+				colors: variantMeta.colors,
+				sizes: variantMeta.sizes,
+				tags: product.tags ? product.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6) : [],
+				score,
+				family,
+				offerType,
+				packCount: inferPackCount(offerType),
+				commercialProfile: getCommercialProfile(family),
+				commercialScoreBoost: profileScore,
+				isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(normalizeText(product.name || '')),
+				isExactOfferMatch,
+				containsExcludedKeyword
+			};
+		})
+		.filter((item) => !item.isGiftLike)
+		.sort((a, b) => {
+			const aTotal = (a.score + a.commercialScoreBoost) + (a.isExactOfferMatch ? 25 : 0) - (a.containsExcludedKeyword ? 200 : 0);
+			const bTotal = (b.score + b.commercialScoreBoost) + (b.isExactOfferMatch ? 25 : 0) - (b.containsExcludedKeyword ? 200 : 0);
+			return bTotal - aTotal;
+		})
+		.slice(0, limit);
 }
 
 export function buildCatalogContext(products = []) {

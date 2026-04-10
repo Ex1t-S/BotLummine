@@ -166,7 +166,7 @@ function rankCommercialProducts(
 			const name = normalizeText(product.name || '');
 			const productFamily = product.family || inferCommercialFamily(name);
 			const offerType = product.offerType || 'single';
-			const isExcluded = productContainsExcludedKeyword(product, excludedKeywords);
+			const isExcluded = product.isExcluded || product.containsExcludedKeyword || productContainsExcludedKeyword(product, excludedKeywords);
 
 			if (productFamily && family && productFamily === family) score += 34;
 			if (categoryLocked && family && productFamily && productFamily !== family) score -= 140;
@@ -183,13 +183,15 @@ function rankCommercialProducts(
 			if (profileScore > 0) score += profileScore;
 
 			if (requestedOfferType) {
-				if (offerType === requestedOfferType) score += 36;
+				if (product.isExactOfferMatch || offerType === requestedOfferType) score += 44;
 				else if (requestedAction === 'ASK_OFFER') score -= 32;
 				else score -= 10;
 			} else if (requestedAction === 'ASK_OFFER') {
 				if (offerType === '3x1') score += 20;
 				if (offerType === '2x1') score += 12;
 			}
+
+			if (product.isExactOfferMatch && requestedOfferType) score += 16;
 
 			if (requestedAction === 'ASK_LINK' || requestedAction === 'ASK_PRICE' || requestedAction === 'ASK_VARIANT' || requestedAction === 'AFFIRM_CONTINUATION') {
 				if (currentState?.lastRecommendedOffer && String(currentState.lastRecommendedOffer).includes(product.name)) score += 12;
@@ -372,21 +374,16 @@ export function resolveCommercialBrainV2({ intent, messageBody, currentState = {
 	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable });
 	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
-	const catalogAvailable = Array.isArray(catalogProducts) && catalogProducts.length > 0;
-	const recommendedAction = catalogAvailable
-		? buildRecommendedAction({
-			stage,
-			requestedAction,
-			shouldEscalate: escalation.shouldEscalate,
-			shareLinkNow,
-			repeatPriceNow,
-			requestedOfferType,
-			requestedOfferAvailable,
-			hasFallbackWithinFamily: Boolean(fallbackOffer)
-		})
-		: requestedAction === 'GREETING'
-			? 'greet_and_discover'
-			: 'catalog_unavailable_clarify_need';
+	const recommendedAction = buildRecommendedAction({
+		stage,
+		requestedAction,
+		shouldEscalate: escalation.shouldEscalate,
+		shareLinkNow,
+		repeatPriceNow,
+		requestedOfferType,
+		requestedOfferAvailable,
+		hasFallbackWithinFamily: Boolean(fallbackOffer)
+	});
 
 	const productFocus = bestOffer?.name || currentState?.currentProductFocus || productFamilyLabel || null;
 	const responseRules = [
@@ -424,7 +421,6 @@ export function resolveCommercialBrainV2({ intent, messageBody, currentState = {
 		handoffReason: escalation.reason,
 		recommendedAction,
 		responseRules,
-		greetingOnly,
-		catalogAvailable
+		greetingOnly
 	};
 }
