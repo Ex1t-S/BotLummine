@@ -1,4 +1,9 @@
-import { getCommercialProfile, inferCommercialFamily, scoreProductAgainstCommercialProfile } from '../../data/catalog-commercial-map.js';
+import {
+	getCommercialFamilyLabel,
+	getCommercialProfile,
+	inferCommercialFamily,
+	scoreProductAgainstCommercialProfile
+} from '../../data/catalog-commercial-map.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -14,14 +19,17 @@ function asArray(value) {
 }
 
 function uniqueStrings(values = []) {
-	return [...new Set(values.filter(Boolean).map((v) => String(v).trim()))];
+	return [...new Set(values.filter(Boolean).map((v) => String(v).trim()).filter(Boolean))];
 }
 
 function isGreetingOnlyMessage(messageBody = '', currentState = {}) {
 	const text = normalizeText(messageBody);
 	if (!text) return true;
 	const greetingOnly = /^(hola|holi|buenas|buen dia|buen día|buenas tardes|buenas noches|hello|hi|👋)+[!.,\s]*$/i.test(text);
-	const hasProductContext = Boolean(currentState?.currentProductFocus) || asArray(currentState?.interestedProducts).length > 0;
+	const hasProductContext =
+		Boolean(currentState?.currentProductFocus) ||
+		Boolean(currentState?.currentProductFamily) ||
+		asArray(currentState?.interestedProducts).length > 0;
 	return greetingOnly && !hasProductContext;
 }
 
@@ -64,26 +72,48 @@ function detectRequestedAction(messageBody = '', greetingOnly = false) {
 	return 'GENERAL';
 }
 
-function inferFamilyFromHistory({ messageBody = '', currentState = {}, products = [] }) {
+function detectRequestedOfferType(messageBody = '', currentState = {}) {
+	const text = normalizeText(messageBody);
+	if (/(3x1|tres por uno)/i.test(text)) return '3x1';
+	if (/(2x1|dos por uno)/i.test(text)) return '2x1';
+	if (/(pack|combo|promo|promocion|promoción|oferta)/i.test(text)) return 'pack';
+	return currentState?.requestedOfferType || null;
+}
+
+function resolveProductFamily({ messageBody = '', currentState = {}, products = [] }) {
 	const requested = inferCommercialFamily(messageBody);
 	if (requested) return requested;
+	if (currentState?.currentProductFamily) return currentState.currentProductFamily;
 	const currentFocusFamily = inferCommercialFamily(currentState?.currentProductFocus || '');
 	if (currentFocusFamily) return currentFocusFamily;
 	if (products[0]?.family) return products[0].family;
-	const firstInterest = asArray(currentState?.interestedProducts)[0] || '';
-	return inferCommercialFamily(firstInterest);
+	const joinedInterest = asArray(currentState?.interestedProducts).join(' ');
+	return inferCommercialFamily(joinedInterest);
 }
 
-function findProductFocus({ messageBody, currentState = {}, products = [], requestedAction = 'GENERAL', family = null }) {
+function shouldLockFamily({ messageBody = '', currentState = {}, productFamily = null }) {
 	const text = normalizeText(messageBody);
-	const direct = products.find((product) => text.includes(normalizeText(product.name || '')));
-	if (direct?.name) return direct.name;
-	if ((requestedAction === 'GENERAL' || requestedAction === 'GREETING') && family) return family;
-	if (currentState?.currentProductFocus && inferCommercialFamily(currentState.currentProductFocus) === family) return currentState.currentProductFocus;
-	if (products[0]?.name) return products[0].name;
-	if (currentState?.currentProductFocus) return currentState.currentProductFocus;
-	const interested = asArray(currentState?.interestedProducts);
-	return interested[0] || family || null;
+	if (inferCommercialFamily(messageBody)) return true;
+	if (/(estabamos hablando de|estábamos hablando de|veniamos hablando de|veníamos hablando de|de ese|de esa|de eso|de esos|de esas)/i.test(text) && (productFamily || currentState?.currentProductFamily)) return true;
+	return Boolean(currentState?.categoryLocked && (currentState?.currentProductFamily || productFamily));
+}
+
+function normalizeExcludedKeywords(currentState = {}) {
+	return uniqueStrings(asArray(currentState?.excludedProductKeywords)).map((item) => normalizeText(item));
+}
+
+function productContainsExcludedKeyword(product = {}, excludedKeywords = []) {
+	if (!excludedKeywords.length) return false;
+	const haystack = normalizeText([
+		product.name,
+		product.handle,
+		product.tags,
+		product.shortDescription,
+		...(Array.isArray(product.variantHints) ? product.variantHints : []),
+		...(Array.isArray(product.colors) ? product.colors : []),
+		...(Array.isArray(product.sizes) ? product.sizes : [])
+	].filter(Boolean).join(' '));
+	return excludedKeywords.some((keyword) => keyword && haystack.includes(keyword));
 }
 
 function mergeHistorySignals({ recentMessages = [], currentState = {}, products = [] }) {
@@ -98,7 +128,7 @@ function mergeHistorySignals({ recentMessages = [], currentState = {}, products 
 	for (const product of products) {
 		if (product.productUrl && joined.includes(String(product.productUrl).toLowerCase())) fromRecent.sharedLinks.push(product.productUrl);
 		if (product.price && joined.includes(String(product.price).toLowerCase())) fromRecent.shownPrices.push(`${product.name}::${product.price}`);
-		if (product.hasDiscount) fromRecent.shownOffers.push(`${product.name}::discount`);
+		if (product.hasDiscount) fromRecent.shownOffers.push(`${product.offerType || 'single'}::${product.name}`);
 	}
 	if (/(3x1|tres por uno)/i.test(joined)) fromRecent.shownOffers.push('3x1');
 	if (/(2x1|dos por uno)/i.test(joined)) fromRecent.shownOffers.push('2x1');
@@ -110,61 +140,90 @@ function mergeHistorySignals({ recentMessages = [], currentState = {}, products 
 	};
 }
 
-function rankCommercialProducts(products = [], { messageBody = '', currentState = {}, requestedAction = 'GENERAL', family = null } = {}) {
+function rankCommercialProducts(
+	products = [],
+	{
+		messageBody = '',
+		currentState = {},
+		requestedAction = 'GENERAL',
+		family = null,
+		requestedOfferType = null,
+		categoryLocked = false,
+		excludedKeywords = []
+	} = {}
+) {
 	const text = normalizeText(messageBody);
 	const currentFocus = normalizeText(currentState?.currentProductFocus || '');
 	const interests = asArray(currentState?.interestedProducts).map((v) => normalizeText(v));
+	const lastRecommendedProduct = normalizeText(currentState?.lastRecommendedProduct || '');
 	const profile = getCommercialProfile(family);
 	const introMode = profile?.introMode || 'product_first';
 	const isGenericDiscovery = requestedAction === 'GENERAL' || requestedAction === 'GREETING';
 
-	return [...products]
+	const ranked = [...products]
 		.map((product) => {
 			let score = Number(product.score || 0) + Number(product.commercialScoreBoost || 0);
 			const name = normalizeText(product.name || '');
 			const productFamily = product.family || inferCommercialFamily(name);
 			const offerType = product.offerType || 'single';
+			const isExcluded = productContainsExcludedKeyword(product, excludedKeywords);
 
-			if (productFamily && family && productFamily === family) score += 28;
-			if (product.hasDiscount) score += requestedAction === 'ASK_OFFER' ? 22 : 8;
-			if (product.priceValue != null) score += 6;
+			if (productFamily && family && productFamily === family) score += 34;
+			if (categoryLocked && family && productFamily && productFamily !== family) score -= 140;
+			else if (family && productFamily && productFamily !== family) score -= 18;
+
+			if (product.hasDiscount) score += requestedAction === 'ASK_OFFER' ? 18 : 6;
+			if (product.priceValue != null) score += 5;
 			if (product.productUrl) score += 2;
-			if (currentFocus && name.includes(currentFocus)) score += 16;
+			if (currentFocus && name.includes(currentFocus)) score += 18;
+			if (lastRecommendedProduct && name.includes(lastRecommendedProduct)) score += 16;
 			if (interests.some((term) => term && name.includes(term))) score += 8;
-			if (scoreProductAgainstCommercialProfile(product, family) > 0) score += scoreProductAgainstCommercialProfile(product, family);
 
-			if (requestedAction === 'ASK_LINK' || requestedAction === 'ASK_PRICE' || requestedAction === 'ASK_VARIANT') {
-				if (offerType === 'single') score += 12;
+			const profileScore = scoreProductAgainstCommercialProfile(product, family);
+			if (profileScore > 0) score += profileScore;
+
+			if (requestedOfferType) {
+				if (offerType === requestedOfferType) score += 36;
+				else if (requestedAction === 'ASK_OFFER') score -= 32;
+				else score -= 10;
+			} else if (requestedAction === 'ASK_OFFER') {
+				if (offerType === '3x1') score += 20;
+				if (offerType === '2x1') score += 12;
 			}
 
-			if (requestedAction === 'ASK_OFFER') {
-				if (offerType === '3x1') score += 24;
-				if (offerType === '2x1') score += 16;
+			if (requestedAction === 'ASK_LINK' || requestedAction === 'ASK_PRICE' || requestedAction === 'ASK_VARIANT' || requestedAction === 'AFFIRM_CONTINUATION') {
+				if (currentState?.lastRecommendedOffer && String(currentState.lastRecommendedOffer).includes(product.name)) score += 12;
+				if (offerType === 'single') score += 8;
 			}
 
 			if (isGenericDiscovery) {
-				if (introMode === 'offer_first' && offerType === '3x1') score += 16;
-				if (introMode === 'offer_first' && offerType === '2x1') score += 8;
-				if (introMode === 'product_first' && offerType === 'single') score += 14;
+				if (introMode === 'offer_first' && offerType === '3x1') score += 14;
+				if (introMode === 'product_first' && offerType === 'single') score += 12;
 				if (offerType === 'pack' && !/(promo|oferta|2x1|3x1)/i.test(text)) score -= 6;
 			}
 
-			return { ...product, commercialScore: score };
+			if (isExcluded) score -= 220;
+
+			return { ...product, family: productFamily, commercialScore: score, isExcluded };
 		})
 		.sort((a, b) => b.commercialScore - a.commercialScore);
+
+	if (categoryLocked && family) {
+		const sameFamily = ranked.filter((item) => item.family === family);
+		if (sameFamily.length) {
+			const rest = ranked.filter((item) => item.family !== family);
+			return [...sameFamily, ...rest];
+		}
+	}
+
+	return ranked;
 }
 
-function chooseBestOffer(products = [], { requestedAction = 'GENERAL', family = null } = {}) {
-	if (!products.length) return null;
-	const profile = getCommercialProfile(family);
-	const introMode = profile?.introMode || 'product_first';
-	const ordered = [...products].sort((a, b) => (b.commercialScore ?? 0) - (a.commercialScore ?? 0));
-	let chosen = ordered[0];
-	if ((requestedAction === 'GENERAL' || requestedAction === 'GREETING') && introMode === 'product_first') {
-		chosen = ordered.find((item) => (item.offerType || 'single') === 'single') || chosen;
-	}
-	return chosen ? {
+function mapBestOffer(chosen, family) {
+	if (!chosen) return null;
+	return {
 		name: chosen.name,
+		productId: chosen.productId || chosen.id || null,
 		price: chosen.price || null,
 		priceValue: chosen.priceValue ?? null,
 		productUrl: chosen.productUrl || null,
@@ -173,19 +232,71 @@ function chooseBestOffer(products = [], { requestedAction = 'GENERAL', family = 
 		sizes: chosen.sizes || [],
 		offerKey: chosen.hasDiscount ? `${chosen.name}::discount` : chosen.name,
 		family: chosen.family || family || null,
-		offerType: chosen.offerType || 'single'
-	} : null;
+		offerType: chosen.offerType || 'single',
+		offerLabel: `${chosen.offerType || 'single'}::${chosen.name}`
+	};
 }
 
-function shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared }) {
+function chooseBestOffer(
+	products = [],
+	{
+		requestedAction = 'GENERAL',
+		family = null,
+		requestedOfferType = null,
+		categoryLocked = false,
+		currentState = {}
+	} = {}
+) {
+	if (!products.length) return { bestOffer: null, requestedOfferAvailable: null, fallbackOffer: null, offerOptions: [] };
+
+	const profile = getCommercialProfile(family);
+	const introMode = profile?.introMode || 'product_first';
+	const allowed = products.filter((item) => !item.isExcluded);
+	const familyScoped = family ? allowed.filter((item) => item.family === family) : allowed;
+	const eligible = (categoryLocked && familyScoped.length) || familyScoped.length ? familyScoped : allowed;
+	const requestedMatches = requestedOfferType ? eligible.filter((item) => item.offerType === requestedOfferType) : [];
+	const lastRecommendedName = normalizeText(currentState?.lastRecommendedProduct || '');
+
+	let chosen = null;
+	if (requestedMatches.length) {
+		chosen = requestedMatches[0];
+	} else if (requestedAction === 'ASK_OFFER') {
+		chosen = eligible.find((item) => item.offerType === '3x1') || eligible.find((item) => item.offerType === '2x1') || eligible[0] || null;
+	} else if ((requestedAction === 'ASK_LINK' || requestedAction === 'ASK_PRICE' || requestedAction === 'ASK_VARIANT' || requestedAction === 'AFFIRM_CONTINUATION') && lastRecommendedName) {
+		chosen = eligible.find((item) => normalizeText(item.name || '').includes(lastRecommendedName)) || eligible[0] || null;
+	} else if ((requestedAction === 'GENERAL' || requestedAction === 'GREETING') && introMode === 'product_first') {
+		chosen = eligible.find((item) => (item.offerType || 'single') === 'single') || eligible[0] || null;
+	} else {
+		chosen = eligible[0] || null;
+	}
+
+	const fallbackOffer = !requestedMatches.length && requestedOfferType ? eligible[0] || null : null;
+	const offerOptions = eligible.slice(0, 3).map((item) => ({
+		name: item.name,
+		price: item.price || null,
+		offerType: item.offerType || 'single',
+		productUrl: item.productUrl || null
+	}));
+
+	return {
+		bestOffer: mapBestOffer(chosen, family),
+		requestedOfferAvailable: requestedOfferType ? requestedMatches.length > 0 : null,
+		fallbackOffer: mapBestOffer(fallbackOffer, family),
+		offerOptions
+	};
+}
+
+function shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable }) {
 	if (!bestOffer?.productUrl) return false;
+	if (requestedOfferAvailable === false) return false;
 	if (requestedAction === 'ASK_LINK') return true;
 	if (requestedAction === 'AFFIRM_CONTINUATION' && stage === 'READY_TO_BUY') return !alreadyShared.sharedLinks.includes(bestOffer.productUrl);
 	return false;
 }
 
-function shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared }) {
+function shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable }) {
 	if (!bestOffer?.price) return false;
+	if (requestedOfferAvailable === false) return false;
 	if (requestedAction !== 'ASK_PRICE') return false;
 	return !alreadyShared.shownPrices.includes(`${bestOffer.name}::${bestOffer.price}`);
 }
@@ -198,9 +309,21 @@ function shouldEscalate({ messageBody = '', mood = 'neutral', currentState = {} 
 	return { shouldEscalate: false, reason: null };
 }
 
-function buildRecommendedAction({ stage, requestedAction, shouldEscalate, shareLinkNow, repeatPriceNow }) {
+function buildRecommendedAction({
+	stage,
+	requestedAction,
+	shouldEscalate,
+	shareLinkNow,
+	repeatPriceNow,
+	requestedOfferType,
+	requestedOfferAvailable,
+	hasFallbackWithinFamily
+}) {
 	if (shouldEscalate) return 'handoff_human';
 	if (requestedAction === 'GREETING') return 'greet_and_discover';
+	if (requestedOfferType && requestedOfferAvailable === false && hasFallbackWithinFamily) {
+		return 'explain_requested_offer_unavailable_keep_family';
+	}
 	if (requestedAction === 'ASK_LINK' && shareLinkNow) return 'close_with_single_link';
 	if (requestedAction === 'ASK_PRICE' && repeatPriceNow) return 'present_price_once';
 	if (requestedAction === 'ASK_OFFER') return 'present_single_best_offer';
@@ -214,37 +337,81 @@ function buildRecommendedAction({ stage, requestedAction, shouldEscalate, shareL
 export function resolveCommercialBrainV2({ intent, messageBody, currentState = {}, recentMessages = [], catalogProducts = [] }) {
 	const greetingOnly = isGreetingOnlyMessage(messageBody, currentState);
 	const requestedAction = detectRequestedAction(messageBody, greetingOnly);
-	const productFamily = inferFamilyFromHistory({ messageBody, currentState, products: catalogProducts });
-	const rankedProducts = greetingOnly ? [] : rankCommercialProducts(catalogProducts, { messageBody, currentState, requestedAction, family: productFamily });
+	const productFamily = resolveProductFamily({ messageBody, currentState, products: catalogProducts });
+	const productFamilyLabel = getCommercialFamilyLabel(productFamily);
+	const categoryLocked = shouldLockFamily({ messageBody, currentState, productFamily });
+	const requestedOfferType = greetingOnly ? null : detectRequestedOfferType(messageBody, currentState);
+	const excludedKeywords = greetingOnly ? [] : normalizeExcludedKeywords(currentState);
+	const rankedProducts = greetingOnly
+		? []
+		: rankCommercialProducts(catalogProducts, {
+			messageBody,
+			currentState,
+			requestedAction,
+			family: productFamily,
+			requestedOfferType,
+			categoryLocked,
+			excludedKeywords
+		});
 	const mood = detectMood(messageBody, currentState);
 	const buyingIntentLevel = greetingOnly ? 'low' : detectBuyingIntent(messageBody, currentState);
 	const stage = detectSalesStage({ intent, messageBody, currentState, greetingOnly });
-	const productFocus = greetingOnly ? null : findProductFocus({ messageBody, currentState, products: rankedProducts, requestedAction, family: productFamily });
 	const alreadyShared = mergeHistorySignals({ recentMessages, currentState, products: rankedProducts });
-	const bestOffer = greetingOnly ? null : chooseBestOffer(rankedProducts, { requestedAction, family: productFamily });
-	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared });
-	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared });
+	const selection = greetingOnly
+		? { bestOffer: null, requestedOfferAvailable: null, fallbackOffer: null, offerOptions: [] }
+		: chooseBestOffer(rankedProducts, {
+			requestedAction,
+			family: productFamily,
+			requestedOfferType,
+			categoryLocked,
+			currentState
+		});
+	const bestOffer = selection.bestOffer;
+	const fallbackOffer = selection.fallbackOffer;
+	const requestedOfferAvailable = selection.requestedOfferAvailable;
+	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable });
+	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
-	const recommendedAction = buildRecommendedAction({ stage, requestedAction, shouldEscalate: escalation.shouldEscalate, shareLinkNow, repeatPriceNow });
+	const recommendedAction = buildRecommendedAction({
+		stage,
+		requestedAction,
+		shouldEscalate: escalation.shouldEscalate,
+		shareLinkNow,
+		repeatPriceNow,
+		requestedOfferType,
+		requestedOfferAvailable,
+		hasFallbackWithinFamily: Boolean(fallbackOffer)
+	});
+
+	const productFocus = bestOffer?.name || currentState?.currentProductFocus || productFamilyLabel || null;
 	const responseRules = [
 		'Si es solo un saludo, respondé breve y no ofrezcas productos todavía.',
-		'Nombra y saluda al cliente una vez sola al comenzar la conversación.',
-		'Ofrecer varias promos si solo te pidieron comparar.',
-		'Priorizá una sola oferta principal por familia.',
-		'Compartir un unico link por respuesta.',
-		'Si la conversación cambió de producto, el link y el foco tienen que seguir el producto más reciente.',
-		'Si ya se dijo el precio, no lo repitas salvo pedido explícito.',
+		'Si el cliente ya fijó una familia de producto, no cambies de familia sin permiso explícito.',
+		'Si pidió una promo puntual, primero buscala dentro de la misma familia antes de abrir alternativas.',
+		'Si una opción está excluida por el cliente, no la vuelvas a ofrecer.',
+		'Priorizá una sola opción principal por respuesta.',
+		'Compartí un único link por respuesta.',
+		'Si la oferta exacta no existe, decilo claro y seguí dentro de la misma familia.',
 		'Bajá el entusiasmo; soná más humana y directa.'
 	];
+
 	return {
 		stage,
 		mood,
 		buyingIntentLevel,
 		requestedAction,
+		requestedOfferType,
+		requestedOfferAvailable,
 		productFocus,
+		productFocusLabel: productFocus,
 		productFamily,
+		productFamilyLabel,
+		categoryLocked,
+		excludedKeywords,
 		rankedProducts,
 		bestOffer,
+		fallbackOffer,
+		offerOptions: selection.offerOptions,
 		alreadyShared,
 		shareLinkNow,
 		repeatPriceNow,

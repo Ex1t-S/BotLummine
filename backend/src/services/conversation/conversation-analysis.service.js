@@ -1,3 +1,5 @@
+import { inferCommercialFamily } from '../../data/catalog-commercial-map.js';
+
 function normalizeText(value = '') {
 	return String(value || '')
 		.toLowerCase()
@@ -72,6 +74,64 @@ function extractInterestedProducts(text) {
 	return dictionary
 		.filter((item) => item.patterns.some((pattern) => pattern.test(text)))
 		.map((item) => item.key);
+}
+
+function extractRequestedOfferType(text, currentState = {}) {
+	if (/(3x1|tres por uno)/.test(text)) return '3x1';
+	if (/(2x1|dos por uno)/.test(text)) return '2x1';
+	if (/(pack|combo|promo|promocion|promoción|oferta)/.test(text)) return 'pack';
+	return currentState?.requestedOfferType || null;
+}
+
+function sanitizeExcludedKeyword(raw = '') {
+	return String(raw || '')
+		.toLowerCase()
+		.replace(/^[\s,.;:!?-]+/, '')
+		.replace(/^(el|la|los|las|un|una)\s+/, '')
+		.split(/(?:\s+pero\s+|\s+y\s+|\s+porque\s+|\s+que\s+trae\s+|\s+que\s+tenga\s+)/i)[0]
+		.replace(/[^a-z0-9\s]/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function extractExcludedProductKeywords(text, currentState = {}) {
+	const existing = Array.isArray(currentState?.excludedProductKeywords)
+		? currentState.excludedProductKeywords
+		: [];
+	const patterns = [
+		/que no sea\s+([^,.!?]+)/gi,
+		/no quiero(?:\s+(?:el|la|los|las))?\s+([^,.!?]+)/gi,
+		/sin\s+([^,.!?]+)/gi,
+		/excepto\s+([^,.!?]+)/gi,
+		/menos\s+([^,.!?]+)/gi
+	];
+	const detected = [];
+	for (const pattern of patterns) {
+		for (const match of text.matchAll(pattern)) {
+			const cleaned = sanitizeExcludedKeyword(match?.[1] || '');
+			if (cleaned && cleaned.length >= 3) detected.push(cleaned);
+		}
+	}
+	return uniqStrings([...existing, ...detected]);
+}
+
+function inferCurrentProductFamily(text, currentState = {}) {
+	return (
+		inferCommercialFamily(text) ||
+		currentState?.currentProductFamily ||
+		inferCommercialFamily(currentState?.currentProductFocus || '') ||
+		inferCommercialFamily((Array.isArray(currentState?.interestedProducts) ? currentState.interestedProducts : []).join(' ')) ||
+		null
+	);
+}
+
+function shouldLockCategory({ intent, text, currentState = {}, currentProductFamily = null }) {
+	if (intent !== 'product') return Boolean(currentState?.categoryLocked && currentState?.currentProductFamily);
+	if (inferCommercialFamily(text)) return true;
+	if (/(estabamos hablando de|estábamos hablando de|veniamos hablando de|veníamos hablando de)/.test(text) && (currentProductFamily || currentState?.currentProductFamily)) {
+		return true;
+	}
+	return Boolean(currentState?.categoryLocked && (currentState?.currentProductFamily || currentProductFamily));
 }
 
 function extractObjections(text) {

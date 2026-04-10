@@ -9,26 +9,28 @@ function normalizeText(value = '') {
 
 export const CATALOG_COMMERCIAL_MAP = {
 	body_modelador: {
-		label: 'body modelador',
-		introMode: 'offer_first',
-		primaryOfferHints: ['3x1', 'promo 3x1', 'pack 3x1'],
-		secondaryOfferHints: ['2x1', 'promo 2x1', 'pack 2x1'],
-		fallbackHints: ['body modelador', 'body modelador reductor', 'body reductor'],
+		label: 'bodys modeladores',
+		introMode: 'product_first',
+		primaryOfferHints: ['body modelador', 'bodys modeladores', 'body reductor', '3x1 bodys'],
+		secondaryOfferHints: ['2x1 bodys', 'promo bodys', 'pack bodys'],
+		fallbackHints: ['body', 'bodys', 'body modelador', 'body reductor'],
 		avoidHints: ['gift', 'regalo', 'segunda piel de regalo'],
 		defaultPitch:
-			'Tenemos el body modelador individual y también promos. La principal para mostrar primero es la 3x1; si no te sirve, seguimos con la 2x1 o la opción individual.',
-		linkHint: 'Si pasás link, priorizá la opción elegida o, si todavía no eligió, la principal de esta familia.'
+			'Si hablan de bodys, quedate en esa familia. Primero confirmá el tipo de body o promo que buscan y recién después abrí alternativas dentro de bodys.',
+		linkHint:
+			'Si pasás link, que sea del body o promo que vienen hablando. No cambies a otra familia sin permiso explícito.'
 	},
 	calzas_linfaticas: {
 		label: 'calzas linfáticas',
 		introMode: 'product_first',
 		primaryOfferHints: ['calzas linfaticas', 'calza linfatica', 'calzas modeladoras'],
 		secondaryOfferHints: ['3x1 calzas', '2x1 calzas'],
-		fallbackHints: ['calzas linfaticas', 'calza modeladora'],
+		fallbackHints: ['calza', 'calzas', 'calzas linfaticas', 'calza modeladora'],
 		avoidHints: ['gift', 'regalo'],
 		defaultPitch:
-			'Si preguntan por piernas o modelado en piernas, guiá primero con calzas linfáticas antes de abrir otras familias.',
-		linkHint: 'Si cambió a calzas, el link tiene que seguir esa conversación y no volver al body.'
+			'Si preguntan por piernas o modelado en piernas, guiá primero con calzas linfáticas y mantené la conversación en esa familia.',
+		linkHint:
+			'Si cambió a calzas, el link tiene que seguir esa conversación y no volver a otra familia.'
 	},
 	short_faja: {
 		label: 'short faja',
@@ -39,29 +41,29 @@ export const CATALOG_COMMERCIAL_MAP = {
 		avoidHints: ['gift', 'regalo']
 	},
 	faja: {
-		label: 'faja',
+		label: 'fajas',
 		introMode: 'product_first',
 		primaryOfferHints: ['faja', 'faja reductora', 'faja modeladora'],
 		secondaryOfferHints: ['2x1 faja', '3x1 faja'],
-		fallbackHints: ['faja', 'faja reductora'],
+		fallbackHints: ['faja', 'fajas', 'faja reductora'],
 		avoidHints: ['gift', 'regalo']
 	},
 	bombacha_modeladora: {
-		label: 'bombacha modeladora',
+		label: 'bombachas modeladoras',
 		introMode: 'product_first',
 		primaryOfferHints: ['bombacha modeladora', 'bombacha reductora'],
 		secondaryOfferHints: ['2x1 bombacha', '3x1 bombacha'],
-		fallbackHints: ['bombacha modeladora'],
+		fallbackHints: ['bombacha', 'bombachas', 'bombacha modeladora'],
 		avoidHints: ['gift', 'regalo']
 	}
 };
 
 const FAMILY_PATTERNS = [
-	{ family: 'body_modelador', regex: /(body|bodys|bodys)\b.*(modelador|reductor|reductora)|\bbody\b|\bbodys\b/ },
-	{ family: 'calzas_linfaticas', regex: /(calza|calzas)\b.*(linfat|modeladora)|\bcalzas linfaticas\b|\bcalza linfatica\b/ },
-	{ family: 'short_faja', regex: /(short)\b.*(faja|modelador|reductor)|\bshort faja\b/ },
-	{ family: 'bombacha_modeladora', regex: /(bombacha)\b.*(modelador|reductor)|\bbombacha modeladora\b/ },
-	{ family: 'faja', regex: /\bfaja\b/ }
+	{ family: 'body_modelador', regex: /\b(body|bodys|bodys)\b|\bbodys modeladores\b|\bbody modelador\b|\bbody reductor\b/ },
+	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora)|\bcalzas linfaticas\b|\bcalza linfatica\b/ },
+	{ family: 'short_faja', regex: /\bshort\b.*(faja|modelador|reductor)|\bshort faja\b/ },
+	{ family: 'bombacha_modeladora', regex: /\bbombacha\b.*(modelador|reductor)|\bbombacha modeladora\b/ },
+	{ family: 'faja', regex: /\bfaja\b|\bfajas\b/ }
 ];
 
 export function inferCommercialFamily(text = '') {
@@ -75,6 +77,11 @@ export function inferCommercialFamily(text = '') {
 export function getCommercialProfile(family = null) {
 	if (!family) return null;
 	return CATALOG_COMMERCIAL_MAP[family] || null;
+}
+
+export function getCommercialFamilyLabel(family = null) {
+	if (!family) return null;
+	return CATALOG_COMMERCIAL_MAP[family]?.label || family;
 }
 
 function termHitScore(text, hints = []) {

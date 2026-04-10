@@ -41,6 +41,10 @@ export function createResetConversationState() {
 		interactionCount: 0,
 		notes: null,
 		currentProductFocus: null,
+		currentProductFamily: null,
+		requestedOfferType: null,
+		excludedProductKeywords: [],
+		categoryLocked: false,
 		salesStage: null,
 		shownOffers: [],
 		shownPrices: [],
@@ -83,8 +87,20 @@ export function buildConversationSummary({
 		parts.push(`Interés: ${enrichedState.interestedProducts.join(', ')}`);
 	}
 
+	if (enrichedState?.currentProductFamily) {
+		parts.push(`Familia: ${enrichedState.currentProductFamily}`);
+	}
+
 	if (commercialPlan?.productFocus) {
 		parts.push(`Foco: ${commercialPlan.productFocus}`);
+	}
+
+	if (enrichedState?.requestedOfferType) {
+		parts.push(`Promo pedida: ${enrichedState.requestedOfferType}`);
+	}
+
+	if (enrichedState?.excludedProductKeywords?.length) {
+		parts.push(`Excluir: ${enrichedState.excludedProductKeywords.join(', ')}`);
 	}
 
 	if (commercialPlan?.bestOffer?.name) {
@@ -507,6 +523,26 @@ export function buildStatePayload({
 		? menuStatePatch.interestedProducts
 		: memoryPatch.interestedProducts;
 
+	const nextProductFamily =
+		memoryPatch?.currentProductFamily ||
+		menuStatePatch?.currentProductFamily ||
+		currentState?.currentProductFamily ||
+		null;
+	const familyChanged =
+		Boolean(nextProductFamily) &&
+		Boolean(currentState?.currentProductFamily) &&
+		nextProductFamily !== currentState.currentProductFamily;
+
+	const excludedProductKeywords = familyChanged
+		? Array.isArray(memoryPatch?.excludedProductKeywords)
+			? memoryPatch.excludedProductKeywords
+			: []
+		: Array.isArray(memoryPatch?.excludedProductKeywords) && memoryPatch.excludedProductKeywords.length
+			? [...new Set([...(Array.isArray(currentState?.excludedProductKeywords) ? currentState.excludedProductKeywords : []), ...memoryPatch.excludedProductKeywords])]
+			: Array.isArray(currentState?.excludedProductKeywords)
+				? currentState.excludedProductKeywords
+				: [];
+
 	return {
 		customerName: contactName || normalizedWaId,
 		lastIntent: shouldKeepOrderContext ? 'order_status' : intent,
@@ -533,7 +569,20 @@ export function buildStatePayload({
 		interactionCount: memoryPatch.interactionCount,
 		notes: currentState?.notes || null,
 		currentProductFocus:
-			menuStatePatch?.currentProductFocus || currentState?.currentProductFocus || null,
+			menuStatePatch?.currentProductFocus ||
+			memoryPatch?.currentProductFocus ||
+			currentState?.currentProductFocus ||
+			null,
+		currentProductFamily: nextProductFamily,
+		requestedOfferType:
+			memoryPatch?.requestedOfferType ||
+			(familyChanged ? null : currentState?.requestedOfferType) ||
+			null,
+		excludedProductKeywords,
+		categoryLocked:
+			typeof memoryPatch?.categoryLocked === 'boolean'
+				? memoryPatch.categoryLocked
+				: Boolean(currentState?.categoryLocked),
 		salesStage: currentState?.salesStage || null,
 		shownOffers: currentState?.shownOffers || [],
 		shownPrices: currentState?.shownPrices || [],

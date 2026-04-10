@@ -75,6 +75,10 @@ model ConversationState {
   interactionCount       Int       @default(0)
   notes                  String?
   currentProductFocus    String?
+  currentProductFamily   String?
+  requestedOfferType     String?
+  excludedProductKeywords Json?
+  categoryLocked         Boolean   @default(false)
   salesStage             String?
   shownOffers            Json?
   shownPrices            Json?

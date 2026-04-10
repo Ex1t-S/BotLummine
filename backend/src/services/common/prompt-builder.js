@@ -40,7 +40,8 @@ function buildPolicyBlock(responsePolicy = {}) {
 		'- Si no hay tracking, decilo sin inventar.',
 		'- Si la conversación ya está empezada, seguí el hilo sin saludar de nuevo.',
 		'- Si el mensaje es solo un saludo, contestá breve y preguntá qué está buscando.',
-		'- Evitá abrir con muletillas como claro, perfecto, genial, buenísimo o dale.'
+		'- Evitá abrir con muletillas como claro, perfecto, genial, buenísimo o dale.',
+		'- Si la intención no es producto, no abras promociones ni upsell salvo pedido explícito del cliente.'
 	].join('\n');
 }
 
@@ -48,10 +49,15 @@ function buildCommercialPlanBlock(commercialPlan = {}) {
 	return [
 		`- Etapa comercial: ${commercialPlan.stage || 'DISCOVERY'}`,
 		`- Acción detectada del cliente: ${commercialPlan.requestedAction || 'GENERAL'}`,
-		`- Familia foco: ${commercialPlan.productFamily || 'no clara'}`,
+		`- Familia foco: ${commercialPlan.productFamilyLabel || commercialPlan.productFamily || 'no clara'}`,
+		`- ¿Familia bloqueada?: ${commercialPlan.categoryLocked ? 'Sí' : 'No'}`,
 		`- Producto foco: ${commercialPlan.productFocus || 'no claro'}`,
+		`- Promo solicitada: ${commercialPlan.requestedOfferType || 'no específica'}`,
+		`- ¿Promo exacta disponible?: ${commercialPlan.requestedOfferAvailable == null ? 'no aplica' : commercialPlan.requestedOfferAvailable ? 'Sí' : 'No'}`,
+		`- Restricciones / exclusiones: ${formatArrayField(commercialPlan.excludedKeywords, 'ninguna')}`,
 		`- Oferta principal: ${commercialPlan.bestOffer?.name || 'no clara'}`,
 		`- Precio principal: ${commercialPlan.bestOffer?.price || 'no cargado'}`,
+		`- Alternativa dentro de la misma familia: ${commercialPlan.fallbackOffer?.name || 'ninguna'}`,
 		`- ¿Compartir link ahora?: ${commercialPlan.shareLinkNow ? 'Sí' : 'No'}`,
 		`- ¿Repetir precio ahora?: ${commercialPlan.repeatPriceNow ? 'Sí' : 'No'}`,
 		`- Links ya compartidos: ${formatArrayField(commercialPlan.alreadyShared?.sharedLinks, 'ninguno')}`,
@@ -98,19 +104,56 @@ export function buildPrompt({
 		`SISTEMA: ${systemPrompt}`,
 		`NEGOCIO: ${businessName}`,
 		`ASESORA: ${agentName}`,
-		businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}` : '',
-		`DATOS DEL CLIENTE:\n- Nombre: ${customerContext.name || contactName || 'Cliente'}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
-		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
-		`ESTADO ACTUAL:\n- Última intención: ${conversationState.lastIntent || 'general'}\n- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}\n- Ánimo: ${conversationState.customerMood || 'neutral'}\n- Talle detectado: ${conversationState.frequentSize || 'no detectado'}\n- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}\n- Productos de interés: ${formatArrayField(conversationState.interestedProducts)}\n- ¿Necesita humano?: ${conversationState.needsHuman ? 'Sí' : 'No'}`,
-		`POLÍTICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy)}`,
-		`PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}`,
-		`PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`,
-		`HECHOS ÚTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}`,
-		`CATÁLOGO RELEVANTE:\n${compactCatalog}`,
-		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,
-		`POLÍTICAS RESUMIDAS:\n- Envíos: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
-		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podés presentarte una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}\n- Si el mensaje del cliente es solo un saludo, respondé breve y preguntá qué está buscando.\n- Si habla de una familia general, primero orientá la familia y recién después bajá a una promo o SKU.\n- Si mostrás opciones, priorizá una sola principal según el plan comercial.\n- Si ya se venía hablando de otro producto más reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explícito.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenísimo o dale.\n- Si la respuesta es continuidad, no repitas nombre ni saludo.`,
-		`CONVERSACIÓN RECIENTE:\n${transcript}`,
+		businessContext ? `CONTEXTO DEL NEGOCIO:
+${businessContext}` : '',
+		`DATOS DEL CLIENTE:
+- Nombre: ${customerContext.name || contactName || 'Cliente'}
+- WhatsApp: ${customerContext.waId || 'No informado'}`,
+		conversationSummary ? `RESUMEN DEL CHAT:
+${conversationSummary}` : '',
+		`ESTADO ACTUAL:
+- Última intención: ${conversationState.lastIntent || 'general'}
+- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}
+- Ánimo: ${conversationState.customerMood || 'neutral'}
+- Familia actual: ${conversationState.currentProductFamily || 'no detectada'}
+- Producto foco: ${conversationState.currentProductFocus || 'no detectado'}
+- Promo pedida: ${conversationState.requestedOfferType || 'no detectada'}
+- Exclusiones: ${formatArrayField(conversationState.excludedProductKeywords, 'ninguna')}
+- ¿Familia bloqueada?: ${conversationState.categoryLocked ? 'Sí' : 'No'}
+- Talle detectado: ${conversationState.frequentSize || 'no detectado'}
+- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}
+- Productos de interés: ${formatArrayField(conversationState.interestedProducts)}
+- ¿Necesita humano?: ${conversationState.needsHuman ? 'Sí' : 'No'}`,
+		`POLÍTICA DE RESPUESTA:
+${buildPolicyBlock(responsePolicy)}`,
+		`PLAN COMERCIAL:
+${buildCommercialPlanBlock(commercialPlan)}`,
+		`PEDIDO REAL / TRACKING:
+${formatLiveOrderContext(liveOrderContext)}`,
+		`HECHOS ÚTILES:
+${facts.map((fact) => `- ${fact}`).join('\n')}`,
+		`CATÁLOGO RELEVANTE:
+${compactCatalog}`,
+		`PISTAS COMERCIALES:
+${commercialHintsBlock}`,
+		`POLÍTICAS RESUMIDAS:
+- Envíos: ${businessData.policySummary.shipping.join(' ')}
+- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
+		`REGLAS DE SALIDA:
+- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podés presentarte una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}
+- Si el mensaje del cliente es solo un saludo, respondé breve y preguntá qué está buscando.
+- Si la intención es soporte (pedido, pago, envío o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.
+- Si el cliente ya fijó familia o promo, respetala y no cambies de producto por tu cuenta.
+- Si el cliente excluyó una opción (por ejemplo "no quiero Total White"), no la vuelvas a mencionar como recomendación.
+- Si la promo exacta no existe dentro de esa familia, decilo explícitamente y ofrecé la mejor alternativa dentro de la misma familia.
+- Si mostrás opciones, priorizá una sola principal según el plan comercial.
+- Si ya se venía hablando de otro producto más reciente, el link tiene que seguir ese producto reciente.
+- No repitas promo, precio ni link si ya fueron dados, salvo pedido explícito.
+- No uses listas largas.
+- No arranques con claro, perfecto, genial, buenísimo o dale.
+- Si la respuesta es continuidad, no repitas nombre ni saludo.`,
+		`CONVERSACIÓN RECIENTE:
+${transcript}`,
 		'Respondé ahora al último mensaje del cliente.'
 	].filter(Boolean).join('\n\n');
 }

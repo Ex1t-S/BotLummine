@@ -269,11 +269,29 @@ export async function runConversationTurn({
 		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
 		commercialHints.push('No pases más de un link en una misma respuesta.');
 		commercialHints.push('No abras varias promos si la clienta ya eligió una.');
+		if (commercialPlan?.categoryLocked && commercialPlan?.productFamilyLabel) {
+			commercialHints.push(`No cambies de familia: seguí en ${commercialPlan.productFamilyLabel}.`);
+		}
+		if (commercialPlan?.excludedKeywords?.length) {
+			commercialHints.push(`No vuelvas a ofrecer: ${commercialPlan.excludedKeywords.join(', ')}.`);
+		}
+		if (commercialPlan?.requestedOfferType && commercialPlan?.requestedOfferAvailable === false && commercialPlan?.fallbackOffer?.name) {
+			commercialHints.push(`La ${commercialPlan.requestedOfferType} exacta no apareció. Decilo claro y ofrecé ${commercialPlan.fallbackOffer.name} sin salir de la misma familia.`);
+		}
 		commercialHints.push('Bajá el tono celebratorio y soná más natural.');
 
 		nextStatePayload = {
 			...nextStatePayload,
 			currentProductFocus: commercialPlan?.productFocusLabel || commercialPlan?.productFocus || nextStatePayload.currentProductFocus || null,
+			currentProductFamily: commercialPlan?.productFamily || nextStatePayload.currentProductFamily || null,
+			requestedOfferType: commercialPlan?.requestedOfferType || nextStatePayload.requestedOfferType || null,
+			excludedProductKeywords: commercialPlan?.excludedKeywords?.length
+				? commercialPlan.excludedKeywords
+				: nextStatePayload.excludedProductKeywords || [],
+			categoryLocked:
+				typeof commercialPlan?.categoryLocked === 'boolean'
+					? commercialPlan.categoryLocked
+					: nextStatePayload.categoryLocked || false,
 			salesStage: commercialPlan?.stage || nextStatePayload.salesStage || null,
 			shownOffers: commercialPlan?.bestOffer?.offerLabel
 				? [...new Set([...(Array.isArray(nextStatePayload.shownOffers) ? nextStatePayload.shownOffers : []), commercialPlan.bestOffer.offerLabel])]

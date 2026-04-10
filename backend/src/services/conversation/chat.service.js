@@ -473,7 +473,63 @@ export async function processInboundMessage({
 		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
 		commercialHints.push('No pases más de un link en una misma respuesta.');
 		commercialHints.push('No abras varias promos si la clienta ya eligió una.');
+		if (commercialPlan?.categoryLocked && commercialPlan?.productFamilyLabel) {
+			commercialHints.push(`No cambies de familia: seguí en ${commercialPlan.productFamilyLabel}.`);
+		}
+		if (commercialPlan?.excludedKeywords?.length) {
+			commercialHints.push(`No vuelvas a ofrecer: ${commercialPlan.excludedKeywords.join(', ')}.`);
+		}
+		if (commercialPlan?.requestedOfferType && commercialPlan?.requestedOfferAvailable === false && commercialPlan?.fallbackOffer?.name) {
+			commercialHints.push(`La ${commercialPlan.requestedOfferType} exacta no apareció. Decilo claro y ofrecé ${commercialPlan.fallbackOffer.name} sin salir de la misma familia.`);
+		}
 		commercialHints.push('Bajá el tono celebratorio y soná más natural.');
+
+		const patchedStatePayload = {
+			...nextStatePayload,
+			currentProductFocus: commercialPlan?.productFocusLabel || commercialPlan?.productFocus || nextStatePayload.currentProductFocus || null,
+			currentProductFamily: commercialPlan?.productFamily || nextStatePayload.currentProductFamily || null,
+			requestedOfferType: commercialPlan?.requestedOfferType || nextStatePayload.requestedOfferType || null,
+			excludedProductKeywords: commercialPlan?.excludedKeywords?.length
+				? commercialPlan.excludedKeywords
+				: nextStatePayload.excludedProductKeywords || [],
+			categoryLocked:
+				typeof commercialPlan?.categoryLocked === 'boolean'
+					? commercialPlan.categoryLocked
+					: nextStatePayload.categoryLocked || false,
+			salesStage: commercialPlan?.stage || nextStatePayload.salesStage || null,
+			shownOffers: commercialPlan?.bestOffer?.offerLabel
+				? [...new Set([...(Array.isArray(nextStatePayload.shownOffers) ? nextStatePayload.shownOffers : []), commercialPlan.bestOffer.offerLabel])]
+				: nextStatePayload.shownOffers || [],
+			shownPrices: commercialPlan?.repeatPriceNow && commercialPlan?.bestOffer?.price
+				? [...new Set([...(Array.isArray(nextStatePayload.shownPrices) ? nextStatePayload.shownPrices : []), `${commercialPlan.bestOffer.name}::${commercialPlan.bestOffer.price}`])]
+				: nextStatePayload.shownPrices || [],
+			sharedLinks: commercialPlan?.shareLinkNow && commercialPlan?.bestOffer?.productUrl
+				? [...new Set([...(Array.isArray(nextStatePayload.sharedLinks) ? nextStatePayload.sharedLinks : []), commercialPlan.bestOffer.productUrl])]
+				: nextStatePayload.sharedLinks || [],
+			lastRecommendedProduct: commercialPlan?.bestOffer?.name || nextStatePayload.lastRecommendedProduct || null,
+			lastRecommendedOffer: commercialPlan?.bestOffer?.offerLabel || nextStatePayload.lastRecommendedOffer || null,
+			buyingIntentLevel: commercialPlan?.buyingIntentLevel || nextStatePayload.buyingIntentLevel || null,
+			commercialSummary: buildConversationSummary({
+				intent,
+				enrichedState: { ...enrichedState, currentProductFocus: commercialPlan?.productFocusLabel || commercialPlan?.productFocus || nextStatePayload.currentProductFocus || null },
+				lastUserMessage: summaryUserMessage,
+				lastAssistantMessage: '',
+				liveOrderContext,
+				commercialPlan
+			})
+		};
+
+		Object.assign(nextStatePayload, patchedStatePayload);
+		Object.assign(enrichedState, patchedStatePayload);
+
+		await prisma.conversationState.upsert({
+			where: { conversationId: freshConversation.id },
+			update: patchedStatePayload,
+			create: {
+				conversationId: freshConversation.id,
+				...patchedStatePayload
+			}
+		});
 	} catch (catalogError) {
 		console.error('Error buscando productos en catálogo local:', catalogError);
 	}
