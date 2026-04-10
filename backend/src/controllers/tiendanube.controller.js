@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { prisma } from '../lib/prisma.js';
 import { getTiendanubeConfig } from '../services/tiendanube/client.js';
+import {
+	syncCatalogFromTiendanube,
+	getCatalogSummary,
+	getCatalogPage
+} from '../services/catalog/catalog.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const ORDER_WEBHOOK_EVENTS = [
@@ -25,7 +30,7 @@ function getRegisterSecret() {
 	).trim();
 }
 
-function isAuthorizedRegisterRequest(req) {
+function isAuthorizedAdminRequest(req) {
 	if (req.user) {
 		return true;
 	}
@@ -242,7 +247,7 @@ async function resolveInstallationForWebhook(requestedStoreId = null) {
 	}
 
 	throw new Error(
-		'No hay credenciales activas de Tiendanube para registrar webhooks. Necesitás StoreInstallation o TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN.'
+		'No hay credenciales activas de Tiendanube para registrar webhooks o sincronizar catálogo. Necesitás StoreInstallation o TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN.'
 	);
 }
 
@@ -320,7 +325,7 @@ export async function handleTiendanubeCallback(req, res) {
 
 export async function registerTiendanubeWebhooks(req, res) {
 	try {
-		if (!isAuthorizedRegisterRequest(req)) {
+		if (!isAuthorizedAdminRequest(req)) {
 			return res.status(401).json({
 				ok: false,
 				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
@@ -356,6 +361,74 @@ export async function registerTiendanubeWebhooks(req, res) {
 	}
 }
 
+export async function runTiendanubeCatalogSync(req, res) {
+	try {
+		if (!isAuthorizedAdminRequest(req)) {
+			return res.status(401).json({
+				ok: false,
+				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+			});
+		}
+
+		await resolveInstallationForWebhook(req.body?.storeId || req.query?.storeId);
+
+		const result = await syncCatalogFromTiendanube({
+			pageSize: Number(req.body?.pageSize || req.query?.pageSize) || 100,
+			delayMs: Number(req.body?.delayMs || req.query?.delayMs) || 250,
+			markMissingAsUnpublished:
+				String(req.body?.markMissingAsUnpublished || req.query?.markMissingAsUnpublished || 'true') !== 'false'
+		});
+
+		return res.json(result);
+	} catch (error) {
+		console.error('[TIENDANUBE][CATALOG SYNC]', error.message);
+		return res.status(500).json({ ok: false, error: error.message });
+	}
+}
+
+export async function getTiendanubeCatalogStatus(req, res) {
+	try {
+		if (!isAuthorizedAdminRequest(req)) {
+			return res.status(401).json({
+				ok: false,
+				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+			});
+		}
+
+		const summary = await getCatalogSummary();
+		return res.json({ ok: true, ...summary });
+	} catch (error) {
+		console.error('[TIENDANUBE][CATALOG STATUS]', error.message);
+		return res.status(500).json({ ok: false, error: error.message });
+	}
+}
+
+export async function getTiendanubeCatalogProducts(req, res) {
+	try {
+		if (!isAuthorizedAdminRequest(req)) {
+			return res.status(401).json({
+				ok: false,
+				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+			});
+		}
+
+		const result = await getCatalogPage({
+			q: req.query?.q || '',
+			page: req.query?.page,
+			pageSize: req.query?.pageSize,
+			published:
+				req.query?.published == null || req.query?.published === ''
+					? undefined
+					: String(req.query.published) === 'true'
+		});
+
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		console.error('[TIENDANUBE][CATALOG PRODUCTS]', error.message);
+		return res.status(500).json({ ok: false, error: error.message });
+	}
+}
+
 export async function getTiendanubeStatus(_req, res) {
 	try {
 		const installation = await prisma.storeInstallation.findFirst({
@@ -368,6 +441,8 @@ export async function getTiendanubeStatus(_req, res) {
 		} catch {
 			activeConfig = null;
 		}
+
+		const catalogSummary = await getCatalogSummary().catch(() => null);
 
 		return res.json({
 			ok: true,
@@ -385,7 +460,8 @@ export async function getTiendanubeStatus(_req, res) {
 			storeId: activeConfig?.storeId || installation?.storeId || null,
 			scope: installation?.scope || null,
 			installedAt: installation?.installedAt || null,
-			orderWebhookEvents: ORDER_WEBHOOK_EVENTS
+			orderWebhookEvents: ORDER_WEBHOOK_EVENTS,
+			catalog: catalogSummary
 		});
 	} catch (error) {
 		console.error('Error obteniendo estado de Tiendanube:', error.message);

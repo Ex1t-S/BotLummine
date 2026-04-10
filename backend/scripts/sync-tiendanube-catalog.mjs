@@ -1,10 +1,10 @@
 import 'dotenv/config';
-import { syncCatalogFromTiendanube } from '../src/services/catalog.service.js';
+import { syncCatalogFromTiendanube } from '../src/services/catalog/catalog.service.js';
 
 try {
 	const result = await syncCatalogFromTiendanube();
 	console.log('✅ Catálogo sincronizado');
-	console.log(result);
+	console.log(JSON.stringify(result, null, 2));
 	process.exit(0);
 } catch (error) {
 	console.error('❌ Error sincronizando catálogo');
