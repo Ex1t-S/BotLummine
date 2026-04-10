@@ -1,9 +1,10 @@
 import { prisma } from '../../lib/prisma.js';
 import { getTiendanubeClient } from '../tiendanube/client.js';
-
-const DEFAULT_PAGE_SIZE = 100;
-const DEFAULT_DELAY_MS = 250;
-const DEFAULT_SYNC_WINDOW_DAYS = 30;
+import {
+	getSkuVariantMeta,
+	isGenericSkuColor,
+	normalizeSku,
+} from '../../data/sku-size-map.js';
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -11,7 +12,7 @@ function sleep(ms) {
 
 function pickLocalized(value) {
 	if (value == null) return null;
-	if (typeof value === 'string') return value.trim() || null;
+	if (typeof value === 'string') return value;
 
 	if (typeof value === 'object') {
 		return (
@@ -20,7 +21,7 @@ function pickLocalized(value) {
 			value['es-AR'] ||
 			value.en ||
 			value.pt ||
-			Object.values(value).find((entry) => typeof entry === 'string' && entry.trim()) ||
+			Object.values(value).find((v) => typeof v === 'string') ||
 			null
 		);
 	}
@@ -79,51 +80,144 @@ function resolveCatalogPrices(baseValue, promoValue) {
 	};
 }
 
+function normalizeSpacing(value = '') {
+	return String(value || '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function looksLikeSkuCode(value = '') {
+	return /^[A-Z]{1,8}-\d{3,}$/i.test(normalizeSku(value));
+}
+
+function normalizeColorLabel(value = '') {
+	const raw = normalizeSpacing(value).toLowerCase();
+	if (!raw) return null;
+
+	const normalized = raw
+		.replace(/\bnegra\b/g, 'negro')
+		.replace(/\bblanca\b/g, 'blanco');
+
+	if (!/(negro|blanco|beige|avellana|marron|marrón|nude|rosa|gris|azul|verde|bordo|chocolate)/i.test(normalized)) {
+		return null;
+	}
+
+	return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function normalizeSizeLabel(value = '') {
+	return normalizeSpacing(value)
+		.toUpperCase()
+		.replace(/\s*\/\s*/g, '/')
+		.replace(/\bML\b/g, 'M/L')
+		.replace(/\bSM\b/g, 'S/M')
+		.replace(/\bP\/M\b/g, 'M/L')
+		.replace(/\bG\/GG\b/g, 'XL/2XL');
+}
+
+function extractAtomicSizes(value = '') {
+	const normalized = normalizeSizeLabel(value);
+	if (!normalized) return [];
+
+	return [...new Set((normalized.match(/(TALLE UNICO|TALLE 1|TALLE 2|TALLE 3|TALLE 4|5XL\/6XL|4XL|3XL\/4XL|2XL\/3XL|XL\/2XL|XL\/XXL|L\/XL|M\/L|S\/M|XXXL|XXL|XL|L|M|S|XS|110)/g) || []))];
+}
+
+function extractVariantMeta(variants = []) {
+	const flat = Array.isArray(variants) ? variants : [];
+	const hints = new Set();
+	const colors = new Set();
+	const sizes = new Set();
+
+	const addValue = (rawValue) => {
+		const cleaned = normalizeSpacing(rawValue);
+		if (!cleaned) return;
+
+		if (looksLikeSkuCode(cleaned)) {
+			const meta = getSkuVariantMeta(cleaned);
+			if (!meta) return;
+
+			if (meta.color && !isGenericSkuColor(meta.color)) {
+				const colorLabel = normalizeColorLabel(meta.color);
+				if (colorLabel) colors.add(colorLabel);
+			}
+
+			extractAtomicSizes(meta.size || '').forEach((size) => sizes.add(size));
+			return;
+		}
+
+		const colorLabel = normalizeColorLabel(cleaned);
+		if (colorLabel) colors.add(colorLabel);
+		extractAtomicSizes(cleaned).forEach((size) => sizes.add(size));
+
+		if (!looksLikeSkuCode(cleaned) && cleaned.length <= 80) {
+			hints.add(cleaned);
+		}
+	};
+
+	for (const variant of flat) {
+		if (variant?.sku) addValue(variant.sku);
+		if (variant?.option1) addValue(variant.option1);
+		if (variant?.option2) addValue(variant.option2);
+		if (variant?.option3) addValue(variant.option3);
+
+		if (Array.isArray(variant?.values)) {
+			variant.values.forEach(addValue);
+		}
+
+		if (Array.isArray(variant?.attributes)) {
+			variant.attributes.forEach((attribute) => {
+				addValue(attribute?.value || '');
+				addValue(attribute?.name || '');
+			});
+		}
+	}
+
+	return {
+		variantHints: [...hints].slice(0, 12),
+		colors: [...colors].slice(0, 8),
+		sizes: [...sizes].slice(0, 8)
+	};
+}
+
+function formatMoney(value) {
+	if (value == null) return null;
+
+	try {
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: 'ARS',
+			maximumFractionDigits: 0
+		}).format(Number(value));
+	} catch {
+		return `$${value}`;
+	}
+}
+
 function normalizeTags(tags) {
 	if (Array.isArray(tags)) {
-		return tags
-			.map((tag) => {
-				if (typeof tag === 'string') return tag.trim();
-				if (tag && typeof tag === 'object') {
-					return String(tag.name || tag.value || '').trim();
-				}
-				return '';
-			})
-			.filter(Boolean)
-			.join(', ');
+		return tags.map((t) => String(t).trim()).filter(Boolean).join(', ');
 	}
 
 	if (typeof tags === 'string') {
-		return tags.trim() || null;
+		return tags;
 	}
 
 	return null;
 }
 
-function buildProductUrl(product, installation, handle) {
-	if (product?.canonical_url) {
-		return product.canonical_url;
-	}
-
-	if (!installation?.storeUrl || !handle) {
-		return null;
-	}
-
-	const cleanStoreUrl = String(installation.storeUrl).replace(/\/+$/, '');
-	const cleanHandle = String(handle).replace(/^\/+/, '');
-	return `${cleanStoreUrl}/${cleanHandle}`;
-}
-
 function normalizeProduct(product, installation) {
-	const name = pickLocalized(product?.name) || `Producto ${product?.id ?? ''}`.trim();
-	const handle = pickLocalized(product?.handle);
-	const description = pickLocalized(product?.description);
-	const brand = typeof product?.brand === 'string' ? product.brand : pickLocalized(product?.brand);
+	const name = pickLocalized(product.name) || `Producto ${product.id}`;
+	const handle = pickLocalized(product.handle);
+	const description = pickLocalized(product.description);
+	const brand =
+		typeof product.brand === 'string'
+			? product.brand
+			: pickLocalized(product.brand);
 
-	const variants = Array.isArray(product?.variants) ? product.variants : [];
-	const images = Array.isArray(product?.images) ? product.images : [];
-	const categories = Array.isArray(product?.categories) ? product.categories : [];
-	const attributes = Array.isArray(product?.attributes) ? product.attributes : [];
+	const variants = Array.isArray(product.variants) ? product.variants : [];
+	const images = Array.isArray(product.images) ? product.images : [];
+	const categories = Array.isArray(product.categories) ? product.categories : [];
+	const attributes = Array.isArray(product.attributes) ? product.attributes : [];
 
 	const firstVariant = variants[0] || null;
 	const featuredImage =
@@ -133,22 +227,39 @@ function normalizeProduct(product, installation) {
 		firstVariant?.image?.url ||
 		null;
 
-	const basePrice = firstVariant?.price ?? product?.price ?? null;
-	const promoPrice = firstVariant?.promotional_price ?? product?.promotional_price ?? null;
+	const basePrice =
+		firstVariant?.price ??
+		product?.price ??
+		null;
+
+	const promoPrice =
+		firstVariant?.promotional_price ??
+		product?.promotional_price ??
+		null;
+
 	const resolvedPrices = resolveCatalogPrices(basePrice, promoPrice);
 
+	let productUrl = null;
+
+	if (product.canonical_url) {
+		productUrl = product.canonical_url;
+	} else if (installation?.storeUrl && handle) {
+		const cleanStoreUrl = String(installation.storeUrl).replace(/\/+$/, '');
+		productUrl = `${cleanStoreUrl}/${handle}`;
+	}
+
 	return {
-		productId: String(product?.id),
+		productId: String(product.id),
 		name,
 		handle,
 		description,
 		brand,
 		price: resolvedPrices.currentPrice,
 		compareAtPrice: resolvedPrices.originalPrice,
-		published: product?.published !== false,
-		tags: normalizeTags(product?.tags),
+		published: product.published !== false,
+		tags: normalizeTags(product.tags),
 		featuredImage,
-		productUrl: buildProductUrl(product, installation, handle),
+		productUrl,
 		variants,
 		images,
 		categories,
@@ -157,114 +268,27 @@ function normalizeProduct(product, installation) {
 	};
 }
 
-function buildCatalogWhere({ q = '', published = undefined } = {}) {
-	const search = String(q || '').trim();
-	return {
-		...(published == null ? {} : { published: Boolean(published) }),
-		...(search
-			? {
-					OR: [
-						{ name: { contains: search, mode: 'insensitive' } },
-						{ brand: { contains: search, mode: 'insensitive' } },
-						{ tags: { contains: search, mode: 'insensitive' } },
-						{ handle: { contains: search, mode: 'insensitive' } },
-						{ description: { contains: search, mode: 'insensitive' } },
-						{ productId: { contains: search, mode: 'insensitive' } }
-					]
-			  }
-			: {})
-	};
-}
-
-async function upsertCatalogPage({ products, storeId, installation }) {
-	const now = new Date();
-	const tx = [];
-
-	for (const product of products) {
-		const normalized = normalizeProduct(product, installation);
-		tx.push(
-			prisma.catalogProduct.upsert({
-				where: {
-					storeId_productId: {
-						storeId,
-						productId: normalized.productId
-					}
-				},
-				update: {
-					name: normalized.name,
-					handle: normalized.handle,
-					description: normalized.description,
-					brand: normalized.brand,
-					price: normalized.price,
-					compareAtPrice: normalized.compareAtPrice,
-					published: normalized.published,
-					tags: normalized.tags,
-					featuredImage: normalized.featuredImage,
-					productUrl: normalized.productUrl,
-					variants: normalized.variants,
-					images: normalized.images,
-					categories: normalized.categories,
-					attributes: normalized.attributes,
-					rawPayload: normalized.rawPayload,
-					syncedAt: now
-				},
-				create: {
-					storeId,
-					productId: normalized.productId,
-					name: normalized.name,
-					handle: normalized.handle,
-					description: normalized.description,
-					brand: normalized.brand,
-					price: normalized.price,
-					compareAtPrice: normalized.compareAtPrice,
-					published: normalized.published,
-					tags: normalized.tags,
-					featuredImage: normalized.featuredImage,
-					productUrl: normalized.productUrl,
-					variants: normalized.variants,
-					images: normalized.images,
-					categories: normalized.categories,
-					attributes: normalized.attributes,
-					rawPayload: normalized.rawPayload,
-					syncedAt: now
-				}
-			})
-		);
-	}
-
-	if (tx.length) {
-		await prisma.$transaction(tx);
-	}
-
-	return products.map((product) => String(product?.id)).filter(Boolean);
-}
-
-export async function syncCatalogFromTiendanube({
-	pageSize = DEFAULT_PAGE_SIZE,
-	delayMs = DEFAULT_DELAY_MS,
-	markMissingAsUnpublished = true
-} = {}) {
+export async function syncCatalogFromTiendanube() {
 	const syncLog = await prisma.catalogSyncLog.create({
 		data: {
 			status: 'RUNNING',
-			message: 'Sincronización completa del catálogo iniciada'
+			message: 'Sincronización iniciada'
 		}
 	});
 
 	try {
 		const { client, installation } = await getTiendanubeClient();
 		const storeId = String(installation.storeId);
-		const seenProductIds = new Set();
+
 		let page = 1;
+		const perPage = 100;
 		let processed = 0;
-		let publishedCount = 0;
-		let unpublishedCount = 0;
 
 		while (true) {
 			const response = await client.get('/products', {
 				params: {
 					page,
-					per_page: pageSize
+					per_page: perPage
 				}
 			});
 
@@ -278,47 +302,65 @@ export async function syncCatalogFromTiendanube({
 				break;
 			}
 
-			const pageIds = await upsertCatalogPage({
-				products,
-				storeId,
-				installation
-			});
-
 			for (const product of products) {
-				if (product?.published === false) unpublishedCount += 1;
-				else publishedCount += 1;
+				const normalized = normalizeProduct(product, installation);
+
+				await prisma.catalogProduct.upsert({
+					where: {
+						storeId_productId: {
+							storeId,
+							productId: normalized.productId
+						}
+					},
+					update: {
+						name: normalized.name,
+						handle: normalized.handle,
+						description: normalized.description,
+						brand: normalized.brand,
+						price: normalized.price,
+						compareAtPrice: normalized.compareAtPrice,
+						published: normalized.published,
+						tags: normalized.tags,
+						featuredImage: normalized.featuredImage,
+						productUrl: normalized.productUrl,
+						variants: normalized.variants,
+						images: normalized.images,
+						categories: normalized.categories,
+						attributes: normalized.attributes,
+						rawPayload: normalized.rawPayload,
+						syncedAt: new Date()
+					},
+					create: {
+						storeId,
+						productId: normalized.productId,
+						name: normalized.name,
+						handle: normalized.handle,
+						description: normalized.description,
+						brand: normalized.brand,
+						price: normalized.price,
+						compareAtPrice: normalized.compareAtPrice,
+						published: normalized.published,
+						tags: normalized.tags,
+						featuredImage: normalized.featuredImage,
+						productUrl: normalized.productUrl,
+						variants: normalized.variants,
+						images: normalized.images,
+						categories: normalized.categories,
+						attributes: normalized.attributes,
+						rawPayload: normalized.rawPayload,
+						syncedAt: new Date()
+					}
+				});
+
+				processed += 1;
 			}
 
-			pageIds.forEach((id) => seenProductIds.add(id));
-			processed += products.length;
-
-			if (products.length < pageSize) {
+			if (products.length < perPage) {
 				break;
 			}
 
 			page += 1;
-			if (delayMs > 0) {
-				await sleep(delayMs);
-			}
-		}
-
-		let missingMarked = 0;
-		if (markMissingAsUnpublished && seenProductIds.size) {
-			const missingResult = await prisma.catalogProduct.updateMany({
-				where: {
-					storeId,
-					NOT: {
-						productId: {
-							in: [...seenProductIds]
-						}
-					}
-				},
-				data: {
-					published: false,
-					syncedAt: new Date()
-				}
-			});
-			missingMarked = missingResult.count || 0;
+			await sleep(350);
 		}
 
 		await prisma.catalogSyncLog.update({
@@ -328,17 +370,14 @@ export async function syncCatalogFromTiendanube({
 				status: 'SUCCESS',
 				finishedAt: new Date(),
 				productsProcessed: processed,
-				message: `Catálogo sincronizado correctamente. ${processed} productos procesados, ${publishedCount} publicados, ${unpublishedCount} no publicados, ${missingMarked} marcados como no publicados por no venir en el sync.`
+				message: `Catálogo sincronizado correctamente. ${processed} productos procesados.`
 			}
 		});
 
 		return {
 			ok: true,
 			storeId,
-			productsProcessed: processed,
-			publishedCount,
-			unpublishedCount,
-			missingMarked
+			productsProcessed: processed
 		};
 	} catch (error) {
 		await prisma.catalogSyncLog.update({
@@ -354,47 +393,60 @@ export async function syncCatalogFromTiendanube({
 	}
 }
 
-export async function getCatalogSummary() {
-	const recentWindow = new Date(Date.now() - DEFAULT_SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-	const [total, published, unpublished, stale, lastSync] = await Promise.all([
-		prisma.catalogProduct.count(),
-		prisma.catalogProduct.count({ where: { published: true } }),
-		prisma.catalogProduct.count({ where: { published: false } }),
-		prisma.catalogProduct.count({ where: { syncedAt: { lt: recentWindow } } }),
-		prisma.catalogSyncLog.findFirst({ orderBy: { startedAt: 'desc' } })
-	]);
-
-	return {
-		total,
-		published,
-		unpublished,
-		stale,
-		lastSync
+export async function getCatalogPage({ q = '', page = 1, pageSize = 24 } = {}) {
+	const where = {
+		...(q
+			? {
+					OR: [
+						{ name: { contains: q, mode: 'insensitive' } },
+						{ brand: { contains: q, mode: 'insensitive' } },
+						{ tags: { contains: q, mode: 'insensitive' } }
+					]
+			  }
+			: {})
 	};
-}
 
-export async function getCatalogPage({ q = '', page = 1, pageSize = 24, published = undefined } = {}) {
-	const safePage = Math.max(1, Number(page) || 1);
-	const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 24));
-	const where = buildCatalogWhere({ q, published });
-
-	const [items, total, summary] = await Promise.all([
+	const [itemsRaw, total, lastSync] = await Promise.all([
 		prisma.catalogProduct.findMany({
 			where,
-			orderBy: [{ published: 'desc' }, { updatedAt: 'desc' }],
-			skip: (safePage - 1) * safePageSize,
-			take: safePageSize
+			orderBy: [
+				{ published: 'desc' },
+				{ updatedAt: 'desc' }
+			],
+			skip: (page - 1) * pageSize,
+			take: pageSize
 		}),
 		prisma.catalogProduct.count({ where }),
-		getCatalogSummary()
+		prisma.catalogSyncLog.findFirst({
+			orderBy: { startedAt: 'desc' }
+		})
 	]);
+
+	const items = itemsRaw.map((item) => {
+		const { currentPrice, originalPrice } = resolveCatalogPrices(
+			item.price,
+			item.compareAtPrice
+		);
+
+		const { colors, sizes } = extractVariantMeta(item.variants);
+
+		return {
+			...item,
+			currentPrice,
+			originalPrice,
+			currentPriceLabel: formatMoney(currentPrice),
+			originalPriceLabel: formatMoney(originalPrice),
+			colors,
+			sizes
+		};
+	});
 
 	return {
 		items,
 		total,
-		page: safePage,
-		pageSize: safePageSize,
-		totalPages: Math.max(1, Math.ceil(total / safePageSize)),
-		summary
+		page,
+		pageSize,
+		totalPages: Math.max(1, Math.ceil(total / pageSize)),
+		lastSync
 	};
 }
