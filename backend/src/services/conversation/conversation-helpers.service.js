@@ -160,6 +160,16 @@ export function buildAiFailureFallback({
 		return 'Te paso con una asesora para seguir mejor con esto.';
 	}
 
+	if (intent === 'product' && commercialPlan?.catalogAvailable === false) {
+		const familyLabel =
+			commercialPlan?.productFamilyLabel ||
+			commercialPlan?.productFamily ||
+			enrichedState?.currentProductFocus ||
+			enrichedState?.currentProductFamily ||
+			'ese producto';
+		return `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar una promo o un link equivocado. Si querés, decime color o talle, o te paso con una asesora.`;
+	}
+
 	if (intent === 'product') {
 		if (
 			commercialPlan?.recommendedAction === 'present_offer_options_brief' &&
@@ -317,6 +327,16 @@ export function buildResponsePolicy({
 	}
 
 	if (intent === 'product') {
+		if (commercialPlan?.catalogAvailable === false) {
+			return {
+				action: 'product_catalog_unavailable',
+				useAI: false,
+				allowHandoffMention: false,
+				maxChars: 260,
+				tone: 'amigable_directo',
+			};
+		}
+
 		return {
 			action: commercialPlan?.recommendedAction || 'product_guidance',
 			useAI: true,
@@ -403,6 +423,17 @@ function responseMentionsHumanHandoff(text = '') {
 	);
 }
 
+function looksLikeInventedCommercialReply(text = '', commercialPlan = null) {
+	if (commercialPlan?.catalogAvailable !== false) return false;
+	const normalized = String(text || '').toLowerCase();
+	return (
+		/(2x1|3x1|pack|combo|promo|promocion|promoción|oferta)/i.test(normalized) ||
+		/\$\s?\d/.test(normalized) ||
+		/https?:\/\//i.test(normalized) ||
+		/\blink\b|\burl\b/i.test(normalized)
+	);
+}
+
 function looksLikeInventedTracking(text = '', liveOrderContext = null) {
 	const normalized = String(text || '').toLowerCase();
 
@@ -456,6 +487,13 @@ export function auditAssistantReply({
 		commercialPlan?.shareLinkNow === false &&
 		commercialPlan?.alreadyShared?.sharedLinks?.some((link) => cleaned.includes(link))
 	) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false,
+		};
+	}
+
+	if (looksLikeInventedCommercialReply(cleaned, commercialPlan)) {
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,

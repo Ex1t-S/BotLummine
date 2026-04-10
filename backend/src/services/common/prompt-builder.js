@@ -47,6 +47,7 @@ function buildPolicyBlock(responsePolicy = {}) {
 
 function buildCommercialPlanBlock(commercialPlan = {}) {
 	return [
+		`- Catálogo local disponible: ${commercialPlan.catalogAvailable === false ? 'No' : 'Sí'}`,
 		`- Etapa comercial: ${commercialPlan.stage || 'DISCOVERY'}`,
 		`- Acción detectada del cliente: ${commercialPlan.requestedAction || 'GENERAL'}`,
 		`- Familia foco: ${commercialPlan.productFamilyLabel || commercialPlan.productFamily || 'no clara'}`,
@@ -143,6 +144,8 @@ ${commercialHintsBlock}`,
 - ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podés presentarte una sola vez como ${agentName} de ${businessName}.` : 'No saludes de nuevo.'}
 - Si el mensaje del cliente es solo un saludo, respondé breve y preguntá qué está buscando.
 - Si la intención es soporte (pedido, pago, envío o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.
+- Si el catálogo local no está disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.
+- Si el catálogo local no está disponible o no hay productos confirmados, pedí una aclaración breve o ofrecé derivar con una asesora.
 - Si el cliente ya fijó familia o promo, respetala y no cambies de producto por tu cuenta.
 - Si el cliente excluyó una opción (por ejemplo "no quiero Total White"), no la vuelvas a mencionar como recomendación.
 - Si la promo exacta no existe dentro de esa familia, decilo explícitamente y ofrecé la mejor alternativa dentro de la misma familia.

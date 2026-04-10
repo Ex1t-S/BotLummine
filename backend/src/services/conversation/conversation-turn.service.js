@@ -14,7 +14,8 @@ import { buildFixedOrderReply } from '../intents/order-status.service.js';
 import {
 	searchCatalogProducts,
 	buildCatalogContext,
-	pickCommercialHints
+	pickCommercialHints,
+	getCatalogLookupStatus
 } from '../catalog/catalog-search.service.js';
 import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
 import {
@@ -219,20 +220,55 @@ export async function runConversationTurn({
 			limit: 5
 		});
 
-		commercialPlan = resolveCommercialBrainV2({
-			intent,
-			messageBody,
-			currentState: enrichedState,
-			recentMessages: fullRecentMessages,
-			catalogProducts
-		});
+		const catalogStatus = getCatalogLookupStatus();
+
+		commercialPlan = {
+			...resolveCommercialBrainV2({
+				intent,
+				messageBody,
+				currentState: enrichedState,
+				recentMessages: fullRecentMessages,
+				catalogProducts
+			}),
+			catalogAvailable: catalogStatus.available !== false,
+			catalogStatusReason: catalogStatus.reason || 'ok',
+			catalogStatusMessage: catalogStatus.message || null
+		};
 
 		catalogProducts = commercialPlan?.rankedProducts?.length
 			? commercialPlan.rankedProducts.slice(0, 5)
 			: catalogProducts;
 
-		catalogContext = buildCatalogContext(catalogProducts, commercialPlan);
-		commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
+		if (commercialPlan?.greetingOnly) {
+			catalogProducts = [];
+			catalogContext = '';
+			commercialHints = [
+				'Es solo un saludo inicial.',
+				'No ofrezcas productos ni promos todavía.',
+				'Respondé breve y natural, invitando a contar qué está buscando.'
+			];
+		} else if (intent === 'product' && commercialPlan?.catalogAvailable === false) {
+			catalogProducts = [];
+			catalogContext = 'Catálogo local no disponible en esta base. No hay productos confirmados para ofrecer.';
+			commercialPlan = {
+				...commercialPlan,
+				bestOffer: null,
+				fallbackOffer: null,
+				offerOptions: [],
+				requestedOfferAvailable: null,
+				shareLinkNow: false,
+				repeatPriceNow: false,
+				recommendedAction: 'catalog_unavailable_clarify_need'
+			};
+			commercialHints = [
+				'El catálogo local no está disponible en esta base.',
+				'No inventes productos, promos, precios ni links.',
+				'Pedí una aclaración corta o ofrecé pasar con una asesora.'
+			];
+		} else {
+			catalogContext = buildCatalogContext(catalogProducts, commercialPlan);
+			commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
+		}
 
 		if (aiGuidance?.type === 'payment') {
 			if (Array.isArray(aiGuidance.missing) && aiGuidance.missing.length) {

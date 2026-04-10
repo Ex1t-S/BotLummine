@@ -372,16 +372,21 @@ export function resolveCommercialBrainV2({ intent, messageBody, currentState = {
 	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable });
 	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
-	const recommendedAction = buildRecommendedAction({
-		stage,
-		requestedAction,
-		shouldEscalate: escalation.shouldEscalate,
-		shareLinkNow,
-		repeatPriceNow,
-		requestedOfferType,
-		requestedOfferAvailable,
-		hasFallbackWithinFamily: Boolean(fallbackOffer)
-	});
+	const catalogAvailable = Array.isArray(catalogProducts) && catalogProducts.length > 0;
+	const recommendedAction = catalogAvailable
+		? buildRecommendedAction({
+			stage,
+			requestedAction,
+			shouldEscalate: escalation.shouldEscalate,
+			shareLinkNow,
+			repeatPriceNow,
+			requestedOfferType,
+			requestedOfferAvailable,
+			hasFallbackWithinFamily: Boolean(fallbackOffer)
+		})
+		: requestedAction === 'GREETING'
+			? 'greet_and_discover'
+			: 'catalog_unavailable_clarify_need';
 
 	const productFocus = bestOffer?.name || currentState?.currentProductFocus || productFamilyLabel || null;
 	const responseRules = [
@@ -419,6 +424,7 @@ export function resolveCommercialBrainV2({ intent, messageBody, currentState = {
 		handoffReason: escalation.reason,
 		recommendedAction,
 		responseRules,
-		greetingOnly
+		greetingOnly,
+		catalogAvailable
 	};
 }

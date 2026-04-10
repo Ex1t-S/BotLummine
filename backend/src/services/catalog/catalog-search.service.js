@@ -5,6 +5,35 @@ import {
 	scoreProductAgainstCommercialProfile
 } from '../../data/catalog-commercial-map.js';
 
+const catalogLookupStatus = {
+	available: true,
+	reason: 'ok',
+	message: null,
+	checkedAt: null
+};
+
+function setCatalogLookupStatus(partial = {}) {
+	Object.assign(catalogLookupStatus, partial, {
+		checkedAt: new Date().toISOString()
+	});
+}
+
+function isMissingCatalogTableError(error) {
+	const message = String(error?.message || '').toLowerCase();
+	const code = String(error?.code || '').toUpperCase();
+	const metaTarget = String(error?.meta?.target || error?.meta?.table || '').toLowerCase();
+	return (
+		code in { 'P2021': 1, 'P2022': 1 } ||
+		message.includes('catalogproduct') ||
+		message.includes('relation "catalogproduct" does not exist') ||
+		metaTarget.includes('catalogproduct')
+	);
+}
+
+export function getCatalogLookupStatus() {
+	return { ...catalogLookupStatus };
+}
+
 function normalizeText(value = '') {
 	return String(value || '')
 		.toLowerCase()
@@ -188,62 +217,91 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 
 export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4 } = {}) {
 	const signals = detectRequestedSignals(query, interestedProducts);
-	if (shouldSkipCatalogLookup(signals)) return [];
+	if (shouldSkipCatalogLookup(signals)) {
+		setCatalogLookupStatus({ available: true, reason: 'skipped', message: null });
+		return [];
+	}
 
-	const rawProducts = await prisma.catalogProduct.findMany({
-		where: { published: true },
-		orderBy: [{ updatedAt: 'desc' }],
-		take: 120
-	});
+	try {
+		const rawProducts = await prisma.catalogProduct.findMany({
+			where: { published: true },
+			orderBy: [{ updatedAt: 'desc' }],
+			take: 120
+		});
 
-	return rawProducts
-		.map((product) => ({ product, score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals) }))
-		.filter((entry) => entry.score > 0)
-		.map(({ product, score }) => {
-			const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
-			const variantMeta = extractVariantMeta(product.variants);
-			const shortDescription = buildShortDescription(product);
-			const family = inferCommercialFamily([product.name, product.tags, product.handle, shortDescription].filter(Boolean).join(' '));
-			const offerType = inferOfferType(product.name || '');
-			const profileScore = scoreProductAgainstCommercialProfile({
-				name: product.name,
-				handle: product.handle,
-				tags: product.tags,
-				shortDescription,
-				variantHints: variantMeta.variantHints,
-				colors: variantMeta.colors,
-				sizes: variantMeta.sizes
-			}, family);
-			return {
-				id: product.id,
-				productId: product.productId,
-				name: product.name,
-				brand: product.brand || null,
-				price: formatPrice(currentPrice),
-				priceValue: currentPrice,
-				originalPrice: formatPrice(originalPrice),
-				originalPriceValue: originalPrice,
-				hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
-				handle: product.handle || null,
-				productUrl: product.productUrl || null,
-				featuredImage: product.featuredImage || null,
-				shortDescription,
-				variantHints: variantMeta.variantHints,
-				colors: variantMeta.colors,
-				sizes: variantMeta.sizes,
-				tags: product.tags ? product.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6) : [],
-				score,
-				family,
-				offerType,
-				packCount: inferPackCount(offerType),
-				commercialProfile: getCommercialProfile(family),
-				commercialScoreBoost: profileScore,
-				isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(normalizeText(product.name || ''))
-			};
-		})
-		.filter((item) => !item.isGiftLike)
-		.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost))
-		.slice(0, limit);
+		setCatalogLookupStatus({
+			available: true,
+			reason: rawProducts.length ? 'ok' : 'empty',
+			message: rawProducts.length ? null : 'No hay productos publicados en el catálogo local.'
+		});
+
+		return rawProducts
+			.map((product) => ({ product, score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals) }))
+			.filter((entry) => entry.score > 0)
+			.map(({ product, score }) => {
+				const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
+				const variantMeta = extractVariantMeta(product.variants);
+				const shortDescription = buildShortDescription(product);
+				const family = inferCommercialFamily([product.name, product.tags, product.handle, shortDescription].filter(Boolean).join(' '));
+				const offerType = inferOfferType(product.name || '');
+				const profileScore = scoreProductAgainstCommercialProfile({
+					name: product.name,
+					handle: product.handle,
+					tags: product.tags,
+					shortDescription,
+					variantHints: variantMeta.variantHints,
+					colors: variantMeta.colors,
+					sizes: variantMeta.sizes
+				}, family);
+				return {
+					id: product.id,
+					productId: product.productId,
+					name: product.name,
+					brand: product.brand || null,
+					price: formatPrice(currentPrice),
+					priceValue: currentPrice,
+					originalPrice: formatPrice(originalPrice),
+					originalPriceValue: originalPrice,
+					hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
+					handle: product.handle || null,
+					productUrl: product.productUrl || null,
+					featuredImage: product.featuredImage || null,
+					shortDescription,
+					variantHints: variantMeta.variantHints,
+					colors: variantMeta.colors,
+					sizes: variantMeta.sizes,
+					tags: product.tags ? product.tags.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6) : [],
+					score,
+					family,
+					offerType,
+					packCount: inferPackCount(offerType),
+					commercialProfile: getCommercialProfile(family),
+					commercialScoreBoost: profileScore,
+					isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(normalizeText(product.name || ''))
+				};
+			})
+			.filter((item) => !item.isGiftLike)
+			.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost))
+			.slice(0, limit);
+	} catch (error) {
+		if (isMissingCatalogTableError(error)) {
+			setCatalogLookupStatus({
+				available: false,
+				reason: 'missing_catalog_table',
+				message: 'La tabla CatalogProduct no existe en esta base.'
+			});
+			console.warn('[CATALOG] La tabla CatalogProduct no existe todavía en esta base.');
+			return [];
+		}
+
+		setCatalogLookupStatus({
+			available: false,
+			reason: 'lookup_error',
+			message: error?.message || String(error)
+		});
+		console.error('[CATALOG] Error buscando productos en catálogo local:', error);
+		return [];
+	}
 }
 
 export function buildCatalogContext(products = []) {
