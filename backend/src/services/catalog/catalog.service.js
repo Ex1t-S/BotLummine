@@ -450,3 +450,49 @@ export async function getCatalogPage({ q = '', page = 1, pageSize = 24 } = {}) {
 		lastSync
 	};
 }
+export async function getCatalogSummary() {
+	try {
+		const [totalProducts, totalPublished, lastSync] = await Promise.all([
+			prisma.catalogProduct.count(),
+			prisma.catalogProduct.count({
+				where: { published: true }
+			}),
+			prisma.catalogSyncLog.findFirst({
+				orderBy: { startedAt: 'desc' }
+			})
+		]);
+
+		return {
+			ok: true,
+			totalProducts,
+			totalPublished,
+			totalUnpublished: Math.max(0, totalProducts - totalPublished),
+			lastSync: lastSync
+				? {
+						id: lastSync.id,
+						status: lastSync.status,
+						storeId: lastSync.storeId || null,
+						productsProcessed: lastSync.productsProcessed || 0,
+						message: lastSync.message || null,
+						startedAt: lastSync.startedAt || null,
+						finishedAt: lastSync.finishedAt || null
+				  }
+				: null
+		};
+	} catch (error) {
+		const message = error?.message || String(error);
+		const missingTable =
+			/relation\s+"?Catalog(Product|SyncLog)"?\s+does not exist/i.test(message) ||
+			/P2021|P2022/i.test(message);
+
+		return {
+			ok: false,
+			totalProducts: 0,
+			totalPublished: 0,
+			totalUnpublished: 0,
+			lastSync: null,
+			reason: missingTable ? 'catalog_tables_missing' : 'catalog_summary_failed',
+			error: message
+		};
+	}
+}
