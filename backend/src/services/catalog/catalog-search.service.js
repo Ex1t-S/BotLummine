@@ -384,8 +384,8 @@ function shouldFilterGiftLikeProduct(product = {}, family = null, offerType = 's
 
 	if (/mes de la mujer/.test(haystack)) return true;
 	if (/gift card|tarjeta regalo|tarjeta de regalo/.test(haystack)) return true;
-	if (family || offerType !== 'single') return false;
-	return /(gift|regalo|boob tape)/i.test(haystack);
+	if (/segunda piel de regalo/.test(haystack) && !family) return true;
+	return false;
 }
 
 function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {

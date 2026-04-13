@@ -14,7 +14,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['body modelador', 'bodys modeladores', 'body reductor', '3x1 bodys'],
 		secondaryOfferHints: ['2x1 bodys', 'promo bodys', 'pack bodys'],
 		fallbackHints: ['body', 'bodys', 'body modelador', 'body reductor'],
-		avoidHints: ['gift', 'regalo', 'segunda piel de regalo'],
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer'],
 		defaultPitch:
 			'Si hablan de bodys, quedate en esa familia. Primero confirma el tipo de body o promo que buscan y despues abri alternativas dentro de bodys.',
 		linkHint:
@@ -26,7 +26,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['calzas linfaticas', 'calza linfatica', 'calzas modeladoras'],
 		secondaryOfferHints: ['3x1 calzas', '2x1 calzas'],
 		fallbackHints: ['calza', 'calzas', 'calzas linfaticas', 'calza modeladora'],
-		avoidHints: ['gift', 'regalo'],
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer'],
 		defaultPitch:
 			'Si preguntan por piernas o modelado en piernas, guia primero con calzas linfaticas y manten la conversacion en esa familia.',
 		linkHint:
@@ -38,7 +38,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['short faja', 'short modelador', 'short reductor'],
 		secondaryOfferHints: ['2x1 short', '3x1 short'],
 		fallbackHints: ['short faja', 'short modelador'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	},
 	faja: {
 		label: 'fajas',
@@ -46,7 +46,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['faja', 'faja reductora', 'faja modeladora'],
 		secondaryOfferHints: ['2x1 faja', '3x1 faja'],
 		fallbackHints: ['faja', 'fajas', 'faja reductora'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	},
 	bombacha_modeladora: {
 		label: 'bombachas modeladoras',
@@ -54,7 +54,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['bombacha modeladora', 'bombacha reductora'],
 		secondaryOfferHints: ['2x1 bombacha', '3x1 bombacha'],
 		fallbackHints: ['bombacha', 'bombachas', 'bombacha modeladora'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	},
 	corset: {
 		label: 'corset',
@@ -62,7 +62,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['corset', 'corset modelador', 'corseteria'],
 		secondaryOfferHints: ['2x1 corset', '3x1 corset'],
 		fallbackHints: ['corset'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	},
 	corpinio: {
 		label: 'corpino',
@@ -70,7 +70,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['corpino', 'corpinio', 'sosten', 'bralette', 'segunda piel'],
 		secondaryOfferHints: ['promo corpino', 'pack corpino'],
 		fallbackHints: ['corpino', 'corpinio', 'bralette', 'segunda piel'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	},
 	musculosa: {
 		label: 'musculosa',
@@ -78,7 +78,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['musculosa', 'camiseta musculosa', 'musculosa modeladora'],
 		secondaryOfferHints: ['pack musculosa', 'promo musculosa'],
 		fallbackHints: ['musculosa'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	},
 	legging: {
 		label: 'legging',
@@ -86,7 +86,7 @@ export const CATALOG_COMMERCIAL_MAP = {
 		primaryOfferHints: ['legging', 'leggings'],
 		secondaryOfferHints: ['promo legging', 'pack legging'],
 		fallbackHints: ['legging', 'leggings'],
-		avoidHints: ['gift', 'regalo']
+		avoidHints: ['gift card', 'tarjeta regalo', 'tarjeta de regalo', 'mes de la mujer']
 	}
 };
 
