@@ -516,6 +516,11 @@ export default function InboxPage() {
 	}, [selectedConversationId]);
 
 	useEffect(() => {
+		if (readFilter === 'UNREAD') {
+			setSelectedConversationId(null);
+			return;
+		}
+
 		if (!visibleContacts.length) {
 			setSelectedConversationId(null);
 			return;
@@ -538,7 +543,7 @@ export default function InboxPage() {
 			null;
 
 		setSelectedConversationId(preferredId);
-	}, [visibleContacts, selectedConversationId, inboxQuery.data]);
+	}, [visibleContacts, selectedConversationId, inboxQuery.data, readFilter]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return undefined;
