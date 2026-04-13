@@ -231,13 +231,16 @@ async function sendMenuTextOnly({ conversationId, body, model = 'menu-text', del
 
 function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) {
 	if (currentState?.needsHuman) return false;
+	if (Boolean(currentState?.menuActive && currentState?.menuPath)) return true;
 
-	const hasAssistantHistory = Array.isArray(freshConversation?.messages)
-		? freshConversation.messages.some((message) => message?.direction === 'OUTBOUND')
+	const normalizedMessage = normalizeText(messageBody);
+	if (!normalizedMessage) return false;
+
+	const isInboundConversationTurn = Array.isArray(freshConversation?.messages)
+		? freshConversation.messages.some((message) => message?.direction === 'INBOUND')
 		: false;
 
-	if (!hasAssistantHistory) return true;
-	return Boolean(currentState?.menuActive && currentState?.menuPath);
+	return isInboundConversationTurn;
 }
 
 function shouldLetFreeTextBypassMenu(messageBody = '') {

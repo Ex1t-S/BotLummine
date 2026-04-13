@@ -18,6 +18,12 @@ const QUICK_EMOJIS = [
 	'✨', '💬', '📦', '🛍️', '✅', '🙌',
 ];
 
+const READ_FILTERS = [
+	{ key: 'ALL', label: 'Todos' },
+	{ key: 'UNREAD', label: 'No leidos' },
+	{ key: 'READ', label: 'Leidos' },
+];
+
 const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Audio recibido]',
 	'[Imagen recibida]',
@@ -316,12 +322,25 @@ function AttachmentPreview({ message }) {
 	return null;
 }
 
-function MessageBubble({ message }) {
+function resolveMessageReadState(message = {}, conversation = null) {
+	if (message.direction !== 'OUTBOUND') return null;
+
+	const createdAt = toTimestamp(message.createdAt);
+	const lastReadAt = toTimestamp(conversation?.lastReadAt);
+
+	if (!createdAt) return 'sent';
+	if (lastReadAt && createdAt <= lastReadAt) return 'read';
+
+	return 'sent';
+}
+
+function MessageBubble({ message, conversation }) {
 	const isOutbound = message.direction === 'OUTBOUND';
 	const hideBody = shouldHideBodyBecauseItIsOnlyPlaceholder(message);
 	const promo = resolvePromoAction(message);
 	const hasPromoButton = Boolean(promo.actionLabel);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
+	const readState = resolveMessageReadState(message, conversation);
 
 	return (
 		<div
@@ -370,6 +389,19 @@ function MessageBubble({ message }) {
 						</span>
 
 						<span>{formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || ''}</span>
+						{isOutbound ? (
+							<span
+								className={`inbox-message-status ${
+									readState === 'read'
+										? 'inbox-message-status--read'
+										: 'inbox-message-status--sent'
+								}`}
+								aria-label={readState === 'read' ? 'Leido' : 'Enviado'}
+								title={readState === 'read' ? 'Leido' : 'Enviado'}
+							>
+								{readState === 'read' ? '✓✓' : '✓'}
+							</span>
+						) : null}
 					</div>
 				</div>
 			</div>
@@ -410,6 +442,7 @@ export default function InboxPage() {
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
+	const [readFilter, setReadFilter] = useState('ALL');
 
 	const inboxQuery = useQuery({
 		queryKey: queryKeys.inbox(queue),
@@ -451,8 +484,7 @@ export default function InboxPage() {
 		);
 
 		if (!normalizedSearch) return sorted;
-
-		return sorted.filter((contact) => {
+		const bySearch = sorted.filter((contact) => {
 			const haystack = [
 				contact.displayName,
 				contact.phoneDisplay,
@@ -465,36 +497,48 @@ export default function InboxPage() {
 
 			return haystack.includes(normalizedSearch);
 		});
+
+		return bySearch;
 	}, [contacts, normalizedSearch]);
+
+	const visibleContacts = useMemo(() => {
+		return filteredContacts.filter((contact) => {
+			const hasUnread = Boolean(contact.hasUnread) || Number(contact.unreadCount || 0) > 0;
+
+			if (readFilter === 'UNREAD') return hasUnread;
+			if (readFilter === 'READ') return !hasUnread;
+			return true;
+		});
+	}, [filteredContacts, readFilter]);
 
 	useEffect(() => {
 		selectedConversationIdRef.current = selectedConversationId;
 	}, [selectedConversationId]);
 
 	useEffect(() => {
-		if (!filteredContacts.length) {
+		if (!visibleContacts.length) {
 			setSelectedConversationId(null);
 			return;
 		}
 
-		const stillExists = filteredContacts.some(
+		const stillExists = visibleContacts.some(
 			(contact) => contact.conversationId === selectedConversationId
 		);
 
 		if (stillExists) return;
 
 		const preferredSelectedId = inboxQuery.data?.selectedContact?.conversationId;
-		const preferredExists = filteredContacts.some(
+		const preferredExists = visibleContacts.some(
 			(contact) => contact.conversationId === preferredSelectedId
 		);
 
 		const preferredId =
 			(preferredExists ? preferredSelectedId : null) ||
-			filteredContacts[0]?.conversationId ||
+			visibleContacts[0]?.conversationId ||
 			null;
 
 		setSelectedConversationId(preferredId);
-	}, [filteredContacts, selectedConversationId, inboxQuery.data]);
+	}, [visibleContacts, selectedConversationId, inboxQuery.data]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return undefined;
@@ -922,18 +966,33 @@ export default function InboxPage() {
 					/>
 				</div>
 
+				<div className="inbox-read-filters">
+					{READ_FILTERS.map((item) => (
+						<button
+							key={item.key}
+							type="button"
+							onClick={() => setReadFilter(item.key)}
+							className={`inbox-read-filter-btn ${
+								readFilter === item.key ? 'inbox-read-filter-btn--active' : ''
+							}`}
+						>
+							{item.label}
+						</button>
+					))}
+				</div>
+
 				<div className="inbox-contacts-scroll">
 					{inboxQuery.isLoading ? (
 						<div className="inbox-empty">Cargando conversaciones...</div>
 					) : null}
 
-					{!inboxQuery.isLoading && !filteredContacts.length ? (
+					{!inboxQuery.isLoading && !visibleContacts.length ? (
 						<div className="inbox-empty">
 							No hay conversaciones en esta bandeja.
 						</div>
 					) : null}
 
-					{filteredContacts.map((contact) => {
+					{visibleContacts.map((contact) => {
 						const isSelected = contact.conversationId === selectedConversationId;
 						const unreadCount = Math.max(0, Number(contact.unreadCount || 0));
 						const hasUnread = Boolean(contact.hasUnread) || unreadCount > 0;
@@ -1135,7 +1194,7 @@ export default function InboxPage() {
 								) : null}
 
 								{(conversation?.messages || []).map((msg) => (
-									<MessageBubble key={msg.id} message={msg} />
+									<MessageBubble key={msg.id} message={msg} conversation={conversation} />
 								))}
 							</div>
 						</div>

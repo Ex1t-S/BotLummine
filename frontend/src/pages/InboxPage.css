@@ -66,6 +66,36 @@
 	margin-bottom: 12px;
 }
 
+.inbox-read-filters {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+
+.inbox-read-filter-btn {
+	padding: 8px 12px;
+	border-radius: 999px;
+	border: 1px solid rgba(15, 23, 42, 0.1);
+	background: #fff;
+	color: #475569;
+	font-size: 12px;
+	font-weight: 800;
+	cursor: pointer;
+	transition: 0.18s ease;
+}
+
+.inbox-read-filter-btn:hover {
+	background: #f8fafc;
+	border-color: rgba(37, 99, 235, 0.16);
+}
+
+.inbox-read-filter-btn--active {
+	background: #eff6ff;
+	color: #1d4ed8;
+	border-color: rgba(37, 99, 235, 0.24);
+}
+
 .inbox-search-input {
 	width: 100%;
 	height: 40px;
@@ -618,6 +648,19 @@
 	margin-top: 10px;
 	font-size: 12px;
 	color: #475569;
+}
+
+.inbox-message-status {
+	font-weight: 800;
+	letter-spacing: -1px;
+}
+
+.inbox-message-status--sent {
+	color: #64748b;
+}
+
+.inbox-message-status--read {
+	color: #2563eb;
 }
 
 .inbox-message-sender-pill {
