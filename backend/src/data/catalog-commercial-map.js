@@ -16,21 +16,21 @@ export const CATALOG_COMMERCIAL_MAP = {
 		fallbackHints: ['body', 'bodys', 'body modelador', 'body reductor'],
 		avoidHints: ['gift', 'regalo', 'segunda piel de regalo'],
 		defaultPitch:
-			'Si hablan de bodys, quedate en esa familia. Primero confirmá el tipo de body o promo que buscan y recién después abrí alternativas dentro de bodys.',
+			'Si hablan de bodys, quedate en esa familia. Primero confirma el tipo de body o promo que buscan y despues abri alternativas dentro de bodys.',
 		linkHint:
-			'Si pasás link, que sea del body o promo que vienen hablando. No cambies a otra familia sin permiso explícito.'
+			'Si pasas link, que sea del body o promo que vienen hablando. No cambies a otra familia sin permiso explicito.'
 	},
 	calzas_linfaticas: {
-		label: 'calzas linfáticas',
+		label: 'calzas linfaticas',
 		introMode: 'product_first',
 		primaryOfferHints: ['calzas linfaticas', 'calza linfatica', 'calzas modeladoras'],
 		secondaryOfferHints: ['3x1 calzas', '2x1 calzas'],
 		fallbackHints: ['calza', 'calzas', 'calzas linfaticas', 'calza modeladora'],
 		avoidHints: ['gift', 'regalo'],
 		defaultPitch:
-			'Si preguntan por piernas o modelado en piernas, guiá primero con calzas linfáticas y mantené la conversación en esa familia.',
+			'Si preguntan por piernas o modelado en piernas, guia primero con calzas linfaticas y manten la conversacion en esa familia.',
 		linkHint:
-			'Si cambió a calzas, el link tiene que seguir esa conversación y no volver a otra familia.'
+			'Si cambio a calzas, el link tiene que seguir esa conversacion y no volver a otra familia.'
 	},
 	short_faja: {
 		label: 'short faja',
@@ -55,14 +55,50 @@ export const CATALOG_COMMERCIAL_MAP = {
 		secondaryOfferHints: ['2x1 bombacha', '3x1 bombacha'],
 		fallbackHints: ['bombacha', 'bombachas', 'bombacha modeladora'],
 		avoidHints: ['gift', 'regalo']
+	},
+	corset: {
+		label: 'corset',
+		introMode: 'product_first',
+		primaryOfferHints: ['corset', 'corset modelador', 'corseteria'],
+		secondaryOfferHints: ['2x1 corset', '3x1 corset'],
+		fallbackHints: ['corset'],
+		avoidHints: ['gift', 'regalo']
+	},
+	corpinio: {
+		label: 'corpino',
+		introMode: 'product_first',
+		primaryOfferHints: ['corpino', 'corpinio', 'sosten', 'bralette', 'segunda piel'],
+		secondaryOfferHints: ['promo corpino', 'pack corpino'],
+		fallbackHints: ['corpino', 'corpinio', 'bralette', 'segunda piel'],
+		avoidHints: ['gift', 'regalo']
+	},
+	musculosa: {
+		label: 'musculosa',
+		introMode: 'product_first',
+		primaryOfferHints: ['musculosa', 'camiseta musculosa', 'musculosa modeladora'],
+		secondaryOfferHints: ['pack musculosa', 'promo musculosa'],
+		fallbackHints: ['musculosa'],
+		avoidHints: ['gift', 'regalo']
+	},
+	legging: {
+		label: 'legging',
+		introMode: 'product_first',
+		primaryOfferHints: ['legging', 'leggings'],
+		secondaryOfferHints: ['promo legging', 'pack legging'],
+		fallbackHints: ['legging', 'leggings'],
+		avoidHints: ['gift', 'regalo']
 	}
 };
 
 const FAMILY_PATTERNS = [
-	{ family: 'body_modelador', regex: /\b(body|bodys|bodys)\b|\bbodys modeladores\b|\bbody modelador\b|\bbody reductor\b/ },
-	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora)|\bcalzas linfaticas\b|\bcalza linfatica\b/ },
-	{ family: 'short_faja', regex: /\bshort\b.*(faja|modelador|reductor)|\bshort faja\b/ },
+	{ family: 'body_modelador', regex: /\b(body|bodys)\b|\bbodys modeladores\b|\bbody modelador\b|\bbody reductor\b/ },
+	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora|reductora)|\bcalzas? linfaticas?\b|\bcalzas? modeladoras?\b/ },
+	{ family: 'legging', regex: /\blegging\b|\bleggings\b/ },
+	{ family: 'short_faja', regex: /\bshort\b.*(faja|modelador|reductor)|\bshort faja\b|\bshort modelador\b/ },
 	{ family: 'bombacha_modeladora', regex: /\bbombacha\b.*(modelador|reductor)|\bbombacha modeladora\b/ },
+	{ family: 'corset', regex: /\bcorset\b|\bcorseteria\b/ },
+	{ family: 'corpinio', regex: /\bcorpiño\b|\bcorpinio\b|\bcorpino\b|\bsosten\b|\bbralette\b|\bsegunda piel\b/ },
+	{ family: 'musculosa', regex: /\bmusculosa\b|\bmusculosas\b/ },
 	{ family: 'faja', regex: /\bfaja\b|\bfajas\b/ }
 ];
 
@@ -112,6 +148,5 @@ export function scoreProductAgainstCommercialProfile(product = {}, family = null
 	score += termHitScore(haystack, profile.secondaryOfferHints) * 12;
 	score += termHitScore(haystack, profile.fallbackHints) * 10;
 	score -= termHitScore(haystack, profile.avoidHints) * 40;
-
 	return score;
 }

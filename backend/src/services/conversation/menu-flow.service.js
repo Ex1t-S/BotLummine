@@ -222,17 +222,8 @@ async function sendMenuTextOnly({ conversationId, body, model = 'menu-text' }) {
 }
 
 function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) {
-	if (isMenuResetCommand(messageBody)) return true;
 	if (currentState?.needsHuman) return false;
-	if (currentState?.menuActive && currentState?.menuPath) return true;
-
-	if (isGreetingOnlyMessage(messageBody)) return true;
-
-	const inboundCount = (freshConversation?.messages || []).filter((msg) => msg.direction === 'INBOUND').length;
-	const outboundCount = (freshConversation?.messages || []).filter((msg) => msg.direction === 'OUTBOUND').length;
-	const hasNoMeaningfulHistory = !currentState?.lastIntent && (currentState?.interactionCount || 0) === 0;
-
-	return inboundCount === 1 && outboundCount === 0 && hasNoMeaningfulHistory;
+	return Boolean(currentState?.menuActive && currentState?.menuPath);
 }
 
 async function handleMenuSelection({

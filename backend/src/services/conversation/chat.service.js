@@ -18,6 +18,7 @@ import {
 	getCatalogLookupStatus
 } from '../catalog/catalog-search.service.js';
 import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
+import { buildPrompt } from '../common/prompt-builder.js';
 import {
 	isPaymentProofMessage,
 	buildPaymentReviewAck,
@@ -38,6 +39,25 @@ import {
 	syncHumanHandoff,
 } from './menu-flow.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
+import { buildMenuAssistantContext } from '../whatsapp/whatsapp-menu.service.js';
+
+function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
+	const baseText = String(text || '').trim();
+	const suffix = String(menuAssistantContext?.suffixText || '').trim();
+
+	if (!baseText || !suffix || !menuAssistantContext?.shouldAppendToReply) {
+		return baseText;
+	}
+
+	const normalizedBase = baseText.toLowerCase();
+	const normalizedSuffix = suffix.toLowerCase();
+
+	if (normalizedBase.includes(normalizedSuffix)) {
+		return baseText;
+	}
+
+	return `${baseText}\n\n${suffix}`.trim();
+}
 
 export async function getOrCreateConversation({
 	waId,
@@ -195,6 +215,22 @@ export async function processInboundMessage({
 	}
 
 	const currentState = freshConversation.state || {};
+	let trace = {
+		intent: null,
+		queueDecision: null,
+		responsePolicy: null,
+		commercialPlan: null,
+		catalogProducts: [],
+		commercialHints: [],
+		prompt: null,
+		assistantMessage: null,
+		provider: null,
+		model: null,
+		aiGuidance: null,
+		liveOrderContext: null,
+		shouldReply: false,
+		menuAssistantContext: null,
+	};
 
 	const menuDecision = await maybeHandleMenuFlow({
 		conversation: freshConversation,
@@ -206,7 +242,15 @@ export async function processInboundMessage({
 	});
 
 	if (menuDecision?.handled) {
-		return { conversation: freshConversation };
+		trace = {
+			...trace,
+			intent: menuDecision?.forceIntent || 'menu',
+			assistantMessage: null,
+			provider: 'system',
+			model: 'menu-flow',
+			shouldReply: false,
+		};
+		return { conversation: freshConversation, trace };
 	}
 
 	const effectiveMessageBody = normalizeText(
@@ -273,6 +317,14 @@ export async function processInboundMessage({
 	const liveOrderContext = intentResult.liveOrderContext || null;
 	const forcedReply = intentResult.forcedReply || null;
 
+	trace = {
+		...trace,
+		intent,
+		queueDecision,
+		aiGuidance,
+		liveOrderContext,
+	};
+
 	const nextStatePayload = buildStatePayload({
 		currentState,
 		contactName,
@@ -309,6 +361,13 @@ export async function processInboundMessage({
 
 	if (detectedPaymentProof) {
 		const ack = buildPaymentReviewAck();
+		trace = {
+			...trace,
+			assistantMessage: ack,
+			provider: 'system',
+			model: 'payment-proof-router',
+			shouldReply: false,
+		};
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
@@ -333,7 +392,7 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation };
+		return { conversation: freshConversation, trace };
 	}
 
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
@@ -343,6 +402,14 @@ export async function processInboundMessage({
 			contactName: freshConversation.contact.name || '',
 			reason: enrichedState.handoffReason
 		});
+
+		trace = {
+			...trace,
+			assistantMessage: handoffReply,
+			provider: 'system',
+			model: 'human-handoff-router',
+			shouldReply: false,
+		};
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
@@ -367,7 +434,7 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation };
+		return { conversation: freshConversation, trace };
 	}
 
 	const isAiEnabledGlobal =
@@ -385,7 +452,11 @@ export async function processInboundMessage({
 	console.log('[AI DEBUG] waId:', freshConversation.contact.waId);
 
 	if (!shouldReply) {
-		return { conversation: freshConversation };
+		trace = {
+			...trace,
+			shouldReply: false,
+		};
+		return { conversation: freshConversation, trace };
 	}
 
 	const maxContext = Number(process.env.MAX_CONTEXT_MESSAGES || 12);
@@ -406,6 +477,7 @@ export async function processInboundMessage({
 	let catalogContext = '';
 	let commercialHints = [];
 	let commercialPlan = null;
+	let menuAssistantContext = null;
 
 	try {
 		catalogProducts = await searchCatalogProducts({
@@ -569,8 +641,31 @@ export async function processInboundMessage({
 		commercialPlan
 	});
 
+	try {
+		menuAssistantContext = await buildMenuAssistantContext({
+			intent,
+			currentState: enrichedState,
+			responsePolicy,
+			commercialPlan,
+			queueDecision,
+		});
+	} catch (menuContextError) {
+		console.error('[MENU ASSISTANT] No se pudo construir el contexto:', menuContextError);
+	}
+
+	trace = {
+		...trace,
+		responsePolicy,
+		commercialPlan,
+		catalogProducts,
+		commercialHints,
+		shouldReply: true,
+		menuAssistantContext,
+	};
+
 	let finalReply = forcedReply || null;
 	let aiMeta = null;
+	let prompt = null;
 
 	if (!finalReply && !responsePolicy.useAI) {
 		if (intent === 'order_status' && liveOrderContext) {
@@ -587,6 +682,25 @@ export async function processInboundMessage({
 
 	if (!finalReply) {
 		try {
+			prompt = buildPrompt({
+				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				contactName: freshConversation.contact.name || freshConversation.contact.waId,
+				recentMessages: fullRecentMessages,
+				conversationSummary: freshConversation.lastSummary || '',
+				customerContext: {
+					name: freshConversation.contact.name || freshConversation.contact.waId,
+					waId: freshConversation.contact.waId
+				},
+				conversationState: enrichedState,
+				liveOrderContext,
+				catalogProducts,
+				catalogContext,
+				commercialHints,
+				commercialPlan,
+				responsePolicy,
+				menuAssistantContext
+			});
+
 			const aiResult = await runAssistantReply({
 				businessName: process.env.BUSINESS_NAME || 'Lummine',
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
@@ -602,7 +716,8 @@ export async function processInboundMessage({
 				catalogContext,
 				commercialHints,
 				commercialPlan,
-				responsePolicy
+				responsePolicy,
+				menuAssistantContext
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
@@ -623,7 +738,10 @@ export async function processInboundMessage({
 				contactName: freshConversation.contact.name || freshConversation.contact.waId
 			});
 
-			finalReply = audited.finalText;
+			finalReply = appendMenuHintIfNeeded(
+				audited.finalText,
+				menuAssistantContext
+			);
 			aiMeta = aiResult;
 
 			if (audited.triggerHumanHandoff) {
@@ -653,6 +771,18 @@ export async function processInboundMessage({
 		}
 	}
 
+	if (forcedReply) {
+		finalReply = appendMenuHintIfNeeded(finalReply, menuAssistantContext);
+	}
+
+	trace = {
+		...trace,
+		prompt,
+		assistantMessage: finalReply,
+		provider: aiMeta?.provider || (forcedReply ? 'system' : null),
+		model: aiMeta?.model || (forcedReply ? 'rule-based-forced-reply' : null),
+	};
+
 	await sendAndPersistOutbound({
 		conversationId: freshConversation.id,
 		body: finalReply,
@@ -673,5 +803,5 @@ export async function processInboundMessage({
 		}
 	});
 
-	return { conversation: freshConversation };
+	return { conversation: freshConversation, trace };
 }

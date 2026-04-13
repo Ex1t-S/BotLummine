@@ -28,7 +28,8 @@ function buildTracePayload(trace = null) {
 		model: trace.model || null,
 		aiGuidance: trace.aiGuidance || null,
 		liveOrderContext: trace.liveOrderContext || null,
-		shouldReply: trace.shouldReply ?? true
+		shouldReply: trace.shouldReply ?? true,
+		menuAssistantContext: trace.menuAssistantContext || null,
 	};
 }
 

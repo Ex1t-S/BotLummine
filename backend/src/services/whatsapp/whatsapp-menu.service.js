@@ -571,3 +571,109 @@ export async function getWhatsAppMenuRuntimeConfig({ forceRefresh = false } = {}
 		return runtimePayload;
 	}
 }
+
+function formatMenuOptionLabel(option = {}) {
+	return normalizeText(option.title || option.description || '').trim();
+}
+
+function buildSoftMenuSuffix(options = []) {
+	const labels = asArray(options)
+		.map(formatMenuOptionLabel)
+		.filter(Boolean)
+		.slice(0, 4);
+
+	if (!labels.length) {
+		return '';
+	}
+
+	if (labels.length === 1) {
+		return `Si querés, también puedo ayudarte con ${labels[0].toLowerCase()}.`;
+	}
+
+	const head = labels.slice(0, -1).map((item) => item.toLowerCase());
+	const tail = labels[labels.length - 1].toLowerCase();
+
+	return `Si querés, también puedo ayudarte con ${head.join(', ')} o ${tail}.`;
+}
+
+function resolveRelevantMenuKeys(intent = '', currentState = {}) {
+	const normalizedIntent = normalizeLooseText(intent);
+	const lastIntent = normalizeLooseText(currentState?.lastIntent || '');
+
+	if (normalizedIntent === 'order_status' || lastIntent === 'order_status') {
+		return [DEFAULT_MENU_PATHS.ORDERS, DEFAULT_MENU_PATHS.SUPPORT, DEFAULT_MENU_PATHS.MAIN];
+	}
+
+	if (['payment', 'shipping', 'size_help'].includes(normalizedIntent)) {
+		return [DEFAULT_MENU_PATHS.SUPPORT, DEFAULT_MENU_PATHS.PRODUCTS, DEFAULT_MENU_PATHS.MAIN];
+	}
+
+	if (normalizedIntent === 'product' || asArray(currentState?.interestedProducts).length) {
+		return [DEFAULT_MENU_PATHS.PRODUCTS, DEFAULT_MENU_PATHS.SUPPORT, DEFAULT_MENU_PATHS.MAIN];
+	}
+
+	return [DEFAULT_MENU_PATHS.MAIN, DEFAULT_MENU_PATHS.PRODUCTS, DEFAULT_MENU_PATHS.SUPPORT];
+}
+
+export async function buildMenuAssistantContext({
+	intent = '',
+	currentState = {},
+	responsePolicy = {},
+	commercialPlan = null,
+	queueDecision = null,
+} = {}) {
+	const runtime = await getWhatsAppMenuRuntimeConfig();
+	const relevantKeys = resolveRelevantMenuKeys(intent, currentState);
+	const collectedOptions = [];
+
+	for (const key of relevantKeys) {
+		const menu = runtime?.menusByKey?.[key];
+		if (!menu?.options?.length) continue;
+
+		for (const option of menu.options) {
+			if (!option?.isActive) continue;
+			if (option.actionType === 'SUBMENU') continue;
+			if (collectedOptions.some((item) => item.id === option.id)) continue;
+
+			collectedOptions.push({
+				id: option.id,
+				title: option.title,
+				description: option.description || '',
+				actionType: option.actionType,
+			});
+
+			if (collectedOptions.length >= 4) break;
+		}
+
+		if (collectedOptions.length >= 4) break;
+	}
+
+	const allowSoftMenu =
+		queueDecision?.queue !== 'HUMAN' &&
+		currentState?.needsHuman !== true;
+
+	const shouldAppendToReply =
+		allowSoftMenu &&
+		(
+			commercialPlan?.greetingOnly ||
+			responsePolicy?.action === 'general_help' ||
+			responsePolicy?.action === 'ask_order_number_or_not_found' ||
+			responsePolicy?.action === 'greet_and_discover'
+		);
+
+	const promptBlock = collectedOptions.length
+		? [
+			'TENÉS UN MENÚ DE AYUDA DISPONIBLE, PERO NO LO IMPONGAS.',
+			'Usalo solo como apoyo natural si suma claridad o si la clienta está abierta/indefinida.',
+			`Opciones disponibles: ${collectedOptions.map((option) => option.title).join(' | ')}.`,
+			'No mandes el menú completo salvo que la clienta lo pida o esté desorientada.',
+		].join('\n')
+		: '';
+
+	return {
+		options: collectedOptions,
+		shouldAppendToReply,
+		suffixText: shouldAppendToReply ? buildSoftMenuSuffix(collectedOptions) : '',
+		promptBlock,
+	};
+}

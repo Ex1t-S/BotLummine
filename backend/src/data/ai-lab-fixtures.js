@@ -67,6 +67,22 @@ export const AI_LAB_FIXTURES = [
 			'Debería responder igual que WhatsApp cuando preguntan por transferencia',
 			'No debería volver al saludo inicial'
 		]
+	},
+	{
+		key: 'soft-menu-discovery',
+		name: 'Descubrimiento con menú blando',
+		description: 'Sirve para ver si la IA guía sin clavar el menú interactivo al primer turno.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: '¡Hola! Soy Sofi de Lummine. ¿En qué puedo ayudarte hoy?'
+			}
+		],
+		expected: [
+			'No debería forzar menú interactivo automáticamente',
+			'Puede sugerir opciones de ayuda dentro de la respuesta si suma claridad',
+			'El trace debería mostrar menuAssistantContext'
+		]
 	}
 ];
 

@@ -312,6 +312,11 @@ export default function AiLabPage() {
 					<JsonBlock value={trace?.commercialHints || []} />
 				</div>
 
+				<div className="ai-lab-meta-box compact">
+					<h3>Asistencia de menú</h3>
+					<JsonBlock value={trace?.menuAssistantContext || {}} />
+				</div>
+
 				{showPrompt ? (
 					<div className="ai-lab-meta-box compact">
 						<h3>Prompt final</h3>

@@ -60,9 +60,9 @@ function resolveCatalogPrices(aValue, bValue) {
 
 const COLOR_PATTERNS = /(negro|negra|blanco|blanca|beige|avellana|marron|marrón|nude|rosa|gris|azul|verde|bordo|chocolate)/i;
 const CATALOG_STOPWORDS = new Set([
-	'hola', 'holi', 'buenas', 'buenos', 'dias', 'dia', 'día', 'tardes', 'noches',
+	'hola', 'holi', 'buenas', 'buenos', 'dias', 'dia', 'tardes', 'noches',
 	'gracias', 'ok', 'oka', 'dale', 'joya', 'bien', 'genial', 'perfecto',
-	'buenisimo', 'buenísimo', 'entiendo', 'barbaro', 'bárbaro', 'si', 'sí', 'claro'
+	'buenisimo', 'entiendo', 'barbaro', 'si', 'claro'
 ]);
 const GENERIC_VARIANT_VALUES = new Set([
 	'pack',
@@ -71,7 +71,7 @@ const GENERIC_VARIANT_VALUES = new Set([
 	'1 de c/u + boob tape',
 	'bodys 1 c/u',
 	'3 unidades',
-	'corpiño 1 c/u',
+	'corpino 1 c/u',
 	'3 de c/u item',
 	'muscu 1 c/u',
 	'1 u',
@@ -155,9 +155,7 @@ function pickFamilyRelevantSizes(meta = {}, family = null) {
 
 	const directSizes = extractAtomicSizes(baseSize);
 	if (directSizes.length) return directSizes;
-
-	const fromDescription = extractAtomicSizes(meta.description || '');
-	return uniqueStrings(fromDescription);
+	return extractAtomicSizes(meta.description || '');
 }
 
 function extractTextSizes(value = '', family = null) {
@@ -226,18 +224,13 @@ function extractVariantMeta(variants = [], { family = null } = {}) {
 	};
 
 	for (const variant of flat) {
-		if (variant?.sku) {
-			pushSkuMeta(variant.sku);
-		}
-
+		if (variant?.sku) pushSkuMeta(variant.sku);
 		if (variant?.option1) pushPlainValue(variant.option1);
 		if (variant?.option2) pushPlainValue(variant.option2);
 		if (variant?.option3) pushPlainValue(variant.option3);
 
 		if (Array.isArray(variant?.values)) {
-			for (const value of variant.values) {
-				pushPlainValue(value);
-			}
+			for (const value of variant.values) pushPlainValue(value);
 		}
 
 		if (Array.isArray(variant?.attributes)) {
@@ -262,7 +255,7 @@ function buildShortDescription(product) {
 		.replace(/\s+/g, ' ')
 		.trim();
 
-	if (!description) return 'Sin descripción cargada.';
+	if (!description) return 'Sin descripcion cargada.';
 	return description.length > 180 ? `${description.slice(0, 177)}...` : description;
 }
 
@@ -296,10 +289,10 @@ function detectRequestedSignals(query = '', interestedProducts = []) {
 		normalizedQuery,
 		terms,
 		requestedFamily,
-		asksPromo: /(oferta|promo|promocion|promoción|pack|combo|2x1|3x1)/i.test(normalizedQuery),
-		asksPrice: /(precio|cuanto|cuánto|sale|valor)/i.test(normalizedQuery),
+		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1)/i.test(normalizedQuery),
+		asksPrice: /(precio|cuanto|sale|valor)/i.test(normalizedQuery),
 		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
-		asksComparison: /(cual|cuál|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
+		asksComparison: /(cual|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
 		hasVariantSpecificity: /(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(normalizedQuery)
 	};
 }
@@ -335,7 +328,7 @@ function inferOfferType(product = {}) {
 
 	if (/3x1|tres por uno/.test(haystack)) return '3x1';
 	if (/2x1|dos por uno/.test(haystack)) return '2x1';
-	if (/pack|combo|promo|promocion|promoción|oferta/.test(haystack)) return 'pack';
+	if (/pack|combo|promo|promocion|oferta/.test(haystack)) return 'pack';
 	return 'single';
 }
 
@@ -343,6 +336,15 @@ function inferPackCount(offerType = 'single') {
 	if (offerType === '3x1') return 3;
 	if (offerType === '2x1') return 2;
 	return 1;
+}
+
+function normalizeOfferSignature(product = {}) {
+	return [
+		normalizeText(product.family || ''),
+		normalizeText(product.offerType || ''),
+		normalizeText(product.name || ''),
+		normalizeText(product.price || '')
+	].join('::');
 }
 
 function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
@@ -391,10 +393,15 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(variantBlob)) score += 14;
 	}
 
-	if (signals.requestedFamily === 'body_modelador' && /(body|modelador|reductor|reductora)/i.test(name)) score += 20;
-	if (signals.requestedFamily === 'calzas_linfaticas' && /(calza|linfat|modeladora|pantymedia)/i.test(`${name} ${description}`)) score += 20;
-	if (signals.hasVariantSpecificity && /(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|xl|xxl|xxxl|s\/m|m\/l|l\/xl)/i.test(variantBlob)) score += 14;
+	if (signals.requestedFamily && inferCommercialFamily(name) === signals.requestedFamily) {
+		score += 20;
+	}
 
+	if (signals.hasVariantSpecificity && /(negro|blanco|beige|nude|rosa|gris|azul|verde|bordo|xl|xxl|xxxl|s\/m|m\/l|l\/xl)/i.test(variantBlob)) {
+		score += 14;
+	}
+
+	if (signals.asksComparison && product.productUrl) score += 4;
 	if (product.published) score += 2;
 	if (product.featuredImage) score += 1;
 	if (product.productUrl) score += 1;
@@ -442,14 +449,14 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 		rawProducts = await prisma.catalogProduct.findMany({
 			where: { published: true },
 			orderBy: [{ updatedAt: 'desc' }],
-			take: signals.asksPromo || signals.requestedFamily ? 220 : 120
+			take: signals.asksPromo || signals.requestedFamily ? 250 : 180
 		});
 	} catch (error) {
 		console.error('[CATALOG SEARCH] No se pudo consultar CatalogProduct:', error?.message || error);
 		return [];
 	}
 
-	return rawProducts
+	const ranked = rawProducts
 		.map((product) => ({
 			product,
 			score: scoreProduct(product, signals.normalizedQuery, signals.terms, signals)
@@ -458,15 +465,13 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 		.map(({ product, score }) => {
 			const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
 			const shortDescription = buildShortDescription(product);
-			const family = inferCommercialFamily([
-				product.name,
-				product.tags,
-				product.handle,
-				shortDescription
-			].filter(Boolean).join(' '));
+			const family = inferCommercialFamily(
+				[product.name, product.tags, product.handle, shortDescription]
+					.filter(Boolean)
+					.join(' ')
+			);
 			const variantMeta = extractVariantMeta(product.variants, { family });
 			const offerType = inferOfferType(product);
-
 			const profileScore = scoreProductAgainstCommercialProfile({
 				name: product.name,
 				handle: product.handle,
@@ -507,13 +512,24 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 			};
 		})
 		.filter((item) => !item.isGiftLike)
-		.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost))
-		.slice(0, limit);
+		.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost));
+
+	const deduped = [];
+	const seen = new Set();
+
+	for (const item of ranked) {
+		const signature = normalizeOfferSignature(item);
+		if (seen.has(signature)) continue;
+		seen.add(signature);
+		deduped.push(item);
+	}
+
+	return deduped.slice(0, Math.max(limit, 6));
 }
 
 export function buildCatalogContext(products = []) {
 	if (!Array.isArray(products) || !products.length) {
-		return 'No se encontraron productos relevantes del catálogo local para este mensaje.';
+		return 'No se encontraron productos relevantes del catalogo local para este mensaje.';
 	}
 
 	return products
@@ -530,7 +546,6 @@ export function buildCatalogContext(products = []) {
 			if (product.originalPrice) lines.push(`   - Precio anterior: ${product.originalPrice}`);
 			if (product.colors?.length) lines.push(`   - Colores detectados: ${product.colors.join(', ')}`);
 			if (product.sizes?.length) lines.push(`   - Talles disponibles: ${product.sizes.join(', ')}`);
-
 			return lines.join('\n');
 		})
 		.join('\n\n');
@@ -544,22 +559,39 @@ export function pickCommercialHints(products = [], commercialPlan = null) {
 	const profile = getCommercialProfile(family);
 
 	if (profile?.defaultPitch) hints.push(profile.defaultPitch);
-	if (commercialPlan?.bestOffer?.name) hints.push(`Priorizá como oferta principal ${commercialPlan.bestOffer.name}.`);
+	if (commercialPlan?.bestOffer?.name) hints.push(`Prioriza como oferta principal ${commercialPlan.bestOffer.name}.`);
+
+	if (Array.isArray(commercialPlan?.offerCandidates) && commercialPlan.offerCandidates.length > 1) {
+		const labels = commercialPlan.offerCandidates
+			.slice(0, 3)
+			.map((option) => option.label)
+			.filter(Boolean);
+
+		if (labels.length) {
+			hints.push(`Si abris opciones, mantenete dentro de la misma familia: ${labels.join(', ')}.`);
+		}
+	}
+
 	if (commercialPlan?.requestedAction === 'ASK_OFFER') {
-		hints.push('Mostrá primero la oferta principal de esta familia; si no avanza, recién ahí abrí la alternativa.');
+		hints.push('Mostra primero la oferta principal de esta familia; si no avanza, recien ahi abri la alternativa.');
 	}
+
+	if (commercialPlan?.recommendedAction === 'present_offer_options_brief') {
+		hints.push('Si comparas opciones, mostra solo 2 o 3 variantes de esa familia con precio corto y cierre de ayuda.');
+	}
+
 	if (commercialPlan?.requestedAction === 'ASK_VARIANT') {
-		hints.push('Cuando hables de talles o colores, nombrá talles humanos (S/M, M/L, XL/XXL) y no SKUs internos.');
+		hints.push('Cuando hables de talles o colores, nombra talles humanos y no SKUs internos.');
 	}
+
 	if (commercialPlan?.shareLinkNow) {
-		hints.push(profile?.linkHint || 'Compartí un único link y solo del producto foco más reciente.');
+		hints.push(profile?.linkHint || 'Comparti un unico link y solo del producto foco mas reciente.');
 	} else {
-		hints.push('No compartas link todavía si la conversación sigue definiendo producto, variante o promo.');
+		hints.push('No compartas link todavia si la conversacion sigue definiendo producto, variante o promo.');
 	}
 
-	hints.push('No abras varias promos salvo pedido explícito.');
-	hints.push('No arranques con saludo repetido ni con claro, perfecto, genial o buenísimo.');
+	hints.push('No abras varias promos salvo pedido explicito.');
+	hints.push('No arranques con saludo repetido ni con claro, perfecto, genial o buenisimo.');
 	hints.push('Nunca muestres SKUs internos al cliente como si fueran talles.');
-
 	return hints;
 }
