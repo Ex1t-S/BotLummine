@@ -324,20 +324,28 @@ function isSpecificCatalogRequest(signals = {}) {
 }
 
 function inferOfferType(product = {}) {
-	const haystack = normalizeText([
+	const primaryHaystack = normalizeText([
 		product.name,
-		product.tags,
-		product.description,
 		product.handle,
-		JSON.stringify(product.attributes || []),
-		JSON.stringify(product.variants || []),
-		JSON.stringify(product.rawPayload || {})
+		product.tags
 	].filter(Boolean).join(' '));
 
-	if (/5x2|cinco por dos/.test(haystack)) return '5x2';
-	if (/3x1|tres por uno/.test(haystack)) return '3x1';
-	if (/2x1|dos por uno/.test(haystack)) return '2x1';
-	if (/pack|combo|promo|promocion|oferta/.test(haystack)) return 'pack';
+	const secondaryHaystack = normalizeText([
+		product.description,
+		JSON.stringify(product.attributes || []),
+		JSON.stringify(product.variants || [])
+	].filter(Boolean).join(' '));
+
+	if (/5x2|cinco por dos/.test(primaryHaystack)) return '5x2';
+	if (/3x1|tres por uno/.test(primaryHaystack)) return '3x1';
+	if (/2x1|dos por uno/.test(primaryHaystack)) return '2x1';
+
+	if (/5x2|cinco por dos/.test(secondaryHaystack)) return '5x2';
+	if (/3x1|tres por uno/.test(secondaryHaystack)) return '3x1';
+	if (/2x1|dos por uno/.test(secondaryHaystack)) return '2x1';
+
+	if (/pack|combo|promo|promocion|oferta/.test(primaryHaystack)) return 'pack';
+	if (/pack|combo|promo|promocion|oferta/.test(secondaryHaystack)) return 'pack';
 	return 'single';
 }
 
