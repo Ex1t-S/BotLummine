@@ -315,6 +315,14 @@ function shouldSkipCatalogLookup(signals = {}) {
 	return !hasCommercialSignal && meaningfulTerms.length < 2;
 }
 
+function isSpecificCatalogRequest(signals = {}) {
+	const meaningfulTerms = (signals.terms || []).filter((term) => !CATALOG_STOPWORDS.has(term));
+	if (signals.asksComparison || signals.hasVariantSpecificity) return true;
+	if (signals.asksLink && meaningfulTerms.length >= 2) return true;
+	if (signals.asksPrice && meaningfulTerms.length >= 2) return true;
+	return meaningfulTerms.length >= 3;
+}
+
 function inferOfferType(product = {}) {
 	const haystack = normalizeText([
 		product.name,
@@ -347,6 +355,37 @@ function normalizeOfferSignature(product = {}) {
 		normalizeText(product.name || ''),
 		normalizeText(product.price || '')
 	].join('::');
+}
+
+function countDirectTermMatches(product = {}, terms = []) {
+	const haystacks = [
+		normalizeText(product.name || ''),
+		normalizeText(product.handle || ''),
+		normalizeText(product.tags || ''),
+		normalizeText(product.description || '')
+	];
+
+	let matches = 0;
+	for (const term of terms) {
+		if (!term || CATALOG_STOPWORDS.has(term)) continue;
+		if (haystacks.some((value) => value.includes(term))) matches += 1;
+	}
+
+	return matches;
+}
+
+function shouldFilterGiftLikeProduct(product = {}, family = null, offerType = 'single') {
+	const haystack = normalizeText([
+		product.name,
+		product.handle,
+		product.tags,
+		product.description
+	].filter(Boolean).join(' '));
+
+	if (/mes de la mujer/.test(haystack)) return true;
+	if (/gift card|tarjeta regalo|tarjeta de regalo/.test(haystack)) return true;
+	if (family || offerType !== 'single') return false;
+	return /(gift|regalo|boob tape)/i.test(haystack);
 }
 
 function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
@@ -510,7 +549,17 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 				packCount: inferPackCount(offerType),
 				commercialProfile: getCommercialProfile(family),
 				commercialScoreBoost: profileScore,
-				isGiftLike: /(gift|regalo|segunda piel de regalo|mes de la mujer)/i.test(normalizeText(product.name || ''))
+				fullQueryMatch: Boolean(
+					signals.normalizedQuery &&
+					[
+						product.name,
+						product.handle,
+						product.tags,
+						shortDescription
+					].some((value) => normalizeText(value || '').includes(signals.normalizedQuery))
+				),
+				directTermMatches: countDirectTermMatches(product, signals.terms),
+				isGiftLike: shouldFilterGiftLikeProduct(product, family, offerType)
 			};
 		})
 		.filter((item) => !item.isGiftLike)
@@ -524,6 +573,22 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 		if (seen.has(signature)) continue;
 		seen.add(signature);
 		deduped.push(item);
+	}
+
+	if (isSpecificCatalogRequest(signals)) {
+		const strongest = deduped[0] || null;
+		const hasStrongMatch = Boolean(
+			strongest &&
+			(
+				strongest.fullQueryMatch ||
+				strongest.directTermMatches >= 2 ||
+				strongest.score >= 26
+			)
+		);
+
+		if (!hasStrongMatch) {
+			return [];
+		}
 	}
 
 	return deduped.slice(0, Math.max(limit, 6));

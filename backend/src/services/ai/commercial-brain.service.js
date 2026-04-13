@@ -406,6 +406,7 @@ function buildRecommendedAction({
 	shouldEscalate,
 	shareLinkNow,
 	repeatPriceNow,
+	bestOffer,
 	requestedOfferType,
 	requestedOfferAvailable,
 	hasFallbackWithinFamily,
@@ -413,6 +414,7 @@ function buildRecommendedAction({
 }) {
 	if (shouldEscalate) return 'handoff_human';
 	if (requestedAction === 'GREETING') return 'greet_and_discover';
+	if (!bestOffer && requestedAction !== 'ASK_CATALOG') return 'clarify_specific_product';
 	if (requestedOfferType && requestedOfferAvailable === false && hasFallbackWithinFamily) {
 		return 'explain_requested_offer_unavailable_keep_family';
 	}
@@ -484,6 +486,7 @@ export function resolveCommercialBrainV2({
 		shouldEscalate: escalation.shouldEscalate,
 		shareLinkNow,
 		repeatPriceNow,
+		bestOffer,
 		requestedOfferType,
 		requestedOfferAvailable,
 		hasFallbackWithinFamily: Boolean(fallbackOffer),

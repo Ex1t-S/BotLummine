@@ -21,6 +21,7 @@ import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
 import { buildPrompt } from '../common/prompt-builder.js';
 import {
 	isPaymentProofMessage,
+	isAmbiguousPaymentAttachment,
 	buildPaymentReviewAck,
 	resolveConversationQueue
 } from './inbox-routing.service.js';
@@ -301,6 +302,14 @@ export async function processInboundMessage({
 		recentMessages
 	});
 
+	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
+		messageType,
+		body: effectiveMessageBody,
+		rawPayload,
+		currentState,
+		recentMessages
+	});
+
 	const queueDecision = resolveConversationQueue({
 		currentConversation: freshConversation,
 		memoryPatch,
@@ -360,6 +369,44 @@ export async function processInboundMessage({
 		...currentState,
 		...nextStatePayload
 	};
+
+	if (ambiguousPaymentAttachment && !detectedPaymentProof) {
+		const clarification =
+			'Recibi la imagen o archivo. Es un comprobante de pago o queres que revise otra cosa de la foto?';
+		trace = {
+			...trace,
+			assistantMessage: clarification,
+			provider: 'system',
+			model: 'payment-attachment-clarifier',
+			shouldReply: false,
+		};
+
+		await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			body: clarification,
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'payment-attachment-clarifier',
+				raw: { ambiguousPaymentAttachment: true }
+			}
+		});
+
+		await prisma.conversation.update({
+			where: { id: freshConversation.id },
+			data: {
+				lastSummary: buildConversationSummary({
+					intent,
+					enrichedState,
+					lastUserMessage: summaryUserMessage,
+					lastAssistantMessage: clarification,
+					liveOrderContext
+				})
+			}
+		});
+
+		return { conversation: freshConversation, trace };
+	}
 
 	if (detectedPaymentProof) {
 		const ack = buildPaymentReviewAck();
@@ -490,7 +537,7 @@ export async function processInboundMessage({
 			limit: 5
 		});
 
-		const catalogStatus = getCatalogLookupStatus();
+		const catalogStatus = await getCatalogLookupStatus();
 
 		commercialPlan = {
 			...resolveCommercialBrainV2({
@@ -739,7 +786,9 @@ export async function processInboundMessage({
 				fallbackReply,
 				commercialPlan,
 				recentMessages: fullRecentMessages,
-				contactName: freshConversation.contact.name || freshConversation.contact.waId
+				contactName: freshConversation.contact.name || freshConversation.contact.waId,
+				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi'
 			});
 
 			finalReply = appendMenuHintIfNeeded(

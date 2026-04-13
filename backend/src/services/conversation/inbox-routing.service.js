@@ -58,6 +58,31 @@ export function isPaymentProofMessage({
 	return false;
 }
 
+export function isAmbiguousPaymentAttachment({
+	messageType = 'text',
+	body = '',
+	rawPayload = null,
+	currentState = {},
+	recentMessages = []
+} = {}) {
+	const text = normalizeText(body);
+	if (text) return false;
+
+	const typeLooksLikeAttachment = ['image', 'document'].includes(String(messageType || '').toLowerCase());
+	const mime = String(
+		rawPayload?.attachment?.mimeType ||
+			rawPayload?.attachmentMimeType ||
+			''
+	).toLowerCase();
+	const fileLooksLikeAttachment =
+		typeLooksLikeAttachment ||
+		mime.includes('pdf') ||
+		mime.includes('image');
+
+	if (!fileLooksLikeAttachment) return false;
+	return recentConversationLooksLikePayment(recentMessages, currentState);
+}
+
 export function buildPaymentReviewAck() {
 	return '¡Gracias! Ya recibimos tu comprobante 😊 En breve lo revisamos y seguimos con tu pedido.';
 }

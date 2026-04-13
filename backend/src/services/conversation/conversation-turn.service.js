@@ -20,6 +20,7 @@ import {
 import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
 import {
 	isPaymentProofMessage,
+	isAmbiguousPaymentAttachment,
 	buildPaymentReviewAck,
 	resolveConversationQueue
 } from './inbox-routing.service.js';
@@ -78,6 +79,14 @@ export async function runConversationTurn({
 		recentMessages
 	});
 
+	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
+		messageType,
+		body: messageBody,
+		rawPayload,
+		currentState,
+		recentMessages
+	});
+
 	const queueDecision = resolveConversationQueue({
 		currentConversation,
 		memoryPatch,
@@ -110,6 +119,47 @@ export async function runConversationTurn({
 		...currentState,
 		...nextStatePayload
 	};
+
+	if (ambiguousPaymentAttachment && !detectedPaymentProof) {
+		const clarification =
+			'Recibi la imagen o archivo. Es un comprobante de pago o queres que revise otra cosa de la foto?';
+		return {
+			intent,
+			queueDecision,
+			nextStatePayload,
+			enrichedState,
+			outbound: {
+				kind: 'payment_attachment_clarifier',
+				body: clarification,
+				aiMeta: {
+					provider: 'system',
+					model: 'payment-attachment-clarifier',
+					raw: { ambiguousPaymentAttachment: true }
+				}
+			},
+			lastSummary: buildConversationSummary({
+				intent,
+				enrichedState,
+				lastUserMessage: messageBody,
+				lastAssistantMessage: clarification,
+				liveOrderContext
+			}),
+			trace: {
+				intent,
+				queueDecision,
+				responsePolicy: null,
+				commercialPlan: null,
+				catalogProducts: [],
+				commercialHints: [],
+				prompt: null,
+				assistantMessage: clarification,
+				provider: 'system',
+				model: 'payment-attachment-clarifier',
+				aiGuidance,
+				liveOrderContext
+			}
+		};
+	}
 
 	if (detectedPaymentProof) {
 		const ack = buildPaymentReviewAck();
@@ -220,7 +270,7 @@ export async function runConversationTurn({
 			limit: 5
 		});
 
-		const catalogStatus = getCatalogLookupStatus();
+		const catalogStatus = await getCatalogLookupStatus();
 
 		commercialPlan = {
 			...resolveCommercialBrainV2({
@@ -460,7 +510,9 @@ export async function runConversationTurn({
 				fallbackReply,
 				commercialPlan,
 				recentMessages: fullRecentMessages,
-				contactName: customerContext?.name || contactName || normalizedWaId
+				contactName: customerContext?.name || contactName || normalizedWaId,
+				businessName,
+				agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi'
 			});
 
 			finalReply = audited.finalText;

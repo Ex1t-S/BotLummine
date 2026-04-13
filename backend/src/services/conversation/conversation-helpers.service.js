@@ -205,6 +205,15 @@ export function buildAiFailureFallback({
 			return 'Tenemos opción individual y también promos. Si querés, te cuento rápido las más elegidas o te paso la web para que las veas.';
 		}
 
+		if (commercialPlan?.recommendedAction === 'clarify_specific_product') {
+			const familyLabel =
+				commercialPlan?.productFamilyLabel ||
+				commercialPlan?.productFamily ||
+				enrichedState?.currentProductFamily ||
+				'ese producto';
+			return `No quiero confundirte con una opcion que no sea. Decime el nombre exacto o pasame el link del producto de ${familyLabel} y lo reviso puntual.`;
+		}
+
 		if (
 			commercialPlan?.recommendedAction === 'present_single_best_offer' &&
 			commercialPlan?.bestOffer
@@ -358,7 +367,7 @@ export function buildResponsePolicy({
 
 		return {
 			action: commercialPlan?.recommendedAction || 'product_guidance',
-			useAI: true,
+			useAI: commercialPlan?.recommendedAction !== 'clarify_specific_product',
 			allowHandoffMention: false,
 			maxChars:
 				commercialPlan?.recommendedAction === 'close_with_single_link'
@@ -387,7 +396,8 @@ export function buildResponsePolicy({
 	};
 }
 
-export function stripRepeatedGreeting(text = '', recentMessages = [], contactName = '') {
+export function stripRepeatedGreeting(text = '', recentMessages = [], contactName = '', preserveGreeting = false) {
+	if (preserveGreeting) return text;
 	const assistantCount = recentMessages.filter((msg) => msg.role === 'assistant').length;
 	if (assistantCount === 0) return text;
 
@@ -420,6 +430,28 @@ export function stripRepeatedGreeting(text = '', recentMessages = [], contactNam
 	}
 
 	return next || text;
+}
+
+function ensureGeneralPresentation(text = '', { preserveGreeting = false, businessName = 'Lummine', agentName = 'Sofi' } = {}) {
+	if (!preserveGreeting) return text;
+
+	const normalized = normalizeText(text);
+	if (!normalized) {
+		return `Hola, soy ${agentName} de ${businessName}.`;
+	}
+
+	if (/soy\s+sofi\s+de\s+lummine/i.test(normalized)) return normalized;
+
+	const withoutLeadingGreeting = normalized.replace(
+		/^(?:¡)?(?:hola|buenas|buen dia|buen día|buenas tardes|buenas noches)[,!.\s-]*/i,
+		''
+	).trim();
+
+	if (!withoutLeadingGreeting) {
+		return `Hola, soy ${agentName} de ${businessName}. ¿En que te puedo ayudar?`;
+	}
+
+	return `Hola, soy ${agentName} de ${businessName}. ${withoutLeadingGreeting}`.trim();
 }
 
 export function stripBotOpenings(text = '') {
@@ -478,10 +510,13 @@ export function auditAssistantReply({
 	commercialPlan,
 	recentMessages = [],
 	contactName = '',
+	businessName = 'Lummine',
+	agentName = 'Sofi',
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
+	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
 	let cleaned = normalizeText(rawText);
-	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName);
+	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName, preserveGreeting);
 	cleaned = stripBotOpenings(cleaned);
 	cleaned = normalizeText(cleaned);
 
@@ -522,8 +557,14 @@ export function auditAssistantReply({
 	const triggerHumanHandoff =
 		commercialPlan?.shouldEscalate || responseMentionsHumanHandoff(cleaned);
 
+	const finalText = ensureGeneralPresentation(cleaned, {
+		preserveGreeting,
+		businessName,
+		agentName,
+	});
+
 	return {
-		finalText: cleaned,
+		finalText,
 		triggerHumanHandoff,
 	};
 }

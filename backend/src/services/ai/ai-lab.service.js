@@ -58,8 +58,34 @@ async function fetchSessionConversation(conversationId) {
 	});
 }
 
-function buildMenuPreview(conversation = null) {
+async function buildMenuPreview(conversation = null) {
 	if (!conversation?.messages?.length) return null;
+
+	const runtime = await getWhatsAppMenuRuntimeConfig();
+	const runtimeMenuPath = conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY;
+	const runtimeMenu =
+		runtime?.menusByKey?.[runtimeMenuPath] ||
+		runtime?.menusByKey?.[runtime?.mainMenuKey] ||
+		null;
+
+	if (conversation.state?.menuActive && runtimeMenu) {
+		return {
+			messageId: null,
+			menuActive: true,
+			menuPath: runtimeMenu.path || runtimeMenu.key || runtimeMenuPath,
+			menuLastSelection: conversation.state?.menuLastSelection || null,
+			headerText: runtimeMenu.headerText || null,
+			footerText: runtimeMenu.footerText || null,
+			buttonText: runtimeMenu.buttonText || null,
+			fallbackText: runtimeMenu.textFallback || runtimeMenu.body || '',
+			options: (runtimeMenu.options || []).map((option) => ({
+				id: option.id,
+				title: option.title,
+				description: option.description || '',
+				sectionTitle: runtimeMenu.sectionTitle || runtimeMenu.title || ''
+			}))
+		};
+	}
 
 	const lastInteractiveMessage = [...conversation.messages]
 		.reverse()
@@ -68,24 +94,40 @@ function buildMenuPreview(conversation = null) {
 	if (!lastInteractiveMessage) return null;
 
 	const interactivePayload = extractInteractivePayload(lastInteractiveMessage);
-	const options = (interactivePayload?.sections || []).flatMap((section) =>
-		(section?.rows || []).map((row) => ({
-			id: row.id,
-			title: row.title,
-			description: row.description || '',
-			sectionTitle: section.title || ''
+	const rawMenuPath = lastInteractiveMessage?.model?.startsWith('menu-')
+		? String(lastInteractiveMessage.model).replace(/^menu-/, '').toUpperCase()
+		: null;
+	const lastMenuPath =
+		lastInteractiveMessage?.rawPayload?.aiMeta?.raw?.menuPath ||
+		conversation.state?.menuPath ||
+		rawMenuPath ||
+		null;
+	const lastRuntimeMenu = lastMenuPath ? runtime?.menusByKey?.[lastMenuPath] || null : null;
+	const options = lastRuntimeMenu
+		? (lastRuntimeMenu.options || []).map((option) => ({
+			id: option.id,
+			title: option.title,
+			description: option.description || '',
+			sectionTitle: lastRuntimeMenu.sectionTitle || lastRuntimeMenu.title || ''
 		}))
-	);
+		: (interactivePayload?.sections || []).flatMap((section) =>
+			(section?.rows || []).map((row) => ({
+				id: row.id,
+				title: row.title,
+				description: row.description || '',
+				sectionTitle: section.title || ''
+			}))
+		);
 
 	return {
 		messageId: lastInteractiveMessage.id,
 		menuActive: Boolean(conversation.state?.menuActive && conversation.state?.menuPath),
-		menuPath: conversation.state?.menuPath || null,
+		menuPath: lastRuntimeMenu?.path || lastRuntimeMenu?.key || lastMenuPath || null,
 		menuLastSelection: conversation.state?.menuLastSelection || null,
-		headerText: interactivePayload?.headerText || null,
-		footerText: interactivePayload?.footerText || null,
-		buttonText: interactivePayload?.buttonText || null,
-		fallbackText: interactivePayload?.fallbackText || lastInteractiveMessage.body || '',
+		headerText: lastRuntimeMenu?.headerText || interactivePayload?.headerText || null,
+		footerText: lastRuntimeMenu?.footerText || interactivePayload?.footerText || null,
+		buttonText: lastRuntimeMenu?.buttonText || interactivePayload?.buttonText || null,
+		fallbackText: lastRuntimeMenu?.textFallback || interactivePayload?.fallbackText || lastInteractiveMessage.body || '',
 		options
 	};
 }
@@ -151,7 +193,7 @@ async function openAiLabMenu({
 	});
 }
 
-function serializeConversation(conversation, fixtureMeta, lastTrace = null, sessionId = null) {
+async function serializeConversation(conversation, fixtureMeta, lastTrace = null, sessionId = null) {
 	if (!conversation) return null;
 
 	const rawName = conversation.contact?.name || 'Cliente';
@@ -181,7 +223,7 @@ function serializeConversation(conversation, fixtureMeta, lastTrace = null, sess
 			interactivePayload: extractInteractivePayload(message)
 		})),
 		lastTrace: buildTracePayload(lastTrace),
-		menuPreview: buildMenuPreview(conversation),
+		menuPreview: await buildMenuPreview(conversation),
 		updatedAt: conversation.updatedAt,
 		queue: conversation.queue,
 		aiEnabled: conversation.aiEnabled
@@ -294,7 +336,7 @@ export async function createAiLabSession({ fixtureKey = 'blank' } = {}) {
 	});
 
 	const hydrated = await fetchSessionConversation(conversation.id);
-	return serializeConversation(hydrated, fixtureMetaFromFixture(fixture), null, sessionId);
+	return await serializeConversation(hydrated, fixtureMetaFromFixture(fixture), null, sessionId);
 }
 
 export async function getAiLabSession(sessionId) {
@@ -303,7 +345,7 @@ export async function getAiLabSession(sessionId) {
 
 	const fixture = getAiLabFixture(session.fixtureKey);
 	const conversation = await fetchSessionConversation(session.conversationId);
-	return serializeConversation(conversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
+	return await serializeConversation(conversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }
 
 export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
@@ -331,7 +373,7 @@ export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
 	}
 
 	const conversation = await fetchSessionConversation(session.conversationId);
-	return serializeConversation(conversation, fixtureMetaFromFixture(fixture), null, session.sessionId);
+	return await serializeConversation(conversation, fixtureMetaFromFixture(fixture), null, session.sessionId);
 }
 
 export async function sendAiLabMessage(sessionId, { body, selectionId = '', action = '' }) {
@@ -429,5 +471,5 @@ export async function sendAiLabMessage(sessionId, { body, selectionId = '', acti
 
 	const fixture = getAiLabFixture(session.fixtureKey);
 	const updatedConversation = await fetchSessionConversation(session.conversationId);
-	return serializeConversation(updatedConversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
+	return await serializeConversation(updatedConversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }
