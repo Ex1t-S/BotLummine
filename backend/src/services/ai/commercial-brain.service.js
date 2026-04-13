@@ -318,13 +318,11 @@ function mapBestOffer(chosen, family) {
 
 function buildOfferCandidates(products = [], family = null, requestedOfferType = null) {
 	const pool = family ? products.filter((product) => product.family === family) : products;
-	const prioritized =
-		requestedOfferType && pool.some((item) => item.offerType === requestedOfferType)
-			? [
-				...pool.filter((item) => item.offerType === requestedOfferType),
-				...pool.filter((item) => item.offerType !== requestedOfferType)
-			]
-			: pool;
+	const hasRequestedMatches =
+		requestedOfferType && pool.some((item) => item.offerType === requestedOfferType);
+	const prioritized = hasRequestedMatches
+		? pool.filter((item) => item.offerType === requestedOfferType)
+		: pool;
 	const candidates = [];
 	const seen = new Set();
 
@@ -444,7 +442,10 @@ function buildRecommendedAction({
 	if (shouldEscalate) return 'handoff_human';
 	if (requestedAction === 'GREETING') return 'greet_and_discover';
 	if (!hasKnownProductContext) return 'send_general_catalog_first';
-	if (requestedAction === 'ASK_CATALOG' || requestedAction === 'GENERAL') {
+	if (requestedAction === 'ASK_CATALOG') {
+		return 'send_general_catalog_first';
+	}
+	if (requestedAction === 'GENERAL' && !bestOffer) {
 		return 'send_general_catalog_first';
 	}
 	if (!bestOffer && requestedAction !== 'ASK_CATALOG') return 'clarify_specific_product';
@@ -513,6 +514,8 @@ export function resolveCommercialBrainV2({
 	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
 	const hasKnownProductContext = Boolean(
+		productFamily ||
+		asArray(currentState?.interestedProducts).length ||
 		currentState?.currentProductFocus ||
 		currentState?.currentProductFamily ||
 		currentState?.lastRecommendedProduct
