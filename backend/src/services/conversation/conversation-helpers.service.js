@@ -444,6 +444,40 @@ export function stripRepeatedGreeting(text = '', recentMessages = [], contactNam
 	return next || text;
 }
 
+function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '', agentName = 'Sofi', businessName = 'Lummine', preserveGreeting = false) {
+	if (preserveGreeting) return text;
+
+	const assistantCount = recentMessages.filter((msg) => msg.role === 'assistant').length;
+	if (assistantCount === 0) return text;
+
+	let next = String(text || '').trim();
+	const safeContactName = String(contactName || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const safeAgentName = String(agentName || 'Sofi').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const safeBusinessName = String(businessName || 'Lummine').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+	const identityPatterns = [
+		safeContactName ? new RegExp(`^${safeContactName}[,:!?\\s-]+`, 'i') : null,
+		new RegExp(`^soy\\s+${safeAgentName}\\s+de\\s+${safeBusinessName}[,:!?\\s-]*`, 'i'),
+		new RegExp(`^${safeAgentName}\\s+de\\s+${safeBusinessName}[,:!?\\s-]*`, 'i'),
+		new RegExp(`^${safeContactName ? `${safeContactName}[,:!?\\s-]+` : ''}soy\\s+${safeAgentName}\\s+de\\s+${safeBusinessName}[,:!?\\s-]*`, 'i'),
+	].filter(Boolean);
+
+	let changed = true;
+	let safety = 0;
+	while (changed && safety < 6) {
+		changed = false;
+		safety += 1;
+		for (const pattern of identityPatterns) {
+			if (pattern.test(next)) {
+				next = next.replace(pattern, '').trim();
+				changed = true;
+			}
+		}
+	}
+
+	return next || text;
+}
+
 function ensureGeneralPresentation(text = '', { preserveGreeting = false, businessName = 'Lummine', agentName = 'Sofi' } = {}) {
 	if (!preserveGreeting) return text;
 
@@ -529,6 +563,7 @@ export function auditAssistantReply({
 	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
 	let cleaned = normalizeText(rawText);
 	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName, preserveGreeting);
+	cleaned = stripRepeatedIdentity(cleaned, recentMessages, contactName, agentName, businessName, preserveGreeting);
 	cleaned = stripBotOpenings(cleaned);
 	cleaned = normalizeText(cleaned);
 
