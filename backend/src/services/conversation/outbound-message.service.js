@@ -15,6 +15,7 @@ export async function sendAndPersistOutbound({
 	aiMeta = null,
 	messageType = 'text',
 	interactivePayload = null,
+	deliveryMode = 'live',
 }) {
 	const cleanBody = String(body || '').trim();
 
@@ -54,7 +55,23 @@ export async function sendAndPersistOutbound({
 
 	let sendResult = null;
 
-	if (messageType === 'interactive') {
+	if (deliveryMode === 'lab') {
+		sendResult = {
+			ok: true,
+			provider: 'ai-lab-simulator',
+			model: null,
+			rawPayload: {
+				deliveryMode: 'lab',
+				messageType,
+				interactivePayload,
+				messages: [
+					{
+						id: `lab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+					}
+				]
+			}
+		};
+	} else if (messageType === 'interactive') {
 		sendResult = await sendWhatsAppInteractiveList({
 			to: waId,
 			body: cleanBody,
@@ -104,11 +121,12 @@ export async function sendAndPersistOutbound({
 				null,
 			rawPayload: aiMeta
 				? {
-					sendResult: sendResult?.rawPayload || null,
-					aiMeta: aiMeta?.raw || null,
-					userId,
-					messageType,
-					interactivePayload,
+			sendResult: sendResult?.rawPayload || null,
+			aiMeta: aiMeta?.raw || null,
+			userId,
+			messageType,
+			interactivePayload,
+			deliveryMode,
 				}
 				: sendResult?.rawPayload || null,
 		},

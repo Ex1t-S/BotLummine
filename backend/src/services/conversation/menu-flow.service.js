@@ -13,6 +13,7 @@ const MENU_PATHS = DEFAULT_MENU_PATHS;
 const ALLOWED_MENU_STATE_PATCH_KEYS = new Set([
 	'lastUserGoal',
 	'currentProductFocus',
+	'currentProductFamily',
 	'interestedProducts',
 	'notes',
 	'paymentPreference',
@@ -22,6 +23,10 @@ const ALLOWED_MENU_STATE_PATCH_KEYS = new Set([
 	'preferredTone',
 	'handoffReason',
 	'needsHuman',
+	'requestedOfferType',
+	'excludedProductKeywords',
+	'categoryLocked',
+	'salesStage',
 ]);
 
 function normalizeLooseText(value = '') {
@@ -179,17 +184,18 @@ export async function syncHumanHandoff({ conversationId, reason = 'ai_declared_h
 	});
 }
 
-async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '' }) {
+async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliveryMode = 'live' }) {
 	const menuConfig = await getMenuConfig(menuPath);
 	if (!menuConfig) return null;
 
 	const body = [bodyPrefix ? normalizeText(bodyPrefix) : null, menuConfig.body]
 		.filter(Boolean)
-		.join('');
+		.join('\n\n');
 
 	return sendAndPersistOutbound({
 		conversationId,
 		body: body || menuConfig.body,
+		deliveryMode,
 		messageType: 'interactive',
 		interactivePayload: {
 			headerText: menuConfig.headerText,
@@ -209,10 +215,11 @@ async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '' }) {
 	});
 }
 
-async function sendMenuTextOnly({ conversationId, body, model = 'menu-text' }) {
+async function sendMenuTextOnly({ conversationId, body, model = 'menu-text', deliveryMode = 'live' }) {
 	return sendAndPersistOutbound({
 		conversationId,
 		body,
+		deliveryMode,
 		aiMeta: {
 			provider: 'system',
 			model,
@@ -226,11 +233,25 @@ function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) 
 	return Boolean(currentState?.menuActive && currentState?.menuPath);
 }
 
+function shouldLetFreeTextBypassMenu(messageBody = '') {
+	const normalized = normalizeLooseText(messageBody);
+	if (!normalized) return false;
+	if (isMenuResetCommand(normalized)) return false;
+	if (/^\d+$/.test(normalized)) return false;
+	if (normalized.length >= 18) return true;
+
+	const meaningfulTerms = normalized.split(/\s+/).filter(Boolean);
+	if (meaningfulTerms.length >= 3) return true;
+
+	return /(body|bodys|calza|calzas|pedido|pago|comprobante|envio|envios|talle|talles|catalogo|promo|precio|link|comprar|asesora|humano)/i.test(normalized);
+}
+
 async function handleMenuSelection({
 	selectionId,
 	conversation,
 	currentState,
 	contactName,
+	transportMode = 'live',
 }) {
 	const conversationId = conversation.id;
 	const waId = conversation.contact?.waId || '';
@@ -258,6 +279,7 @@ async function handleMenuSelection({
 			conversationId,
 			menuPath: targetMenuPath,
 			bodyPrefix: option.promptPrefix || '',
+			deliveryMode: transportMode,
 		});
 
 		return { handled: true };
@@ -278,6 +300,7 @@ async function handleMenuSelection({
 			conversationId,
 			body: handoffReply,
 			model: option.model || 'menu-human-handoff',
+			deliveryMode: transportMode,
 		});
 
 		return { handled: true };
@@ -295,6 +318,7 @@ async function handleMenuSelection({
 			conversationId,
 			body: normalizeText(option.replyBody || option.title || 'Listo.'),
 			model: option.model || `menu-message-${selectionId}`,
+			deliveryMode: transportMode,
 		});
 
 		return { handled: true };
@@ -330,6 +354,7 @@ export async function maybeHandleMenuFlow({
 	messageBody,
 	messageType,
 	rawPayload,
+	transportMode = 'live',
 }) {
 	const waId = conversation.contact?.waId || '';
 	const wantsMenu = isMenuResetCommand(messageBody);
@@ -375,6 +400,7 @@ export async function maybeHandleMenuFlow({
 				conversation,
 				currentState,
 				contactName,
+				transportMode,
 			});
 		}
 
@@ -388,6 +414,7 @@ export async function maybeHandleMenuFlow({
 		await sendMenuPrompt({
 			conversationId: conversation.id,
 			menuPath: MENU_PATHS.MAIN,
+			deliveryMode: transportMode,
 			bodyPrefix: isGreetingOnlyMessage(messageBody)
 				? '¡Hola!'
 				: 'Antes de seguir, te dejo el menú para ayudarte más rápido.',
@@ -442,10 +469,29 @@ export async function maybeHandleMenuFlow({
 				conversation,
 				currentState,
 				contactName,
+				transportMode,
 			});
 		}
 
 		if (messageType === 'text' && normalizeText(messageBody)) {
+			if (shouldLetFreeTextBypassMenu(messageBody)) {
+				await patchConversationState(conversation.id, {
+					menuActive: false,
+					menuPath: null,
+					menuLastPromptAt: new Date(),
+				});
+
+				return {
+					handled: false,
+					effectiveMessageBody: messageBody,
+					summaryUserMessage: messageBody,
+					forceIntent: null,
+					statePatch: {
+						menuLastSelection: 'free_text_override',
+					},
+				};
+			}
+
 			await patchConversationState(conversation.id, {
 				menuLastPromptAt: new Date(),
 			});

@@ -50,7 +50,9 @@ export async function postAiLabSessionReset(req, res, next) {
 export async function postAiLabSessionMessage(req, res, next) {
 	try {
 		const session = await sendAiLabMessage(req.params.sessionId, {
-			body: req.body?.body || ''
+			body: req.body?.body || '',
+			selectionId: req.body?.selectionId || '',
+			action: req.body?.action || ''
 		});
 		return res.json({ ok: true, session });
 	} catch (error) {

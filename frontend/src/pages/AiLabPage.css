@@ -243,6 +243,73 @@
 	background: #ffffff;
 }
 
+.ai-lab-inline-actions {
+	padding: 0 22px 18px;
+	background: #ffffff;
+}
+
+.ai-lab-inline-menu {
+	margin: 0 22px 22px;
+	padding: 16px;
+	border-radius: 20px;
+	border: 1px solid #bfdbfe;
+	background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+	display: grid;
+	gap: 14px;
+}
+
+.ai-lab-inline-menu__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+}
+
+.ai-lab-inline-menu__header strong {
+	display: block;
+	color: #0f172a;
+}
+
+.ai-lab-inline-menu__header span {
+	color: #475569;
+	font-size: 0.85rem;
+}
+
+.ai-lab-inline-menu p {
+	margin: 0;
+	color: #334155;
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+.ai-lab-inline-menu__options {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.ai-lab-inline-menu__option {
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	border-radius: 16px;
+	padding: 12px 14px;
+	text-align: left;
+	cursor: pointer;
+	display: grid;
+	gap: 6px;
+	color: #0f172a;
+}
+
+.ai-lab-inline-menu__option strong {
+	font-size: 0.94rem;
+}
+
+.ai-lab-inline-menu__option span {
+	color: #64748b;
+	font-size: 0.82rem;
+	line-height: 1.35;
+}
+
 .ai-lab-chip-group {
 	display: flex;
 	gap: 10px;
@@ -348,6 +415,7 @@
 		max-width: 100%;
 	}
 
+	.ai-lab-inline-menu__options,
 	.ai-lab-debug-grid,
 	.ai-lab-actions-row {
 		grid-template-columns: 1fr;

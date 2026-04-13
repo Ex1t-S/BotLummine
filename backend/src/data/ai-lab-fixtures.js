@@ -83,6 +83,25 @@ export const AI_LAB_FIXTURES = [
 			'Puede sugerir opciones de ayuda dentro de la respuesta si suma claridad',
 			'El trace debería mostrar menuAssistantContext'
 		]
+	},
+	{
+		key: 'buyer-menu-flow',
+		name: 'Menu comprador real',
+		description: 'Carga el menu comprador real para probar selecciones y cambios bruscos de tema.',
+		startWithMainMenu: true,
+		menuPath: 'MAIN_MENU',
+		menuIntroText: 'Simulacion AI LAB: este es el menu que veria la compradora.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Hola, soy Sofi de Lummine. Te ayudo por aca.'
+			}
+		],
+		expected: [
+			'Deberias poder tocar opciones reales del menu desde AI LAB',
+			'Si la clienta cambia de tema fuerte, la IA no deberia quedar atrapada en el menu',
+			'La seleccion de menu deberia orientar familia, soporte o postventa segun el caso'
+		]
 	}
 ];
 

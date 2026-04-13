@@ -289,7 +289,7 @@ function detectRequestedSignals(query = '', interestedProducts = []) {
 		normalizedQuery,
 		terms,
 		requestedFamily,
-		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1)/i.test(normalizedQuery),
+		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1|5x2|cinco por dos)/i.test(normalizedQuery),
 		asksPrice: /(precio|cuanto|sale|valor)/i.test(normalizedQuery),
 		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
 		asksComparison: /(cual|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
@@ -326,6 +326,7 @@ function inferOfferType(product = {}) {
 		JSON.stringify(product.rawPayload || {})
 	].filter(Boolean).join(' '));
 
+	if (/5x2|cinco por dos/.test(haystack)) return '5x2';
 	if (/3x1|tres por uno/.test(haystack)) return '3x1';
 	if (/2x1|dos por uno/.test(haystack)) return '2x1';
 	if (/pack|combo|promo|promocion|oferta/.test(haystack)) return 'pack';
@@ -333,6 +334,7 @@ function inferOfferType(product = {}) {
 }
 
 function inferPackCount(offerType = 'single') {
+	if (offerType === '5x2') return 5;
 	if (offerType === '3x1') return 3;
 	if (offerType === '2x1') return 2;
 	return 1;
@@ -388,9 +390,9 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	}
 
 	if (signals.asksPromo) {
-		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(name)) score += 20;
-		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(tags)) score += 16;
-		if (/(oferta|promo|pack|combo|2x1|3x1)/i.test(variantBlob)) score += 14;
+		if (/(oferta|promo|pack|combo|2x1|3x1|5x2)/i.test(name)) score += 20;
+		if (/(oferta|promo|pack|combo|2x1|3x1|5x2)/i.test(tags)) score += 16;
+		if (/(oferta|promo|pack|combo|2x1|3x1|5x2)/i.test(variantBlob)) score += 14;
 	}
 
 	if (signals.requestedFamily && inferCommercialFamily(name) === signals.requestedFamily) {
@@ -560,6 +562,12 @@ export function pickCommercialHints(products = [], commercialPlan = null) {
 
 	if (profile?.defaultPitch) hints.push(profile.defaultPitch);
 	if (commercialPlan?.bestOffer?.name) hints.push(`Prioriza como oferta principal ${commercialPlan.bestOffer.name}.`);
+	if (Array.isArray(commercialPlan?.bestOffer?.sizes) && commercialPlan.bestOffer.sizes.length) {
+		hints.push(`Talles confirmados del producto foco: ${commercialPlan.bestOffer.sizes.join(', ')}.`);
+	}
+	if (Array.isArray(commercialPlan?.bestOffer?.colors) && commercialPlan.bestOffer.colors.length) {
+		hints.push(`Colores confirmados del producto foco: ${commercialPlan.bestOffer.colors.join(', ')}.`);
+	}
 
 	if (Array.isArray(commercialPlan?.offerCandidates) && commercialPlan.offerCandidates.length > 1) {
 		const labels = commercialPlan.offerCandidates
@@ -578,6 +586,10 @@ export function pickCommercialHints(products = [], commercialPlan = null) {
 
 	if (commercialPlan?.recommendedAction === 'present_offer_options_brief') {
 		hints.push('Si comparas opciones, mostra solo 2 o 3 variantes de esa familia con precio corto y cierre de ayuda.');
+	}
+
+	if (commercialPlan?.requestedOfferType && commercialPlan?.requestedOfferAvailable === false) {
+		hints.push(`No afirmes que existe una ${commercialPlan.requestedOfferType} exacta si no aparece confirmada en el catalogo.`);
 	}
 
 	if (commercialPlan?.requestedAction === 'ASK_VARIANT') {

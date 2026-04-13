@@ -150,7 +150,8 @@ export async function processInboundMessage({
 	messageType = 'text',
 	attachmentMeta = null,
 	rawPayload,
-	metaMessageId = null
+	metaMessageId = null,
+	transportMode = 'live'
 }) {
 	const normalizedWaId = normalizeThreadPhone(waId);
 
@@ -238,7 +239,8 @@ export async function processInboundMessage({
 		contactName,
 		messageBody,
 		messageType,
-		rawPayload
+		rawPayload,
+		transportMode,
 	});
 
 	if (menuDecision?.handled) {
@@ -372,6 +374,7 @@ export async function processInboundMessage({
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
 			body: ack,
+			deliveryMode: transportMode,
 			aiMeta: {
 				provider: 'system',
 				model: 'payment-proof-router',
@@ -414,6 +417,7 @@ export async function processInboundMessage({
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
 			body: handoffReply,
+			deliveryMode: transportMode,
 			aiMeta: {
 				provider: 'system',
 				model: 'human-handoff-router',
@@ -786,6 +790,7 @@ export async function processInboundMessage({
 	await sendAndPersistOutbound({
 		conversationId: freshConversation.id,
 		body: finalReply,
+		deliveryMode: transportMode,
 		aiMeta
 	});
 

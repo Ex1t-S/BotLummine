@@ -77,10 +77,12 @@ export default function AiLabPage() {
 	});
 
 	const sendMessageMutation = useMutation({
-		mutationFn: async () => {
-			if (!session?.id || !messageText.trim()) return null;
+		mutationFn: async (payload = {}) => {
+			if (!session?.id) return null;
 			const res = await api.post(`/ai-lab/sessions/${session.id}/messages`, {
-				body: messageText.trim()
+				body: payload.body || '',
+				selectionId: payload.selectionId || '',
+				action: payload.action || ''
 			});
 			return res.data.session;
 		},
@@ -120,11 +122,22 @@ export default function AiLabPage() {
 	const fixtures = fixturesQuery.data || [];
 	const activeFixture = fixtures.find((fixture) => fixture.key === fixtureKey) || session?.fixtureMeta || null;
 	const debugOffers = commercialPlan?.offerCandidates || [];
+	const menuPreview = session?.menuPreview || null;
 
 	function handleSubmit(event) {
 		event.preventDefault();
 		if (!messageText.trim() || !session?.id) return;
-		sendMessageMutation.mutate();
+		sendMessageMutation.mutate({ body: messageText.trim() });
+	}
+
+	function handleOpenMenu() {
+		if (!session?.id) return;
+		sendMessageMutation.mutate({ action: 'open_menu' });
+	}
+
+	function handleMenuSelection(selectionId) {
+		if (!session?.id || !selectionId) return;
+		sendMessageMutation.mutate({ selectionId });
 	}
 
 	return (
@@ -248,6 +261,43 @@ export default function AiLabPage() {
 						{sendMessageMutation.isPending ? 'Probando...' : 'Enviar al lab'}
 					</button>
 				</form>
+
+				<div className="ai-lab-inline-actions">
+					<button type="button" className="ai-lab-secondary-btn" onClick={handleOpenMenu} disabled={!session?.id || isBusy}>
+						Abrir menu comprador
+					</button>
+				</div>
+
+				{menuPreview?.options?.length ? (
+					<div className="ai-lab-inline-menu">
+						<div className="ai-lab-inline-menu__header">
+							<div>
+								<strong>Menu comprador</strong>
+								<span>{menuPreview.menuPath || 'sin ruta'}</span>
+							</div>
+							<span className={`ai-lab-chip ${menuPreview.menuActive ? '' : 'secondary'}`}>
+								{menuPreview.menuActive ? 'Activo' : 'Ultimo menu'}
+							</span>
+						</div>
+
+						<p>{menuPreview.fallbackText || 'Sin vista previa del menu.'}</p>
+
+						<div className="ai-lab-inline-menu__options">
+							{menuPreview.options.map((option) => (
+								<button
+									key={option.id}
+									type="button"
+									className="ai-lab-inline-menu__option"
+									onClick={() => handleMenuSelection(option.id)}
+									disabled={isBusy}
+								>
+									<strong>{option.title}</strong>
+									<span>{option.description || option.sectionTitle || option.id}</span>
+								</button>
+							))}
+						</div>
+					</div>
+				) : null}
 			</section>
 
 			<aside className="ai-lab-debug-card">

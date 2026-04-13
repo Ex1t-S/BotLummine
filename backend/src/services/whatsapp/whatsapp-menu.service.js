@@ -212,11 +212,14 @@ export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 					aliases: ['1', 'body', 'bodys', 'body modelador', 'bodys modeladores', 'ver bodys'],
 					actionType: 'INTENT',
 					actionValue: 'product',
-					effectiveMessageBody: 'Quiero ver bodys modeladores',
+					effectiveMessageBody: 'Quiero ver bodys modeladores y sus promos disponibles',
 					summaryUserMessage: 'Cliente eligió menú: bodys modeladores',
 					statePatch: {
 						currentProductFocus: 'bodys modeladores',
-						interestedProducts: ['bodys modeladores']
+						currentProductFamily: 'body_modelador',
+						interestedProducts: ['bodys modeladores'],
+						categoryLocked: true,
+						salesStage: 'DISCOVERY'
 					},
 					sortOrder: 1
 				},
@@ -227,11 +230,14 @@ export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 					aliases: ['2', 'calza', 'calzas', 'calzas linfaticas', 'calzas linfáticas'],
 					actionType: 'INTENT',
 					actionValue: 'product',
-					effectiveMessageBody: 'Quiero ver calzas linfáticas',
+					effectiveMessageBody: 'Quiero ver calzas linfáticas y sus promos disponibles',
 					summaryUserMessage: 'Cliente eligió menú: calzas linfáticas',
 					statePatch: {
 						currentProductFocus: 'calzas linfáticas',
-						interestedProducts: ['calzas linfáticas']
+						currentProductFamily: 'calzas_linfaticas',
+						interestedProducts: ['calzas linfáticas'],
+						categoryLocked: true,
+						salesStage: 'DISCOVERY'
 					},
 					sortOrder: 2
 				},
@@ -599,6 +605,11 @@ function buildSoftMenuSuffix(options = []) {
 function resolveRelevantMenuKeys(intent = '', currentState = {}) {
 	const normalizedIntent = normalizeLooseText(intent);
 	const lastIntent = normalizeLooseText(currentState?.lastIntent || '');
+	const activeMenuPath = normalizeText(currentState?.menuPath || '');
+
+	if (activeMenuPath) {
+		return [activeMenuPath, DEFAULT_MENU_PATHS.MAIN, DEFAULT_MENU_PATHS.PRODUCTS, DEFAULT_MENU_PATHS.SUPPORT];
+	}
 
 	if (normalizedIntent === 'order_status' || lastIntent === 'order_status') {
 		return [DEFAULT_MENU_PATHS.ORDERS, DEFAULT_MENU_PATHS.SUPPORT, DEFAULT_MENU_PATHS.MAIN];
@@ -651,8 +662,7 @@ export async function buildMenuAssistantContext({
 	const allowSoftMenu =
 		queueDecision?.queue !== 'HUMAN' &&
 		currentState?.needsHuman !== true;
-
-	const shouldAppendToReply =
+	const canSurfaceInline =
 		allowSoftMenu &&
 		(
 			commercialPlan?.greetingOnly ||
@@ -664,16 +674,21 @@ export async function buildMenuAssistantContext({
 	const promptBlock = collectedOptions.length
 		? [
 			'TENÉS UN MENÚ DE AYUDA DISPONIBLE, PERO NO LO IMPONGAS.',
-			'Usalo solo como apoyo natural si suma claridad o si la clienta está abierta/indefinida.',
+			'Usalo solo como apoyo natural si suma claridad o si la clienta está abierta, ambigua o pide opciones.',
 			`Opciones disponibles: ${collectedOptions.map((option) => option.title).join(' | ')}.`,
 			'No mandes el menú completo salvo que la clienta lo pida o esté desorientada.',
+			'No pegues una coletilla fija de menú al final de respuestas concretas.',
+			canSurfaceInline
+				? 'Si querés orientar, hacelo en una sola línea corta y natural, ofreciendo hasta 3 caminos.'
+				: 'Si ya estás resolviendo algo concreto, seguí directo sin mencionar el menú.'
 		].join('\n')
 		: '';
 
 	return {
 		options: collectedOptions,
-		shouldAppendToReply,
-		suffixText: shouldAppendToReply ? buildSoftMenuSuffix(collectedOptions) : '',
+		shouldAppendToReply: false,
+		suffixText: canSurfaceInline ? buildSoftMenuSuffix(collectedOptions) : '',
+		surfaceMode: canSurfaceInline ? 'inline_if_helpful' : 'prompt_only',
 		promptBlock,
 	};
 }

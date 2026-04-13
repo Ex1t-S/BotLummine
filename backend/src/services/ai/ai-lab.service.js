@@ -3,7 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 import { getOrCreateConversation, processInboundMessage } from '../conversation/chat.service.js';
 import { createResetConversationState } from '../conversation/conversation-helpers.service.js';
+import { patchConversationState } from '../conversation/menu-flow.service.js';
+import { sendAndPersistOutbound } from '../conversation/outbound-message.service.js';
 import { getAiLabFixture, AI_LAB_FIXTURES } from '../../data/ai-lab-fixtures.js';
+import {
+	getWhatsAppMenuRuntimeConfig,
+	DEFAULT_MAIN_MENU_KEY
+} from '../whatsapp/whatsapp-menu.service.js';
 
 const SESSIONS = new Map();
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
@@ -11,6 +17,12 @@ const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 function buildFakeWaId() {
 	const suffix = `${Date.now()}${Math.floor(Math.random() * 900 + 100)}`.slice(-10);
 	return `54911${suffix}`;
+}
+
+function extractInteractivePayload(message = {}) {
+	const rawPayload = message?.rawPayload;
+	if (!rawPayload || typeof rawPayload !== 'object') return null;
+	return rawPayload.interactivePayload || null;
 }
 
 function buildTracePayload(trace = null) {
@@ -46,6 +58,99 @@ async function fetchSessionConversation(conversationId) {
 	});
 }
 
+function buildMenuPreview(conversation = null) {
+	if (!conversation?.messages?.length) return null;
+
+	const lastInteractiveMessage = [...conversation.messages]
+		.reverse()
+		.find((message) => extractInteractivePayload(message)?.sections?.length);
+
+	if (!lastInteractiveMessage) return null;
+
+	const interactivePayload = extractInteractivePayload(lastInteractiveMessage);
+	const options = (interactivePayload?.sections || []).flatMap((section) =>
+		(section?.rows || []).map((row) => ({
+			id: row.id,
+			title: row.title,
+			description: row.description || '',
+			sectionTitle: section.title || ''
+		}))
+	);
+
+	return {
+		messageId: lastInteractiveMessage.id,
+		menuActive: Boolean(conversation.state?.menuActive && conversation.state?.menuPath),
+		menuPath: conversation.state?.menuPath || null,
+		menuLastSelection: conversation.state?.menuLastSelection || null,
+		headerText: interactivePayload?.headerText || null,
+		footerText: interactivePayload?.footerText || null,
+		buttonText: interactivePayload?.buttonText || null,
+		fallbackText: interactivePayload?.fallbackText || lastInteractiveMessage.body || '',
+		options
+	};
+}
+
+async function resolveRuntimeMenuOption({ menuPath = DEFAULT_MAIN_MENU_KEY, selectionId = '' } = {}) {
+	const runtime = await getWhatsAppMenuRuntimeConfig();
+	const activeMenu =
+		runtime?.menusByKey?.[menuPath] ||
+		runtime?.menusByKey?.[runtime?.mainMenuKey] ||
+		null;
+
+	return {
+		activeMenu,
+		option: activeMenu?.optionById?.[selectionId] || null
+	};
+}
+
+async function openAiLabMenu({
+	conversationId,
+	contactName = '',
+	menuPath = DEFAULT_MAIN_MENU_KEY,
+	bodyPrefix = ''
+} = {}) {
+	const runtime = await getWhatsAppMenuRuntimeConfig();
+	const menu =
+		runtime?.menusByKey?.[menuPath] ||
+		runtime?.menusByKey?.[runtime?.mainMenuKey] ||
+		Object.values(runtime?.menusByKey || {})[0] ||
+		null;
+
+	if (!menu) return null;
+
+	await patchConversationState(conversationId, {
+		customerName: contactName || null,
+		menuActive: true,
+		menuPath: menu.path || menu.key || menuPath,
+		menuLastPromptAt: new Date()
+	});
+
+	const body = [String(bodyPrefix || '').trim(), menu.body].filter(Boolean).join('\n\n');
+
+	return sendAndPersistOutbound({
+		conversationId,
+		body: body || menu.body,
+		deliveryMode: 'lab',
+		messageType: 'interactive',
+		interactivePayload: {
+			headerText: menu.headerText,
+			footerText: menu.footerText,
+			buttonText: menu.buttonText,
+			sections: menu.sections,
+			fallbackText: menu.textFallback || menu.body
+		},
+		aiMeta: {
+			provider: 'system',
+			model: `menu-${String(menu.path || menu.key || menuPath).toLowerCase()}`,
+			raw: {
+				menuPath: menu.path || menu.key || menuPath,
+				menuTitle: menu.title,
+				source: 'ai-lab'
+			}
+		}
+	});
+}
+
 function serializeConversation(conversation, fixtureMeta, lastTrace = null, sessionId = null) {
 	if (!conversation) return null;
 
@@ -67,13 +172,16 @@ function serializeConversation(conversation, fixtureMeta, lastTrace = null, sess
 		messages: (conversation.messages || []).map((message) => ({
 			id: message.id,
 			role: message.direction === 'INBOUND' ? 'user' : 'assistant',
+			type: message.type || 'text',
 			text: message.body,
 			createdAt: message.createdAt,
 			provider: message.provider || null,
 			model: message.model || null,
-			tokenTotal: message.tokenTotal ?? null
+			tokenTotal: message.tokenTotal ?? null,
+			interactivePayload: extractInteractivePayload(message)
 		})),
 		lastTrace: buildTracePayload(lastTrace),
+		menuPreview: buildMenuPreview(conversation),
 		updatedAt: conversation.updatedAt,
 		queue: conversation.queue,
 		aiEnabled: conversation.aiEnabled
@@ -135,6 +243,15 @@ async function resetConversationForFixture(conversationId, fixture) {
 	}
 }
 
+function fixtureMetaFromFixture(fixture = {}) {
+	return {
+		key: fixture.key,
+		name: fixture.name,
+		description: fixture.description,
+		expected: fixture.expected || []
+	};
+}
+
 export function listAiLabFixtures() {
 	return AI_LAB_FIXTURES.map((fixture) => ({
 		key: fixture.key,
@@ -159,6 +276,15 @@ export async function createAiLabSession({ fixtureKey = 'blank' } = {}) {
 
 	await resetConversationForFixture(conversation.id, fixture);
 
+	if (fixture.startWithMainMenu) {
+		await openAiLabMenu({
+			conversationId: conversation.id,
+			contactName,
+			menuPath: fixture.menuPath || DEFAULT_MAIN_MENU_KEY,
+			bodyPrefix: fixture.menuIntroText || ''
+		});
+	}
+
 	const sessionId = randomUUID();
 	SESSIONS.set(sessionId, {
 		sessionId,
@@ -168,17 +294,7 @@ export async function createAiLabSession({ fixtureKey = 'blank' } = {}) {
 	});
 
 	const hydrated = await fetchSessionConversation(conversation.id);
-	return serializeConversation(
-		hydrated,
-		{
-			key: fixture.key,
-			name: fixture.name,
-			description: fixture.description,
-			expected: fixture.expected || []
-		},
-		null,
-		sessionId
-	);
+	return serializeConversation(hydrated, fixtureMetaFromFixture(fixture), null, sessionId);
 }
 
 export async function getAiLabSession(sessionId) {
@@ -187,24 +303,13 @@ export async function getAiLabSession(sessionId) {
 
 	const fixture = getAiLabFixture(session.fixtureKey);
 	const conversation = await fetchSessionConversation(session.conversationId);
-
-	return serializeConversation(
-		conversation,
-		{
-			key: fixture.key,
-			name: fixture.name,
-			description: fixture.description,
-			expected: fixture.expected || []
-		},
-		session.lastTrace,
-		session.sessionId
-	);
+	return serializeConversation(conversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }
 
 export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) {
-		const error = new Error('Sesión de AI Lab no encontrada.');
+		const error = new Error('Sesion de AI Lab no encontrada.');
 		error.status = 404;
 		throw error;
 	}
@@ -215,69 +320,114 @@ export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
 
 	await resetConversationForFixture(session.conversationId, fixture);
 
-	const conversation = await fetchSessionConversation(session.conversationId);
+	if (fixture.startWithMainMenu) {
+		const baseConversation = await fetchSessionConversation(session.conversationId);
+		await openAiLabMenu({
+			conversationId: session.conversationId,
+			contactName: baseConversation?.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			menuPath: fixture.menuPath || DEFAULT_MAIN_MENU_KEY,
+			bodyPrefix: fixture.menuIntroText || ''
+		});
+	}
 
-	return serializeConversation(
-		conversation,
-		{
-			key: fixture.key,
-			name: fixture.name,
-			description: fixture.description,
-			expected: fixture.expected || []
-		},
-		null,
-		session.sessionId
-	);
+	const conversation = await fetchSessionConversation(session.conversationId);
+	return serializeConversation(conversation, fixtureMetaFromFixture(fixture), null, session.sessionId);
 }
 
-export async function sendAiLabMessage(sessionId, { body }) {
+export async function sendAiLabMessage(sessionId, { body, selectionId = '', action = '' }) {
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) {
-		const error = new Error('Sesión de AI Lab no encontrada.');
+		const error = new Error('Sesion de AI Lab no encontrada.');
 		error.status = 404;
 		throw error;
 	}
 
 	const conversation = await fetchSessionConversation(session.conversationId);
 	if (!conversation) {
-		const error = new Error('Conversación de AI Lab no encontrada.');
+		const error = new Error('Conversacion de AI Lab no encontrada.');
 		error.status = 404;
 		throw error;
 	}
 
+	const cleanAction = String(action || '').trim();
+	const cleanSelectionId = String(selectionId || '').trim();
 	const cleanBody = String(body || '').trim();
-	if (!cleanBody) {
-		const error = new Error('El mensaje no puede estar vacío.');
-		error.status = 400;
-		throw error;
-	}
 
-	const result = await processInboundMessage({
-		waId: conversation.contact?.waId,
-		contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
-		messageBody: cleanBody,
-		messageType: 'text',
-		attachmentMeta: null,
-		rawPayload: {
+	if (cleanAction === 'open_menu') {
+		await openAiLabMenu({
+			conversationId: conversation.id,
+			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			menuPath: conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY,
+			bodyPrefix: 'Simulacion AI LAB: abrimos el menu comprador.'
+		});
+
+		session.lastTrace = {
+			intent: 'menu',
+			queueDecision: null,
+			responsePolicy: null,
+			commercialPlan: null,
+			catalogProducts: [],
+			commercialHints: [],
+			prompt: null,
+			assistantMessage: null,
+			provider: 'system',
+			model: 'ai-lab-menu-open',
+			aiGuidance: null,
+			liveOrderContext: null,
+			shouldReply: false,
+			menuAssistantContext: null,
+		};
+	} else {
+		if (!cleanBody && !cleanSelectionId) {
+			const error = new Error('El mensaje no puede estar vacio.');
+			error.status = 400;
+			throw error;
+		}
+
+		let nextMessageBody = cleanBody;
+		let nextMessageType = 'text';
+		let nextRawPayload = {
 			source: 'ai-lab',
 			sessionId
-		},
-		transportMode: 'lab'
-	});
+		};
 
-	session.lastTrace = result.trace || null;
+		if (cleanSelectionId) {
+			const { activeMenu, option } = await resolveRuntimeMenuOption({
+				menuPath: conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY,
+				selectionId: cleanSelectionId
+			});
+
+			nextMessageBody = option?.title || cleanSelectionId;
+			nextMessageType = 'interactive';
+			nextRawPayload = {
+				source: 'ai-lab',
+				sessionId,
+				message: {
+					interactive: {
+						list_reply: {
+							id: cleanSelectionId,
+							title: option?.title || cleanSelectionId,
+							description: option?.description || activeMenu?.title || ''
+						}
+					}
+				}
+			};
+		}
+
+		const result = await processInboundMessage({
+			waId: conversation.contact?.waId,
+			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			messageBody: nextMessageBody,
+			messageType: nextMessageType,
+			attachmentMeta: null,
+			rawPayload: nextRawPayload,
+			transportMode: 'lab'
+		});
+
+		session.lastTrace = result.trace || null;
+	}
+
 	const fixture = getAiLabFixture(session.fixtureKey);
 	const updatedConversation = await fetchSessionConversation(session.conversationId);
-
-	return serializeConversation(
-		updatedConversation,
-		{
-			key: fixture.key,
-			name: fixture.name,
-			description: fixture.description,
-			expected: fixture.expected || []
-		},
-		session.lastTrace,
-		session.sessionId
-	);
+	return serializeConversation(updatedConversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }

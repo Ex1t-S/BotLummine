@@ -5,6 +5,7 @@ function normalizeText(value = '') {
 		.toLowerCase()
 		.normalize('NFD')
 		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/\s+/g, ' ')
 		.trim();
 }
 
@@ -77,6 +78,7 @@ function extractInterestedProducts(text) {
 }
 
 function extractRequestedOfferType(text, currentState = {}) {
+	if (/(5x2|cinco por dos)/.test(text)) return '5x2';
 	if (/(3x1|tres por uno)/.test(text)) return '3x1';
 	if (/(2x1|dos por uno)/.test(text)) return '2x1';
 	if (/(pack|combo|promo|promocion|promoción|oferta)/.test(text)) return 'pack';
@@ -94,7 +96,37 @@ function sanitizeExcludedKeyword(raw = '') {
 		.trim();
 }
 
-function extractExcludedProductKeywords(text, currentState = {}) {
+function extractImplicitExclusions(text, currentProductFamily = null) {
+	const detected = [];
+	const normalizedFamily = currentProductFamily || inferCommercialFamily(text) || null;
+
+	if (
+		/\bsolo\s+(body|bodys|bodies)\b/.test(text) ||
+		/\b(body|bodys|bodies)\s+solos?\b/.test(text)
+	) {
+		detected.push('pantymedia', 'pantymedias', 'media termica', 'medias termicas', 'boob tape');
+	}
+
+	if (
+		normalizedFamily === 'body_modelador' &&
+		/\bsolo\b/.test(text) &&
+		/\b(body|bodys|bodies)\b/.test(text)
+	) {
+		detected.push('pantymedia', 'pantymedias', 'media termica', 'medias termicas', 'boob tape');
+	}
+
+	if (/\bsin\s+pantymedias?\b|\bsin\s+medias?\b/.test(text)) {
+		detected.push('pantymedia', 'pantymedias', 'media termica', 'medias termicas');
+	}
+
+	if (/\bsin\s+boob\s+tape\b/.test(text)) {
+		detected.push('boob tape');
+	}
+
+	return uniqStrings(detected);
+}
+
+function extractExcludedProductKeywords(text, currentState = {}, currentProductFamily = null) {
 	const existing = Array.isArray(currentState?.excludedProductKeywords)
 		? currentState.excludedProductKeywords
 		: [];
@@ -112,7 +144,12 @@ function extractExcludedProductKeywords(text, currentState = {}) {
 			if (cleaned && cleaned.length >= 3) detected.push(cleaned);
 		}
 	}
-	return uniqStrings([...existing, ...detected]);
+
+	return uniqStrings([
+		...existing,
+		...detected,
+		...extractImplicitExclusions(text, currentProductFamily),
+	]);
 }
 
 function inferCurrentProductFamily(text, currentState = {}) {
@@ -369,6 +406,7 @@ export function analyzeConversationTurn({
 	recentMessages = []
 }) {
 	const text = normalizeText(messageBody);
+	const currentProductFamily = inferCurrentProductFamily(text, currentState);
 
 	const isReadyToBuy =
 		/(quiero comprar|como compro|pasame el link|me interesa comprar|lo quiero|me lo llevo|quiero ese|armar el pedido|armo el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|te lo compro|te compro|te quiero transferir|te pago por transferencia|pasame alias)/.test(
@@ -403,6 +441,22 @@ export function analyzeConversationTurn({
 	);
 
 	const objections = mergeStringArrays(currentState.objections, extractObjections(text));
+	const requestedOfferType =
+		intent === 'product'
+			? extractRequestedOfferType(text, currentState)
+			: currentState?.requestedOfferType || null;
+	const excludedProductKeywords =
+		intent === 'product'
+			? extractExcludedProductKeywords(text, currentState, currentProductFamily)
+			: Array.isArray(currentState?.excludedProductKeywords)
+				? currentState.excludedProductKeywords
+				: [];
+	const categoryLocked = shouldLockCategory({
+		intent,
+		text,
+		currentState,
+		currentProductFamily,
+	});
 
 	return {
 		customerMood: mood,
@@ -415,6 +469,10 @@ export function analyzeConversationTurn({
 		objections,
 		lastDetectedIntent: intent,
 		lastUserGoal: inferLastUserGoal(intent, text, isReadyToBuy),
+		currentProductFamily,
+		requestedOfferType,
+		excludedProductKeywords,
+		categoryLocked,
 		needsHuman: escalation.needsHuman,
 		handoffReason: escalation.handoffReason,
 		interactionCount: Number(currentState.interactionCount || 0) + 1,

@@ -172,12 +172,31 @@ export function buildAiFailureFallback({
 
 	if (intent === 'product') {
 		if (
+			commercialPlan?.recommendedAction === 'explain_requested_offer_unavailable_keep_family' &&
+			commercialPlan?.requestedOfferType
+		) {
+			const familyLabel =
+				commercialPlan?.productFamilyLabel ||
+				commercialPlan?.productFamily ||
+				enrichedState?.currentProductFamily ||
+				'esa familia';
+			const fallbackLabel =
+				commercialPlan?.fallbackOffer?.offerLabel ||
+				commercialPlan?.fallbackOffer?.name ||
+				null;
+
+			return fallbackLabel
+				? `No estoy viendo una ${commercialPlan.requestedOfferType} exacta dentro de ${familyLabel}. Lo más parecido que sí tengo confirmado es ${fallbackLabel}.`
+				: `No estoy viendo una ${commercialPlan.requestedOfferType} exacta confirmada dentro de ${familyLabel}. Si querés, te muestro la alternativa más cercana sin salir de esa familia.`;
+		}
+
+		if (
 			commercialPlan?.recommendedAction === 'present_offer_options_brief' &&
 			commercialPlan?.offerOptions?.length
 		) {
 			const brief = commercialPlan.offerOptions
 				.slice(0, 3)
-				.map((option) => `${option.label}${option.price ? ` (${option.price})` : ''}`)
+				.map((option) => option.label || `${option.name}${option.price ? ` (${option.price})` : ''}`)
 				.join(', ');
 			return `En este producto solemos tener ${brief}. Si querés, te digo cuál te conviene más.`;
 		}

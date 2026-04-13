@@ -63,7 +63,7 @@ function detectSalesStage({ intent, messageBody, currentState = {}, greetingOnly
 	if (greetingOnly) return 'DISCOVERY';
 	if (currentState?.needsHuman) return 'NEEDS_HUMAN';
 	if (/(precio|cuanto|sale|valor)/i.test(text)) return 'PRICE_EVALUATION';
-	if (/(oferta|promo|promocion|pack|combo|2x1|3x1|cual conviene|que diferencia)/i.test(text)) return 'OFFER_DISCOVERY';
+	if (/(oferta|promo|promocion|pack|combo|2x1|3x1|5x2|cual conviene|que diferencia)/i.test(text)) return 'OFFER_DISCOVERY';
 	if (/(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text)) return 'SIZE_COLOR_CHECK';
 	if (/(quiero|lo quiero|me lo llevo|como compro|pasame el link|mandame el link|guiame)/i.test(text)) return 'READY_TO_BUY';
 	if (intent === 'product') return 'PRODUCT_INTEREST';
@@ -76,7 +76,7 @@ function detectRequestedAction(messageBody = '', greetingOnly = false) {
 	if (/(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(text)) return 'ASK_LINK';
 	if (/(cual|conviene|mejor|diferencia|compar)/i.test(text)) return 'ASK_COMPARISON';
 	if (/(precio|cuanto|sale|valor)/i.test(text)) return 'ASK_PRICE';
-	if (/(oferta|promo|promocion|pack|combo|2x1|3x1)/i.test(text)) return 'ASK_OFFER';
+	if (/(oferta|promo|promocion|pack|combo|2x1|3x1|5x2)/i.test(text)) return 'ASK_OFFER';
 	if (/(catalogo|ver opciones|que tienen|mostrame|muestrame)/i.test(text)) return 'ASK_CATALOG';
 	if (/(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text)) return 'ASK_VARIANT';
 	if (/^si$/i.test(text) || /^(sí)$/i.test(text)) return 'AFFIRM_CONTINUATION';
@@ -86,6 +86,7 @@ function detectRequestedAction(messageBody = '', greetingOnly = false) {
 
 function detectRequestedOfferType(messageBody = '', currentState = {}) {
 	const text = normalizeText(messageBody);
+	if (/(5x2|cinco por dos)/i.test(text)) return '5x2';
 	if (/(3x1|tres por uno)/i.test(text)) return '3x1';
 	if (/(2x1|dos por uno)/i.test(text)) return '2x1';
 	if (/(pack|combo|promo|promocion|oferta)/i.test(text)) return 'pack';
@@ -155,6 +156,7 @@ function mergeHistorySignals({ recentMessages = [], currentState = {}, products 
 		}
 	}
 
+	if (/(5x2|cinco por dos)/i.test(joined)) fromRecent.shownOffers.push('5x2');
 	if (/(3x1|tres por uno)/i.test(joined)) fromRecent.shownOffers.push('3x1');
 	if (/(2x1|dos por uno)/i.test(joined)) fromRecent.shownOffers.push('2x1');
 	if (/(promo|promocion|oferta)/i.test(joined)) fromRecent.shownOffers.push('promo');
@@ -217,6 +219,7 @@ function rankCommercialProducts(
 				else score -= 10;
 			} else if (requestedAction === 'ASK_OFFER') {
 				if (offerType === '3x1') score += 20;
+				if (offerType === '5x2') score += 16;
 				if (offerType === '2x1') score += 12;
 			}
 
@@ -250,10 +253,21 @@ function rankCommercialProducts(
 
 function buildOfferLabel(product = {}) {
 	const fallbackPrice = product.price ? ` (${product.price})` : '';
+	if (product.offerType === '5x2') return `5x2${fallbackPrice}`;
 	if (product.offerType === '3x1') return `3x1${fallbackPrice}`;
 	if (product.offerType === '2x1') return `2x1${fallbackPrice}`;
 	if (product.offerType === 'pack') return `${product.name}${fallbackPrice}`;
 	return `${product.name}${fallbackPrice}`;
+}
+
+function mapOfferOption(item = {}) {
+	return {
+		name: item.name,
+		price: item.price || null,
+		label: buildOfferLabel(item),
+		offerType: item.offerType || 'single',
+		productUrl: item.productUrl || null
+	};
 }
 
 function mapBestOffer(chosen, family) {
@@ -274,15 +288,27 @@ function mapBestOffer(chosen, family) {
 	};
 }
 
-function buildOfferCandidates(products = [], family = null) {
+function buildOfferCandidates(products = [], family = null, requestedOfferType = null) {
 	const pool = family ? products.filter((product) => product.family === family) : products;
-	return pool.slice(0, 4).map((item) => ({
-		name: item.name,
-		price: item.price || null,
-		label: buildOfferLabel(item),
-		offerType: item.offerType || 'single',
-		productUrl: item.productUrl || null
-	}));
+	const prioritized =
+		requestedOfferType && pool.some((item) => item.offerType === requestedOfferType)
+			? [
+				...pool.filter((item) => item.offerType === requestedOfferType),
+				...pool.filter((item) => item.offerType !== requestedOfferType)
+			]
+			: pool;
+	const candidates = [];
+	const seen = new Set();
+
+	for (const item of prioritized) {
+		const option = mapOfferOption(item);
+		if (!option.label || seen.has(option.label)) continue;
+		seen.add(option.label);
+		candidates.push(option);
+		if (candidates.length >= 4) break;
+	}
+
+	return candidates;
 }
 
 function chooseBestOffer(
@@ -313,6 +339,7 @@ function chooseBestOffer(
 	} else if (requestedAction === 'ASK_OFFER') {
 		chosen =
 			eligible.find((item) => item.offerType === '3x1') ||
+			eligible.find((item) => item.offerType === '5x2') ||
 			eligible.find((item) => item.offerType === '2x1') ||
 			eligible[0] ||
 			null;
@@ -334,12 +361,7 @@ function chooseBestOffer(
 	}
 
 	const fallbackOffer = !requestedMatches.length && requestedOfferType ? eligible[0] || null : null;
-	const offerOptions = eligible.slice(0, 3).map((item) => ({
-		name: item.name,
-		price: item.price || null,
-		offerType: item.offerType || 'single',
-		productUrl: item.productUrl || null
-	}));
+	const offerOptions = buildOfferCandidates(eligible, null, requestedOfferType).slice(0, 3);
 
 	return {
 		bestOffer: mapBestOffer(chosen, family),
@@ -451,7 +473,7 @@ export function resolveCommercialBrainV2({
 	const bestOffer = selection.bestOffer;
 	const fallbackOffer = selection.fallbackOffer;
 	const requestedOfferAvailable = selection.requestedOfferAvailable;
-	const offerCandidates = buildOfferCandidates(rankedProducts, productFamily);
+	const offerCandidates = buildOfferCandidates(rankedProducts, productFamily, requestedOfferType);
 	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable });
 	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
