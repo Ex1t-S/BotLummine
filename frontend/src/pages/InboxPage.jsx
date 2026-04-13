@@ -502,21 +502,37 @@ export default function InboxPage() {
 	}, [contacts, normalizedSearch]);
 
 	const visibleContacts = useMemo(() => {
-		return filteredContacts.filter((contact) => {
+		const filtered = filteredContacts.filter((contact) => {
 			const hasUnread = Boolean(contact.hasUnread) || Number(contact.unreadCount || 0) > 0;
 
 			if (readFilter === 'UNREAD') return hasUnread;
 			if (readFilter === 'READ') return !hasUnread;
 			return true;
 		});
-	}, [filteredContacts, readFilter]);
+
+		if (
+			readFilter === 'UNREAD' &&
+			selectedConversationId &&
+			!filtered.some((contact) => contact.conversationId === selectedConversationId)
+		) {
+			const selectedContact = filteredContacts.find(
+				(contact) => contact.conversationId === selectedConversationId
+			);
+
+			if (selectedContact) {
+				return [selectedContact, ...filtered];
+			}
+		}
+
+		return filtered;
+	}, [filteredContacts, readFilter, selectedConversationId]);
 
 	useEffect(() => {
 		selectedConversationIdRef.current = selectedConversationId;
 	}, [selectedConversationId]);
 
 	useEffect(() => {
-		if (readFilter === 'UNREAD') {
+		if (readFilter === 'UNREAD' && !selectedConversationId) {
 			setSelectedConversationId(null);
 			return;
 		}
