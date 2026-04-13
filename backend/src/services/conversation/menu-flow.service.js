@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { STORE_LINKS } from '../../data/lummine-business.js';
 import { normalizeText } from './conversation-helpers.service.js';
 import { buildHandoffReply } from './conversation-analysis.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
@@ -230,6 +231,12 @@ async function sendMenuTextOnly({ conversationId, body, model = 'menu-text', del
 
 function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) {
 	if (currentState?.needsHuman) return false;
+
+	const hasAssistantHistory = Array.isArray(freshConversation?.messages)
+		? freshConversation.messages.some((message) => message?.direction === 'OUTBOUND')
+		: false;
+
+	if (!hasAssistantHistory) return true;
 	return Boolean(currentState?.menuActive && currentState?.menuPath);
 }
 
@@ -263,6 +270,24 @@ async function handleMenuSelection({
 	}
 
 	const safeStatePatch = sanitizeMenuStatePatch(option.statePatch || {}, currentState);
+
+	if (selectionId === 'menu_main_products') {
+		await patchConversationState(conversationId, {
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: selectionId,
+			lastUserGoal: 'Ver catalogo general y definir producto',
+		});
+
+		await sendMenuTextOnly({
+			conversationId,
+			body: `Te paso el catalogo general para que veas todo: ${STORE_LINKS.indumentaria} Decime que producto o promo puntual necesitas y te ayudo por aca.`,
+			model: 'menu-general-catalog',
+			deliveryMode: transportMode,
+		});
+
+		return { handled: true };
+	}
 
 	if (option.actionType === 'SUBMENU') {
 		const targetMenuPath = option.actionValue || DEFAULT_MAIN_MENU_KEY;

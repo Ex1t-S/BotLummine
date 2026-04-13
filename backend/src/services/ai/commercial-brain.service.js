@@ -407,6 +407,7 @@ function buildRecommendedAction({
 	shareLinkNow,
 	repeatPriceNow,
 	bestOffer,
+	hasKnownProductContext,
 	requestedOfferType,
 	requestedOfferAvailable,
 	hasFallbackWithinFamily,
@@ -414,6 +415,10 @@ function buildRecommendedAction({
 }) {
 	if (shouldEscalate) return 'handoff_human';
 	if (requestedAction === 'GREETING') return 'greet_and_discover';
+	if (!hasKnownProductContext) return 'send_general_catalog_first';
+	if (requestedAction === 'ASK_CATALOG' || requestedAction === 'GENERAL') {
+		return 'send_general_catalog_first';
+	}
 	if (!bestOffer && requestedAction !== 'ASK_CATALOG') return 'clarify_specific_product';
 	if (requestedOfferType && requestedOfferAvailable === false && hasFallbackWithinFamily) {
 		return 'explain_requested_offer_unavailable_keep_family';
@@ -479,6 +484,11 @@ export function resolveCommercialBrainV2({
 	const shareLinkNow = shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable });
 	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
+	const hasKnownProductContext = Boolean(
+		currentState?.currentProductFocus ||
+		currentState?.currentProductFamily ||
+		currentState?.lastRecommendedProduct
+	);
 
 	const recommendedAction = buildRecommendedAction({
 		stage,
@@ -487,6 +497,7 @@ export function resolveCommercialBrainV2({
 		shareLinkNow,
 		repeatPriceNow,
 		bestOffer,
+		hasKnownProductContext,
 		requestedOfferType,
 		requestedOfferAvailable,
 		hasFallbackWithinFamily: Boolean(fallbackOffer),

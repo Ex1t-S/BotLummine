@@ -2,6 +2,7 @@ import {
 	handleOrderStatusIntent,
 	buildFixedOrderReply,
 } from '../intents/order-status.service.js';
+import { STORE_LINKS } from '../../data/lummine-business.js';
 import { handlePaymentIntent } from '../intents/payment.service.js';
 import { handleShippingIntent } from '../intents/shipping.service.js';
 import { handleSizeHelpIntent } from '../intents/size-help.service.js';
@@ -18,6 +19,10 @@ export function summarizeText(value = '', max = 160) {
 	if (!text) return '';
 	if (text.length <= max) return text;
 	return `${text.slice(0, max - 1).trim()}…`;
+}
+
+function buildGeneralCatalogReply() {
+	return `Te paso el catalogo general para que veas todo: ${STORE_LINKS.indumentaria} Decime que producto o promo puntual necesitas y te ayudo por aca.`;
 }
 
 export function createResetConversationState() {
@@ -205,6 +210,10 @@ export function buildAiFailureFallback({
 			return 'Tenemos opción individual y también promos. Si querés, te cuento rápido las más elegidas o te paso la web para que las veas.';
 		}
 
+		if (commercialPlan?.recommendedAction === 'send_general_catalog_first') {
+			return buildGeneralCatalogReply();
+		}
+
 		if (commercialPlan?.recommendedAction === 'clarify_specific_product') {
 			const familyLabel =
 				commercialPlan?.productFamilyLabel ||
@@ -367,7 +376,10 @@ export function buildResponsePolicy({
 
 		return {
 			action: commercialPlan?.recommendedAction || 'product_guidance',
-			useAI: commercialPlan?.recommendedAction !== 'clarify_specific_product',
+			useAI:
+				!['clarify_specific_product', 'send_general_catalog_first', 'guide_and_discover'].includes(
+					commercialPlan?.recommendedAction
+				),
 			allowHandoffMention: false,
 			maxChars:
 				commercialPlan?.recommendedAction === 'close_with_single_link'
