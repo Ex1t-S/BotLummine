@@ -236,11 +236,19 @@ function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) 
 	const normalizedMessage = normalizeText(messageBody);
 	if (!normalizedMessage) return false;
 
-	const isInboundConversationTurn = Array.isArray(freshConversation?.messages)
-		? freshConversation.messages.some((message) => message?.direction === 'INBOUND')
+	const hasAssistantHistory = Array.isArray(freshConversation?.messages)
+		? freshConversation.messages.some((message) => message?.direction === 'OUTBOUND')
 		: false;
 
-	return isInboundConversationTurn;
+	if (!hasAssistantHistory) {
+		return true;
+	}
+
+	if (isGreetingOnlyMessage(normalizedMessage)) {
+		return true;
+	}
+
+	return false;
 }
 
 function shouldLetFreeTextBypassMenu(messageBody = '') {
