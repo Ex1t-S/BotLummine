@@ -5,6 +5,7 @@ import {
 	getInboxStream,
 	getConversationMessagesJson,
 	postConversationMessage,
+	patchConversationRead,
 	patchConversationQueue,
 	patchConversationResetContext,
 	deleteConversationHistory,
@@ -35,6 +36,7 @@ router.get('/inbox', requireInboxAccess, getInbox);
 router.get('/inbox/stream', requireInboxAccess, getInboxStream);
 router.get('/conversations/:conversationId/messages', requireInboxAccess, getConversationMessagesJson);
 router.post('/conversations/:conversationId/messages', requireInboxAccess, postConversationMessage);
+router.patch('/conversations/:conversationId/read', requireInboxAccess, patchConversationRead);
 router.patch('/conversations/:conversationId/queue', requireInboxAccess, patchConversationQueue);
 router.patch('/conversations/:conversationId/archive', requireInboxAccess, patchConversationArchive);
 

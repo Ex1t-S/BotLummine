@@ -40,6 +40,9 @@ model Conversation {
   aiEnabled     Boolean            @default(true)
   lastSummary   String?
   lastMessageAt DateTime?
+  lastInboundMessageAt DateTime?
+  lastReadAt    DateTime?
+  unreadCount   Int                @default(0)
   archivedAt    DateTime?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -49,6 +52,7 @@ model Conversation {
   messages Message[]
 
   @@index([lastMessageAt])
+  @@index([unreadCount, lastMessageAt])
   @@index([archivedAt, lastMessageAt])
   @@index([queue, aiEnabled, lastMessageAt])
 }

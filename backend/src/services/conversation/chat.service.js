@@ -171,6 +171,8 @@ export async function processInboundMessage({
 		}
 	}
 
+	const createdInboundAt = new Date();
+
 	await prisma.message.create({
 		data: {
 			conversationId: conversation.id,
@@ -182,13 +184,20 @@ export async function processInboundMessage({
 			attachmentUrl: attachmentMeta?.attachmentUrl || null,
 			attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
 			attachmentName: attachmentMeta?.attachmentName || null,
-			rawPayload
+			rawPayload,
+			createdAt: createdInboundAt,
 		}
 	});
 
 	await prisma.conversation.update({
 		where: { id: conversation.id },
-		data: { lastMessageAt: new Date() }
+		data: {
+			lastMessageAt: createdInboundAt,
+			lastInboundMessageAt: createdInboundAt,
+			unreadCount: {
+				increment: 1,
+			},
+		}
 	});
 
 	publishInboxEvent({
@@ -198,7 +207,7 @@ export async function processInboundMessage({
 		queue: conversation.queue,
 		direction: 'INBOUND',
 		metaMessageId,
-		createdAt: new Date().toISOString(),
+		createdAt: createdInboundAt.toISOString(),
 	});
 
 	const freshConversation = await prisma.conversation.findUnique({

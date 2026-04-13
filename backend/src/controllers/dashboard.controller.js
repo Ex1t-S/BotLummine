@@ -263,6 +263,9 @@ async function deduplicateInboxContacts() {
 			aiEnabled: true,
 			lastSummary: true,
 			lastMessageAt: true,
+			lastInboundMessageAt: true,
+			lastReadAt: true,
+			unreadCount: true,
 			archivedAt: true,
 			createdAt: true,
 			updatedAt: true,
@@ -350,6 +353,22 @@ async function deduplicateInboxContacts() {
 		const mergedLastMessageAt = pickLatestDate(
 			sorted.map((item) => item.lastMessageAt)
 		);
+		const mergedLastInboundMessageAt = pickLatestDate(
+			sorted.map((item) => item.lastInboundMessageAt)
+		);
+		const mergedLastReadAt = pickLatestDate(
+			sorted.map((item) => item.lastReadAt)
+		);
+		const mergedUnreadCount =
+			mergedLastInboundMessageAt &&
+			mergedLastReadAt &&
+			new Date(mergedLastReadAt).getTime() >=
+				new Date(mergedLastInboundMessageAt).getTime()
+				? 0
+				: sorted.reduce(
+						(acc, item) => acc + Math.max(0, Number(item.unreadCount || 0)),
+						0
+				  );
 
 		const mergedLastSummary = firstMeaningfulValue(
 			sorted.map((item) => item.lastSummary)
@@ -412,6 +431,9 @@ async function deduplicateInboxContacts() {
 					aiEnabled: mergedAiEnabled,
 					lastSummary: mergedLastSummary || undefined,
 					lastMessageAt: mergedLastMessageAt || undefined,
+					lastInboundMessageAt: mergedLastInboundMessageAt || undefined,
+					lastReadAt: mergedLastReadAt || null,
+					unreadCount: mergedUnreadCount,
 					archivedAt: mergedArchivedAt || null,
 				},
 			});
@@ -480,6 +502,7 @@ function buildContactCard(conversation, lastMessage) {
 	const phone = normalizePhone(contact.phone || contact.waId || '');
 	const displayName = contact.name || phone || 'Sin nombre';
 	const queueMeta = getQueueMeta(conversation.queue);
+	const unreadCount = Math.max(0, Number(conversation.unreadCount || 0));
 
 	return {
 		key: contact.waId || conversation.id,
@@ -500,6 +523,10 @@ function buildContactCard(conversation, lastMessage) {
 		queueBadgeClass: queueMeta.badgeClass,
 		needsHuman: !!state.needsHuman,
 		handoffReason: state.handoffReason || '',
+		unreadCount,
+		hasUnread: unreadCount > 0,
+		lastReadAt: conversation.lastReadAt || null,
+		lastInboundMessageAt: conversation.lastInboundMessageAt || null,
 		avatar: buildAvatar(displayName, phone),
 		lastSummary: conversation.lastSummary || '',
 	};
@@ -528,6 +555,9 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', arc
 			aiEnabled: true,
 			lastSummary: true,
 			lastMessageAt: true,
+			lastInboundMessageAt: true,
+			lastReadAt: true,
+			unreadCount: true,
 			contact: {
 				select: {
 					name: true,
@@ -620,6 +650,9 @@ async function ensureConversationExists(conversationId) {
 			aiEnabled: true,
 			lastSummary: true,
 			lastMessageAt: true,
+			lastInboundMessageAt: true,
+			lastReadAt: true,
+			unreadCount: true,
 			contact: {
 				select: {
 					id: true,
@@ -642,6 +675,35 @@ async function ensureConversationExists(conversationId) {
 	});
 
 	return conversation;
+}
+
+async function markConversationAsRead(conversationId) {
+	const now = new Date();
+
+	const updatedConversation = await prisma.conversation.update({
+		where: { id: conversationId },
+		data: {
+			unreadCount: 0,
+			lastReadAt: now,
+		},
+		select: {
+			id: true,
+			queue: true,
+			lastReadAt: true,
+			unreadCount: true,
+		},
+	});
+
+	publishInboxEvent({
+		scope: 'conversation',
+		action: 'read',
+		conversationId: updatedConversation.id,
+		queue: updatedConversation.queue,
+		unreadCount: updatedConversation.unreadCount,
+		lastReadAt: updatedConversation.lastReadAt?.toISOString() || null,
+	});
+
+	return updatedConversation;
 }
 export async function getInbox(req, res, next) {
 	try {
@@ -750,6 +812,9 @@ export async function getConversationMessagesJson(req, res, next) {
 				queue: true,
 				aiEnabled: true,
 				lastMessageAt: true,
+				lastInboundMessageAt: true,
+				lastReadAt: true,
+				unreadCount: true,
 				contact: {
 					select: {
 						name: true,
@@ -800,6 +865,10 @@ export async function getConversationMessagesJson(req, res, next) {
 				queue: conversation.queue,
 				aiEnabled: conversation.aiEnabled,
 				lastMessageAt: conversation.lastMessageAt,
+				lastInboundMessageAt: conversation.lastInboundMessageAt,
+				lastReadAt: conversation.lastReadAt,
+				unreadCount: conversation.unreadCount || 0,
+				hasUnread: Number(conversation.unreadCount || 0) > 0,
 				contact: {
 					name: conversation.contact?.name || '',
 					phone: conversation.contact?.phone || conversation.contact?.waId || '',
@@ -825,6 +894,31 @@ export async function getConversationMessagesJson(req, res, next) {
 					rawPayload: msg.rawPayload || null,
 				})),
 			},
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function patchConversationRead(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+		const conversation = await ensureConversationExists(conversationId);
+
+		if (!conversation) {
+			return res.status(404).json({
+				ok: false,
+				error: 'ConversaciÃ³n no encontrada',
+			});
+		}
+
+		const updatedConversation = await markConversationAsRead(conversationId);
+
+		return res.json({
+			ok: true,
+			conversationId: updatedConversation.id,
+			unreadCount: updatedConversation.unreadCount,
+			lastReadAt: updatedConversation.lastReadAt,
 		});
 	} catch (error) {
 		next(error);
@@ -1041,6 +1135,9 @@ export async function deleteConversationHistory(req, res, next) {
 				data: {
 					lastSummary: null,
 					lastMessageAt: null,
+					lastInboundMessageAt: null,
+					lastReadAt: null,
+					unreadCount: 0,
 				},
 			}),
 		];

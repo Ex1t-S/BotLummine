@@ -25,9 +25,6 @@ const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Sticker recibido]',
 ]);
 
-const UNREAD_STORAGE_KEY = 'lummine:inbox:unread-counts:v2';
-const SNAPSHOT_STORAGE_KEY = 'lummine:inbox:last-seen-snapshot:v2';
-
 function isDocumentVisible() {
 	if (typeof document === 'undefined') return true;
 	return !document.hidden;
@@ -37,29 +34,6 @@ function toTimestamp(value) {
 	if (!value) return 0;
 	const time = new Date(value).getTime();
 	return Number.isFinite(time) ? time : 0;
-}
-
-function readStoredMap(key, fallback = {}) {
-	if (typeof window === 'undefined') return fallback;
-
-	try {
-		const raw = window.localStorage.getItem(key);
-		if (!raw) return fallback;
-		const parsed = JSON.parse(raw);
-		return parsed && typeof parsed === 'object' ? parsed : fallback;
-	} catch {
-		return fallback;
-	}
-}
-
-function writeStoredMap(key, value) {
-	if (typeof window === 'undefined') return;
-
-	try {
-		window.localStorage.setItem(key, JSON.stringify(value || {}));
-	} catch {
-		// noop
-	}
 }
 
 function formatArgentinaTime(value) {
@@ -426,9 +400,9 @@ export default function InboxPage() {
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
-	const lastInboxSnapshotRef = useRef(readStoredMap(SNAPSHOT_STORAGE_KEY, {}));
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
+	const lastReadRequestRef = useRef('');
 
 	const [queue, setQueue] = useState('AUTO');
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
@@ -436,7 +410,6 @@ export default function InboxPage() {
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
-	const [newMessageCounts, setNewMessageCounts] = useState(() => readStoredMap(UNREAD_STORAGE_KEY, {}));
 
 	const inboxQuery = useQuery({
 		queryKey: queryKeys.inbox(queue),
@@ -495,54 +468,8 @@ export default function InboxPage() {
 	}, [contacts, normalizedSearch]);
 
 	useEffect(() => {
-		writeStoredMap(UNREAD_STORAGE_KEY, newMessageCounts);
-	}, [newMessageCounts]);
-
-	useEffect(() => {
 		selectedConversationIdRef.current = selectedConversationId;
 	}, [selectedConversationId]);
-
-	useEffect(() => {
-		setNewMessageCounts((prev) => {
-			let next = prev;
-			let changed = false;
-			const seenConversationIds = new Set();
-			const nextSnapshot = { ...lastInboxSnapshotRef.current };
-
-			for (const contact of contacts) {
-				const conversationId = contact.conversationId;
-				const currentTimestamp = toTimestamp(contact.lastMessageAt);
-				const previousTimestamp = Number(nextSnapshot[conversationId] || 0);
-				const isInboundLastMessage = contact.lastMessageDirection === 'INBOUND';
-
-				seenConversationIds.add(conversationId);
-
-				if (
-					previousTimestamp > 0 &&
-					currentTimestamp > previousTimestamp &&
-					isInboundLastMessage &&
-					conversationId !== selectedConversationId
-				) {
-					if (next === prev) next = { ...prev };
-					next[conversationId] = Number(next[conversationId] || 0) + 1;
-					changed = true;
-				}
-
-				nextSnapshot[conversationId] = currentTimestamp;
-			}
-
-			for (const storedConversationId of Object.keys(nextSnapshot)) {
-				if (!seenConversationIds.has(storedConversationId)) {
-					delete nextSnapshot[storedConversationId];
-				}
-			}
-
-			lastInboxSnapshotRef.current = nextSnapshot;
-			writeStoredMap(SNAPSHOT_STORAGE_KEY, nextSnapshot);
-
-			return changed ? next : prev;
-		});
-	}, [contacts, selectedConversationId]);
 
 	useEffect(() => {
 		if (!filteredContacts.length) {
@@ -690,29 +617,83 @@ export default function InboxPage() {
 		);
 	}, [filteredContacts, contacts, selectedConversationId]);
 
-	useEffect(() => {
-		if (!selectedConversationId || !conversation) return;
+	const markConversationReadMutation = useMutation({
+		mutationFn: async (conversationId) => {
+			if (!conversationId) return null;
 
-		const currentTimestamp = toTimestamp(
-			conversation?.lastMessageAt || activeContact?.lastMessageAt
+			const res = await api.patch(`/dashboard/conversations/${conversationId}/read`);
+			return { conversationId, data: res.data };
+		},
+		onSuccess: async (result) => {
+			if (!result?.conversationId) return;
+
+			queryClient.setQueryData(queryKeys.inbox(queue), (current) => {
+				if (!current) return current;
+
+				return {
+					...current,
+					contacts: (current.contacts || []).map((contact) =>
+						contact.conversationId === result.conversationId
+							? {
+									...contact,
+									unreadCount: 0,
+									hasUnread: false,
+									lastReadAt: result.data?.lastReadAt || new Date().toISOString(),
+							  }
+							: contact
+					),
+				};
+			});
+
+			queryClient.setQueryData(queryKeys.conversation(result.conversationId), (current) => {
+				if (!current?.conversation) return current;
+
+				return {
+					...current,
+					conversation: {
+						...current.conversation,
+						unreadCount: 0,
+						hasUnread: false,
+						lastReadAt: result.data?.lastReadAt || new Date().toISOString(),
+					},
+				};
+			});
+
+			await invalidateInboxAndConversation(result.conversationId);
+		},
+		onError: (error) => {
+			console.error(error);
+		},
+	});
+
+	useEffect(() => {
+		if (!selectedConversationId || !isDocumentVisible()) return;
+
+		const unreadCount = Math.max(
+			0,
+			Number(activeContact?.unreadCount || conversation?.unreadCount || 0)
 		);
 
-		if (currentTimestamp > 0) {
-			lastInboxSnapshotRef.current[selectedConversationId] = currentTimestamp;
-			writeStoredMap(SNAPSHOT_STORAGE_KEY, lastInboxSnapshotRef.current);
+		if (unreadCount < 1) {
+			lastReadRequestRef.current = '';
+			return;
 		}
 
-		setNewMessageCounts((prev) => {
-			if (!prev[selectedConversationId]) return prev;
-			const next = { ...prev };
-			delete next[selectedConversationId];
-			return next;
-		});
+		const requestKey = `${selectedConversationId}:${unreadCount}`;
+		if (
+			markConversationReadMutation.isPending ||
+			lastReadRequestRef.current === requestKey
+		) {
+			return;
+		}
+
+		lastReadRequestRef.current = requestKey;
+		markConversationReadMutation.mutate(selectedConversationId);
 	}, [
 		selectedConversationId,
-		conversation?.lastMessageAt,
-		conversation?.messages?.length,
-		activeContact?.lastMessageAt,
+		activeContact?.unreadCount,
+		conversation?.unreadCount,
+		markConversationReadMutation,
 	]);
 
 	useEffect(() => {
@@ -954,8 +935,8 @@ export default function InboxPage() {
 
 					{filteredContacts.map((contact) => {
 						const isSelected = contact.conversationId === selectedConversationId;
-						const unreadCount = newMessageCounts[contact.conversationId] || 0;
-						const hasUnread = unreadCount > 0;
+						const unreadCount = Math.max(0, Number(contact.unreadCount || 0));
+						const hasUnread = Boolean(contact.hasUnread) || unreadCount > 0;
 
 						return (
 							<button
