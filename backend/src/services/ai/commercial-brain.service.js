@@ -22,6 +22,10 @@ function uniqueStrings(values = []) {
 	return [...new Set(values.filter(Boolean).map((v) => String(v).trim()).filter(Boolean))];
 }
 
+function asksForTotalWhite(text = '') {
+	return /\btotal white\b|\bwhite\b|\bblanco\b/.test(normalizeText(text));
+}
+
 function isGreetingOnlyMessage(messageBody = '', currentState = {}) {
 	const text = normalizeText(messageBody);
 	if (!text) return true;
@@ -187,6 +191,8 @@ function rankCommercialProducts(
 	const profile = getCommercialProfile(family);
 	const introMode = profile?.introMode || 'product_first';
 	const isGenericDiscovery = ['GENERAL', 'GREETING', 'ASK_CATALOG'].includes(requestedAction);
+	const explicitTotalWhite = asksForTotalWhite(text);
+	const asksBoobTape = /\bboob\s*tape\b|\bboop\s*tape\b/.test(text);
 
 	const ranked = [...products]
 		.map((product) => {
@@ -194,6 +200,15 @@ function rankCommercialProducts(
 			const name = normalizeText(product.name || '');
 			const productFamily = product.family || inferCommercialFamily(name);
 			const offerType = product.offerType || 'single';
+			const mentionsBoobTape = /\bboob\s*tape\b/.test(
+				normalizeText([
+					product.name,
+					product.handle,
+					product.tags,
+					product.shortDescription,
+					...(Array.isArray(product.variantHints) ? product.variantHints : [])
+				].filter(Boolean).join(' '))
+			);
 			const isExcluded =
 				product.isExcluded ||
 				product.containsExcludedKeyword ||
@@ -232,6 +247,19 @@ function rankCommercialProducts(
 				if (introMode === 'offer_first' && offerType === '3x1') score += 14;
 				if (introMode === 'product_first' && offerType === 'single') score += 12;
 				if (offerType === 'pack' && !/(promo|oferta|2x1|3x1)/i.test(text)) score -= 6;
+			}
+
+			if (
+				requestedOfferType === '3x1' &&
+				productFamily === 'body_modelador' &&
+				/\btotal white\b/.test(name) &&
+				!explicitTotalWhite
+			) {
+				score -= 90;
+			}
+
+			if (asksBoobTape) {
+				score += mentionsBoobTape ? 42 : -28;
 			}
 
 			if (isExcluded) score -= 220;
