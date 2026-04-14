@@ -4,6 +4,10 @@ import { getQueueMeta } from '../services/conversation/inbox-routing.service.js'
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { publishInboxEvent, subscribeInboxEvents } from '../lib/inbox-events.js';
+import {
+	getEnboxSyncStatus,
+	syncEnboxShipments,
+} from '../services/enbox/enbox-sync.service.js';
 
 function formatTime(value) {
 	if (!value) return '';
@@ -894,6 +898,56 @@ export async function getConversationMessagesJson(req, res, next) {
 					rawPayload: msg.rawPayload || null,
 				})),
 			},
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getEnboxSyncStatusJson(_req, res, next) {
+	try {
+		const status = getEnboxSyncStatus();
+		const [latestLog, latestShipments] = await Promise.all([
+			prisma.enboxSyncLog.findMany({
+				orderBy: { startedAt: 'desc' },
+				take: 10,
+			}),
+			prisma.enboxShipment.findMany({
+				orderBy: { updatedAt: 'desc' },
+				take: 20,
+				select: {
+					didEnvio: true,
+					orderNumber: true,
+					shipmentNumber: true,
+					trackingUrl: true,
+					shippingStatus: true,
+					updatedAt: true,
+				},
+			}),
+		]);
+
+		return res.json({
+			ok: true,
+			status,
+			latestLog,
+			latestShipments,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function postRunEnboxSync(req, res, next) {
+	try {
+		const mode = String(req.body?.mode || 'incremental').toLowerCase() === 'backfill'
+			? 'backfill'
+			: 'incremental';
+
+		const result = await syncEnboxShipments({ mode });
+
+		return res.json({
+			ok: true,
+			...result,
 		});
 	} catch (error) {
 		next(error);

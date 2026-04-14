@@ -33,6 +33,7 @@ let schedulerTimer = null;
 function pushError(message) {
 	syncState.errors.push({ message, at: new Date().toISOString() });
 	syncState.message = message;
+	console.error(`[ENBOX SYNC] ${message}`);
 }
 
 function resetSyncState(mode) {
@@ -46,12 +47,16 @@ function resetSyncState(mode) {
 	syncState.ordersScanned = 0;
 	syncState.ordersMatched = 0;
 	syncState.errors = [];
+	console.log(`[ENBOX SYNC] iniciando modo=${mode}`);
 }
 
 function finishSyncState(message) {
 	syncState.running = false;
 	syncState.finishedAt = new Date().toISOString();
 	syncState.message = message;
+	console.log(
+		`[ENBOX SYNC] finalizado modo=${syncState.lastMode} checked=${syncState.shipmentsChecked} upserted=${syncState.shipmentsUpserted} scanned=${syncState.ordersScanned} matched=${syncState.ordersMatched} message="${message}"`
+	);
 }
 
 function subtractDays(days) {
@@ -175,6 +180,7 @@ async function upsertEnboxShipment(source = {}) {
 }
 
 async function refreshKnownShipments(limit = REFRESH_BATCH_SIZE) {
+	console.log(`[ENBOX SYNC] refrescando envíos conocidos limit=${limit}`);
 	const rows = await prisma.enboxShipment.findMany({
 		orderBy: [{ lastSyncedAt: 'asc' }, { updatedAt: 'asc' }],
 		take: limit,
@@ -220,6 +226,7 @@ async function getCandidateOrders(mode = 'incremental') {
 
 async function discoverRecentShipments(mode = 'incremental') {
 	const candidates = await getCandidateOrders(mode);
+	console.log(`[ENBOX SYNC] candidatos mode=${mode} total=${candidates.length}`);
 
 	for (const candidate of candidates) {
 		syncState.ordersScanned += 1;
@@ -331,6 +338,7 @@ export async function syncEnboxShipments({ mode = 'incremental' } = {}) {
 	let syncLog = null;
 
 	try {
+		console.log(`[ENBOX SYNC] creando log mode=${mode}`);
 		syncLog = await prisma.enboxSyncLog.create({
 			data: safeSyncLogData({
 				status: 'RUNNING',
@@ -340,6 +348,7 @@ export async function syncEnboxShipments({ mode = 'incremental' } = {}) {
 			}),
 		});
 	} catch {
+		console.warn(`[ENBOX SYNC] no se pudo crear EnboxSyncLog mode=${mode}`);
 		syncLog = null;
 	}
 

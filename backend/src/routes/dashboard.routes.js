@@ -11,6 +11,8 @@ import {
 	deleteConversationHistory,
 	getCatalog,
 	postSyncCatalog,
+	getEnboxSyncStatusJson,
+	postRunEnboxSync,
 	patchConversationArchive,
 	postDeduplicateInboxContacts,
 } from '../controllers/dashboard.controller.js';
@@ -46,6 +48,8 @@ router.post('/inbox/deduplicate', requireAdmin, postDeduplicateInboxContacts);
 
 router.get('/catalog', requireAdmin, getCatalog);
 router.post('/catalog/sync', requireAdmin, postSyncCatalog);
+router.get('/enbox-sync/status', requireAdmin, getEnboxSyncStatusJson);
+router.post('/enbox-sync/run', requireAdmin, postRunEnboxSync);
 
 router.get('/abandoned-carts', requireAdmin, getAbandonedCarts);
 router.post('/abandoned-carts/sync', requireAdmin, postSyncAbandonedCarts);
