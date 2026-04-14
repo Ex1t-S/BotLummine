@@ -14,6 +14,10 @@ const INCREMENTAL_BATCH_SIZE = Math.max(5, Number(process.env.ENBOX_INCREMENTAL_
 const REFRESH_BATCH_SIZE = Math.max(5, Number(process.env.ENBOX_REFRESH_BATCH_SIZE || 120));
 const SYNC_INTERVAL_MS = Math.max(5 * 60 * 1000, Number(process.env.ENBOX_SYNC_INTERVAL_MS || 15 * 60 * 1000));
 const STARTUP_DELAY_MS = Math.max(5_000, Number(process.env.ENBOX_SYNC_STARTUP_DELAY_MS || 15_000));
+const DISCOVERY_SEED_DID = Math.max(1, Number(process.env.ENBOX_DISCOVERY_SEED_DID || 332490));
+const BACKFILL_DID_WINDOW = Math.max(50, Number(process.env.ENBOX_BACKFILL_DID_WINDOW || 1500));
+const INCREMENTAL_DID_WINDOW = Math.max(20, Number(process.env.ENBOX_INCREMENTAL_DID_WINDOW || 180));
+const DISCOVERY_CONCURRENCY = Math.max(1, Math.min(10, Number(process.env.ENBOX_DISCOVERY_CONCURRENCY || 4)));
 
 const syncState = {
 	running: false,
@@ -68,12 +72,24 @@ function cleanString(value) {
 	return text || null;
 }
 
+const TARGET_CLIENT_ID = cleanString(process.env.ENBOX_TARGET_CLIENT_ID || '90');
+
 function normalizeText(value) {
 	return String(value ?? '')
 		.toLowerCase()
 		.normalize('NFD')
 		.replace(/[\u0300-\u036f]/g, '')
 		.trim();
+}
+
+async function mapInBatches(items, worker, concurrency = DISCOVERY_CONCURRENCY) {
+	const results = [];
+	for (let index = 0; index < items.length; index += concurrency) {
+		const chunk = items.slice(index, index + concurrency);
+		const chunkResults = await Promise.all(chunk.map(worker));
+		results.push(...chunkResults);
+	}
+	return results;
 }
 
 function buildTrackingToken(didEnvio, didCliente) {
@@ -198,6 +214,60 @@ async function refreshKnownShipments(limit = REFRESH_BATCH_SIZE) {
 			source: 'enbox-refresh',
 		});
 	}
+}
+
+async function getDiscoverySeedDid() {
+	const latestKnown = await prisma.enboxShipment.findFirst({
+		orderBy: [{ updatedAt: 'desc' }, { didEnvio: 'desc' }],
+		select: { didEnvio: true },
+	});
+
+	const parsedKnown = Number(latestKnown?.didEnvio || 0);
+	if (parsedKnown > 0) return parsedKnown;
+	return DISCOVERY_SEED_DID;
+}
+
+function buildDidRange(seedDid, mode = 'incremental') {
+	const backwardWindow = mode === 'backfill' ? BACKFILL_DID_WINDOW : INCREMENTAL_DID_WINDOW;
+	const forwardWindow = mode === 'backfill' ? Math.max(50, Math.floor(backwardWindow * 0.08)) : Math.max(20, Math.floor(backwardWindow * 0.2));
+	const lowerBound = Math.max(1, seedDid - backwardWindow);
+	const upperBound = seedDid + forwardWindow;
+	const dids = [];
+
+	for (let did = upperBound; did >= lowerBound; did -= 1) {
+		dids.push(did);
+	}
+
+	return dids;
+}
+
+async function crawlDidWindow(mode = 'incremental') {
+	const seedDid = await getDiscoverySeedDid();
+	const dids = buildDidRange(seedDid, mode);
+
+	console.log(`[ENBOX SYNC] crawl did window mode=${mode} seed=${seedDid} total=${dids.length}`);
+
+	await mapInBatches(
+		dids,
+		async (didEnvio) => {
+			syncState.shipmentsChecked += 1;
+			const detailResult = await fetchEnboxShipmentDetailByDid(didEnvio).catch(() => null);
+			const detail = detailResult?.detail?.header || null;
+			if (!detail) return null;
+
+			const didCliente = cleanString(detail?.didCliente);
+			if (TARGET_CLIENT_ID && didCliente && didCliente !== TARGET_CLIENT_ID) {
+				return null;
+			}
+
+			return upsertEnboxShipment({
+				...detailResult,
+				orderNumber: cleanString(detail?.ml_venta_id) || cleanString(detail?.ml_shipment_id),
+				source: 'enbox-did-crawl',
+			});
+		},
+		DISCOVERY_CONCURRENCY
+	);
 }
 
 async function getCandidateOrders(mode = 'incremental') {
@@ -354,6 +424,7 @@ export async function syncEnboxShipments({ mode = 'incremental' } = {}) {
 
 	try {
 		await refreshKnownShipments();
+		await crawlDidWindow(mode);
 		await discoverRecentShipments(mode);
 
 		const successMessage =
