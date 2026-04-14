@@ -181,6 +181,26 @@ function templateRequiresHeaderImage(template) {
 	return normalizeType(header?.format) === 'IMAGE';
 }
 
+function getTemplateHeaderImageAsset(template) {
+	const components = getTemplateComponents(template);
+	const header = components.find(
+		(component) => normalizeType(component?.type) === 'HEADER'
+	);
+	const rawHeaderMedia = template?.rawPayload?.headerMedia || {};
+	const headerImage = header?.image || {};
+
+	const mediaId = String(rawHeaderMedia.mediaId || headerImage.id || '').trim();
+	const previewUrl = String(rawHeaderMedia.previewUrl || headerImage.link || '').trim();
+	const headerHandle = String(rawHeaderMedia.headerHandle || '').trim();
+
+	return {
+		mediaId,
+		previewUrl,
+		headerHandle,
+		hasResolvedAsset: Boolean(mediaId || previewUrl || headerHandle),
+	};
+}
+
 function extractTemplatePlaceholders(template) {
 	const components = getTemplateComponents(template);
 	const texts = [];
@@ -611,6 +631,16 @@ export default function CampaignComposerPanel({
 		() => templateRequiresHeaderImage(selectedTemplate),
 		[selectedTemplate]
 	);
+	const templateHeaderImageAsset = useMemo(
+		() => getTemplateHeaderImageAsset(selectedTemplate),
+		[selectedTemplate]
+	);
+	const campaignOverridesTemplateImage = Boolean(uploadedMediaId);
+	const hasTemplateResolvedHeaderImage = templateHeaderImageAsset.hasResolvedAsset;
+	const needsHeaderImageUpload =
+		requiresHeaderImage &&
+		!hasTemplateResolvedHeaderImage &&
+		!campaignOverridesTemplateImage;
 
 	const extraVariables = useMemo(
 		() => (uploadedMediaId ? { header_image_id: uploadedMediaId } : {}),
@@ -684,6 +714,64 @@ export default function CampaignComposerPanel({
 	const sampleResolvedVariables = useMemo(() => {
 		return recipients[0]?.variables || {};
 	}, [recipients]);
+	const variableMappingError = useMemo(() => validateVariableMapping(), [
+		templatePlaceholders,
+		variableMapping,
+	]);
+	const campaignChecklist = useMemo(
+		() => [
+			{
+				id: 'template',
+				label: 'Template elegido',
+				ok: Boolean(selectedTemplate?.id),
+				readyText: selectedTemplate?.name || 'Listo',
+				pendingText: 'ElegÃ­ un template',
+			},
+			{
+				id: 'image',
+				label: 'Header image',
+				ok: !requiresHeaderImage || !needsHeaderImageUpload,
+				readyText: campaignOverridesTemplateImage
+					? 'Se reemplaza para esta campaÃ±a'
+					: hasTemplateResolvedHeaderImage
+						? 'Resuelta en la plantilla'
+						: 'No aplica',
+				pendingText: 'Falta cargar la imagen',
+			},
+			{
+				id: 'variables',
+				label: 'Variables',
+				ok: !templatePlaceholders.length || !variableMappingError,
+				readyText: templatePlaceholders.length
+					? `${templatePlaceholders.length} variables listas`
+					: 'Sin variables',
+				pendingText: variableMappingError || 'Faltan variables',
+			},
+			{
+				id: 'audience',
+				label: 'Audiencia',
+				ok: recipients.length > 0,
+				readyText: `${formatCompactNumber(recipients.length)} destinatarios`,
+				pendingText:
+					form.audienceMode === 'customers'
+						? 'SeleccionÃ¡ clientes'
+						: 'CargÃ¡ destinatarios',
+			},
+		],
+		[
+			selectedTemplate?.id,
+			selectedTemplate?.name,
+			requiresHeaderImage,
+			needsHeaderImageUpload,
+			campaignOverridesTemplateImage,
+			hasTemplateResolvedHeaderImage,
+			templatePlaceholders.length,
+			variableMappingError,
+			recipients.length,
+			form.audienceMode,
+		]
+	);
+	const campaignReadyToCreate = campaignChecklist.every((item) => item.ok);
 
 	const selectedCustomerCount = selectedCustomers.length;
 
@@ -1049,7 +1137,7 @@ export default function CampaignComposerPanel({
 			return;
 		}
 
-		if (requiresHeaderImage && !uploadedMediaId) {
+		if (needsHeaderImageUpload) {
 			setImageError('Esta plantilla requiere una imagen de encabezado antes de crear la campaña.');
 			return;
 		}
@@ -1155,6 +1243,31 @@ export default function CampaignComposerPanel({
 						<span>estimado rápido</span>
 					</div>
 				</div>
+
+				<div className="campaign-helper-box">
+					<div className="campaign-helper-text">
+						RevisiÃ³n rÃ¡pida antes de crear la campaÃ±a. Si algo no estÃ¡ listo, aparece marcado acÃ¡ y no reciÃ©n al final.
+					</div>
+
+					<div className="campaign-review-grid">
+						{campaignChecklist.map((item) => (
+							<div key={item.id} className="campaign-review-card">
+								<strong>{item.label}</strong>
+								<span>{item.ok ? item.readyText : item.pendingText}</span>
+							</div>
+						))}
+					</div>
+
+					{campaignReadyToCreate ? (
+						<div className="campaign-inline-success">
+							La campaÃ±a ya tiene todo lo necesario para crearse.
+						</div>
+					) : (
+						<div className="campaign-inline-warning">
+							CompletÃ¡ los puntos pendientes antes de crear o lanzar la campaÃ±a.
+						</div>
+					)}
+				</div>
 			</div>
 
 			<form className="campaign-form campaign-form--spacious" onSubmit={handleSubmit}>
@@ -1237,7 +1350,9 @@ export default function CampaignComposerPanel({
 							<span>Imagen del encabezado</span>
 							<div className="campaign-helper-box">
 								<div className="campaign-helper-text">
-									Este template necesita imagen para poder enviarse.
+									{hasTemplateResolvedHeaderImage
+										? 'Este template ya tiene una imagen configurada. Solo subi otra si queres reemplazarla para esta campaÃ±a.'
+										: 'Este template usa header con imagen y todavia necesita que cargues una para poder enviarse.'}
 								</div>
 								<div className="campaign-inline-actions">
 									<label
@@ -1248,7 +1363,9 @@ export default function CampaignComposerPanel({
 											? 'Subiendo…'
 											: uploadedMediaId
 												? 'Cambiar imagen'
-												: 'Subir imagen'}
+												: hasTemplateResolvedHeaderImage
+													? 'Reemplazar imagen'
+													: 'Subir imagen'}
 										<input
 											type="file"
 											accept="image/*"
@@ -1263,9 +1380,15 @@ export default function CampaignComposerPanel({
 									) : null}
 								</div>
 
+								{hasTemplateResolvedHeaderImage && !uploadedMediaId ? (
+									<div className="campaign-inline-success">
+										La campaÃ±a va a usar la imagen ya guardada en la plantilla.
+									</div>
+								) : null}
+
 								{uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										Imagen lista para usar.
+										La campaÃ±a va a usar la nueva imagen cargada.
 									</div>
 								) : null}
 
@@ -1619,6 +1742,22 @@ export default function CampaignComposerPanel({
 							<strong>USD {estimatedCost.toFixed(2)}</strong>
 							<span>estimado</span>
 						</div>
+						<div className="campaign-review-card">
+							<strong>
+								{requiresHeaderImage
+									? campaignOverridesTemplateImage
+										? 'Imagen nueva'
+										: hasTemplateResolvedHeaderImage
+											? 'Lista'
+											: 'Falta imagen'
+									: 'No aplica'}
+							</strong>
+							<span>header image</span>
+						</div>
+						<div className="campaign-review-card">
+							<strong>{form.sendNow ? 'Se lanza al crear' : 'Queda en borrador'}</strong>
+							<span>estado inicial</span>
+						</div>
 					</div>
 
 					{templatePlaceholders.length ? (
@@ -1747,7 +1886,11 @@ export default function CampaignComposerPanel({
 					{submitError ? <div className="campaign-inline-error">{submitError}</div> : null}
 
 					<div className="campaign-form-actions campaign-form-actions--end">
-						<button className="button primary" type="submit" disabled={creating || uploadingImage}>
+						<button
+							className="button primary"
+							type="submit"
+							disabled={creating || uploadingImage || !campaignReadyToCreate}
+						>
 							{creating ? 'Creando…' : 'Crear campaña'}
 						</button>
 					</div>

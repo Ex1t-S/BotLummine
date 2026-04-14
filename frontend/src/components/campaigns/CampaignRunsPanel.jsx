@@ -32,10 +32,77 @@ function getStatusTone(status = '') {
 	const normalized = String(status || '').toUpperCase();
 
 	if (['RUNNING', 'QUEUED', 'ACTIVE'].includes(normalized)) return 'En marcha';
-	if (['PAUSED'].includes(normalized)) return 'Pausada';
-	if (['COMPLETED', 'SENT'].includes(normalized)) return 'Finalizada';
+	if (['PAUSED', 'CANCELED'].includes(normalized)) return 'Detenida';
+	if (['PARTIAL'].includes(normalized)) return 'Parcial';
+	if (['FAILED'].includes(normalized)) return 'Con fallos';
+	if (['COMPLETED', 'SENT', 'FINISHED'].includes(normalized)) return 'Finalizada';
 
 	return 'Borrador';
+}
+
+function buildCampaignActionModel(campaign = {}) {
+	const status = String(campaign?.status || '').toUpperCase();
+	const failedCount = Number(campaign?.failedCount || campaign?.failedRecipients || 0);
+	const pendingCount = Number(campaign?.pendingCount || campaign?.pendingRecipients || 0);
+
+	if (['RUNNING', 'QUEUED'].includes(status)) {
+		return {
+			primaryLabel: 'En curso',
+			primaryDisabled: true,
+			primaryAction: null,
+			secondaryLabel: 'Cancelar campaÃ±a',
+			secondaryAction: 'pause',
+			helperText: 'La campaÃ±a ya estÃ¡ en ejecuciÃ³n o en cola. Solo podÃ©s cancelarla.',
+		};
+	}
+
+	if (['FAILED', 'PARTIAL'].includes(status)) {
+		return {
+			primaryLabel: failedCount > 0 ? 'Reintentar fallidos' : 'Relanzar pendientes',
+			primaryDisabled: failedCount === 0 && pendingCount === 0,
+			primaryAction: 'resume',
+			secondaryLabel: null,
+			secondaryAction: null,
+			helperText:
+				failedCount > 0
+					? 'La campaÃ±a tuvo fallidos. PodÃ©s reintentar solo esos destinatarios.'
+					: 'No hay destinatarios fallidos ni pendientes para volver a lanzar.',
+		};
+	}
+
+	if (status === 'CANCELED') {
+		return {
+			primaryLabel: pendingCount > 0 || failedCount > 0 ? 'Relanzar pendientes' : 'Sin acciones',
+			primaryDisabled: pendingCount === 0 && failedCount === 0,
+			primaryAction: 'resume',
+			secondaryLabel: null,
+			secondaryAction: null,
+			helperText:
+				pendingCount > 0 || failedCount > 0
+					? 'La campaÃ±a fue cancelada, pero todavÃ­a podÃ©s volver a intentar los pendientes.'
+					: 'La campaÃ±a fue cancelada y ya no tiene destinatarios para relanzar.',
+		};
+	}
+
+	if (status === 'FINISHED') {
+		return {
+			primaryLabel: 'Finalizada',
+			primaryDisabled: true,
+			primaryAction: null,
+			secondaryLabel: null,
+			secondaryAction: null,
+			helperText: 'La campaÃ±a ya terminÃ³. Si querÃ©s repetirla, conviene crear una nueva a partir de este mismo template.',
+		};
+	}
+
+	return {
+		primaryLabel: 'Lanzar campaÃ±a',
+		primaryDisabled: false,
+		primaryAction: 'dispatch',
+		secondaryLabel: null,
+		secondaryAction: null,
+		helperText: 'Esta campaÃ±a todavÃ­a estÃ¡ en borrador. Cuando la lances, empieza el despacho.',
+	};
 }
 
 function normalizeRecipientStatus(status = '') {
@@ -147,6 +214,10 @@ export default function CampaignRunsPanel({
 	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
 	const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
 	const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
+	const actionModel = useMemo(
+		() => buildCampaignActionModel(selectedCampaign || {}),
+		[selectedCampaign]
+	);
 
 	const totalCampaignRecipients = campaigns.reduce(
 		(total, campaign) => total + Number(getMetric(campaign, ['totalRecipients', 'recipientCount'])),
@@ -296,32 +367,37 @@ export default function CampaignRunsPanel({
 									<span>Creación</span>
 									<strong>{formatDate(selectedCampaign.createdAt)}</strong>
 								</div>
+								<div className="campaign-detail-meta-card">
+									<span>AcciÃ³n sugerida</span>
+									<strong>{actionModel.primaryLabel}</strong>
+								</div>
+							</div>
+
+							<div className="campaign-helper-box">
+								<div className="campaign-helper-text">{actionModel.helperText}</div>
 							</div>
 
 							<div className="campaign-detail-actions campaign-detail-actions--spaced">
 								<button
 									className="button primary"
-									onClick={() => onDispatch(selectedCampaign.id)}
-									disabled={actionLoading}
+									onClick={() => {
+										if (actionModel.primaryAction === 'dispatch') onDispatch(selectedCampaign.id);
+										if (actionModel.primaryAction === 'resume') onResume(selectedCampaign.id);
+									}}
+									disabled={actionLoading || actionModel.primaryDisabled}
 								>
-									Despachar
+									{actionModel.primaryLabel}
 								</button>
 
-								<button
-									className="button secondary"
-									onClick={() => onPause(selectedCampaign.id)}
-									disabled={actionLoading}
-								>
-									Pausar
-								</button>
-
-								<button
-									className="button ghost"
-									onClick={() => onResume(selectedCampaign.id)}
-									disabled={actionLoading}
-								>
-									Reanudar
-								</button>
+								{actionModel.secondaryAction === 'pause' ? (
+									<button
+										className="button secondary"
+										onClick={() => onPause(selectedCampaign.id)}
+										disabled={actionLoading}
+									>
+										{actionModel.secondaryLabel}
+									</button>
+								) : null}
 
 								<button
 									type="button"
