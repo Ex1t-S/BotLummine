@@ -1,4 +1,6 @@
 import { getOrderByNumber } from '../tiendanube/orders.service.js';
+import { resolveEnboxTracking } from '../enbox/enbox.service.js';
+import { findCachedEnboxShipment } from '../enbox/enbox-sync.service.js';
 
 function formatMoney(value, currency = 'ARS') {
 	const num = Number(value || 0);
@@ -89,6 +91,53 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 				found: false
 			}
 		};
+	}
+
+	if (
+		!liveOrderContext.trackingUrl &&
+		String(liveOrderContext.shippingCarrier || '').toLowerCase().includes('enbox')
+	) {
+		try {
+			const cachedShipment = await findCachedEnboxShipment(orderNumber);
+			if (cachedShipment?.trackingUrl || cachedShipment?.trackingNumber) {
+				liveOrderContext.trackingUrl = cachedShipment.trackingUrl || liveOrderContext.trackingUrl;
+				liveOrderContext.trackingNumber = cachedShipment.trackingNumber || liveOrderContext.trackingNumber;
+				liveOrderContext.shippingStatus = cachedShipment.shippingStatus || liveOrderContext.shippingStatus;
+				liveOrderContext.enboxTracking = cachedShipment;
+			}
+		} catch (error) {
+			console.error('Error consultando cache de Enbox:', error);
+		}
+
+		if (liveOrderContext.trackingUrl || liveOrderContext.trackingNumber) {
+			return {
+				handled: true,
+				forcedReply: buildFixedOrderReply(liveOrderContext),
+				liveOrderContext,
+				aiGuidance: {
+					type: 'order_status',
+					orderNumber,
+					found: true,
+					hasTracking: true,
+					shippingCarrier: liveOrderContext.shippingCarrier || null
+				}
+			};
+		}
+
+		try {
+			const enboxTracking = await resolveEnboxTracking(liveOrderContext);
+			if (enboxTracking?.trackingUrl || enboxTracking?.trackingNumber) {
+				liveOrderContext.trackingUrl =
+					enboxTracking.trackingUrl || liveOrderContext.trackingUrl;
+				liveOrderContext.trackingNumber =
+					enboxTracking.trackingNumber || liveOrderContext.trackingNumber;
+				liveOrderContext.shippingStatus =
+					enboxTracking.shippingStatus || liveOrderContext.shippingStatus;
+				liveOrderContext.enboxTracking = enboxTracking;
+			}
+		} catch (error) {
+			console.error('Error consultando tracking en Enbox:', error);
+		}
 	}
 
 	return {

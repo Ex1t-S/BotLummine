@@ -185,7 +185,7 @@ function matchesOrder(order, wanted) {
 	);
 }
 
-function normalizeOrderContext(order) {
+export function normalizeOrderContext(order) {
 	const tracking = extractTracking(order);
 
 	return {

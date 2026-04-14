@@ -373,6 +373,58 @@ model CustomerSyncLog {
   @@index([storeId, status, startedAt])
 }
 
+model EnboxShipment {
+  id                 String   @id @default(cuid())
+  didEnvio           String   @unique
+  didCliente         String?
+  storeId            String?
+  orderId            String?
+  orderNumber        String?
+  shipmentNumber     String?
+  packId             String?
+  trackingNumber     String?
+  trackingToken      String?
+  trackingUrl        String?
+  shippingStatus     String?
+  shippingStatusCode String?
+  recipientName      String?
+  recipientPhone     String?
+  recipientEmail     String?
+  postalCode         String?
+  addressLine        String?
+  shippingMethod     String?
+  source             String?
+  rawSummary         Json?
+  rawPayload         Json?
+  discoveredAt       DateTime @default(now())
+  lastSyncedAt       DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([orderNumber])
+  @@index([shipmentNumber])
+  @@index([packId])
+  @@index([trackingNumber])
+  @@index([storeId, orderNumber])
+  @@index([lastSyncedAt])
+}
+
+model EnboxSyncLog {
+  id               String   @id @default(cuid())
+  status           String
+  mode             String
+  startedAt        DateTime @default(now())
+  finishedAt       DateTime?
+  shipmentsChecked Int      @default(0)
+  shipmentsUpserted Int     @default(0)
+  ordersScanned    Int      @default(0)
+  ordersMatched    Int      @default(0)
+  message          String?
+  createdAt        DateTime @default(now())
+
+  @@index([status, startedAt])
+}
+
 model WhatsAppTemplate {
   id              String    @id @default(cuid())
   wabaId          String
