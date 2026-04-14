@@ -163,6 +163,18 @@ function normalizeText(value = '') {
 		.trim();
 }
 
+function sanitizeCampaignCopy(value = '') {
+	return String(value || '')
+		.replace(/ÃƒÂ¡|Ã¡/g, 'a')
+		.replace(/ÃƒÂ©|Ã©/g, 'e')
+		.replace(/ÃƒÂ­|Ã­/g, 'i')
+		.replace(/ÃƒÂ³|Ã³/g, 'o')
+		.replace(/ÃƒÂº|Ãº/g, 'u')
+		.replace(/ÃƒÂ±|Ã±/g, 'n')
+		.replace(/â€¦/g, '...')
+		.replace(/Â·/g, '-');
+}
+
 function getTemplateComponents(template) {
 	if (Array.isArray(template?.components)) return template.components;
 	if (Array.isArray(template?.rawPayload?.components)) return template.rawPayload.components;
@@ -709,7 +721,7 @@ export default function CampaignComposerPanel({
 		return form.audienceMode === 'customers' ? customerRecipients : manualRecipients;
 	}, [form.audienceMode, customerRecipients, manualRecipients]);
 
-	const estimatedCost = useMemo(() => recipients.length * 0.032, [recipients.length]);
+	const estimatedCost = useMemo(() => recipients.length * 0.06, [recipients.length]);
 
 	const sampleResolvedVariables = useMemo(() => {
 		return recipients[0]?.variables || {};
@@ -1240,11 +1252,36 @@ export default function CampaignComposerPanel({
 					</div>
 					<div className="campaign-builder-top-summary-item">
 						<strong>USD {estimatedCost.toFixed(2)}</strong>
-						<span>estimado rápido</span>
+						<span>{sanitizeCampaignCopy('estimado rÃ¡pido')}</span>
 					</div>
 				</div>
 
 				<div className="campaign-helper-box">
+					<div className="campaign-helper-text">
+						Revision rapida antes de crear la campana. Si algo no esta listo, aparece marcado aca y no recien al final.
+					</div>
+
+					<div className="campaign-review-grid">
+						{campaignChecklist.map((item) => (
+							<div key={`clean-${item.id}`} className="campaign-review-card">
+								<strong>{sanitizeCampaignCopy(item.label)}</strong>
+								<span>{sanitizeCampaignCopy(item.ok ? item.readyText : item.pendingText)}</span>
+							</div>
+						))}
+					</div>
+
+					{campaignReadyToCreate ? (
+						<div className="campaign-inline-success">
+							La campana ya tiene todo lo necesario para crearse.
+						</div>
+					) : (
+						<div className="campaign-inline-warning">
+							Completa los puntos pendientes antes de crear o lanzar la campana.
+						</div>
+					)}
+				</div>
+
+				<div className="campaign-helper-box" style={{ display: 'none' }}>
 					<div className="campaign-helper-text">
 						RevisiÃ³n rÃ¡pida antes de crear la campaÃ±a. Si algo no estÃ¡ listo, aparece marcado acÃ¡ y no reciÃ©n al final.
 					</div>

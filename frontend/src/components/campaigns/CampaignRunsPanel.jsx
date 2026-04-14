@@ -50,9 +50,9 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryLabel: 'En curso',
 			primaryDisabled: true,
 			primaryAction: null,
-			secondaryLabel: 'Cancelar campaÃ±a',
+			secondaryLabel: 'Cancelar campana',
 			secondaryAction: 'pause',
-			helperText: 'La campaÃ±a ya estÃ¡ en ejecuciÃ³n o en cola. Solo podÃ©s cancelarla.',
+			helperText: 'La campana ya esta en ejecucion o en cola. Solo podes cancelarla.',
 		};
 	}
 
@@ -65,7 +65,7 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				failedCount > 0
-					? 'La campaÃ±a tuvo fallidos. PodÃ©s reintentar solo esos destinatarios.'
+					? 'La campana tuvo fallidos. Podes reintentar solo esos destinatarios.'
 					: 'No hay destinatarios fallidos ni pendientes para volver a lanzar.',
 		};
 	}
@@ -79,8 +79,8 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				pendingCount > 0 || failedCount > 0
-					? 'La campaÃ±a fue cancelada, pero todavÃ­a podÃ©s volver a intentar los pendientes.'
-					: 'La campaÃ±a fue cancelada y ya no tiene destinatarios para relanzar.',
+					? 'La campana fue cancelada, pero todavia podes volver a intentar los pendientes.'
+					: 'La campana fue cancelada y ya no tiene destinatarios para relanzar.',
 		};
 	}
 
@@ -91,17 +91,17 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryAction: null,
 			secondaryLabel: null,
 			secondaryAction: null,
-			helperText: 'La campaÃ±a ya terminÃ³. Si querÃ©s repetirla, conviene crear una nueva a partir de este mismo template.',
+			helperText: 'La campana ya termino. Si queres repetirla, conviene crear una nueva a partir de este mismo template.',
 		};
 	}
 
 	return {
-		primaryLabel: 'Lanzar campaÃ±a',
+		primaryLabel: 'Lanzar campana',
 		primaryDisabled: false,
 		primaryAction: 'dispatch',
 		secondaryLabel: null,
 		secondaryAction: null,
-		helperText: 'Esta campaÃ±a todavÃ­a estÃ¡ en borrador. Cuando la lances, empieza el despacho.',
+		helperText: 'Esta campana todavia esta en borrador. Cuando la lances, empieza el despacho.',
 	};
 }
 
