@@ -74,12 +74,16 @@ export async function previewAbandonedCartAudience(payload) {
 	return unwrap(response);
 }
 
-export async function uploadCampaignHeaderImage(file) {
+export async function uploadCampaignHeaderMedia(file, fieldName = 'media') {
 	const formData = new FormData();
-	formData.append('image', file);
+	formData.append(fieldName, file);
 
 	const response = await api.post('/media/campaign-header-image', formData);
 	return unwrap(response);
+}
+
+export async function uploadCampaignHeaderImage(file) {
+	return uploadCampaignHeaderMedia(file, 'image');
 }
 
 export async function fetchCampaignCustomers(params = {}) {

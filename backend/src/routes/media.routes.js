@@ -21,7 +21,11 @@ router.post(
 	'/campaign-header-image',
 	attachUser,
 	requireAdmin,
-	upload.single('image'),
+	upload.fields([
+		{ name: 'image', maxCount: 1 },
+		{ name: 'media', maxCount: 1 },
+		{ name: 'video', maxCount: 1 }
+	]),
 	uploadCampaignHeaderImageController
 );
 

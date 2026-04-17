@@ -24,6 +24,14 @@ function safeArray(value) {
 	return Array.isArray(value) ? value : [];
 }
 
+function getHeaderMediaFieldByFormat(format = '') {
+	const normalized = toUpper(format);
+
+	if (normalized === 'VIDEO') return 'video';
+	if (normalized === 'DOCUMENT') return 'document';
+	return 'image';
+}
+
 function cloneJson(value, fallback) {
 	try {
 		return JSON.parse(JSON.stringify(value ?? fallback));
@@ -57,8 +65,18 @@ function buildTemplateRawPayloadWithLocalMedia(
 	if (headerIndex >= 0 && toUpper(nextComponents[headerIndex]?.format) === 'TEXT') {
 		const nextHeader = { ...nextComponents[headerIndex] };
 		delete nextHeader.image;
+		delete nextHeader.video;
+		delete nextHeader.document;
 		nextComponents[headerIndex] = nextHeader;
 	}
+
+	const headerMediaFormat = toUpper(
+		headerMedia?.format ||
+			nextComponents[headerIndex]?.format ||
+			template?.headerFormat ||
+			'IMAGE'
+	);
+	const headerMediaField = getHeaderMediaFieldByFormat(headerMediaFormat);
 
 	if (headerMedia && (headerMedia.mediaId || headerMedia.previewUrl || headerMedia.headerHandle)) {
 		const currentHeader =
@@ -66,15 +84,18 @@ function buildTemplateRawPayloadWithLocalMedia(
 				? { ...nextComponents[headerIndex] }
 				: {
 						type: 'HEADER',
-						format: 'IMAGE',
+						format: headerMediaFormat,
 					};
 
 		const nextHeader = {
 			...currentHeader,
 			type: 'HEADER',
-			format: 'IMAGE',
-			image: {
-				...(currentHeader.image || {}),
+			format: headerMediaFormat,
+			image: undefined,
+			video: undefined,
+			document: undefined,
+			[headerMediaField]: {
+				...(currentHeader[headerMediaField] || {}),
 				...(headerMedia.mediaId ? { id: normalizeString(headerMedia.mediaId) } : {}),
 				...(headerMedia.previewUrl ? { link: normalizeString(headerMedia.previewUrl) } : {}),
 			},
@@ -88,11 +109,13 @@ function buildTemplateRawPayloadWithLocalMedia(
 
 		rawPayload.headerMedia = {
 			...(rawPayload.headerMedia || {}),
+			format: headerMediaFormat,
+			mediaType: headerMediaField,
 			...(headerMedia.mediaId ? { mediaId: normalizeString(headerMedia.mediaId) } : {}),
 			...(headerMedia.previewUrl ? { previewUrl: normalizeString(headerMedia.previewUrl) } : {}),
 			...(headerMedia.headerHandle ? { headerHandle: normalizeString(headerMedia.headerHandle) } : {}),
 		};
-	} else if (toUpper(template?.headerFormat) !== 'IMAGE') {
+	} else if (!['IMAGE', 'VIDEO', 'DOCUMENT'].includes(toUpper(template?.headerFormat))) {
 		delete rawPayload.headerMedia;
 	}
 

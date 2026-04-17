@@ -663,46 +663,52 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 		};
 	}
 
-	if (format === 'IMAGE') {
-		const imageId =
+	if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(format)) {
+		const mediaField =
+			format === 'VIDEO' ? 'video' : format === 'DOCUMENT' ? 'document' : 'image';
+		const mediaVariablePrefix = mediaField;
+
+		const mediaId =
 			normalizeString(
-				variables.header_image_id ||
-				variables.image_id ||
-				headerComponent?.image?.id ||
+				variables[`header_${mediaVariablePrefix}_id`] ||
+				variables[`${mediaVariablePrefix}_id`] ||
+				template?.rawPayload?.headerMedia?.mediaId ||
+				headerComponent?.[mediaField]?.id ||
 				''
 			) || null;
 
-		const imageLink =
+		const mediaLink =
 			normalizeString(
-				variables.header_image_link ||
-				variables.image_link ||
-				headerComponent?.image?.link ||
-				template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.image?.link ||
+				variables[`header_${mediaVariablePrefix}_link`] ||
+				variables[`${mediaVariablePrefix}_link`] ||
+				template?.rawPayload?.headerMedia?.previewUrl ||
+				headerComponent?.[mediaField]?.link ||
+				template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.[mediaField]?.link ||
 				''
 			) || null;
 
-		if (imageId) {
+		if (mediaId) {
 			return {
 				type: 'header',
 				parameters: [
 					{
-						type: 'image',
-						image: {
-							id: imageId
+						type: mediaField,
+						[mediaField]: {
+							id: mediaId
 						}
 					}
 				]
 			};
 		}
 
-		if (imageLink) {
+		if (mediaLink) {
 			return {
 				type: 'header',
 				parameters: [
 					{
-						type: 'image',
-						image: {
-							link: imageLink
+						type: mediaField,
+						[mediaField]: {
+							link: mediaLink
 						}
 					}
 				]
@@ -710,7 +716,7 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 		}
 
 		throw new Error(
-			`La plantilla ${template?.name || 'seleccionada'} requiere HEADER IMAGE y no tiene image.id ni image.link para enviar.`
+			`La plantilla ${template?.name || 'seleccionada'} requiere HEADER ${format} y no tiene ${mediaField}.id ni ${mediaField}.link para enviar.`
 		);
 	}
 

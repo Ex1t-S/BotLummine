@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
 	fetchCampaignCustomers,
-	uploadCampaignHeaderImage,
+	uploadCampaignHeaderMedia,
 } from '../../lib/campaigns.js';
 import api from '../../lib/api.js';
 
@@ -181,31 +181,62 @@ function getTemplateComponents(template) {
 	return [];
 }
 
-function templateRequiresHeaderImage(template) {
+function getTemplateHeaderComponent(template) {
 	const components = getTemplateComponents(template);
 
-	const header = components.find(
+	return components.find(
 		(component) => normalizeType(component?.type) === 'HEADER'
 	);
+}
+
+function getTemplateHeaderMediaField(template) {
+	const header = getTemplateHeaderComponent(template);
+	const format = normalizeType(header?.format);
+
+	if (format === 'VIDEO') return 'video';
+	if (format === 'DOCUMENT') return 'document';
+	if (format === 'IMAGE') return 'image';
+	return null;
+}
+
+function templateRequiresHeaderMedia(template) {
+	const header = getTemplateHeaderComponent(template);
 
 	if (!header) return false;
 
-	return normalizeType(header?.format) === 'IMAGE';
+	return ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(normalizeType(header?.format));
 }
 
-function getTemplateHeaderImageAsset(template) {
-	const components = getTemplateComponents(template);
-	const header = components.find(
-		(component) => normalizeType(component?.type) === 'HEADER'
-	);
-	const rawHeaderMedia = template?.rawPayload?.headerMedia || {};
-	const headerImage = header?.image || {};
+function getTemplateHeaderMediaLabel(template) {
+	const format = normalizeType(getTemplateHeaderComponent(template)?.format);
 
-	const mediaId = String(rawHeaderMedia.mediaId || headerImage.id || '').trim();
-	const previewUrl = String(rawHeaderMedia.previewUrl || headerImage.link || '').trim();
+	if (format === 'VIDEO') return 'video';
+	if (format === 'DOCUMENT') return 'documento';
+	if (format === 'IMAGE') return 'imagen';
+	return 'media';
+}
+
+function getTemplateHeaderMediaAccept(template) {
+	const format = normalizeType(getTemplateHeaderComponent(template)?.format);
+
+	if (format === 'VIDEO') return 'video/mp4';
+	if (format === 'DOCUMENT') return 'application/pdf';
+	return 'image/*';
+}
+
+function getTemplateHeaderMediaAsset(template) {
+	const header = getTemplateHeaderComponent(template);
+	const rawHeaderMedia = template?.rawPayload?.headerMedia || {};
+	const mediaField = getTemplateHeaderMediaField(template);
+	const headerMedia = mediaField ? header?.[mediaField] || {} : {};
+
+	const mediaId = String(rawHeaderMedia.mediaId || headerMedia.id || '').trim();
+	const previewUrl = String(rawHeaderMedia.previewUrl || headerMedia.link || '').trim();
 	const headerHandle = String(rawHeaderMedia.headerHandle || '').trim();
 
 	return {
+		format: normalizeType(header?.format),
+		mediaField,
 		mediaId,
 		previewUrl,
 		headerHandle,
@@ -639,24 +670,34 @@ export default function CampaignComposerPanel({
 	useEffect(() => {
 		void loadCatalogOptions();
 	}, []);
-	const requiresHeaderImage = useMemo(
-		() => templateRequiresHeaderImage(selectedTemplate),
+	const requiresHeaderMedia = useMemo(
+		() => templateRequiresHeaderMedia(selectedTemplate),
 		[selectedTemplate]
 	);
-	const templateHeaderImageAsset = useMemo(
-		() => getTemplateHeaderImageAsset(selectedTemplate),
+	const templateHeaderMediaAsset = useMemo(
+		() => getTemplateHeaderMediaAsset(selectedTemplate),
 		[selectedTemplate]
 	);
-	const campaignOverridesTemplateImage = Boolean(uploadedMediaId);
-	const hasTemplateResolvedHeaderImage = templateHeaderImageAsset.hasResolvedAsset;
-	const needsHeaderImageUpload =
-		requiresHeaderImage &&
-		!hasTemplateResolvedHeaderImage &&
-		!campaignOverridesTemplateImage;
+	const campaignOverridesTemplateMedia = Boolean(uploadedMediaId);
+	const hasTemplateResolvedHeaderMedia = templateHeaderMediaAsset.hasResolvedAsset;
+	const needsHeaderMediaUpload =
+		requiresHeaderMedia &&
+		!hasTemplateResolvedHeaderMedia &&
+		!campaignOverridesTemplateMedia;
+
+	const headerMediaVariablePrefix = useMemo(() => {
+		const mediaField = templateHeaderMediaAsset.mediaField;
+		return mediaField || 'image';
+	}, [templateHeaderMediaAsset.mediaField]);
 
 	const extraVariables = useMemo(
-		() => (uploadedMediaId ? { header_image_id: uploadedMediaId } : {}),
-		[uploadedMediaId]
+		() =>
+			uploadedMediaId
+				? {
+						[`header_${headerMediaVariablePrefix}_id`]: uploadedMediaId,
+					}
+				: {},
+		[headerMediaVariablePrefix, uploadedMediaId]
 	);
 
 	const manualRecipients = useMemo(
@@ -741,14 +782,14 @@ export default function CampaignComposerPanel({
 			},
 			{
 				id: 'image',
-				label: 'Header image',
-				ok: !requiresHeaderImage || !needsHeaderImageUpload,
-				readyText: campaignOverridesTemplateImage
+				label: 'Header media',
+				ok: !requiresHeaderMedia || !needsHeaderMediaUpload,
+				readyText: campaignOverridesTemplateMedia
 					? 'Se reemplaza para esta campaÃ±a'
-					: hasTemplateResolvedHeaderImage
+					: hasTemplateResolvedHeaderMedia
 						? 'Resuelta en la plantilla'
 						: 'No aplica',
-				pendingText: 'Falta cargar la imagen',
+				pendingText: 'Falta cargar el media',
 			},
 			{
 				id: 'variables',
@@ -773,10 +814,10 @@ export default function CampaignComposerPanel({
 		[
 			selectedTemplate?.id,
 			selectedTemplate?.name,
-			requiresHeaderImage,
-			needsHeaderImageUpload,
-			campaignOverridesTemplateImage,
-			hasTemplateResolvedHeaderImage,
+			requiresHeaderMedia,
+			needsHeaderMediaUpload,
+			campaignOverridesTemplateMedia,
+			hasTemplateResolvedHeaderMedia,
 			templatePlaceholders.length,
 			variableMappingError,
 			recipients.length,
@@ -1088,7 +1129,7 @@ export default function CampaignComposerPanel({
 			};
 		});
 	}
-	async function handleImageChange(event) {
+	async function handleHeaderMediaChange(event) {
 		const file = event.target.files?.[0];
 		if (!file) return;
 
@@ -1097,11 +1138,13 @@ export default function CampaignComposerPanel({
 		setUploadingImage(true);
 
 		try {
-			const result = await uploadCampaignHeaderImage(file);
+			const result = await uploadCampaignHeaderMedia(file);
 			const mediaId = result?.mediaId || '';
 
 			if (!mediaId) {
-				throw new Error('Meta no devolvió mediaId para la imagen.');
+				throw new Error(
+					`Meta no devolvió mediaId para el ${getTemplateHeaderMediaLabel(selectedTemplate)}.`
+				);
 			}
 
 			setUploadedMediaId(mediaId);
@@ -1112,7 +1155,7 @@ export default function CampaignComposerPanel({
 			setImageError(
 				error?.response?.data?.error ||
 				error?.message ||
-				'No se pudo subir la imagen del encabezado.'
+				`No se pudo subir el ${getTemplateHeaderMediaLabel(selectedTemplate)} del encabezado.`
 			);
 		} finally {
 			setUploadingImage(false);
@@ -1149,8 +1192,10 @@ export default function CampaignComposerPanel({
 			return;
 		}
 
-		if (needsHeaderImageUpload) {
-			setImageError('Esta plantilla requiere una imagen de encabezado antes de crear la campaña.');
+		if (needsHeaderMediaUpload) {
+			setImageError(
+				`Esta plantilla requiere un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de crear la campaña.`
+			);
 			return;
 		}
 
@@ -1382,14 +1427,14 @@ export default function CampaignComposerPanel({
 						</div>
 					) : null}
 
-					{requiresHeaderImage ? (
+					{requiresHeaderMedia ? (
 						<div className="field">
-							<span>Imagen del encabezado</span>
+							<span>{`${getTemplateHeaderMediaLabel(selectedTemplate)} del encabezado`}</span>
 							<div className="campaign-helper-box">
 								<div className="campaign-helper-text">
-									{hasTemplateResolvedHeaderImage
-										? 'Este template ya tiene una imagen configurada. Solo subi otra si queres reemplazarla para esta campaÃ±a.'
-										: 'Este template usa header con imagen y todavia necesita que cargues una para poder enviarse.'}
+									{hasTemplateResolvedHeaderMedia
+										? `Este template ya tiene un ${getTemplateHeaderMediaLabel(selectedTemplate)} configurado. Solo subí otro si querés reemplazarlo para esta campaña.`
+										: `Este template usa header con ${getTemplateHeaderMediaLabel(selectedTemplate)} y todavía necesita que cargues uno para poder enviarse.`}
 								</div>
 								<div className="campaign-inline-actions">
 									<label
@@ -1399,14 +1444,14 @@ export default function CampaignComposerPanel({
 										{uploadingImage
 											? 'Subiendo…'
 											: uploadedMediaId
-												? 'Cambiar imagen'
-												: hasTemplateResolvedHeaderImage
-													? 'Reemplazar imagen'
-													: 'Subir imagen'}
+												? `Cambiar ${getTemplateHeaderMediaLabel(selectedTemplate)}`
+												: hasTemplateResolvedHeaderMedia
+													? `Reemplazar ${getTemplateHeaderMediaLabel(selectedTemplate)}`
+													: `Subir ${getTemplateHeaderMediaLabel(selectedTemplate)}`}
 										<input
 											type="file"
-											accept="image/*"
-											onChange={handleImageChange}
+											accept={getTemplateHeaderMediaAccept(selectedTemplate)}
+											onChange={handleHeaderMediaChange}
 											disabled={uploadingImage}
 											style={{ display: 'none' }}
 										/>
@@ -1417,15 +1462,15 @@ export default function CampaignComposerPanel({
 									) : null}
 								</div>
 
-								{hasTemplateResolvedHeaderImage && !uploadedMediaId ? (
+								{hasTemplateResolvedHeaderMedia && !uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										La campaÃ±a va a usar la imagen ya guardada en la plantilla.
+										{`La campaña va a usar el ${getTemplateHeaderMediaLabel(selectedTemplate)} ya guardado en la plantilla.`}
 									</div>
 								) : null}
 
 								{uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										La campaÃ±a va a usar la nueva imagen cargada.
+										{`La campaña va a usar el nuevo ${getTemplateHeaderMediaLabel(selectedTemplate)} cargado.`}
 									</div>
 								) : null}
 
@@ -1781,15 +1826,15 @@ export default function CampaignComposerPanel({
 						</div>
 						<div className="campaign-review-card">
 							<strong>
-								{requiresHeaderImage
-									? campaignOverridesTemplateImage
-										? 'Imagen nueva'
-										: hasTemplateResolvedHeaderImage
+								{requiresHeaderMedia
+									? campaignOverridesTemplateMedia
+										? 'Media nueva'
+										: hasTemplateResolvedHeaderMedia
 											? 'Lista'
-											: 'Falta imagen'
+											: 'Falta media'
 									: 'No aplica'}
 							</strong>
-							<span>header image</span>
+							<span>header media</span>
 						</div>
 						<div className="campaign-review-card">
 							<strong>{form.sendNow ? 'Se lanza al crear' : 'Queda en borrador'}</strong>

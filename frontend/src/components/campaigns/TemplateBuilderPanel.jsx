@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { uploadCampaignHeaderImage } from '../../lib/campaigns.js';
+import { uploadCampaignHeaderMedia } from '../../lib/campaigns.js';
 
 function createEmptyButton(type = 'QUICK_REPLY') {
 	return {
@@ -97,10 +97,14 @@ function mapTemplateToForm(template) {
 		headerType: toUpper(header?.format || template.headerFormat || 'TEXT', 'TEXT'),
 		headerText,
 		headerMediaId: normalizeString(
-			header?.image?.id || template?.rawPayload?.headerMedia?.mediaId || ''
+			header?.[getHeaderMediaField(header?.format || template.headerFormat)]?.id ||
+				template?.rawPayload?.headerMedia?.mediaId ||
+				''
 		),
 		headerMediaPreviewUrl: normalizeString(
-			header?.image?.link || template?.rawPayload?.headerMedia?.previewUrl || ''
+			header?.[getHeaderMediaField(header?.format || template.headerFormat)]?.link ||
+				template?.rawPayload?.headerMedia?.previewUrl ||
+				''
 		),
 		headerAssetHandle: extractHeaderHandle(header, template),
 		bodyText,
@@ -279,8 +283,9 @@ function buildPayload(form) {
 		parameterFormat: form.parameterFormat,
 		components,
 		headerMedia:
-			form.headerType === 'IMAGE'
+			['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType)
 				? {
+						format: form.headerType,
 						mediaId: normalizeString(form.headerMediaId || '') || null,
 						previewUrl: normalizeString(form.headerMediaPreviewUrl || '') || null,
 						headerHandle: normalizeString(form.headerAssetHandle || '') || null,
@@ -417,7 +422,7 @@ export default function TemplateBuilderPanel({
 		setLocalError('');
 	}
 
-	async function handleImageUpload(event) {
+	async function handleHeaderMediaUpload(event) {
 		const file = event.target.files?.[0];
 		if (!file) return;
 
@@ -425,7 +430,7 @@ export default function TemplateBuilderPanel({
 		setUploadingImage(true);
 
 		try {
-			const response = await uploadCampaignHeaderImage(file);
+			const response = await uploadCampaignHeaderMedia(file);
 			const previewUrl = URL.createObjectURL(file);
 			const nextMediaId = extractUploadValue(response, ['mediaId', 'id']);
 			const nextHeaderHandle = extractUploadValue(response, [
@@ -437,7 +442,6 @@ export default function TemplateBuilderPanel({
 
 			setForm((current) => ({
 				...current,
-				headerType: 'IMAGE',
 				headerMediaId: nextMediaId,
 				headerMediaPreviewUrl: previewUrl,
 				headerAssetHandle: nextHeaderHandle,
@@ -445,11 +449,14 @@ export default function TemplateBuilderPanel({
 
 			if (!nextHeaderHandle) {
 				setLocalError(
-					'La imagen se subió, pero el backend no devolvió un header_handle. Para templates IMAGE, Meta lo exige.'
+					`El ${getHeaderMediaLabel(form.headerType)} se subió, pero el backend no devolvió un header_handle. Meta lo exige para headers de media.`
 				);
 			}
 		} catch (error) {
-			setLocalError(error?.response?.data?.error || 'No se pudo subir la imagen del header.');
+			setLocalError(
+				error?.response?.data?.error ||
+					`No se pudo subir el ${getHeaderMediaLabel(form.headerType)} del header.`
+			);
 		} finally {
 			setUploadingImage(false);
 			event.target.value = '';
@@ -514,8 +521,8 @@ export default function TemplateBuilderPanel({
 			}
 		}
 
-		if (form.headerType === 'IMAGE' && !form.headerAssetHandle) {
-			return 'Para templates con header IMAGE necesitás una imagen que devuelva header_handle.';
+		if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) && !form.headerAssetHandle) {
+			return `Para templates con header ${form.headerType} necesitás un media upload que devuelva header_handle.`;
 		}
 
 		for (const button of safeArray(form.buttons)) {
@@ -664,7 +671,7 @@ export default function TemplateBuilderPanel({
 										...current,
 										headerType: nextType,
 										headerText: nextType === 'TEXT' ? current.headerText : '',
-										...(nextType !== 'IMAGE'
+										...(!['IMAGE', 'VIDEO', 'DOCUMENT'].includes(nextType)
 											? {
 													headerMediaId: '',
 													headerMediaPreviewUrl: '',
@@ -693,7 +700,7 @@ export default function TemplateBuilderPanel({
 								}
 							/>
 						</label>
-					) : form.headerType === 'IMAGE' ? (
+					) : ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) ? (
 						<div
 							className="field"
 							style={{
@@ -705,7 +712,7 @@ export default function TemplateBuilderPanel({
 								background: '#fff',
 							}}
 						>
-							<span>Imagen de header</span>
+							<span>{`${getHeaderMediaLabel(form.headerType)} de header`}</span>
 
 							<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
 								<label
@@ -723,12 +730,14 @@ export default function TemplateBuilderPanel({
 								>
 									<input
 										type="file"
-										accept="image/*"
-										onChange={handleImageUpload}
+										accept={getHeaderMediaAccept(form.headerType)}
+										onChange={handleHeaderMediaUpload}
 										style={{ display: 'none' }}
 										disabled={uploadingImage}
 									/>
-									{uploadingImage ? 'Subiendo imagen...' : 'Subir imagen'}
+									{uploadingImage
+										? `Subiendo ${getHeaderMediaLabel(form.headerType)}...`
+										: `Subir ${getHeaderMediaLabel(form.headerType)}`}
 								</label>
 
 								{form.headerMediaId || form.headerMediaPreviewUrl || form.headerAssetHandle ? (
@@ -744,7 +753,7 @@ export default function TemplateBuilderPanel({
 											}))
 										}
 									>
-										Quitar imagen
+										{`Quitar ${getHeaderMediaLabel(form.headerType)}`}
 									</button>
 								) : null}
 							</div>
@@ -755,7 +764,7 @@ export default function TemplateBuilderPanel({
 								</div>
 							) : (
 								<div style={{ fontSize: 12, color: '#b45309' }}>
-									Para templates con IMAGE, Meta exige un <strong>header_handle</strong> de
+									Para templates con {form.headerType}, Meta exige un <strong>header_handle</strong> de
 									ejemplo.
 								</div>
 							)}
@@ -776,39 +785,42 @@ export default function TemplateBuilderPanel({
 										width: 'fit-content',
 									}}
 								>
-									<img
-										src={form.headerMediaPreviewUrl}
-										alt="Preview header"
-										style={{
-											width: 220,
-											maxWidth: '100%',
-											display: 'block',
-											borderRadius: 12,
-										}}
-									/>
+									{form.headerType === 'VIDEO' ? (
+										<video
+											src={form.headerMediaPreviewUrl}
+											controls
+											style={{
+												width: 220,
+												maxWidth: '100%',
+												display: 'block',
+												borderRadius: 12,
+											}}
+										/>
+									) : form.headerType === 'DOCUMENT' ? (
+										<a href={form.headerMediaPreviewUrl} target="_blank" rel="noreferrer">
+											Ver PDF cargado
+										</a>
+									) : (
+										<img
+											src={form.headerMediaPreviewUrl}
+											alt="Preview header"
+											style={{
+												width: 220,
+												maxWidth: '100%',
+												display: 'block',
+												borderRadius: 12,
+											}}
+										/>
+									)}
 								</div>
 							) : (
 								<div style={{ fontSize: 12, color: '#64748b' }}>
-									Subí la imagen y el editor va a intentar guardar tanto el media id como el
+									Subí el archivo y el editor va a intentar guardar tanto el media id como el
 									header handle.
 								</div>
 							)}
 						</div>
-					) : (
-						<div
-							className="field"
-							style={{
-								padding: 14,
-								border: '1px dashed #cbd5e1',
-								borderRadius: 14,
-								background: '#fff',
-								color: '#64748b',
-							}}
-						>
-							Por ahora el flujo fuerte queda resuelto para <strong>TEXT</strong> e{' '}
-							<strong>IMAGE</strong>.
-						</div>
-					)}
+					) : null}
 
 					<label className="field">
 						<span>Body</span>
@@ -1016,14 +1028,35 @@ export default function TemplateBuilderPanel({
 								<div className="campaign-preview-header">{form.headerText}</div>
 							) : null}
 
-							{form.headerType === 'IMAGE' ? (
+							{['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) ? (
 								form.headerMediaPreviewUrl ? (
 									<div style={{ marginBottom: 10 }}>
-										<img
-											src={form.headerMediaPreviewUrl}
-											alt="Header preview"
-											style={{ width: '100%', display: 'block', borderRadius: 12 }}
-										/>
+										{form.headerType === 'VIDEO' ? (
+											<video
+												src={form.headerMediaPreviewUrl}
+												controls
+												style={{ width: '100%', display: 'block', borderRadius: 12 }}
+											/>
+										) : form.headerType === 'DOCUMENT' ? (
+											<div
+												style={{
+													padding: '18px 12px',
+													borderRadius: 12,
+													background: '#e2e8f0',
+													color: '#0f172a',
+													fontWeight: 700,
+													textAlign: 'center',
+												}}
+											>
+												PDF adjunto en el header
+											</div>
+										) : (
+											<img
+												src={form.headerMediaPreviewUrl}
+												alt="Header preview"
+												style={{ width: '100%', display: 'block', borderRadius: 12 }}
+											/>
+										)}
 									</div>
 								) : (
 									<div
@@ -1037,7 +1070,7 @@ export default function TemplateBuilderPanel({
 											textAlign: 'center',
 										}}
 									>
-										Acá se verá la imagen del header
+										{`Acá se verá el ${getHeaderMediaLabel(form.headerType)} del header`}
 									</div>
 								)
 							) : null}
@@ -1066,4 +1099,28 @@ export default function TemplateBuilderPanel({
 			</div>
 		</section>
 	);
+}
+
+function getHeaderMediaField(headerType = '') {
+	const normalized = toUpper(headerType);
+
+	if (normalized === 'VIDEO') return 'video';
+	if (normalized === 'DOCUMENT') return 'document';
+	return 'image';
+}
+
+function getHeaderMediaAccept(headerType = '') {
+	const normalized = toUpper(headerType);
+
+	if (normalized === 'VIDEO') return 'video/mp4';
+	if (normalized === 'DOCUMENT') return 'application/pdf';
+	return 'image/*';
+}
+
+function getHeaderMediaLabel(headerType = '') {
+	const normalized = toUpper(headerType);
+
+	if (normalized === 'VIDEO') return 'video';
+	if (normalized === 'DOCUMENT') return 'documento';
+	return 'imagen';
 }

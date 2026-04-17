@@ -93,7 +93,7 @@ export async function serveInboxMediaController(req, res) {
 }
 
 export async function uploadCampaignHeaderImageController(req, res) {
-	const file = req.file;
+	const file = req.file || req.files?.media?.[0] || req.files?.image?.[0] || req.files?.video?.[0] || null;
 
 	console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
 	console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
@@ -103,7 +103,7 @@ export async function uploadCampaignHeaderImageController(req, res) {
 	}
 
 	if (!file) {
-		return res.status(400).json({ ok: false, error: 'No se recibió ninguna imagen.' });
+		return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo de media.' });
 	}
 
 	try {
@@ -118,7 +118,7 @@ export async function uploadCampaignHeaderImageController(req, res) {
 
 			return res.status(400).json({
 				ok: false,
-				error: 'No se pudo subir la imagen a Meta.',
+				error: 'No se pudo subir el media a Meta.',
 				details: result.error || null
 			});
 		}
@@ -137,7 +137,7 @@ export async function uploadCampaignHeaderImageController(req, res) {
 
 		return res.status(500).json({
 			ok: false,
-			error: error.message || 'Error interno al subir la imagen.'
+			error: error.message || 'Error interno al subir el media.'
 		});
 	} finally {
 		try {
