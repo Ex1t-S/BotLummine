@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import {
 	serveInboxMediaController,
-	uploadCampaignHeaderImageController
+	uploadCampaignHeaderMediaController
 } from '../controllers/media.controller.js';
 import { attachUser, requireAdmin } from '../middleware/auth.js';
 
@@ -11,22 +11,26 @@ const router = Router();
 const upload = multer({
 	dest: 'tmp/',
 	limits: {
-		fileSize: 10 * 1024 * 1024
+		fileSize: 100 * 1024 * 1024
 	}
 });
 
 router.get('/inbox/:fileName', serveInboxMediaController);
 
 router.post(
+	'/campaign-header-media',
+	attachUser,
+	requireAdmin,
+	upload.single('file'),
+	uploadCampaignHeaderMediaController
+);
+
+router.post(
 	'/campaign-header-image',
 	attachUser,
 	requireAdmin,
-	upload.fields([
-		{ name: 'image', maxCount: 1 },
-		{ name: 'media', maxCount: 1 },
-		{ name: 'video', maxCount: 1 }
-	]),
-	uploadCampaignHeaderImageController
+	upload.single('file'),
+	uploadCampaignHeaderMediaController
 );
 
 export default router;

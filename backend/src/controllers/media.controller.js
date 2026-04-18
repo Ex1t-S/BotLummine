@@ -92,8 +92,10 @@ export async function serveInboxMediaController(req, res) {
 	}
 }
 
-export async function uploadCampaignHeaderImageController(req, res) {
-	const file = req.file || req.files?.media?.[0] || req.files?.image?.[0] || req.files?.video?.[0] || null;
+export async function uploadCampaignHeaderMediaController(req, res) {
+	const file = req.file || req.files?.file?.[0] || req.files?.media?.[0] || req.files?.image?.[0] || req.files?.video?.[0] || null;
+	const purpose = String(req.body?.purpose || '').trim().toLowerCase();
+	const generateHeaderHandle = purpose === 'template_header';
 
 	console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
 	console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
@@ -110,7 +112,8 @@ export async function uploadCampaignHeaderImageController(req, res) {
 		const result = await uploadWhatsAppMedia({
 			filePath: file.path,
 			fileName: file.originalname || file.filename || 'header-image',
-			mimeType: file.mimetype
+			mimeType: file.mimetype,
+			generateHeaderHandle
 		});
 
 		if (!result.ok) {
@@ -130,6 +133,7 @@ export async function uploadCampaignHeaderImageController(req, res) {
 			fileName: result.fileName || file.originalname || null,
 			mimeType: result.mimeType || file.mimetype || null,
 			fileSize: result.fileSize || null,
+			purpose: purpose || null,
 			warnings: Array.isArray(result.warnings) ? result.warnings : []
 		});
 	} catch (error) {
@@ -149,3 +153,5 @@ export async function uploadCampaignHeaderImageController(req, res) {
 		}
 	}
 }
+
+export const uploadCampaignHeaderImageController = uploadCampaignHeaderMediaController;

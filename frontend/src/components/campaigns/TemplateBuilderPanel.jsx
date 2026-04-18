@@ -430,7 +430,9 @@ export default function TemplateBuilderPanel({
 		setUploadingImage(true);
 
 		try {
-			const response = await uploadCampaignHeaderMedia(file);
+			const response = await uploadCampaignHeaderMedia(file, {
+				purpose: 'template_header'
+			});
 			const previewUrl = URL.createObjectURL(file);
 			const nextMediaId = extractUploadValue(response, ['mediaId', 'id']);
 			const nextHeaderHandle = extractUploadValue(response, [

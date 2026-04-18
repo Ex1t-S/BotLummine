@@ -1138,7 +1138,9 @@ export default function CampaignComposerPanel({
 		setUploadingImage(true);
 
 		try {
-			const result = await uploadCampaignHeaderMedia(file);
+			const result = await uploadCampaignHeaderMedia(file, {
+				purpose: 'campaign_send'
+			});
 			const mediaId = result?.mediaId || '';
 
 			if (!mediaId) {

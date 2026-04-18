@@ -74,16 +74,22 @@ export async function previewAbandonedCartAudience(payload) {
 	return unwrap(response);
 }
 
-export async function uploadCampaignHeaderMedia(file, fieldName = 'media') {
+export async function uploadCampaignHeaderMedia(
+	file,
+	{ fieldName = 'file', purpose = null } = {}
+) {
 	const formData = new FormData();
 	formData.append(fieldName, file);
+	if (purpose) {
+		formData.append('purpose', purpose);
+	}
 
-	const response = await api.post('/media/campaign-header-image', formData);
+	const response = await api.post('/media/campaign-header-media', formData);
 	return unwrap(response);
 }
 
 export async function uploadCampaignHeaderImage(file) {
-	return uploadCampaignHeaderMedia(file, 'image');
+	return uploadCampaignHeaderMedia(file, { fieldName: 'file' });
 }
 
 export async function fetchCampaignCustomers(params = {}) {

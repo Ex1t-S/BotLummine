@@ -24,6 +24,25 @@ function getPhoneNumberId() {
 	return normalizeString(process.env.WHATSAPP_PHONE_NUMBER_ID || '');
 }
 
+function getMetaAppId() {
+	return normalizeString(
+		process.env.META_APP_ID ||
+			process.env.FACEBOOK_APP_ID ||
+			process.env.APP_ID ||
+			''
+	);
+}
+
+function canGenerateTemplateHeaderHandle(mimeType = '') {
+	return [
+		'image/jpeg',
+		'image/jpg',
+		'image/png',
+		'video/mp4',
+		'application/pdf'
+	].includes(normalizeString(mimeType).toLowerCase());
+}
+
 function getBackendPublicBaseUrl() {
 	const explicit =
 		normalizeString(process.env.BACKEND_PUBLIC_URL) ||
@@ -182,7 +201,110 @@ async function uploadStandardWhatsAppMedia({ phoneNumberId, fileName, mimeType, 
 	return normalizeString(data?.id || data?.media_id || '');
 }
 
-export async function uploadWhatsAppMedia({ filePath, fileName, mimeType }) {
+async function createResumableUploadSession({
+	appId,
+	fileName,
+	fileLength,
+	fileType,
+	accessToken
+}) {
+	const params = new URLSearchParams({
+		file_name: fileName,
+		file_length: String(Number(fileLength || 0)),
+		file_type: fileType
+	});
+
+	const response = await fetch(`${getGraphBaseUrl()}/${appId}/uploads?${params.toString()}`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${accessToken}`
+		}
+	});
+
+	const data = await response.json().catch(() => null);
+
+	if (!response.ok) {
+		const error = new Error(
+			data?.error?.message || data?.message || 'No se pudo crear la sesión de upload de Meta.'
+		);
+
+		error.response = {
+			status: response.status,
+			data
+		};
+
+		throw error;
+	}
+
+	const sessionId = normalizeString(data?.id || '');
+
+	if (!sessionId) {
+		const error = new Error('Meta no devolvió el id de la sesión de upload.');
+		error.response = {
+			status: response.status,
+			data
+		};
+		throw error;
+	}
+
+	return sessionId;
+}
+
+async function uploadTemplateHeaderAsset({
+	uploadSessionId,
+	buffer,
+	accessToken
+}) {
+	const response = await fetch(`${getGraphBaseUrl()}/${uploadSessionId}`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+			file_offset: '0',
+			'Content-Type': 'application/octet-stream'
+		},
+		body: buffer
+	});
+
+	const data = await response.json().catch(() => null);
+
+	if (!response.ok) {
+		const error = new Error(
+			data?.error?.message || data?.message || 'No se pudo subir el asset del header a Meta.'
+		);
+
+		error.response = {
+			status: response.status,
+			data
+		};
+
+		throw error;
+	}
+
+	const headerHandle = normalizeString(
+		data?.h ||
+			data?.header_handle ||
+			data?.handle ||
+			''
+	);
+
+	if (!headerHandle) {
+		const error = new Error('Meta no devolvió header_handle para el asset del template.');
+		error.response = {
+			status: response.status,
+			data
+		};
+		throw error;
+	}
+
+	return headerHandle;
+}
+
+export async function uploadWhatsAppMedia({
+	filePath,
+	fileName,
+	mimeType,
+	generateHeaderHandle = false
+}) {
 	const accessToken = getAccessToken();
 	const phoneNumberId = getPhoneNumberId();
 
@@ -214,6 +336,7 @@ export async function uploadWhatsAppMedia({ filePath, fileName, mimeType }) {
 
 		const resolvedFileName = sanitizeFileName(fileName || path.basename(absolutePath) || 'media');
 		const resolvedMimeType = normalizeString(mimeType || 'application/octet-stream');
+		const warnings = [];
 
 		const mediaId = await uploadStandardWhatsAppMedia({
 			phoneNumberId,
@@ -223,14 +346,62 @@ export async function uploadWhatsAppMedia({ filePath, fileName, mimeType }) {
 			accessToken
 		});
 
+		let headerHandle = null;
+
+		if (generateHeaderHandle) {
+			if (!canGenerateTemplateHeaderHandle(resolvedMimeType)) {
+				return {
+					ok: false,
+					error: {
+						message: `Tipo de archivo no soportado para header de template: ${resolvedMimeType}`,
+						status: 400,
+						responseData: {
+							mimeType: resolvedMimeType
+						}
+					}
+				};
+			}
+
+			const appId = getMetaAppId();
+
+			if (!appId) {
+				return {
+					ok: false,
+					error: {
+						message: 'Falta META_APP_ID, FACEBOOK_APP_ID o APP_ID para generar header_handle de templates.',
+						status: 400,
+						responseData: null
+					}
+				};
+			}
+
+			const uploadSessionId = await createResumableUploadSession({
+				appId,
+				fileName: resolvedFileName,
+				fileLength: stats.size,
+				fileType: resolvedMimeType,
+				accessToken
+			});
+
+			headerHandle = await uploadTemplateHeaderAsset({
+				uploadSessionId,
+				buffer,
+				accessToken
+			});
+		} else if (canGenerateTemplateHeaderHandle(resolvedMimeType) && !getMetaAppId()) {
+			warnings.push(
+				'No se generó header_handle porque falta META_APP_ID/FACEBOOK_APP_ID/APP_ID. Para crear templates con media header, configurá esa variable.'
+			);
+		}
+
 		return {
 			ok: true,
 			mediaId,
-			headerHandle: null,
+			headerHandle,
 			fileName: resolvedFileName,
 			mimeType: resolvedMimeType,
 			fileSize: stats.size,
-			warnings: []
+			warnings
 		};
 	} catch (error) {
 		return {
