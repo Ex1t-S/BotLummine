@@ -203,6 +203,7 @@ function buildTemplateUpsertPayload(metaTemplate, rawPayloadOverride = null) {
 		rejectedReason: normalizeString(metaTemplate?.rejected_reason || '') || null,
 		disabledReason: normalizeString(metaTemplate?.disabled_reason || '') || null,
 		lastSyncedAt: new Date(),
+		deletedAt: null,
 		rawPayload: cleanJson(rawPayloadOverride || metaTemplate)
 	};
 }
@@ -280,6 +281,7 @@ export async function syncTemplatesFromMeta({
 	pageLimit = 10,
 	pageSize = 100
 } = {}) {
+	const wabaId = getWhatsAppBusinessAccountId();
 	const syncLog = await prisma.templateSyncLog.create({
 		data: {
 			status: 'RUNNING'
@@ -291,11 +293,14 @@ export async function syncTemplatesFromMeta({
 	let fetchedCount = 0;
 	let upsertedCount = 0;
 	let errorCount = 0;
+	let restoredCount = 0;
+	let markedDeletedCount = 0;
 	const pages = [];
+	const seenMetaTemplateIds = new Set();
 
 	try {
 		while (page < pageLimit) {
-			const response = await graphGet(`/${getWhatsAppBusinessAccountId()}/message_templates`, {
+			const response = await graphGet(`/${wabaId}/message_templates`, {
 				params: {
 					limit: Math.max(1, Math.min(Number(pageSize) || 100, 250)),
 					fields: TEMPLATE_FIELDS,
@@ -308,7 +313,30 @@ export async function syncTemplatesFromMeta({
 			fetchedCount += batch.length;
 
 			for (const item of batch) {
+				if (item?.id) {
+					seenMetaTemplateIds.add(String(item.id));
+				}
+
+				const payload = buildTemplateUpsertPayload(item);
+				const existingTemplate = await prisma.whatsAppTemplate.findUnique({
+					where: {
+						wabaId_name_language: {
+							wabaId: payload.wabaId,
+							name: payload.name,
+							language: payload.language
+						}
+					},
+					select: {
+						deletedAt: true
+					}
+				});
+
 				await upsertLocalTemplate(item);
+
+				if (existingTemplate?.deletedAt) {
+					restoredCount += 1;
+				}
+
 				upsertedCount += 1;
 			}
 
@@ -320,6 +348,29 @@ export async function syncTemplatesFromMeta({
 			}
 		}
 
+		const deleteWhere = {
+			wabaId,
+			metaTemplateId: seenMetaTemplateIds.size
+				? {
+					not: null,
+					notIn: [...seenMetaTemplateIds]
+				}
+				: {
+					not: null
+				},
+			deletedAt: null
+		};
+		const deleteResult = await prisma.whatsAppTemplate.updateMany({
+			where: deleteWhere,
+			data: {
+				status: 'DELETED',
+				deletedAt: new Date(),
+				lastSyncedAt: new Date()
+			}
+		});
+
+		markedDeletedCount = Number(deleteResult?.count || 0);
+
 		await prisma.templateSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
@@ -330,7 +381,9 @@ export async function syncTemplatesFromMeta({
 				errorCount,
 				rawPayload: {
 					pagesFetched: page,
-					lastAfter: after
+					lastAfter: after,
+					restoredCount,
+					markedDeletedCount
 				}
 			}
 		});
@@ -338,7 +391,9 @@ export async function syncTemplatesFromMeta({
 		return {
 			fetchedCount,
 			upsertedCount,
-			errorCount
+			errorCount,
+			restoredCount,
+			markedDeletedCount
 		};
 	} catch (error) {
 		errorCount += 1;
