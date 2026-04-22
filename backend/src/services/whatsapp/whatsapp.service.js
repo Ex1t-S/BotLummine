@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import axios from 'axios';
 import {
 	normalizeWhatsAppNumber,
@@ -6,20 +7,53 @@ import {
 	buildInteractiveListPayload,
 	buildTemplatePayload,
 } from './whatsapp-formatters.js';
+import {
+	getGraphVersion,
+	getWhatsAppAccessToken,
+	getWhatsAppPhoneNumberId,
+} from './meta-graph.service.js';
+
+function buildTokenDebugFingerprint(token = '') {
+	const normalized = String(token || '').trim();
+
+	if (!normalized) {
+		return {
+			tokenPresent: false,
+			tokenLength: 0,
+			tokenFingerprint: null,
+			tokenPrefix: null,
+			tokenSuffix: null,
+		};
+	}
+
+	return {
+		tokenPresent: true,
+		tokenLength: normalized.length,
+		tokenFingerprint: crypto
+			.createHash('sha256')
+			.update(normalized)
+			.digest('hex')
+			.slice(0, 16),
+		tokenPrefix: normalized.slice(0, 6),
+		tokenSuffix: normalized.slice(-6),
+	};
+}
 
 async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	const rawTo = to;
 	const finalTo = normalizeWhatsAppNumber(rawTo);
-	const graphVersion = process.env.WHATSAPP_GRAPH_VERSION || 'v25.0';
-	const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+	const graphVersion = getGraphVersion();
+	const phoneNumberId = getWhatsAppPhoneNumberId();
+	const accessToken = getWhatsAppAccessToken();
 	const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
+	const tokenDebug = buildTokenDebugFingerprint(accessToken);
 
 	debugWhatsAppRecipient(`${debugLabel} META`, {
 		rawTo,
 		finalTo,
 		graphVersion,
 		phoneNumberId,
-		tokenLoaded: Boolean(process.env.WHATSAPP_ACCESS_TOKEN),
+		...tokenDebug,
 		payloadType: payload?.type || null,
 	});
 
@@ -43,7 +77,7 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	try {
 		const response = await axios.post(url, finalPayload, {
 			headers: {
-				Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+				Authorization: `Bearer ${accessToken}`,
 				'Content-Type': 'application/json',
 			},
 		});
@@ -59,6 +93,21 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 	} catch (error) {
 		console.error(`[WA DEBUG] ${debugLabel} ERROR MESSAGE`, error.message);
 		console.error(`[WA DEBUG] ${debugLabel} ERROR STATUS`, error.response?.status);
+		console.error(
+			`[WA DEBUG] ${debugLabel} ERROR CONTEXT`,
+			JSON.stringify(
+				{
+					rawTo,
+					finalTo,
+					graphVersion,
+					phoneNumberId,
+					...tokenDebug,
+					payloadType: payload?.type || null,
+				},
+				null,
+				2
+			)
+		);
 		console.error(
 			`[WA DEBUG] ${debugLabel} ERROR DATA`,
 			JSON.stringify(error.response?.data || {}, null, 2)

@@ -525,6 +525,9 @@ function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentS
 	if (currentStatus === 'CANCELED') {
 		return 'CANCELED';
 	}
+	if (currentStatus === 'FAILED' && pending > 0) {
+		return 'FAILED';
+	}
 	if (pending > 0) {
 		return 'RUNNING';
 	}
@@ -588,6 +591,35 @@ function normalizeCampaignBatchSize() {
 
 function normalizeCampaignLockMs() {
 	return Math.max(60_000, Number(process.env.CAMPAIGN_DISPATCH_LOCK_MS || 300_000) || 300_000);
+}
+
+function extractCampaignProviderError(sendResult = {}) {
+	const providerError = sendResult?.error?.error || sendResult?.error || {};
+
+	return {
+		code: normalizeString(providerError?.code || ''),
+		subcode: normalizeString(providerError?.error_subcode || ''),
+		message: normalizeString(
+			providerError?.message ||
+			sendResult?.error?.message ||
+			'No se pudo enviar la plantilla.'
+		),
+		raw: sendResult?.error || null
+	};
+}
+
+function isFatalCampaignProviderError(sendResult = {}) {
+	const providerError = extractCampaignProviderError(sendResult);
+	return providerError.code === '190';
+}
+
+class CampaignDispatchFatalError extends Error {
+	constructor(message, options = {}) {
+		super(message);
+		this.name = 'CampaignDispatchFatalError';
+		this.recipientHandled = Boolean(options.recipientHandled);
+		this.providerError = options.providerError || null;
+	}
 }
 
 function ensureApprovedTemplate(template) {
@@ -1084,7 +1116,7 @@ export async function retryFailedCampaignRecipients(campaignId) {
 		where: {
 			campaignId,
 			status: {
-				in: ['FAILED', 'SKIPPED']
+				in: ['FAILED', 'SKIPPED', 'PENDING']
 			}
 		},
 		data: {
@@ -1246,6 +1278,8 @@ async function dispatchSingleRecipient(campaign, recipient) {
 
 	console.log('[CAMPAIGN][SEND] original phone:', recipient.phone);
 	console.log('[CAMPAIGN][SEND] normalized phone:', normalizeCampaignPhone(recipient.phone || ''));
+	console.log('[CAMPAIGN][SEND] campaign:', campaign.id, campaign.name, campaign.audienceSource || 'manual');
+	console.log('[CAMPAIGN][SEND] recipient:', recipient.id, recipient.contactId || 'no-contact', recipient.externalKey || 'no-external-key');
 	console.log('[CAMPAIGN][SEND] template:', campaign.templateName, campaign.templateLanguage);
 	console.log('[CAMPAIGN][SEND] components:', JSON.stringify(componentsToSend, null, 2));
 
@@ -1257,24 +1291,33 @@ async function dispatchSingleRecipient(campaign, recipient) {
 	});
 
 	if (!sendResult?.ok) {
+		const providerError = extractCampaignProviderError(sendResult);
+
 		console.log('[CAMPAIGN][SEND][ERROR] phone:', recipient.phone);
+		console.log('[CAMPAIGN][SEND][ERROR] campaign:', campaign.id, recipient.id);
+		console.log('[CAMPAIGN][SEND][ERROR] provider:', providerError.code, providerError.subcode, providerError.message);
 		console.log('[CAMPAIGN][SEND][ERROR] raw:', JSON.stringify(sendResult?.error || {}, null, 2));
 
-		return prisma.campaignRecipient.update({
+		const failedRecipient = await prisma.campaignRecipient.update({
 			where: { id: recipient.id },
 			data: {
 				status: 'FAILED',
-				errorCode: normalizeString(sendResult?.error?.error?.code || ''),
-				errorSubcode: normalizeString(sendResult?.error?.error?.error_subcode || ''),
-				errorMessage: normalizeString(
-					sendResult?.error?.error?.message ||
-					sendResult?.error?.message ||
-					'No se pudo enviar la plantilla.'
-				),
+				errorCode: providerError.code,
+				errorSubcode: providerError.subcode,
+				errorMessage: providerError.message,
 				failedAt: new Date(),
-				rawPayload: sendResult?.error || null
+				rawPayload: providerError.raw
 			}
 		});
+
+		if (isFatalCampaignProviderError(sendResult)) {
+			throw new CampaignDispatchFatalError(providerError.message, {
+				recipientHandled: true,
+				providerError
+			});
+		}
+
+		return failedRecipient;
 	}
 
 	const updatedRecipient = await prisma.campaignRecipient.update({
@@ -1365,21 +1408,30 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 		} catch (error) {
 			console.log('[CAMPAIGN][DISPATCH][EXCEPTION]', error.message);
 
-			await prisma.campaignRecipient.update({
-				where: { id: recipient.id },
-				data: {
-					status: 'FAILED',
-					errorMessage: error.message,
-					failedAt: new Date()
-				}
-			});
+			if (!error?.recipientHandled) {
+				await prisma.campaignRecipient.update({
+					where: { id: recipient.id },
+					data: {
+						status: 'FAILED',
+						errorMessage: error.message,
+						failedAt: new Date()
+					}
+				});
+			}
+
+			const isFatal = error instanceof CampaignDispatchFatalError;
 
 			await prisma.campaign.update({
 				where: { id: campaignId },
 				data: {
-					lastError: error.message
+					lastError: error.message,
+					...(isFatal ? { status: 'FAILED' } : {})
 				}
 			});
+
+			if (isFatal) {
+				break;
+			}
 		}
 
 		if (delayMs > 0) {
