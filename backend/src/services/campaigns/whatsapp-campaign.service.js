@@ -593,6 +593,21 @@ function normalizeCampaignLockMs() {
 	return Math.max(60_000, Number(process.env.CAMPAIGN_DISPATCH_LOCK_MS || 300_000) || 300_000);
 }
 
+async function refreshCampaignDispatchLock(campaignId, lockId) {
+	const updated = await prisma.campaign.updateMany({
+		where: {
+			id: campaignId,
+			dispatchLockId: lockId
+		},
+		data: {
+			dispatchLockedAt: new Date(),
+			status: 'RUNNING'
+		}
+	});
+
+	return updated.count === 1;
+}
+
 function extractCampaignProviderError(sendResult = {}) {
 	const providerError = sendResult?.error?.error || sendResult?.error || {};
 
@@ -1461,6 +1476,140 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 	};
 }
 
+async function dispatchClaimedCampaign(campaignId, lockId) {
+	const campaign = await prisma.campaign.findUnique({
+		where: { id: campaignId }
+	});
+
+	if (!campaign) {
+		return {
+			ok: false,
+			message: 'La campaÃ±a no existe.'
+		};
+	}
+
+	if (campaign.status === 'CANCELED') {
+		await prisma.campaign.updateMany({
+			where: {
+				id: campaignId,
+				dispatchLockId: lockId
+			},
+			data: {
+				dispatchLockedAt: null,
+				dispatchLockId: null,
+				finishedAt: new Date()
+			}
+		});
+
+		return {
+			ok: true,
+			campaignId,
+			processedCount: 0,
+			message: 'La campaÃ±a ya estaba cancelada.'
+		};
+	}
+
+	const delayMs = normalizeCampaignDelayMs();
+	const batchSize = normalizeCampaignBatchSize();
+	let processedCount = 0;
+	let sawFatalProviderError = false;
+
+	while (true) {
+		const lockStillOwned = await refreshCampaignDispatchLock(campaignId, lockId);
+
+		if (!lockStillOwned) {
+			return {
+				ok: false,
+				campaignId,
+				processedCount,
+				message: 'Se perdiÃ³ el lock de despacho de la campaÃ±a.'
+			};
+		}
+
+		const recipients = await prisma.campaignRecipient.findMany({
+			where: {
+				campaignId,
+				status: 'PENDING'
+			},
+			orderBy: [{ createdAt: 'asc' }],
+			take: batchSize
+		});
+
+		if (!recipients.length) {
+			break;
+		}
+
+		for (const recipient of recipients) {
+			try {
+				await dispatchSingleRecipient(campaign, recipient);
+			} catch (error) {
+				console.log('[CAMPAIGN][DISPATCH][EXCEPTION]', error.message);
+
+				if (!error?.recipientHandled) {
+					await prisma.campaignRecipient.update({
+						where: { id: recipient.id },
+						data: {
+							status: 'FAILED',
+							errorMessage: error.message,
+							failedAt: new Date()
+						}
+					});
+				}
+
+				const isFatal = error instanceof CampaignDispatchFatalError;
+
+				await prisma.campaign.update({
+					where: { id: campaignId },
+					data: {
+						lastError: error.message,
+						...(isFatal ? { status: 'FAILED' } : {})
+					}
+				});
+
+				if (isFatal) {
+					sawFatalProviderError = true;
+				}
+			}
+
+			processedCount += 1;
+
+			if (sawFatalProviderError) {
+				break;
+			}
+
+			if (delayMs > 0) {
+				await sleep(delayMs);
+			}
+		}
+
+		if (sawFatalProviderError) {
+			break;
+		}
+	}
+
+	const refreshed = await refreshCampaignCounters(campaignId);
+
+	await prisma.campaign.updateMany({
+		where: {
+			id: campaignId,
+			dispatchLockId: lockId
+		},
+		data: {
+			dispatchLockedAt: null,
+			dispatchLockId: null,
+			status: refreshed?.status || campaign.status
+		}
+	});
+
+	return {
+		ok: true,
+		campaignId,
+		processedCount,
+		status: refreshed?.status || campaign.status,
+		...(processedCount === 0 ? { message: 'No habÃ­a destinatarios pendientes.' } : {})
+	};
+}
+
 export async function runCampaignDispatchTick() {
 	const claimed = await claimNextCampaignForDispatch();
 
@@ -1472,7 +1621,7 @@ export async function runCampaignDispatchTick() {
 		};
 	}
 
-	const result = await dispatchCampaignBatch(claimed.campaignId, claimed.lockId);
+	const result = await dispatchClaimedCampaign(claimed.campaignId, claimed.lockId);
 
 	return {
 		ok: true,

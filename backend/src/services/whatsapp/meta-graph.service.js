@@ -1,9 +1,24 @@
 import axios from 'axios';
 
-const DEFAULT_GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION || 'v25.0';
+function normalizeEnvValue(value, fallback = '') {
+	const normalized = String(value ?? '').trim();
+
+	if (!normalized) {
+		return fallback;
+	}
+
+	if (
+		(normalized.startsWith('"') && normalized.endsWith('"')) ||
+		(normalized.startsWith("'") && normalized.endsWith("'"))
+	) {
+		return normalized.slice(1, -1).trim() || fallback;
+	}
+
+	return normalized;
+}
 
 function readRequiredEnv(name) {
-	const value = String(process.env[name] || '').trim();
+	const value = normalizeEnvValue(process.env[name] || '');
 
 	if (!value) {
 		throw new Error(`Falta la variable de entorno ${name}.`);
@@ -13,15 +28,16 @@ function readRequiredEnv(name) {
 }
 
 export function getGraphVersion() {
-	return DEFAULT_GRAPH_VERSION;
+	return normalizeEnvValue(process.env.WHATSAPP_GRAPH_VERSION, 'v25.0');
 }
 
 export function getWhatsAppBusinessAccountId() {
-	return String(
+	return normalizeEnvValue(
 		process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ||
 		process.env.WHATSAPP_WABA_ID ||
-		''
-	).trim() || readRequiredEnv('WHATSAPP_BUSINESS_ACCOUNT_ID');
+		'',
+		readRequiredEnv('WHATSAPP_BUSINESS_ACCOUNT_ID')
+	);
 }
 
 export function getWhatsAppPhoneNumberId() {
