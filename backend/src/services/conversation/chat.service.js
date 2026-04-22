@@ -60,6 +60,181 @@ function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	return `${baseText}\n\n${suffix}`.trim();
 }
 
+function findLastOutboundBeforeCurrentInbound(messages = []) {
+	for (let index = messages.length - 2; index >= 0; index -= 1) {
+		const message = messages[index];
+		if (message?.direction === 'OUTBOUND') {
+			return message;
+		}
+	}
+
+	return null;
+}
+
+function isAbandonedCartCampaignMessage(message = null) {
+	return (
+		message?.direction === 'OUTBOUND' &&
+		message?.provider === 'whatsapp-cloud-api' &&
+		message?.model === 'carrito_abandonated_v2'
+	);
+}
+
+function looksLikeThirdPartyAutoReply(text = '') {
+	const normalized = normalizeText(text);
+	if (!normalized) return false;
+
+	return /(gracias por comunicarte con|te comunicaste con|servicio de guardia|solo llamadas por whatsapp|departamento comercial|por consultas o turnos|estudio juridico|mi nombre es .+ en que puedo ayudarte|esper[o]? tenga un buen dia)/i.test(
+		normalized
+	);
+}
+
+function looksLikeCampaignPaymentIssue(text = '') {
+	const normalized = normalizeText(text);
+	if (!normalized) return false;
+
+	const hasPaymentTopic =
+		/(pago|tarjeta|cuotas|banco|mercado pago|mercadopago|transfer|alias|cbu|comprobante)/i.test(
+			normalized
+		);
+	const hasFriction =
+		/(error|no me deja|no me dejaba|no podia|problema|recargada|rechaz|no encontre|no figura|me daba|no podia pagar)/i.test(
+			normalized
+		);
+
+	return hasPaymentTopic && hasFriction;
+}
+
+function looksLikeSimplePurchaseCompletion(text = '') {
+	const normalized = normalizeText(text);
+	if (!normalized) return false;
+
+	const completedPurchase =
+		/(ya compre|ya hice la compra|ya hice el pedido|ya realice el pedido|ya realice la compra|ya finalice la compra|ya esta realizado|ya esta hecha|ya lo compre)/i.test(
+			normalized
+		);
+	const asksForFollowUp =
+		/(cuando|seguimiento|tracking|pedido|envio|llega|cuanto|donde)/i.test(normalized);
+
+	return completedPurchase && !asksForFollowUp;
+}
+
+function looksLikeGenericCampaignReply(text = '') {
+	const normalized = normalizeText(text);
+	if (!normalized) return true;
+
+	if (/^(hola+|holaa+|holis+|buen dia|buenos dias|buenas|gracias|muchas gracias|hola sofi|hola bella|hola hermosa)[!. ]*$/i.test(normalized)) {
+		return true;
+	}
+
+	if (normalized.length <= 20 && /^(si|sisi|dale|ok|oka|buenas|hola|holaa|holis|gracias)/i.test(normalized)) {
+		return true;
+	}
+
+	return false;
+}
+
+async function maybeHandleAbandonedCartReply({
+	conversation,
+	currentState,
+	contactName,
+	messageBody,
+	messageType,
+	rawPayload,
+	transportMode,
+}) {
+	const lastOutbound = findLastOutboundBeforeCurrentInbound(conversation?.messages || []);
+	if (!isAbandonedCartCampaignMessage(lastOutbound)) {
+		return { handled: false };
+	}
+
+	const normalizedBody = normalizeText(messageBody);
+	const normalizedMessageType = String(messageType || '').toLowerCase();
+
+	if (['image', 'document'].includes(normalizedMessageType)) {
+		return { handled: false };
+	}
+
+	if (looksLikeThirdPartyAutoReply(normalizedBody)) {
+		return {
+			handled: true,
+			traceModel: 'campaign-autoreply-ignore',
+			suppressReply: true,
+		};
+	}
+
+	if (looksLikeCampaignPaymentIssue(normalizedBody)) {
+		await syncHumanHandoff({
+			conversationId: conversation.id,
+			reason: 'campaign_payment_issue',
+		});
+
+		await sendAndPersistOutbound({
+			conversationId: conversation.id,
+			body: buildHandoffReply({
+				contactName: contactName || conversation.contact?.name || conversation.contact?.waId || '',
+				reason: 'default',
+			}),
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'campaign-payment-handoff',
+				raw: {
+					source: 'abandoned_cart_reply',
+				},
+			},
+		});
+
+		return {
+			handled: true,
+			traceModel: 'campaign-payment-handoff',
+			suppressReply: false,
+		};
+	}
+
+	if (looksLikeSimplePurchaseCompletion(normalizedBody)) {
+		await sendAndPersistOutbound({
+			conversationId: conversation.id,
+			body: 'Perfecto, gracias por avisar. Si mas adelante necesitas ayuda con tu pedido, pago o talle, escribime menu y te guio por aca.',
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'campaign-purchase-ack',
+				raw: {
+					source: 'abandoned_cart_reply',
+				},
+			},
+		});
+
+		return {
+			handled: true,
+			traceModel: 'campaign-purchase-ack',
+			suppressReply: false,
+		};
+	}
+
+	if (looksLikeGenericCampaignReply(normalizedBody)) {
+		const menuDecision = await maybeHandleMenuFlow({
+			conversation,
+			currentState,
+			contactName,
+			messageBody: 'menu',
+			messageType,
+			rawPayload,
+			transportMode,
+		});
+
+		if (menuDecision?.handled) {
+			return {
+				handled: true,
+				traceModel: 'campaign-menu-router',
+				suppressReply: false,
+			};
+		}
+	}
+
+	return { handled: false };
+}
+
 export async function getOrCreateConversation({
 	waId,
 	contactName,
@@ -242,6 +417,28 @@ export async function processInboundMessage({
 		shouldReply: false,
 		menuAssistantContext: null,
 	};
+
+	const abandonedCartDecision = await maybeHandleAbandonedCartReply({
+		conversation: freshConversation,
+		currentState,
+		contactName,
+		messageBody,
+		messageType,
+		rawPayload,
+		transportMode,
+	});
+
+	if (abandonedCartDecision?.handled) {
+		trace = {
+			...trace,
+			intent: 'campaign_reply',
+			assistantMessage: null,
+			provider: 'system',
+			model: abandonedCartDecision.traceModel || 'campaign-reply-router',
+			shouldReply: !abandonedCartDecision.suppressReply,
+		};
+		return { conversation: freshConversation, trace };
+	}
 
 	const menuDecision = await maybeHandleMenuFlow({
 		conversation: freshConversation,

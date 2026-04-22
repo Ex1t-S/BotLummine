@@ -521,6 +521,61 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 	};
 }
 
+async function applyCampaignConversationContext({ campaign, recipient, conversationId }) {
+	if (!conversationId) return null;
+	if (normalizeAudienceSource(campaign.audienceSource || '') !== 'abandoned_carts') {
+		return null;
+	}
+
+	const primaryProductName = normalizeString(
+		recipient?.variables?.product_name || recipient?.variables?.first_product_name || ''
+	);
+	const checkoutUrl = normalizeString(
+		recipient?.variables?.checkout_url || recipient?.variables?.abandoned_checkout_url || ''
+	);
+	const totalAmount = normalizeString(recipient?.variables?.total_amount || '');
+
+	const commercialSummary = [
+		'Ultimo contacto: campana de carrito abandonado.',
+		primaryProductName ? `Producto del carrito: ${primaryProductName}.` : null,
+		totalAmount ? `Total mostrado: ${totalAmount}.` : null,
+		checkoutUrl ? `Checkout pendiente: ${checkoutUrl}.` : null,
+	]
+		.filter(Boolean)
+		.join(' ');
+
+	return prisma.conversationState.upsert({
+		where: { conversationId },
+		update: {
+			lastUserGoal: 'retomar_compra_carrito',
+			currentProductFocus: primaryProductName || null,
+			currentProductFamily: null,
+			requestedOfferType: null,
+			categoryLocked: false,
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: null,
+			commercialSummary: commercialSummary || null
+		},
+		create: {
+			conversationId,
+			customerName: recipient?.contactName || recipient?.phone || null,
+			interactionCount: 0,
+			interestedProducts: [],
+			objections: [],
+			lastUserGoal: 'retomar_compra_carrito',
+			currentProductFocus: primaryProductName || null,
+			currentProductFamily: null,
+			requestedOfferType: null,
+			categoryLocked: false,
+			menuActive: false,
+			menuPath: null,
+			menuLastSelection: null,
+			commercialSummary: commercialSummary || null
+		}
+	});
+}
+
 function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentStatus }) {
 	if (currentStatus === 'CANCELED') {
 		return 'CANCELED';
@@ -1231,6 +1286,15 @@ async function persistCampaignOutboundMessage({
 	if (!ensured.conversationId) {
 		return null;
 	}
+
+	await applyCampaignConversationContext({
+		campaign,
+		recipient: {
+			...recipient,
+			contactId: ensured.contactId || recipient.contactId
+		},
+		conversationId: ensured.conversationId
+	});
 
 	return prisma.message.create({
 		data: {

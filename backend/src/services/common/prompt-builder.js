@@ -78,6 +78,11 @@ function buildCommercialPlanBlock(commercialPlan = {}) {
 	].join('\n');
 }
 
+function shouldIncludeLiveOrderContext({ liveOrderContext, responsePolicy }) {
+	if (!liveOrderContext) return false;
+	return /^order_status/.test(String(responsePolicy?.action || ''));
+}
+
 export function buildPrompt({
 	businessName,
 	contactName,
@@ -103,6 +108,10 @@ export function buildPrompt({
 	const commercialHintsBlock = Array.isArray(commercialHints) && commercialHints.length
 		? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n')
 		: '- Guia una sola opcion principal y no abras todo el catalogo.';
+	const liveOrderContextEnabled = shouldIncludeLiveOrderContext({
+		liveOrderContext,
+		responsePolicy,
+	});
 	const compactCatalog = Array.isArray(catalogProducts) && catalogProducts.length
 		? catalogProducts.slice(0, 3).map((item) => [
 			`- ${item.name}`,
@@ -122,10 +131,12 @@ export function buildPrompt({
 		businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}` : '',
 		`DATOS DEL CLIENTE:\n- Nombre: ${customerContext.name || contactName || 'Cliente'}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
-		`ESTADO ACTUAL:\n- Ultima intencion: ${conversationState.lastIntent || 'general'}\n- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}\n- Animo: ${conversationState.customerMood || 'neutral'}\n- Familia actual: ${conversationState.currentProductFamily || 'no detectada'}\n- Producto foco: ${conversationState.currentProductFocus || 'no detectado'}\n- Promo pedida: ${conversationState.requestedOfferType || 'no detectada'}\n- Exclusiones: ${formatArrayField(conversationState.excludedProductKeywords, 'ninguna')}\n- Familia bloqueada: ${conversationState.categoryLocked ? 'Si' : 'No'}\n- Talle detectado: ${conversationState.frequentSize || 'no detectado'}\n- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}\n- Productos de interes: ${formatArrayField(conversationState.interestedProducts)}\n- Necesita humano: ${conversationState.needsHuman ? 'Si' : 'No'}`,
+		`ESTADO ACTUAL:\n- Ultima intencion: ${conversationState.lastIntent || 'general'}\n- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}\n- Animo: ${conversationState.customerMood || 'neutral'}\n- Familia actual: ${conversationState.currentProductFamily || 'no detectada'}\n- Producto foco: ${conversationState.currentProductFocus || 'no detectado'}\n- Promo pedida: ${conversationState.requestedOfferType || 'no detectada'}\n- Exclusiones: ${formatArrayField(conversationState.excludedProductKeywords, 'ninguna')}\n- Familia bloqueada: ${conversationState.categoryLocked ? 'Si' : 'No'}\n- Talle detectado: ${conversationState.frequentSize || 'no detectado'}\n- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}\n- Productos de interes: ${formatArrayField(conversationState.interestedProducts)}\n- Resumen comercial: ${conversationState.commercialSummary || 'sin resumen especial'}\n- Necesita humano: ${conversationState.needsHuman ? 'Si' : 'No'}`,
 		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy)}`,
 		`PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}`,
-		`PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`,
+		liveOrderContextEnabled
+			? `PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`
+			: 'REGLA DE PEDIDO:\n- Ignora cualquier pedido previo salvo que la accion permitida sea de seguimiento de pedido.',
 		`HECHOS UTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}`,
 		`CATALOGO RELEVANTE:\n${compactCatalog}`,
 		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,

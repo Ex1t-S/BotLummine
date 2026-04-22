@@ -13,11 +13,23 @@ function recentConversationLooksLikePayment(recentMessages = [], currentState = 
 
 	return recentMessages
 		.slice(-6)
+		.filter((msg) => msg?.role === 'user')
 		.some((msg) =>
 			/(transferencia|transferi|transferí|alias|cbu|mercado pago|mercadopago|comprobante|pago)/i.test(
 				String(msg.text || '')
 			)
 		);
+}
+
+function attachmentLooksLikeFile({ messageType = 'text', rawPayload = null } = {}) {
+	const typeLooksLikeAttachment = ['image', 'document'].includes(String(messageType || '').toLowerCase());
+	const mime = String(
+		rawPayload?.attachment?.mimeType ||
+			rawPayload?.attachmentMimeType ||
+			''
+	).toLowerCase();
+
+	return typeLooksLikeAttachment || mime.includes('pdf') || mime.includes('image');
 }
 
 export function isPaymentProofMessage({
@@ -34,24 +46,7 @@ export function isPaymentProofMessage({
 			text
 		);
 
-	const typeLooksLikeProof = ['image', 'document'].includes(String(messageType || '').toLowerCase());
-
-	const mime = String(
-		rawPayload?.attachment?.mimeType ||
-			rawPayload?.attachmentMimeType ||
-			''
-	).toLowerCase();
-
-	const fileLooksLikeProof =
-		mime.includes('pdf') ||
-		mime.includes('image') ||
-		typeLooksLikeProof;
-
 	if (textLooksLikeProof) {
-		return true;
-	}
-
-	if (fileLooksLikeProof && recentConversationLooksLikePayment(recentMessages, currentState)) {
 		return true;
 	}
 
@@ -66,21 +61,15 @@ export function isAmbiguousPaymentAttachment({
 	recentMessages = []
 } = {}) {
 	const text = normalizeText(body);
-	if (text) return false;
+	if (!attachmentLooksLikeFile({ messageType, rawPayload })) return false;
+	if (!text) return true;
 
-	const typeLooksLikeAttachment = ['image', 'document'].includes(String(messageType || '').toLowerCase());
-	const mime = String(
-		rawPayload?.attachment?.mimeType ||
-			rawPayload?.attachmentMimeType ||
-			''
-	).toLowerCase();
-	const fileLooksLikeAttachment =
-		typeLooksLikeAttachment ||
-		mime.includes('pdf') ||
-		mime.includes('image');
+	const weakAttachmentCaption =
+		/(ahi va|ahí va|te lo mando|te lo paso|te lo adjunto|adjunto|mira|mirá|aca va|acá va)/.test(
+			text
+		);
 
-	if (!fileLooksLikeAttachment) return false;
-	return recentConversationLooksLikePayment(recentMessages, currentState);
+	return weakAttachmentCaption && recentConversationLooksLikePayment(recentMessages, currentState);
 }
 
 export function buildPaymentReviewAck() {
