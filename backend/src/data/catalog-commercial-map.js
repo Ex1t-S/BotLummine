@@ -90,8 +90,10 @@ export const CATALOG_COMMERCIAL_MAP = {
 	}
 };
 
+const BODY_FAMILY_PATTERN = /\b(body|bodys|bodies|bodyus)\b|\bbodys modeladores\b|\bbody modelador\b|\bbody reductor\b/;
+
 const FAMILY_PATTERNS = [
-	{ family: 'body_modelador', regex: /\b(body|bodys)\b|\bbodys modeladores\b|\bbody modelador\b|\bbody reductor\b/ },
+	{ family: 'body_modelador', regex: BODY_FAMILY_PATTERN },
 	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora|reductora)|\bcalzas? linfaticas?\b|\bcalzas? modeladoras?\b/ },
 	{ family: 'legging', regex: /\blegging\b|\bleggings\b/ },
 	{ family: 'short_faja', regex: /\bshort\b.*(faja|modelador|reductor)|\bshort faja\b|\bshort modelador\b/ },

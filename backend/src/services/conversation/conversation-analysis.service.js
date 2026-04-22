@@ -57,9 +57,12 @@ function detectDeliveryPreference(text) {
 	return null;
 }
 
+const BODY_PRODUCT_PATTERN = /\b(body|bodys|bodies|bodyus)\b/;
+const BODY_ONLY_PATTERN = /\bsolo\s+(body|bodys|bodies|bodyus)\b|\b(body|bodys|bodies|bodyus)\s+solos?\b/;
+
 function extractInterestedProducts(text) {
 	const dictionary = [
-		{ key: 'body', patterns: [/body/, /bodies/] },
+		{ key: 'body', patterns: [BODY_PRODUCT_PATTERN] },
 		{ key: 'calza', patterns: [/calza/, /calzas/] },
 		{ key: 'legging', patterns: [/legging/, /leggings/] },
 		{ key: 'corset', patterns: [/corset/] },
@@ -100,17 +103,14 @@ function extractImplicitExclusions(text, currentProductFamily = null) {
 	const detected = [];
 	const normalizedFamily = currentProductFamily || inferCommercialFamily(text) || null;
 
-	if (
-		/\bsolo\s+(body|bodys|bodies)\b/.test(text) ||
-		/\b(body|bodys|bodies)\s+solos?\b/.test(text)
-	) {
+	if (BODY_ONLY_PATTERN.test(text)) {
 		detected.push('pantymedia', 'pantymedias', 'media termica', 'medias termicas', 'boob tape');
 	}
 
 	if (
 		normalizedFamily === 'body_modelador' &&
 		/\bsolo\b/.test(text) &&
-		/\b(body|bodys|bodies)\b/.test(text)
+		BODY_PRODUCT_PATTERN.test(text)
 	) {
 		detected.push('pantymedia', 'pantymedias', 'media termica', 'medias termicas', 'boob tape');
 	}
