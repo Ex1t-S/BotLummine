@@ -35,6 +35,10 @@ function asArray(value) {
 	return Array.isArray(value) ? value : [];
 }
 
+function hasOwn(object, key) {
+	return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function buildFallbackText(menu) {
 	const lines = [];
 	const title = normalizeText(menu.fallbackTitle || menu.title || menu.headerText || 'Menú');
@@ -60,26 +64,22 @@ function buildFallbackText(menu) {
 
 function normalizeOption(rawOption = {}, fallbackOption = {}, index = 0) {
 	const id = normalizeText(rawOption.id || fallbackOption.id || `menu_option_${index + 1}`);
-	const aliases = [
-		...asArray(fallbackOption.aliases),
-		...asArray(rawOption.aliases)
-	]
-		.map((value) => normalizeText(value))
-		.filter(Boolean);
+	const aliasSource = hasOwn(rawOption, 'aliases') ? rawOption.aliases : fallbackOption.aliases;
+	const aliases = asArray(aliasSource).map((value) => normalizeText(value)).filter(Boolean);
 
 	const option = {
 		id,
-		title: normalizeText(rawOption.title || fallbackOption.title || `Opción ${index + 1}`),
-		description: normalizeText(rawOption.description || fallbackOption.description || ''),
+		title: normalizeText(hasOwn(rawOption, 'title') ? rawOption.title : (fallbackOption.title || `Opción ${index + 1}`)),
+		description: normalizeText(hasOwn(rawOption, 'description') ? rawOption.description : (fallbackOption.description || '')),
 		aliases: [...new Set(aliases)],
-		actionType: normalizeText(rawOption.actionType || fallbackOption.actionType || 'MESSAGE').toUpperCase(),
-		actionValue: normalizeText(rawOption.actionValue || fallbackOption.actionValue || ''),
-		promptPrefix: normalizeText(rawOption.promptPrefix || fallbackOption.promptPrefix || ''),
-		replyBody: normalizeText(rawOption.replyBody || fallbackOption.replyBody || ''),
-		effectiveMessageBody: normalizeText(rawOption.effectiveMessageBody || fallbackOption.effectiveMessageBody || ''),
-		summaryUserMessage: normalizeText(rawOption.summaryUserMessage || fallbackOption.summaryUserMessage || ''),
-		handoffReason: normalizeText(rawOption.handoffReason || fallbackOption.handoffReason || ''),
-		model: normalizeText(rawOption.model || fallbackOption.model || ''),
+		actionType: normalizeText(hasOwn(rawOption, 'actionType') ? rawOption.actionType : (fallbackOption.actionType || 'MESSAGE')).toUpperCase(),
+		actionValue: normalizeText(hasOwn(rawOption, 'actionValue') ? rawOption.actionValue : (fallbackOption.actionValue || '')),
+		promptPrefix: normalizeText(hasOwn(rawOption, 'promptPrefix') ? rawOption.promptPrefix : (fallbackOption.promptPrefix || '')),
+		replyBody: normalizeText(hasOwn(rawOption, 'replyBody') ? rawOption.replyBody : (fallbackOption.replyBody || '')),
+		effectiveMessageBody: normalizeText(hasOwn(rawOption, 'effectiveMessageBody') ? rawOption.effectiveMessageBody : (fallbackOption.effectiveMessageBody || '')),
+		summaryUserMessage: normalizeText(hasOwn(rawOption, 'summaryUserMessage') ? rawOption.summaryUserMessage : (fallbackOption.summaryUserMessage || '')),
+		handoffReason: normalizeText(hasOwn(rawOption, 'handoffReason') ? rawOption.handoffReason : (fallbackOption.handoffReason || '')),
+		model: normalizeText(hasOwn(rawOption, 'model') ? rawOption.model : (fallbackOption.model || '')),
 		statePatch: typeof rawOption.statePatch === 'object' && rawOption.statePatch !== null
 			? rawOption.statePatch
 			: (typeof fallbackOption.statePatch === 'object' && fallbackOption.statePatch !== null ? fallbackOption.statePatch : {}),
@@ -97,19 +97,11 @@ function normalizeMenu(rawMenu = {}, fallbackMenu = {}, index = 0) {
 	const fallbackOptions = asArray(fallbackMenu.options);
 	const rawOptions = asArray(rawMenu.options);
 	const fallbackOptionById = Object.fromEntries(fallbackOptions.map((option) => [option.id, option]));
-	const seenIds = new Set();
 
-	const normalizedOptions = rawOptions
-		.map((option, optionIndex) => {
-			const normalized = normalizeOption(option, fallbackOptionById[option?.id] || {}, optionIndex);
-			seenIds.add(normalized.id);
-			return normalized;
-		});
-
-	for (const [optionIndex, fallbackOption] of fallbackOptions.entries()) {
-		if (seenIds.has(fallbackOption.id)) continue;
-		normalizedOptions.push(normalizeOption({}, fallbackOption, optionIndex + normalizedOptions.length));
-	}
+	const optionSource = rawOptions.length ? rawOptions : fallbackOptions;
+	const normalizedOptions = optionSource.map((option, optionIndex) =>
+		normalizeOption(option, rawOptions.length ? (fallbackOptionById[option?.id] || {}) : {}, optionIndex)
+	);
 
 	normalizedOptions.sort((left, right) => {
 		if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder;
@@ -118,14 +110,18 @@ function normalizeMenu(rawMenu = {}, fallbackMenu = {}, index = 0) {
 
 	const menu = {
 		key,
-		title: normalizeText(rawMenu.title || fallbackMenu.title || key),
-		headerText: normalizeText(rawMenu.headerText || fallbackMenu.headerText || ''),
-		body: normalizeText(rawMenu.body || fallbackMenu.body || ''),
-		buttonText: normalizeText(rawMenu.buttonText || fallbackMenu.buttonText || 'Ver opciones'),
-		footerText: normalizeText(rawMenu.footerText || fallbackMenu.footerText || ''),
-		sectionTitle: normalizeText(rawMenu.sectionTitle || fallbackMenu.sectionTitle || rawMenu.title || fallbackMenu.title || 'Opciones'),
-		fallbackTitle: normalizeText(rawMenu.fallbackTitle || fallbackMenu.fallbackTitle || ''),
-		textFallback: normalizeText(rawMenu.textFallback || fallbackMenu.textFallback || ''),
+		title: normalizeText(hasOwn(rawMenu, 'title') ? rawMenu.title : (fallbackMenu.title || key)),
+		headerText: normalizeText(hasOwn(rawMenu, 'headerText') ? rawMenu.headerText : (fallbackMenu.headerText || '')),
+		body: normalizeText(hasOwn(rawMenu, 'body') ? rawMenu.body : (fallbackMenu.body || '')),
+		buttonText: normalizeText(hasOwn(rawMenu, 'buttonText') ? rawMenu.buttonText : (fallbackMenu.buttonText || 'Ver opciones')),
+		footerText: normalizeText(hasOwn(rawMenu, 'footerText') ? rawMenu.footerText : (fallbackMenu.footerText || '')),
+		sectionTitle: normalizeText(
+			hasOwn(rawMenu, 'sectionTitle')
+				? rawMenu.sectionTitle
+				: (fallbackMenu.sectionTitle || rawMenu.title || fallbackMenu.title || 'Opciones')
+		),
+		fallbackTitle: normalizeText(hasOwn(rawMenu, 'fallbackTitle') ? rawMenu.fallbackTitle : (fallbackMenu.fallbackTitle || '')),
+		textFallback: normalizeText(hasOwn(rawMenu, 'textFallback') ? rawMenu.textFallback : (fallbackMenu.textFallback || '')),
 		isActive: rawMenu.isActive !== undefined ? Boolean(rawMenu.isActive) : (fallbackMenu.isActive !== undefined ? Boolean(fallbackMenu.isActive) : true),
 		sortOrder: Number.isFinite(Number(rawMenu.sortOrder))
 			? Number(rawMenu.sortOrder)
@@ -393,26 +389,19 @@ export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 export function normalizeWhatsAppMenuConfig(inputConfig = {}) {
 	const defaultConfig = clone(DEFAULT_WHATSAPP_MENU_CONFIG);
 	const sourceConfig = typeof inputConfig === 'object' && inputConfig !== null ? inputConfig : {};
+	const sourceMenus = asArray(sourceConfig.menus);
+	const fallbackMenus = asArray(defaultConfig.menus);
 	const mergedConfig = {
 		version: Number.isFinite(Number(sourceConfig.version)) ? Number(sourceConfig.version) : defaultConfig.version,
 		mainMenuKey: normalizeText(sourceConfig.mainMenuKey || defaultConfig.mainMenuKey) || DEFAULT_MAIN_MENU_KEY,
 		menus: []
 	};
-
-	const fallbackMenus = asArray(defaultConfig.menus);
 	const fallbackByKey = Object.fromEntries(fallbackMenus.map((menu) => [menu.key, menu]));
-	const sourceMenus = asArray(sourceConfig.menus);
-	const seenKeys = new Set();
+	const menuSource = sourceMenus.length ? sourceMenus : fallbackMenus;
 
-	for (const [index, rawMenu] of sourceMenus.entries()) {
-		const normalized = normalizeMenu(rawMenu, fallbackByKey[rawMenu?.key] || {}, index);
-		seenKeys.add(normalized.key);
-		mergedConfig.menus.push(normalized);
-	}
-
-	for (const [index, fallbackMenu] of fallbackMenus.entries()) {
-		if (seenKeys.has(fallbackMenu.key)) continue;
-		mergedConfig.menus.push(normalizeMenu({}, fallbackMenu, sourceMenus.length + index));
+	for (const [index, rawMenu] of menuSource.entries()) {
+		const fallbackMenu = sourceMenus.length ? (fallbackByKey[rawMenu?.key] || {}) : {};
+		mergedConfig.menus.push(normalizeMenu(rawMenu, fallbackMenu, index));
 	}
 
 	mergedConfig.menus.sort((left, right) => {

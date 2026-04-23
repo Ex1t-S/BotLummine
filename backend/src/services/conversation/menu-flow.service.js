@@ -454,7 +454,7 @@ async function handleMenuSelection({
 		return {
 			handled: false,
 			effectiveMessageBody: normalizeText(option.effectiveMessageBody || option.title),
-			summaryUserMessage: normalizeText(option.summaryUserMessage || `Cliente eligió menú: ${option.title}`),
+			summaryUserMessage: normalizeText(`Cliente eligió menú: ${option.title}`),
 			forceIntent: option.actionValue || null,
 			statePatch: {
 				menuLastSelection: selectionId,

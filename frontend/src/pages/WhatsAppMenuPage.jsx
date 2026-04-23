@@ -28,7 +28,6 @@ function createEmptyOption(nextIndex = 1) {
 		promptPrefix: '',
 		replyBody: 'Contame un poco más y seguimos por acá.',
 		effectiveMessageBody: '',
-		summaryUserMessage: '',
 		statePatch: {},
 		isActive: true,
 		sortOrder: nextIndex
@@ -103,10 +102,43 @@ function sortOptions(options = []) {
 	return [...options].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
+function applyDraftsToConfig(menuConfig, drafts) {
+	if (!menuConfig || !drafts || !Object.keys(drafts).length) return menuConfig;
+
+	const nextConfig = deepClone(menuConfig);
+
+	for (const [draftKey, rawValue] of Object.entries(drafts)) {
+		const [menuKey, optionId, field] = draftKey.split(':');
+		const menu = nextConfig.menus.find((item) => item.key === menuKey);
+		const option = menu?.options?.find((item) => item.id === optionId);
+		if (!option) continue;
+
+		if (field === 'aliases') {
+			option.aliases = textToAliases(rawValue);
+			continue;
+		}
+
+		if (field === 'interestedProducts') {
+			option.statePatch = {
+				...(option.statePatch || {})
+			};
+			const values = textToAliases(rawValue);
+			if (values.length) {
+				option.statePatch.interestedProducts = values;
+			} else {
+				delete option.statePatch.interestedProducts;
+			}
+		}
+	}
+
+	return nextConfig;
+}
+
 export default function WhatsAppMenuPage() {
 	const [config, setConfig] = useState(null);
 	const [settingsName, setSettingsName] = useState('Configuración principal');
 	const [selectedMenuKey, setSelectedMenuKey] = useState('');
+	const [textDrafts, setTextDrafts] = useState({});
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [feedback, setFeedback] = useState('');
@@ -126,6 +158,7 @@ export default function WhatsAppMenuPage() {
 			const nextConfig = deepClone(response.data?.settings?.config || { version: 1, mainMenuKey: '', menus: [] });
 
 			setConfig(nextConfig);
+			setTextDrafts({});
 			setSettingsName(response.data?.settings?.name || 'Configuración principal');
 			setSelectedMenuKey(nextConfig.mainMenuKey || nextConfig.menus?.[0]?.key || '');
 		} catch (requestError) {
@@ -188,6 +221,28 @@ export default function WhatsAppMenuPage() {
 				};
 			})
 		}));
+	}
+
+	function getDraftKey(menuKey, optionId, field) {
+		return `${menuKey}:${optionId}:${field}`;
+	}
+
+	function handleDraftChange(menuKey, optionId, field, value) {
+		const draftKey = getDraftKey(menuKey, optionId, field);
+		setTextDrafts((current) => ({
+			...current,
+			[draftKey]: value
+		}));
+	}
+
+	function clearDraft(menuKey, optionId, field) {
+		const draftKey = getDraftKey(menuKey, optionId, field);
+		setTextDrafts((current) => {
+			if (!(draftKey in current)) return current;
+			const nextDrafts = { ...current };
+			delete nextDrafts[draftKey];
+			return nextDrafts;
+		});
 	}
 
 	function addMenu() {
@@ -257,16 +312,18 @@ export default function WhatsAppMenuPage() {
 		setFeedback('');
 
 		try {
+			const nextConfig = applyDraftsToConfig(config, textDrafts);
 			const payload = {
 				name: settingsName,
-				config
+				config: nextConfig
 			};
 
 			const response = await api.put('/whatsapp-menu', payload);
-			const nextConfig = deepClone(response.data?.settings?.config || config);
+			const savedConfig = deepClone(response.data?.settings?.config || nextConfig);
 
-			setConfig(nextConfig);
-			setSelectedMenuKey(nextConfig.mainMenuKey || nextConfig.menus?.[0]?.key || '');
+			setConfig(savedConfig);
+			setTextDrafts({});
+			setSelectedMenuKey(savedConfig.mainMenuKey || savedConfig.menus?.[0]?.key || '');
 			setFeedback('Menú guardado correctamente.');
 		} catch (requestError) {
 			setError(requestError?.response?.data?.error || 'No pude guardar los cambios del menú.');
@@ -285,6 +342,7 @@ export default function WhatsAppMenuPage() {
 			const nextConfig = deepClone(response.data?.settings?.config || { version: 1, mainMenuKey: '', menus: [] });
 
 			setConfig(nextConfig);
+			setTextDrafts({});
 			setSettingsName(response.data?.settings?.name || 'Configuración principal');
 			setSelectedMenuKey(nextConfig.mainMenuKey || nextConfig.menus?.[0]?.key || '');
 			setFeedback('Se restauró el menú por defecto.');
@@ -600,15 +658,22 @@ export default function WhatsAppMenuPage() {
 													<label className="wam-form-grid__full">
 														<span>Aliases</span>
 														<input
-															value={aliasesToText(option.aliases)}
+															value={
+																textDrafts[getDraftKey(selectedMenu.key, option.id, 'aliases')] ??
+																aliasesToText(option.aliases)
+															}
 															onChange={(event) =>
+																handleDraftChange(selectedMenu.key, option.id, 'aliases', event.target.value)
+															}
+															onBlur={(event) => {
 																updateOptionField(
 																	selectedMenu.key,
 																	option.id,
 																	'aliases',
 																	textToAliases(event.target.value)
-																)
-															}
+																);
+																clearDraft(selectedMenu.key, option.id, 'aliases');
+															}}
 															placeholder="1, productos, ver productos"
 														/>
 													</label>
@@ -676,20 +741,6 @@ export default function WhatsAppMenuPage() {
 																/>
 															</label>
 
-															<label className="wam-form-grid__full">
-																<span>Resumen para historial</span>
-																<input
-																	value={option.summaryUserMessage || ''}
-																	onChange={(event) =>
-																		updateOptionField(
-																			selectedMenu.key,
-																			option.id,
-																			'summaryUserMessage',
-																			event.target.value
-																		)
-																	}
-																/>
-															</label>
 														</>
 													) : null}
 
@@ -750,8 +801,19 @@ export default function WhatsAppMenuPage() {
 														<label className="wam-form-grid__full">
 															<span>Productos de interés</span>
 															<input
-																value={aliasesToText(option.statePatch?.interestedProducts || [])}
+																value={
+																	textDrafts[getDraftKey(selectedMenu.key, option.id, 'interestedProducts')] ??
+																	aliasesToText(option.statePatch?.interestedProducts || [])
+																}
 																onChange={(event) =>
+																	handleDraftChange(
+																		selectedMenu.key,
+																		option.id,
+																		'interestedProducts',
+																		event.target.value
+																	)
+																}
+																onBlur={(event) => {
 																	setConfig((current) =>
 																		updateStatePatch(
 																			current,
@@ -760,8 +822,9 @@ export default function WhatsAppMenuPage() {
 																			'interestedProducts',
 																			textToAliases(event.target.value)
 																		)
-																	)
-																}
+																	);
+																	clearDraft(selectedMenu.key, option.id, 'interestedProducts');
+																}}
 																placeholder="body, calza, conjunto"
 															/>
 														</label>
