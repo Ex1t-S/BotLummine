@@ -190,6 +190,7 @@ export function useCampaignsDashboard() {
 		const merged = {
 			...(listCampaign || {}),
 			...(detailCampaign || {}),
+			analytics: detailPayload?.analytics || detailCampaign?.analytics || null,
 			recipients: detailRecipients,
 			allRecipients: detailRecipients,
 			pagination: detailPayload?.pagination || detailCampaign?.pagination || null,

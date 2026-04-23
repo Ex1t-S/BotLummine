@@ -10,6 +10,25 @@ function formatDate(value) {
 	}).format(date);
 }
 
+function formatPercent(value) {
+	const numeric = Number(value || 0);
+	return `${Math.round(numeric * 100)}%`;
+}
+
+function formatMoney(value, currency = 'ARS') {
+	if (value === null || value === undefined || value === '') return '--';
+
+	try {
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: currency || 'ARS',
+			maximumFractionDigits: 0,
+		}).format(Number(value));
+	} catch {
+		return `${value} ${currency || 'ARS'}`;
+	}
+}
+
 function badgeClass(value = '') {
 	return `campaign-badge ${String(value).toLowerCase()}`;
 }
@@ -239,6 +258,7 @@ export default function CampaignRunsPanel({
 		() => buildRecipientMetrics(selectedCampaign || {}),
 		[selectedCampaign]
 	);
+	const analytics = selectedCampaign?.analytics || {};
 
 	const filteredRecipients = useMemo(() => {
 		return allRecipients.filter((recipient) => {
@@ -291,6 +311,7 @@ export default function CampaignRunsPanel({
 							campaigns.map((campaign) => {
 								const isSelected = selectedCampaign?.id === campaign.id;
 								const listMetrics = buildRecipientMetrics(campaign);
+								const campaignAnalytics = campaign?.analytics || {};
 
 								return (
 									<article
@@ -320,6 +341,12 @@ export default function CampaignRunsPanel({
 											<span>{listMetrics.total} destinatarios</span>
 											<span>{getStatusTone(campaign.status)}</span>
 											<span>Creada {formatDate(campaign.createdAt)}</span>
+										</div>
+
+										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile campaign-inline-stats--analytics">
+											<span>Respondieron {Number(campaignAnalytics.repliedRecipients || 0)}</span>
+											<span>Lectura efectiva {Number(campaignAnalytics.effectiveReadRecipients || 0)}</span>
+											<span>Compraron {Number(campaignAnalytics.purchasedRecipients || 0)}</span>
 										</div>
 									</article>
 								);
@@ -407,6 +434,21 @@ export default function CampaignRunsPanel({
 									<span>Pendientes</span>
 									<strong>{recipientMetrics.pending}</strong>
 								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Respondieron</span>
+									<strong>{Number(analytics.repliedRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.replyRate || 0)}</small>
+								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Lectura efectiva</span>
+									<strong>{Number(analytics.effectiveReadRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.effectiveReadRate || 0)}</small>
+								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Compraron</span>
+									<strong>{Number(analytics.purchasedRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.purchaseRate || 0)}</small>
+								</div>
 							</div>
 
 							<div className="campaign-tracking-toolbar">
@@ -449,6 +491,8 @@ export default function CampaignRunsPanel({
 											<th>Destinatario</th>
 											<th>Telefono</th>
 											<th>Estado</th>
+											<th>Interaccion</th>
+											<th>Compra detectada</th>
 											<th>Ultima actualizacion</th>
 										</tr>
 									</thead>
@@ -464,6 +508,51 @@ export default function CampaignRunsPanel({
 														</span>
 													</td>
 													<td>
+														<div className="campaign-recipient-meta">
+															<span
+																className={badgeClass(
+																	recipient.hasReply
+																		? 'read'
+																		: recipient.effectiveRead
+																			? 'delivered'
+																			: 'pending'
+																)}
+															>
+																{recipient.hasReply
+																	? 'Respondio'
+																	: recipient.effectiveRead
+																		? 'Leido efectivo'
+																		: 'Sin senal'}
+															</span>
+															<small>
+																{recipient.firstReplyAt
+																	? `Respuesta: ${formatDate(recipient.firstReplyAt)}`
+																	: recipient.effectiveRead
+																		? 'Leido por respuesta o check de lectura'
+																		: 'Sin respuesta registrada'}
+															</small>
+														</div>
+													</td>
+													<td>
+														<div className="campaign-recipient-meta">
+															<span
+																className={badgeClass(
+																	recipient.purchaseDetected ? 'approved' : 'pending'
+																)}
+															>
+																{recipient.purchaseDetected ? 'Compro' : 'Sin compra'}
+															</span>
+															<small>
+																{recipient.purchaseDetected
+																	? `#${recipient.purchaseOrderNumber || recipient.purchaseOrderId || '--'} · ${formatMoney(
+																			recipient.purchaseTotalAmount,
+																			recipient.purchaseCurrency
+																	  )}`
+																	: 'No hay pedido posterior al envio'}
+															</small>
+														</div>
+													</td>
+													<td>
 														{formatDate(
 															recipient.readAt ||
 															recipient.deliveredAt ||
@@ -476,7 +565,7 @@ export default function CampaignRunsPanel({
 											))
 										) : (
 											<tr>
-												<td colSpan={4}>
+												<td colSpan={6}>
 													<div className="campaign-empty-state compact">
 														<p>No hay destinatarios para ese filtro.</p>
 													</div>

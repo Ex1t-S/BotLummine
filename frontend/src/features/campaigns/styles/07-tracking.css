@@ -31,7 +31,7 @@
 
 .campaign-tracking-kpis {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 10px;
 }
 
@@ -58,6 +58,11 @@
     color: #0f172a;
 }
 
+.campaign-tracking-kpi small {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
 .campaign-tracking-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
@@ -67,6 +72,11 @@
 
 .campaign-tracking-toolbar-select {
     max-width: 280px;
+}
+
+.campaign-inline-stats--analytics {
+    padding-top: 2px;
+    border-top: 1px dashed #e2e8f0;
 }
 
 .campaign-recipient-table-wrapper--tracking {
@@ -90,6 +100,17 @@
 .campaign-recipient-table-wrapper--tracking .campaign-table td,
 .campaign-recipient-table-wrapper--tracking .campaign-table th {
     vertical-align: middle;
+}
+
+.campaign-recipient-meta {
+    display: grid;
+    gap: 6px;
+}
+
+.campaign-recipient-meta small {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: #64748b;
 }
 
 .campaign-customer-pagination--tracking {

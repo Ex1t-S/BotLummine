@@ -919,7 +919,7 @@ function buildSendComponentsFromTemplate({
 }
 
 export async function listCampaigns({ limit = 50 } = {}) {
-	return prisma.campaign.findMany({
+	const campaigns = await prisma.campaign.findMany({
 		orderBy: [{ createdAt: 'desc' }],
 		take: Math.max(1, Math.min(Number(limit) || 50, 1000)),
 		include: {
@@ -929,6 +929,255 @@ export async function listCampaigns({ limit = 50 } = {}) {
 			}
 		}
 	});
+
+	const analyticsByCampaignId = await Promise.all(
+		campaigns.map(async (campaign) => {
+			const recipients = await prisma.campaignRecipient.findMany({
+				where: { campaignId: campaign.id },
+				select: {
+					id: true,
+					phone: true,
+					waId: true,
+					externalKey: true,
+					conversationId: true,
+					status: true,
+					sentAt: true,
+					deliveredAt: true,
+					readAt: true
+				}
+			});
+
+			const insights = await buildCampaignRecipientInsights(recipients);
+			return [campaign.id, insights.summary];
+		})
+	);
+
+	const analyticsMap = new Map(analyticsByCampaignId);
+
+	return campaigns.map((campaign) => ({
+		...campaign,
+		analytics: analyticsMap.get(campaign.id) || null
+	}));
+}
+
+function getRecipientDispatchAt(recipient = {}) {
+	return recipient.sentAt || recipient.deliveredAt || recipient.readAt || null;
+}
+
+function getAbandonedCartCheckoutId(externalKey = '') {
+	const normalized = normalizeString(externalKey || '');
+	if (!normalized.toLowerCase().startsWith('abandoned_cart:')) {
+		return '';
+	}
+
+	return normalizeString(normalized.split(':').slice(1).join(':'));
+}
+
+function isPaidLikePaymentStatus(paymentStatus = '') {
+	const normalized = normalizeString(paymentStatus || '').toLowerCase();
+	return ['paid', 'partially_paid', 'authorized', 'pagado', 'pago aprobado'].includes(normalized);
+}
+
+async function buildCampaignRecipientInsights(recipients = []) {
+	const normalizedRecipients = safeArray(recipients);
+	const recipientsWithDispatch = normalizedRecipients.filter((recipient) => Boolean(getRecipientDispatchAt(recipient)));
+
+	const emptySummary = {
+		totalRecipients: normalizedRecipients.length,
+		repliedRecipients: 0,
+		effectiveReadRecipients: 0,
+		purchasedRecipients: 0,
+		replyRate: 0,
+		effectiveReadRate: 0,
+		purchaseRate: 0,
+		purchaseAttributionModel: 'order_after_campaign_send',
+	};
+
+	if (!recipientsWithDispatch.length) {
+		return {
+			summary: emptySummary,
+			recipientsById: new Map(),
+		};
+	}
+
+	const earliestDispatchAt = recipientsWithDispatch.reduce((earliest, recipient) => {
+		const dispatchAt = getRecipientDispatchAt(recipient);
+		if (!dispatchAt) return earliest;
+		if (!earliest) return dispatchAt;
+		return dispatchAt < earliest ? dispatchAt : earliest;
+	}, null);
+
+	const conversationIds = [...new Set(
+		recipientsWithDispatch.map((recipient) => recipient.conversationId).filter(Boolean)
+	)];
+	const normalizedPhones = [...new Set(
+		recipientsWithDispatch
+			.map((recipient) => normalizeCampaignPhone(recipient.phone || recipient.waId || ''))
+			.filter(Boolean)
+	)];
+	const checkoutIds = [...new Set(
+		recipientsWithDispatch
+			.map((recipient) => getAbandonedCartCheckoutId(recipient.externalKey || ''))
+			.filter(Boolean)
+	)];
+
+	const [inboundMessages, orders, abandonedCarts] = await Promise.all([
+		conversationIds.length
+			? prisma.message.findMany({
+					where: {
+						conversationId: { in: conversationIds },
+						direction: 'INBOUND',
+						createdAt: earliestDispatchAt ? { gte: earliestDispatchAt } : undefined,
+					},
+					orderBy: [{ createdAt: 'asc' }],
+					select: {
+						conversationId: true,
+						createdAt: true,
+						body: true,
+					},
+			  })
+			: Promise.resolve([]),
+		normalizedPhones.length
+			? prisma.customerOrder.findMany({
+					where: {
+						normalizedPhone: { in: normalizedPhones },
+						orderCreatedAt: earliestDispatchAt ? { gte: earliestDispatchAt } : undefined,
+					},
+					orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
+					select: {
+						normalizedPhone: true,
+						token: true,
+						orderId: true,
+						orderNumber: true,
+						orderCreatedAt: true,
+						orderUpdatedAt: true,
+						totalAmount: true,
+						currency: true,
+						paymentStatus: true,
+						status: true,
+					},
+			  })
+			: Promise.resolve([]),
+		checkoutIds.length
+			? prisma.abandonedCart.findMany({
+					where: {
+						checkoutId: { in: checkoutIds },
+					},
+					select: {
+						checkoutId: true,
+						token: true,
+						recoveredAt: true,
+						status: true,
+						updatedAt: true,
+					},
+			  })
+			: Promise.resolve([]),
+	]);
+
+	const inboundByConversation = new Map();
+	for (const message of inboundMessages) {
+		const bucket = inboundByConversation.get(message.conversationId) || [];
+		bucket.push(message);
+		inboundByConversation.set(message.conversationId, bucket);
+	}
+
+	const ordersByPhone = new Map();
+	const ordersByToken = new Map();
+	for (const order of orders) {
+		const phone = normalizeCampaignPhone(order.normalizedPhone || '');
+		if (!phone) continue;
+		const bucket = ordersByPhone.get(phone) || [];
+		bucket.push(order);
+		ordersByPhone.set(phone, bucket);
+
+		const token = normalizeString(order.token || '');
+		if (token) {
+			const tokenBucket = ordersByToken.get(token) || [];
+			tokenBucket.push(order);
+			ordersByToken.set(token, tokenBucket);
+		}
+	}
+
+	const abandonedCartByCheckoutId = new Map(
+		abandonedCarts.map((cart) => [normalizeString(cart.checkoutId || ''), cart])
+	);
+
+	const recipientsById = new Map();
+	let repliedRecipients = 0;
+	let effectiveReadRecipients = 0;
+	let purchasedRecipients = 0;
+
+	for (const recipient of normalizedRecipients) {
+		const dispatchAt = getRecipientDispatchAt(recipient);
+		const normalizedPhone = normalizeCampaignPhone(recipient.phone || recipient.waId || '');
+		const checkoutId = getAbandonedCartCheckoutId(recipient.externalKey || '');
+		const abandonedCart = checkoutId ? abandonedCartByCheckoutId.get(checkoutId) || null : null;
+		const abandonedCartToken = normalizeString(abandonedCart?.token || '');
+		const conversationMessages = recipient.conversationId
+			? inboundByConversation.get(recipient.conversationId) || []
+			: [];
+		const firstReply = dispatchAt
+			? conversationMessages.find((message) => new Date(message.createdAt).getTime() >= new Date(dispatchAt).getTime()) || null
+			: null;
+		const matchingOrderByCart = dispatchAt && abandonedCartToken
+			? (ordersByToken.get(abandonedCartToken) || []).find((order) => {
+					const effectiveOrderTimestamp = order.orderUpdatedAt || order.orderCreatedAt || null;
+					if (!effectiveOrderTimestamp) return false;
+					return (
+						isPaidLikePaymentStatus(order.paymentStatus) &&
+						new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime()
+					);
+			  }) || null
+			: null;
+		const purchaseOrder = matchingOrderByCart || (
+			dispatchAt && normalizedPhone
+				? (ordersByPhone.get(normalizedPhone) || []).find((order) => {
+						const effectiveOrderTimestamp = order.orderUpdatedAt || order.orderCreatedAt || null;
+						if (!effectiveOrderTimestamp) return false;
+						return new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime();
+				  }) || null
+				: null
+		);
+		const hasReply = Boolean(firstReply);
+		const effectiveRead = Boolean(recipient.readAt || hasReply);
+		const purchaseDetected = Boolean(purchaseOrder);
+
+		if (hasReply) repliedRecipients += 1;
+		if (effectiveRead) effectiveReadRecipients += 1;
+		if (purchaseDetected) purchasedRecipients += 1;
+
+		recipientsById.set(recipient.id, {
+			hasReply,
+			firstReplyAt: firstReply?.createdAt || null,
+			firstReplyBody: normalizeString(firstReply?.body || '') || null,
+			effectiveRead,
+			purchaseDetected,
+			purchaseAt: purchaseOrder?.orderUpdatedAt || purchaseOrder?.orderCreatedAt || null,
+			purchaseOrderId: normalizeString(purchaseOrder?.orderId || '') || null,
+			purchaseOrderNumber: normalizeString(purchaseOrder?.orderNumber || '') || null,
+			purchasePaymentStatus: normalizeString(purchaseOrder?.paymentStatus || '') || null,
+			purchaseStatus: normalizeString(purchaseOrder?.status || '') || null,
+			purchaseTotalAmount: purchaseOrder?.totalAmount ?? null,
+			purchaseCurrency: normalizeString(purchaseOrder?.currency || 'ARS') || 'ARS',
+			purchaseDetectionMode: matchingOrderByCart ? 'abandoned_cart_token_paid_after_campaign' : (purchaseOrder ? 'phone_order_after_campaign' : null),
+		});
+	}
+
+	const base = recipientsWithDispatch.length || 0;
+
+	return {
+		summary: {
+			...emptySummary,
+			repliedRecipients,
+			effectiveReadRecipients,
+			purchasedRecipients,
+			replyRate: base > 0 ? repliedRecipients / base : 0,
+			effectiveReadRate: base > 0 ? effectiveReadRecipients / base : 0,
+			purchaseRate: base > 0 ? purchasedRecipients / base : 0,
+			purchaseAttributionModel: 'prefer_same_abandoned_cart_token_paid_after_campaign_else_phone_order_after_campaign',
+		},
+		recipientsById,
+	};
 }
 
 export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } = {}) {
@@ -943,7 +1192,7 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 	const currentPage = Math.max(1, Number(page) || 1);
 	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || 50, 1000));
 
-	const [template, totalRecipients, recipients] = await Promise.all([
+	const [template, totalRecipients, recipients, allRecipientsForInsights] = await Promise.all([
 		campaign.templateLocalId
 			? prisma.whatsAppTemplate.findUnique({ where: { id: campaign.templateLocalId } })
 			: null,
@@ -953,13 +1202,34 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 			orderBy: [{ createdAt: 'asc' }],
 			skip: (currentPage - 1) * currentPageSize,
 			take: currentPageSize
+		}),
+		prisma.campaignRecipient.findMany({
+			where: { campaignId },
+			select: {
+				id: true,
+				phone: true,
+				waId: true,
+				externalKey: true,
+				conversationId: true,
+				status: true,
+				sentAt: true,
+				deliveredAt: true,
+				readAt: true
+			}
 		})
 	]);
+
+	const insights = await buildCampaignRecipientInsights(allRecipientsForInsights);
+	const enrichedRecipients = recipients.map((recipient) => ({
+		...recipient,
+		...(insights.recipientsById.get(recipient.id) || {})
+	}));
 
 	return {
 		campaign,
 		template,
-		recipients,
+		recipients: enrichedRecipients,
+		analytics: insights.summary,
 		pagination: {
 			page: currentPage,
 			pageSize: currentPageSize,
