@@ -12,7 +12,7 @@ function formatDate(value) {
 
 function formatPercent(value) {
 	const numeric = Number(value || 0);
-	return `${Math.round(numeric * 100)}%`;
+	return `${Math.ceil(numeric * 100)}%`;
 }
 
 function formatMoney(value, currency = 'ARS') {
@@ -26,6 +26,23 @@ function formatMoney(value, currency = 'ARS') {
 		}).format(Number(value));
 	} catch {
 		return `${value} ${currency || 'ARS'}`;
+	}
+}
+
+function calculateCampaignCost(sentCount = 0) {
+	return Number(sentCount || 0) * 0.06;
+}
+
+function formatUsdCost(value = 0) {
+	try {
+		return new Intl.NumberFormat('en-US', {
+			style: 'currency',
+			currency: 'USD',
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		}).format(Number(value || 0));
+	} catch {
+		return `USD ${Number(value || 0).toFixed(2)}`;
 	}
 }
 
@@ -259,6 +276,7 @@ export default function CampaignRunsPanel({
 		[selectedCampaign]
 	);
 	const analytics = selectedCampaign?.analytics || {};
+	const campaignCost = calculateCampaignCost(recipientMetrics.sent);
 
 	const filteredRecipients = useMemo(() => {
 		return allRecipients.filter((recipient) => {
@@ -312,6 +330,7 @@ export default function CampaignRunsPanel({
 								const isSelected = selectedCampaign?.id === campaign.id;
 								const listMetrics = buildRecipientMetrics(campaign);
 								const campaignAnalytics = campaign?.analytics || {};
+								const listCost = calculateCampaignCost(listMetrics.sent);
 
 								return (
 									<article
@@ -347,6 +366,7 @@ export default function CampaignRunsPanel({
 											<span>Respondieron {Number(campaignAnalytics.repliedRecipients || 0)}</span>
 											<span>Lectura efectiva {Number(campaignAnalytics.effectiveReadRecipients || 0)}</span>
 											<span>Compraron {Number(campaignAnalytics.conversionSignalRecipients || campaignAnalytics.purchasedRecipients || 0)}</span>
+											<span>Costo {formatUsdCost(listCost)}</span>
 										</div>
 									</article>
 								);
@@ -458,6 +478,11 @@ export default function CampaignRunsPanel({
 									<span>Conversion total</span>
 									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
 									<small>{formatPercent(analytics.conversionSignalRate || 0)}</small>
+								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Costo</span>
+									<strong>{formatUsdCost(campaignCost)}</strong>
+									<small>{recipientMetrics.sent} enviados x USD 0.06</small>
 								</div>
 							</div>
 
