@@ -978,6 +978,39 @@ function isPaidLikePaymentStatus(paymentStatus = '') {
 	return ['paid', 'partially_paid', 'authorized', 'pagado', 'pago aprobado'].includes(normalized);
 }
 
+function messageSuggestsCompletedPurchase(text = '') {
+	const normalized = normalizeString(text || '').toLowerCase();
+	if (!normalized) return false;
+
+	const negativePatterns = [
+		/no\s+(realice|realic[eé]|hice|hizo|hicimos|compre|compr[eé]|compr[oó])/i,
+		/error.*pagar/i,
+		/no\s+pod[íi]a\s+pagar/i,
+		/quise comprar/i,
+		/quiero comprar/i,
+		/desde el link/i,
+	];
+
+	if (negativePatterns.some((pattern) => pattern.test(normalized))) {
+		return false;
+	}
+
+	const positivePatterns = [
+		/ya\s+est[aá]\s+realizada/i,
+		/ya\s+hice\s+la\s+compra/i,
+		/yo\s+ya\s+hice\s+la\s+compra/i,
+		/yo\s+ya\s+compr[eé]/i,
+		/ya\s+compr[eé]/i,
+		/estoy\s+esperando\s+mi\s+pedido/i,
+		/me\s+mandaron\s+por\s+mail\s+el\s+seguimiento/i,
+		/me\s+lleg[oó]\s+el\s+pedido/i,
+		/ya\s+me\s+lleg[oó]/i,
+		/ya\s+lo\s+compr[eé]/i,
+	];
+
+	return positivePatterns.some((pattern) => pattern.test(normalized));
+}
+
 async function buildCampaignRecipientInsights(recipients = []) {
 	const normalizedRecipients = safeArray(recipients);
 	const recipientsWithDispatch = normalizedRecipients.filter((recipient) => Boolean(getRecipientDispatchAt(recipient)));
@@ -987,9 +1020,13 @@ async function buildCampaignRecipientInsights(recipients = []) {
 		repliedRecipients: 0,
 		effectiveReadRecipients: 0,
 		purchasedRecipients: 0,
+		chatConfirmedPurchaseRecipients: 0,
+		conversionSignalRecipients: 0,
 		replyRate: 0,
 		effectiveReadRate: 0,
 		purchaseRate: 0,
+		chatConfirmedPurchaseRate: 0,
+		conversionSignalRate: 0,
 		purchaseAttributionModel: 'order_after_campaign_send',
 	};
 
@@ -1106,6 +1143,8 @@ async function buildCampaignRecipientInsights(recipients = []) {
 	let repliedRecipients = 0;
 	let effectiveReadRecipients = 0;
 	let purchasedRecipients = 0;
+	let chatConfirmedPurchaseRecipients = 0;
+	let conversionSignalRecipients = 0;
 
 	for (const recipient of normalizedRecipients) {
 		const dispatchAt = getRecipientDispatchAt(recipient);
@@ -1118,6 +1157,12 @@ async function buildCampaignRecipientInsights(recipients = []) {
 			: [];
 		const firstReply = dispatchAt
 			? conversationMessages.find((message) => new Date(message.createdAt).getTime() >= new Date(dispatchAt).getTime()) || null
+			: null;
+		const purchaseChatMessage = dispatchAt
+			? conversationMessages.find((message) => {
+					if (new Date(message.createdAt).getTime() < new Date(dispatchAt).getTime()) return false;
+					return messageSuggestsCompletedPurchase(message.body || '');
+			  }) || null
 			: null;
 		const matchingOrderByCart = dispatchAt && abandonedCartToken
 			? (ordersByToken.get(abandonedCartToken) || []).find((order) => {
@@ -1141,10 +1186,14 @@ async function buildCampaignRecipientInsights(recipients = []) {
 		const hasReply = Boolean(firstReply);
 		const effectiveRead = Boolean(recipient.readAt || hasReply);
 		const purchaseDetected = Boolean(purchaseOrder);
+		const chatConfirmedPurchase = Boolean(purchaseChatMessage);
+		const conversionSignal = Boolean(purchaseDetected || chatConfirmedPurchase);
 
 		if (hasReply) repliedRecipients += 1;
 		if (effectiveRead) effectiveReadRecipients += 1;
 		if (purchaseDetected) purchasedRecipients += 1;
+		if (chatConfirmedPurchase) chatConfirmedPurchaseRecipients += 1;
+		if (conversionSignal) conversionSignalRecipients += 1;
 
 		recipientsById.set(recipient.id, {
 			hasReply,
@@ -1152,6 +1201,10 @@ async function buildCampaignRecipientInsights(recipients = []) {
 			firstReplyBody: normalizeString(firstReply?.body || '') || null,
 			effectiveRead,
 			purchaseDetected,
+			chatConfirmedPurchase,
+			chatConfirmedPurchaseAt: purchaseChatMessage?.createdAt || null,
+			chatConfirmedPurchaseBody: normalizeString(purchaseChatMessage?.body || '') || null,
+			conversionSignal,
 			purchaseAt: purchaseOrder?.orderUpdatedAt || purchaseOrder?.orderCreatedAt || null,
 			purchaseOrderId: normalizeString(purchaseOrder?.orderId || '') || null,
 			purchaseOrderNumber: normalizeString(purchaseOrder?.orderNumber || '') || null,
@@ -1171,9 +1224,13 @@ async function buildCampaignRecipientInsights(recipients = []) {
 			repliedRecipients,
 			effectiveReadRecipients,
 			purchasedRecipients,
+			chatConfirmedPurchaseRecipients,
+			conversionSignalRecipients,
 			replyRate: base > 0 ? repliedRecipients / base : 0,
 			effectiveReadRate: base > 0 ? effectiveReadRecipients / base : 0,
 			purchaseRate: base > 0 ? purchasedRecipients / base : 0,
+			chatConfirmedPurchaseRate: base > 0 ? chatConfirmedPurchaseRecipients / base : 0,
+			conversionSignalRate: base > 0 ? conversionSignalRecipients / base : 0,
 			purchaseAttributionModel: 'prefer_same_abandoned_cart_token_paid_after_campaign_else_phone_order_after_campaign',
 		},
 		recipientsById,

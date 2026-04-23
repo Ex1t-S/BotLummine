@@ -346,7 +346,7 @@ export default function CampaignRunsPanel({
 										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile campaign-inline-stats--analytics">
 											<span>Respondieron {Number(campaignAnalytics.repliedRecipients || 0)}</span>
 											<span>Lectura efectiva {Number(campaignAnalytics.effectiveReadRecipients || 0)}</span>
-											<span>Compraron {Number(campaignAnalytics.purchasedRecipients || 0)}</span>
+											<span>Compraron {Number(campaignAnalytics.conversionSignalRecipients || campaignAnalytics.purchasedRecipients || 0)}</span>
 										</div>
 									</article>
 								);
@@ -449,6 +449,16 @@ export default function CampaignRunsPanel({
 									<strong>{Number(analytics.purchasedRecipients || 0)}</strong>
 									<small>{formatPercent(analytics.purchaseRate || 0)}</small>
 								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Compra por chat</span>
+									<strong>{Number(analytics.chatConfirmedPurchaseRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.chatConfirmedPurchaseRate || 0)}</small>
+								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Conversion total</span>
+									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.conversionSignalRate || 0)}</small>
+								</div>
 							</div>
 
 							<div className="campaign-tracking-toolbar">
@@ -537,10 +547,10 @@ export default function CampaignRunsPanel({
 														<div className="campaign-recipient-meta">
 															<span
 																className={badgeClass(
-																	recipient.purchaseDetected ? 'approved' : 'pending'
+																	recipient.conversionSignal ? 'approved' : 'pending'
 																)}
 															>
-																{recipient.purchaseDetected ? 'Compro' : 'Sin compra'}
+																{recipient.conversionSignal ? 'Compro / confirmo' : 'Sin compra'}
 															</span>
 															<small>
 																{recipient.purchaseDetected
@@ -548,7 +558,9 @@ export default function CampaignRunsPanel({
 																			recipient.purchaseTotalAmount,
 																			recipient.purchaseCurrency
 																	  )}`
-																	: 'No hay pedido posterior al envio'}
+																	: recipient.chatConfirmedPurchase
+																		? `Chat: ${recipient.chatConfirmedPurchaseBody || 'compra confirmada en conversacion'}`
+																		: 'No hay pedido posterior al envio'}
 															</small>
 														</div>
 													</td>
