@@ -304,6 +304,34 @@ function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) 
 	return false;
 }
 
+function getMenuReentryThresholdMs() {
+	const hours = Math.max(1, Number(process.env.MENU_REENTRY_HOURS || 24) || 24);
+	return hours * 60 * 60 * 1000;
+}
+
+function getPreviousConversationActivityAt(messages = []) {
+	const safeMessages = Array.isArray(messages) ? messages : [];
+	if (safeMessages.length <= 1) return null;
+
+	const previousMessages = safeMessages.slice(0, -1);
+	if (!previousMessages.length) return null;
+
+	const previousTimestamp = new Date(
+		previousMessages[previousMessages.length - 1]?.createdAt || 0
+	).getTime();
+
+	return Number.isFinite(previousTimestamp) && previousTimestamp > 0
+		? previousTimestamp
+		: null;
+}
+
+function isConversationStaleForMenu(messages = []) {
+	const previousActivityAt = getPreviousConversationActivityAt(messages);
+	if (!previousActivityAt) return false;
+
+	return Date.now() - previousActivityAt >= getMenuReentryThresholdMs();
+}
+
 function isHardHumanLock(currentState = {}) {
 	return Boolean(
 		currentState?.needsHuman === true &&
@@ -470,6 +498,7 @@ export async function maybeHandleMenuFlow({
 	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
 	const interactiveReplyId = getInteractiveReplyId(rawPayload);
 	const hardHumanLock = isHardHumanLock(currentState);
+	const isStaleConversation = isConversationStaleForMenu(conversation?.messages);
 
 	if (!hardHumanLock && interactiveReplyId) {
 		const resolvedSelection = await detectMenuSelectionAcrossMenus({
@@ -494,13 +523,16 @@ export async function maybeHandleMenuFlow({
 
 	const shouldOfferMenu =
 		!hardHumanLock &&
-		shouldForceMenuFirst({
-			currentState,
-			freshConversation: conversation,
-			messageBody,
-		});
+		(
+			isStaleConversation ||
+			shouldForceMenuFirst({
+				currentState,
+				freshConversation: conversation,
+				messageBody,
+			})
+		);
 
-	if (!currentState?.needsHuman && shouldOfferMenu) {
+	if (shouldOfferMenu) {
 		const selectionId = await detectMenuSelection({
 			messageBody,
 			rawPayload,
