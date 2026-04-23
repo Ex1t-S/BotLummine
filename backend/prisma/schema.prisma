@@ -50,11 +50,34 @@ model Conversation {
   contact  Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   state    ConversationState?
   messages Message[]
+  aiLabRuns AiLabRun[]
 
   @@index([lastMessageAt])
   @@index([unreadCount, lastMessageAt])
   @@index([archivedAt, lastMessageAt])
   @@index([queue, aiEnabled, lastMessageAt])
+}
+
+model AiLabRun {
+  id              String   @id @default(cuid())
+  sessionId       String
+  fixtureKey      String
+  conversationId  String
+  action          String?
+  selectionId     String?
+  userMessage     String?
+  assistantMessage String?
+  intent          String?
+  provider        String?
+  model           String?
+  tracePayload    Json?
+  createdAt       DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([fixtureKey, createdAt])
 }
 
 model ConversationState {

@@ -45,6 +45,70 @@ function buildTracePayload(trace = null) {
 	};
 }
 
+async function listPersistedRuns(conversationId, sessionId) {
+	if (!conversationId || !sessionId) return [];
+
+	const runs = await prisma.aiLabRun.findMany({
+		where: {
+			conversationId,
+			sessionId,
+		},
+		orderBy: {
+			createdAt: 'asc',
+		},
+	});
+
+	return runs.map((run) => ({
+		id: run.id,
+		sessionId: run.sessionId,
+		fixtureKey: run.fixtureKey,
+		action: run.action || '',
+		selectionId: run.selectionId || '',
+		userMessage: run.userMessage || '',
+		assistantMessage: run.assistantMessage || '',
+		intent: run.intent || '',
+		provider: run.provider || '',
+		model: run.model || '',
+		tracePayload: run.tracePayload || null,
+		createdAt: run.createdAt,
+	}));
+}
+
+async function persistAiLabRun({
+	sessionId,
+	fixtureKey,
+	conversationId,
+	action = '',
+	selectionId = '',
+	userMessage = '',
+	trace = null,
+} = {}) {
+	if (!sessionId || !fixtureKey || !conversationId) return null;
+
+	const tracePayload = buildTracePayload(trace);
+
+	return prisma.aiLabRun.create({
+		data: {
+			sessionId,
+			fixtureKey,
+			conversationId,
+			action: String(action || '').trim() || null,
+			selectionId: String(selectionId || '').trim() || null,
+			userMessage: String(userMessage || '').trim() || null,
+			assistantMessage:
+				String(
+					tracePayload?.assistantMessage?.text ||
+					tracePayload?.assistantMessage ||
+					''
+				).trim() || null,
+			intent: tracePayload?.intent || null,
+			provider: tracePayload?.provider || null,
+			model: tracePayload?.model || null,
+			tracePayload: tracePayload || null,
+		},
+	});
+}
+
 async function fetchSessionConversation(conversationId) {
 	return prisma.conversation.findUnique({
 		where: { id: conversationId },
@@ -201,6 +265,8 @@ async function serializeConversation(conversation, fixtureMeta, lastTrace = null
 		? rawName.slice(AI_LAB_CONTACT_PREFIX.length)
 		: rawName;
 
+	const runs = await listPersistedRuns(conversation.id, sessionId);
+
 	return {
 		id: sessionId,
 		conversationId: conversation.id,
@@ -223,6 +289,7 @@ async function serializeConversation(conversation, fixtureMeta, lastTrace = null
 			interactivePayload: extractInteractivePayload(message)
 		})),
 		lastTrace: buildTracePayload(lastTrace),
+		runs,
 		menuPreview: await buildMenuPreview(conversation),
 		updatedAt: conversation.updatedAt,
 		queue: conversation.queue,
@@ -360,6 +427,12 @@ export async function resetAiLabSession(sessionId, { fixtureKey } = {}) {
 	session.fixtureKey = fixture.key;
 	session.lastTrace = null;
 
+	await prisma.aiLabRun.deleteMany({
+		where: {
+			sessionId: session.sessionId,
+		},
+	});
+
 	await resetConversationForFixture(session.conversationId, fixture);
 
 	if (fixture.startWithMainMenu) {
@@ -419,6 +492,15 @@ export async function sendAiLabMessage(sessionId, { body, selectionId = '', acti
 			shouldReply: false,
 			menuAssistantContext: null,
 		};
+
+		await persistAiLabRun({
+			sessionId: session.sessionId,
+			fixtureKey: session.fixtureKey,
+			conversationId: conversation.id,
+			action: 'open_menu',
+			userMessage: 'open_menu',
+			trace: session.lastTrace,
+		});
 	} else {
 		if (!cleanBody && !cleanSelectionId) {
 			const error = new Error('El mensaje no puede estar vacio.');
@@ -467,6 +549,16 @@ export async function sendAiLabMessage(sessionId, { body, selectionId = '', acti
 		});
 
 		session.lastTrace = result.trace || null;
+
+		await persistAiLabRun({
+			sessionId: session.sessionId,
+			fixtureKey: session.fixtureKey,
+			conversationId: conversation.id,
+			action: cleanSelectionId ? 'selection' : 'message',
+			selectionId: cleanSelectionId,
+			userMessage: nextMessageBody,
+			trace: session.lastTrace,
+		});
 	}
 
 	const fixture = getAiLabFixture(session.fixtureKey);

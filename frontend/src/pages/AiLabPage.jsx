@@ -123,6 +123,7 @@ export default function AiLabPage() {
 	const activeFixture = fixtures.find((fixture) => fixture.key === fixtureKey) || session?.fixtureMeta || null;
 	const debugOffers = commercialPlan?.offerCandidates || [];
 	const menuPreview = session?.menuPreview || null;
+	const persistedRuns = session?.runs || [];
 
 	function handleSubmit(event) {
 		event.preventDefault();
@@ -348,6 +349,30 @@ export default function AiLabPage() {
 				<div className="ai-lab-meta-box compact">
 					<h3>Estado de conversación</h3>
 					<JsonBlock value={session?.conversationState || {}} />
+				</div>
+
+				<div className="ai-lab-meta-box compact">
+					<h3>Historial persistido</h3>
+					{persistedRuns.length ? (
+						<div className="ai-lab-persisted-run-list">
+							{persistedRuns.map((run) => (
+								<div key={run.id} className="ai-lab-persisted-run-item">
+									<div className="ai-lab-persisted-run-head">
+										<strong>{run.action || 'turno'}</strong>
+										<span>{new Date(run.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
+									</div>
+									<div className="ai-lab-persisted-run-body">
+										<p><strong>Input:</strong> {run.userMessage || '—'}</p>
+										<p><strong>Output:</strong> {run.assistantMessage || '—'}</p>
+										<p><strong>Intent:</strong> {run.intent || '—'}</p>
+										<p><strong>Modelo:</strong> {run.model || '—'}</p>
+									</div>
+								</div>
+							))}
+						</div>
+					) : (
+						<p style={{ margin: 0 }}>Todavía no hay runs persistidos para esta sesión.</p>
+					)}
 				</div>
 
 				{showCatalog ? (
