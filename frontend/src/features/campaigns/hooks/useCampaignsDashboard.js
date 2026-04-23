@@ -272,11 +272,14 @@ export function useCampaignsDashboard() {
 		onSuccess: (result) => {
 			invalidateAll();
 			const markedDeletedCount = Number(result?.markedDeletedCount || 0);
+			const deletedCount = Number(result?.deletedCount || 0);
 			showFeedback(
 				'success',
-				markedDeletedCount > 0
-					? `Templates sincronizados con Meta. ${markedDeletedCount} quedaron marcados para limpiar.`
-					: 'Templates sincronizados con Meta.'
+				deletedCount > 0
+					? `Templates sincronizados con Meta. ${deletedCount} se eliminaron de la base local.`
+					: markedDeletedCount > 0
+						? `Templates sincronizados con Meta. ${markedDeletedCount} quedaron marcados para limpiar.`
+						: 'Templates sincronizados con Meta.'
 			);
 		},
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo sincronizar.'),

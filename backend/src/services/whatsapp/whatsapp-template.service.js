@@ -279,7 +279,8 @@ export async function getTemplateOrThrow(templateId) {
 
 export async function syncTemplatesFromMeta({
 	pageLimit = 10,
-	pageSize = 100
+	pageSize = 100,
+	purgeDeleted = true
 } = {}) {
 	const wabaId = getWhatsAppBusinessAccountId();
 	const syncLog = await prisma.templateSyncLog.create({
@@ -295,6 +296,7 @@ export async function syncTemplatesFromMeta({
 	let errorCount = 0;
 	let restoredCount = 0;
 	let markedDeletedCount = 0;
+	let deletedCount = 0;
 	const pages = [];
 	const seenMetaTemplateIds = new Set();
 	const fetchedKeys = new Set();
@@ -354,10 +356,10 @@ export async function syncTemplatesFromMeta({
 
 		const localActiveTemplates = await prisma.whatsAppTemplate.findMany({
 			where: {
-				wabaId,
 				deletedAt: null
 			},
 			select: {
+				wabaId: true,
 				id: true,
 				name: true,
 				language: true,
@@ -367,6 +369,10 @@ export async function syncTemplatesFromMeta({
 
 		const staleTemplateIds = localActiveTemplates
 			.filter((template) => {
+				if (String(template.wabaId || '') !== String(wabaId)) {
+					return true;
+				}
+
 				const templateKey = `${template.name}::${template.language}`;
 				const seenByKey = fetchedKeys.has(templateKey);
 				const seenByMetaId = template.metaTemplateId
@@ -394,6 +400,11 @@ export async function syncTemplatesFromMeta({
 			markedDeletedCount = Number(result?.count || 0);
 		}
 
+		if (purgeDeleted) {
+			const purgeResult = await purgeDeletedLocalTemplates();
+			deletedCount = Number(purgeResult?.deletedCount || 0);
+		}
+
 		await prisma.templateSyncLog.update({
 			where: { id: syncLog.id },
 			data: {
@@ -406,7 +417,9 @@ export async function syncTemplatesFromMeta({
 					pagesFetched: page,
 					lastAfter: after,
 					restoredCount,
-					markedDeletedCount
+					markedDeletedCount,
+					deletedCount,
+					purgeDeleted
 				}
 			}
 		});
@@ -416,7 +429,8 @@ export async function syncTemplatesFromMeta({
 			upsertedCount,
 			errorCount,
 			restoredCount,
-			markedDeletedCount
+			markedDeletedCount,
+			deletedCount
 		};
 	} catch (error) {
 		errorCount += 1;
