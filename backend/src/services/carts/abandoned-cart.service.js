@@ -21,8 +21,8 @@ const DELETE_CHUNK_SIZE = Math.max(
 	25,
 	Number(process.env.TIENDANUBE_ABANDONED_DELETE_CHUNK_SIZE || 250)
 );
-const DEFAULT_DAYS_BACK = 7;
-const ALLOWED_WINDOWS = new Set([7, 15, 30]);
+const DEFAULT_DAYS_BACK = 30;
+const ALLOWED_WINDOWS = new Set([30]);
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));

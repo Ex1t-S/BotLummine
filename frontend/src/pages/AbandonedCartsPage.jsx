@@ -11,6 +11,8 @@ const initialFilters = {
 	page: 1
 };
 
+const FIXED_SYNC_WINDOW_DAYS = 30;
+
 function getInitials(value = '') {
 	return (
 		String(value)
@@ -114,14 +116,14 @@ export default function AbandonedCartsPage() {
 		await loadAbandonedCarts(initialFilters);
 	}
 
-	async function handleSync(daysBack = 7) {
+	async function handleSync() {
 		setSyncing(true);
 
 		try {
-			const res = await api.post('/dashboard/abandoned-carts/sync', { daysBack });
+			const res = await api.post('/dashboard/abandoned-carts/sync', {});
 
 			setSyncSummary({
-				daysBack: res.data?.daysBack || daysBack,
+				daysBack: res.data?.daysBack || FIXED_SYNC_WINDOW_DAYS,
 				syncedCount: res.data?.syncedCount ?? res.data?.count ?? 0,
 				deletedCount: res.data?.deletedCount ?? 0,
 				remainingCount: res.data?.remainingCount ?? 0,
@@ -130,7 +132,7 @@ export default function AbandonedCartsPage() {
 
 			const next = {
 				...filters,
-				syncWindow: daysBack,
+				syncWindow: FIXED_SYNC_WINDOW_DAYS,
 				page: 1
 			};
 
@@ -183,19 +185,13 @@ export default function AbandonedCartsPage() {
 					<p>
 						Total: <strong>{stats.total || 0}</strong>
 						<br />
-						La vista respeta la ventana elegida de 7, 15 o 30 días y conserva el estado de los carritos ya contactados.
+						La sync toma siempre los últimos 30 días y conserva el estado de los carritos ya contactados por campañas.
 					</p>
 				</div>
 
 				<div className="inline-actions">
-					<button type="button" onClick={() => handleSync(7)} disabled={syncing}>
-						{syncing && filters.syncWindow === 7 ? 'Sincronizando...' : 'Sync 7 días'}
-					</button>
-					<button type="button" onClick={() => handleSync(15)} disabled={syncing}>
-						{syncing && filters.syncWindow === 15 ? 'Sincronizando...' : 'Sync 15 días'}
-					</button>
-					<button type="button" onClick={() => handleSync(30)} disabled={syncing}>
-						{syncing && filters.syncWindow === 30 ? 'Sincronizando...' : 'Sync 30 días'}
+					<button type="button" onClick={handleSync} disabled={syncing}>
+						{syncing ? 'Sincronizando últimos 30 días...' : 'Sincronizar últimos 30 días'}
 					</button>
 				</div>
 			</section>

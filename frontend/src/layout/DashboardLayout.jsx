@@ -71,10 +71,6 @@ export default function DashboardLayout() {
 							<NavLink to="/whatsapp-menu" className={navClass}>
 								Editar menú
 							</NavLink>
-
-							<NavLink to="/ai-lab" className={navClass}>
-								AI Lab
-							</NavLink>
 						</>
 					) : null}
 				</nav>

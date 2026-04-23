@@ -51,7 +51,7 @@ export default function App() {
 					}
 				/>
 				<Route
-					path="campaigns"
+					path="campaigns/*"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
 							<CampaignsPage />

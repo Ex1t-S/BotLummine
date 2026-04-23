@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 
 function formatDate(value) {
-	if (!value) return '—';
+	if (!value) return '--';
 	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return '—';
+	if (Number.isNaN(date.getTime())) return '--';
 	return new Intl.DateTimeFormat('es-AR', {
 		dateStyle: 'short',
 		timeStyle: 'short',
@@ -269,10 +269,10 @@ export default function CampaignRunsPanel({
 		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Historial y tracking de campañas</h3>
+					<h3>Historial y tracking de campanas</h3>
 					<p>
-						Seguí borradores, campañas activas y resultados desde una vista más clara,
-						con tracking real de envíos, entregas y lecturas.
+						Segui borradores, campanas activas y resultados desde una vista mas clara,
+						con tracking real de envios, entregas y lecturas.
 					</p>
 				</div>
 			</div>
@@ -280,72 +280,81 @@ export default function CampaignRunsPanel({
 			<div className="campaign-inline-summary">
 				<div className="campaign-inline-summary-item">
 					<strong>{campaigns.length}</strong>
-					<span>campañas registradas</span>
+					<span>campanas registradas</span>
 				</div>
 				<div className="campaign-inline-summary-item">
 					<strong>{totalCampaignRecipients}</strong>
 					<span>destinatarios sumados</span>
 				</div>
 				<div className="campaign-inline-summary-item">
-					<strong>{selectedCampaign ? getStatusTone(selectedCampaign.status) : '—'}</strong>
+					<strong>{selectedCampaign ? getStatusTone(selectedCampaign.status) : '--'}</strong>
 					<span>estado actual seleccionado</span>
 				</div>
 			</div>
 
 			<div className="campaign-runs-grid campaign-runs-grid--balanced">
-				<div className="campaign-list compact campaign-list--airy">
-					{campaigns.length === 0 ? (
-						<div className="campaign-empty-state">
-							<strong>Todavía no hay campañas.</strong>
-							<p>Creá una y te va a aparecer acá con sus métricas.</p>
+				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-list">
+					<div className="campaign-detail-header">
+						<div>
+								<h4>Campanas cargadas</h4>
+								<p>Elegi una campana para revisar su tracking y sus destinatarios.</p>
 						</div>
-					) : (
-						campaigns.map((campaign) => {
-							const isSelected = selectedCampaign?.id === campaign.id;
-							const listMetrics = buildRecipientMetrics(campaign);
+					</div>
 
-							return (
-								<article
-									key={campaign.id}
-									className={`campaign-list-card campaign-list-card--run${isSelected ? ' selected' : ''}`}
-									onClick={() => onSelectCampaign(campaign)}
-									role="button"
-									tabIndex={0}
-									onKeyDown={(event) => {
-										if (event.key === 'Enter' || event.key === ' ') {
-											event.preventDefault();
-											onSelectCampaign(campaign);
-										}
-									}}
-								>
-									<div className="campaign-list-card-top">
-										<div>
-											<strong>{campaign.name}</strong>
-											<p>{campaign.templateName || campaign.template?.name || 'Sin template asociado'}</p>
+					<div className="campaign-list compact campaign-list--airy campaign-list--tracking">
+						{campaigns.length === 0 ? (
+							<div className="campaign-empty-state">
+								<strong>Todavia no hay campanas.</strong>
+								<p>Crea una y te va a aparecer aca con sus metricas.</p>
+							</div>
+						) : (
+							campaigns.map((campaign) => {
+								const isSelected = selectedCampaign?.id === campaign.id;
+								const listMetrics = buildRecipientMetrics(campaign);
+
+								return (
+									<article
+										key={campaign.id}
+										className={`campaign-list-card campaign-list-card--run${isSelected ? ' selected' : ''}`}
+										onClick={() => onSelectCampaign(campaign)}
+										role="button"
+										tabIndex={0}
+										onKeyDown={(event) => {
+											if (event.key === 'Enter' || event.key === ' ') {
+												event.preventDefault();
+												onSelectCampaign(campaign);
+											}
+										}}
+									>
+										<div className="campaign-list-card-top">
+											<div>
+												<strong>{campaign.name}</strong>
+												<p>{campaign.templateName || campaign.template?.name || 'Sin template asociado'}</p>
+											</div>
+											<span className={badgeClass(campaign.status)}>
+												{campaign.status || 'DRAFT'}
+											</span>
 										</div>
-										<span className={badgeClass(campaign.status)}>
-											{campaign.status || 'DRAFT'}
-										</span>
-									</div>
 
-									<div className="campaign-inline-stats campaign-inline-stats--stack-mobile">
-										<span>{listMetrics.total} destinatarios</span>
-										<span>{getStatusTone(campaign.status)}</span>
-										<span>Creada {formatDate(campaign.createdAt)}</span>
-									</div>
-								</article>
-							);
-						})
-					)}
+										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile">
+											<span>{listMetrics.total} destinatarios</span>
+											<span>{getStatusTone(campaign.status)}</span>
+											<span>Creada {formatDate(campaign.createdAt)}</span>
+										</div>
+									</article>
+								);
+							})
+						)}
+					</div>
 				</div>
 
-				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking">
+				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-detail">
 					{selectedCampaign ? (
 						<>
 							<div className="campaign-detail-header">
 								<div>
 									<h4>{selectedCampaign.name}</h4>
-									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripción.'}</p>
+									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripcion.'}</p>
 								</div>
 								<span className={badgeClass(selectedCampaign.status)}>
 									{selectedCampaign.status || 'DRAFT'}
@@ -364,11 +373,11 @@ export default function CampaignRunsPanel({
 									<strong>{recipientMetrics.total}</strong>
 								</div>
 								<div className="campaign-detail-meta-card">
-									<span>Creación</span>
+									<span>Creacion</span>
 									<strong>{formatDate(selectedCampaign.createdAt)}</strong>
 								</div>
 								<div className="campaign-detail-meta-card">
-									<span>AcciÃ³n sugerida</span>
+									<span>Accion sugerida</span>
 									<strong>{actionModel.primaryLabel}</strong>
 								</div>
 							</div>
@@ -406,11 +415,11 @@ export default function CampaignRunsPanel({
 									disabled={!canDelete || deleteBusy}
 									title={
 										canDelete
-											? 'Eliminar campaña'
-											: 'No se puede eliminar una campaña en cola o en ejecución'
+											? 'Eliminar campana'
+											: 'No se puede eliminar una campana en cola o en ejecucion'
 									}
 								>
-									{deleteBusy ? 'Eliminando…' : 'Eliminar'}
+									{deleteBusy ? 'Eliminando...' : 'Eliminar'}
 								</button>
 							</div>
 
@@ -428,7 +437,7 @@ export default function CampaignRunsPanel({
 									<strong>{recipientMetrics.delivered}</strong>
 								</div>
 								<div className="campaign-tracking-kpi">
-									<span>Leídos</span>
+									<span>Leidos</span>
 									<strong>{recipientMetrics.read}</strong>
 								</div>
 								<div className="campaign-tracking-kpi">
@@ -451,7 +460,7 @@ export default function CampaignRunsPanel({
 											setSearch(event.target.value);
 											setPage(1);
 										}}
-										placeholder="Nombre, teléfono o estado"
+										placeholder="Nombre, telefono o estado"
 									/>
 								</div>
 
@@ -468,7 +477,7 @@ export default function CampaignRunsPanel({
 										<option value="PENDING">Pendientes</option>
 										<option value="SENT">Enviados</option>
 										<option value="DELIVERED">Entregados</option>
-										<option value="READ">Leídos</option>
+										<option value="READ">Leidos</option>
 										<option value="FAILED">Fallidos</option>
 									</select>
 								</div>
@@ -479,9 +488,9 @@ export default function CampaignRunsPanel({
 									<thead>
 										<tr>
 											<th>Destinatario</th>
-											<th>Teléfono</th>
+											<th>Telefono</th>
 											<th>Estado</th>
-											<th>Última actualización</th>
+											<th>Ultima actualizacion</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -489,7 +498,7 @@ export default function CampaignRunsPanel({
 											paginatedRecipients.map((recipient) => (
 												<tr key={recipient.id || recipient.phone}>
 													<td>{recipient.contactName || recipient.name || 'Sin nombre'}</td>
-													<td>{recipient.phone || recipient.contactPhone || '—'}</td>
+													<td>{recipient.phone || recipient.contactPhone || '--'}</td>
 													<td>
 														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
 															{normalizeRecipientStatus(recipient.status)}
@@ -521,7 +530,7 @@ export default function CampaignRunsPanel({
 
 							<div className="campaign-customer-pagination campaign-customer-pagination--tracking">
 								<span>
-									Mostrando {filteredRecipients.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–
+									Mostrando {filteredRecipients.length === 0 ? 0 : (safePage - 1) * pageSize + 1}-
 									{Math.min(safePage * pageSize, filteredRecipients.length)} de {filteredRecipients.length}
 								</span>
 
@@ -548,8 +557,8 @@ export default function CampaignRunsPanel({
 						</>
 					) : (
 						<div className="campaign-empty-state">
-							<strong>Elegí una campaña.</strong>
-							<p>Acá vas a ver el detalle, los estados y las acciones disponibles.</p>
+							<strong>Elegi una campana.</strong>
+							<p>Aca vas a ver el detalle, los estados y las acciones disponibles.</p>
 						</div>
 					)}
 				</div>

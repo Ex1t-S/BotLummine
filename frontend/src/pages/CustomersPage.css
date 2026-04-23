@@ -92,6 +92,32 @@
 	font-weight: 600;
 }
 
+.customers-visibility-btn {
+	background: #fff;
+	color: #111827;
+	padding: 11px 14px;
+	border-radius: 12px;
+	font-weight: 700;
+	border: 1px solid #d1d5db;
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font: inherit;
+	cursor: pointer;
+	transition: 0.18s ease;
+}
+
+.customers-visibility-btn[aria-pressed='true'] {
+	background: #f8fafc;
+	border-color: #cbd5e1;
+}
+
+.customers-visibility-icon {
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+}
+
 .customers-feedback {
 	padding: 12px 14px;
 	border-radius: 12px;

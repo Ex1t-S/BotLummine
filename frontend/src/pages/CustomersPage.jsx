@@ -225,6 +225,38 @@ function ProductMultiSelect({
 	);
 }
 
+function EyeToggleIcon({ hidden = false }) {
+	return (
+		<svg viewBox="0 0 24 24" aria-hidden="true" className="customers-visibility-icon">
+			<path
+				d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.8"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<circle
+				cx="12"
+				cy="12"
+				r="3"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.8"
+			/>
+			{hidden ? (
+				<path
+					d="M4 4l16 16"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="1.8"
+					strokeLinecap="round"
+				/>
+			) : null}
+		</svg>
+	);
+}
+
 export default function CustomersPage() {
 	const [filters, setFilters] = useState(initialFilters);
 	const [data, setData] = useState({
@@ -240,6 +272,7 @@ export default function CustomersPage() {
 	const [selectedProducts, setSelectedProducts] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
 	const [showProductFilter, setShowProductFilter] = useState(false);
+	const [billingVisible, setBillingVisible] = useState(true);
 	const pollRef = useRef(null);
 
 	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
@@ -249,6 +282,8 @@ export default function CustomersPage() {
 		() => buildVisiblePages(currentPage, totalPages),
 		[currentPage, totalPages]
 	);
+	const displayAvgTicketLabel = billingVisible ? normalizedStats.avgTicketLabel : '********';
+	const displayTotalSpentLabel = billingVisible ? normalizedStats.totalSpentLabel : '********';
 
 	async function loadCatalogOptions() {
 		try {
@@ -443,6 +478,16 @@ export default function CustomersPage() {
 					<button type="button" className="secondary-link-btn" onClick={handleResetFilters}>
 						Limpiar filtros
 					</button>
+					<button
+						type="button"
+						className="customers-visibility-btn"
+						onClick={() => setBillingVisible((current) => !current)}
+						aria-pressed={!billingVisible}
+						title={billingVisible ? 'Ocultar montos' : 'Mostrar montos'}
+					>
+						<EyeToggleIcon hidden={!billingVisible} />
+						<span>{billingVisible ? 'Ocultar montos' : 'Mostrar montos'}</span>
+					</button>
 				</div>
 			</div>
 
@@ -513,8 +558,8 @@ export default function CustomersPage() {
 				<div className="customers-stat-card"><span className="customers-stat-label">Pedidos</span><strong>{normalizedStats.totalOrders}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Clientes únicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Con teléfono</span><strong>{normalizedStats.withPhone}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{normalizedStats.avgTicketLabel}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{normalizedStats.totalSpentLabel}</strong></div>
+					<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{displayAvgTicketLabel}</strong></div>
+					<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{displayTotalSpentLabel}</strong></div>
 			</div>
 
 			<div className="customers-filters-card">
@@ -700,7 +745,7 @@ export default function CustomersPage() {
 								<div className="customer-meta-row">
 									<div className="customer-meta-chip">
 										<span>Total</span>
-										<strong>{customer.totalSpentLabel || '$0'}</strong>
+										<strong>{billingVisible ? customer.totalSpentLabel || '$0' : '********'}</strong>
 									</div>
 									<div className="customer-meta-chip">
 										<span>Fecha</span>

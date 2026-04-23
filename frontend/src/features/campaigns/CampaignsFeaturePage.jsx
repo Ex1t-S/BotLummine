@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import CampaignRunsPanel from '../../components/campaigns/CampaignRunsPanel.jsx';
 import TemplateBuilderPanel from '../../components/campaigns/TemplateBuilderPanel.jsx';
 import TemplateLibraryPanel from '../../components/campaigns/TemplateLibraryPanel.jsx';
@@ -10,27 +11,40 @@ import './CampaignsFeaturePage.css';
 const TAB_DEFINITIONS = [
 	{
 		id: 'library',
+		path: 'library',
 		label: 'Biblioteca de templates',
 		eyebrow: 'Templates',
 		title: 'Biblioteca de templates',
 		description:
-			'Buscá, filtrá y elegí la plantilla con la que querés trabajar. Desde acá arrancás sin dar vueltas.',
+			'Busca, filtra y elegi la plantilla con la que queres trabajar. Desde aca arrancas sin dar vueltas.',
+	},
+	{
+		id: 'builder',
+		path: 'builder',
+		label: 'Editor de templates',
+		eyebrow: 'Templates',
+		title: 'Editor de templates',
+		description:
+			'Edita variables, botones y contenido del template sin salir del flujo de campanas.',
+		hiddenFromNav: true,
 	},
 	{
 		id: 'segment',
-		label: 'Segmentar campaña',
-		eyebrow: 'Campañas',
-		title: 'Segmentar campaña',
+		path: 'segment',
+		label: 'Segmentar campana',
+		eyebrow: 'Campanas',
+		title: 'Segmentar campana',
 		description:
-			'Elegí si la audiencia sale de carritos abandonados o de clientes con compras, y armá la campaña desde un solo flujo.',
+			'Elegi si la audiencia sale de carritos abandonados o de clientes con compras, y arma la campana desde un solo flujo.',
 	},
 	{
 		id: 'tracking',
+		path: 'tracking',
 		label: 'Seguimiento',
-		eyebrow: 'Campañas',
+		eyebrow: 'Campanas',
 		title: 'Seguimiento',
 		description:
-			'Revisá estados, resultados y destinatarios desde una vista separada para controlar lo que ya salió.',
+			'Revisa estados, resultados y destinatarios desde una vista separada para controlar lo que ya salio.',
 	},
 ];
 
@@ -62,6 +76,8 @@ function CampaignSectionShell({ eyebrow, title, description, children }) {
 }
 
 export default function CampaignsFeaturePage() {
+	const location = useLocation();
+	const navigate = useNavigate();
 	const {
 		feedback,
 		templates,
@@ -76,22 +92,53 @@ export default function CampaignsFeaturePage() {
 		abandonedCart,
 	} = useCampaignsDashboard();
 
-	const [activeTab, setActiveTab] = useState('library');
 	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
+	const tabsByPath = useMemo(
+		() =>
+			TAB_DEFINITIONS.reduce((acc, tab) => {
+				acc[tab.path] = tab;
+				return acc;
+			}, {}),
+		[]
+	);
+
+	const activeTab = useMemo(() => {
+		const pathSegments = location.pathname.split('/').filter(Boolean);
+		const activePath = pathSegments[1] || '';
+		return tabsByPath[activePath]?.id || 'library';
+	}, [location.pathname, tabsByPath]);
+
 	const currentTab = useMemo(
 		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
 		[activeTab]
 	);
+
+	useEffect(() => {
+		const pathSegments = location.pathname.split('/').filter(Boolean);
+		const activePath = pathSegments[1] || '';
+
+		if (!activePath || !tabsByPath[activePath]) {
+			navigate('/campaigns/library', { replace: true });
+		}
+	}, [location.pathname, navigate, tabsByPath]);
+
+	function openTab(tabId) {
+		const tab = TAB_DEFINITIONS.find((item) => item.id === tabId);
+		if (!tab) return;
+		navigate(`/campaigns/${tab.path}`);
+	}
+
 	function openBuilderForEdit(template) {
 		setSelectedTemplate(template || null);
 		setBuilderModeRequest('edit');
-		setActiveTab('builder');
+		openTab('builder');
 	}
 
 	function openBuilderForCreate() {
 		setBuilderModeRequest('create');
-		setActiveTab('builder');
+		openTab('builder');
 	}
+
 	function renderContent() {
 		switch (activeTab) {
 			case 'library':
@@ -110,7 +157,7 @@ export default function CampaignsFeaturePage() {
 							onSync={() => mutations.sync.mutate()}
 							syncing={mutations.sync.isPending}
 							onDeleteTemplate={(template) => {
-								const confirmed = window.confirm(`¿Eliminar el template ${template.name}?`);
+								const confirmed = window.confirm(`Eliminar el template ${template.name}?`);
 								if (confirmed) mutations.deleteTemplate.mutate(template.id);
 							}}
 						/>
@@ -127,7 +174,7 @@ export default function CampaignsFeaturePage() {
 						<TemplateBuilderPanel
 							selectedTemplate={selectedTemplate}
 							builderModeRequest={builderModeRequest}
-							onBackToLibrary={() => setActiveTab('library')}
+							onBackToLibrary={() => openTab('library')}
 							creating={mutations.createTemplate.isPending}
 							updating={mutations.updateTemplate.isPending}
 							onCreateTemplate={(payload) => mutations.createTemplate.mutateAsync(payload)}
@@ -175,7 +222,7 @@ export default function CampaignsFeaturePage() {
 								if (!campaign?.id) return;
 
 								const confirmed = window.confirm(
-									`¿Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
+									`Eliminar la campana "${campaign.name}"?\n\nEsta accion no se puede deshacer.`
 								);
 
 								if (!confirmed) return;
@@ -197,22 +244,22 @@ export default function CampaignsFeaturePage() {
 		<section className="campaigns-page campaigns-page--tabs campaigns-page--feature-refresh">
 			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--tabs campaigns-hero--feature-refresh">
 				<div className="campaigns-hero-copy campaigns-hero-copy--full">
-					<span className="campaigns-eyebrow">Campañas · WhatsApp Templates</span>
-					<h2>Creación y seguimiento de campañas</h2>
+					<span className="campaigns-eyebrow">Campanas - WhatsApp Templates</span>
+					<h2>Creacion y seguimiento de campanas</h2>
 					<p className="campaigns-hero-lead">
-						Creá campañas de WhatsApp, elegí audiencia, editá templates y seguí resultados desde
+						Crea campanas de WhatsApp, elegi audiencia, edita templates y segui resultados desde
 						un solo lugar sin perderte en paneles gigantes.
 					</p>
 
 					<CampaignFeedbackAlert feedback={feedback} />
 
-					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campañas">
-						{TAB_DEFINITIONS.map((tab) => (
+					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campanas">
+						{TAB_DEFINITIONS.filter((tab) => !tab.hiddenFromNav).map((tab) => (
 							<DashboardTabButton
 								key={tab.id}
 								tab={tab}
 								isActive={activeTab === tab.id}
-								onClick={setActiveTab}
+								onClick={openTab}
 							/>
 						))}
 					</div>

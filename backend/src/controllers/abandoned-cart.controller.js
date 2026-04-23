@@ -4,6 +4,7 @@ import { getOrCreateConversation } from '../services/conversation/chat.service.j
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 
+const FIXED_SYNC_WINDOW_DAYS = 30;
 
 function ensureAbandonedCartModel() {
 	if (!prisma?.abandonedCart) {
@@ -43,7 +44,7 @@ function buildSuggestedMessage(cart) {
 	].join('\n\n');
 }
 
-function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = 7 }) {
+function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = FIXED_SYNC_WINDOW_DAYS }) {
 	const useManualDates = Boolean(dateFrom || dateTo);
 	const window = {};
 
@@ -59,17 +60,17 @@ function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = 7 }) {
 		return Object.keys(window).length ? window : null;
 	}
 
-	if (![7, 15, 30].includes(Number(syncWindow))) {
+	if (Number(syncWindow) !== FIXED_SYNC_WINDOW_DAYS) {
 		return null;
 	}
 
 	const cutoff = new Date();
-	cutoff.setDate(cutoff.getDate() - Number(syncWindow));
+	cutoff.setDate(cutoff.getDate() - FIXED_SYNC_WINDOW_DAYS);
 	window.gte = cutoff;
 	return window;
 }
 
-function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '', syncWindow = 7 }) {
+function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '', syncWindow = FIXED_SYNC_WINDOW_DAYS }) {
 	const where = {};
 
 	if (status && status !== 'ALL') {
@@ -140,9 +141,7 @@ export async function getAbandonedCarts(req, res, next) {
 		const status = String(req.query.status || 'ALL').toUpperCase();
 		const dateFrom = String(req.query.dateFrom || '');
 		const dateTo = String(req.query.dateTo || '');
-		const syncWindow = [7, 15, 30].includes(Number(req.query.syncWindow))
-			? Number(req.query.syncWindow)
-			: 30;
+		const syncWindow = FIXED_SYNC_WINDOW_DAYS;
 
 		const where = buildWhereClause({ q, status, dateFrom, dateTo, syncWindow });
 		const statsBaseWhere = buildWhereClause({
@@ -197,8 +196,7 @@ export async function postSyncAbandonedCarts(req, res) {
 	try {
 		ensureAbandonedCartModel();
 
-		const requestedDays = Number(req.body?.daysBack || 7);
-		const daysBack = [7, 15, 30].includes(requestedDays) ? requestedDays : 7;
+		const daysBack = FIXED_SYNC_WINDOW_DAYS;
 
 		const result = await syncAbandonedCarts(daysBack);
 
