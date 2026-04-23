@@ -83,7 +83,7 @@ function looksLikeThirdPartyAutoReply(text = '') {
 	const normalized = normalizeText(text);
 	if (!normalized) return false;
 
-	return /(gracias por comunicarte con|te comunicaste con|servicio de guardia|solo llamadas por whatsapp|departamento comercial|por consultas o turnos|estudio juridico|mi nombre es .+ en que puedo ayudarte|esper[o]? tenga un buen dia)/i.test(
+	return /(gracias\s+por\s+(comunicarte|escribir)\s+(con|a)|te\s+comunicaste\s+con|servicio\s+de\s+guardia|solo\s+llamadas\s+por\s+whatsapp|departamento\s+comercial|por\s+consultas\s+o\s+turnos|estudio\s+juridico|mi\s+nombre\s+es\s+.+\s+en\s+que\s+puedo\s+ayudarte|en\s+un\s+momento\s+te\s+respondo|dejame\s+tu\s+consulta|d[ée]jame\s+tu\s+consulta|te\s+respondo\s+para\s+ayudarte\s+con\s+tu\s+pedido|esper[o]?\s+tenga\s+un\s+buen\s+dia)/i.test(
 		normalized
 	);
 }
