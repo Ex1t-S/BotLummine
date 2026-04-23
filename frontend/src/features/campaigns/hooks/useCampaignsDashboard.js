@@ -40,6 +40,11 @@ const initialAbandonedCartForm = {
 
 const CAMPAIGN_RECIPIENT_FETCH_SIZE = 500;
 const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
+const CAMPAIGN_POLL_INTERVAL_MS = 5000;
+
+function isLiveCampaignStatus(status = '') {
+	return ['QUEUED', 'RUNNING'].includes(String(status || '').trim().toUpperCase());
+}
 
 function normalizeRecipientStatus(status = '') {
 	const normalized = String(status || '').trim().toUpperCase();
@@ -149,6 +154,15 @@ export function useCampaignsDashboard() {
 	const campaignsQuery = useQuery({
 		queryKey: queryKeys.campaigns.runs(),
 		queryFn: () => fetchCampaigns(),
+		refetchInterval: (query) => {
+			const payload = query.state.data;
+			const runs =
+				Array.isArray(payload?.campaigns) ? payload.campaigns : Array.isArray(payload) ? payload : [];
+			return runs.some((campaign) => isLiveCampaignStatus(campaign?.status))
+				? CAMPAIGN_POLL_INTERVAL_MS
+				: false;
+		},
+		refetchIntervalInBackground: true,
 	});
 
 	const campaignDetailQuery = useQuery({
@@ -166,6 +180,12 @@ export function useCampaignsDashboard() {
 			return response.data;
 		},
 		enabled: Boolean(selectedCampaignId),
+		refetchInterval: (query) => {
+			const payload = extractDetailResponsePayload(query.state.data);
+			const campaign = payload?.campaign || payload?.item || payload?.run || null;
+			return isLiveCampaignStatus(campaign?.status) ? CAMPAIGN_POLL_INTERVAL_MS : false;
+		},
+		refetchIntervalInBackground: true,
 	});
 
 	const templates = useMemo(() => getTemplateCollection(templatesQuery.data), [templatesQuery.data]);

@@ -314,7 +314,7 @@ export default function CampaignRunsPanel({
 				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-list">
 					<div className="campaign-detail-header">
 						<div>
-								<h4>Campanas cargadas</h4>
+								<h4>Campañas cargadas</h4>
 								<p>Elegi una campana para revisar su tracking y sus destinatarios.</p>
 						</div>
 					</div>
@@ -328,9 +328,10 @@ export default function CampaignRunsPanel({
 						) : (
 							campaigns.map((campaign) => {
 								const isSelected = selectedCampaign?.id === campaign.id;
-								const listMetrics = buildRecipientMetrics(campaign);
 								const campaignAnalytics = campaign?.analytics || {};
-								const listCost = calculateCampaignCost(listMetrics.sent);
+								const listTotalRecipients = getMetric(campaign, ['totalRecipients', 'recipientCount']);
+								const listSentRecipients = getMetric(campaign, ['sentRecipients', 'sentCount']);
+								const listCost = calculateCampaignCost(listSentRecipients);
 
 								return (
 									<article
@@ -357,7 +358,7 @@ export default function CampaignRunsPanel({
 										</div>
 
 										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile">
-											<span>{listMetrics.total} destinatarios</span>
+											<span>{listTotalRecipients} destinatarios</span>
 											<span>{getStatusTone(campaign.status)}</span>
 											<span>Creada {formatDate(campaign.createdAt)}</span>
 										</div>
