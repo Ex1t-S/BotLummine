@@ -501,14 +501,16 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
-				queue: 'AUTO',
-				aiEnabled: true,
+				queue: 'HUMAN',
+				aiEnabled: false,
 				state: {
 					create: {
 						customerName: contact.name || normalizedPhone,
 						interactionCount: 0,
 						interestedProducts: [],
-						objections: []
+						objections: [],
+						needsHuman: true,
+						handoffReason: 'campaign_reply_pending_human',
 					}
 				}
 			}
@@ -555,6 +557,8 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
+			needsHuman: true,
+			handoffReason: 'campaign_reply_pending_human',
 			commercialSummary: commercialSummary || null
 		},
 		create: {
@@ -571,6 +575,8 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
+			needsHuman: true,
+			handoffReason: 'campaign_reply_pending_human',
 			commercialSummary: commercialSummary || null
 		}
 	});

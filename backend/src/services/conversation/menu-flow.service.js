@@ -1,5 +1,4 @@
 import { prisma } from '../../lib/prisma.js';
-import { STORE_LINKS } from '../../data/lummine-business.js';
 import { normalizeText } from './conversation-helpers.service.js';
 import { buildHandoffReply } from './conversation-analysis.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
@@ -144,6 +143,45 @@ async function detectMenuSelection({ messageBody, rawPayload, menuPath }) {
 	return null;
 }
 
+async function detectMenuSelectionAcrossMenus({ messageBody, rawPayload, preferredMenuPath = MENU_PATHS.MAIN }) {
+	const runtime = await getWhatsAppMenuRuntimeConfig();
+	const menusByKey = runtime?.menusByKey || {};
+	const interactiveId = getInteractiveReplyId(rawPayload);
+	const orderedMenuPaths = [
+		preferredMenuPath,
+		runtime?.mainMenuKey,
+		MENU_PATHS.MAIN,
+		...Object.keys(menusByKey),
+	].filter(Boolean);
+	const visited = new Set();
+
+	for (const menuPath of orderedMenuPaths) {
+		if (visited.has(menuPath)) continue;
+		visited.add(menuPath);
+
+		const menuConfig = menusByKey[menuPath];
+		if (!menuConfig) continue;
+
+		if (interactiveId && menuConfig.optionById?.[interactiveId]) {
+			return { selectionId: interactiveId, menuPath };
+		}
+
+		if (!interactiveId) {
+			const selectionId = await detectMenuSelection({
+				messageBody,
+				rawPayload,
+				menuPath,
+			});
+
+			if (selectionId) {
+				return { selectionId, menuPath };
+			}
+		}
+	}
+
+	return null;
+}
+
 async function getMenuOptionDefinition({ menuPath, selectionId }) {
 	const menuConfig = await getMenuConfig(menuPath);
 	return menuConfig?.optionById?.[selectionId] || null;
@@ -182,6 +220,22 @@ export async function syncHumanHandoff({ conversationId, reason = 'ai_declared_h
 		handoffReason: reason,
 		menuActive: false,
 		menuPath: null,
+	});
+}
+
+async function enableAutomaticConversation({ conversationId }) {
+	await prisma.conversation.update({
+		where: { id: conversationId },
+		data: {
+			queue: 'AUTO',
+			aiEnabled: true,
+			lastMessageAt: new Date(),
+		},
+	});
+
+	await patchConversationState(conversationId, {
+		needsHuman: false,
+		handoffReason: null,
 	});
 }
 
@@ -230,7 +284,6 @@ async function sendMenuTextOnly({ conversationId, body, model = 'menu-text', del
 }
 
 function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) {
-	if (currentState?.needsHuman) return false;
 	if (Boolean(currentState?.menuActive && currentState?.menuPath)) return true;
 
 	const normalizedMessage = normalizeText(messageBody);
@@ -249,6 +302,14 @@ function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) 
 	}
 
 	return false;
+}
+
+function isHardHumanLock(currentState = {}) {
+	return Boolean(
+		currentState?.needsHuman === true &&
+		currentState?.handoffReason &&
+		currentState?.handoffReason !== 'manual_human_lock'
+	);
 }
 
 function shouldLetFreeTextBypassMenu(messageBody = '') {
@@ -282,25 +343,9 @@ async function handleMenuSelection({
 
 	const safeStatePatch = sanitizeMenuStatePatch(option.statePatch || {}, currentState);
 
-	if (selectionId === 'menu_main_products') {
-		await patchConversationState(conversationId, {
-			menuActive: false,
-			menuPath: null,
-			menuLastSelection: selectionId,
-			lastUserGoal: 'Ver catalogo general y definir producto',
-		});
-
-		await sendMenuTextOnly({
-			conversationId,
-			body: `Te paso el catalogo general para que veas todo: ${STORE_LINKS.indumentaria} Decime que producto o promo puntual necesitas y te ayudo por aca.`,
-			model: 'menu-general-catalog',
-			deliveryMode: transportMode,
-		});
-
-		return { handled: true };
-	}
-
 	if (option.actionType === 'SUBMENU') {
+		await enableAutomaticConversation({ conversationId });
+
 		const targetMenuPath = option.actionValue || DEFAULT_MAIN_MENU_KEY;
 
 		await patchConversationState(conversationId, {
@@ -309,6 +354,8 @@ async function handleMenuSelection({
 			menuLastSelection: selectionId,
 			menuLastPromptAt: new Date(),
 			customerName: contactName || currentState.customerName || waId,
+			needsHuman: false,
+			handoffReason: null,
 		});
 
 		await sendMenuPrompt({
@@ -343,10 +390,14 @@ async function handleMenuSelection({
 	}
 
 	if (option.actionType === 'MESSAGE') {
+		await enableAutomaticConversation({ conversationId });
+
 		await patchConversationState(conversationId, {
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: selectionId,
+			needsHuman: false,
+			handoffReason: null,
 			...safeStatePatch,
 		});
 
@@ -361,10 +412,14 @@ async function handleMenuSelection({
 	}
 
 	if (option.actionType === 'INTENT') {
+		await enableAutomaticConversation({ conversationId });
+
 		await patchConversationState(conversationId, {
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: selectionId,
+			needsHuman: false,
+			handoffReason: null,
 			...safeStatePatch,
 		});
 
@@ -375,7 +430,13 @@ async function handleMenuSelection({
 			forceIntent: option.actionValue || null,
 			statePatch: {
 				menuLastSelection: selectionId,
+				needsHuman: false,
+				handoffReason: null,
 				...safeStatePatch,
+			},
+			queueDecisionOverride: {
+				queue: 'AUTO',
+				aiEnabled: true,
 			},
 		};
 	}
@@ -391,37 +452,53 @@ export async function maybeHandleMenuFlow({
 	messageType,
 	rawPayload,
 	transportMode = 'live',
+	skipMenu = false,
 }) {
-	const waId = conversation.contact?.waId || '';
-	const wantsMenu = isMenuResetCommand(messageBody);
-	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
-	const isAiEnabledGlobal =
-		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true';
-
-	const isCampaignLocked =
-		currentState?.handoffReason === 'campaign_reply_pending_human';
-
-	const isAutomaticConversation =
-		conversation?.queue === 'AUTO' &&
-		conversation?.aiEnabled !== false &&
-		currentState?.needsHuman !== true &&
-		!isCampaignLocked;
-
-	if (!isAutomaticConversation) {
+	if (skipMenu) {
 		return {
 			handled: false,
 			effectiveMessageBody: messageBody,
 			summaryUserMessage: messageBody,
 			forceIntent: null,
 			statePatch: null,
+			queueDecisionOverride: null,
 		};
 	}
 
-	const shouldOfferMenu = shouldForceMenuFirst({
-		currentState,
-		freshConversation: conversation,
-		messageBody,
-	});
+	const waId = conversation.contact?.waId || '';
+	const wantsMenu = isMenuResetCommand(messageBody);
+	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
+	const interactiveReplyId = getInteractiveReplyId(rawPayload);
+	const hardHumanLock = isHardHumanLock(currentState);
+
+	if (!hardHumanLock && interactiveReplyId) {
+		const resolvedSelection = await detectMenuSelectionAcrossMenus({
+			messageBody,
+			rawPayload,
+			preferredMenuPath: currentState?.menuPath || menuPath,
+		});
+
+		if (resolvedSelection?.selectionId) {
+			return handleMenuSelection({
+				selectionId: resolvedSelection.selectionId,
+				conversation,
+				currentState: {
+					...currentState,
+					menuPath: resolvedSelection.menuPath || currentState?.menuPath || menuPath,
+				},
+				contactName,
+				transportMode,
+			});
+		}
+	}
+
+	const shouldOfferMenu =
+		!hardHumanLock &&
+		shouldForceMenuFirst({
+			currentState,
+			freshConversation: conversation,
+			messageBody,
+		});
 
 	if (!currentState?.needsHuman && shouldOfferMenu) {
 		const selectionId = await detectMenuSelection({
@@ -445,7 +522,11 @@ export async function maybeHandleMenuFlow({
 			menuPath: MENU_PATHS.MAIN,
 			menuLastPromptAt: new Date(),
 			customerName: contactName || currentState.customerName || waId,
+			needsHuman: false,
+			handoffReason: null,
 		});
+
+		await enableAutomaticConversation({ conversationId: conversation.id });
 
 		await sendMenuPrompt({
 			conversationId: conversation.id,
@@ -460,28 +541,16 @@ export async function maybeHandleMenuFlow({
 	}
 
 	if (wantsMenu) {
-		const shouldEnableAuto =
-			isAiEnabledGlobal &&
-			!currentState?.needsHuman &&
-			conversation.queue === 'AUTO';
-
 		await patchConversationState(conversation.id, {
 			menuActive: true,
 			menuPath: MENU_PATHS.MAIN,
 			menuLastPromptAt: new Date(),
 			customerName: contactName || currentState.customerName || waId,
-			needsHuman: shouldEnableAuto ? false : (currentState?.needsHuman ?? true),
-			handoffReason: shouldEnableAuto ? null : currentState?.handoffReason || 'manual_human_lock',
+			needsHuman: false,
+			handoffReason: null,
 		});
 
-		await prisma.conversation.update({
-			where: { id: conversation.id },
-			data: {
-				queue: 'AUTO',
-				aiEnabled: true,
-				lastMessageAt: new Date(),
-			},
-		});
+		await enableAutomaticConversation({ conversationId: conversation.id });
 
 		await sendMenuPrompt({
 			conversationId: conversation.id,
@@ -492,7 +561,7 @@ export async function maybeHandleMenuFlow({
 		return { handled: true };
 	}
 
-	if (!currentState?.needsHuman && currentState?.menuActive && currentState?.menuPath) {
+	if (!hardHumanLock && currentState?.menuActive && currentState?.menuPath) {
 		const selectionId = await detectMenuSelection({
 			messageBody,
 			rawPayload,
@@ -524,6 +593,12 @@ export async function maybeHandleMenuFlow({
 					forceIntent: null,
 					statePatch: {
 						menuLastSelection: 'free_text_override',
+						needsHuman: false,
+						handoffReason: null,
+					},
+					queueDecisionOverride: {
+						queue: 'AUTO',
+						aiEnabled: true,
 					},
 				};
 			}
@@ -548,5 +623,6 @@ export async function maybeHandleMenuFlow({
 		summaryUserMessage: messageBody,
 		forceIntent: null,
 		statePatch: null,
+		queueDecisionOverride: null,
 	};
 }

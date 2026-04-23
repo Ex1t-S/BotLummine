@@ -133,6 +133,26 @@ function looksLikeGenericCampaignReply(text = '') {
 	return false;
 }
 
+function isPaymentClarifierMessage(message = null) {
+	return (
+		message?.direction === 'OUTBOUND' &&
+		message?.model === 'payment-attachment-clarifier'
+	);
+}
+
+function looksLikePaymentClarifierConfirmation({ text = '', lastOutbound = null } = {}) {
+	if (!isPaymentClarifierMessage(lastOutbound)) {
+		return false;
+	}
+
+	const normalized = normalizeText(text);
+	if (!normalized) return false;
+
+	return /^(si|sí|sisi|sip|correcto|exacto|asi es|así es|es comprobante|si es comprobante|sí es comprobante|es el comprobante|si te mande el comprobante|sí te mandé el comprobante|te mande el comprobante|te mandé el comprobante|comprobante|comprobante de pago)$/i.test(
+		normalized
+	);
+}
+
 async function maybeHandleAbandonedCartReply({
 	conversation,
 	currentState,
@@ -162,10 +182,16 @@ async function maybeHandleAbandonedCartReply({
 		};
 	}
 
-	if (looksLikeCampaignPaymentIssue(normalizedBody)) {
+	if (
+		messageType !== 'text' ||
+		looksLikeCampaignPaymentIssue(normalizedBody) ||
+		looksLikeSimplePurchaseCompletion(normalizedBody) ||
+		looksLikeGenericCampaignReply(normalizedBody) ||
+		normalizedBody
+	) {
 		await syncHumanHandoff({
 			conversationId: conversation.id,
-			reason: 'campaign_payment_issue',
+			reason: 'campaign_reply_pending_human',
 		});
 
 		await sendAndPersistOutbound({
@@ -177,7 +203,7 @@ async function maybeHandleAbandonedCartReply({
 			deliveryMode: transportMode,
 			aiMeta: {
 				provider: 'system',
-				model: 'campaign-payment-handoff',
+				model: 'campaign-human-handoff',
 				raw: {
 					source: 'abandoned_cart_reply',
 				},
@@ -186,50 +212,9 @@ async function maybeHandleAbandonedCartReply({
 
 		return {
 			handled: true,
-			traceModel: 'campaign-payment-handoff',
+			traceModel: 'campaign-human-handoff',
 			suppressReply: false,
 		};
-	}
-
-	if (looksLikeSimplePurchaseCompletion(normalizedBody)) {
-		await sendAndPersistOutbound({
-			conversationId: conversation.id,
-			body: 'Perfecto, gracias por avisar. Si mas adelante necesitas ayuda con tu pedido, pago o talle, escribime menu y te guio por aca.',
-			deliveryMode: transportMode,
-			aiMeta: {
-				provider: 'system',
-				model: 'campaign-purchase-ack',
-				raw: {
-					source: 'abandoned_cart_reply',
-				},
-			},
-		});
-
-		return {
-			handled: true,
-			traceModel: 'campaign-purchase-ack',
-			suppressReply: false,
-		};
-	}
-
-	if (looksLikeGenericCampaignReply(normalizedBody)) {
-		const menuDecision = await maybeHandleMenuFlow({
-			conversation,
-			currentState,
-			contactName,
-			messageBody: 'menu',
-			messageType,
-			rawPayload,
-			transportMode,
-		});
-
-		if (menuDecision?.handled) {
-			return {
-				handled: true,
-				traceModel: 'campaign-menu-router',
-				suppressReply: false,
-			};
-		}
 	}
 
 	return { handled: false };
@@ -401,6 +386,7 @@ export async function processInboundMessage({
 	}
 
 	const currentState = freshConversation.state || {};
+	const lastOutbound = findLastOutboundBeforeCurrentInbound(freshConversation.messages || []);
 	let trace = {
 		intent: null,
 		queueDecision: null,
@@ -448,6 +434,7 @@ export async function processInboundMessage({
 		messageType,
 		rawPayload,
 		transportMode,
+		skipMenu: isAbandonedCartCampaignMessage(lastOutbound),
 	});
 
 	if (menuDecision?.handled) {
@@ -506,6 +493,9 @@ export async function processInboundMessage({
 		rawPayload,
 		currentState,
 		recentMessages
+	}) || looksLikePaymentClarifierConfirmation({
+		text: effectiveMessageBody,
+		lastOutbound,
 	});
 
 	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
@@ -516,12 +506,16 @@ export async function processInboundMessage({
 		recentMessages
 	});
 
-	const queueDecision = resolveConversationQueue({
+	let queueDecision = resolveConversationQueue({
 		currentConversation: freshConversation,
 		memoryPatch,
 		detectedPaymentProof,
 		aiDeclaredHandoff: false
 	});
+
+	if (menuDecision?.queueDecisionOverride && !detectedPaymentProof) {
+		queueDecision = menuDecision.queueDecisionOverride;
+	}
 
 	const intentResult = await resolveIntentAction({
 		intent,
@@ -833,6 +827,9 @@ export async function processInboundMessage({
 		}
 		if (commercialPlan?.excludedKeywords?.length) {
 			commercialHints.push(`No vuelvas a ofrecer: ${commercialPlan.excludedKeywords.join(', ')}.`);
+		}
+		if (commercialPlan?.justRejectedOption && commercialPlan?.bestOffer?.name) {
+			commercialHints.push(`Acaba de rechazar una opcion. Reconocelo breve y segui con ${commercialPlan.bestOffer.name} sin volver a nombrar lo excluido.`);
 		}
 		if (commercialPlan?.requestedOfferType && commercialPlan?.requestedOfferAvailable === false && commercialPlan?.fallbackOffer?.name) {
 			commercialHints.push(`La ${commercialPlan.requestedOfferType} exacta no apareció. Decilo claro y ofrecé ${commercialPlan.fallbackOffer.name} sin salir de la misma familia.`);
