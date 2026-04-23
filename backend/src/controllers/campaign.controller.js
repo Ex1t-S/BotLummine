@@ -14,6 +14,7 @@ import {
 	updateTemplate,
 	deleteTemplate,
 	syncTemplatesFromMeta,
+	purgeDeletedLocalTemplates,
 	listLocalTemplates,
 	getTemplateOrThrow,
 	renderTemplatePreviewFromComponents,
@@ -98,6 +99,15 @@ export async function deleteTemplateController(req, res) {
 export async function syncTemplatesController(_req, res) {
 	try {
 		const result = await syncTemplatesFromMeta();
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function purgeDeletedTemplatesController(_req, res) {
+	try {
+		const result = await purgeDeletedLocalTemplates();
 		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 500);

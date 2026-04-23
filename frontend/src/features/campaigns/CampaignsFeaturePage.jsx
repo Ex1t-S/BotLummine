@@ -156,6 +156,8 @@ export default function CampaignsFeaturePage() {
 							onCreateTemplate={openBuilderForCreate}
 							onSync={() => mutations.sync.mutate()}
 							syncing={mutations.sync.isPending}
+							onPurgeDeleted={() => mutations.purgeDeletedTemplates.mutate()}
+							purgingDeleted={mutations.purgeDeletedTemplates.isPending}
 							onDeleteTemplate={(template) => {
 								const confirmed = window.confirm(`Eliminar el template ${template.name}?`);
 								if (confirmed) mutations.deleteTemplate.mutate(template.id);

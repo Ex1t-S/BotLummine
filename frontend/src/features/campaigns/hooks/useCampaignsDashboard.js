@@ -12,6 +12,7 @@ import {
 	fetchTemplates,
 	pauseCampaign,
 	previewAbandonedCartAudience,
+	purgeDeletedTemplates,
 	resumeCampaign,
 	syncTemplates,
 	updateTemplate,
@@ -268,11 +269,30 @@ export function useCampaignsDashboard() {
 
 	const syncMutation = useMutation({
 		mutationFn: syncTemplates,
-		onSuccess: () => {
+		onSuccess: (result) => {
 			invalidateAll();
-			showFeedback('success', 'Templates sincronizados con Meta.');
+			const markedDeletedCount = Number(result?.markedDeletedCount || 0);
+			showFeedback(
+				'success',
+				markedDeletedCount > 0
+					? `Templates sincronizados con Meta. ${markedDeletedCount} quedaron marcados para limpiar.`
+					: 'Templates sincronizados con Meta.'
+			);
 		},
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo sincronizar.'),
+	});
+
+	const purgeDeletedTemplatesMutation = useMutation({
+		mutationFn: purgeDeletedTemplates,
+		onSuccess: (result) => {
+			invalidateAll();
+			showFeedback(
+				'success',
+				`${Number(result?.deletedCount || 0)} templates eliminados de la base local.`
+			);
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudieron limpiar los templates eliminados.'),
 	});
 
 	const createTemplateMutation = useMutation({
@@ -448,6 +468,7 @@ export function useCampaignsDashboard() {
 		},
 		mutations: {
 			sync: syncMutation,
+			purgeDeletedTemplates: purgeDeletedTemplatesMutation,
 			createTemplate: createTemplateMutation,
 			updateTemplate: updateTemplateMutation,
 			deleteTemplate: deleteTemplateMutation,

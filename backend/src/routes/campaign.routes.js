@@ -8,6 +8,7 @@ import {
 	updateTemplateController,
 	deleteTemplateController,
 	syncTemplatesController,
+	purgeDeletedTemplatesController,
 	renderTemplatePreviewController,
 	previewAbandonedCartAudienceController,
 	listCampaignsController,
@@ -31,6 +32,7 @@ router.post('/templates', createTemplateController);
 router.patch('/templates/:templateId', updateTemplateController);
 router.delete('/templates/:templateId', deleteTemplateController);
 router.post('/templates/sync', syncTemplatesController);
+router.post('/templates/purge-deleted', purgeDeletedTemplatesController);
 router.post('/templates/preview', renderTemplatePreviewController);
 
 router.post('/abandoned-carts/preview', previewAbandonedCartAudienceController);

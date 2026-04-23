@@ -219,11 +219,6 @@ export default function CampaignRunsPanel({
 		[selectedCampaign]
 	);
 
-	const totalCampaignRecipients = campaigns.reduce(
-		(total, campaign) => total + Number(getMetric(campaign, ['totalRecipients', 'recipientCount'])),
-		0
-	);
-
 	const {
 		statusFilter = 'ALL',
 		setStatusFilter = () => {},
@@ -274,21 +269,6 @@ export default function CampaignRunsPanel({
 						Segui borradores, campanas activas y resultados desde una vista mas clara,
 						con tracking real de envios, entregas y lecturas.
 					</p>
-				</div>
-			</div>
-
-			<div className="campaign-inline-summary">
-				<div className="campaign-inline-summary-item">
-					<strong>{campaigns.length}</strong>
-					<span>campanas registradas</span>
-				</div>
-				<div className="campaign-inline-summary-item">
-					<strong>{totalCampaignRecipients}</strong>
-					<span>destinatarios sumados</span>
-				</div>
-				<div className="campaign-inline-summary-item">
-					<strong>{selectedCampaign ? getStatusTone(selectedCampaign.status) : '--'}</strong>
-					<span>estado actual seleccionado</span>
 				</div>
 			</div>
 
@@ -359,27 +339,6 @@ export default function CampaignRunsPanel({
 								<span className={badgeClass(selectedCampaign.status)}>
 									{selectedCampaign.status || 'DRAFT'}
 								</span>
-							</div>
-
-							<div className="campaign-detail-meta-grid">
-								<div className="campaign-detail-meta-card">
-									<span>Template</span>
-									<strong>
-										{selectedCampaign.templateName || selectedCampaign.template?.name || 'Sin template'}
-									</strong>
-								</div>
-								<div className="campaign-detail-meta-card">
-									<span>Destinatarios</span>
-									<strong>{recipientMetrics.total}</strong>
-								</div>
-								<div className="campaign-detail-meta-card">
-									<span>Creacion</span>
-									<strong>{formatDate(selectedCampaign.createdAt)}</strong>
-								</div>
-								<div className="campaign-detail-meta-card">
-									<span>Accion sugerida</span>
-									<strong>{actionModel.primaryLabel}</strong>
-								</div>
 							</div>
 
 							<div className="campaign-helper-box">

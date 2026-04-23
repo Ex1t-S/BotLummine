@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 
 function formatDate(value) {
-	if (!value) return '—';
+	if (!value) return '--';
 	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return '—';
+	if (Number.isNaN(date.getTime())) return '--';
 
 	return new Intl.DateTimeFormat('es-AR', {
 		dateStyle: 'short',
@@ -35,6 +35,8 @@ export default function TemplateLibraryPanel({
 	onCreateTemplate,
 	onSync,
 	syncing,
+	onPurgeDeleted,
+	purgingDeleted,
 	onDeleteTemplate,
 }) {
 	const [search, setSearch] = useState('');
@@ -107,9 +109,10 @@ export default function TemplateLibraryPanel({
 			<div className="template-library-header">
 				<div>
 					<span className="campaigns-eyebrow">Biblioteca</span>
-					<h3>Elegí una base antes de editar</h3>
+					<h3>Elegi una base antes de editar</h3>
 					<p>
-						Buscá, filtrá y seleccioná el template correcto. La idea es que no tengas que andar pescándolo con red y snorkel.
+						Busca, filtra y selecciona el template correcto. La idea es que no tengas que
+						andar pescandolo con red y snorkel.
 					</p>
 				</div>
 
@@ -119,7 +122,16 @@ export default function TemplateLibraryPanel({
 					</button>
 
 					<button className="button secondary" onClick={onSync} disabled={syncing}>
-						{syncing ? 'Sincronizando…' : 'Sincronizar con Meta'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar con Meta'}
+					</button>
+
+					<button
+						className="button ghost"
+						onClick={onPurgeDeleted}
+						disabled={purgingDeleted}
+						title="Limpia de la base local los templates ya marcados como eliminados"
+					>
+						{purgingDeleted ? 'Limpiando...' : 'Limpiar eliminados'}
 					</button>
 				</div>
 			</div>
@@ -150,7 +162,7 @@ export default function TemplateLibraryPanel({
 				</label>
 
 				<label className="field">
-					<span>Categoría</span>
+					<span>Categoria</span>
 					<select value={category} onChange={(event) => setCategory(event.target.value)}>
 						{categories.map((item) => (
 							<option key={item} value={item}>
@@ -174,8 +186,8 @@ export default function TemplateLibraryPanel({
 				<label className="field">
 					<span>Orden</span>
 					<select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-						<option value="updated_desc">Más recientes</option>
-						<option value="updated_asc">Más viejos</option>
+						<option value="updated_desc">Mas recientes</option>
+						<option value="updated_asc">Mas viejos</option>
 						<option value="name_asc">Nombre A-Z</option>
 						<option value="name_desc">Nombre Z-A</option>
 					</select>
@@ -188,7 +200,7 @@ export default function TemplateLibraryPanel({
 						<span className="template-library-selected-label">Seleccionado</span>
 						<strong>{selectedTemplate.name}</strong>
 						<small>
-							{selectedTemplate.language || 'es_AR'} · {selectedTemplate.category || 'MARKETING'}
+							{selectedTemplate.language || 'es_AR'} - {selectedTemplate.category || 'MARKETING'}
 						</small>
 					</div>
 
@@ -204,7 +216,7 @@ export default function TemplateLibraryPanel({
 				{filteredTemplates.length === 0 ? (
 					<div className="campaign-empty-state">
 						<strong>No hay templates que coincidan.</strong>
-						<p>Probá otro filtro o sincronizá de nuevo.</p>
+						<p>Proba otro filtro o sincroniza de nuevo.</p>
 					</div>
 				) : (
 					filteredTemplates.map((template) => {
@@ -230,7 +242,7 @@ export default function TemplateLibraryPanel({
 									<div className="template-list-card-title">
 										<strong>{template.name}</strong>
 										<p>
-											{template.language || 'es_AR'} · {template.category || 'MARKETING'}
+											{template.language || 'es_AR'} - {template.category || 'MARKETING'}
 										</p>
 									</div>
 

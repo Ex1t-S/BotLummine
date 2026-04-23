@@ -19,6 +19,11 @@ export async function syncTemplates() {
 	return unwrap(response);
 }
 
+export async function purgeDeletedTemplates() {
+	const response = await api.post('/campaigns/templates/purge-deleted');
+	return unwrap(response);
+}
+
 export async function createTemplate(payload) {
 	const response = await api.post('/campaigns/templates', payload);
 	return unwrap(response);

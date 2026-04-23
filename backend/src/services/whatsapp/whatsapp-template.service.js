@@ -297,6 +297,7 @@ export async function syncTemplatesFromMeta({
 	let markedDeletedCount = 0;
 	const pages = [];
 	const seenMetaTemplateIds = new Set();
+	const fetchedKeys = new Set();
 
 	try {
 		while (page < pageLimit) {
@@ -317,6 +318,10 @@ export async function syncTemplatesFromMeta({
 					seenMetaTemplateIds.add(String(item.id));
 				}
 
+				const name = ensureTemplateName(item?.name || '');
+				const language = ensureTemplateLanguage(item?.language || 'es_AR');
+				fetchedKeys.add(`${name}::${language}`);
+
 				const payload = buildTemplateUpsertPayload(item);
 				const existingTemplate = await prisma.whatsAppTemplate.findUnique({
 					where: {
@@ -330,7 +335,6 @@ export async function syncTemplatesFromMeta({
 						deletedAt: true
 					}
 				});
-
 				await upsertLocalTemplate(item);
 
 				if (existingTemplate?.deletedAt) {
@@ -348,28 +352,47 @@ export async function syncTemplatesFromMeta({
 			}
 		}
 
-		const deleteWhere = {
-			wabaId,
-			metaTemplateId: seenMetaTemplateIds.size
-				? {
-					not: null,
-					notIn: [...seenMetaTemplateIds]
-				}
-				: {
-					not: null
-				},
-			deletedAt: null
-		};
-		const deleteResult = await prisma.whatsAppTemplate.updateMany({
-			where: deleteWhere,
-			data: {
-				status: 'DELETED',
-				deletedAt: new Date(),
-				lastSyncedAt: new Date()
+		const localActiveTemplates = await prisma.whatsAppTemplate.findMany({
+			where: {
+				wabaId,
+				deletedAt: null
+			},
+			select: {
+				id: true,
+				name: true,
+				language: true,
+				metaTemplateId: true
 			}
 		});
 
-		markedDeletedCount = Number(deleteResult?.count || 0);
+		const staleTemplateIds = localActiveTemplates
+			.filter((template) => {
+				const templateKey = `${template.name}::${template.language}`;
+				const seenByKey = fetchedKeys.has(templateKey);
+				const seenByMetaId = template.metaTemplateId
+					? seenMetaTemplateIds.has(String(template.metaTemplateId))
+					: false;
+
+				return !seenByKey && !seenByMetaId;
+			})
+			.map((template) => template.id);
+
+		if (staleTemplateIds.length) {
+			const result = await prisma.whatsAppTemplate.updateMany({
+				where: {
+					id: {
+						in: staleTemplateIds
+					}
+				},
+				data: {
+					status: 'DELETED',
+					deletedAt: new Date(),
+					lastSyncedAt: new Date()
+				}
+			});
+
+			markedDeletedCount = Number(result?.count || 0);
+		}
 
 		await prisma.templateSyncLog.update({
 			where: { id: syncLog.id },
@@ -415,6 +438,40 @@ export async function syncTemplatesFromMeta({
 
 		throw error;
 	}
+}
+
+export async function purgeDeletedLocalTemplates() {
+	const deletedTemplates = await prisma.whatsAppTemplate.findMany({
+		where: {
+			OR: [
+				{ deletedAt: { not: null } },
+				{ status: 'DELETED' }
+			]
+		},
+		select: {
+			id: true
+		}
+	});
+
+	const deletedIds = deletedTemplates.map((template) => template.id);
+
+	if (!deletedIds.length) {
+		return {
+			deletedCount: 0
+		};
+	}
+
+	const result = await prisma.whatsAppTemplate.deleteMany({
+		where: {
+			id: {
+				in: deletedIds
+			}
+		}
+	});
+
+	return {
+		deletedCount: Number(result?.count || 0)
+	};
 }
 
 export async function createTemplate({
