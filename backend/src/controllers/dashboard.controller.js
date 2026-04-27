@@ -1,8 +1,12 @@
+import fs from 'node:fs/promises';
 import { prisma } from '../lib/prisma.js';
 import { getCatalogPage, syncCatalogFromTiendanube } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
-import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
+import {
+	sendAndPersistOutbound,
+	sendAndPersistOutboundMediaBatch,
+} from '../services/conversation/outbound-message.service.js';
 import { publishInboxEvent, subscribeInboxEvents } from '../lib/inbox-events.js';
 import {
 	getEnboxSyncStatus,
@@ -983,8 +987,9 @@ export async function postConversationMessage(req, res, next) {
 	try {
 		const { conversationId } = req.params;
 		const body = String(req.body?.body || '').trim();
+		const files = Array.isArray(req.files) ? req.files : [];
 
-		if (!body) {
+		if (!body && !files.length) {
 			return res.status(400).json({
 				ok: false,
 				error: 'El mensaje está vacío',
@@ -1014,20 +1019,38 @@ export async function postConversationMessage(req, res, next) {
 			});
 		}
 
-		const result = await sendAndPersistOutbound({
-			conversationId: conversation.id,
-			waId,
-			body,
-			aiMeta: {
-				provider: 'manual',
-				model: null,
-				raw: {
-					source: 'dashboard-manual-reply',
-				},
+		const manualMeta = {
+			provider: 'manual',
+			model: null,
+			raw: {
+				source: files.length
+					? 'dashboard-manual-reply-with-attachments'
+					: 'dashboard-manual-reply',
+				attachmentCount: files.length || 0,
 			},
-		});
+		};
 
-		if (!result?.ok) {
+		const result = files.length
+			? await sendAndPersistOutboundMediaBatch({
+					conversationId: conversation.id,
+					body,
+					files,
+					aiMeta: manualMeta,
+				})
+			: await sendAndPersistOutbound({
+					conversationId: conversation.id,
+					waId,
+					body,
+					aiMeta: manualMeta,
+				});
+		const sentOk =
+			result?.ok ||
+			result?.sendResult?.ok ||
+			(Array.isArray(result?.sendResults) &&
+				result.sendResults.length > 0 &&
+				result.sendResults.every((item) => item?.ok));
+
+		if (!sentOk) {
 			return res.status(400).json({
 				ok: false,
 				error: 'No se pudo enviar el mensaje',
@@ -1046,6 +1069,20 @@ export async function postConversationMessage(req, res, next) {
 		});
 	} catch (error) {
 		next(error);
+	} finally {
+		const files = Array.isArray(req.files) ? req.files : [];
+
+		await Promise.all(
+			files.map(async (file) => {
+				if (!file?.path) return;
+
+				try {
+					await fs.unlink(file.path);
+				} catch {
+					// ignore temp cleanup errors
+				}
+			})
+		);
 	}
 }
 

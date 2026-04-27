@@ -529,6 +529,45 @@ export async function saveInboundWhatsAppMedia({
 	};
 }
 
+export async function saveLocalWhatsAppMedia({
+	filePath,
+	fileName = '',
+	mimeType = '',
+	messageType = 'media',
+	metaMessageId = ''
+}) {
+	const absoluteSourcePath = path.resolve(filePath);
+	const [buffer, stats] = await Promise.all([
+		fs.readFile(absoluteSourcePath),
+		fs.stat(absoluteSourcePath)
+	]);
+	const storageDir = await ensureInboundMediaDir();
+	const effectiveMimeType = normalizeString(mimeType || 'application/octet-stream');
+	const storedFileName = buildStoredInboundFileName({
+		messageType,
+		mimeType: effectiveMimeType,
+		preferredFileName: fileName,
+		metaMessageId
+	});
+	const absolutePath = path.join(storageDir, storedFileName);
+
+	await fs.writeFile(absolutePath, buffer);
+
+	return {
+		attachmentUrl: buildPublicInboxMediaUrl(storedFileName),
+		attachmentMimeType: effectiveMimeType,
+		attachmentName: buildReadableAttachmentName({
+			messageType,
+			mimeType: effectiveMimeType,
+			originalName: fileName
+		}),
+		attachmentSha256: crypto.createHash('sha256').update(buffer).digest('hex'),
+		attachmentSize: stats.size || buffer.length,
+		storedFileName,
+		storedAbsolutePath: absolutePath
+	};
+}
+
 export function resolveInboxMediaAbsolutePath(fileName) {
 	const rawName = String(fileName || '').trim();
 	const safeName = path.basename(rawName);

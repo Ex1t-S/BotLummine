@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import multer from 'multer';
 import { requireAuth, requireAdmin, requireAnyRole } from '../middleware/auth.js';
 import {
 	getInbox,
@@ -31,13 +34,40 @@ import {
 
 const router = Router();
 const requireInboxAccess = requireAnyRole(['ADMIN', 'AGENT']);
+const dashboardAttachmentDir = path.resolve(process.cwd(), 'tmp/dashboard-attachments');
+const messageAttachmentUpload = multer({
+	storage: multer.diskStorage({
+		destination: (_req, _file, cb) => {
+			try {
+				fs.mkdirSync(dashboardAttachmentDir, { recursive: true });
+				cb(null, dashboardAttachmentDir);
+			} catch (error) {
+				cb(error);
+			}
+		},
+		filename: (_req, file, cb) => {
+			const extension = path.extname(file.originalname || '');
+			const safeSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+			cb(null, `inbox-${safeSuffix}${extension}`);
+		},
+	}),
+	limits: {
+		fileSize: 25 * 1024 * 1024,
+		files: 5,
+	},
+});
 
 router.use(requireAuth);
 
 router.get('/inbox', requireInboxAccess, getInbox);
 router.get('/inbox/stream', requireInboxAccess, getInboxStream);
 router.get('/conversations/:conversationId/messages', requireInboxAccess, getConversationMessagesJson);
-router.post('/conversations/:conversationId/messages', requireInboxAccess, postConversationMessage);
+router.post(
+	'/conversations/:conversationId/messages',
+	requireInboxAccess,
+	messageAttachmentUpload.array('files', 5),
+	postConversationMessage
+);
 router.patch('/conversations/:conversationId/read', requireInboxAccess, patchConversationRead);
 router.patch('/conversations/:conversationId/queue', requireInboxAccess, patchConversationQueue);
 router.patch('/conversations/:conversationId/archive', requireInboxAccess, patchConversationArchive);

@@ -151,6 +151,53 @@ export async function sendWhatsAppText({ to, body }) {
 	});
 }
 
+export async function sendWhatsAppMedia({
+	to,
+	mediaId,
+	mediaType = 'document',
+	caption = '',
+	fileName = '',
+}) {
+	const cleanMediaId = String(mediaId || '').trim();
+	const cleanType = String(mediaType || '').trim().toLowerCase();
+	const finalType = ['image', 'video', 'audio', 'document'].includes(cleanType)
+		? cleanType
+		: 'document';
+	const cleanCaption = String(caption || '').trim();
+	const cleanFileName = String(fileName || '').trim();
+
+	if (!cleanMediaId) {
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta mediaId para enviar por WhatsApp.' },
+		};
+	}
+
+	const mediaPayload = {
+		id: cleanMediaId,
+	};
+
+	if (cleanCaption && ['image', 'video', 'document'].includes(finalType)) {
+		mediaPayload.caption = cleanCaption.slice(0, 1024);
+	}
+
+	if (finalType === 'document' && cleanFileName) {
+		mediaPayload.filename = cleanFileName.slice(0, 240);
+	}
+
+	return sendWhatsAppRequest({
+		to,
+		debugLabel: `MEDIA_${finalType.toUpperCase()}`,
+		payload: {
+			messaging_product: 'whatsapp',
+			type: finalType,
+			[finalType]: mediaPayload,
+		},
+	});
+}
+
 export async function sendWhatsAppInteractiveList({
 	to,
 	body,

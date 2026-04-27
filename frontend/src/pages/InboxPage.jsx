@@ -24,6 +24,11 @@ const READ_FILTERS = [
 	{ key: 'READ', label: 'Leidos' },
 ];
 
+const MAX_COMPOSER_FILES = 5;
+const MAX_COMPOSER_FILE_SIZE = 25 * 1024 * 1024;
+const ATTACHMENT_ACCEPT =
+	'image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt';
+
 const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Audio recibido]',
 	'[Imagen recibida]',
@@ -66,6 +71,25 @@ function formatArgentinaDateTime(value) {
 	} catch {
 		return '';
 	}
+}
+
+function formatFileSize(bytes = 0) {
+	const size = Number(bytes || 0);
+	if (!Number.isFinite(size) || size <= 0) return '';
+	if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`;
+	return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+function createComposerAttachment(file) {
+	return {
+		id: `${file.name || 'file'}-${file.size || 0}-${file.lastModified || Date.now()}-${Math.random()
+			.toString(36)
+			.slice(2, 8)}`,
+		file,
+		name: file.name || 'Archivo adjunto',
+		sizeLabel: formatFileSize(file.size),
+		type: file.type || '',
+	};
 }
 
 function cleanPreviewText(value = '') {
@@ -432,6 +456,7 @@ export default function InboxPage() {
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
+	const fileInputRef = useRef(null);
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
 	const lastReadRequestRef = useRef('');
@@ -441,6 +466,8 @@ export default function InboxPage() {
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(null);
 	const [messageText, setMessageText] = useState('');
+	const [pendingAttachments, setPendingAttachments] = useState([]);
+	const [attachmentError, setAttachmentError] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState('ALL');
 
@@ -529,6 +556,15 @@ export default function InboxPage() {
 
 	useEffect(() => {
 		selectedConversationIdRef.current = selectedConversationId;
+	}, [selectedConversationId]);
+
+	useEffect(() => {
+		setPendingAttachments([]);
+		setAttachmentError('');
+
+		if (fileInputRef.current) {
+			fileInputRef.current.value = '';
+		}
 	}, [selectedConversationId]);
 
 	useEffect(() => {
@@ -826,7 +862,21 @@ export default function InboxPage() {
 	const sendMessageMutation = useMutation({
 		mutationFn: async () => {
 			const body = messageText.trim();
-			if (!selectedConversationId || !body) return;
+			const files = pendingAttachments.map((item) => item.file).filter(Boolean);
+
+			if (!selectedConversationId || (!body && !files.length)) return;
+
+			if (files.length) {
+				const formData = new FormData();
+				formData.append('body', body);
+				files.forEach((file) => formData.append('files', file));
+
+				await api.post(
+					`/dashboard/conversations/${selectedConversationId}/messages`,
+					formData
+				);
+				return;
+			}
 
 			await api.post(`/dashboard/conversations/${selectedConversationId}/messages`, {
 				body,
@@ -834,12 +884,21 @@ export default function InboxPage() {
 		},
 		onSuccess: async () => {
 			setMessageText('');
+			setPendingAttachments([]);
+			setAttachmentError('');
 			setShowEmojiPicker(false);
+			if (fileInputRef.current) {
+				fileInputRef.current.value = '';
+			}
 			shouldStickToBottomRef.current = true;
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setAttachmentError(
+				error?.response?.data?.error ||
+					'No se pudo enviar el mensaje. Revisa el adjunto e intenta de nuevo.'
+			);
 		},
 	});
 
@@ -912,7 +971,7 @@ export default function InboxPage() {
 
 	function handleSubmit(event) {
 		event.preventDefault();
-		if (!messageText.trim()) return;
+		if (!messageText.trim() && !pendingAttachments.length) return;
 		sendMessageMutation.mutate();
 	}
 
@@ -922,15 +981,70 @@ export default function InboxPage() {
 
 	function insertEmoji(emoji) {
 		setMessageText((prev) => `${prev}${emoji}`);
-		setShowEmojiPicker(false);
 		textareaRef.current?.focus();
+	}
+
+	function addComposerFiles(fileList) {
+		const incomingFiles = Array.from(fileList || []);
+		if (!incomingFiles.length) return;
+
+		setPendingAttachments((current) => {
+			const availableSlots = Math.max(0, MAX_COMPOSER_FILES - current.length);
+			const acceptedFiles = [];
+			let nextError = '';
+
+			if (!availableSlots) {
+				setAttachmentError(`Podes adjuntar hasta ${MAX_COMPOSER_FILES} archivos por mensaje.`);
+				return current;
+			}
+
+			for (const file of incomingFiles.slice(0, availableSlots)) {
+				if (file.size > MAX_COMPOSER_FILE_SIZE) {
+					nextError = `El archivo "${file.name}" supera el maximo de 25 MB.`;
+					continue;
+				}
+
+				acceptedFiles.push(createComposerAttachment(file));
+			}
+
+			if (incomingFiles.length > availableSlots && !nextError) {
+				nextError = `Solo se agregaron ${availableSlots} archivos. El maximo es ${MAX_COMPOSER_FILES}.`;
+			}
+
+			setAttachmentError(nextError);
+			return acceptedFiles.length ? [...current, ...acceptedFiles] : current;
+		});
+	}
+
+	function handleAttachmentInputChange(event) {
+		addComposerFiles(event.target.files);
+		event.target.value = '';
+		textareaRef.current?.focus();
+	}
+
+	function handleComposerPaste(event) {
+		const files = Array.from(event.clipboardData?.files || []);
+		if (!files.length) return;
+
+		event.preventDefault();
+		addComposerFiles(files);
+	}
+
+	function removePendingAttachment(attachmentId) {
+		setPendingAttachments((current) =>
+			current.filter((attachment) => attachment.id !== attachmentId)
+		);
+		setAttachmentError('');
 	}
 
 	function handleComposerKeyDown(event) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 
-			if (messageText.trim() && !sendMessageMutation.isPending) {
+			if (
+				(messageText.trim() || pendingAttachments.length) &&
+				!sendMessageMutation.isPending
+			) {
 				sendMessageMutation.mutate();
 			}
 		}
@@ -1221,7 +1335,59 @@ export default function InboxPage() {
 						</div>
 
 						<div className="inbox-composer-shell">
+							{pendingAttachments.length || attachmentError ? (
+								<div className="inbox-attachment-tray">
+									{pendingAttachments.map((attachment) => (
+										<div key={attachment.id} className="inbox-pending-attachment">
+											<div className="inbox-pending-attachment-main">
+												<span className="inbox-pending-attachment-icon">+</span>
+												<span className="inbox-pending-attachment-name">
+													{attachment.name}
+												</span>
+												{attachment.sizeLabel ? (
+													<span className="inbox-pending-attachment-size">
+														{attachment.sizeLabel}
+													</span>
+												) : null}
+											</div>
+
+											<button
+												type="button"
+												className="inbox-pending-attachment-remove"
+												onClick={() => removePendingAttachment(attachment.id)}
+												title="Quitar adjunto"
+											>
+												x
+											</button>
+										</div>
+									))}
+
+									{attachmentError ? (
+										<div className="inbox-attachment-error">{attachmentError}</div>
+									) : null}
+								</div>
+							) : null}
+
 							<form onSubmit={handleSubmit} className="inbox-composer">
+								<input
+									ref={fileInputRef}
+									type="file"
+									multiple
+									accept={ATTACHMENT_ACCEPT}
+									onChange={handleAttachmentInputChange}
+									className="inbox-file-input"
+								/>
+
+								<button
+									type="button"
+									className="inbox-attach-trigger"
+									onClick={() => fileInputRef.current?.click()}
+									disabled={sendMessageMutation.isPending}
+									title="Adjuntar archivo"
+								>
+									+
+								</button>
+
 								<div className="inbox-composer-leading" ref={emojiPickerRef}>
 									<button
 										type="button"
@@ -1257,6 +1423,7 @@ export default function InboxPage() {
 									value={messageText}
 									onChange={(event) => setMessageText(event.target.value)}
 									onKeyDown={handleComposerKeyDown}
+									onPaste={handleComposerPaste}
 									placeholder="Escribe un mensaje"
 									rows={1}
 									disabled={sendMessageMutation.isPending}
@@ -1266,7 +1433,8 @@ export default function InboxPage() {
 								<button
 									type="submit"
 									disabled={
-										sendMessageMutation.isPending || !messageText.trim()
+										sendMessageMutation.isPending ||
+										(!messageText.trim() && !pendingAttachments.length)
 									}
 									title="Enviar"
 									className="inbox-send-btn"
