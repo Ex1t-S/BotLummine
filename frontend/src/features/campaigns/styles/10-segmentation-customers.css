@@ -126,6 +126,48 @@
 	gap: 10px;
 }
 
+.campaign-marketing-history-box {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(160px, 1fr)) minmax(260px, 1.4fr);
+	gap: 10px;
+	align-items: stretch;
+	padding: 12px;
+	border: 1px solid #d8deea;
+	border-radius: 16px;
+	background: #f8fafc;
+}
+
+.campaign-marketing-history-box > div {
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	display: grid;
+	align-content: center;
+}
+
+.campaign-marketing-history-box strong {
+	color: #0f172a;
+	font-size: 18px;
+	line-height: 1;
+}
+
+.campaign-marketing-history-box span {
+	margin-top: 4px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.campaign-toggle--compact {
+	align-self: stretch;
+	margin: 0;
+	padding: 10px 12px;
+	border: 1px solid #bbf7d0;
+	border-radius: 12px;
+	background: #f0fdf4;
+}
+
 .campaign-toggle--field {
 	min-height: 54px;
 	align-self: end;
@@ -317,5 +359,9 @@
 
 	.campaign-segment-action-summary {
 		width: 100%;
+	}
+
+	.campaign-marketing-history-box {
+		grid-template-columns: 1fr;
 	}
 }

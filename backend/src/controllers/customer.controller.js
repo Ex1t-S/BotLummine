@@ -47,6 +47,120 @@ function getInitials(name = '') {
 	return words.map((word) => word[0]?.toUpperCase() || '').join('');
 }
 
+function normalizeMarketingPhone(value = '') {
+	return String(value || '').replace(/\D/g, '').trim();
+}
+
+function isDispatchedCampaignRecipient(recipient = {}) {
+	const status = String(recipient.status || '').toUpperCase();
+	return ['SENT', 'DELIVERED', 'READ'].includes(status) || Boolean(recipient.sentAt || recipient.deliveredAt || recipient.readAt);
+}
+
+async function buildMarketingHistoryByPhone({
+	phones = [],
+	templateId = '',
+	templateName = '',
+} = {}) {
+	const normalizedPhones = [...new Set(
+		phones.map(normalizeMarketingPhone).filter(Boolean)
+	)];
+	const cleanTemplateId = String(templateId || '').trim();
+	const cleanTemplateName = String(templateName || '').trim();
+
+	if (!normalizedPhones.length || (!cleanTemplateId && !cleanTemplateName)) {
+		return new Map();
+	}
+	const phoneChunks = [];
+	for (let index = 0; index < normalizedPhones.length; index += 4000) {
+		phoneChunks.push(normalizedPhones.slice(index, index + 4000));
+	}
+
+	const campaignClauses = [];
+	if (cleanTemplateId) {
+		campaignClauses.push({ templateLocalId: cleanTemplateId });
+	}
+	if (cleanTemplateName) {
+		campaignClauses.push({ templateName: cleanTemplateName });
+	}
+
+	const historyByPhone = new Map();
+
+	for (const phoneChunk of phoneChunks) {
+		const rows = await prisma.campaignRecipient.findMany({
+			where: {
+				AND: [
+					{
+						OR: [
+							{ phone: { in: phoneChunk } },
+							{ waId: { in: phoneChunk } },
+						],
+					},
+					{
+						OR: [
+							{ status: { in: ['SENT', 'DELIVERED', 'READ'] } },
+							{ sentAt: { not: null } },
+							{ deliveredAt: { not: null } },
+							{ readAt: { not: null } },
+						],
+					},
+					{
+						campaign: {
+							is: campaignClauses.length === 1
+								? campaignClauses[0]
+								: { OR: campaignClauses },
+						},
+					},
+				],
+			},
+			orderBy: [
+				{ sentAt: 'desc' },
+				{ createdAt: 'desc' },
+			],
+			select: {
+				phone: true,
+				waId: true,
+				status: true,
+				sentAt: true,
+				deliveredAt: true,
+				readAt: true,
+				createdAt: true,
+				campaign: {
+					select: {
+						id: true,
+						name: true,
+						templateLocalId: true,
+						templateName: true,
+					},
+				},
+			},
+		});
+
+		for (const row of rows) {
+			if (!isDispatchedCampaignRecipient(row)) continue;
+
+			const keys = [
+				normalizeMarketingPhone(row.phone || ''),
+				normalizeMarketingPhone(row.waId || ''),
+			].filter(Boolean);
+
+			for (const key of keys) {
+				if (historyByPhone.has(key)) continue;
+
+				historyByPhone.set(key, {
+					sentForTemplate: true,
+					lastCampaignId: row.campaign?.id || null,
+					lastCampaignName: row.campaign?.name || '',
+					templateName: row.campaign?.templateName || cleanTemplateName,
+					status: row.status || '',
+					lastSentAt: row.readAt || row.deliveredAt || row.sentAt || row.createdAt || null,
+				});
+			}
+		}
+	}
+
+	return historyByPhone;
+}
+
 function buildProductTerms(productQuery = '') {
 	return String(productQuery || '')
 		.split('||')
@@ -291,6 +405,8 @@ export async function getCustomers(req, res) {
 			paymentStatus = '',
 			minSpent = '',
 			hasPhoneOnly = '',
+			marketingTemplateId = '',
+			marketingTemplateName = '',
 			sort = 'purchase_desc',
 			page = '1',
 			pageSize = '24',
@@ -337,8 +453,6 @@ export async function getCustomers(req, res) {
 			}),
 		]);
 
-		const customers = orders.map(mapOrderToCard);
-
 		const uniquePhones = new Set();
 		const uniqueFallback = new Set();
 
@@ -361,9 +475,34 @@ export async function getCustomers(req, res) {
 			(acc, row) => acc + Number(row.totalAmount || 0),
 			0
 		);
+		const marketingHistoryByPhone = await buildMarketingHistoryByPhone({
+			phones: metricsBase.map((row) => row.contactPhone || ''),
+			templateId: marketingTemplateId,
+			templateName: marketingTemplateName,
+		});
+		const customers = orders.map((order) => {
+			const card = mapOrderToCard(order);
+			const phoneKey = normalizeMarketingPhone(card.phone || '');
+			const marketing = marketingHistoryByPhone.get(phoneKey) || null;
+
+			return {
+				...card,
+				marketing: marketing || {
+					sentForTemplate: false,
+					lastCampaignId: null,
+					lastCampaignName: '',
+					templateName: marketingTemplateName || '',
+					status: '',
+					lastSentAt: null,
+				},
+			};
+		});
 
 		const showingFrom = totalItems > 0 ? skip + 1 : 0;
 		const showingTo = Math.min(skip + parsedPageSize, totalItems);
+		const advertisedPhonesCount = [...uniquePhones].filter((phone) =>
+			marketingHistoryByPhone.has(normalizeMarketingPhone(phone))
+		).length;
 
 		return res.json({
 			ok: true,
@@ -377,6 +516,12 @@ export async function getCustomers(req, res) {
 				currency: 'ARS',
 				showingFrom,
 				showingTo,
+				marketing: {
+					templateId: marketingTemplateId || null,
+					templateName: marketingTemplateName || null,
+					advertisedCustomers: advertisedPhonesCount,
+					notAdvertisedCustomers: Math.max(0, uniquePhones.size - advertisedPhonesCount),
+				},
 			},
 			pagination: {
 				page: parsedPage,

@@ -983,6 +983,8 @@ function messageSuggestsCompletedPurchase(text = '') {
 	if (!normalized) return false;
 
 	const negativePatterns = [
+		/no\s+voy\s+a\s+hacer\s+la\s+compra/i,
+		/no\s+termin[e\u00e9]\s+de\s+realizar\s+la\s+compra/i,
 		/no\s+(realice|realic[eé]|hice|hizo|hicimos|compre|compr[eé]|compr[oó])/i,
 		/error.*pagar/i,
 		/no\s+pod[íi]a\s+pagar/i,
@@ -996,6 +998,11 @@ function messageSuggestsCompletedPurchase(text = '') {
 	}
 
 	const positivePatterns = [
+		/ya\s+pagu[e\u00e9]/i,
+		/ya\s+realic[e\u00e9]\s+(la\s+)?(transferencia|compra|el\s+pago)/i,
+		/ya\s+transfer[i\u00ed]/i,
+		/(te\s+)?(env[i\u00ed]o|mando|paso|adjunto).{0,40}comprobante/i,
+		/comprobante\s+(de\s+)?(pago|transferencia)/i,
 		/ya\s+est[aá]\s+realizada/i,
 		/ya\s+hice\s+la\s+compra/i,
 		/yo\s+ya\s+hice\s+la\s+compra/i,

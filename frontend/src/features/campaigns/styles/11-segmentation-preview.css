@@ -55,7 +55,7 @@
 
 .campaign-recipient-preview-row {
 	display: grid;
-	grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(180px, 1.3fr) 120px;
+	grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(180px, 1.3fr) minmax(110px, 0.8fr) 120px;
 	gap: 16px;
 	align-items: center;
 	padding: 14px 16px;
@@ -77,6 +77,30 @@
 	padding: 18px;
 	color: #64748b;
 	font-size: 14px;
+}
+
+.campaign-marketing-status {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: fit-content;
+	padding: 6px 9px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 800;
+	white-space: nowrap;
+}
+
+.campaign-marketing-status--sent {
+	background: #fff7ed;
+	color: #c2410c;
+	border: 1px solid #fed7aa;
+}
+
+.campaign-marketing-status--new {
+	background: #ecfdf5;
+	color: #047857;
+	border: 1px solid #bbf7d0;
 }
 
 .button.danger {

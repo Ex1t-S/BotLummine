@@ -677,6 +677,7 @@ export default function CampaignComposerPanel({
 	const [productSearch, setProductSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
 	const [selectedPresetId, setSelectedPresetId] = useState('');
+	const [onlyUnadvertised, setOnlyUnadvertised] = useState(false);
 	const [variableMapping, setVariableMapping] = useState({});
 	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
 	const [contactLimit, setContactLimit] = useState('');
@@ -756,6 +757,15 @@ export default function CampaignComposerPanel({
 	useEffect(() => {
 		void loadCatalogOptions();
 	}, []);
+
+	useEffect(() => {
+		if (form.audienceMode !== 'customers') return;
+		if (!selectedTemplate?.id || !customerAudience.customers.length) return;
+
+		resetSelectedAudience();
+		void loadCustomers(customerFilters);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedTemplate?.id]);
 	const requiresHeaderMedia = useMemo(
 		() => templateRequiresHeaderMedia(selectedTemplate),
 		[selectedTemplate]
@@ -913,12 +923,17 @@ export default function CampaignComposerPanel({
 	const campaignReadyToCreate = campaignChecklist.every((item) => item.ok);
 
 	const selectedCustomerCount = selectedCustomers.length;
+	const selectedAdvertisedCount = useMemo(() => {
+		return selectedCustomers.filter((customer) => customer?.marketing?.sentForTemplate).length;
+	}, [selectedCustomers]);
 
 	const totalFoundCount = Number(
 		customerAudience?.pagination?.totalItems ||
 		customerAudience?.stats?.totalCustomers ||
 		0
 	);
+	const marketingStats = customerAudience?.stats?.marketing || {};
+	const notAdvertisedCount = Number(marketingStats.notAdvertisedCustomers || 0);
 	const activeFilterChips = useMemo(() => {
 		const chips = [];
 
@@ -956,6 +971,13 @@ export default function CampaignComposerPanel({
 			});
 		}
 
+		if (onlyUnadvertised) {
+			chips.push({
+				id: 'onlyUnadvertised',
+				label: 'Sin publicidad previa',
+			});
+		}
+
 		if (customerFilters.sort && customerFilters.sort !== initialCustomerFilters.sort) {
 			const sortLabel =
 				CUSTOMER_SORT_OPTIONS.find((option) => option.value === customerFilters.sort)?.label ||
@@ -964,7 +986,7 @@ export default function CampaignComposerPanel({
 		}
 
 		return chips;
-	}, [customerFilters, selectedProductFilters.length]);
+	}, [customerFilters, onlyUnadvertised, selectedProductFilters.length]);
 	const contactLimitNumber = useMemo(() => {
 		const parsed = Number(contactLimit);
 		if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -1023,6 +1045,14 @@ export default function CampaignComposerPanel({
 	const selectionButtonLabel = useMemo(() => {
 		if (customerAudience.loadingAll) return 'Seleccionando…';
 
+		if (onlyUnadvertised) {
+			const target = contactLimitNumber
+				? Math.min(notAdvertisedCount || totalFoundCount, contactLimitNumber)
+				: notAdvertisedCount || totalFoundCount;
+
+			return `Seleccionar sin publicidad (${formatCompactNumber(target)})`;
+		}
+
 		if (contactLimitNumber) {
 			return `Seleccionar primeros ${formatCompactNumber(effectiveSelectionCount)} filtrados`;
 		}
@@ -1036,6 +1066,8 @@ export default function CampaignComposerPanel({
 		customerAudience.loadingAll,
 		contactLimitNumber,
 		effectiveSelectionCount,
+		notAdvertisedCount,
+		onlyUnadvertised,
 		selectedProductFilters.length,
 		totalFoundCount,
 	]);
@@ -1054,6 +1086,8 @@ export default function CampaignComposerPanel({
 			sort: nextFilters.sort || 'purchase_desc',
 			page: nextFilters.page || 1,
 			pageSize: nextFilters.pageSize || 24,
+			marketingTemplateId: selectedTemplate?.id || '',
+			marketingTemplateName: selectedTemplate?.name || '',
 			minSpent:
 				nextFilters.minSpent === '' || nextFilters.minSpent === null
 					? undefined
@@ -1176,6 +1210,7 @@ export default function CampaignComposerPanel({
 		setSelectedPresetId(preset.id);
 		setSelectedProductFilters([]);
 		setProductSearch('');
+		setOnlyUnadvertised(false);
 		setContactLimit(preset.limit || '');
 		setCustomerFilters(nextFilters);
 		resetSelectedAudience();
@@ -1185,6 +1220,12 @@ export default function CampaignComposerPanel({
 	function removeCustomerFilter(filterId) {
 		if (filterId === 'products') {
 			clearSelectedProducts();
+			return;
+		}
+
+		if (filterId === 'onlyUnadvertised') {
+			setOnlyUnadvertised(false);
+			resetSelectedAudience();
 			return;
 		}
 
@@ -1208,10 +1249,16 @@ export default function CampaignComposerPanel({
 		setSelectedPresetId('');
 		setSelectedProductFilters([]);
 		setProductSearch('');
+		setOnlyUnadvertised(false);
 		setContactLimit('');
 		setCustomerFilters(nextFilters);
 		resetSelectedAudience();
 		void loadCustomers(nextFilters);
+	}
+
+	function toggleOnlyUnadvertised(value) {
+		setOnlyUnadvertised(Boolean(value));
+		resetSelectedAudience();
 	}
 
 	function updateVariableMapping(key, patch) {
@@ -1263,9 +1310,11 @@ export default function CampaignComposerPanel({
 		try {
 			const allCustomers = await fetchAllFilteredCustomers(customerFilters);
 
-			const selectableCustomers = allCustomers.filter((customer) =>
-				Boolean(normalizePhone(customer.phone || ''))
-			);
+			const selectableCustomers = allCustomers.filter((customer) => {
+				if (!normalizePhone(customer.phone || '')) return false;
+				if (onlyUnadvertised && customer?.marketing?.sentForTemplate) return false;
+				return true;
+			});
 
 			const limitedCustomers = contactLimitNumber
 				? selectableCustomers.slice(0, contactLimitNumber)
@@ -1276,7 +1325,11 @@ export default function CampaignComposerPanel({
 			setBulkSelectionInfo({
 				count: limitedCustomers.length,
 				customerIds: limitedCustomers.map((customer) => customer.id).filter(Boolean),
-				mode: selectedProductFilters.length ? 'products' : 'all',
+				mode: onlyUnadvertised
+					? 'unadvertised'
+					: selectedProductFilters.length
+						? 'products'
+						: 'all',
 			});
 
 			setShowAudiencePreview(true);
@@ -1936,6 +1989,29 @@ export default function CampaignComposerPanel({
 									onClear={clearSelectedProducts}
 								/>
 							) : null}
+
+							<div className="campaign-marketing-history-box">
+								<div>
+									<strong>
+										{formatCompactNumber(notAdvertisedCount || 0)}
+									</strong>
+									<span>clientes sin esta plantilla</span>
+								</div>
+								<div>
+									<strong>
+										{formatCompactNumber(Number(marketingStats.advertisedCustomers || 0))}
+									</strong>
+									<span>ya recibieron esta plantilla</span>
+								</div>
+								<label className="campaign-toggle campaign-toggle--compact">
+									<input
+										type="checkbox"
+										checked={onlyUnadvertised}
+										onChange={(event) => toggleOnlyUnadvertised(event.target.checked)}
+									/>
+									<span>Seleccionar solo contactos sin publicidad previa</span>
+								</label>
+							</div>
 						</div>
 
 						<div className="campaign-inline-actions campaign-inline-actions--wrap campaign-segment-action-bar">
@@ -2007,6 +2083,11 @@ export default function CampaignComposerPanel({
 								<strong>{formatCompactNumber(selectedProductFilters.length)}</strong>
 								<span>productos marcados</span>
 							</div>
+
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(selectedAdvertisedCount)}</strong>
+								<span>seleccionados ya impactados</span>
+							</div>
 						</div>
 
 						<div className="campaign-helper-box">
@@ -2039,6 +2120,12 @@ export default function CampaignComposerPanel({
 									Todavía no seleccionaste destinatarios. Primero filtrá y después apretá el botón de seleccionar.
 								</div>
 							)}
+
+							{selectedAdvertisedCount > 0 ? (
+								<div className="campaign-inline-warning">
+									Hay {formatCompactNumber(selectedAdvertisedCount)} seleccionado(s) que ya recibieron esta plantilla.
+								</div>
+							) : null}
 						</div>
 
 						{customerAudience.error ? (
@@ -2155,6 +2242,7 @@ export default function CampaignComposerPanel({
 									<span>Destinatario</span>
 									<span>Teléfono</span>
 									<span>Producto</span>
+									<span>Publicidad</span>
 									<span>Acción</span>
 								</div>
 
@@ -2167,6 +2255,18 @@ export default function CampaignComposerPanel({
 											<span>{getRecipientDisplayName(customer)}</span>
 											<span>{normalizePhone(customer.phone || '') || '—'}</span>
 											<span>{getRecipientProductPreview(customer) || '—'}</span>
+											<span>
+												<span
+													className={`campaign-marketing-status ${
+														customer?.marketing?.sentForTemplate
+															? 'campaign-marketing-status--sent'
+															: 'campaign-marketing-status--new'
+													}`}
+													title={customer?.marketing?.lastCampaignName || ''}
+												>
+													{customer?.marketing?.sentForTemplate ? 'Ya recibio' : 'Nuevo'}
+												</span>
+											</span>
 											<span>
 												<button
 													type="button"
