@@ -72,12 +72,61 @@ function findLastOutboundBeforeCurrentInbound(messages = []) {
 	return null;
 }
 
-function isAbandonedCartCampaignMessage(message = null) {
+function isOutboundCampaignTemplateMessage(message = null) {
 	return (
 		message?.direction === 'OUTBOUND' &&
 		message?.provider === 'whatsapp-cloud-api' &&
-		message?.model === 'carrito_abandonated_v2'
+		message?.type === 'template' &&
+		Boolean(message?.model)
 	);
+}
+
+function isAbandonedCartCampaignMessage(message = null) {
+	const rawPayload = message?.rawPayload || {};
+	const model = String(message?.model || rawPayload.campaignTemplateName || '').toLowerCase();
+	const audienceSource = String(rawPayload.campaignAudienceSource || '').toLowerCase();
+
+	return (
+		isOutboundCampaignTemplateMessage(message) &&
+		(audienceSource === 'abandoned_carts' || model === 'carrito_abandonated_v2')
+	);
+}
+
+function isCampaignFollowupState(currentState = {}) {
+	const goal = String(currentState?.lastUserGoal || '').toLowerCase();
+	const summary = normalizeText(currentState?.commercialSummary || '');
+
+	return (
+		goal.includes('campana') ||
+		goal.includes('carrito') ||
+		goal.includes('pago_pendiente') ||
+		summary.includes('campana')
+	);
+}
+
+function buildCampaignReplyHints({ currentState = {}, lastOutbound = null } = {}) {
+	if (!isOutboundCampaignTemplateMessage(lastOutbound) && !isCampaignFollowupState(currentState)) {
+		return [];
+	}
+
+	const goal = String(currentState?.lastUserGoal || '').toLowerCase();
+	const hints = [
+		'La clienta esta respondiendo una campana reciente: no abras el menu principal.',
+		'Usa el resumen comercial y el mensaje de plantilla como contexto principal.',
+		'Si solo saluda o dice gracias, responde breve retomando el motivo de la campana.',
+	];
+
+	if (goal.includes('pago_pendiente')) {
+		hints.push('Si viene por pago pendiente, ayuda a completar el pago o confirmar comprobante sin vender otra promo.');
+		hints.push('Si envia o confirma comprobante, agradece y deja la conversacion en revision de pago.');
+	} else if (goal.includes('carrito')) {
+		hints.push('Si viene por carrito abandonado, resolvi la objecion concreta para que pueda finalizar la compra.');
+		hints.push('Si pregunta por talle, envio o cuotas, contesta eso y conserva el link pendiente cuando exista.');
+	} else if (goal.includes('promocion')) {
+		hints.push('Si viene por promo, explica por que se envio y ofrece ayuda sobre producto, talle, stock o compra.');
+	}
+
+	return hints;
 }
 
 function looksLikeThirdPartyAutoReply(text = '') {
@@ -154,7 +203,7 @@ function looksLikePaymentClarifierConfirmation({ text = '', lastOutbound = null 
 	);
 }
 
-async function maybeHandleAbandonedCartReply({
+async function maybeHandleCampaignReply({
 	conversation,
 	currentState,
 	contactName,
@@ -164,57 +213,18 @@ async function maybeHandleAbandonedCartReply({
 	transportMode,
 }) {
 	const lastOutbound = findLastOutboundBeforeCurrentInbound(conversation?.messages || []);
-	if (!isAbandonedCartCampaignMessage(lastOutbound)) {
+	if (!isOutboundCampaignTemplateMessage(lastOutbound) && !isCampaignFollowupState(currentState)) {
 		return { handled: false };
 	}
 
 	const normalizedBody = normalizeText(messageBody);
 	const normalizedMessageType = String(messageType || '').toLowerCase();
 
-	if (['image', 'document'].includes(normalizedMessageType)) {
-		return { handled: false };
-	}
-
-	if (looksLikeThirdPartyAutoReply(normalizedBody)) {
+	if (normalizedMessageType === 'reaction' || looksLikeThirdPartyAutoReply(normalizedBody)) {
 		return {
 			handled: true,
 			traceModel: 'campaign-autoreply-ignore',
 			suppressReply: true,
-		};
-	}
-
-	if (
-		messageType !== 'text' ||
-		looksLikeCampaignPaymentIssue(normalizedBody) ||
-		looksLikeSimplePurchaseCompletion(normalizedBody) ||
-		looksLikeGenericCampaignReply(normalizedBody) ||
-		normalizedBody
-	) {
-		await syncHumanHandoff({
-			conversationId: conversation.id,
-			reason: 'campaign_reply_pending_human',
-		});
-
-		await sendAndPersistOutbound({
-			conversationId: conversation.id,
-			body: buildHandoffReply({
-				contactName: contactName || conversation.contact?.name || conversation.contact?.waId || '',
-				reason: 'default',
-			}),
-			deliveryMode: transportMode,
-			aiMeta: {
-				provider: 'system',
-				model: 'campaign-human-handoff',
-				raw: {
-					source: 'abandoned_cart_reply',
-				},
-			},
-		});
-
-		return {
-			handled: true,
-			traceModel: 'campaign-human-handoff',
-			suppressReply: false,
 		};
 	}
 
@@ -406,7 +416,7 @@ export async function processInboundMessage({
 		menuAssistantContext: null,
 	};
 
-	const abandonedCartDecision = await maybeHandleAbandonedCartReply({
+	const campaignReplyDecision = await maybeHandleCampaignReply({
 		conversation: freshConversation,
 		currentState,
 		contactName,
@@ -416,14 +426,14 @@ export async function processInboundMessage({
 		transportMode,
 	});
 
-	if (abandonedCartDecision?.handled) {
+	if (campaignReplyDecision?.handled) {
 		trace = {
 			...trace,
 			intent: 'campaign_reply',
 			assistantMessage: null,
 			provider: 'system',
-			model: abandonedCartDecision.traceModel || 'campaign-reply-router',
-			shouldReply: !abandonedCartDecision.suppressReply,
+			model: campaignReplyDecision.traceModel || 'campaign-reply-router',
+			shouldReply: !campaignReplyDecision.suppressReply,
 		};
 		return { conversation: freshConversation, trace };
 	}
@@ -436,7 +446,7 @@ export async function processInboundMessage({
 		messageType,
 		rawPayload,
 		transportMode,
-		skipMenu: isAbandonedCartCampaignMessage(lastOutbound),
+		skipMenu: isOutboundCampaignTemplateMessage(lastOutbound) || isCampaignFollowupState(currentState),
 	});
 
 	if (menuDecision?.handled) {
@@ -526,6 +536,21 @@ export async function processInboundMessage({
 		detectedPaymentProof,
 		aiDeclaredHandoff: false
 	});
+
+	const shouldUnlockCampaignHumanLock =
+		!detectedPaymentProof &&
+		(isOutboundCampaignTemplateMessage(lastOutbound) || isCampaignFollowupState(currentState)) &&
+		freshConversation.queue === 'HUMAN' &&
+		currentState?.handoffReason === 'campaign_reply_pending_human';
+
+	if (shouldUnlockCampaignHumanLock) {
+		queueDecision = {
+			queue: 'AUTO',
+			aiEnabled: true,
+		};
+		memoryPatch.needsHuman = false;
+		memoryPatch.handoffReason = null;
+	}
 
 	if (menuDecision?.queueDecisionOverride && !detectedPaymentProof) {
 		queueDecision = menuDecision.queueDecisionOverride;
@@ -803,6 +828,18 @@ export async function processInboundMessage({
 		} else {
 			catalogContext = buildCatalogContext(catalogProducts);
 			commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
+		}
+
+		const campaignHints = buildCampaignReplyHints({
+			currentState: enrichedState,
+			lastOutbound,
+		});
+
+		if (campaignHints.length) {
+			commercialHints = [
+				...campaignHints,
+				...commercialHints.filter((hint) => !/solo un saludo inicial|no ofrezcas productos/i.test(hint)),
+			];
 		}
 
 		if (aiGuidance?.type === 'payment') {

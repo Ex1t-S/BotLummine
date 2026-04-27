@@ -30,6 +30,72 @@ function normalizeAudienceSource(value, fallback = 'manual') {
 	return normalizeString(value, fallback).toLowerCase();
 }
 
+function normalizeSearchText(value = '') {
+	return normalizeString(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+}
+
+function inferCampaignGoal(campaign = {}, recipient = {}) {
+	const audienceSource = normalizeAudienceSource(campaign.audienceSource || '');
+	const searchable = normalizeSearchText([
+		campaign.name,
+		campaign.templateName,
+		campaign.notes,
+		recipient?.renderedPreviewText,
+		recipient?.variables?.campaign_type
+	].filter(Boolean).join(' '));
+
+	if (audienceSource === 'abandoned_carts' || /carrito|checkout|compra sin finalizar|abandon/.test(searchable)) {
+		return 'retomar_compra_carrito';
+	}
+
+	if (/pago|pendiente|transfer|comprobante|mercado\s*pago|mercadopago/.test(searchable)) {
+		return 'resolver_pago_pendiente';
+	}
+
+	if (/promo|promocion|descuento|cupon|oferta|marketing|calza|modeladora/.test(searchable)) {
+		return 'responder_consulta_de_promocion';
+	}
+
+	return 'responder_seguimiento_de_campana';
+}
+
+function buildCampaignCommercialSummary({ campaign = {}, recipient = {}, goal = '' } = {}) {
+	const variables = recipient?.variables || {};
+	const primaryProductName = normalizeString(
+		variables.product_name || variables.first_product_name || variables.product || ''
+	);
+	const checkoutUrl = normalizeString(
+		variables.checkout_url || variables.abandoned_checkout_url || variables.payment_url || ''
+	);
+	const totalAmount = normalizeString(variables.total_amount || variables.total || '');
+	const previewText = normalizeString(recipient?.renderedPreviewText || campaign.previewText || '');
+	const audienceSource = normalizeAudienceSource(campaign.audienceSource || '');
+
+	const contextLabel = {
+		retomar_compra_carrito: 'campana de carrito abandonado',
+		resolver_pago_pendiente: 'campana de pago pendiente',
+		responder_consulta_de_promocion: 'campana promocional',
+		responder_seguimiento_de_campana: 'campana de WhatsApp',
+	}[goal] || 'campana de WhatsApp';
+
+	return [
+		`Ultimo contacto: ${contextLabel}.`,
+		campaign.name ? `Campana: ${campaign.name}.` : null,
+		campaign.templateName ? `Plantilla enviada: ${campaign.templateName}.` : null,
+		audienceSource ? `Audiencia: ${audienceSource}.` : null,
+		primaryProductName ? `Producto foco: ${primaryProductName}.` : null,
+		totalAmount ? `Importe mostrado: ${totalAmount}.` : null,
+		checkoutUrl ? `Link pendiente: ${checkoutUrl}.` : null,
+		previewText ? `Mensaje enviado: ${previewText.slice(0, 420)}.` : null,
+		'Si la clienta responde a esta campana, continuar ese tema sin abrir el menu principal.'
+	]
+		.filter(Boolean)
+		.join(' ');
+}
+
 function formatCurrency(value, currency = 'ARS') {
 	try {
 		return new Intl.NumberFormat('es-AR', {
@@ -501,16 +567,16 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
-				queue: 'HUMAN',
-				aiEnabled: false,
+				queue: 'AUTO',
+				aiEnabled: true,
 				state: {
 					create: {
 						customerName: contact.name || normalizedPhone,
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: true,
-						handoffReason: 'campaign_reply_pending_human',
+						needsHuman: false,
+						handoffReason: null,
 					}
 				}
 			}
@@ -525,31 +591,39 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 
 async function applyCampaignConversationContext({ campaign, recipient, conversationId }) {
 	if (!conversationId) return null;
-	if (normalizeAudienceSource(campaign.audienceSource || '') !== 'abandoned_carts') {
-		return null;
-	}
 
 	const primaryProductName = normalizeString(
 		recipient?.variables?.product_name || recipient?.variables?.first_product_name || ''
 	);
-	const checkoutUrl = normalizeString(
-		recipient?.variables?.checkout_url || recipient?.variables?.abandoned_checkout_url || ''
-	);
-	const totalAmount = normalizeString(recipient?.variables?.total_amount || '');
+	const goal = inferCampaignGoal(campaign, recipient);
+	const commercialSummary = buildCampaignCommercialSummary({ campaign, recipient, goal });
 
-	const commercialSummary = [
-		'Ultimo contacto: campana de carrito abandonado.',
-		primaryProductName ? `Producto del carrito: ${primaryProductName}.` : null,
-		totalAmount ? `Total mostrado: ${totalAmount}.` : null,
-		checkoutUrl ? `Checkout pendiente: ${checkoutUrl}.` : null,
-	]
-		.filter(Boolean)
-		.join(' ');
+	const conversation = await prisma.conversation.findUnique({
+		where: { id: conversationId },
+		include: { state: true }
+	});
+
+	if (conversation && conversation.queue !== 'PAYMENT_REVIEW') {
+		const isCampaignHumanLock =
+			conversation.state?.handoffReason === 'campaign_reply_pending_human' ||
+			conversation.state?.handoffReason === null ||
+			conversation.state?.handoffReason === undefined;
+
+		if (conversation.queue === 'AUTO' || isCampaignHumanLock) {
+			await prisma.conversation.update({
+				where: { id: conversationId },
+				data: {
+					queue: 'AUTO',
+					aiEnabled: true,
+				}
+			});
+		}
+	}
 
 	return prisma.conversationState.upsert({
 		where: { conversationId },
 		update: {
-			lastUserGoal: 'retomar_compra_carrito',
+			lastUserGoal: goal,
 			currentProductFocus: primaryProductName || null,
 			currentProductFamily: null,
 			requestedOfferType: null,
@@ -557,8 +631,8 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: true,
-			handoffReason: 'campaign_reply_pending_human',
+			needsHuman: false,
+			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		},
 		create: {
@@ -567,7 +641,7 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			interactionCount: 0,
 			interestedProducts: [],
 			objections: [],
-			lastUserGoal: 'retomar_compra_carrito',
+			lastUserGoal: goal,
 			currentProductFocus: primaryProductName || null,
 			currentProductFamily: null,
 			requestedOfferType: null,
@@ -575,8 +649,8 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: true,
-			handoffReason: 'campaign_reply_pending_human',
+			needsHuman: false,
+			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		}
 	});
@@ -1646,7 +1720,14 @@ async function persistCampaignOutboundMessage({
 			body: recipient.renderedPreviewText || `[Plantilla ${campaign.templateName}]`,
 			provider: 'whatsapp-cloud-api',
 			model: campaign.templateName,
-			rawPayload: sendResult?.rawPayload || null
+			rawPayload: {
+				...(sendResult?.rawPayload || {}),
+				campaignId: campaign.id,
+				campaignRecipientId: recipient.id,
+				campaignName: campaign.name,
+				campaignTemplateName: campaign.templateName,
+				campaignAudienceSource: campaign.audienceSource || null,
+			}
 		}
 	});
 }
