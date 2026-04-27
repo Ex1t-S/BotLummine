@@ -34,31 +34,8 @@ function ensureArgentinaCountryCode(value = '') {
 	return `54${digits}`;
 }
 
-function removeMobile15AfterArea(value = '') {
-	const digits = ensureArgentinaCountryCode(value);
-
-	if (!digits.startsWith('54')) {
-		return digits;
-	}
-
-	const national = digits.slice(2);
-
-	for (const areaLen of [2, 3, 4]) {
-		if (national.length <= areaLen + 2) continue;
-
-		const area = national.slice(0, areaLen);
-		const rest = national.slice(areaLen);
-
-		if (rest.startsWith('15')) {
-			return `54${area}${rest.slice(2)}`;
-		}
-	}
-
-	return digits;
-}
-
 function ensureArgentinaMobileNine(value = '') {
-	const digits = removeMobile15AfterArea(value);
+	const digits = ensureArgentinaCountryCode(value);
 
 	if (!digits.startsWith('54')) {
 		return digits;
