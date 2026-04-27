@@ -6,6 +6,17 @@ function normalizeText(value = '') {
 		.trim();
 }
 
+function normalizeAttachmentText(value = '') {
+	const normalized = normalizeText(value);
+
+	if (!normalized) return '';
+	if (/^\[(imagen|documento|video|sticker) recibid[ao]/i.test(normalized)) {
+		return '';
+	}
+
+	return normalized;
+}
+
 function recentConversationLooksLikePayment(recentMessages = [], currentState = {}) {
 	if (currentState?.paymentPreference) return true;
 	if (currentState?.lastIntent === 'payment') return true;
@@ -39,7 +50,7 @@ export function isPaymentProofMessage({
 	currentState = {},
 	recentMessages = []
 } = {}) {
-	const text = normalizeText(body);
+	const text = normalizeAttachmentText(body);
 
 	const textLooksLikeProof =
 		/(ya transferi|ya transferí|te transferi|te transferí|te adjunto comprobante|te mando comprobante|te paso comprobante|adjunto el comprobante|ahi te mande el comprobante|ahí te mandé el comprobante|comprobante de pago|ticket de pago|acuse de transferencia)/.test(
@@ -50,7 +61,11 @@ export function isPaymentProofMessage({
 		return true;
 	}
 
-	return false;
+	return (
+		attachmentLooksLikeFile({ messageType, rawPayload }) &&
+		recentConversationLooksLikePayment(recentMessages, currentState) &&
+		(!text || /(comprobante|transferencia|mercado pago|mercadopago|pago|ticket|acuse)/.test(text))
+	);
 }
 
 export function isAmbiguousPaymentAttachment({
@@ -60,9 +75,9 @@ export function isAmbiguousPaymentAttachment({
 	currentState = {},
 	recentMessages = []
 } = {}) {
-	const text = normalizeText(body);
+	const text = normalizeAttachmentText(body);
 	if (!attachmentLooksLikeFile({ messageType, rawPayload })) return false;
-	if (!text) return true;
+	if (!text) return recentConversationLooksLikePayment(recentMessages, currentState);
 
 	const weakAttachmentCaption =
 		/(ahi va|ahí va|te lo mando|te lo paso|te lo adjunto|adjunto|mira|mirá|aca va|acá va)/.test(

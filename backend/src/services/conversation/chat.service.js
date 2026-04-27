@@ -25,6 +25,7 @@ import {
 	buildPaymentReviewAck,
 	resolveConversationQueue
 } from './inbox-routing.service.js';
+import { analyzePaymentProofImage } from './payment-proof-vision.service.js';
 import {
 	normalizeText,
 	buildConversationSummary,
@@ -400,6 +401,7 @@ export async function processInboundMessage({
 		model: null,
 		aiGuidance: null,
 		liveOrderContext: null,
+		paymentProofAnalysis: null,
 		shouldReply: false,
 		menuAssistantContext: null,
 	};
@@ -487,6 +489,12 @@ export async function processInboundMessage({
 		memoryPatch.handoffReason = 'requested_human';
 	}
 
+	const paymentProofAnalysis = await analyzePaymentProofImage({
+		messageType,
+		attachmentMeta,
+		rawPayload,
+	});
+
 	const detectedPaymentProof = isPaymentProofMessage({
 		messageType,
 		body: effectiveMessageBody,
@@ -496,7 +504,13 @@ export async function processInboundMessage({
 	}) || looksLikePaymentClarifierConfirmation({
 		text: effectiveMessageBody,
 		lastOutbound,
-	});
+	}) || paymentProofAnalysis.isPaymentProof;
+
+	if (detectedPaymentProof) {
+		memoryPatch.needsHuman = true;
+		memoryPatch.handoffReason = 'payment_proof_review';
+		memoryPatch.paymentPreference = memoryPatch.paymentPreference || currentState?.paymentPreference || 'transferencia';
+	}
 
 	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
 		messageType,
@@ -534,6 +548,7 @@ export async function processInboundMessage({
 		queueDecision,
 		aiGuidance,
 		liveOrderContext,
+		paymentProofAnalysis: paymentProofAnalysis.analyzed ? paymentProofAnalysis : null,
 	};
 
 	const nextStatePayload = buildStatePayload({
@@ -625,7 +640,10 @@ export async function processInboundMessage({
 			aiMeta: {
 				provider: 'system',
 				model: 'payment-proof-router',
-				raw: { detectedPaymentProof: true }
+				raw: {
+					detectedPaymentProof: true,
+					paymentProofAnalysis: paymentProofAnalysis.analyzed ? paymentProofAnalysis : null,
+				}
 			}
 		});
 

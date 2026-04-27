@@ -354,8 +354,7 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 }
 
 export function buildHandoffReply({ contactName = '', reason = '' } = {}) {
-	const safeName = String(contactName || '').trim();
-	const prefix = safeName ? `${safeName}, ` : '';
+	const prefix = '';
 
 	const variantsByReason = {
 		requested_human: [

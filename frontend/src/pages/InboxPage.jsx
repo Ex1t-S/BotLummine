@@ -341,6 +341,8 @@ function MessageBubble({ message, conversation }) {
 	const hasPromoButton = Boolean(promo.actionLabel);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
 	const readState = resolveMessageReadState(message, conversation);
+	const messageTime = formatArgentinaTime(message.createdAt) || message.createdAtLabel || '';
+	const messageDateTime = formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || '';
 
 	return (
 		<div
@@ -384,11 +386,9 @@ function MessageBubble({ message, conversation }) {
 					) : null}
 
 					<div className="inbox-message-meta">
-						<span className="inbox-message-sender-pill">
-							{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
+						<span className="inbox-message-time" title={messageDateTime}>
+							{messageTime}
 						</span>
-
-						<span>{formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || ''}</span>
 						{isOutbound ? (
 							<span
 								className={`inbox-message-status ${
@@ -1104,7 +1104,7 @@ export default function InboxPage() {
 					<>
 						<div className="inbox-chat-header">
 							<div className="inbox-chat-header-top">
-								<div>
+								<div className="inbox-chat-heading">
 									<div className="inbox-chat-title">
 										{conversation?.contact?.name ||
 											activeContact?.displayName ||

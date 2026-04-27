@@ -4,6 +4,36 @@ import { prisma } from '../lib/prisma.js';
 
 const cookieName = process.env.AUTH_COOKIE_NAME || 'wa_assistant_token';
 
+function shouldUseSecureCookies(req = null) {
+	const explicit = String(process.env.AUTH_COOKIE_SECURE || '').trim().toLowerCase();
+	if (explicit === 'true') return true;
+	if (explicit === 'false') return false;
+
+	const host = String(req?.headers?.host || '').toLowerCase();
+	if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
+		return false;
+	}
+
+	const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').toLowerCase();
+	if (forwardedProto.includes('https') || req?.secure) {
+		return true;
+	}
+
+	return process.env.NODE_ENV === 'production';
+}
+
+function buildAuthCookieOptions(req = null) {
+	const secure = shouldUseSecureCookies(req);
+
+	return {
+		httpOnly: true,
+		secure,
+		sameSite: secure ? 'none' : 'lax',
+		path: '/',
+		maxAge: 7 * 24 * 60 * 60 * 1000
+	};
+}
+
 export function normalizeRole(value = '') {
 	return String(value || '').trim().toUpperCase();
 }
@@ -101,13 +131,7 @@ export function issueAuthCookie(res, user) {
 		{ expiresIn: '7d' }
 	);
 
-	const cookieOptions = {
-		httpOnly: true,
-		secure: true,
-		sameSite: 'none',
-		path: '/',
-		maxAge: 7 * 24 * 60 * 60 * 1000
-	};
+	const cookieOptions = buildAuthCookieOptions(res.req);
 
 	console.log('---------------- AUTH COOKIE ISSUE ----------------');
 	console.log('[AUTH] seteando cookie:', cookieName);
@@ -119,12 +143,7 @@ export function issueAuthCookie(res, user) {
 }
 
 export function clearAuthCookie(res) {
-	const cookieOptions = {
-		httpOnly: true,
-		secure: true,
-		sameSite: 'none',
-		path: '/'
-	};
+	const { maxAge, ...cookieOptions } = buildAuthCookieOptions(res.req);
 
 	console.log('---------------- AUTH COOKIE CLEAR ----------------');
 	console.log('[AUTH] limpiando cookie:', cookieName);
