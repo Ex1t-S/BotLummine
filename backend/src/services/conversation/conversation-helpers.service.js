@@ -514,6 +514,31 @@ export function stripBotOpenings(text = '') {
 	return next || text;
 }
 
+function cleanCampaignFollowupTone(text = '') {
+	let next = String(text || '').trim();
+	const replacements = [
+		[/^¡?hola!?\s*/i, ''],
+		[/^soy\s+sofi\s+de\s+lummine[,.!\s]*/i, ''],
+		[/^¡?sofi\s+de\s+lummine\s+ac[aá][,.!\s]*/i, ''],
+		[/^sofi\s+de\s+lummine\s+a\s+tu\s+servicio[,.!\s]*/i, ''],
+		[/^¡?sofi\s+de\s+lummine\s+a\s+tu\s+servicio!?[,.!\s]*/i, ''],
+		[/^¡?sofi\s+de\s+lummine[,.!\s]*/i, ''],
+		[/\bme alegra mucho\b/gi, 'gracias por avisarnos'],
+		[/\bme alegra\b/gi, 'gracias por avisarnos'],
+		[/¡?qué bueno que\b/gi, 'Gracias por avisarnos que'],
+		[/¡?es una excelente elección!?/gi, ''],
+		[/¡?felicidades por tu elección!?/gi, ''],
+	];
+
+	for (const [pattern, replacement] of replacements) {
+		next = next.replace(pattern, replacement).trim();
+	}
+
+	next = next.replace(/^[\s.!,¡]+/, '').trim();
+
+	return normalizeText(next) || text;
+}
+
 function responseMentionsHumanHandoff(text = '') {
 	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana)/i.test(
 		String(text || '')
@@ -565,6 +590,9 @@ export function auditAssistantReply({
 	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName, preserveGreeting);
 	cleaned = stripRepeatedIdentity(cleaned, recentMessages, contactName, agentName, businessName, preserveGreeting);
 	cleaned = stripBotOpenings(cleaned);
+	if (commercialPlan?.campaignFollowup) {
+		cleaned = cleanCampaignFollowupTone(cleaned);
+	}
 	cleaned = normalizeText(cleaned);
 
 	if (!cleaned) {

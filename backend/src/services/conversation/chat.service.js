@@ -114,16 +114,22 @@ function buildCampaignReplyHints({ currentState = {}, lastOutbound = null } = {}
 		'La clienta esta respondiendo una campana reciente: no abras el menu principal.',
 		'Usa el resumen comercial y el mensaje de plantilla como contexto principal.',
 		'Si solo saluda o dice gracias, responde breve retomando el motivo de la campana.',
+		'No uses "Cliente" como nombre propio; si no hay nombre real, omitilo.',
+		'No suenes celebratoria ni ceremonial: evita felicitaciones largas y frases como "me alegra mucho".',
 	];
 
 	if (goal.includes('pago_pendiente')) {
 		hints.push('Si viene por pago pendiente, ayuda a completar el pago o confirmar comprobante sin vender otra promo.');
 		hints.push('Si envia o confirma comprobante, agradece y deja la conversacion en revision de pago.');
+		hints.push('Si solo saluda, contesta que le escribias por el pago pendiente y ofrece ayudar a finalizar o revisar comprobante.');
 	} else if (goal.includes('carrito')) {
 		hints.push('Si viene por carrito abandonado, resolvi la objecion concreta para que pueda finalizar la compra.');
 		hints.push('Si pregunta por talle, envio o cuotas, contesta eso y conserva el link pendiente cuando exista.');
+		hints.push('Si tiene miedo por el talle, pedile una referencia concreta de talle/medidas y tranquiliza sin derivar.');
 	} else if (goal.includes('promocion')) {
 		hints.push('Si viene por promo, explica por que se envio y ofrece ayuda sobre producto, talle, stock o compra.');
+		hints.push('No digas que recibiste una consulta si la charla empezo por campana: deci que le escribimos para compartir la promo.');
+		hints.push('Si dice que ya compro, agradece breve y ofrece revisar comprobante, pedido o seguimiento si lo necesita.');
 	}
 
 	return hints;
@@ -840,6 +846,10 @@ export async function processInboundMessage({
 				...campaignHints,
 				...commercialHints.filter((hint) => !/solo un saludo inicial|no ofrezcas productos/i.test(hint)),
 			];
+			commercialPlan = {
+				...commercialPlan,
+				campaignFollowup: true,
+			};
 		}
 
 		if (aiGuidance?.type === 'payment') {
