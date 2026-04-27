@@ -40,6 +40,91 @@ const PAYMENT_STATUS_OPTIONS = [
 	{ value: 'voided', label: 'Anulado' },
 ];
 
+const CUSTOMER_SORT_OPTIONS = [
+	{ value: 'purchase_desc', label: 'Compra mas reciente' },
+	{ value: 'purchase_asc', label: 'Compra mas antigua' },
+	{ value: 'spent_desc', label: 'Mayor gasto' },
+	{ value: 'spent_asc', label: 'Menor gasto' },
+	{ value: 'name_asc', label: 'Nombre A-Z' },
+];
+
+function formatDateForInput(date) {
+	return date.toISOString().slice(0, 10);
+}
+
+function dateDaysAgo(days) {
+	const date = new Date();
+	date.setDate(date.getDate() - Number(days || 0));
+	return formatDateForInput(date);
+}
+
+const CUSTOMER_SEGMENT_PRESETS = [
+	{
+		id: 'recent_paid',
+		label: 'Compraron hace poco',
+		description: 'Pagos completos de los ultimos 30 dias.',
+		getFilters: () => ({
+			dateFrom: dateDaysAgo(30),
+			dateTo: '',
+			paymentStatus: 'paid',
+			minSpent: '',
+			sort: 'purchase_desc',
+			q: '',
+			orderNumber: '',
+			page: 1,
+		}),
+		limit: '100',
+	},
+	{
+		id: 'pending_payment',
+		label: 'Pagos pendientes',
+		description: 'Personas que iniciaron compra y falta cerrar pago.',
+		getFilters: () => ({
+			dateFrom: dateDaysAgo(30),
+			dateTo: '',
+			paymentStatus: 'pending',
+			minSpent: '',
+			sort: 'purchase_desc',
+			q: '',
+			orderNumber: '',
+			page: 1,
+		}),
+		limit: '80',
+	},
+	{
+		id: 'vip',
+		label: 'Clientes de mayor valor',
+		description: 'Ordena por gasto para elegir primero los compradores fuertes.',
+		getFilters: () => ({
+			dateFrom: '',
+			dateTo: '',
+			paymentStatus: 'paid',
+			minSpent: '',
+			sort: 'spent_desc',
+			q: '',
+			orderNumber: '',
+			page: 1,
+		}),
+		limit: '100',
+	},
+	{
+		id: 'reactivation',
+		label: 'Reactivacion',
+		description: 'Compraron hace mas tiempo y conviene volver a activar.',
+		getFilters: () => ({
+			dateFrom: '',
+			dateTo: dateDaysAgo(60),
+			paymentStatus: 'paid',
+			minSpent: '',
+			sort: 'purchase_desc',
+			q: '',
+			orderNumber: '',
+			page: 1,
+		}),
+		limit: '150',
+	},
+];
+
 function buildCatalogProducts(rawCatalog = []) {
 	const seen = new Set();
 	const options = [];
@@ -591,6 +676,7 @@ export default function CampaignComposerPanel({
 	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
+	const [selectedPresetId, setSelectedPresetId] = useState('');
 	const [variableMapping, setVariableMapping] = useState({});
 	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
 	const [contactLimit, setContactLimit] = useState('');
@@ -833,6 +919,52 @@ export default function CampaignComposerPanel({
 		customerAudience?.stats?.totalCustomers ||
 		0
 	);
+	const activeFilterChips = useMemo(() => {
+		const chips = [];
+
+		if (customerFilters.q) {
+			chips.push({ id: 'q', label: `Busqueda: ${customerFilters.q}` });
+		}
+
+		if (customerFilters.orderNumber) {
+			chips.push({ id: 'orderNumber', label: `Pedido: ${customerFilters.orderNumber}` });
+		}
+
+		if (customerFilters.minSpent) {
+			chips.push({ id: 'minSpent', label: `Minimo: $${customerFilters.minSpent}` });
+		}
+
+		if (customerFilters.dateFrom) {
+			chips.push({ id: 'dateFrom', label: `Desde: ${customerFilters.dateFrom}` });
+		}
+
+		if (customerFilters.dateTo) {
+			chips.push({ id: 'dateTo', label: `Hasta: ${customerFilters.dateTo}` });
+		}
+
+		if (customerFilters.paymentStatus) {
+			const statusLabel =
+				PAYMENT_STATUS_OPTIONS.find((option) => option.value === customerFilters.paymentStatus)?.label ||
+				customerFilters.paymentStatus;
+			chips.push({ id: 'paymentStatus', label: `Pago: ${statusLabel}` });
+		}
+
+		if (selectedProductFilters.length) {
+			chips.push({
+				id: 'products',
+				label: `Productos: ${selectedProductFilters.length}`,
+			});
+		}
+
+		if (customerFilters.sort && customerFilters.sort !== initialCustomerFilters.sort) {
+			const sortLabel =
+				CUSTOMER_SORT_OPTIONS.find((option) => option.value === customerFilters.sort)?.label ||
+				customerFilters.sort;
+			chips.push({ id: 'sort', label: `Orden: ${sortLabel}` });
+		}
+
+		return chips;
+	}, [customerFilters, selectedProductFilters.length]);
 	const contactLimitNumber = useMemo(() => {
 		const parsed = Number(contactLimit);
 		if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -1018,6 +1150,68 @@ export default function CampaignComposerPanel({
 			[field]: value,
 			page: field === 'page' ? value : 1,
 		}));
+		setSelectedPresetId('');
+		resetSelectedAudience();
+	}
+
+	function resetSelectedAudience() {
+		setSelectedCustomersMap({});
+		setBulkSelectionInfo({
+			count: 0,
+			customerIds: [],
+			mode: '',
+		});
+		setShowAudiencePreview(false);
+	}
+
+	function applyCustomerPreset(preset) {
+		if (!preset) return;
+
+		const nextFilters = {
+			...customerFilters,
+			...preset.getFilters(),
+			hasPhoneOnly: true,
+		};
+
+		setSelectedPresetId(preset.id);
+		setSelectedProductFilters([]);
+		setProductSearch('');
+		setContactLimit(preset.limit || '');
+		setCustomerFilters(nextFilters);
+		resetSelectedAudience();
+		void loadCustomers(nextFilters);
+	}
+
+	function removeCustomerFilter(filterId) {
+		if (filterId === 'products') {
+			clearSelectedProducts();
+			return;
+		}
+
+		const nextFilters = {
+			...customerFilters,
+			[filterId]: initialCustomerFilters[filterId] ?? '',
+			page: 1,
+		};
+
+		setSelectedPresetId('');
+		setCustomerFilters(nextFilters);
+		resetSelectedAudience();
+	}
+
+	function clearCustomerSegmentation() {
+		const nextFilters = {
+			...initialCustomerFilters,
+			page: 1,
+		};
+
+		setSelectedPresetId('');
+		setSelectedProductFilters([]);
+		setProductSearch('');
+		setContactLimit('');
+		setCustomerFilters(nextFilters);
+		resetSelectedAudience();
+		void loadCustomers(nextFilters);
 	}
 
 	function updateVariableMapping(key, patch) {
@@ -1041,6 +1235,7 @@ export default function CampaignComposerPanel({
 				page: 1,
 				productQuery: next.join('||'),
 			}));
+			resetSelectedAudience();
 
 			return next;
 		});
@@ -1054,6 +1249,8 @@ export default function CampaignComposerPanel({
 			page: 1,
 			productQuery: '',
 		}));
+		setSelectedPresetId('');
+		resetSelectedAudience();
 	}
 
 		async function handleSelectAllFilteredCustomers() {
@@ -1103,13 +1300,7 @@ export default function CampaignComposerPanel({
 	}
 
 	function clearFilteredSelection() {
-		setSelectedCustomersMap({});
-		setBulkSelectionInfo({
-			count: 0,
-			customerIds: [],
-			mode: '',
-		});
-		setShowAudiencePreview(false);
+		resetSelectedAudience();
 	}
 	function removeSelectedCustomer(customerId) {
 		if (!customerId) return;
@@ -1566,6 +1757,56 @@ export default function CampaignComposerPanel({
 							</div>
 						</div>
 
+						<div className="campaign-segment-presets">
+							<div className="campaign-segment-presets__head">
+								<div>
+									<strong>Atajos de segmentacion</strong>
+									<span>Elegilos como punto de partida y despues ajusta los filtros.</span>
+								</div>
+								<button
+									type="button"
+									className="button ghost"
+									onClick={clearCustomerSegmentation}
+								>
+									Limpiar filtros
+								</button>
+							</div>
+
+							<div className="campaign-segment-preset-grid">
+								{CUSTOMER_SEGMENT_PRESETS.map((preset) => (
+									<button
+										key={preset.id}
+										type="button"
+										className={`campaign-segment-preset-card ${
+											selectedPresetId === preset.id ? 'is-active' : ''
+										}`.trim()}
+										onClick={() => applyCustomerPreset(preset)}
+									>
+										<strong>{preset.label}</strong>
+										<span>{preset.description}</span>
+									</button>
+								))}
+							</div>
+
+							{activeFilterChips.length ? (
+								<div className="campaign-active-filter-row">
+									<span>Filtros activos</span>
+									{activeFilterChips.map((chip) => (
+										<button
+											key={chip.id}
+											type="button"
+											className="campaign-active-filter-chip"
+											onClick={() => removeCustomerFilter(chip.id)}
+											title="Quitar filtro"
+										>
+											{chip.label}
+											<strong>x</strong>
+										</button>
+									))}
+								</div>
+							) : null}
+						</div>
+
 						<div className="campaign-builder-grid campaign-builder-grid--2">
 							<label className="field">
 								<span>Buscar cliente</span>
@@ -1629,6 +1870,29 @@ export default function CampaignComposerPanel({
 									))}
 								</select>
 							</label>
+
+							<label className="field">
+								<span>Ordenar por</span>
+								<select
+									value={customerFilters.sort}
+									onChange={(event) => updateCustomerFilter('sort', event.target.value)}
+								>
+									{CUSTOMER_SORT_OPTIONS.map((option) => (
+										<option key={option.value} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+							</label>
+
+							<label className="campaign-toggle campaign-toggle--field">
+								<input
+									type="checkbox"
+									checked={Boolean(customerFilters.hasPhoneOnly)}
+									onChange={(event) => updateCustomerFilter('hasPhoneOnly', event.target.checked)}
+								/>
+								<span>Solo clientes con telefono</span>
+							</label>
 						</div>
 
 						<div className="campaign-product-filter-group">
@@ -1674,7 +1938,12 @@ export default function CampaignComposerPanel({
 							) : null}
 						</div>
 
-						<div className="campaign-inline-actions campaign-inline-actions--wrap">
+						<div className="campaign-inline-actions campaign-inline-actions--wrap campaign-segment-action-bar">
+							<div className="campaign-segment-action-summary">
+								<strong>{formatCompactNumber(totalFoundCount)}</strong>
+								<span>encontrados con estos filtros</span>
+							</div>
+
 							<button
 								type="button"
 								className="button primary"
