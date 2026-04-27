@@ -514,8 +514,18 @@ export function stripBotOpenings(text = '') {
 	return next || text;
 }
 
-function cleanCampaignFollowupTone(text = '') {
+function lastUserText(recentMessages = []) {
+	return [...recentMessages].reverse().find((message) => message?.role === 'user')?.text || '';
+}
+
+function cleanCampaignFollowupTone(text = '', recentMessages = []) {
 	let next = String(text || '').trim();
+	const lastUser = normalizeText(lastUserText(recentMessages));
+	const userAlreadyBought =
+		/(ya compre|ya hice la compra|ya hice el pedido|hoy las compre|ayer compre|ya lo compre|ya esta pago|ya pague)/.test(
+			lastUser
+		);
+
 	const replacements = [
 		[/^¡?hola!?\s*/i, ''],
 		[/^soy\s+sofi\s+de\s+lummine[,.!\s]*/i, ''],
@@ -523,6 +533,9 @@ function cleanCampaignFollowupTone(text = '') {
 		[/^sofi\s+de\s+lummine\s+a\s+tu\s+servicio[,.!\s]*/i, ''],
 		[/^¡?sofi\s+de\s+lummine\s+a\s+tu\s+servicio!?[,.!\s]*/i, ''],
 		[/^¡?sofi\s+de\s+lummine[,.!\s]*/i, ''],
+		[/\bsofi\s+de\s+lummine\s+a\s+tu\s+servicio\b[,.!\s]*/gi, ''],
+		[/\ba\s+tu\s+servicio\b[,.!\s]*/gi, ''],
+		[/\bme llamo\s+sofi,?\s+de\s+lummine\b[,.!\s]*/gi, ''],
 		[/\bme alegra mucho\b/gi, 'gracias por avisarnos'],
 		[/\bme alegra\b/gi, 'gracias por avisarnos'],
 		[/¡?qué bueno que\b/gi, 'Gracias por avisarnos que'],
@@ -535,6 +548,13 @@ function cleanCampaignFollowupTone(text = '') {
 	}
 
 	next = next.replace(/^[\s.!,¡]+/, '').trim();
+
+	if (
+		userAlreadyBought &&
+		/(promo|oferta|aprovechar|te puedo contar mas|te puedo contar m[aá]s|si te interesan|comprar|link)/i.test(next)
+	) {
+		return 'Gracias por avisarnos. Si necesitás ayuda con el comprobante, el pedido o el seguimiento, escribime por acá.';
+	}
 
 	return normalizeText(next) || text;
 }
@@ -590,9 +610,32 @@ export function auditAssistantReply({
 	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName, preserveGreeting);
 	cleaned = stripRepeatedIdentity(cleaned, recentMessages, contactName, agentName, businessName, preserveGreeting);
 	cleaned = stripBotOpenings(cleaned);
+	cleaned = cleaned.replace(/\bsofi\s+de\s+lummine\s+a\s+tu\s+servicio\b[,.!\s]*/gi, '').trim();
+	cleaned = cleaned.replace(/\ba\s+tu\s+servicio\b[,.!\s]*/gi, '').trim();
 	if (commercialPlan?.campaignFollowup) {
-		cleaned = cleanCampaignFollowupTone(cleaned);
+		cleaned = cleanCampaignFollowupTone(cleaned, recentMessages);
+		cleaned = cleaned.replace(/\bCliente\b[,:!.\s]*/g, '').trim();
+		const campaignLastUser = normalizeText(lastUserText(recentMessages)).toLowerCase();
+		const campaignCleaned = normalizeText(cleaned).toLowerCase();
+		const campaignAlreadyBought =
+			/(ya compre|ya hice la compra|ya hice el pedido|hoy las compre|ayer compre|ya lo compre|ya esta pago|ya pague|ya compre gracias|ya las compre)/.test(
+				campaignLastUser
+			);
+
+		if (campaignAlreadyBought) {
+			cleaned = 'Gracias por avisarnos. Si necesitas ayuda con el comprobante, el pedido o el seguimiento, escribime por aca.';
+		} else if (
+			/(tarjeta|pago|pagar|no me toma|no me deja)/.test(campaignLastUser) &&
+			/(promo|promocion|promoción|oferta)/.test(campaignCleaned)
+		) {
+			cleaned = 'Entiendo. Si la tarjeta no pasa, revisa los datos ingresados e intenta nuevamente. Si el error sigue, mandanos captura del aviso para revisarlo.';
+		} else if (/recibimos tu consulta|tu consulta sobre/.test(campaignCleaned)) {
+			cleaned = cleaned.replace(/recibimos tu consulta sobre/gi, 'te escribimos para compartirte info sobre');
+			cleaned = cleaned.replace(/recibimos tu consulta/gi, 'te escribimos para compartirte la promo');
+		}
 	}
+	cleaned = cleaned.replace(/¡?excelente elecci[oó]n!?/gi, '').trim();
+	cleaned = cleaned.replace(/\bfuror\b/gi, 'muy elegidas').trim();
 	cleaned = normalizeText(cleaned);
 
 	if (!cleaned) {

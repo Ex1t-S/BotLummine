@@ -214,7 +214,7 @@ export function detectIntent(text = '', currentState = {}) {
 	const preservePurchaseContext = shouldPreservePurchaseContext(q, currentState);
 
 	if (
-		/(quiero hablar con una persona|quiero hablar con alguien|humano|asesor|asesora|persona real|operador|agente|alguien del equipo)/.test(
+		/(quiero hablar con una persona|quiero hablar con alguien|humano|asesor|asesora|persona real|operador|agente|alguien del equipo|no quiero bot|no quiero hablar con bot|no me atiendas con bot)/.test(
 			q
 		)
 	) {
