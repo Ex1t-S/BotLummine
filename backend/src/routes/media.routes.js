@@ -4,7 +4,7 @@ import {
 	serveInboxMediaController,
 	uploadCampaignHeaderMediaController
 } from '../controllers/media.controller.js';
-import { attachUser, requireAdmin } from '../middleware/auth.js';
+import { attachUser, requireAdmin, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ const upload = multer({
 	}
 });
 
-router.get('/inbox/:fileName', serveInboxMediaController);
+router.get('/inbox/:fileName', requireAuth, serveInboxMediaController);
 
 router.post(
 	'/campaign-header-media',

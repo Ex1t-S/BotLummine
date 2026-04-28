@@ -9,12 +9,13 @@ import {
 } from '../services/whatsapp/whatsapp-media.service.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
-async function tryRestoreMissingInboxMedia(fileName) {
+async function findInboxMediaMessage(fileName, workspaceId) {
 	const safeFileName = String(fileName || '').trim();
-	if (!safeFileName) return false;
+	if (!safeFileName || !workspaceId) return null;
 
-	const message = await prisma.message.findFirst({
+	return prisma.message.findFirst({
 		where: {
+			workspaceId,
 			attachmentUrl: {
 				contains: safeFileName
 			}
@@ -29,6 +30,13 @@ async function tryRestoreMissingInboxMedia(fileName) {
 			createdAt: 'desc'
 		}
 	});
+}
+
+async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
+	const safeFileName = String(fileName || '').trim();
+	if (!safeFileName) return false;
+
+	const message = await findInboxMediaMessage(safeFileName, workspaceId);
 
 	if (!message) return false;
 
@@ -64,11 +72,21 @@ export async function serveInboxMediaController(req, res) {
 	}
 
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		const message = await findInboxMediaMessage(fileName, workspaceId);
+
+		if (!message) {
+			return res.status(404).json({
+				ok: false,
+				error: 'Archivo no encontrado para este workspace.'
+			});
+		}
+
 		const absolutePath = resolveInboxMediaAbsolutePath(fileName);
 		let stats = await fs.stat(absolutePath).catch(() => null);
 
 		if (!stats || !stats.isFile()) {
-			const restored = await tryRestoreMissingInboxMedia(fileName).catch((error) => {
+			const restored = await tryRestoreMissingInboxMedia(fileName, workspaceId).catch((error) => {
 				console.error('[MEDIA][RESTORE ERROR]', fileName, error?.message || error);
 				return false;
 			});

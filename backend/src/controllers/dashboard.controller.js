@@ -688,12 +688,16 @@ async function ensureConversationExists(conversationId, workspaceId) {
 async function markConversationAsRead(conversationId, workspaceId) {
 	const now = new Date();
 
-	const updatedConversation = await prisma.conversation.update({
-		where: { id: conversationId },
+	await prisma.conversation.updateMany({
+		where: { id: conversationId, workspaceId },
 		data: {
 			unreadCount: 0,
 			lastReadAt: now,
 		},
+	});
+
+	const updatedConversation = await prisma.conversation.findFirst({
+		where: { id: conversationId, workspaceId },
 		select: {
 			id: true,
 			queue: true,
@@ -1040,6 +1044,7 @@ export async function postConversationMessage(req, res, next) {
 
 		const result = await sendAndPersistOutbound({
 			conversationId: conversation.id,
+			workspaceId,
 			waId,
 			body,
 			aiMeta: {
@@ -1058,8 +1063,8 @@ export async function postConversationMessage(req, res, next) {
 			});
 		}
 
-		await prisma.conversation.update({
-			where: { id: conversationId },
+		await prisma.conversation.updateMany({
+			where: { id: conversationId, workspaceId },
 			data: {
 				lastSummary: null,
 			},
@@ -1099,12 +1104,15 @@ export async function patchConversationQueue(req, res, next) {
 			});
 		}
 
-		const updatedConversation = await prisma.conversation.update({
-			where: { id: conversationId },
+		await prisma.conversation.updateMany({
+			where: { id: conversationId, workspaceId },
 			data: {
 				queue: requestedQueue,
 				aiEnabled: requestedQueue === 'AUTO',
 			},
+		});
+		const updatedConversation = await prisma.conversation.findFirst({
+			where: { id: conversationId, workspaceId },
 		});
 
 		if (conversation.state) {
@@ -1160,8 +1168,8 @@ export async function patchConversationResetContext(req, res, next) {
 			});
 		}
 
-		await prisma.conversation.update({
-			where: { id: conversationId },
+		await prisma.conversation.updateMany({
+			where: { id: conversationId, workspaceId },
 			data: {
 				lastSummary: null,
 			},
@@ -1211,10 +1219,10 @@ export async function deleteConversationHistory(req, res, next) {
 
 		const transaction = [
 			prisma.message.deleteMany({
-				where: { conversationId },
+				where: { conversationId, workspaceId },
 			}),
-			prisma.conversation.update({
-				where: { id: conversationId },
+			prisma.conversation.updateMany({
+				where: { id: conversationId, workspaceId },
 				data: {
 					lastSummary: null,
 					lastMessageAt: null,
@@ -1273,11 +1281,15 @@ export async function patchConversationArchive(req, res, next) {
 			});
 		}
 
-		const updatedConversation = await prisma.conversation.update({
-			where: { id: conversationId },
+		await prisma.conversation.updateMany({
+			where: { id: conversationId, workspaceId },
 			data: {
 				archivedAt: archived ? new Date() : null,
 			},
+		});
+		const updatedConversation = await prisma.conversation.findFirst({
+			where: { id: conversationId, workspaceId },
+			select: { archivedAt: true },
 		});
 		publishInboxEvent({
 			workspaceId,

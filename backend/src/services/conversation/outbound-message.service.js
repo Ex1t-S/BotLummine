@@ -8,6 +8,7 @@ import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.servi
 
 export async function sendAndPersistOutbound({
 	conversationId,
+	workspaceId: expectedWorkspaceId = null,
 	body,
 	userId = null,
 	provider = 'whatsapp-cloud-api',
@@ -28,12 +29,19 @@ export async function sendAndPersistOutbound({
 		throw new Error('El mensaje no puede estar vacío.');
 	}
 
-	const conversation = await prisma.conversation.findUnique({
-		where: { id: conversationId },
-		include: {
-			contact: true,
-		},
-	});
+	const conversation = expectedWorkspaceId
+		? await prisma.conversation.findFirst({
+				where: { id: conversationId, workspaceId: expectedWorkspaceId },
+				include: {
+					contact: true,
+				},
+		  })
+		: await prisma.conversation.findUnique({
+				where: { id: conversationId },
+				include: {
+					contact: true,
+				},
+		  });
 
 	if (!conversation) {
 		throw new Error('Conversación no encontrada.');
@@ -139,8 +147,8 @@ export async function sendAndPersistOutbound({
 		},
 	});
 
-	await prisma.conversation.update({
-		where: { id: conversation.id },
+	await prisma.conversation.updateMany({
+		where: { id: conversation.id, workspaceId },
 		data: {
 			lastMessageAt: new Date(),
 		},
