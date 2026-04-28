@@ -1260,7 +1260,10 @@ async function buildCampaignRecipientInsights(recipients = []) {
 				? (ordersByPhone.get(normalizedPhone) || []).find((order) => {
 						const effectiveOrderTimestamp = order.orderUpdatedAt || order.orderCreatedAt || null;
 						if (!effectiveOrderTimestamp) return false;
-						return new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime();
+						return (
+							isPaidLikePaymentStatus(order.paymentStatus) &&
+							new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime()
+						);
 				  }) || null
 				: null
 		);
@@ -1268,7 +1271,7 @@ async function buildCampaignRecipientInsights(recipients = []) {
 		const effectiveRead = Boolean(recipient.readAt || hasReply);
 		const purchaseDetected = Boolean(purchaseOrder);
 		const chatConfirmedPurchase = Boolean(purchaseChatMessage);
-		const conversionSignal = Boolean(purchaseDetected || chatConfirmedPurchase);
+		const conversionSignal = purchaseDetected;
 
 		if (hasReply) repliedRecipients += 1;
 		if (effectiveRead) effectiveReadRecipients += 1;

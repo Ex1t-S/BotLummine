@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -12,6 +13,7 @@ const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES
 const ORDER_FIELDS = [
 	'id',
 	'number',
+	'token',
 	'created_at',
 	'updated_at',
 	'total',
@@ -65,8 +67,7 @@ function normalizeEmail(value) {
 }
 
 function normalizePhone(value) {
-	const digits = String(value ?? '').replace(/\D/g, '');
-	return digits || null;
+	return normalizeWhatsAppIdentityPhone(value) || null;
 }
 
 function normalizeText(value) {
@@ -422,15 +423,23 @@ function mapOrderPayload(order, storeId, customerProfileId) {
 		storeId,
 		orderId: String(order?.id),
 		orderNumber: cleanString(order?.number),
+		token: cleanString(order?.token),
 		contactName: cleanString(order?.contact_name) || 'Cliente sin nombre',
 		contactEmail: cleanString(order?.contact_email),
 		normalizedEmail: normalizeEmail(order?.contact_email),
 		contactPhone: cleanString(order?.contact_phone),
 		normalizedPhone: normalizePhone(order?.contact_phone),
+		contactIdentification: cleanString(order?.contact_identification),
+		status: normalizeOrderStatus(order?.status),
 		paymentStatus: normalizeOrderStatus(order?.payment_status),
 		shippingStatus: normalizeOrderStatus(order?.shipping_status),
+		subtotal: toDecimalOrNull(order?.subtotal),
 		totalAmount: toDecimalOrNull(order?.total),
 		currency: cleanString(order?.currency) || 'ARS',
+		gateway: cleanString(order?.gateway),
+		gatewayId: cleanString(order?.gateway_id),
+		gatewayName: cleanString(order?.gateway_name),
+		gatewayLink: cleanString(order?.gateway_link),
 		products: Array.isArray(order?.products) ? order.products : [],
 		rawPayload: order,
 		orderCreatedAt: parseDateOrNull(order?.created_at),
