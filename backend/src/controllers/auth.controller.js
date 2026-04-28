@@ -43,6 +43,18 @@ export async function login(req, res, next) {
 			});
 		}
 
+		if (
+			user.role !== 'PLATFORM_ADMIN' &&
+			user.workspaceId &&
+			user.workspace?.status &&
+			user.workspace.status !== 'ACTIVE'
+		) {
+			return res.status(403).json({
+				ok: false,
+				error: 'Workspace inactivo'
+			});
+		}
+
 		issueAuthCookie(res, user);
 
 		return res.json({

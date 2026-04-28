@@ -624,22 +624,28 @@ function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentS
 }
 
 async function refreshCampaignCounters(campaignId) {
-	const [pending, accepted, delivered, read, failed, skipped, campaign] = await Promise.all([
-		prisma.campaignRecipient.count({ where: { campaignId, status: 'PENDING' } }),
-		prisma.campaignRecipient.count({ where: { campaignId, status: { in: ['SENT', 'DELIVERED', 'READ'] } } }),
-		prisma.campaignRecipient.count({ where: { campaignId, status: { in: ['DELIVERED', 'READ'] } } }),
-		prisma.campaignRecipient.count({ where: { campaignId, status: 'READ' } }),
-		prisma.campaignRecipient.count({ where: { campaignId, status: 'FAILED' } }),
-		prisma.campaignRecipient.count({ where: { campaignId, status: 'SKIPPED' } }),
-		prisma.campaign.findUnique({
-			where: { id: campaignId },
-			select: { id: true, status: true, totalRecipients: true }
-		})
-	]);
+	const campaign = await prisma.campaign.findUnique({
+		where: { id: campaignId },
+		select: { id: true, workspaceId: true, status: true, totalRecipients: true }
+	});
 
 	if (!campaign) {
 		return null;
 	}
+
+	const scopedWhere = {
+		workspaceId: campaign.workspaceId,
+		campaignId
+	};
+
+	const [pending, accepted, delivered, read, failed, skipped] = await Promise.all([
+		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: 'PENDING' } }),
+		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: { in: ['SENT', 'DELIVERED', 'READ'] } } }),
+		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: { in: ['DELIVERED', 'READ'] } } }),
+		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: 'READ' } }),
+		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: 'FAILED' } }),
+		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: 'SKIPPED' } }),
+	]);
 
 	const nextStatus = buildCampaignFinalStatus({
 		pending,
@@ -649,8 +655,8 @@ async function refreshCampaignCounters(campaignId) {
 		currentStatus: campaign.status
 	});
 
-	return prisma.campaign.update({
-		where: { id: campaignId },
+	await prisma.campaign.updateMany({
+		where: { id: campaignId, workspaceId: campaign.workspaceId },
 		data: {
 			pendingRecipients: pending,
 			sentRecipients: accepted,
@@ -661,6 +667,10 @@ async function refreshCampaignCounters(campaignId) {
 			status: nextStatus,
 			finishedAt: pending === 0 ? new Date() : null
 		}
+	});
+
+	return prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: campaign.workspaceId }
 	});
 }
 
@@ -677,9 +687,17 @@ function normalizeCampaignLockMs() {
 }
 
 async function refreshCampaignDispatchLock(campaignId, lockId) {
+	const campaign = await prisma.campaign.findUnique({
+		where: { id: campaignId },
+		select: { workspaceId: true },
+	});
+
+	if (!campaign?.workspaceId) return false;
+
 	const updated = await prisma.campaign.updateMany({
 		where: {
 			id: campaignId,
+			workspaceId: campaign.workspaceId,
 			dispatchLockId: lockId
 		},
 		data: {

@@ -77,6 +77,18 @@ export function requireAuth(req, res, next) {
 		});
 	}
 
+	if (
+		normalizeRole(req.user.role) !== 'PLATFORM_ADMIN' &&
+		req.user.workspaceId &&
+		req.user.workspace?.status &&
+		req.user.workspace.status !== 'ACTIVE'
+	) {
+		return res.status(403).json({
+			ok: false,
+			error: 'Workspace inactivo'
+		});
+	}
+
 	return next();
 }
 

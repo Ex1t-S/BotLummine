@@ -699,9 +699,11 @@ export async function applyTemplateStatusWebhook(payload = {}) {
 		return null;
 	}
 
+	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
 	const template = await prisma.whatsAppTemplate.findFirst({
 		where: {
-			metaTemplateId
+			metaTemplateId,
+			...(wabaId ? { wabaId } : {}),
 		}
 	});
 
@@ -732,9 +734,11 @@ export async function applyTemplateQualityWebhook(payload = {}) {
 		return null;
 	}
 
+	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
 	const template = await prisma.whatsAppTemplate.findFirst({
 		where: {
-			metaTemplateId
+			metaTemplateId,
+			...(wabaId ? { wabaId } : {}),
 		}
 	});
 
@@ -764,9 +768,11 @@ export async function applyTemplateCategoryWebhook(payload = {}) {
 		return null;
 	}
 
+	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
 	const template = await prisma.whatsAppTemplate.findFirst({
 		where: {
-			metaTemplateId
+			metaTemplateId,
+			...(wabaId ? { wabaId } : {}),
 		}
 	});
 
@@ -796,9 +802,11 @@ export async function applyTemplateComponentsWebhook(payload = {}) {
 		return null;
 	}
 
+	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
 	const template = await prisma.whatsAppTemplate.findFirst({
 		where: {
-			metaTemplateId
+			metaTemplateId,
+			...(wabaId ? { wabaId } : {}),
 		}
 	});
 
