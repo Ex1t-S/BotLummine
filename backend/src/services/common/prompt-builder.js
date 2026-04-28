@@ -30,7 +30,7 @@ function formatArrayField(value = [], fallback = 'ninguno') {
 	return Array.isArray(value) && value.length ? value.join(', ') : fallback;
 }
 
-function buildPolicyBlock(responsePolicy = {}) {
+function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', businessName = 'la marca' } = {}) {
 	return [
 		`- Accion permitida: ${responsePolicy.action || 'general_help'}`,
 		`- Tono: ${responsePolicy.tone || 'amigable_directo'}`,
@@ -39,7 +39,7 @@ function buildPolicyBlock(responsePolicy = {}) {
 		'- Responde solo con lo confirmado.',
 		'- Si no hay tracking, decilo sin inventar.',
 		'- Si la conversacion ya esta empezada, segui el hilo sin saludar de nuevo, salvo que el cliente retome solo con hola o buenas.',
-		'- Si el mensaje es solo un saludo, presenta de forma breve a Sofi de Lummine y pregunta que esta buscando.',
+		`- Si el mensaje es solo un saludo, presenta de forma breve a ${agentName} de ${businessName} y pregunta que esta buscando.`,
 		'- Evita abrir con muletillas como claro, perfecto, genial, buenisimo o dale.',
 		'- Si la intencion no es producto, no abras promociones ni upsell salvo pedido explicito del cliente.'
 	].join('\n');
@@ -85,6 +85,7 @@ function shouldIncludeLiveOrderContext({ liveOrderContext, responsePolicy }) {
 
 export function buildPrompt({
 	businessName,
+	workspaceConfig = null,
 	contactName,
 	recentMessages,
 	conversationSummary = '',
@@ -98,13 +99,26 @@ export function buildPrompt({
 	responsePolicy = {},
 	menuAssistantContext = null
 }) {
-	const systemPrompt = process.env.SYSTEM_PROMPT || 'Responde como asesora humana de ventas por WhatsApp. Sona natural, directa y comercial.';
-	const businessContext = process.env.BUSINESS_CONTEXT || '';
-	const agentName = process.env.BUSINESS_AGENT_NAME || 'Sofi';
+	const aiConfig = workspaceConfig?.ai || {};
+	const systemPrompt = aiConfig.systemPrompt || process.env.SYSTEM_PROMPT || 'Responde como asesora humana de ventas por WhatsApp. Sona natural, directa y comercial.';
+	const businessContext = aiConfig.businessContext || process.env.BUSINESS_CONTEXT || '';
+	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi';
+	const tone = aiConfig.tone || 'amigable_directo';
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
-	const facts = getRelevantStoreFacts(recentMessages);
+	const useLegacyLummineData =
+		!workspaceConfig?.workspaceId ||
+		workspaceConfig.workspaceId === 'workspace_lummine' ||
+		String(businessName || '').toLowerCase().includes('lummine');
+	const facts = useLegacyLummineData ? getRelevantStoreFacts(recentMessages) : [];
 	const firstContact = isFirstContact(recentMessages);
-	const businessData = buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '');
+	const businessData = useLegacyLummineData
+		? buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '')
+		: {
+			policySummary: {
+				shipping: ['Usa solo las politicas cargadas para este workspace.'],
+				returns: ['Usa solo las politicas cargadas para este workspace.']
+			}
+		};
 	const commercialHintsBlock = Array.isArray(commercialHints) && commercialHints.length
 		? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n')
 		: '- Guia una sola opcion principal y no abras todo el catalogo.';
@@ -128,11 +142,12 @@ export function buildPrompt({
 		`SISTEMA: ${systemPrompt}`,
 		`NEGOCIO: ${businessName}`,
 		`ASESORA: ${agentName}`,
+		`TONO DE MARCA: ${tone}`,
 		businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}` : '',
 		`DATOS DEL CLIENTE:\n- Nombre: ${customerContext.name || contactName || 'Cliente'}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
 		`ESTADO ACTUAL:\n- Ultima intencion: ${conversationState.lastIntent || 'general'}\n- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}\n- Animo: ${conversationState.customerMood || 'neutral'}\n- Familia actual: ${conversationState.currentProductFamily || 'no detectada'}\n- Producto foco: ${conversationState.currentProductFocus || 'no detectado'}\n- Promo pedida: ${conversationState.requestedOfferType || 'no detectada'}\n- Exclusiones: ${formatArrayField(conversationState.excludedProductKeywords, 'ninguna')}\n- Familia bloqueada: ${conversationState.categoryLocked ? 'Si' : 'No'}\n- Talle detectado: ${conversationState.frequentSize || 'no detectado'}\n- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}\n- Productos de interes: ${formatArrayField(conversationState.interestedProducts)}\n- Resumen comercial: ${conversationState.commercialSummary || 'sin resumen especial'}\n- Necesita humano: ${conversationState.needsHuman ? 'Si' : 'No'}`,
-		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy)}`,
+		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName })}`,
 		`PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}`,
 		liveOrderContextEnabled
 			? `PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`
@@ -142,7 +157,7 @@ export function buildPrompt({
 		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',
 		`POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
-		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podes presentarte una sola vez como ${agentName} de ${businessName}.` : 'Si el cliente solo retoma con hola o buenas, podes volver a presentarte breve como Sofi de Lummine. Si no, segui el hilo sin saludar de nuevo.'}\n- Si el mensaje del cliente es solo un saludo, responde breve, presentate como ${agentName} de ${businessName} y pregunta que esta buscando.\n- Si la intencion es soporte (pedido, pago, envio o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.\n- Si el catalogo local no esta disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.\n- Si el catalogo local no esta disponible o no hay productos confirmados, pedi una aclaracion breve o ofrece derivar con una asesora.\n- Si el cliente ya fijo familia o promo, respetala y no cambies de producto por tu cuenta.\n- Si el cliente excluyo una opcion, no la vuelvas a mencionar como recomendacion.\n- Si la promo exacta no existe dentro de esa familia, decilo explicitamente y ofrece la mejor alternativa dentro de la misma familia.\n- Si mostras opciones, prioriza una sola principal segun el plan comercial, salvo que este comparando.\n- Si ya se venia hablando de otro producto mas reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explicito.\n- Si usas el menu como guia, integralo natural solo cuando el cliente este abierto o desorientado.\n- No pegues una coletilla fija de menu al final de respuestas concretas.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenisimo o dale.\n- Si la respuesta es continuidad y no es un saludo nuevo, no repitas nombre ni saludo.`,
+		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podes presentarte una sola vez como ${agentName} de ${businessName}.` : `Si el cliente solo retoma con hola o buenas, podes volver a presentarte breve como ${agentName} de ${businessName}. Si no, segui el hilo sin saludar de nuevo.`}\n- Si el mensaje del cliente es solo un saludo, responde breve, presentate como ${agentName} de ${businessName} y pregunta que esta buscando.\n- Si la intencion es soporte (pedido, pago, envio o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.\n- Si el catalogo local no esta disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.\n- Si el catalogo local no esta disponible o no hay productos confirmados, pedi una aclaracion breve o ofrece derivar con una asesora.\n- Si el cliente ya fijo familia o promo, respetala y no cambies de producto por tu cuenta.\n- Si el cliente excluyo una opcion, no la vuelvas a mencionar como recomendacion.\n- Si la promo exacta no existe dentro de esa familia, decilo explicitamente y ofrece la mejor alternativa dentro de la misma familia.\n- Si mostras opciones, prioriza una sola principal segun el plan comercial, salvo que este comparando.\n- Si ya se venia hablando de otro producto mas reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explicito.\n- Si usas el menu como guia, integralo natural solo cuando el cliente este abierto o desorientado.\n- No pegues una coletilla fija de menu al final de respuestas concretas.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenisimo o dale.\n- Si la respuesta es continuidad y no es un saludo nuevo, no repitas nombre ni saludo.`,
 		`CONVERSACION RECIENTE:\n${transcript}`,
 		'Responde ahora al ultimo mensaje del cliente.'
 	].filter(Boolean).join('\n\n');

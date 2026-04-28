@@ -617,17 +617,18 @@ export function auditAssistantReply({
 }
 
 export async function resolveIntentAction({
+	workspaceId,
 	intent,
 	messageBody,
 	explicitOrderNumber,
 	currentState,
 }) {
 	if (intent === 'order_status') {
-		return handleOrderStatusIntent({ explicitOrderNumber, currentState });
+		return handleOrderStatusIntent({ explicitOrderNumber, currentState, workspaceId });
 	}
 
 	if (intent === 'payment') {
-		return handlePaymentIntent({ currentState });
+		return handlePaymentIntent({ currentState, workspaceId });
 	}
 
 	if (intent === 'shipping') {

@@ -4,6 +4,11 @@ import { prisma } from '../../lib/prisma.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
 import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
+import {
+	DEFAULT_WORKSPACE_ID,
+	getWorkspaceRuntimeConfig,
+	normalizeWorkspaceId,
+} from '../workspaces/workspace-context.service.js';
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -155,13 +160,14 @@ function dedupeRecipients(recipients = []) {
 	return [...seen.values()];
 }
 
-async function resolveRecipientsFromContacts(contactIds = []) {
+async function resolveRecipientsFromContacts(contactIds = [], workspaceId = DEFAULT_WORKSPACE_ID) {
 	if (!Array.isArray(contactIds) || !contactIds.length) {
 		return [];
 	}
 
 	const contacts = await prisma.contact.findMany({
 		where: {
+			workspaceId,
 			id: {
 				in: contactIds
 			}
@@ -187,8 +193,9 @@ async function resolveRecipientsFromContacts(contactIds = []) {
 	}));
 }
 
-async function resolveRecipientsFromAllContacts() {
+async function resolveRecipientsFromAllContacts(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const contacts = await prisma.contact.findMany({
+		where: { workspaceId },
 		select: {
 			id: true,
 			name: true,
@@ -213,7 +220,7 @@ async function resolveRecipientsFromAllContacts() {
 	}));
 }
 
-async function resolveLatestOrdersByPhones(normalizedPhones = []) {
+async function resolveLatestOrdersByPhones(normalizedPhones = [], workspaceId = DEFAULT_WORKSPACE_ID) {
 	const uniquePhones = [...new Set(
 		safeArray(normalizedPhones)
 			.map((phone) => normalizeCampaignPhone(phone))
@@ -226,6 +233,7 @@ async function resolveLatestOrdersByPhones(normalizedPhones = []) {
 
 	const orders = await prisma.customerOrder.findMany({
 		where: {
+			workspaceId,
 			normalizedPhone: {
 				in: uniquePhones
 			}
@@ -261,11 +269,13 @@ async function resolveLatestOrdersByPhones(normalizedPhones = []) {
 }
 
 async function resolveRecipientsFromAbandonedCarts(input = {}) {
+	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
 	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
 	const since = new Date();
 	since.setDate(since.getDate() - filters.daysBack);
 
 	const where = {
+		workspaceId,
 		contactPhone: {
 			not: null
 		},
@@ -332,6 +342,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	if (normalizedPhones.length) {
 		contacts = await prisma.contact.findMany({
 			where: {
+				workspaceId,
 				OR: [
 					{ waId: { in: normalizedPhones } },
 					{ phone: { in: normalizedPhones } }
@@ -349,7 +360,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 		});
 	}
 
-	const latestOrderByPhone = await resolveLatestOrdersByPhones(normalizedPhones);
+	const latestOrderByPhone = await resolveLatestOrdersByPhones(normalizedPhones, workspaceId);
 
 	const contactByPhone = new Map();
 	for (const contact of contacts) {
@@ -385,6 +396,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 }
 
 async function resolveCampaignRecipients(input = {}) {
+	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
 	const audienceSource = normalizeAudienceSource(input.audienceSource || 'manual');
 
 	if (audienceSource === 'abandoned_carts') {
@@ -402,8 +414,8 @@ async function resolveCampaignRecipients(input = {}) {
 		optOutReason: recipient.optOutReason || null
 	}));
 
-	const recipientsFromIds = await resolveRecipientsFromContacts(safeArray(input.contactIds));
-	const recipientsFromAllContacts = input.includeAllContacts ? await resolveRecipientsFromAllContacts() : [];
+	const recipientsFromIds = await resolveRecipientsFromContacts(safeArray(input.contactIds), workspaceId);
+	const recipientsFromAllContacts = input.includeAllContacts ? await resolveRecipientsFromAllContacts(workspaceId) : [];
 
 	return dedupeRecipients([
 		...manualRecipients,
@@ -413,10 +425,12 @@ async function resolveCampaignRecipients(input = {}) {
 }
 
 export async function previewAbandonedCartAudience({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	templateId = null,
 	filters = {}
 } = {}) {
 	const recipients = await resolveRecipientsFromAbandonedCarts({
+		workspaceId,
 		audienceSource: 'abandoned_carts',
 		audienceFilters: filters
 	});
@@ -425,7 +439,7 @@ export async function previewAbandonedCartAudience({
 	let baseComponents = [];
 
 	if (templateId) {
-		template = await getTemplateOrThrow(templateId);
+		template = await getTemplateOrThrow(templateId, { workspaceId });
 		baseComponents = safeArray(template?.rawPayload?.components);
 	}
 
@@ -460,7 +474,8 @@ export async function previewAbandonedCartAudience({
 	};
 }
 
-async function ensureCampaignConversation({ phone, contactId = null, contactName = null }) {
+async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, phone, contactId = null, contactName = null }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedPhone = normalizeCampaignPhone(phone);
 
 	if (!normalizedPhone) {
@@ -473,19 +488,25 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 	let contact = null;
 
 	if (contactId) {
-		contact = await prisma.contact.findUnique({
-			where: { id: contactId }
+		contact = await prisma.contact.findFirst({
+			where: { id: contactId, workspaceId: resolvedWorkspaceId }
 		});
 	}
 
 	if (!contact) {
 		contact = await prisma.contact.upsert({
-			where: { waId: normalizedPhone },
+			where: {
+				workspaceId_waId: {
+					workspaceId: resolvedWorkspaceId,
+					waId: normalizedPhone
+				}
+			},
 			update: {
 				name: contactName || undefined,
 				phone: normalizedPhone
 			},
 			create: {
+				workspaceId: resolvedWorkspaceId,
 				waId: normalizedPhone,
 				phone: normalizedPhone,
 				name: contactName || normalizedPhone
@@ -493,14 +514,15 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 		});
 	}
 
-	let conversation = await prisma.conversation.findUnique({
-		where: { contactId: contact.id }
+	let conversation = await prisma.conversation.findFirst({
+		where: { workspaceId: resolvedWorkspaceId, contactId: contact.id }
 	});
 
 	if (!conversation) {
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
+				workspaceId: resolvedWorkspaceId,
 				queue: 'HUMAN',
 				aiEnabled: false,
 				state: {
@@ -918,8 +940,10 @@ function buildSendComponentsFromTemplate({
 	return sendComponents;
 }
 
-export async function listCampaigns({ limit = 50 } = {}) {
+export async function listCampaigns({ workspaceId = DEFAULT_WORKSPACE_ID, limit = 50 } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const campaigns = await prisma.campaign.findMany({
+		where: { workspaceId: resolvedWorkspaceId },
 		orderBy: [{ createdAt: 'desc' }],
 		take: Math.max(1, Math.min(Number(limit) || 50, 1000)),
 		include: {
@@ -933,7 +957,7 @@ export async function listCampaigns({ limit = 50 } = {}) {
 	const analyticsByCampaignId = await Promise.all(
 		campaigns.map(async (campaign) => {
 			const recipients = await prisma.campaignRecipient.findMany({
-				where: { campaignId: campaign.id },
+				where: { workspaceId: resolvedWorkspaceId, campaignId: campaign.id },
 				select: {
 					id: true,
 					phone: true,
@@ -947,7 +971,7 @@ export async function listCampaigns({ limit = 50 } = {}) {
 				}
 			});
 
-			const insights = await buildCampaignRecipientInsights(recipients);
+			const insights = await buildCampaignRecipientInsights(recipients, resolvedWorkspaceId);
 			return [campaign.id, insights.summary];
 		})
 	);
@@ -1011,7 +1035,8 @@ function messageSuggestsCompletedPurchase(text = '') {
 	return positivePatterns.some((pattern) => pattern.test(normalized));
 }
 
-async function buildCampaignRecipientInsights(recipients = []) {
+async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEFAULT_WORKSPACE_ID) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedRecipients = safeArray(recipients);
 	const recipientsWithDispatch = normalizedRecipients.filter((recipient) => Boolean(getRecipientDispatchAt(recipient)));
 
@@ -1062,6 +1087,7 @@ async function buildCampaignRecipientInsights(recipients = []) {
 		conversationIds.length
 			? prisma.message.findMany({
 					where: {
+						workspaceId: resolvedWorkspaceId,
 						conversationId: { in: conversationIds },
 						direction: 'INBOUND',
 						createdAt: earliestDispatchAt ? { gte: earliestDispatchAt } : undefined,
@@ -1077,6 +1103,7 @@ async function buildCampaignRecipientInsights(recipients = []) {
 		normalizedPhones.length
 			? prisma.customerOrder.findMany({
 					where: {
+						workspaceId: resolvedWorkspaceId,
 						normalizedPhone: { in: normalizedPhones },
 						orderCreatedAt: earliestDispatchAt ? { gte: earliestDispatchAt } : undefined,
 					},
@@ -1098,6 +1125,7 @@ async function buildCampaignRecipientInsights(recipients = []) {
 		checkoutIds.length
 			? prisma.abandonedCart.findMany({
 					where: {
+						workspaceId: resolvedWorkspaceId,
 						checkoutId: { in: checkoutIds },
 					},
 					select: {
@@ -1237,9 +1265,10 @@ async function buildCampaignRecipientInsights(recipients = []) {
 	};
 }
 
-export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } = {}) {
-	const campaign = await prisma.campaign.findUnique({
-		where: { id: campaignId }
+export async function getCampaignDetail(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID, page = 1, pageSize = 50 } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const campaign = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
 	});
 
 	if (!campaign) {
@@ -1251,17 +1280,22 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 
 	const [template, totalRecipients, recipients, allRecipientsForInsights] = await Promise.all([
 		campaign.templateLocalId
-			? prisma.whatsAppTemplate.findUnique({ where: { id: campaign.templateLocalId } })
+			? prisma.whatsAppTemplate.findFirst({
+					where: {
+						workspaceId: resolvedWorkspaceId,
+						id: campaign.templateLocalId
+					}
+			  })
 			: null,
-		prisma.campaignRecipient.count({ where: { campaignId } }),
+		prisma.campaignRecipient.count({ where: { workspaceId: resolvedWorkspaceId, campaignId } }),
 		prisma.campaignRecipient.findMany({
-			where: { campaignId },
+			where: { workspaceId: resolvedWorkspaceId, campaignId },
 			orderBy: [{ createdAt: 'asc' }],
 			skip: (currentPage - 1) * currentPageSize,
 			take: currentPageSize
 		}),
 		prisma.campaignRecipient.findMany({
-			where: { campaignId },
+			where: { workspaceId: resolvedWorkspaceId, campaignId },
 			select: {
 				id: true,
 				phone: true,
@@ -1276,7 +1310,7 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 		})
 	]);
 
-	const insights = await buildCampaignRecipientInsights(allRecipientsForInsights);
+	const insights = await buildCampaignRecipientInsights(allRecipientsForInsights, resolvedWorkspaceId);
 	const enrichedRecipients = recipients.map((recipient) => ({
 		...recipient,
 		...(insights.recipientsById.get(recipient.id) || {})
@@ -1297,6 +1331,7 @@ export async function getCampaignDetail(campaignId, { page = 1, pageSize = 50 } 
 }
 
 export async function createCampaignDraft({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	name,
 	templateId,
 	templateName,
@@ -1310,10 +1345,12 @@ export async function createCampaignDraft({
 	notes = null,
 	launchedByUserId = null
 }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const template = templateId
-		? await getTemplateOrThrow(templateId)
+		? await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId })
 		: await prisma.whatsAppTemplate.findFirst({
 				where: {
+					workspaceId: resolvedWorkspaceId,
 					name: normalizeString(templateName).toLowerCase(),
 					language: normalizeString(languageCode, 'es_AR'),
 					deletedAt: null
@@ -1327,6 +1364,7 @@ export async function createCampaignDraft({
 	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || 'manual');
 
 	const resolvedRecipients = await resolveCampaignRecipients({
+		workspaceId: resolvedWorkspaceId,
 		recipients,
 		contactIds,
 		includeAllContacts,
@@ -1368,6 +1406,7 @@ export async function createCampaignDraft({
 			normalizedAudienceSource !== 'manual' && recipient.isOptedOut;
 
 		recipientRows.push({
+			workspaceId: resolvedWorkspaceId,
 			phone: normalizedPhone,
 			waId: normalizedPhone,
 			contactId: recipient.contactId || null,
@@ -1392,6 +1431,7 @@ export async function createCampaignDraft({
 
 	const campaign = await prisma.campaign.create({
 		data: {
+			workspaceId: resolvedWorkspaceId,
 			name: normalizeString(name, `Campaña ${template.name}`),
 			templateLocalId: template.id,
 			templateMetaId: template.metaTemplateId,
@@ -1423,9 +1463,10 @@ export async function createCampaignDraft({
 	};
 }
 
-export async function launchCampaign(campaignId) {
-	const campaign = await prisma.campaign.findUnique({
-		where: { id: campaignId }
+export async function launchCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const campaign = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
 	});
 
 	if (!campaign) {
@@ -1437,13 +1478,14 @@ export async function launchCampaign(campaignId) {
 	}
 
 	const template = campaign.templateLocalId
-		? await getTemplateOrThrow(campaign.templateLocalId)
+		? await getTemplateOrThrow(campaign.templateLocalId, { workspaceId: resolvedWorkspaceId })
 		: null;
 
 	ensureApprovedTemplate(template);
 
 	const pendingCount = await prisma.campaignRecipient.count({
 		where: {
+			workspaceId: resolvedWorkspaceId,
 			campaignId,
 			status: 'PENDING'
 		}
@@ -1468,7 +1510,15 @@ export async function launchCampaign(campaignId) {
 	};
 }
 
-export async function cancelCampaign(campaignId) {
+export async function cancelCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const existing = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId },
+		select: { id: true },
+	});
+	if (!existing) {
+		throw new Error('No se encontrÃ³ la campaÃ±a.');
+	}
 	return prisma.campaign.update({
 		where: { id: campaignId },
 		data: {
@@ -1480,9 +1530,10 @@ export async function cancelCampaign(campaignId) {
 	});
 }
 
-export async function deleteCampaign(campaignId) {
-	const campaign = await prisma.campaign.findUnique({
-		where: { id: campaignId },
+export async function deleteCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const campaign = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId },
 		select: {
 			id: true,
 			name: true,
@@ -1500,7 +1551,7 @@ export async function deleteCampaign(campaignId) {
 
 	await prisma.$transaction([
 		prisma.campaignRecipient.deleteMany({
-			where: { campaignId }
+			where: { workspaceId: resolvedWorkspaceId, campaignId }
 		}),
 		prisma.campaign.delete({
 			where: { id: campaignId }
@@ -1514,9 +1565,11 @@ export async function deleteCampaign(campaignId) {
 	};
 }
 
-export async function retryFailedCampaignRecipients(campaignId) {
+export async function retryFailedCampaignRecipients(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	await prisma.campaignRecipient.updateMany({
 		where: {
+			workspaceId: resolvedWorkspaceId,
 			campaignId,
 			status: {
 				in: ['FAILED', 'SKIPPED', 'PENDING']
@@ -1601,6 +1654,7 @@ async function persistCampaignOutboundMessage({
 	sendResult
 }) {
 	const ensured = await ensureCampaignConversation({
+		workspaceId: campaign.workspaceId,
 		phone: recipient.phone,
 		contactId: recipient.contactId,
 		contactName: recipient.contactName
@@ -1629,11 +1683,13 @@ async function persistCampaignOutboundMessage({
 		conversationId: ensured.conversationId
 	});
 
+	const workspaceConfig = await getWorkspaceRuntimeConfig(campaign.workspaceId);
 	return prisma.message.create({
 		data: {
+			workspaceId: campaign.workspaceId,
 			conversationId: ensured.conversationId,
 			metaMessageId: sendResult?.rawPayload?.messages?.[0]?.id || null,
-			senderName: process.env.BUSINESS_NAME || 'Lummine',
+			senderName: workspaceConfig.ai.businessName || 'Marca',
 			direction: 'OUTBOUND',
 			type: 'template',
 			body: recipient.renderedPreviewText || `[Plantilla ${campaign.templateName}]`,
@@ -1659,6 +1715,7 @@ async function markAbandonedCartAsContactedFromRecipient(recipient = {}) {
 
 	return prisma.abandonedCart.updateMany({
 		where: {
+			workspaceId: recipient.workspaceId || DEFAULT_WORKSPACE_ID,
 			checkoutId
 		},
 		data: {
@@ -1671,7 +1728,7 @@ async function markAbandonedCartAsContactedFromRecipient(recipient = {}) {
 
 async function dispatchSingleRecipient(campaign, recipient) {
 	const template = campaign.templateLocalId
-		? await getTemplateOrThrow(campaign.templateLocalId)
+		? await getTemplateOrThrow(campaign.templateLocalId, { workspaceId: campaign.workspaceId })
 		: null;
 
 	ensureApprovedTemplate(template);
@@ -1696,6 +1753,7 @@ async function dispatchSingleRecipient(campaign, recipient) {
 	console.log('[CAMPAIGN][SEND] components:', JSON.stringify(componentsToSend, null, 2));
 
 	const sendResult = await sendWhatsAppTemplate({
+		workspaceId: campaign.workspaceId,
 		to: recipient.phone,
 		templateName: campaign.templateName,
 		languageCode: campaign.templateLanguage,
@@ -2037,7 +2095,7 @@ function toDateFromUnixTimestamp(value) {
 	return new Date(seconds * 1000);
 }
 
-export async function applyCampaignMessageStatusWebhook(statusPayload = {}) {
+export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { workspaceId = null } = {}) {
 	const waMessageId = normalizeString(statusPayload?.id || statusPayload?.message_id || '');
 
 	if (!waMessageId) {
@@ -2046,6 +2104,7 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}) {
 
 	const recipient = await prisma.campaignRecipient.findFirst({
 		where: {
+			...(workspaceId ? { workspaceId } : {}),
 			waMessageId
 		}
 	});

@@ -24,7 +24,7 @@ export default function ProtectedRoute({ children, allowedRoles = null }) {
 		const currentRole = normalizeRole(user.role);
 		const normalizedAllowed = allowedRoles.map(normalizeRole);
 
-		if (!normalizedAllowed.includes(currentRole)) {
+		if (currentRole !== 'PLATFORM_ADMIN' && !normalizedAllowed.includes(currentRole)) {
 			return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
 		}
 	}

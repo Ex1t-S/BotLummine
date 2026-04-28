@@ -240,12 +240,12 @@ async function fetchOrderDetail(client, orderId) {
 	}
 }
 
-export async function buildOrderContextByNumber(orderNumber) {
+export async function buildOrderContextByNumber(orderNumber, { workspaceId } = {}) {
 	const wanted = normalizeString(orderNumber);
 
 	if (!wanted) return null;
 
-	const { client } = await getTiendanubeClient();
+	const { client } = await getTiendanubeClient({ workspaceId });
 
 	let match = null;
 
@@ -273,6 +273,6 @@ export async function buildOrderContextByNumber(orderNumber) {
 	return normalizeOrderContext(mergedOrder);
 }
 
-export async function getOrderByNumber(orderNumber) {
-	return buildOrderContextByNumber(orderNumber);
+export async function getOrderByNumber(orderNumber, options = {}) {
+	return buildOrderContextByNumber(orderNumber, options);
 }

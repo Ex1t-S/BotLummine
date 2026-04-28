@@ -16,7 +16,15 @@ export async function login(req, res, next) {
 		const user = await prisma.user.findUnique({
 			where: {
 				email: String(email).trim().toLowerCase()
-			}
+			},
+			include: {
+				workspace: {
+					include: {
+						branding: true,
+						aiConfig: true,
+					},
+				},
+			},
 		});
 
 		if (!user) {
@@ -43,7 +51,17 @@ export async function login(req, res, next) {
 				id: user.id,
 				email: user.email,
 				name: user.name,
-				role: user.role
+				role: user.role,
+				workspaceId: user.workspaceId || null,
+				workspace: user.workspace
+					? {
+							id: user.workspace.id,
+							name: user.workspace.name,
+							slug: user.workspace.slug,
+							status: user.workspace.status,
+							branding: user.workspace.branding || null,
+					  }
+					: null,
 			}
 		});
 	} catch (error) {
@@ -75,7 +93,17 @@ export async function me(req, res, next) {
 				id: req.user.id,
 				email: req.user.email,
 				name: req.user.name,
-				role: req.user.role
+				role: req.user.role,
+				workspaceId: req.user.workspaceId || null,
+				workspace: req.user.workspace
+					? {
+							id: req.user.workspace.id,
+							name: req.user.workspace.name,
+							slug: req.user.workspace.slug,
+							status: req.user.workspace.status,
+							branding: req.user.workspace.branding || null,
+					  }
+					: null,
 			}
 		});
 	} catch (error) {

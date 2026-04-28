@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { getCatalogPage, syncCatalogFromTiendanube } from '../services/catalog/catalog.service.js';
+import { getCatalogPage, syncCatalogFromProvider } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
@@ -8,6 +8,7 @@ import {
 	getEnboxSyncStatus,
 	syncEnboxShipments,
 } from '../services/enbox/enbox-sync.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 function formatTime(value) {
 	if (!value) return '';
@@ -248,11 +249,12 @@ function buildMergedConversationState(primaryState = null, extraStates = []) {
 	};
 }
 
-async function deduplicateInboxContacts() {
+async function deduplicateInboxContacts(workspaceId) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
 	const conversations = await prisma.conversation.findMany({
 		where: {
+			workspaceId,
 			NOT: {
 				contact: {
 					name: {
@@ -536,10 +538,11 @@ function buildContactCard(conversation, lastMessage) {
 	};
 }
 
-async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', archived = false) {
+async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', archived = false, workspaceId) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
 	const where = {
+		workspaceId,
 		...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
 		...(queue === 'ALL' ? {} : { queue }),
 		NOT: {
@@ -612,6 +615,7 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', arc
 	}
 
 	const countsWhere = {
+		workspaceId,
 		archivedAt: null,
 		NOT: {
 			contact: {
@@ -645,9 +649,9 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', arc
 	};
 }
 
-async function ensureConversationExists(conversationId) {
-	const conversation = await prisma.conversation.findUnique({
-		where: { id: conversationId },
+async function ensureConversationExists(conversationId, workspaceId) {
+	const conversation = await prisma.conversation.findFirst({
+		where: { id: conversationId, workspaceId },
 		select: {
 			id: true,
 			queue: true,
@@ -681,7 +685,7 @@ async function ensureConversationExists(conversationId) {
 	return conversation;
 }
 
-async function markConversationAsRead(conversationId) {
+async function markConversationAsRead(conversationId, workspaceId) {
 	const now = new Date();
 
 	const updatedConversation = await prisma.conversation.update({
@@ -699,6 +703,7 @@ async function markConversationAsRead(conversationId) {
 	});
 
 	publishInboxEvent({
+		workspaceId,
 		scope: 'conversation',
 		action: 'read',
 		conversationId: updatedConversation.id,
@@ -711,13 +716,15 @@ async function markConversationAsRead(conversationId) {
 }
 export async function getInbox(req, res, next) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		const currentQueue = String(req.query.queue || 'AUTO').toUpperCase();
 		const archived = String(req.query.archived || 'false') === 'true';
 
 		const data = await fetchInboxData(
 			req.query.conversationId || null,
 			currentQueue,
-			archived
+			archived,
+			workspaceId
 		);
 
 		return res.json({
@@ -733,6 +740,7 @@ export async function getInbox(req, res, next) {
 
 export async function getInboxStream(req, res, next) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		res.setHeader('Content-Type', 'text/event-stream');
 		res.setHeader('Cache-Control', 'no-cache, no-transform');
 		res.setHeader('Connection', 'keep-alive');
@@ -747,6 +755,10 @@ export async function getInboxStream(req, res, next) {
 
 		const unsubscribe = subscribeInboxEvents((payload) => {
 			try {
+				if (payload?.workspaceId && payload.workspaceId !== workspaceId) {
+					return;
+				}
+
 				res.write(`event: inbox:update\n`);
 				res.write(`data: ${JSON.stringify(payload)}\n\n`);
 			} catch (error) {
@@ -775,12 +787,14 @@ export async function getInboxStream(req, res, next) {
 
 export async function getCatalog(req, res, next) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		const q = String(req.query.q || '').trim();
 		const pageNumber = Math.max(1, Number(req.query.page || 1) || 1);
 		const catalog = await getCatalogPage({
 			q,
 			page: pageNumber,
 			pageSize: 24,
+			workspaceId,
 		});
 
 		return res.json({
@@ -793,12 +807,15 @@ export async function getCatalog(req, res, next) {
 	}
 }
 
-export async function postSyncCatalog(_req, res, next) {
+export async function postSyncCatalog(req, res, next) {
 	try {
-		await syncCatalogFromTiendanube();
+		const workspaceId = requireRequestWorkspaceId(req);
+		const provider = String(req.body?.provider || req.query?.provider || 'TIENDANUBE').toUpperCase();
+		await syncCatalogFromProvider({ workspaceId, provider });
 
 		return res.json({
 			ok: true,
+			provider,
 		});
 	} catch (error) {
 		next(error);
@@ -808,9 +825,10 @@ export async function postSyncCatalog(_req, res, next) {
 export async function getConversationMessagesJson(req, res, next) {
 	try {
 		const { conversationId } = req.params;
+		const workspaceId = requireRequestWorkspaceId(req);
 
-		const conversation = await prisma.conversation.findUnique({
-			where: { id: conversationId },
+		const conversation = await prisma.conversation.findFirst({
+			where: { id: conversationId, workspaceId },
 			select: {
 				id: true,
 				queue: true,
@@ -904,15 +922,18 @@ export async function getConversationMessagesJson(req, res, next) {
 	}
 }
 
-export async function getEnboxSyncStatusJson(_req, res, next) {
+export async function getEnboxSyncStatusJson(req, res, next) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		const status = getEnboxSyncStatus();
 		const [latestLog, latestShipments] = await Promise.all([
 			prisma.enboxSyncLog.findMany({
+				where: { workspaceId },
 				orderBy: { startedAt: 'desc' },
 				take: 10,
 			}),
 			prisma.enboxShipment.findMany({
+				where: { workspaceId },
 				orderBy: { updatedAt: 'desc' },
 				take: 20,
 				select: {
@@ -943,7 +964,8 @@ export async function postRunEnboxSync(req, res, next) {
 			? 'backfill'
 			: 'incremental';
 
-		const result = await syncEnboxShipments({ mode });
+		const workspaceId = requireRequestWorkspaceId(req);
+		const result = await syncEnboxShipments({ mode, workspaceId });
 
 		return res.json({
 			ok: true,
@@ -957,7 +979,8 @@ export async function postRunEnboxSync(req, res, next) {
 export async function patchConversationRead(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-		const conversation = await ensureConversationExists(conversationId);
+		const workspaceId = requireRequestWorkspaceId(req);
+		const conversation = await ensureConversationExists(conversationId, workspaceId);
 
 		if (!conversation) {
 			return res.status(404).json({
@@ -966,7 +989,7 @@ export async function patchConversationRead(req, res, next) {
 			});
 		}
 
-		const updatedConversation = await markConversationAsRead(conversationId);
+		const updatedConversation = await markConversationAsRead(conversationId, workspaceId);
 
 		return res.json({
 			ok: true,
@@ -982,6 +1005,7 @@ export async function patchConversationRead(req, res, next) {
 export async function postConversationMessage(req, res, next) {
 	try {
 		const { conversationId } = req.params;
+		const workspaceId = requireRequestWorkspaceId(req);
 		const body = String(req.body?.body || '').trim();
 
 		if (!body) {
@@ -991,8 +1015,8 @@ export async function postConversationMessage(req, res, next) {
 			});
 		}
 
-		const conversation = await prisma.conversation.findUnique({
-			where: { id: conversationId },
+		const conversation = await prisma.conversation.findFirst({
+			where: { id: conversationId, workspaceId },
 			include: { contact: true },
 		});
 
@@ -1052,6 +1076,7 @@ export async function postConversationMessage(req, res, next) {
 export async function patchConversationQueue(req, res, next) {
 	try {
 		const { conversationId } = req.params;
+		const workspaceId = requireRequestWorkspaceId(req);
 		const requestedQueue = String(req.body?.queue || '').toUpperCase();
 		const allowedQueues = ['AUTO', 'HUMAN', 'PAYMENT_REVIEW'];
 
@@ -1062,8 +1087,8 @@ export async function patchConversationQueue(req, res, next) {
 			});
 		}
 
-		const conversation = await prisma.conversation.findUnique({
-			where: { id: conversationId },
+		const conversation = await prisma.conversation.findFirst({
+			where: { id: conversationId, workspaceId },
 			include: { state: true },
 		});
 
@@ -1105,6 +1130,7 @@ export async function patchConversationQueue(req, res, next) {
 			});
 		}
 		publishInboxEvent({
+			workspaceId,
 			scope: 'conversation',
 			action: 'queue-updated',
 			conversationId: updatedConversation.id,
@@ -1124,7 +1150,8 @@ export async function patchConversationQueue(req, res, next) {
 export async function patchConversationResetContext(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-		const conversation = await ensureConversationExists(conversationId);
+		const workspaceId = requireRequestWorkspaceId(req);
+		const conversation = await ensureConversationExists(conversationId, workspaceId);
 
 		if (!conversation) {
 			return res.status(404).json({
@@ -1154,6 +1181,7 @@ export async function patchConversationResetContext(req, res, next) {
 			});
 		}
 		publishInboxEvent({
+				workspaceId,
 				scope: 'conversation',
 				action: 'context-reset',
 				conversationId,
@@ -1171,7 +1199,8 @@ export async function patchConversationResetContext(req, res, next) {
 export async function deleteConversationHistory(req, res, next) {
 	try {
 		const { conversationId } = req.params;
-		const conversation = await ensureConversationExists(conversationId);
+		const workspaceId = requireRequestWorkspaceId(req);
+		const conversation = await ensureConversationExists(conversationId, workspaceId);
 
 		if (!conversation) {
 			return res.status(404).json({
@@ -1216,6 +1245,7 @@ export async function deleteConversationHistory(req, res, next) {
 
 		await prisma.$transaction(transaction);
 		publishInboxEvent({
+			workspaceId,
 			scope: 'conversation',
 			action: 'history-cleared',
 			conversationId,
@@ -1232,8 +1262,9 @@ export async function deleteConversationHistory(req, res, next) {
 export async function patchConversationArchive(req, res, next) {
 	try {
 		const { conversationId } = req.params;
+		const workspaceId = requireRequestWorkspaceId(req);
 		const archived = req.body?.archived !== false;
-		const conversation = await ensureConversationExists(conversationId);
+		const conversation = await ensureConversationExists(conversationId, workspaceId);
 
 		if (!conversation) {
 			return res.status(404).json({
@@ -1249,6 +1280,7 @@ export async function patchConversationArchive(req, res, next) {
 			},
 		});
 		publishInboxEvent({
+			workspaceId,
 			scope: 'conversation',
 			action: archived ? 'archived' : 'unarchived',
 			conversationId,
@@ -1263,9 +1295,10 @@ export async function patchConversationArchive(req, res, next) {
 	}
 }
 
-export async function postDeduplicateInboxContacts(_req, res, next) {
+export async function postDeduplicateInboxContacts(req, res, next) {
 	try {
-		const result = await deduplicateInboxContacts();
+		const workspaceId = requireRequestWorkspaceId(req);
+		const result = await deduplicateInboxContacts(workspaceId);
 
 		return res.json({
 			ok: true,

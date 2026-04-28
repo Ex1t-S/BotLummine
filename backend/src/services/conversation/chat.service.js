@@ -41,6 +41,11 @@ import {
 } from './menu-flow.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
 import { buildMenuAssistantContext } from '../whatsapp/whatsapp-menu.service.js';
+import {
+	DEFAULT_WORKSPACE_ID,
+	getWorkspaceRuntimeConfig,
+	normalizeWorkspaceId,
+} from '../workspaces/workspace-context.service.js';
 
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	const baseText = String(text || '').trim();
@@ -221,21 +226,29 @@ async function maybeHandleAbandonedCartReply({
 }
 
 export async function getOrCreateConversation({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	waId,
 	contactName,
 	queue = 'HUMAN',
 	aiEnabled = false,
 	forceRouting = false
 }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedWaId = normalizeThreadPhone(waId);
 
 	const contact = await prisma.contact.upsert({
-		where: { waId: normalizedWaId },
+		where: {
+			workspaceId_waId: {
+				workspaceId: resolvedWorkspaceId,
+				waId: normalizedWaId,
+			},
+		},
 		update: {
 			name: contactName || undefined,
 			phone: normalizedWaId
 		},
 		create: {
+			workspaceId: resolvedWorkspaceId,
 			waId: normalizedWaId,
 			phone: normalizedWaId,
 			name: contactName || normalizedWaId
@@ -243,7 +256,7 @@ export async function getOrCreateConversation({
 	});
 
 	let conversation = await prisma.conversation.findFirst({
-		where: { contactId: contact.id },
+		where: { workspaceId: resolvedWorkspaceId, contactId: contact.id },
 		include: { contact: true, state: true }
 	});
 
@@ -251,6 +264,7 @@ export async function getOrCreateConversation({
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
+				workspaceId: resolvedWorkspaceId,
 				queue,
 				aiEnabled,
 				lastMessageAt: new Date(),
@@ -305,6 +319,7 @@ export async function getOrCreateConversation({
 }
 
 export async function processInboundMessage({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	waId,
 	contactName,
 	messageBody,
@@ -314,16 +329,21 @@ export async function processInboundMessage({
 	metaMessageId = null,
 	transportMode = 'live'
 }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedWaId = normalizeThreadPhone(waId);
 
 	const conversation = await getOrCreateConversation({
+		workspaceId: resolvedWorkspaceId,
 		waId: normalizedWaId,
 		contactName
 	});
 
 	if (metaMessageId) {
-		const existingMessage = await prisma.message.findUnique({
-			where: { metaMessageId }
+		const existingMessage = await prisma.message.findFirst({
+			where: {
+				workspaceId: resolvedWorkspaceId,
+				metaMessageId
+			}
 		});
 
 		if (existingMessage) {
@@ -336,6 +356,7 @@ export async function processInboundMessage({
 	await prisma.message.create({
 		data: {
 			conversationId: conversation.id,
+			workspaceId: resolvedWorkspaceId,
 			metaMessageId,
 			senderName: contactName || normalizedWaId,
 			direction: 'INBOUND',
@@ -361,6 +382,7 @@ export async function processInboundMessage({
 	});
 
 	publishInboxEvent({
+		workspaceId: resolvedWorkspaceId,
 		scope: 'message',
 		action: 'inbound-created',
 		conversationId: conversation.id,
@@ -518,6 +540,7 @@ export async function processInboundMessage({
 	}
 
 	const intentResult = await resolveIntentAction({
+		workspaceId: resolvedWorkspaceId,
 		intent,
 		messageBody: effectiveMessageBody,
 		explicitOrderNumber,
@@ -729,15 +752,18 @@ export async function processInboundMessage({
 	let commercialHints = [];
 	let commercialPlan = null;
 	let menuAssistantContext = null;
+	const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
+	const aiBrand = workspaceConfig.ai;
 
 	try {
 		catalogProducts = await searchCatalogProducts({
 			query: effectiveMessageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
-			limit: 5
+			limit: 5,
+			workspaceId: resolvedWorkspaceId
 		});
 
-		const catalogStatus = await getCatalogLookupStatus();
+		const catalogStatus = await getCatalogLookupStatus({ workspaceId: resolvedWorkspaceId });
 
 		commercialPlan = {
 			...resolveCommercialBrainV2({
@@ -897,6 +923,7 @@ export async function processInboundMessage({
 
 	try {
 		menuAssistantContext = await buildMenuAssistantContext({
+			workspaceId: resolvedWorkspaceId,
 			intent,
 			currentState: enrichedState,
 			responsePolicy,
@@ -937,7 +964,8 @@ export async function processInboundMessage({
 	if (!finalReply) {
 		try {
 			prompt = buildPrompt({
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				businessName: aiBrand.businessName,
+				workspaceConfig,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				recentMessages: fullRecentMessages,
 				conversationSummary: freshConversation.lastSummary || '',
@@ -956,7 +984,8 @@ export async function processInboundMessage({
 			});
 
 			const aiResult = await runAssistantReply({
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				businessName: aiBrand.businessName,
+				workspaceConfig,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				recentMessages: fullRecentMessages,
 				conversationSummary: freshConversation.lastSummary || '',
@@ -990,8 +1019,8 @@ export async function processInboundMessage({
 				commercialPlan,
 				recentMessages: fullRecentMessages,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
-				agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi'
+				businessName: aiBrand.businessName,
+				agentName: aiBrand.agentName
 			});
 
 			finalReply = appendMenuHintIfNeeded(

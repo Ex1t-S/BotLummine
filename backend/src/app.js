@@ -13,6 +13,7 @@ import webhookRoutes from './routes/webhook.routes.js';
 import aiLabRoutes from './routes/ai-lab.routes.js';
 import mediaRoutes from './routes/media.routes.js';
 import whatsappMenuRoutes from './routes/whatsapp-menu.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 
 dotenv.config();
 
@@ -107,6 +108,7 @@ app.use('/api/webhook', webhookRoutes);
 app.use('/api/ai-lab', aiLabRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/whatsapp-menu', whatsappMenuRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use((err, _req, res, _next) => {
 	console.error(err);

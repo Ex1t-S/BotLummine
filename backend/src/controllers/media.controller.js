@@ -7,6 +7,7 @@ import {
 	getWhatsAppMediaMetadata,
 	downloadWhatsAppMediaBuffer
 } from '../services/whatsapp/whatsapp-media.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 async function tryRestoreMissingInboxMedia(fileName) {
 	const safeFileName = String(fileName || '').trim();
@@ -19,6 +20,7 @@ async function tryRestoreMissingInboxMedia(fileName) {
 			}
 		},
 		select: {
+			workspaceId: true,
 			attachmentMimeType: true,
 			attachmentName: true,
 			rawPayload: true
@@ -37,11 +39,12 @@ async function tryRestoreMissingInboxMedia(fileName) {
 	if (!attachmentId) return false;
 
 	const metadata = await getWhatsAppMediaMetadata({
+		workspaceId: message.workspaceId,
 		attachmentId,
 		mimeType: message.attachmentMimeType || ''
 	});
 
-	const buffer = await downloadWhatsAppMediaBuffer(metadata.url);
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, { workspaceId: message.workspaceId });
 	const absolutePath = resolveInboxMediaAbsolutePath(safeFileName);
 
 	await fs.mkdir(path.dirname(absolutePath), { recursive: true });
@@ -110,6 +113,7 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 
 	try {
 		const result = await uploadWhatsAppMedia({
+			workspaceId: requireRequestWorkspaceId(req),
 			filePath: file.path,
 			fileName: file.originalname || file.filename || 'header-image',
 			mimeType: file.mimetype,

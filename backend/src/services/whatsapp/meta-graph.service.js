@@ -56,9 +56,9 @@ export function buildGraphUrl(path) {
 	return `https://graph.facebook.com/${getGraphVersion()}${normalizedPath}`;
 }
 
-function buildHeaders(extraHeaders = {}) {
+function buildHeaders(extraHeaders = {}, accessToken = null) {
 	return {
-		Authorization: `Bearer ${getWhatsAppAccessToken()}`,
+		Authorization: `Bearer ${accessToken || getWhatsAppAccessToken()}`,
 		'Content-Type': 'application/json',
 		...extraHeaders
 	};
@@ -83,7 +83,7 @@ function normalizeAxiosGraphError(error) {
 	);
 }
 
-export async function graphGet(path, { params = {}, headers = {} } = {}) {
+export async function graphGet(path, { params = {}, headers = {}, accessToken = null } = {}) {
 	const url = buildGraphUrl(path);
 
 	logGraph('GET', { url, params });
@@ -91,7 +91,7 @@ export async function graphGet(path, { params = {}, headers = {} } = {}) {
 	try {
 		const response = await axios.get(url, {
 			params,
-			headers: buildHeaders(headers)
+			headers: buildHeaders(headers, accessToken)
 		});
 
 		return response.data;
@@ -107,7 +107,7 @@ export async function graphGet(path, { params = {}, headers = {} } = {}) {
 	}
 }
 
-export async function graphPost(path, data = {}, { params = {}, headers = {} } = {}) {
+export async function graphPost(path, data = {}, { params = {}, headers = {}, accessToken = null } = {}) {
 	const url = buildGraphUrl(path);
 
 	logGraph('POST', { url, params, data });
@@ -115,7 +115,7 @@ export async function graphPost(path, data = {}, { params = {}, headers = {} } =
 	try {
 		const response = await axios.post(url, data, {
 			params,
-			headers: buildHeaders(headers)
+			headers: buildHeaders(headers, accessToken)
 		});
 
 		return response.data;
@@ -132,7 +132,7 @@ export async function graphPost(path, data = {}, { params = {}, headers = {} } =
 	}
 }
 
-export async function graphDelete(path, { params = {}, data = {}, headers = {} } = {}) {
+export async function graphDelete(path, { params = {}, data = {}, headers = {}, accessToken = null } = {}) {
 	const url = buildGraphUrl(path);
 
 	logGraph('DELETE', { url, params, data });
@@ -141,7 +141,7 @@ export async function graphDelete(path, { params = {}, data = {}, headers = {} }
 		const response = await axios.delete(url, {
 			params,
 			data,
-			headers: buildHeaders(headers)
+			headers: buildHeaders(headers, accessToken)
 		});
 
 		return response.data;

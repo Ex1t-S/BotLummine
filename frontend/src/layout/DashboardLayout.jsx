@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
 import logoLummine from '../assets/lummine-logo.png';
-import { isAdminUser } from '../lib/authz.js';
+import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
 
 function navClass({ isActive }) {
 	return `admin-menu-link${isActive ? ' active' : ''}`;
@@ -12,6 +12,12 @@ export default function DashboardLayout() {
 	const navigate = useNavigate();
 	const { user, logout } = useAuth();
 	const isAdmin = isAdminUser(user);
+	const isPlatformAdmin = isPlatformAdminUser(user);
+	const workspace = user?.workspace || null;
+	const brandName = isPlatformAdmin
+		? 'Admin plataforma'
+		: (workspace?.aiConfig?.businessName || workspace?.name || 'Marca');
+	const logoUrl = workspace?.branding?.logoUrl || logoLummine;
 
 	async function handleLogout() {
 		try {
@@ -27,22 +33,18 @@ export default function DashboardLayout() {
 			<aside className="admin-sidebar">
 				<div className="admin-brand">
 					<div className="admin-brand-mark admin-brand-mark--logo">
-						<img
-							src={logoLummine}
-							alt="Lummine"
-							className="admin-brand-logo"
-						/>
+						<img src={logoUrl} alt={brandName} className="admin-brand-logo" />
 					</div>
 
 					<div className="admin-brand-copy">
-						<h1>Lummine</h1>
-						<p>{isAdmin ? 'Ventas conversacionales' : 'Inbox de atención'}</p>
+						<h1>{brandName}</h1>
+						<p>{isPlatformAdmin ? 'Gestion multi marca' : (isAdmin ? 'Ventas conversacionales' : 'Inbox de atencion')}</p>
 					</div>
 				</div>
 
 				<div className="admin-user-box">
 					<strong>{user?.name || user?.email || 'Usuario'}</strong>
-					<span>{isAdmin ? 'ADMIN' : 'AGENTE'}</span>
+					<span>{isPlatformAdmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : 'AGENTE')}</span>
 				</div>
 
 				<nav className="admin-menu">
@@ -52,12 +54,16 @@ export default function DashboardLayout() {
 
 					{isAdmin ? (
 						<>
+							<NavLink to="/admin" className={navClass}>
+								Admin
+							</NavLink>
+
 							<NavLink to="/catalog" className={navClass}>
-								Catálogo
+								Catalogo
 							</NavLink>
 
 							<NavLink to="/campaigns" className={navClass}>
-								Campañas
+								Campanas
 							</NavLink>
 
 							<NavLink to="/abandoned-carts" className={navClass}>
@@ -69,7 +75,7 @@ export default function DashboardLayout() {
 							</NavLink>
 
 							<NavLink to="/whatsapp-menu" className={navClass}>
-								Editar menú
+								Menu
 							</NavLink>
 						</>
 					) : null}

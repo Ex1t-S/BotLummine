@@ -12,6 +12,7 @@ import {
 	getWhatsAppAccessToken,
 	getWhatsAppPhoneNumberId,
 } from './meta-graph.service.js';
+import { getWhatsAppChannelForWorkspace } from '../workspaces/workspace-context.service.js';
 
 function buildTokenDebugFingerprint(token = '') {
 	const normalized = String(token || '').trim();
@@ -39,12 +40,13 @@ function buildTokenDebugFingerprint(token = '') {
 	};
 }
 
-async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
+async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel = 'REQUEST' }) {
 	const rawTo = to;
 	const finalTo = normalizeWhatsAppNumber(rawTo);
-	const graphVersion = getGraphVersion();
-	const phoneNumberId = getWhatsAppPhoneNumberId();
-	const accessToken = getWhatsAppAccessToken();
+	const channel = workspaceId ? await getWhatsAppChannelForWorkspace(workspaceId) : null;
+	const graphVersion = channel?.graphVersion || getGraphVersion();
+	const phoneNumberId = channel?.phoneNumberId || getWhatsAppPhoneNumberId();
+	const accessToken = channel?.accessToken || getWhatsAppAccessToken();
 	const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
 	const tokenDebug = buildTokenDebugFingerprint(accessToken);
 
@@ -53,6 +55,8 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 		finalTo,
 		graphVersion,
 		phoneNumberId,
+		workspaceId: channel?.workspaceId || workspaceId || null,
+		channelSource: channel?.source || 'env',
 		...tokenDebug,
 		payloadType: payload?.type || null,
 	});
@@ -124,7 +128,7 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 
 export { normalizeWhatsAppNumber } from './whatsapp-formatters.js';
 
-export async function sendWhatsAppText({ to, body }) {
+export async function sendWhatsAppText({ workspaceId = null, to, body }) {
 	const cleanBody = String(body || '').trim();
 
 	if (!cleanBody) {
@@ -142,6 +146,7 @@ export async function sendWhatsAppText({ to, body }) {
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
 		debugLabel: 'TEXT',
 		payload: {
@@ -152,6 +157,7 @@ export async function sendWhatsAppText({ to, body }) {
 }
 
 export async function sendWhatsAppInteractiveList({
+	workspaceId = null,
 	to,
 	body,
 	headerText = null,
@@ -201,6 +207,7 @@ export async function sendWhatsAppInteractiveList({
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
 		debugLabel: 'INTERACTIVE_LIST',
 		payload: {
@@ -211,6 +218,7 @@ export async function sendWhatsAppInteractiveList({
 }
 
 export async function sendWhatsAppTemplate({
+	workspaceId = null,
 	to,
 	templateName,
 	languageCode = 'es_AR',
@@ -228,6 +236,7 @@ export async function sendWhatsAppTemplate({
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
 		debugLabel: 'TEMPLATE',
 		payload: buildTemplatePayload({

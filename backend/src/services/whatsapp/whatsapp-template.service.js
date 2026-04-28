@@ -1,5 +1,10 @@
 import { prisma } from '../../lib/prisma.js';
 import {
+	DEFAULT_WORKSPACE_ID,
+	getWhatsAppChannelForWorkspace,
+	normalizeWorkspaceId
+} from '../workspaces/workspace-context.service.js';
+import {
 	graphDelete,
 	graphGet,
 	graphPost,
@@ -171,8 +176,9 @@ function deepPersonalize(value, variables = {}) {
 	return value;
 }
 
-function localTemplateWhere(metaOrLocalId) {
+function localTemplateWhere(metaOrLocalId, workspaceId = DEFAULT_WORKSPACE_ID) {
 	return {
+		workspaceId,
 		OR: [
 			{ id: String(metaOrLocalId) },
 			{ metaTemplateId: String(metaOrLocalId) }
@@ -180,7 +186,21 @@ function localTemplateWhere(metaOrLocalId) {
 	};
 }
 
-function buildTemplateUpsertPayload(metaTemplate, rawPayloadOverride = null) {
+async function getTemplateMetaConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
+	const channel = await getWhatsAppChannelForWorkspace(workspaceId).catch(() => null);
+
+	return {
+		wabaId: normalizeString(channel?.wabaId || getWhatsAppBusinessAccountId()),
+		accessToken: normalizeString(channel?.accessToken || '')
+	};
+}
+
+function buildTemplateUpsertPayload(
+	metaTemplate,
+	rawPayloadOverride = null,
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	wabaId = getWhatsAppBusinessAccountId()
+) {
 	const components = Array.isArray(metaTemplate?.components)
 		? metaTemplate.components
 		: Array.isArray(rawPayloadOverride?.components)
@@ -188,7 +208,8 @@ function buildTemplateUpsertPayload(metaTemplate, rawPayloadOverride = null) {
 			: [];
 
 	return {
-		wabaId: getWhatsAppBusinessAccountId(),
+		workspaceId,
+		wabaId,
 		metaTemplateId: metaTemplate?.id ? String(metaTemplate.id) : null,
 		name: ensureTemplateName(metaTemplate?.name || rawPayloadOverride?.name || ''),
 		language: ensureTemplateLanguage(metaTemplate?.language || rawPayloadOverride?.language || 'es_AR'),
@@ -218,12 +239,20 @@ export function renderTemplatePreviewFromComponents(components = [], variables =
 	};
 }
 
-export async function upsertLocalTemplate(metaTemplate, rawPayloadOverride = null) {
-	const payload = buildTemplateUpsertPayload(metaTemplate, rawPayloadOverride);
+export async function upsertLocalTemplate(metaTemplate, rawPayloadOverride = null, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const payload = buildTemplateUpsertPayload(
+		metaTemplate,
+		rawPayloadOverride,
+		resolvedWorkspaceId,
+		metaConfig.wabaId
+	);
 
 	return prisma.whatsAppTemplate.upsert({
 		where: {
-			wabaId_name_language: {
+			workspaceId_wabaId_name_language: {
+				workspaceId: resolvedWorkspaceId,
 				wabaId: payload.wabaId,
 				name: payload.name,
 				language: payload.language
@@ -235,6 +264,7 @@ export async function upsertLocalTemplate(metaTemplate, rawPayloadOverride = nul
 }
 
 export async function listLocalTemplates({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	q = '',
 	status = '',
 	category = '',
@@ -242,7 +272,9 @@ export async function listLocalTemplates({
 	includeDeleted = false,
 	limit = 100
 } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const where = {
+		workspaceId: resolvedWorkspaceId,
 		deletedAt: includeDeleted ? undefined : null,
 		status: status ? normalizeString(status).toUpperCase() : undefined,
 		category: category ? normalizeString(category).toUpperCase() : undefined,
@@ -265,9 +297,10 @@ export async function listLocalTemplates({
 	});
 }
 
-export async function getTemplateOrThrow(templateId) {
+export async function getTemplateOrThrow(templateId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const template = await prisma.whatsAppTemplate.findFirst({
-		where: localTemplateWhere(templateId)
+		where: localTemplateWhere(templateId, resolvedWorkspaceId)
 	});
 
 	if (!template) {
@@ -278,13 +311,17 @@ export async function getTemplateOrThrow(templateId) {
 }
 
 export async function syncTemplatesFromMeta({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	pageLimit = 10,
 	pageSize = 100,
 	purgeDeleted = true
 } = {}) {
-	const wabaId = getWhatsAppBusinessAccountId();
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const wabaId = metaConfig.wabaId;
 	const syncLog = await prisma.templateSyncLog.create({
 		data: {
+			workspaceId: resolvedWorkspaceId,
 			status: 'RUNNING'
 		}
 	});
@@ -304,6 +341,7 @@ export async function syncTemplatesFromMeta({
 	try {
 		while (page < pageLimit) {
 			const response = await graphGet(`/${wabaId}/message_templates`, {
+				accessToken: metaConfig.accessToken,
 				params: {
 					limit: Math.max(1, Math.min(Number(pageSize) || 100, 250)),
 					fields: TEMPLATE_FIELDS,
@@ -324,10 +362,11 @@ export async function syncTemplatesFromMeta({
 				const language = ensureTemplateLanguage(item?.language || 'es_AR');
 				fetchedKeys.add(`${name}::${language}`);
 
-				const payload = buildTemplateUpsertPayload(item);
+				const payload = buildTemplateUpsertPayload(item, null, resolvedWorkspaceId, wabaId);
 				const existingTemplate = await prisma.whatsAppTemplate.findUnique({
 					where: {
-						wabaId_name_language: {
+						workspaceId_wabaId_name_language: {
+							workspaceId: resolvedWorkspaceId,
 							wabaId: payload.wabaId,
 							name: payload.name,
 							language: payload.language
@@ -337,7 +376,7 @@ export async function syncTemplatesFromMeta({
 						deletedAt: true
 					}
 				});
-				await upsertLocalTemplate(item);
+				await upsertLocalTemplate(item, null, { workspaceId: resolvedWorkspaceId });
 
 				if (existingTemplate?.deletedAt) {
 					restoredCount += 1;
@@ -356,6 +395,7 @@ export async function syncTemplatesFromMeta({
 
 		const localActiveTemplates = await prisma.whatsAppTemplate.findMany({
 			where: {
+				workspaceId: resolvedWorkspaceId,
 				deletedAt: null
 			},
 			select: {
@@ -401,7 +441,7 @@ export async function syncTemplatesFromMeta({
 		}
 
 		if (purgeDeleted) {
-			const purgeResult = await purgeDeletedLocalTemplates();
+			const purgeResult = await purgeDeletedLocalTemplates({ workspaceId: resolvedWorkspaceId });
 			deletedCount = Number(purgeResult?.deletedCount || 0);
 		}
 
@@ -454,9 +494,11 @@ export async function syncTemplatesFromMeta({
 	}
 }
 
-export async function purgeDeletedLocalTemplates() {
+export async function purgeDeletedLocalTemplates({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const deletedTemplates = await prisma.whatsAppTemplate.findMany({
 		where: {
+			workspaceId: resolvedWorkspaceId,
 			OR: [
 				{ deletedAt: { not: null } },
 				{ status: 'DELETED' }
@@ -477,6 +519,7 @@ export async function purgeDeletedLocalTemplates() {
 
 	const result = await prisma.whatsAppTemplate.deleteMany({
 		where: {
+			workspaceId: resolvedWorkspaceId,
 			id: {
 				in: deletedIds
 			}
@@ -489,12 +532,15 @@ export async function purgeDeletedLocalTemplates() {
 }
 
 export async function createTemplate({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	name,
 	category,
 	language = 'es_AR',
 	parameterFormat = 'POSITIONAL',
 	components = []
 }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
 	const normalizedParameterFormat = ensureParameterFormat(parameterFormat);
 
 	const payload = {
@@ -505,7 +551,9 @@ export async function createTemplate({
 		components: ensureComponents(components)
 	};
 
-	const response = await graphPost(`/${getWhatsAppBusinessAccountId()}/message_templates`, payload);
+	const response = await graphPost(`/${metaConfig.wabaId}/message_templates`, payload, {
+		accessToken: metaConfig.accessToken
+	});
 	const localTemplate = await upsertLocalTemplate(
 		{
 			id: response?.id || null,
@@ -519,7 +567,8 @@ export async function createTemplate({
 		{
 			...payload,
 			...response
-		}
+		},
+		{ workspaceId: resolvedWorkspaceId }
 	);
 
 	return {
@@ -529,11 +578,14 @@ export async function createTemplate({
 }
 
 export async function updateTemplate(templateId, {
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	category,
 	parameterFormat,
 	components = []
 }) {
-	const localTemplate = await getTemplateOrThrow(templateId);
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const localTemplate = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 
 	if (!localTemplate.metaTemplateId) {
 		throw new Error('La plantilla local no tiene metaTemplateId para editar en Meta.');
@@ -552,7 +604,9 @@ export async function updateTemplate(templateId, {
 		components: ensureComponents(components)
 	};
 
-	const response = await graphPost(`/${localTemplate.metaTemplateId}`, payload);
+	const response = await graphPost(`/${localTemplate.metaTemplateId}`, payload, {
+		accessToken: metaConfig.accessToken
+	});
 	const updatedTemplate = await upsertLocalTemplate(
 		{
 			id: localTemplate.metaTemplateId,
@@ -569,7 +623,8 @@ export async function updateTemplate(templateId, {
 			...response,
 			name: localTemplate.name,
 			language: localTemplate.language
-		}
+		},
+		{ workspaceId: resolvedWorkspaceId }
 	);
 
 	return {
@@ -578,8 +633,13 @@ export async function updateTemplate(templateId, {
 	};
 }
 
-export async function deleteTemplate(templateId, { deleteAllLanguages = false } = {}) {
-	const localTemplate = await getTemplateOrThrow(templateId);
+export async function deleteTemplate(templateId, {
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	deleteAllLanguages = false
+} = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const localTemplate = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 
 	const deletePayload = deleteAllLanguages
 		? {
@@ -590,13 +650,15 @@ export async function deleteTemplate(templateId, { deleteAllLanguages = false } 
 			hsm_id: localTemplate.metaTemplateId
 		};
 
-	const response = await graphDelete(`/${getWhatsAppBusinessAccountId()}/message_templates`, {
+	const response = await graphDelete(`/${metaConfig.wabaId}/message_templates`, {
+		accessToken: metaConfig.accessToken,
 		data: deletePayload
 	});
 
 	if (deleteAllLanguages) {
 		await prisma.whatsAppTemplate.updateMany({
 			where: {
+				workspaceId: resolvedWorkspaceId,
 				wabaId: localTemplate.wabaId,
 				name: localTemplate.name
 			},

@@ -4,10 +4,12 @@ import {
 	resetWhatsAppMenuSettings,
 	updateWhatsAppMenuSettings
 } from '../services/whatsapp/whatsapp-menu.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 export async function getWhatsAppMenu(req, res) {
-	const settings = await getWhatsAppMenuSettings();
-	const runtime = await getWhatsAppMenuRuntimeConfig({ forceRefresh: true });
+	const workspaceId = requireRequestWorkspaceId(req);
+	const settings = await getWhatsAppMenuSettings({ workspaceId });
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId, forceRefresh: true });
 
 	return res.json({
 		ok: true,
@@ -36,6 +38,7 @@ export async function getWhatsAppMenu(req, res) {
 }
 
 export async function updateWhatsAppMenu(req, res) {
+	const workspaceId = requireRequestWorkspaceId(req);
 	const { name, config } = req.body || {};
 
 	if (!config || typeof config !== 'object') {
@@ -45,8 +48,8 @@ export async function updateWhatsAppMenu(req, res) {
 		});
 	}
 
-	const settings = await updateWhatsAppMenuSettings({ name, config });
-	const runtime = await getWhatsAppMenuRuntimeConfig({ forceRefresh: true });
+	const settings = await updateWhatsAppMenuSettings({ workspaceId, name, config });
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId, forceRefresh: true });
 
 	return res.json({
 		ok: true,
@@ -65,9 +68,10 @@ export async function updateWhatsAppMenu(req, res) {
 	});
 }
 
-export async function restoreDefaultWhatsAppMenu(_req, res) {
-	const settings = await resetWhatsAppMenuSettings();
-	const runtime = await getWhatsAppMenuRuntimeConfig({ forceRefresh: true });
+export async function restoreDefaultWhatsAppMenu(req, res) {
+	const workspaceId = requireRequestWorkspaceId(req);
+	const settings = await resetWhatsAppMenuSettings({ workspaceId });
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId, forceRefresh: true });
 
 	return res.json({
 		ok: true,

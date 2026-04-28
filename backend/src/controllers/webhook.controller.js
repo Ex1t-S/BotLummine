@@ -14,6 +14,7 @@ import {
 	upsertTiendanubeOrder,
 	resolveStoreCredentials
 } from '../services/customers/customer.service.js';
+import { resolveWorkspaceIdFromPhoneNumberId } from '../services/workspaces/workspace-context.service.js';
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
@@ -63,13 +64,14 @@ function extractAttachmentMeta(message = {}) {
 	return {};
 }
 
-async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}) {
+async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, workspaceId = null) {
 	if (!attachmentMeta?.attachmentId) {
 		return attachmentMeta;
 	}
 
 	try {
 		const savedMedia = await saveInboundWhatsAppMedia({
+			workspaceId,
 			attachmentId: attachmentMeta.attachmentId,
 			attachmentMimeType: attachmentMeta.attachmentMimeType || '',
 			attachmentName: attachmentMeta.attachmentName || '',
@@ -109,13 +111,16 @@ async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}) {
 async function processInboundMessages(req, value = {}) {
 	const messages = Array.isArray(value.messages) ? value.messages : [];
 	const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
+	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
 
 	for (const message of messages) {
 		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
 		const baseAttachmentMeta = extractAttachmentMeta(message);
-		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta);
+		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta, workspaceId);
 
 		await processInboundMessage({
+			workspaceId,
 			waId: message.from,
 			contactName: contactInfo?.profile?.name || message.from,
 			messageBody: extractInboundBody(message),
@@ -142,9 +147,11 @@ async function processInboundMessages(req, value = {}) {
 
 async function processOutboundStatuses(value = {}) {
 	const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
+	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
 
 	for (const status of statuses) {
-		await applyCampaignMessageStatusWebhook(status);
+		await applyCampaignMessageStatusWebhook(status, { workspaceId });
 	}
 }
 
@@ -213,13 +220,14 @@ async function resolveWebhookStoreCredentials(storeId) {
 	const installation = await prisma.storeInstallation.findFirst({
 		where: { storeId: normalizedStoreId },
 		orderBy: { updatedAt: 'desc' },
-		select: { storeId: true, accessToken: true }
+		select: { storeId: true, accessToken: true, workspaceId: true },
 	});
 
 	if (installation?.storeId && installation?.accessToken) {
 		return {
 			storeId: installation.storeId,
 			accessToken: installation.accessToken,
+			workspaceId: installation.workspaceId,
 			source: 'storeInstallation'
 		};
 	}
@@ -231,6 +239,7 @@ async function resolveWebhookStoreCredentials(storeId) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
+			workspaceId: 'workspace_lummine',
 			source: 'env'
 		};
 	}
@@ -351,7 +360,9 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			orderId: resourceId
 		});
 
-		const saved = await upsertTiendanubeOrder(order, credentials.storeId);
+		const saved = await upsertTiendanubeOrder(order, credentials.storeId, {
+			workspaceId: credentials.workspaceId,
+		});
 
 		return res.status(200).json({
 			ok: true,

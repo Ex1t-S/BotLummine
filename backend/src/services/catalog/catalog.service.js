@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { getTiendanubeClient } from '../tiendanube/client.js';
+import { getShopifyClient } from '../shopify/client.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	getSkuVariantMeta,
 	isGenericSkuColor,
@@ -268,16 +270,19 @@ function normalizeProduct(product, installation) {
 	};
 }
 
-export async function syncCatalogFromTiendanube() {
+export async function syncCatalogFromTiendanube({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const syncLog = await prisma.catalogSyncLog.create({
 		data: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'TIENDANUBE',
 			status: 'RUNNING',
 			message: 'Sincronización iniciada'
 		}
 	});
 
 	try {
-		const { client, installation } = await getTiendanubeClient();
+		const { client, installation } = await getTiendanubeClient({ workspaceId: resolvedWorkspaceId });
 		const storeId = String(installation.storeId);
 
 		let page = 1;
@@ -305,51 +310,11 @@ export async function syncCatalogFromTiendanube() {
 			for (const product of products) {
 				const normalized = normalizeProduct(product, installation);
 
-				await prisma.catalogProduct.upsert({
-					where: {
-						storeId_productId: {
-							storeId,
-							productId: normalized.productId
-						}
-					},
-					update: {
-						name: normalized.name,
-						handle: normalized.handle,
-						description: normalized.description,
-						brand: normalized.brand,
-						price: normalized.price,
-						compareAtPrice: normalized.compareAtPrice,
-						published: normalized.published,
-						tags: normalized.tags,
-						featuredImage: normalized.featuredImage,
-						productUrl: normalized.productUrl,
-						variants: normalized.variants,
-						images: normalized.images,
-						categories: normalized.categories,
-						attributes: normalized.attributes,
-						rawPayload: normalized.rawPayload,
-						syncedAt: new Date()
-					},
-					create: {
-						storeId,
-						productId: normalized.productId,
-						name: normalized.name,
-						handle: normalized.handle,
-						description: normalized.description,
-						brand: normalized.brand,
-						price: normalized.price,
-						compareAtPrice: normalized.compareAtPrice,
-						published: normalized.published,
-						tags: normalized.tags,
-						featuredImage: normalized.featuredImage,
-						productUrl: normalized.productUrl,
-						variants: normalized.variants,
-						images: normalized.images,
-						categories: normalized.categories,
-						attributes: normalized.attributes,
-						rawPayload: normalized.rawPayload,
-						syncedAt: new Date()
-					}
+				await upsertCatalogProduct({
+					workspaceId: resolvedWorkspaceId,
+					provider: 'TIENDANUBE',
+					storeId,
+					normalized
 				});
 
 				processed += 1;
@@ -393,8 +358,115 @@ export async function syncCatalogFromTiendanube() {
 	}
 }
 
-export async function getCatalogPage({ q = '', page = 1, pageSize = 24 } = {}) {
+export async function syncCatalogFromShopify({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const syncLog = await prisma.catalogSyncLog.create({
+		data: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'SHOPIFY',
+			status: 'RUNNING',
+			message: 'Sincronizacion Shopify iniciada'
+		}
+	});
+
+	try {
+		const { client, config } = await getShopifyClient({ workspaceId: resolvedWorkspaceId });
+		const storeId = String(config.externalStoreId || config.shopDomain);
+		let sinceId = 0;
+		const limit = 250;
+		let processed = 0;
+
+		while (true) {
+			const response = await client.get('/products.json', {
+				params: {
+					limit,
+					since_id: sinceId,
+					fields: [
+						'id',
+						'title',
+						'handle',
+						'body_html',
+						'vendor',
+						'product_type',
+						'tags',
+						'status',
+						'published_at',
+						'variants',
+						'images',
+						'image',
+						'options',
+						'updated_at'
+					].join(',')
+				}
+			});
+
+			const products = Array.isArray(response.data?.products) ? response.data.products : [];
+			if (!products.length) break;
+
+			for (const product of products) {
+				const normalized = normalizeShopifyProduct(product, config);
+				await upsertCatalogProduct({
+					workspaceId: resolvedWorkspaceId,
+					provider: 'SHOPIFY',
+					storeId,
+					normalized
+				});
+
+				processed += 1;
+				sinceId = Math.max(sinceId, Number(product.id || 0));
+			}
+
+			if (products.length < limit || !sinceId) break;
+			await sleep(350);
+		}
+
+		await prisma.catalogSyncLog.update({
+			where: { id: syncLog.id },
+			data: {
+				storeId,
+				status: 'SUCCESS',
+				finishedAt: new Date(),
+				productsProcessed: processed,
+				message: `Catalogo Shopify sincronizado. ${processed} productos procesados.`
+			}
+		});
+
+		return {
+			ok: true,
+			storeId,
+			productsProcessed: processed
+		};
+	} catch (error) {
+		await prisma.catalogSyncLog.update({
+			where: { id: syncLog.id },
+			data: {
+				status: 'ERROR',
+				finishedAt: new Date(),
+				message: error.message
+			}
+		});
+
+		throw error;
+	}
+}
+
+export async function syncCatalogFromProvider({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	provider = 'TIENDANUBE'
+} = {}) {
+	const normalizedProvider = String(provider || 'TIENDANUBE').trim().toUpperCase();
+
+	if (normalizedProvider === 'SHOPIFY') {
+		return syncCatalogFromShopify({ workspaceId });
+	}
+
+	return syncCatalogFromTiendanube({ workspaceId });
+}
+
+export async function getCatalogPage({ q = '', page = 1, pageSize = 24, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const where = {
+		workspaceId: resolvedWorkspaceId,
 		...(q
 			? {
 					OR: [
@@ -418,6 +490,7 @@ export async function getCatalogPage({ q = '', page = 1, pageSize = 24 } = {}) {
 		}),
 		prisma.catalogProduct.count({ where }),
 		prisma.catalogSyncLog.findFirst({
+			where: { workspaceId: resolvedWorkspaceId },
 			orderBy: { startedAt: 'desc' }
 		})
 	]);
@@ -450,14 +523,16 @@ export async function getCatalogPage({ q = '', page = 1, pageSize = 24 } = {}) {
 		lastSync
 	};
 }
-export async function getCatalogSummary() {
+export async function getCatalogSummary({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	try {
 		const [totalProducts, totalPublished, lastSync] = await Promise.all([
-			prisma.catalogProduct.count(),
+			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId } }),
 			prisma.catalogProduct.count({
-				where: { published: true }
+				where: { workspaceId: resolvedWorkspaceId, published: true }
 			}),
 			prisma.catalogSyncLog.findFirst({
+				where: { workspaceId: resolvedWorkspaceId },
 				orderBy: { startedAt: 'desc' }
 			})
 		]);
@@ -495,4 +570,89 @@ export async function getCatalogSummary() {
 			error: message
 		};
 	}
+}
+
+function normalizeShopifyProduct(product, connection) {
+	const variants = Array.isArray(product.variants) ? product.variants : [];
+	const images = Array.isArray(product.images) ? product.images : [];
+	const firstVariant = variants[0] || null;
+	const handle = normalizeSpacing(product.handle || '');
+	const storeUrl = String(connection?.storeUrl || '').replace(/\/+$/, '');
+	const productUrl = storeUrl && handle ? `${storeUrl}/products/${handle}` : null;
+	const resolvedPrices = resolveCatalogPrices(
+		firstVariant?.price ?? null,
+		firstVariant?.compare_at_price ?? null
+	);
+
+	return {
+		productId: String(product.id),
+		name: normalizeSpacing(product.title || `Producto ${product.id}`),
+		handle: handle || null,
+		description: product.body_html || null,
+		brand: product.vendor || null,
+		price: resolvedPrices.currentPrice,
+		compareAtPrice: resolvedPrices.originalPrice,
+		published: product.status === 'active' && product.published_at !== null,
+		tags: normalizeTags(product.tags),
+		featuredImage: product.image?.src || images[0]?.src || null,
+		productUrl,
+		variants,
+		images,
+		categories: product.product_type ? [product.product_type] : [],
+		attributes: Array.isArray(product.options) ? product.options : [],
+		rawPayload: product
+	};
+}
+
+async function upsertCatalogProduct({ workspaceId, provider, storeId, normalized }) {
+	return prisma.catalogProduct.upsert({
+		where: {
+			workspaceId_provider_productId: {
+				workspaceId,
+				provider,
+				productId: normalized.productId
+			}
+		},
+		update: {
+			storeId,
+			name: normalized.name,
+			handle: normalized.handle,
+			description: normalized.description,
+			brand: normalized.brand,
+			price: normalized.price,
+			compareAtPrice: normalized.compareAtPrice,
+			published: normalized.published,
+			tags: normalized.tags,
+			featuredImage: normalized.featuredImage,
+			productUrl: normalized.productUrl,
+			variants: normalized.variants,
+			images: normalized.images,
+			categories: normalized.categories,
+			attributes: normalized.attributes,
+			rawPayload: normalized.rawPayload,
+			syncedAt: new Date()
+		},
+		create: {
+			workspaceId,
+			provider,
+			storeId,
+			productId: normalized.productId,
+			name: normalized.name,
+			handle: normalized.handle,
+			description: normalized.description,
+			brand: normalized.brand,
+			price: normalized.price,
+			compareAtPrice: normalized.compareAtPrice,
+			published: normalized.published,
+			tags: normalized.tags,
+			featuredImage: normalized.featuredImage,
+			productUrl: normalized.productUrl,
+			variants: normalized.variants,
+			images: normalized.images,
+			categories: normalized.categories,
+			attributes: normalized.attributes,
+			rawPayload: normalized.rawPayload,
+			syncedAt: new Date()
+		}
+	});
 }

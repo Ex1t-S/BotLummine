@@ -1,14 +1,15 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 function buildHeaders(accessToken) {
 	return {
 		Authentication: `bearer ${accessToken}`,
 		'Content-Type': 'application/json',
 		'User-Agent':
-			process.env.TIENDANUBE_USER_AGENT ||
-			'Lummine IA Assistant (soporte@lummine.com)'
+		process.env.TIENDANUBE_USER_AGENT ||
+			'Multi Brand IA Assistant'
 	};
 }
 
@@ -17,23 +18,28 @@ function buildBaseUrl(storeId) {
 	return `https://api.tiendanube.com/${apiVersion}/${storeId}`;
 }
 
-function getEnvTiendanubeConfig() {
+function getEnvTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const storeId = process.env.TIENDANUBE_STORE_ID || null;
 	const accessToken = process.env.TIENDANUBE_ACCESS_TOKEN || null;
 
-	if (!storeId || !accessToken) {
+	if (normalizeWorkspaceId(workspaceId) !== DEFAULT_WORKSPACE_ID || !storeId || !accessToken) {
 		return null;
 	}
 
 	return {
 		storeId: String(storeId),
 		accessToken: String(accessToken),
+		workspaceId: DEFAULT_WORKSPACE_ID,
 		source: 'env'
 	};
 }
 
-async function getStoredTiendanubeConfig() {
+async function getStoredTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const installation = await prisma.storeInstallation.findFirst({
+		where: {
+			workspaceId: normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID,
+			provider: 'TIENDANUBE',
+		},
 		orderBy: { installedAt: 'desc' }
 	});
 
@@ -44,6 +50,7 @@ async function getStoredTiendanubeConfig() {
 	return {
 		storeId: String(installation.storeId),
 		accessToken: String(installation.accessToken),
+		workspaceId: installation.workspaceId,
 		storeName: installation.storeName || null,
 		storeUrl: installation.storeUrl || null,
 		installedAt: installation.installedAt,
@@ -51,11 +58,12 @@ async function getStoredTiendanubeConfig() {
 	};
 }
 
-export async function getTiendanubeConfig() {
-	const stored = await getStoredTiendanubeConfig();
+export async function getTiendanubeConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const stored = await getStoredTiendanubeConfig(resolvedWorkspaceId);
 	if (stored) return stored;
 
-	const envConfig = getEnvTiendanubeConfig();
+	const envConfig = getEnvTiendanubeConfig(resolvedWorkspaceId);
 	if (envConfig) return envConfig;
 
 	throw new Error('Faltan credenciales de Tiendanube. Configurá StoreInstallation o TIENDANUBE_STORE_ID/TIENDANUBE_ACCESS_TOKEN en el .env');
@@ -75,8 +83,8 @@ export function createTiendanubeClient(config = null) {
 	});
 }
 
-export async function getTiendanubeClient() {
-	const installation = await getTiendanubeConfig();
+export async function getTiendanubeClient({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const installation = await getTiendanubeConfig({ workspaceId });
 
 	return {
 		client: createTiendanubeClient(installation),

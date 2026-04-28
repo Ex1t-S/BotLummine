@@ -4,6 +4,7 @@ import {
 	sendWhatsAppText,
 	sendWhatsAppInteractiveList,
 } from '../whatsapp/whatsapp.service.js';
+import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
 
 export async function sendAndPersistOutbound({
 	conversationId,
@@ -39,6 +40,8 @@ export async function sendAndPersistOutbound({
 	}
 
 	const waId = conversation.contact?.waId;
+	const workspaceId = conversation.workspaceId;
+	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 
 	console.log('[OUTBOUND DEBUG] sendAndPersistOutbound', {
 		conversationId,
@@ -73,6 +76,7 @@ export async function sendAndPersistOutbound({
 		};
 	} else if (messageType === 'interactive') {
 		sendResult = await sendWhatsAppInteractiveList({
+			workspaceId,
 			to: waId,
 			body: cleanBody,
 			headerText: interactivePayload?.headerText || null,
@@ -83,12 +87,14 @@ export async function sendAndPersistOutbound({
 
 		if (!sendResult?.ok && interactivePayload?.fallbackText) {
 			sendResult = await sendWhatsAppText({
+				workspaceId,
 				to: waId,
 				body: interactivePayload.fallbackText,
 			});
 		}
 	} else {
 		sendResult = await sendWhatsAppText({
+			workspaceId,
 			to: waId,
 			body: cleanBody,
 		});
@@ -106,13 +112,14 @@ export async function sendAndPersistOutbound({
 	const createdMessage = await prisma.message.create({
 		data: {
 			conversationId: conversation.id,
+			workspaceId,
 			direction: 'OUTBOUND',
 			type: messageType,
 			body:
 				messageType === 'interactive' && interactivePayload?.fallbackText
 					? interactivePayload.fallbackText
 					: cleanBody,
-			senderName: process.env.BUSINESS_NAME || 'Lummine',
+			senderName: workspaceConfig.ai.businessName || 'Marca',
 			provider: aiMeta?.provider || provider,
 			model: aiMeta?.model || model,
 			metaMessageId:
@@ -140,6 +147,7 @@ export async function sendAndPersistOutbound({
 	});
 
 	publishInboxEvent({
+		workspaceId,
 		scope: 'message',
 		action: 'outbound-created',
 		conversationId: conversation.id,

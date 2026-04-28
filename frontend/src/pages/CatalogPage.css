@@ -1,12 +1,27 @@
 .catalog-search-form button,
 .page-header button {
 	padding: 12px 16px;
-	border-radius: 14px;
+	border-radius: 8px;
 	border: none;
 	background: #10b981;
 	color: #042014;
 	font-weight: 700;
 	cursor: pointer;
+}
+
+.catalog-sync-controls {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.catalog-sync-controls select {
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	padding: 11px 12px;
+	background: #ffffff;
+	color: #172033;
+	font: inherit;
 }
 
 .muted-text {

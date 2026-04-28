@@ -47,6 +47,7 @@ export async function runConversationTurn({
 	currentConversation = {},
 	currentState = {},
 	messages = [],
+	workspaceId = currentConversation?.workspaceId,
 	businessName = process.env.BUSINESS_NAME || 'Lummine'
 }) {
 	const normalizedWaId = normalizeThreadPhone(
@@ -95,6 +96,7 @@ export async function runConversationTurn({
 	});
 
 	const intentResult = await resolveIntentAction({
+		workspaceId,
 		intent,
 		messageBody,
 		explicitOrderNumber,

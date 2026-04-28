@@ -4,6 +4,7 @@ import './CatalogPage.css';
 
 export default function CatalogPage() {
 	const [query, setQuery] = useState('');
+	const [provider, setProvider] = useState('TIENDANUBE');
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
 	const [data, setData] = useState({
@@ -41,8 +42,8 @@ export default function CatalogPage() {
 		loadCatalog();
 	}, []);
 
-	async function handleSearch(e) {
-		e.preventDefault();
+	async function handleSearch(event) {
+		event.preventDefault();
 		loadCatalog(query, 1);
 	}
 
@@ -50,7 +51,7 @@ export default function CatalogPage() {
 		setSyncing(true);
 
 		try {
-			await api.post('/dashboard/catalog/sync');
+			await api.post('/dashboard/catalog/sync', { provider });
 			await loadCatalog(query, 1);
 		} catch (error) {
 			console.error(error);
@@ -63,26 +64,32 @@ export default function CatalogPage() {
 		<section className="page-card">
 			<div className="page-header">
 				<div>
-					<h2>Catálogo</h2>
+					<h2>Catalogo</h2>
 					<p>Total: <strong>{data.total}</strong> productos</p>
 				</div>
 
-				<button onClick={handleSync} disabled={syncing}>
-					{syncing ? 'Sincronizando...' : 'Actualizar catálogo'}
-				</button>
+				<div className="catalog-sync-controls">
+					<select value={provider} onChange={(event) => setProvider(event.target.value)}>
+						<option value="TIENDANUBE">Tiendanube</option>
+						<option value="SHOPIFY">Shopify</option>
+					</select>
+					<button onClick={handleSync} disabled={syncing} type="button">
+						{syncing ? 'Sincronizando...' : 'Actualizar catalogo'}
+					</button>
+				</div>
 			</div>
 
 			<form onSubmit={handleSearch} className="catalog-search-form">
 				<input
 					type="text"
 					value={query}
-					onChange={(e) => setQuery(e.target.value)}
+					onChange={(event) => setQuery(event.target.value)}
 					placeholder="Buscar por nombre, marca o tags..."
 				/>
 				<button type="submit">Buscar</button>
 			</form>
 
-			{loading ? <p>Cargando catálogo...</p> : null}
+			{loading ? <p>Cargando catalogo...</p> : null}
 
 			<div className="catalog-grid">
 				{data.items.map((item) => (
@@ -94,7 +101,7 @@ export default function CatalogPage() {
 						)}
 
 						<h3>{item.name}</h3>
-						<p>{item.brand || 'Sin marca'}</p>
+						<p>{item.brand || item.provider || 'Sin marca'}</p>
 						<strong>{item.currentPriceLabel || 'Sin precio'}</strong>
 					</article>
 				))}

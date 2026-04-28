@@ -1,9 +1,15 @@
-export async function handlePaymentIntent({ currentState = {} } = {}) {
-	const alias = process.env.TRANSFER_ALIAS;
-	const cbu = process.env.TRANSFER_CBU;
-	const holder = process.env.TRANSFER_HOLDER;
-	const bank = process.env.TRANSFER_BANK;
-	const extra = process.env.TRANSFER_EXTRA;
+import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
+
+export async function handlePaymentIntent({ currentState = {}, workspaceId } = {}) {
+	const workspaceConfig = workspaceId
+		? await getWorkspaceRuntimeConfig(workspaceId).catch(() => null)
+		: null;
+	const transferConfig = workspaceConfig?.ai?.paymentConfig?.transfer || {};
+	const alias = transferConfig.alias || process.env.TRANSFER_ALIAS;
+	const cbu = transferConfig.cbu || process.env.TRANSFER_CBU;
+	const holder = transferConfig.holder || process.env.TRANSFER_HOLDER;
+	const bank = transferConfig.bank || process.env.TRANSFER_BANK;
+	const extra = transferConfig.extra || transferConfig.extraInstructions || process.env.TRANSFER_EXTRA;
 
 	const missing = [];
 

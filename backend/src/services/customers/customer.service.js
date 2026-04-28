@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -165,21 +166,27 @@ function pushError(message) {
 	syncState.message = message;
 }
 
-export async function resolveStoreCredentials() {
+export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const envStoreId = cleanString(process.env.TIENDANUBE_STORE_ID);
 	const envAccessToken = cleanString(process.env.TIENDANUBE_ACCESS_TOKEN);
 
-	if (envStoreId && envAccessToken) {
+	if (resolvedWorkspaceId === DEFAULT_WORKSPACE_ID && envStoreId && envAccessToken) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
+			workspaceId: resolvedWorkspaceId,
 			source: 'env',
 		};
 	}
 
 	const installation = await prisma.storeInstallation.findFirst({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'TIENDANUBE',
+		},
 		orderBy: { updatedAt: 'desc' },
-		select: { storeId: true, accessToken: true },
+		select: { storeId: true, accessToken: true, workspaceId: true },
 	});
 
 	if (!installation?.storeId || !installation?.accessToken) {
@@ -189,12 +196,13 @@ export async function resolveStoreCredentials() {
 	return {
 		storeId: installation.storeId,
 		accessToken: installation.accessToken,
+		workspaceId: installation.workspaceId,
 		source: 'storeInstallation',
 	};
 }
 
 async function fetchJson(url, accessToken, resourceLabel) {
-	const userAgent = process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant';
+	const userAgent = process.env.TIENDANUBE_USER_AGENT || 'Multi Brand IA Assistant';
 
 	let lastError = null;
 	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
@@ -279,16 +287,16 @@ async function fetchOrdersPage({
 	}
 }
 
-async function getLocalOrderBounds(storeId) {
+async function getLocalOrderBounds(storeId, workspaceId) {
 	const [count, earliest, latest] = await Promise.all([
-		prisma.customerOrder.count({ where: { storeId } }),
+		prisma.customerOrder.count({ where: { workspaceId, storeId } }),
 		prisma.customerOrder.findFirst({
-			where: { storeId },
+			where: { workspaceId, storeId },
 			orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
 			select: { orderCreatedAt: true },
 		}),
 		prisma.customerOrder.findFirst({
-			where: { storeId },
+			where: { workspaceId, storeId },
 			orderBy: [{ orderUpdatedAt: 'desc' }, { orderCreatedAt: 'desc' }, { createdAt: 'desc' }],
 			select: { orderCreatedAt: true, orderUpdatedAt: true },
 		}),
@@ -320,7 +328,7 @@ function buildProfileIdentity(order) {
 	};
 }
 
-async function ensureProfilesForOrders(orders, storeId) {
+async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 	const candidatesMap = new Map();
 	for (const order of orders) {
 		const candidate = buildProfileIdentity(order);
@@ -336,6 +344,7 @@ async function ensureProfilesForOrders(orders, storeId) {
 
 	const existingProfiles = await prisma.customerProfile.findMany({
 		where: {
+			workspaceId,
 			storeId,
 			OR: [
 				externalIds.length ? { externalCustomerId: { in: externalIds } } : null,
@@ -365,6 +374,8 @@ async function ensureProfilesForOrders(orders, storeId) {
 	if (missing.length) {
 		await prisma.customerProfile.createMany({
 			data: missing.map((item) => ({
+				workspaceId,
+				provider: 'TIENDANUBE',
 				storeId,
 				externalCustomerId: item.externalCustomerId,
 				displayName: item.displayName,
@@ -381,6 +392,7 @@ async function ensureProfilesForOrders(orders, storeId) {
 
 	const reloadedProfiles = await prisma.customerProfile.findMany({
 		where: {
+			workspaceId,
 			storeId,
 			OR: [
 				externalIds.length ? { externalCustomerId: { in: externalIds } } : null,
@@ -416,8 +428,10 @@ async function ensureProfilesForOrders(orders, storeId) {
 	return orderToProfileId;
 }
 
-function mapOrderPayload(order, storeId, customerProfileId) {
+function mapOrderPayload(order, storeId, customerProfileId, workspaceId) {
 	return {
+		workspaceId,
+		provider: 'TIENDANUBE',
 		customerProfileId,
 		storeId,
 		orderId: String(order?.id),
@@ -438,7 +452,7 @@ function mapOrderPayload(order, storeId, customerProfileId) {
 	};
 }
 
-function buildOrderItems(order, storeId, customerOrderId, customerProfileId) {
+function buildOrderItems(order, storeId, customerOrderId, customerProfileId, workspaceId) {
 	const orderId = String(order?.id);
 	const orderNumber = cleanString(order?.number);
 	const orderCreatedAt = parseDateOrNull(order?.created_at);
@@ -453,6 +467,8 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId) {
 		const variantName = variantValues.length ? variantValues.join(' / ') : null;
 
 		return {
+			workspaceId,
+			provider: 'TIENDANUBE',
 			customerOrderId,
 			customerProfileId,
 			storeId,
@@ -475,14 +491,15 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId) {
 	});
 }
 
-async function upsertOrdersAndItems(orders, storeId) {
+async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKSPACE_ID) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	if (!orders.length) return { ordersUpserted: 0, itemsUpserted: 0 };
 
-	const orderToProfileId = await ensureProfilesForOrders(orders, storeId);
+	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, resolvedWorkspaceId);
 	const orderIds = orders.map((order) => String(order.id));
 
 	const existingOrders = await prisma.customerOrder.findMany({
-		where: { storeId, orderId: { in: orderIds } },
+		where: { workspaceId: resolvedWorkspaceId, storeId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const existingMap = new Map(existingOrders.map((item) => [item.orderId, item.id]));
@@ -494,7 +511,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerProfileId) continue;
 
-		const payload = mapOrderPayload(order, storeId, customerProfileId);
+		const payload = mapOrderPayload(order, storeId, customerProfileId, resolvedWorkspaceId);
 		if (existingMap.has(orderId)) {
 			updates.push({ id: existingMap.get(orderId), data: payload });
 		} else {
@@ -524,7 +541,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 	}
 
 	const savedOrders = await prisma.customerOrder.findMany({
-		where: { storeId, orderId: { in: orderIds } },
+		where: { workspaceId: resolvedWorkspaceId, storeId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const savedOrderMap = new Map(savedOrders.map((item) => [item.orderId, item.id]));
@@ -541,7 +558,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 		const customerOrderId = savedOrderMap.get(orderId);
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerOrderId || !customerProfileId) continue;
-		items.push(...buildOrderItems(order, storeId, customerOrderId, customerProfileId));
+		items.push(...buildOrderItems(order, storeId, customerOrderId, customerProfileId, resolvedWorkspaceId));
 	}
 
 	for (let index = 0; index < items.length; index += ITEM_BATCH_SIZE) {
@@ -570,15 +587,15 @@ export async function fetchTiendanubeOrderById({ storeId, accessToken, orderId }
 	return payload;
 }
 
-export async function upsertTiendanubeOrder(order, storeId) {
+export async function upsertTiendanubeOrder(order, storeId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	if (!order || !order.id) {
 		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([order], storeId);
+	return upsertOrdersAndItems([order], storeId, workspaceId);
 }
 
-async function processWindow({ storeId, accessToken, from, to, label }) {
+async function processWindow({ storeId, accessToken, workspaceId, from, to, label }) {
 	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
 	syncState.activeWindow = { from, to, label };
 	syncState.message = `Sincronizando ${label === 'recent' ? 'recientes' : 'histórico'} ${label}.`;
@@ -609,13 +626,13 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 		syncState.ordersFetched += orders.length;
 		windowOrders += orders.length;
 
-		const saved = await upsertOrdersAndItems(orders, storeId);
+		const saved = await upsertOrdersAndItems(orders, storeId, workspaceId);
 		syncState.ordersUpserted += saved.ordersUpserted;
 		syncState.itemsUpserted += saved.itemsUpserted;
 		windowUpserted += saved.ordersUpserted;
 		windowItems += saved.itemsUpserted;
 
-		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { storeId } });
+		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { workspaceId, storeId } });
 		syncState.message = `Ventana ${label}: página ${page} · pedidos ${syncState.ordersFetched} · guardados ${syncState.ordersUpserted}.`;
 
 		if (orders.length < ORDERS_PER_PAGE) break;
@@ -637,6 +654,9 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 
 function safeSyncLogData(data) {
 	return {
+		workspaceId: data.workspaceId,
+		provider: data.provider || 'TIENDANUBE',
+		storeId: data.storeId || null,
 		status: data.status,
 		fullSync: Boolean(data.fullSync),
 		startedAt: data.startedAt,
@@ -649,14 +669,18 @@ function safeSyncLogData(data) {
 	};
 }
 
-async function runSyncJob() {
+async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const startedAt = Date.now();
 	let syncLog = null;
 
 	try {
+		const { storeId, accessToken } = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId });
 		try {
 			syncLog = await prisma.customerSyncLog.create({
 				data: safeSyncLogData({
+					workspaceId: resolvedWorkspaceId,
+					storeId,
 					status: 'RUNNING',
 					fullSync: false,
 					startedAt: new Date(),
@@ -667,8 +691,7 @@ async function runSyncJob() {
 			pushWarning(`No se pudo crear customerSyncLog: ${logError?.message || 'error desconocido'}`);
 		}
 
-		const { storeId, accessToken } = await resolveStoreCredentials();
-		const boundsBefore = await getLocalOrderBounds(storeId);
+		const boundsBefore = await getLocalOrderBounds(storeId, resolvedWorkspaceId);
 		syncState.localOrdersBefore = boundsBefore.count;
 		syncState.localOrdersAfter = boundsBefore.count;
 
@@ -680,6 +703,7 @@ async function runSyncJob() {
 			await processWindow({
 				storeId,
 				accessToken,
+				workspaceId: resolvedWorkspaceId,
 				from: recentFrom,
 				to: new Date(),
 				label: 'recent',
@@ -701,6 +725,7 @@ async function runSyncJob() {
 			const result = await processWindow({
 				storeId,
 				accessToken,
+				workspaceId: resolvedWorkspaceId,
 				from: monthStart,
 				to: monthEnd,
 				label,
@@ -738,6 +763,8 @@ async function runSyncJob() {
 				where: { id: syncLog.id },
 				data: safeSyncLogData({
 					status: 'SUCCESS',
+					workspaceId: resolvedWorkspaceId,
+					storeId,
 					finishedAt: new Date(),
 					pagesFetched: syncState.pagesFetched,
 					ordersFetched: syncState.ordersFetched,
@@ -763,6 +790,8 @@ async function runSyncJob() {
 					where: { id: syncLog.id },
 					data: safeSyncLogData({
 						status: 'ERROR',
+						workspaceId: resolvedWorkspaceId,
+						storeId: syncLog.storeId,
 						finishedAt: new Date(),
 						pagesFetched: syncState.pagesFetched,
 						ordersFetched: syncState.ordersFetched,
@@ -781,7 +810,8 @@ async function runSyncJob() {
 	}
 }
 
-export async function syncCustomers() {
+export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	if (syncState.running) {
 		return {
 			ok: true,
@@ -798,7 +828,7 @@ export async function syncCustomers() {
 	syncState.message = 'Preparando sincronización de pedidos...';
 
 	setTimeout(() => {
-		runSyncJob().catch((error) => {
+		runSyncJob({ workspaceId: resolvedWorkspaceId }).catch((error) => {
 			pushError(error?.message || 'Error sincronizando pedidos.');
 			syncState.running = false;
 			syncState.phase = 'error';

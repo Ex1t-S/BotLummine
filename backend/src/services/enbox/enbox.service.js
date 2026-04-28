@@ -1,3 +1,6 @@
+import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+
 const DEFAULT_PANEL_BASE_URL = 'https://enbox.lightdata.com.ar';
 const DEFAULT_PUBLIC_BASE_URL = 'https://enbox.lightdata.com.ar';
 const DEFAULT_PUBLIC_TRACKING_SALT = 'd54df4s8a';
@@ -38,13 +41,51 @@ function firstNonEmpty(...values) {
 	return '';
 }
 
-export function getEnboxConfig() {
+function getEnvEnboxConfig() {
 	return {
+		source: 'env',
 		panelBaseUrl: String(process.env.ENBOX_PANEL_BASE_URL || DEFAULT_PANEL_BASE_URL).replace(/\/+$/, ''),
 		publicBaseUrl: String(process.env.ENBOX_PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL).replace(/\/+$/, ''),
 		publicTrackingSalt: String(process.env.ENBOX_PUBLIC_TRACKING_SALT || DEFAULT_PUBLIC_TRACKING_SALT).trim(),
 		username: String(process.env.ENBOX_USERNAME || '').trim(),
 		password: String(process.env.ENBOX_PASSWORD || '').trim(),
+	};
+}
+
+export async function getEnboxConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const connection = await prisma.logisticsConnection.findFirst({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'ENBOX',
+			status: 'ACTIVE'
+		},
+		orderBy: { updatedAt: 'desc' }
+	});
+
+	if (connection?.username && connection?.password) {
+		const config = connection.config && typeof connection.config === 'object' ? connection.config : {};
+		return {
+			source: 'database',
+			panelBaseUrl: String(config.panelBaseUrl || DEFAULT_PANEL_BASE_URL).replace(/\/+$/, ''),
+			publicBaseUrl: String(config.publicBaseUrl || DEFAULT_PUBLIC_BASE_URL).replace(/\/+$/, ''),
+			publicTrackingSalt: String(config.publicTrackingSalt || DEFAULT_PUBLIC_TRACKING_SALT).trim(),
+			username: String(connection.username || '').trim(),
+			password: String(connection.password || '').trim(),
+		};
+	}
+
+	if (resolvedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+		return getEnvEnboxConfig();
+	}
+
+	return {
+		source: 'empty',
+		panelBaseUrl: DEFAULT_PANEL_BASE_URL,
+		publicBaseUrl: DEFAULT_PUBLIC_BASE_URL,
+		publicTrackingSalt: DEFAULT_PUBLIC_TRACKING_SALT,
+		username: '',
+		password: '',
 	};
 }
 
@@ -240,8 +281,8 @@ async function fetchShipmentDetail(sessionCookie, did, config = {}) {
 	}
 }
 
-export async function fetchEnboxShipmentDetailByDid(didEnvio) {
-	const config = getEnboxConfig();
+export async function fetchEnboxShipmentDetailByDid(didEnvio, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const config = await getEnboxConfig({ workspaceId });
 	if (!hasEnboxCredentials(config)) return null;
 
 	const normalizedDid = Number(didEnvio || 0);
@@ -382,8 +423,8 @@ async function findBestShipmentMatch(order = {}, sessionCookie, config = {}) {
 	return candidates.sort((a, b) => b._score - a._score)[0] || null;
 }
 
-export async function resolveEnboxTracking(order = {}) {
-	const config = getEnboxConfig();
+export async function resolveEnboxTracking(order = {}, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const config = await getEnboxConfig({ workspaceId });
 	if (!hasEnboxCredentials(config)) return null;
 
 	const sessionCookie = await loginToEnbox(config);

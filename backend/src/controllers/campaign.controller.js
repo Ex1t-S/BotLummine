@@ -20,6 +20,7 @@ import {
 	renderTemplatePreviewFromComponents,
 } from '../services/whatsapp/whatsapp-template.service.js';
 import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
 	normalizeBoolean,
 	persistTemplateBuilderMetadata,
@@ -29,6 +30,7 @@ import {
 export async function listTemplates(req, res) {
 	try {
 		const templates = await listLocalTemplates({
+			workspaceId: requireRequestWorkspaceId(req),
 			q: req.query.q || '',
 			status: req.query.status || '',
 			category: req.query.category || '',
@@ -45,7 +47,9 @@ export async function listTemplates(req, res) {
 
 export async function getTemplate(req, res) {
 	try {
-		const template = await getTemplateOrThrow(req.params.templateId);
+		const template = await getTemplateOrThrow(req.params.templateId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		return res.json({ ok: true, template });
 	} catch (error) {
 		return sendError(res, error, 404);
@@ -55,6 +59,7 @@ export async function getTemplate(req, res) {
 export async function createTemplateController(req, res) {
 	try {
 		const result = await createTemplate({
+			workspaceId: requireRequestWorkspaceId(req),
 			name: req.body?.name,
 			category: req.body?.category,
 			language: req.body?.language || 'es_AR',
@@ -72,6 +77,7 @@ export async function createTemplateController(req, res) {
 export async function updateTemplateController(req, res) {
 	try {
 		const result = await updateTemplate(req.params.templateId, {
+			workspaceId: requireRequestWorkspaceId(req),
 			category: req.body?.category,
 			parameterFormat: req.body?.parameterFormat || 'POSITIONAL',
 			components: Array.isArray(req.body?.components) ? req.body.components : [],
@@ -87,6 +93,7 @@ export async function updateTemplateController(req, res) {
 export async function deleteTemplateController(req, res) {
 	try {
 		const result = await deleteTemplate(req.params.templateId, {
+			workspaceId: requireRequestWorkspaceId(req),
 			deleteAllLanguages: normalizeBoolean(req.query.allLanguages || req.body?.allLanguages),
 		});
 
@@ -96,18 +103,18 @@ export async function deleteTemplateController(req, res) {
 	}
 }
 
-export async function syncTemplatesController(_req, res) {
+export async function syncTemplatesController(req, res) {
 	try {
-		const result = await syncTemplatesFromMeta();
+		const result = await syncTemplatesFromMeta({ workspaceId: requireRequestWorkspaceId(req) });
 		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
 }
 
-export async function purgeDeletedTemplatesController(_req, res) {
+export async function purgeDeletedTemplatesController(req, res) {
 	try {
-		const result = await purgeDeletedLocalTemplates();
+		const result = await purgeDeletedLocalTemplates({ workspaceId: requireRequestWorkspaceId(req) });
 		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 500);
@@ -129,6 +136,7 @@ export async function renderTemplatePreviewController(req, res) {
 export async function previewAbandonedCartAudienceController(req, res) {
 	try {
 		const result = await previewAbandonedCartAudience({
+			workspaceId: requireRequestWorkspaceId(req),
 			templateId: req.body?.templateId || null,
 			filters: req.body?.filters || {},
 		});
@@ -140,7 +148,10 @@ export async function previewAbandonedCartAudienceController(req, res) {
 
 export async function listCampaignsController(req, res) {
 	try {
-		const campaigns = await listCampaigns({ limit: req.query.limit || 50 });
+		const campaigns = await listCampaigns({
+			workspaceId: requireRequestWorkspaceId(req),
+			limit: req.query.limit || 50,
+		});
 		return res.json({ ok: true, campaigns });
 	} catch (error) {
 		return sendError(res, error, 500);
@@ -150,6 +161,7 @@ export async function listCampaignsController(req, res) {
 export async function getCampaignController(req, res) {
 	try {
 		const result = await getCampaignDetail(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
 			page: req.query.page || 1,
 			pageSize: req.query.pageSize || 50,
 		});
@@ -162,6 +174,7 @@ export async function getCampaignController(req, res) {
 export async function createCampaignController(req, res) {
 	try {
 		const result = await createCampaignDraft({
+			workspaceId: requireRequestWorkspaceId(req),
 			name: req.body?.name,
 			templateId: req.body?.templateId || null,
 			templateName: req.body?.templateName || null,
@@ -184,7 +197,9 @@ export async function createCampaignController(req, res) {
 
 export async function launchCampaignController(req, res) {
 	try {
-		const result = await launchCampaign(req.params.campaignId);
+		const result = await launchCampaign(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		return res.json(result);
 	} catch (error) {
 		console.log('[CAMPAIGN][LAUNCH][ERROR]', error.message);
@@ -194,7 +209,9 @@ export async function launchCampaignController(req, res) {
 
 export async function cancelCampaignController(req, res) {
 	try {
-		const campaign = await cancelCampaign(req.params.campaignId);
+		const campaign = await cancelCampaign(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		return res.json({ ok: true, campaign });
 	} catch (error) {
 		return sendError(res, error);
@@ -203,7 +220,9 @@ export async function cancelCampaignController(req, res) {
 
 export async function deleteCampaignController(req, res) {
 	try {
-		const result = await deleteCampaign(req.params.campaignId);
+		const result = await deleteCampaign(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
@@ -212,7 +231,9 @@ export async function deleteCampaignController(req, res) {
 
 export async function retryFailedCampaignRecipientsController(req, res) {
 	try {
-		const result = await retryFailedCampaignRecipients(req.params.campaignId);
+		const result = await retryFailedCampaignRecipients(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		void executeCampaignDispatcherTick();
 		return res.json({ ok: true, ...result });
 	} catch (error) {
@@ -229,9 +250,9 @@ export async function dispatchTickController(_req, res) {
 	}
 }
 
-export async function getCampaignStatsController(_req, res) {
+export async function getCampaignStatsController(req, res) {
 	try {
-		const stats = await getCampaignStats();
+		const stats = await getCampaignStats({ workspaceId: requireRequestWorkspaceId(req) });
 		return res.json({ ok: true, stats });
 	} catch (error) {
 		return sendError(res, error, 500);

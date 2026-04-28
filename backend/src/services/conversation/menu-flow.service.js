@@ -71,8 +71,8 @@ function getInteractiveReplyId(rawPayload = null) {
 	);
 }
 
-async function getMenuRuntime(menuPath = MENU_PATHS.MAIN) {
-	const runtime = await getWhatsAppMenuRuntimeConfig();
+async function getMenuRuntime(menuPath = MENU_PATHS.MAIN, workspaceId) {
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
 	const menu =
 		runtime?.menusByKey?.[menuPath] ||
 		runtime?.menusByKey?.[runtime?.mainMenuKey] ||
@@ -82,8 +82,8 @@ async function getMenuRuntime(menuPath = MENU_PATHS.MAIN) {
 	return { runtime, menu };
 }
 
-async function getMenuConfig(menuPath = MENU_PATHS.MAIN) {
-	const { menu } = await getMenuRuntime(menuPath);
+async function getMenuConfig(menuPath = MENU_PATHS.MAIN, workspaceId) {
+	const { menu } = await getMenuRuntime(menuPath, workspaceId);
 	return menu;
 }
 
@@ -107,8 +107,8 @@ function sanitizeMenuStatePatch(statePatch = {}, currentState = {}) {
 	return patch;
 }
 
-async function detectMenuSelection({ messageBody, rawPayload, menuPath }) {
-	const menuConfig = await getMenuConfig(menuPath);
+async function detectMenuSelection({ messageBody, rawPayload, menuPath, workspaceId }) {
+	const menuConfig = await getMenuConfig(menuPath, workspaceId);
 	if (!menuConfig) return null;
 
 	const interactiveId = getInteractiveReplyId(rawPayload);
@@ -143,8 +143,8 @@ async function detectMenuSelection({ messageBody, rawPayload, menuPath }) {
 	return null;
 }
 
-async function detectMenuSelectionAcrossMenus({ messageBody, rawPayload, preferredMenuPath = MENU_PATHS.MAIN }) {
-	const runtime = await getWhatsAppMenuRuntimeConfig();
+async function detectMenuSelectionAcrossMenus({ messageBody, rawPayload, preferredMenuPath = MENU_PATHS.MAIN, workspaceId }) {
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
 	const menusByKey = runtime?.menusByKey || {};
 	const interactiveId = getInteractiveReplyId(rawPayload);
 	const orderedMenuPaths = [
@@ -171,6 +171,7 @@ async function detectMenuSelectionAcrossMenus({ messageBody, rawPayload, preferr
 				messageBody,
 				rawPayload,
 				menuPath,
+				workspaceId,
 			});
 
 			if (selectionId) {
@@ -182,8 +183,8 @@ async function detectMenuSelectionAcrossMenus({ messageBody, rawPayload, preferr
 	return null;
 }
 
-async function getMenuOptionDefinition({ menuPath, selectionId }) {
-	const menuConfig = await getMenuConfig(menuPath);
+async function getMenuOptionDefinition({ menuPath, selectionId, workspaceId }) {
+	const menuConfig = await getMenuConfig(menuPath, workspaceId);
 	return menuConfig?.optionById?.[selectionId] || null;
 }
 
@@ -239,8 +240,8 @@ async function enableAutomaticConversation({ conversationId }) {
 	});
 }
 
-async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliveryMode = 'live' }) {
-	const menuConfig = await getMenuConfig(menuPath);
+async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliveryMode = 'live', workspaceId }) {
+	const menuConfig = await getMenuConfig(menuPath, workspaceId);
 	if (!menuConfig) return null;
 
 	const body = [bodyPrefix ? normalizeText(bodyPrefix) : null, menuConfig.body]
@@ -361,9 +362,10 @@ async function handleMenuSelection({
 	transportMode = 'live',
 }) {
 	const conversationId = conversation.id;
+	const workspaceId = conversation.workspaceId;
 	const waId = conversation.contact?.waId || '';
 	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
-	const option = await getMenuOptionDefinition({ menuPath, selectionId });
+	const option = await getMenuOptionDefinition({ menuPath, selectionId, workspaceId });
 
 	if (!option) {
 		return { handled: false };
@@ -389,6 +391,7 @@ async function handleMenuSelection({
 		await sendMenuPrompt({
 			conversationId,
 			menuPath: targetMenuPath,
+			workspaceId,
 			bodyPrefix: option.promptPrefix || '',
 			deliveryMode: transportMode,
 		});
@@ -494,6 +497,7 @@ export async function maybeHandleMenuFlow({
 	}
 
 	const waId = conversation.contact?.waId || '';
+	const workspaceId = conversation.workspaceId;
 	const wantsMenu = isMenuResetCommand(messageBody);
 	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
 	const interactiveReplyId = getInteractiveReplyId(rawPayload);
@@ -504,6 +508,7 @@ export async function maybeHandleMenuFlow({
 		const resolvedSelection = await detectMenuSelectionAcrossMenus({
 			messageBody,
 			rawPayload,
+			workspaceId,
 			preferredMenuPath: currentState?.menuPath || menuPath,
 		});
 
@@ -537,6 +542,7 @@ export async function maybeHandleMenuFlow({
 			messageBody,
 			rawPayload,
 			menuPath,
+			workspaceId,
 		});
 
 		if (selectionId) {
@@ -563,6 +569,7 @@ export async function maybeHandleMenuFlow({
 		await sendMenuPrompt({
 			conversationId: conversation.id,
 			menuPath: MENU_PATHS.MAIN,
+			workspaceId,
 			deliveryMode: transportMode,
 			bodyPrefix: isGreetingOnlyMessage(messageBody)
 				? '¡Hola!'
@@ -587,6 +594,7 @@ export async function maybeHandleMenuFlow({
 		await sendMenuPrompt({
 			conversationId: conversation.id,
 			menuPath: MENU_PATHS.MAIN,
+			workspaceId,
 			bodyPrefix: 'Perfecto, abrimos el menú de nuevo.',
 		});
 
@@ -598,6 +606,7 @@ export async function maybeHandleMenuFlow({
 			messageBody,
 			rawPayload,
 			menuPath: currentState.menuPath,
+			workspaceId,
 		});
 
 		if (selectionId) {
@@ -642,6 +651,7 @@ export async function maybeHandleMenuFlow({
 			await sendMenuPrompt({
 				conversationId: conversation.id,
 				menuPath: currentState.menuPath,
+				workspaceId,
 				bodyPrefix: 'No llegué a entender esa opción. Elegí una de la lista así vamos más rápido.',
 			});
 

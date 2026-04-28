@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	getCommercialProfile,
 	inferCommercialFamily,
@@ -458,11 +459,12 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	return score;
 }
 
-export async function getCatalogLookupStatus() {
+export async function getCatalogLookupStatus({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	try {
 		const [totalProducts, totalPublished] = await Promise.all([
-			prisma.catalogProduct.count(),
-			prisma.catalogProduct.count({ where: { published: true } })
+			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId } }),
+			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId, published: true } })
 		]);
 
 		return {
@@ -489,14 +491,15 @@ export async function getCatalogLookupStatus() {
 	}
 }
 
-export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4 } = {}) {
+export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const signals = detectRequestedSignals(query, interestedProducts);
 	if (shouldSkipCatalogLookup(signals)) return [];
 
 	let rawProducts = [];
 	try {
 		rawProducts = await prisma.catalogProduct.findMany({
-			where: { published: true },
+			where: { workspaceId: resolvedWorkspaceId, published: true },
 			orderBy: [{ updatedAt: 'desc' }],
 			take: signals.asksPromo || signals.requestedFamily ? 250 : 180
 		});

@@ -5,6 +5,7 @@ import {
 	resetAiLabSession,
 	sendAiLabMessage
 } from '../services/ai/ai-lab.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 
 export async function getAiLabFixtures(_req, res, next) {
@@ -17,7 +18,10 @@ export async function getAiLabFixtures(_req, res, next) {
 
 export async function postAiLabSession(req, res, next) {
 	try {
-		const session = await createAiLabSession({ fixtureKey: req.body?.fixtureKey || 'blank' });
+		const session = await createAiLabSession({
+			workspaceId: requireRequestWorkspaceId(req),
+			fixtureKey: req.body?.fixtureKey || 'blank',
+		});
 		return res.status(201).json({ ok: true, session });
 	} catch (error) {
 		next(error);

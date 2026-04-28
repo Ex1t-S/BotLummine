@@ -3,6 +3,7 @@ import {
 	getCustomerSyncStatus as getCustomerSyncStatusService,
 	syncCustomers as syncCustomersService,
 } from '../services/customers/customer.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -94,6 +95,7 @@ function getPaymentStatusMeta(paymentStatus = '') {
 }
 
 function buildCustomersWhere({
+	workspaceId,
 	q,
 	productQuery,
 	orderNumber,
@@ -103,7 +105,7 @@ function buildCustomersWhere({
 	minSpent,
 	hasPhoneOnly,
 }) {
-	const and = [];
+	const and = [{ workspaceId }];
 
 	const search = String(q || '').trim();
 	if (search) {
@@ -301,6 +303,7 @@ export async function getCustomers(req, res) {
 		const skip = (parsedPage - 1) * parsedPageSize;
 
 		const where = buildCustomersWhere({
+			workspaceId: requireRequestWorkspaceId(req),
 			q,
 			productQuery,
 			orderNumber,
@@ -398,6 +401,7 @@ export async function getCustomers(req, res) {
 export async function postSyncCustomers(req, res) {
 	try {
 		const result = await syncCustomersService({
+			workspaceId: requireRequestWorkspaceId(req),
 			force: req.body?.force === true,
 		});
 

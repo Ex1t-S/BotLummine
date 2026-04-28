@@ -10,6 +10,7 @@ import AbandonedCartsPage from './pages/AbandonedCartsPage.jsx';
 import CustomersPage from './pages/CustomersPage.jsx';
 import AiLabPage from './pages/AiLabPage.jsx';
 import WhatsAppMenuPage from './pages/WhatsAppMenuPage.jsx';
+import AdminPage from './pages/AdminPage.jsx';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
@@ -39,6 +40,14 @@ export default function App() {
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
 							<InboxPage />
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="admin"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<AdminPage />
 						</ProtectedRoute>
 					}
 				/>

@@ -15,7 +15,7 @@ export function hasAnyRole(user, allowedRoles = []) {
 	const currentRole = normalizeRole(user.role);
 	const normalizedAllowed = allowedRoles.map(normalizeRole);
 
-	return normalizedAllowed.includes(currentRole);
+	return currentRole === 'PLATFORM_ADMIN' || normalizedAllowed.includes(currentRole);
 }
 
 export async function attachUser(req, _res, next) {
@@ -46,6 +46,14 @@ export async function attachUser(req, _res, next) {
 
 		const user = await prisma.user.findUnique({
 			where: { id: payload.sub },
+			include: {
+				workspace: {
+					include: {
+						branding: true,
+						aiConfig: true,
+					},
+				},
+			},
 		});
 
 		console.log('[AUTH] user found:', Boolean(user));
@@ -93,10 +101,16 @@ export function requireAnyRole(allowedRoles = []) {
 }
 
 export const requireAdmin = requireAnyRole(['ADMIN']);
+export const requirePlatformAdmin = requireAnyRole(['PLATFORM_ADMIN']);
 
 export function issueAuthCookie(res, user) {
 	const token = jwt.sign(
-		{ sub: user.id, role: user.role, email: user.email },
+		{
+			sub: user.id,
+			role: user.role,
+			email: user.email,
+			workspaceId: user.workspaceId || null,
+		},
 		process.env.JWT_SECRET || 'dev-secret',
 		{ expiresIn: '7d' }
 	);
