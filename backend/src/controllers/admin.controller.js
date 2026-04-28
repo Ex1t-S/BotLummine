@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import axios from 'axios';
 import { prisma } from '../lib/prisma.js';
 import {
 	ensureWorkspaceAccess,
@@ -7,6 +8,10 @@ import {
 	isPlatformAdmin,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
+import {
+	getCatalogSummary,
+	syncCatalogFromProvider,
+} from '../services/catalog/catalog.service.js';
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
@@ -32,11 +37,39 @@ function normalizeCommerceProvider(value = '') {
 	return ['TIENDANUBE', 'SHOPIFY'].includes(provider) ? provider : '';
 }
 
+function normalizeLogisticsProvider(value = '') {
+	const provider = normalizeString(value).toUpperCase();
+	return ['ENBOX'].includes(provider) ? provider : '';
+}
+
 function normalizeShopDomain(value = '') {
 	return normalizeString(value)
 		.replace(/^https?:\/\//i, '')
 		.replace(/\/+$/, '')
 		.toLowerCase();
+}
+
+function pickLocalized(value) {
+	if (value == null) return null;
+	if (typeof value === 'string') return value;
+	if (typeof value === 'object') {
+		return (
+			value.es ||
+			value['es_AR'] ||
+			value['es-AR'] ||
+			value.en ||
+			Object.values(value).find((item) => typeof item === 'string') ||
+			null
+		);
+	}
+	return null;
+}
+
+function normalizeAssetUrl(value) {
+	const raw = pickLocalized(value) || value?.src || value?.url || value;
+	if (!raw || typeof raw !== 'string') return null;
+	if (/^\/\//.test(raw)) return `https:${raw}`;
+	return raw;
 }
 
 function assertPlatformAdmin(req) {
@@ -85,9 +118,22 @@ async function buildWorkspacePayload(workspaceId) {
 					status: true,
 					storeName: true,
 					storeUrl: true,
+					rawPayload: true,
 					installedAt: true,
 					updatedAt: true,
 				},
+			},
+			logisticsConnections: {
+				select: {
+					id: true,
+					provider: true,
+					username: true,
+					status: true,
+					config: true,
+					createdAt: true,
+					updatedAt: true,
+				},
+				orderBy: { updatedAt: 'desc' },
 			},
 			storeInstallations: {
 				select: {
@@ -119,6 +165,168 @@ async function buildWorkspacePayload(workspaceId) {
 	});
 
 	return workspace ? getWorkspacePublicPayload(workspace) : null;
+}
+
+export async function getWorkspaceCatalogStatus(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+
+		const catalog = await getCatalogSummary({ workspaceId });
+		return res.json({ ok: true, catalog });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function runWorkspaceCatalogSync(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+
+		const provider = normalizeCommerceProvider(req.body?.provider || req.query?.provider || 'TIENDANUBE');
+		if (!provider) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Proveedor invalido. Usa TIENDANUBE o SHOPIFY.',
+			});
+		}
+
+		const result = await syncCatalogFromProvider({ workspaceId, provider });
+		const catalog = await getCatalogSummary({ workspaceId });
+		return res.json({ ok: true, result, catalog });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function syncWorkspaceBranding(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+
+		const provider = normalizeCommerceProvider(req.body?.provider || req.query?.provider || 'TIENDANUBE');
+		if (provider !== 'TIENDANUBE') {
+			return res.status(400).json({
+				ok: false,
+				error: 'Por ahora la importacion automatica de branding esta disponible para TIENDANUBE.',
+			});
+		}
+
+		const connection = await prisma.commerceConnection.findUnique({
+			where: {
+				workspaceId_provider: {
+					workspaceId,
+					provider,
+				},
+			},
+		});
+
+		const installation = await prisma.storeInstallation.findFirst({
+			where: { workspaceId, provider },
+			orderBy: { updatedAt: 'desc' },
+		});
+
+		const storeId = connection?.externalStoreId || installation?.storeId;
+		const accessToken = connection?.accessToken || installation?.accessToken;
+
+		if (!storeId || !accessToken) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Conecta Tienda Nube antes de importar branding.',
+			});
+		}
+
+		const apiVersion = process.env.TIENDANUBE_API_VERSION || 'v1';
+		const response = await axios.get(
+			`https://api.tiendanube.com/${apiVersion}/${storeId}/store`,
+			{
+				headers: {
+					Authentication: `bearer ${accessToken}`,
+					'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Multi tenant WhatsApp assistant',
+				},
+				timeout: 20000,
+			}
+		);
+
+		const store = response.data || {};
+		const storeName = pickLocalized(store.name) || store.business_name || null;
+		const storeUrl =
+			(Array.isArray(store.domains) && store.domains[0] ? `https://${store.domains[0]}` : null) ||
+			(store.original_domain ? `https://${store.original_domain}` : null);
+		const logoUrl = normalizeAssetUrl(store.logo);
+		const colors = store.colors || store.theme?.colors || {};
+		const primaryColor = colors.primary || colors.main || colors.brand || null;
+		const secondaryColor = colors.secondary || colors.background || null;
+		const accentColor = colors.accent || colors.button || null;
+
+		await prisma.workspaceBranding.upsert({
+			where: { workspaceId },
+			update: {
+				logoUrl,
+				primaryColor,
+				secondaryColor,
+				accentColor,
+				rawProviderBranding: store,
+			},
+			create: {
+				workspaceId,
+				logoUrl,
+				primaryColor,
+				secondaryColor,
+				accentColor,
+				rawProviderBranding: store,
+			},
+		});
+
+		if (storeName) {
+			await prisma.workspaceAiConfig.upsert({
+				where: { workspaceId },
+				update: { businessName: storeName },
+				create: {
+					workspaceId,
+					businessName: storeName,
+					agentName: 'Sofi',
+					tone: 'humana, directa y comercial',
+				},
+			});
+		}
+
+		await prisma.commerceConnection.upsert({
+			where: {
+				workspaceId_provider: {
+					workspaceId,
+					provider,
+				},
+			},
+			update: {
+				storeName,
+				storeUrl,
+				rawPayload: {
+					...(connection?.rawPayload && typeof connection.rawPayload === 'object' ? connection.rawPayload : {}),
+					store,
+				},
+			},
+			create: {
+				workspaceId,
+				provider,
+				externalStoreId: String(storeId),
+				accessToken,
+				storeName,
+				storeUrl,
+				rawPayload: { store },
+			},
+		});
+
+		const workspace = await buildWorkspacePayload(workspaceId);
+		return res.json({
+			ok: true,
+			branding: { storeName, storeUrl, logoUrl, primaryColor, secondaryColor, accentColor },
+			workspace,
+		});
+	} catch (error) {
+		next(error);
+	}
 }
 
 export async function listWorkspaces(req, res, next) {
@@ -413,6 +621,85 @@ export async function updateWorkspaceUser(req, res, next) {
 		});
 
 		return res.json({ ok: true, user: updated });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function upsertLogisticsConnection(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+
+		const provider = normalizeLogisticsProvider(req.params.provider || req.body?.provider);
+		if (!provider) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Proveedor logistico invalido. Usa ENBOX.',
+			});
+		}
+
+		let username = normalizeString(req.body?.username);
+		let password = normalizeString(req.body?.password);
+
+		const existingConnection = await prisma.logisticsConnection.findUnique({
+			where: {
+				workspaceId_provider: {
+					workspaceId,
+					provider,
+				},
+			},
+			select: { username: true, password: true },
+		});
+
+		if (!username && existingConnection?.username) username = existingConnection.username;
+		if (!password && existingConnection?.password) password = existingConnection.password;
+
+		if (!username || !password) {
+			return res.status(400).json({
+				ok: false,
+				error: 'username y password son obligatorios.',
+			});
+		}
+
+		const config = {
+			panelBaseUrl: normalizeString(req.body?.panelBaseUrl) || null,
+			publicBaseUrl: normalizeString(req.body?.publicBaseUrl) || null,
+			publicTrackingSalt: normalizeString(req.body?.publicTrackingSalt) || null,
+			targetClientId: normalizeString(req.body?.targetClientId) || null,
+			discoverySeedDid: normalizeString(req.body?.discoverySeedDid) || null,
+		};
+
+		const connection = await prisma.logisticsConnection.upsert({
+			where: {
+				workspaceId_provider: {
+					workspaceId,
+					provider,
+				},
+			},
+			update: {
+				username,
+				password,
+				status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
+				config,
+			},
+			create: {
+				workspaceId,
+				provider,
+				username,
+				password,
+				status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
+				config,
+			},
+		});
+
+		return res.json({
+			ok: true,
+			connection: {
+				...connection,
+				password: undefined,
+			},
+		});
 	} catch (error) {
 		next(error);
 	}

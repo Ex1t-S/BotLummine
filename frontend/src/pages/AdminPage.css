@@ -43,6 +43,40 @@
 	padding-bottom: 10px;
 }
 
+.tenant-admin-tabs {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	padding: 2px;
+}
+
+.tenant-admin-tabs button,
+.tenant-admin-actions button,
+.tenant-admin-user-row button {
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #172033;
+	font-weight: 800;
+	padding: 9px 12px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tenant-admin-tabs button.active,
+.tenant-admin-actions button {
+	background: #0f766e;
+	border-color: #0f766e;
+	color: #ffffff;
+}
+
+.tenant-admin-tabs button:disabled,
+.tenant-admin-actions button:disabled,
+.tenant-admin-user-row button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
 .tenant-admin-panel {
 	background: #ffffff;
 	border: 1px solid #d9e2ef;
@@ -107,6 +141,12 @@
 	cursor: pointer;
 }
 
+.tenant-admin-grid button[type="button"] {
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #172033;
+}
+
 .tenant-admin-grid button:disabled {
 	opacity: 0.55;
 	cursor: default;
@@ -135,7 +175,7 @@
 
 .tenant-admin-user-row {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto;
 	gap: 12px;
 	align-items: center;
 	padding: 9px 10px;
@@ -154,6 +194,23 @@
 .tenant-admin-user-row small {
 	font-weight: 800;
 	color: #0f766e;
+}
+
+.tenant-admin-metrics,
+.tenant-admin-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.tenant-admin-pill {
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #f8fafc;
+	color: #334155;
+	font-size: 13px;
+	font-weight: 800;
+	padding: 9px 11px;
 }
 
 @media (max-width: 980px) {

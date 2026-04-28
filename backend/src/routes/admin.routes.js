@@ -4,11 +4,15 @@ import {
 	createWorkspace,
 	createWorkspaceUser,
 	getWorkspace,
+	getWorkspaceCatalogStatus,
 	listWorkspaceUsers,
 	listWorkspaces,
+	runWorkspaceCatalogSync,
+	syncWorkspaceBranding,
 	updateWorkspace,
 	updateWorkspaceUser,
 	upsertCommerceConnection,
+	upsertLogisticsConnection,
 	upsertWhatsAppChannel,
 } from '../controllers/admin.controller.js';
 
@@ -22,8 +26,12 @@ router.get('/workspaces/:workspaceId', requireAdmin, getWorkspace);
 router.patch('/workspaces/:workspaceId', requireAdmin, updateWorkspace);
 router.get('/workspaces/:workspaceId/users', requireAdmin, listWorkspaceUsers);
 router.post('/workspaces/:workspaceId/users', requireAdmin, createWorkspaceUser);
+router.get('/workspaces/:workspaceId/catalog/status', requireAdmin, getWorkspaceCatalogStatus);
+router.post('/workspaces/:workspaceId/catalog/sync', requireAdmin, runWorkspaceCatalogSync);
+router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspaceBranding);
 router.put('/workspaces/:workspaceId/whatsapp-channel', requireAdmin, upsertWhatsAppChannel);
 router.put('/workspaces/:workspaceId/commerce-connections/:provider', requireAdmin, upsertCommerceConnection);
+router.put('/workspaces/:workspaceId/logistics-connections/:provider', requireAdmin, upsertLogisticsConnection);
 router.patch('/users/:userId', requireAdmin, updateWorkspaceUser);
 
 export default router;

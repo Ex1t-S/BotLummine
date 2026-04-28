@@ -253,6 +253,9 @@ export function getWorkspacePublicPayload(workspace = {}) {
 		commerceConnections: Array.isArray(workspace.commerceConnections)
 			? workspace.commerceConnections
 			: [],
+		logisticsConnections: Array.isArray(workspace.logisticsConnections)
+			? workspace.logisticsConnections
+			: [],
 		storeInstallations: Array.isArray(workspace.storeInstallations)
 			? workspace.storeInstallations
 			: [],
