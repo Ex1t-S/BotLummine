@@ -41,6 +41,8 @@
 	min-height: 0;
 	overflow: auto;
 	display: grid;
+	grid-auto-rows: max-content;
+	align-content: start;
 	gap: 12px;
 	padding-bottom: 10px;
 }
@@ -93,6 +95,7 @@
 	border-radius: 8px;
 	padding: 16px;
 	display: grid;
+	align-content: start;
 	gap: 14px;
 }
 
@@ -102,19 +105,20 @@
 
 .tenant-admin-grid {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 	gap: 12px;
 	align-items: end;
 }
 
 .admin-field {
 	display: grid;
+	align-content: start;
 	gap: 6px;
 	min-width: 0;
 }
 
 .admin-field--wide {
-	grid-column: span 3;
+	grid-column: 1 / -1;
 }
 
 .admin-field span {
@@ -129,6 +133,7 @@
 .admin-field textarea {
 	width: 100%;
 	min-width: 0;
+	min-height: 42px;
 	border: 1px solid #cbd5e1;
 	border-radius: 8px;
 	padding: 10px 11px;
@@ -139,15 +144,18 @@
 
 .admin-field textarea {
 	resize: vertical;
+	min-height: 96px;
 }
 
 .tenant-admin-grid button {
+	align-self: end;
 	border: none;
 	border-radius: 8px;
 	background: #0f766e;
 	color: #ffffff;
 	font-weight: 800;
 	padding: 11px 14px;
+	min-height: 42px;
 	cursor: pointer;
 }
 
@@ -210,7 +218,13 @@
 .tenant-admin-actions {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: flex-start;
 	gap: 10px;
+}
+
+.tenant-admin-actions button {
+	min-height: 42px;
+	padding: 11px 14px;
 }
 
 .tenant-admin-pill {
@@ -234,7 +248,7 @@
 	}
 
 	.admin-field--wide {
-		grid-column: span 1;
+		grid-column: 1 / -1;
 	}
 
 	.tenant-admin-user-row {
