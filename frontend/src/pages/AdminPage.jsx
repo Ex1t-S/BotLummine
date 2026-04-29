@@ -549,8 +549,12 @@ export default function AdminPage() {
 		<div className="tenant-admin-page">
 			<header className="tenant-admin-header">
 				<div>
-					<h2>Admin multi marca</h2>
-					<p>{workspace?.name || 'Configuracion de workspaces, accesos e integraciones'}</p>
+					<h2>{platformAdmin ? 'Admin plataforma' : 'Configuracion de marca'}</h2>
+					<p>
+						{platformAdmin
+							? (workspace?.name || 'Workspaces, accesos e integraciones')
+							: (workspace?.name || 'Cuenta, accesos e integraciones de la marca')}
+					</p>
 				</div>
 				{workspaceOptions.length ? (
 					<Select label="Workspace" value={selectedWorkspaceId} onChange={setSelectedWorkspaceId}>

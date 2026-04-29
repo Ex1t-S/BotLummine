@@ -48,35 +48,41 @@ export default function DashboardLayout() {
 				</div>
 
 				<nav className="admin-menu">
-					<NavLink to="/inbox" className={navClass}>
-						Inbox
-					</NavLink>
+					{!isPlatformAdmin ? (
+						<NavLink to="/inbox" className={navClass}>
+							Inbox
+						</NavLink>
+					) : null}
 
 					{isAdmin ? (
 						<>
 							<NavLink to="/admin" className={navClass}>
-								Admin
+								{isPlatformAdmin ? 'Admin plataforma' : 'Configuracion'}
 							</NavLink>
 
-							<NavLink to="/catalog" className={navClass}>
-								Catalogo
-							</NavLink>
+							{!isPlatformAdmin ? (
+								<>
+									<NavLink to="/catalog" className={navClass}>
+										Catalogo
+									</NavLink>
 
-							<NavLink to="/campaigns" className={navClass}>
-								Campanas
-							</NavLink>
+									<NavLink to="/campaigns" className={navClass}>
+										Campanas
+									</NavLink>
 
-							<NavLink to="/abandoned-carts" className={navClass}>
-								Carritos
-							</NavLink>
+									<NavLink to="/abandoned-carts" className={navClass}>
+										Carritos
+									</NavLink>
 
-							<NavLink to="/customers" className={navClass}>
-								Clientes
-							</NavLink>
+									<NavLink to="/customers" className={navClass}>
+										Clientes
+									</NavLink>
 
-							<NavLink to="/whatsapp-menu" className={navClass}>
-								Menu
-							</NavLink>
+									<NavLink to="/whatsapp-menu" className={navClass}>
+										Menu
+									</NavLink>
+								</>
+							) : null}
 						</>
 					) : null}
 				</nav>
