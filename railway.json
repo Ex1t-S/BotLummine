@@ -4,7 +4,7 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "preDeployCommand": "npm --prefix backend run prisma:migrate",
+    "preDeployCommand": "npm run prisma:migrate",
     "startCommand": "npm start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
