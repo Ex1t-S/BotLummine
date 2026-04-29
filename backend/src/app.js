@@ -100,10 +100,13 @@ const RELEASE_ID = 'platform-admin-prisma-runtime-check-20260429';
 
 app.get('/api/health', async (_req, res) => {
 	let prismaUserRoleValues = [];
+	let userRoleFieldType = null;
 
 	try {
 		const prismaClient = await import('@prisma/client');
 		prismaUserRoleValues = Object.keys(prismaClient.UserRole || {});
+		const userModel = prismaClient.Prisma?.dmmf?.datamodel?.models?.find((model) => model.name === 'User');
+		userRoleFieldType = userModel?.fields?.find((field) => field.name === 'role')?.type || null;
 	} catch (error) {
 		prismaUserRoleValues = [`error:${error.message}`];
 	}
@@ -114,7 +117,9 @@ app.get('/api/health', async (_req, res) => {
 		release: RELEASE_ID,
 		commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || null,
 		prismaUserRoleValues,
-		hasPlatformAdminRole: prismaUserRoleValues.includes('PLATFORM_ADMIN'),
+		userRoleFieldType,
+		userRoleStorage: userRoleFieldType === 'String' ? 'text' : 'enum',
+		hasPlatformAdminRole: prismaUserRoleValues.includes('PLATFORM_ADMIN') || userRoleFieldType === 'String',
 	});
 });
 
