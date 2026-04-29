@@ -96,8 +96,26 @@ app.use(cookieParser());
 
 app.use(attachUser);
 
-app.get('/api/health', (_req, res) => {
-	res.json({ ok: true, service: 'whatsapp-ai-assistant-backend' });
+const RELEASE_ID = 'platform-admin-prisma-runtime-check-20260429';
+
+app.get('/api/health', async (_req, res) => {
+	let prismaUserRoleValues = [];
+
+	try {
+		const prismaClient = await import('@prisma/client');
+		prismaUserRoleValues = Object.keys(prismaClient.UserRole || {});
+	} catch (error) {
+		prismaUserRoleValues = [`error:${error.message}`];
+	}
+
+	res.json({
+		ok: true,
+		service: 'whatsapp-ai-assistant-backend',
+		release: RELEASE_ID,
+		commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || null,
+		prismaUserRoleValues,
+		hasPlatformAdminRole: prismaUserRoleValues.includes('PLATFORM_ADMIN'),
+	});
 });
 
 app.use('/api/auth', authRoutes);
