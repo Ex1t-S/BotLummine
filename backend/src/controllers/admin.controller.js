@@ -72,6 +72,21 @@ function normalizeAssetUrl(value) {
 	return raw;
 }
 
+function getDatabaseHostFingerprint() {
+	const rawUrl = String(process.env.DATABASE_URL || '').trim();
+	if (!rawUrl) return null;
+
+	try {
+		const parsed = new URL(rawUrl);
+		return {
+			host: parsed.hostname,
+			database: parsed.pathname.replace(/^\/+/, '') || null,
+		};
+	} catch {
+		return { host: 'invalid-url', database: null };
+	}
+}
+
 function assertPlatformAdmin(req) {
 	if (!isPlatformAdmin(req.user)) {
 		const error = new Error('Solo un superadmin puede realizar esta accion.');
@@ -354,6 +369,58 @@ export async function listWorkspaces(req, res, next) {
 				...getWorkspacePublicPayload(workspace),
 				counts: workspace._count,
 			})),
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getPlatformDiagnostics(req, res, next) {
+	try {
+		assertPlatformAdmin(req);
+
+		const [
+			workspaces,
+			users,
+			contacts,
+			conversations,
+			messages,
+			catalogProducts,
+			customerProfiles,
+			customerOrders,
+			abandonedCarts,
+			campaigns,
+			campaignRecipients,
+		] = await Promise.all([
+			prisma.workspace.count(),
+			prisma.user.count(),
+			prisma.contact.count(),
+			prisma.conversation.count(),
+			prisma.message.count(),
+			prisma.catalogProduct.count(),
+			prisma.customerProfile.count(),
+			prisma.customerOrder.count(),
+			prisma.abandonedCart.count(),
+			prisma.campaign.count(),
+			prisma.campaignRecipient.count(),
+		]);
+
+		return res.json({
+			ok: true,
+			database: getDatabaseHostFingerprint(),
+			counts: {
+				workspaces,
+				users,
+				contacts,
+				conversations,
+				messages,
+				catalogProducts,
+				customerProfiles,
+				customerOrders,
+				abandonedCarts,
+				campaigns,
+				campaignRecipients,
+			},
 		});
 	} catch (error) {
 		next(error);

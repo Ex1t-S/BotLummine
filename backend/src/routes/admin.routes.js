@@ -3,6 +3,7 @@ import { requireAuth, requirePlatformAdmin, requireAdmin } from '../middleware/a
 import {
 	createWorkspace,
 	createWorkspaceUser,
+	getPlatformDiagnostics,
 	getWorkspace,
 	getWorkspaceCatalogStatus,
 	listWorkspaceUsers,
@@ -20,6 +21,7 @@ const router = Router();
 
 router.use(requireAuth);
 
+router.get('/diagnostics', requirePlatformAdmin, getPlatformDiagnostics);
 router.get('/workspaces', requirePlatformAdmin, listWorkspaces);
 router.post('/workspaces', requirePlatformAdmin, createWorkspace);
 router.get('/workspaces/:workspaceId', requireAdmin, getWorkspace);
