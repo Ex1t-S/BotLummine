@@ -37,8 +37,30 @@ function cleanString(value = '') {
 	return normalized || null;
 }
 
-function resolveWorkspaceId(storeId) {
-	return cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID) || cleanString(storeId) || 'default';
+let cachedWorkspaceId = null;
+
+async function resolveWorkspaceId() {
+	const configuredWorkspaceId = cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID);
+	if (configuredWorkspaceId) return configuredWorkspaceId;
+	if (cachedWorkspaceId) return cachedWorkspaceId;
+
+	try {
+		const rows = await prisma.$queryRaw`
+			SELECT "id"
+			FROM "Workspace"
+			ORDER BY "createdAt" ASC NULLS LAST, "id" ASC
+			LIMIT 1
+		`;
+		const workspaceId = cleanString(rows?.[0]?.id);
+		if (workspaceId) {
+			cachedWorkspaceId = workspaceId;
+			return workspaceId;
+		}
+	} catch {
+		// Older single-tenant schemas do not have Workspace.
+	}
+
+	return 'default';
 }
 
 function buildHeaders(accessToken) {
@@ -112,7 +134,7 @@ async function resolveStoreCredentials() {
 	}
 
 	const normalizedStoreId = String(storeId);
-	return { storeId: normalizedStoreId, accessToken, workspaceId: resolveWorkspaceId(normalizedStoreId) };
+	return { storeId: normalizedStoreId, accessToken, workspaceId: await resolveWorkspaceId() };
 }
 
 async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKOUTS_PER_PAGE }) {

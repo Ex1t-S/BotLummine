@@ -61,8 +61,30 @@ function cleanString(value) {
 	return text || null;
 }
 
-function resolveWorkspaceId(storeId) {
-	return cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID) || cleanString(storeId) || 'default';
+let cachedWorkspaceId = null;
+
+async function resolveWorkspaceId() {
+	const configuredWorkspaceId = cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID);
+	if (configuredWorkspaceId) return configuredWorkspaceId;
+	if (cachedWorkspaceId) return cachedWorkspaceId;
+
+	try {
+		const rows = await prisma.$queryRaw`
+			SELECT "id"
+			FROM "Workspace"
+			ORDER BY "createdAt" ASC NULLS LAST, "id" ASC
+			LIMIT 1
+		`;
+		const workspaceId = cleanString(rows?.[0]?.id);
+		if (workspaceId) {
+			cachedWorkspaceId = workspaceId;
+			return workspaceId;
+		}
+	} catch {
+		// Older single-tenant schemas do not have Workspace.
+	}
+
+	return 'default';
 }
 
 function normalizeEmail(value) {
@@ -173,13 +195,14 @@ function pushError(message) {
 export async function resolveStoreCredentials() {
 	const envStoreId = cleanString(process.env.TIENDANUBE_STORE_ID);
 	const envAccessToken = cleanString(process.env.TIENDANUBE_ACCESS_TOKEN);
+	const workspaceId = await resolveWorkspaceId();
 
 	if (envStoreId && envAccessToken) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
 			source: 'env',
-			workspaceId: resolveWorkspaceId(envStoreId),
+			workspaceId,
 		};
 	}
 
@@ -196,7 +219,7 @@ export async function resolveStoreCredentials() {
 		storeId: installation.storeId,
 		accessToken: installation.accessToken,
 		source: 'storeInstallation',
-		workspaceId: resolveWorkspaceId(installation.storeId),
+		workspaceId,
 	};
 }
 
@@ -495,14 +518,15 @@ function buildOrderItems(order, storeId, workspaceId, customerOrderId, customerP
 	});
 }
 
-async function upsertOrdersAndItems(orders, storeId, workspaceId = resolveWorkspaceId(storeId)) {
+async function upsertOrdersAndItems(orders, storeId, workspaceId = null) {
 	if (!orders.length) return { ordersUpserted: 0, itemsUpserted: 0 };
+	const resolvedWorkspaceId = workspaceId || await resolveWorkspaceId();
 
-	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, workspaceId);
+	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, resolvedWorkspaceId);
 	const orderIds = orders.map((order) => String(order.id));
 
 	const existingOrders = await prisma.customerOrder.findMany({
-		where: { storeId, workspaceId, orderId: { in: orderIds } },
+		where: { storeId, workspaceId: resolvedWorkspaceId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const existingMap = new Map(existingOrders.map((item) => [item.orderId, item.id]));
@@ -514,7 +538,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = resolveWorksp
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerProfileId) continue;
 
-		const payload = mapOrderPayload(order, storeId, workspaceId, customerProfileId);
+		const payload = mapOrderPayload(order, storeId, resolvedWorkspaceId, customerProfileId);
 		if (existingMap.has(orderId)) {
 			updates.push({ id: existingMap.get(orderId), data: payload });
 		} else {
@@ -544,7 +568,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = resolveWorksp
 	}
 
 	const savedOrders = await prisma.customerOrder.findMany({
-		where: { storeId, workspaceId, orderId: { in: orderIds } },
+		where: { storeId, workspaceId: resolvedWorkspaceId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const savedOrderMap = new Map(savedOrders.map((item) => [item.orderId, item.id]));
@@ -561,7 +585,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = resolveWorksp
 		const customerOrderId = savedOrderMap.get(orderId);
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerOrderId || !customerProfileId) continue;
-		items.push(...buildOrderItems(order, storeId, workspaceId, customerOrderId, customerProfileId));
+		items.push(...buildOrderItems(order, storeId, resolvedWorkspaceId, customerOrderId, customerProfileId));
 	}
 
 	for (let index = 0; index < items.length; index += ITEM_BATCH_SIZE) {
@@ -595,7 +619,7 @@ export async function upsertTiendanubeOrder(order, storeId) {
 		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([order], storeId, resolveWorkspaceId(storeId));
+	return upsertOrdersAndItems([order], storeId);
 }
 
 async function processWindow({ storeId, workspaceId, accessToken, from, to, label }) {
@@ -657,7 +681,7 @@ async function processWindow({ storeId, workspaceId, accessToken, from, to, labe
 
 function safeSyncLogData(data) {
 	return {
-		workspaceId: data.workspaceId || resolveWorkspaceId(data.storeId),
+		workspaceId: data.workspaceId || 'default',
 		storeId: data.storeId || null,
 		status: data.status,
 		fullSync: Boolean(data.fullSync),
