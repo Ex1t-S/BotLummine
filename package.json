@@ -5,6 +5,6 @@
   "scripts": {
     "build": "npm --prefix backend run prisma:generate",
     "postinstall": "npm --prefix backend ci",
-    "start": "npm --prefix backend start"
+    "start": "npm --prefix backend run start:prod"
   }
 }
