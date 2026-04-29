@@ -37,6 +37,10 @@ function cleanString(value = '') {
 	return normalized || null;
 }
 
+function resolveWorkspaceId(storeId) {
+	return cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID) || cleanString(storeId) || 'default';
+}
+
 function buildHeaders(accessToken) {
 	return {
 		Authentication: `bearer ${accessToken}`,
@@ -107,7 +111,8 @@ async function resolveStoreCredentials() {
 		);
 	}
 
-	return { storeId: String(storeId), accessToken };
+	const normalizedStoreId = String(storeId);
+	return { storeId: normalizedStoreId, accessToken, workspaceId: resolveWorkspaceId(normalizedStoreId) };
 }
 
 async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKOUTS_PER_PAGE }) {
@@ -194,7 +199,7 @@ async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKO
 	);
 }
 
-function buildCartPayload(cart, storeId) {
+function buildCartPayload(cart, storeId, workspaceId) {
 	const products = Array.isArray(cart?.products)
 		? cart.products.map((product) => ({
 				id: product?.id ?? null,
@@ -219,6 +224,7 @@ function buildCartPayload(cart, storeId) {
 		: [];
 
 	return {
+		workspaceId,
 		storeId: String(cart?.store_id || storeId),
 		token: cleanString(cart?.token),
 		contactName: cleanString(cart?.contact_name || cart?.shipping_name),
@@ -248,11 +254,11 @@ function buildCartPayload(cart, storeId) {
 	};
 }
 
-async function replaceCartBatch(carts, storeId) {
+async function replaceCartBatch(carts, storeId, workspaceId) {
 	const rows = carts
 		.map((cart) => ({
 			checkoutId: String(cart?.id || '').trim(),
-			...buildCartPayload(cart, storeId)
+			...buildCartPayload(cart, storeId, workspaceId)
 		}))
 		.filter((row) => row.checkoutId);
 
@@ -265,6 +271,7 @@ async function replaceCartBatch(carts, storeId) {
 					checkoutId: row.checkoutId
 				},
 				update: {
+					workspaceId: row.workspaceId,
 					storeId: row.storeId,
 					token: row.token,
 					contactName: row.contactName,
@@ -317,7 +324,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		? Number(daysBack)
 		: DEFAULT_DAYS_BACK;
 
-	const { storeId, accessToken } = await resolveStoreCredentials();
+	const { storeId, workspaceId, accessToken } = await resolveStoreCredentials();
 
 	const startedAt = new Date();
 	const cutoff = new Date(startedAt);
@@ -365,7 +372,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		}
 
 		if (validCarts.length) {
-			syncedCount += await replaceCartBatch(validCarts, storeId);
+			syncedCount += await replaceCartBatch(validCarts, storeId, workspaceId);
 		}
 
 		if (pageResult.reachedEnd) {
@@ -375,6 +382,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 
 	const oldNewCarts = await prisma.abandonedCart.findMany({
 		where: {
+			workspaceId,
 			storeId,
 			status: 'NEW',
 			checkoutCreatedAt: { lt: cutoff }
@@ -385,7 +393,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 	const idsToDelete = oldNewCarts.map((item) => item.id);
 	const uniqueIdsToDelete = [...new Set(idsToDelete)];
 	const deletedCount = await deleteCartIdsInChunks(uniqueIdsToDelete);
-	const remainingCount = await prisma.abandonedCart.count({ where: { storeId } });
+	const remainingCount = await prisma.abandonedCart.count({ where: { workspaceId, storeId } });
 
 	return {
 		ok: true,

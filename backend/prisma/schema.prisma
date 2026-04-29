@@ -211,6 +211,7 @@ model CatalogSyncLog {
 
 model AbandonedCart {
   id                   String    @id @default(cuid())
+  workspaceId          String    @default("default")
   storeId              String?
   checkoutId           String    @unique
   token                String?
@@ -240,12 +241,14 @@ model AbandonedCart {
 
   @@index([status, updatedAt])
   @@index([contactPhone])
+  @@index([workspaceId, status, updatedAt])
   @@index([storeId, checkoutCreatedAt])
   @@index([storeId, updatedAt])
 }
 
 model CustomerProfile {
   id                        String    @id @default(cuid())
+  workspaceId               String    @default("default")
   storeId                   String
   externalCustomerId        String?
   displayName               String?
@@ -293,6 +296,7 @@ model CustomerProfile {
   @@unique([storeId, externalCustomerId])
   @@unique([storeId, normalizedEmail])
   @@unique([storeId, normalizedPhone])
+  @@index([workspaceId, storeId])
   @@index([storeId, lastOrderAt])
   @@index([storeId, firstOrderAt])
   @@index([storeId, totalSpent])
@@ -304,6 +308,7 @@ model CustomerProfile {
 
 model CustomerOrder {
   id                    String    @id @default(cuid())
+  workspaceId           String    @default("default")
   customerProfileId     String
   storeId               String
   orderId               String
@@ -336,6 +341,7 @@ model CustomerOrder {
   items           CustomerOrderItem[]
 
   @@unique([storeId, orderId])
+  @@index([workspaceId, storeId, orderCreatedAt])
   @@index([customerProfileId, orderCreatedAt])
   @@index([storeId, orderCreatedAt])
   @@index([normalizedEmail])
@@ -347,6 +353,7 @@ model CustomerOrder {
 
 model CustomerOrderItem {
   id                String    @id @default(cuid())
+  workspaceId       String    @default("default")
   customerOrderId   String
   customerProfileId String
   storeId           String
@@ -373,6 +380,7 @@ model CustomerOrderItem {
   customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
 
   @@index([customerProfileId, orderCreatedAt])
+  @@index([workspaceId, storeId, normalizedName])
   @@index([storeId, normalizedName])
   @@index([storeId, productId])
   @@index([storeId, orderNumber])
@@ -381,6 +389,7 @@ model CustomerOrderItem {
 
 model CustomerSyncLog {
   id               String    @id @default(cuid())
+  workspaceId      String    @default("default")
   storeId          String?
   status           String
   fullSync         Boolean   @default(true)
@@ -394,6 +403,7 @@ model CustomerSyncLog {
   createdAt        DateTime  @default(now())
 
   @@index([storeId, status, startedAt])
+  @@index([workspaceId, storeId, status, startedAt])
 }
 
 model EnboxShipment {

@@ -61,6 +61,10 @@ function cleanString(value) {
 	return text || null;
 }
 
+function resolveWorkspaceId(storeId) {
+	return cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID) || cleanString(storeId) || 'default';
+}
+
 function normalizeEmail(value) {
 	const text = cleanString(value);
 	return text ? text.toLowerCase() : null;
@@ -175,6 +179,7 @@ export async function resolveStoreCredentials() {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
 			source: 'env',
+			workspaceId: resolveWorkspaceId(envStoreId),
 		};
 	}
 
@@ -191,6 +196,7 @@ export async function resolveStoreCredentials() {
 		storeId: installation.storeId,
 		accessToken: installation.accessToken,
 		source: 'storeInstallation',
+		workspaceId: resolveWorkspaceId(installation.storeId),
 	};
 }
 
@@ -280,16 +286,16 @@ async function fetchOrdersPage({
 	}
 }
 
-async function getLocalOrderBounds(storeId) {
+async function getLocalOrderBounds(storeId, workspaceId) {
 	const [count, earliest, latest] = await Promise.all([
-		prisma.customerOrder.count({ where: { storeId } }),
+		prisma.customerOrder.count({ where: { storeId, workspaceId } }),
 		prisma.customerOrder.findFirst({
-			where: { storeId },
+			where: { storeId, workspaceId },
 			orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
 			select: { orderCreatedAt: true },
 		}),
 		prisma.customerOrder.findFirst({
-			where: { storeId },
+			where: { storeId, workspaceId },
 			orderBy: [{ orderUpdatedAt: 'desc' }, { orderCreatedAt: 'desc' }, { createdAt: 'desc' }],
 			select: { orderCreatedAt: true, orderUpdatedAt: true },
 		}),
@@ -321,7 +327,7 @@ function buildProfileIdentity(order) {
 	};
 }
 
-async function ensureProfilesForOrders(orders, storeId) {
+async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 	const candidatesMap = new Map();
 	for (const order of orders) {
 		const candidate = buildProfileIdentity(order);
@@ -338,6 +344,7 @@ async function ensureProfilesForOrders(orders, storeId) {
 	const existingProfiles = await prisma.customerProfile.findMany({
 		where: {
 			storeId,
+			workspaceId,
 			OR: [
 				externalIds.length ? { externalCustomerId: { in: externalIds } } : null,
 				emails.length ? { normalizedEmail: { in: emails } } : null,
@@ -367,6 +374,7 @@ async function ensureProfilesForOrders(orders, storeId) {
 		await prisma.customerProfile.createMany({
 			data: missing.map((item) => ({
 				storeId,
+				workspaceId,
 				externalCustomerId: item.externalCustomerId,
 				displayName: item.displayName,
 				email: item.email,
@@ -383,6 +391,7 @@ async function ensureProfilesForOrders(orders, storeId) {
 	const reloadedProfiles = await prisma.customerProfile.findMany({
 		where: {
 			storeId,
+			workspaceId,
 			OR: [
 				externalIds.length ? { externalCustomerId: { in: externalIds } } : null,
 				emails.length ? { normalizedEmail: { in: emails } } : null,
@@ -417,9 +426,10 @@ async function ensureProfilesForOrders(orders, storeId) {
 	return orderToProfileId;
 }
 
-function mapOrderPayload(order, storeId, customerProfileId) {
+function mapOrderPayload(order, storeId, workspaceId, customerProfileId) {
 	return {
 		customerProfileId,
+		workspaceId,
 		storeId,
 		orderId: String(order?.id),
 		orderNumber: cleanString(order?.number),
@@ -447,7 +457,7 @@ function mapOrderPayload(order, storeId, customerProfileId) {
 	};
 }
 
-function buildOrderItems(order, storeId, customerOrderId, customerProfileId) {
+function buildOrderItems(order, storeId, workspaceId, customerOrderId, customerProfileId) {
 	const orderId = String(order?.id);
 	const orderNumber = cleanString(order?.number);
 	const orderCreatedAt = parseDateOrNull(order?.created_at);
@@ -464,6 +474,7 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId) {
 		return {
 			customerOrderId,
 			customerProfileId,
+			workspaceId,
 			storeId,
 			orderId,
 			orderNumber,
@@ -484,14 +495,14 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId) {
 	});
 }
 
-async function upsertOrdersAndItems(orders, storeId) {
+async function upsertOrdersAndItems(orders, storeId, workspaceId = resolveWorkspaceId(storeId)) {
 	if (!orders.length) return { ordersUpserted: 0, itemsUpserted: 0 };
 
-	const orderToProfileId = await ensureProfilesForOrders(orders, storeId);
+	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, workspaceId);
 	const orderIds = orders.map((order) => String(order.id));
 
 	const existingOrders = await prisma.customerOrder.findMany({
-		where: { storeId, orderId: { in: orderIds } },
+		where: { storeId, workspaceId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const existingMap = new Map(existingOrders.map((item) => [item.orderId, item.id]));
@@ -503,7 +514,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerProfileId) continue;
 
-		const payload = mapOrderPayload(order, storeId, customerProfileId);
+		const payload = mapOrderPayload(order, storeId, workspaceId, customerProfileId);
 		if (existingMap.has(orderId)) {
 			updates.push({ id: existingMap.get(orderId), data: payload });
 		} else {
@@ -533,7 +544,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 	}
 
 	const savedOrders = await prisma.customerOrder.findMany({
-		where: { storeId, orderId: { in: orderIds } },
+		where: { storeId, workspaceId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const savedOrderMap = new Map(savedOrders.map((item) => [item.orderId, item.id]));
@@ -550,7 +561,7 @@ async function upsertOrdersAndItems(orders, storeId) {
 		const customerOrderId = savedOrderMap.get(orderId);
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerOrderId || !customerProfileId) continue;
-		items.push(...buildOrderItems(order, storeId, customerOrderId, customerProfileId));
+		items.push(...buildOrderItems(order, storeId, workspaceId, customerOrderId, customerProfileId));
 	}
 
 	for (let index = 0; index < items.length; index += ITEM_BATCH_SIZE) {
@@ -584,10 +595,10 @@ export async function upsertTiendanubeOrder(order, storeId) {
 		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([order], storeId);
+	return upsertOrdersAndItems([order], storeId, resolveWorkspaceId(storeId));
 }
 
-async function processWindow({ storeId, accessToken, from, to, label }) {
+async function processWindow({ storeId, workspaceId, accessToken, from, to, label }) {
 	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
 	syncState.activeWindow = { from, to, label };
 	syncState.message = `Sincronizando ${label === 'recent' ? 'recientes' : 'histórico'} ${label}.`;
@@ -618,13 +629,13 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 		syncState.ordersFetched += orders.length;
 		windowOrders += orders.length;
 
-		const saved = await upsertOrdersAndItems(orders, storeId);
+		const saved = await upsertOrdersAndItems(orders, storeId, workspaceId);
 		syncState.ordersUpserted += saved.ordersUpserted;
 		syncState.itemsUpserted += saved.itemsUpserted;
 		windowUpserted += saved.ordersUpserted;
 		windowItems += saved.itemsUpserted;
 
-		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { storeId } });
+		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { storeId, workspaceId } });
 		syncState.message = `Ventana ${label}: página ${page} · pedidos ${syncState.ordersFetched} · guardados ${syncState.ordersUpserted}.`;
 
 		if (orders.length < ORDERS_PER_PAGE) break;
@@ -646,6 +657,8 @@ async function processWindow({ storeId, accessToken, from, to, label }) {
 
 function safeSyncLogData(data) {
 	return {
+		workspaceId: data.workspaceId || resolveWorkspaceId(data.storeId),
+		storeId: data.storeId || null,
 		status: data.status,
 		fullSync: Boolean(data.fullSync),
 		startedAt: data.startedAt,
@@ -661,11 +674,20 @@ function safeSyncLogData(data) {
 async function runSyncJob() {
 	const startedAt = Date.now();
 	let syncLog = null;
+	let storeId = null;
+	let workspaceId = null;
 
 	try {
+		const credentials = await resolveStoreCredentials();
+		storeId = credentials.storeId;
+		workspaceId = credentials.workspaceId;
+		const { accessToken } = credentials;
+
 		try {
 			syncLog = await prisma.customerSyncLog.create({
 				data: safeSyncLogData({
+					storeId,
+					workspaceId,
 					status: 'RUNNING',
 					fullSync: false,
 					startedAt: new Date(),
@@ -676,8 +698,7 @@ async function runSyncJob() {
 			pushWarning(`No se pudo crear customerSyncLog: ${logError?.message || 'error desconocido'}`);
 		}
 
-		const { storeId, accessToken } = await resolveStoreCredentials();
-		const boundsBefore = await getLocalOrderBounds(storeId);
+		const boundsBefore = await getLocalOrderBounds(storeId, workspaceId);
 		syncState.localOrdersBefore = boundsBefore.count;
 		syncState.localOrdersAfter = boundsBefore.count;
 
@@ -688,6 +709,7 @@ async function runSyncJob() {
 		runs.push(
 			await processWindow({
 				storeId,
+				workspaceId,
 				accessToken,
 				from: recentFrom,
 				to: new Date(),
@@ -709,6 +731,7 @@ async function runSyncJob() {
 
 			const result = await processWindow({
 				storeId,
+				workspaceId,
 				accessToken,
 				from: monthStart,
 				to: monthEnd,
@@ -747,6 +770,8 @@ async function runSyncJob() {
 				where: { id: syncLog.id },
 				data: safeSyncLogData({
 					status: 'SUCCESS',
+					storeId,
+					workspaceId,
 					finishedAt: new Date(),
 					pagesFetched: syncState.pagesFetched,
 					ordersFetched: syncState.ordersFetched,
@@ -772,6 +797,8 @@ async function runSyncJob() {
 					where: { id: syncLog.id },
 					data: safeSyncLogData({
 						status: 'ERROR',
+						storeId,
+						workspaceId,
 						finishedAt: new Date(),
 						pagesFetched: syncState.pagesFetched,
 						ordersFetched: syncState.ordersFetched,
