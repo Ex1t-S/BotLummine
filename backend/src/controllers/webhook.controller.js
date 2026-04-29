@@ -284,6 +284,10 @@ export async function receiveWhatsappWebhook(req, res) {
 					continue;
 				}
 
+				if (Array.isArray(value.statuses) && value.statuses.length) {
+					await processOutboundStatuses(value);
+				}
+
 				await processTemplateWebhook(change);
 			}
 		}

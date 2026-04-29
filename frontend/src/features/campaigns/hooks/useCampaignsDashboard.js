@@ -41,9 +41,55 @@ const initialAbandonedCartForm = {
 const CAMPAIGN_RECIPIENT_FETCH_SIZE = 500;
 const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
 const CAMPAIGN_POLL_INTERVAL_MS = 5000;
+const CAMPAIGN_STATUS_POLL_WINDOW_MS = 60 * 60 * 1000;
 
 function isLiveCampaignStatus(status = '') {
 	return ['QUEUED', 'RUNNING'].includes(String(status || '').trim().toUpperCase());
+}
+
+function readCampaignCount(campaign = {}, keys = []) {
+	for (const key of keys) {
+		const value = Number(campaign?.[key]);
+		if (Number.isFinite(value) && value > 0) return value;
+	}
+
+	return 0;
+}
+
+function getCampaignStatusUpdatedAt(campaign = {}) {
+	const candidates = [
+		campaign?.finishedAt,
+		campaign?.startedAt,
+		campaign?.updatedAt,
+		campaign?.createdAt,
+	].filter(Boolean);
+
+	for (const value of candidates) {
+		const timestamp = new Date(value).getTime();
+		if (Number.isFinite(timestamp)) return timestamp;
+	}
+
+	return 0;
+}
+
+function shouldPollCampaignStatusUpdates(campaign = {}) {
+	if (isLiveCampaignStatus(campaign?.status)) return true;
+
+	const status = String(campaign?.status || '').trim().toUpperCase();
+	if (!['FINISHED', 'PARTIAL'].includes(status)) return false;
+
+	const lastUpdateAt = getCampaignStatusUpdatedAt(campaign);
+	if (!lastUpdateAt || Date.now() - lastUpdateAt > CAMPAIGN_STATUS_POLL_WINDOW_MS) {
+		return false;
+	}
+
+	const sent = readCampaignCount(campaign, ['sentCount', 'sentRecipients']);
+	const delivered = readCampaignCount(campaign, ['deliveredCount', 'deliveredRecipients']);
+	const read = readCampaignCount(campaign, ['readCount', 'readRecipients']);
+	const failed = readCampaignCount(campaign, ['failedCount', 'failedRecipients']);
+	const terminal = Math.max(delivered, read) + failed;
+
+	return sent > terminal || delivered > read;
 }
 
 function normalizeRecipientStatus(status = '') {
@@ -158,7 +204,7 @@ export function useCampaignsDashboard() {
 			const payload = query.state.data;
 			const runs =
 				Array.isArray(payload?.campaigns) ? payload.campaigns : Array.isArray(payload) ? payload : [];
-			return runs.some((campaign) => isLiveCampaignStatus(campaign?.status))
+			return runs.some((campaign) => shouldPollCampaignStatusUpdates(campaign))
 				? CAMPAIGN_POLL_INTERVAL_MS
 				: false;
 		},
@@ -183,7 +229,7 @@ export function useCampaignsDashboard() {
 		refetchInterval: (query) => {
 			const payload = extractDetailResponsePayload(query.state.data);
 			const campaign = payload?.campaign || payload?.item || payload?.run || null;
-			return isLiveCampaignStatus(campaign?.status) ? CAMPAIGN_POLL_INTERVAL_MS : false;
+			return shouldPollCampaignStatusUpdates(campaign) ? CAMPAIGN_POLL_INTERVAL_MS : false;
 		},
 		refetchIntervalInBackground: true,
 	});

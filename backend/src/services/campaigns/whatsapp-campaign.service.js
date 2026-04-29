@@ -2113,6 +2113,30 @@ function toDateFromUnixTimestamp(value) {
 	return new Date(seconds * 1000);
 }
 
+const CAMPAIGN_DELIVERY_STATUS_RANK = {
+	PENDING: 0,
+	SENT: 1,
+	DELIVERED: 2,
+	READ: 3,
+	FAILED: 4,
+	SKIPPED: 4
+};
+
+function getCampaignDeliveryStatusRank(status = '') {
+	return CAMPAIGN_DELIVERY_STATUS_RANK[toUpper(status, 'PENDING')] ?? 0;
+}
+
+function shouldApplyCampaignDeliveryStatus(currentStatus = '', nextStatus = '') {
+	const currentRank = getCampaignDeliveryStatusRank(currentStatus);
+	const nextRank = getCampaignDeliveryStatusRank(nextStatus);
+
+	if (nextStatus === 'FAILED') {
+		return currentStatus !== 'READ';
+	}
+
+	return nextRank >= currentRank;
+}
+
 export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { workspaceId = null } = {}) {
 	const waMessageId = normalizeString(statusPayload?.id || statusPayload?.message_id || '');
 
@@ -2128,12 +2152,18 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 	});
 
 	if (!recipient) {
+		console.log('[CAMPAIGN][STATUS][UNMATCHED]', {
+			waMessageId,
+			status: statusPayload?.status || null,
+			workspaceId: workspaceId || null
+		});
 		return null;
 	}
 
 	const nextStatus = normalizeString(statusPayload?.status || '').toLowerCase();
 	const timestamp = toDateFromUnixTimestamp(statusPayload?.timestamp);
 	const error = safeArray(statusPayload?.errors)[0] || null;
+	const normalizedNextStatus = toUpper(nextStatus);
 
 	const updateData = {
 		rawPayload: statusPayload,
@@ -2145,19 +2175,27 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 	};
 
 	if (nextStatus === 'sent') {
-		updateData.status = 'SENT';
+		if (shouldApplyCampaignDeliveryStatus(recipient.status, 'SENT')) {
+			updateData.status = 'SENT';
+		}
 		updateData.sentAt = timestamp;
 	}
 	if (nextStatus === 'delivered') {
-		updateData.status = 'DELIVERED';
+		if (shouldApplyCampaignDeliveryStatus(recipient.status, 'DELIVERED')) {
+			updateData.status = 'DELIVERED';
+		}
 		updateData.deliveredAt = timestamp;
 	}
 	if (nextStatus === 'read') {
-		updateData.status = 'READ';
+		if (shouldApplyCampaignDeliveryStatus(recipient.status, 'READ')) {
+			updateData.status = 'READ';
+		}
 		updateData.readAt = timestamp;
 	}
 	if (nextStatus === 'failed') {
-		updateData.status = 'FAILED';
+		if (shouldApplyCampaignDeliveryStatus(recipient.status, 'FAILED')) {
+			updateData.status = 'FAILED';
+		}
 		updateData.failedAt = timestamp;
 		updateData.errorCode = normalizeString(error?.code || '');
 		updateData.errorSubcode = normalizeString(error?.error_subcode || '');
@@ -2167,6 +2205,14 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 			error?.details ||
 			'Error de entrega'
 		);
+	}
+
+	if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(normalizedNextStatus)) {
+		console.log('[CAMPAIGN][STATUS][IGNORED]', {
+			waMessageId,
+			status: statusPayload?.status || null,
+			workspaceId: workspaceId || null
+		});
 	}
 
 	await prisma.campaignRecipient.update({
