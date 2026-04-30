@@ -41,6 +41,65 @@ const PAYMENT_STATUS_OPTIONS = [
 	{ value: 'voided', label: 'Anulado' },
 ];
 
+function TemplateMultiSelect({
+	options,
+	selectedValues,
+	search,
+	onSearchChange,
+	onToggleValue,
+	onClear,
+}) {
+	const filtered = useMemo(() => {
+		const term = String(search || '').trim().toLowerCase();
+		if (!term) return options.slice(0, 80);
+
+		return options
+			.filter((option) => option.label.toLowerCase().includes(term))
+			.slice(0, 80);
+	}, [options, search]);
+
+	return (
+		<div className="campaign-product-multiselect">
+			<input
+				type="text"
+				className="campaign-product-multiselect-search"
+				placeholder="Buscar plantillas..."
+				value={search}
+				onChange={(event) => onSearchChange(event.target.value)}
+			/>
+
+			<div className="campaign-product-multiselect-list">
+				{filtered.length ? (
+					filtered.map((option) => {
+						const checked = selectedValues.includes(option.label);
+
+						return (
+							<label key={option.id} className="campaign-product-option-row">
+								<input
+									type="checkbox"
+									checked={checked}
+									onChange={() => onToggleValue(option.label)}
+								/>
+								<span>{option.label}</span>
+							</label>
+						);
+					})
+				) : (
+					<div className="campaign-product-option-empty">
+						No hay coincidencias de plantillas.
+					</div>
+				)}
+			</div>
+
+			<div className="campaign-product-multiselect-footer">
+				<button type="button" className="button ghost" onClick={onClear}>
+					Limpiar plantillas
+				</button>
+			</div>
+		</div>
+	);
+}
+
 function buildCatalogProducts(rawCatalog = []) {
 	const seen = new Set();
 	const options = [];
@@ -67,6 +126,24 @@ function buildCatalogProducts(rawCatalog = []) {
 	return options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
 }
 
+function buildTemplateFilterOptions(templates = []) {
+	const seen = new Set();
+	const options = [];
+
+	for (const template of templates) {
+		const name = String(template?.name || '').trim();
+		if (!name || seen.has(name.toLowerCase())) continue;
+
+		seen.add(name.toLowerCase());
+		options.push({
+			id: template?.id || name,
+			label: name,
+		});
+	}
+
+	return options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
+}
+
 function ProductMultiSelect({
 	options,
 	selectedValues,
@@ -74,6 +151,9 @@ function ProductMultiSelect({
 	onSearchChange,
 	onToggleValue,
 	onClear,
+	placeholder = 'Buscar productos del catalogo...',
+	emptyText = 'No hay coincidencias en el catalogo.',
+	clearText = 'Limpiar productos',
 }) {
 	const filtered = useMemo(() => {
 		const term = String(search || '').trim().toLowerCase();
@@ -589,9 +669,12 @@ export default function CampaignComposerPanel({
 	const [imageError, setImageError] = useState('');
 	const [submitError, setSubmitError] = useState('');
 	const [showProductPicker, setShowProductPicker] = useState(false);
+	const [showTemplateExclusionPicker, setShowTemplateExclusionPicker] = useState(false);
 	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
+	const [templateExclusionSearch, setTemplateExclusionSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
+	const [selectedSentTemplateFilters, setSelectedSentTemplateFilters] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
 	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
 	const [contactLimit, setContactLimit] = useState('');
@@ -644,6 +727,10 @@ export default function CampaignComposerPanel({
 		() => extractTemplatePlaceholders(selectedTemplate),
 		[selectedTemplate]
 	);
+	const templateFilterOptions = useMemo(
+		() => buildTemplateFilterOptions(templates),
+		[templates]
+	);
 
 	useEffect(() => {
 		setVariableMapping((current) => {
@@ -657,6 +744,13 @@ export default function CampaignComposerPanel({
 			return next;
 		});
 	}, [templatePlaceholders]);
+
+	useEffect(() => {
+		const templateName = String(selectedTemplate?.name || '').trim();
+		if (!templateName) return;
+
+		setSelectedSentTemplateFilters((current) => (current.length ? current : [templateName]));
+	}, [selectedTemplate?.name]);
 
 	useEffect(() => {
 		if (
@@ -890,7 +984,8 @@ export default function CampaignComposerPanel({
 		return Math.min(totalFoundCount, contactLimitNumber);
 	}, [totalFoundCount, contactLimitNumber]);
 	const excludedByTemplateCount = Number(customerAudience?.stats?.excludedByTemplate || 0);
-	const sentTemplateFilterName = selectedTemplate?.name || '';
+	const sentTemplateFilterNames = selectedSentTemplateFilters.filter(Boolean);
+	const sentTemplateFilterKey = sentTemplateFilterNames.join('||');
 
 	const selectionButtonLabel = useMemo(() => {
 		if (customerAudience.loadingAll) return 'Seleccionando…';
@@ -932,10 +1027,14 @@ export default function CampaignComposerPanel({
 					: Number(nextFilters.minSpent),
 			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
 			excludeSentTemplate:
-				nextFilters.excludeSentTemplate && sentTemplateFilterName ? 'true' : 'false',
+				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length ? 'true' : 'false',
 			sentTemplateName:
-				nextFilters.excludeSentTemplate && sentTemplateFilterName
-					? sentTemplateFilterName
+				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length
+					? sentTemplateFilterNames[0]
+					: '',
+			sentTemplateNames:
+				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length
+					? sentTemplateFilterKey
 					: '',
 		};
 	}
@@ -944,12 +1043,12 @@ export default function CampaignComposerPanel({
 		if (
 			form.audienceMode === 'customers' &&
 			customerFilters.excludeSentTemplate &&
-			sentTemplateFilterName
+			sentTemplateFilterNames.length
 		) {
 			void loadCustomers({ ...customerFilters, page: 1 });
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [sentTemplateFilterName]);
+	}, [sentTemplateFilterKey]);
 
 	async function fetchAllFilteredCustomers(nextFilters = customerFilters) {
 		const firstPage = await fetchCampaignCustomers({
@@ -1081,6 +1180,32 @@ export default function CampaignComposerPanel({
 			productQuery: '',
 		}));
 		clearFilteredSelection();
+	}
+
+	function toggleSentTemplateFilter(templateName) {
+		setSelectedSentTemplateFilters((current) => {
+			const next = current.includes(templateName)
+				? current.filter((item) => item !== templateName)
+				: [...current, templateName];
+
+			clearFilteredSelection();
+			setCustomerFilters((prev) => ({
+				...prev,
+				page: 1,
+			}));
+
+			return next;
+		});
+	}
+
+	function clearSentTemplateFilters() {
+		setSelectedSentTemplateFilters([]);
+		setTemplateExclusionSearch('');
+		clearFilteredSelection();
+		setCustomerFilters((prev) => ({
+			...prev,
+			page: 1,
+		}));
 	}
 
 		async function handleSelectAllFilteredCustomers() {
@@ -1263,7 +1388,8 @@ export default function CampaignComposerPanel({
 						hasOrders: Boolean(customerFilters.hasOrders),
 						productQuery: customerFilters.productQuery || '',
 						excludeSentTemplate: Boolean(customerFilters.excludeSentTemplate),
-						sentTemplateName: sentTemplateFilterName,
+						sentTemplateName: sentTemplateFilterNames[0] || '',
+						sentTemplateNames: sentTemplateFilterNames,
 						selectedProducts: selectedProductFilters,
 						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
 						selectedCount: selectedCustomers.length,
@@ -1668,13 +1794,53 @@ export default function CampaignComposerPanel({
 									onChange={(event) =>
 										updateCustomerFilter('excludeSentTemplate', event.target.checked)
 									}
-									disabled={!sentTemplateFilterName}
+									disabled={!sentTemplateFilterNames.length}
 								/>
 								<span>
-									Excluir clientes que ya recibieron este template
-									{sentTemplateFilterName ? ` (${sentTemplateFilterName})` : ''}
+									Excluir clientes que ya recibieron alguna plantilla seleccionada
 								</span>
 							</label>
+
+							<label className="field">
+								<span>Plantillas ya enviadas</span>
+								<button
+									type="button"
+									className={`campaign-product-filter-toggle ${showTemplateExclusionPicker ? 'open' : ''}`}
+									onClick={() => setShowTemplateExclusionPicker((current) => !current)}
+								>
+									{sentTemplateFilterNames.length
+										? `Selector de plantillas (${sentTemplateFilterNames.length})`
+										: 'Selector de plantillas'}
+								</button>
+							</label>
+
+							{sentTemplateFilterNames.length ? (
+								<div className="campaign-selected-products-row campaign-selected-products-row--interactive">
+									{sentTemplateFilterNames.map((templateName) => (
+										<button
+											key={templateName}
+											type="button"
+											className="campaign-selected-product-chip"
+											onClick={() => toggleSentTemplateFilter(templateName)}
+											title="Quitar plantilla"
+										>
+											<span>{templateName}</span>
+											<strong>x</strong>
+										</button>
+									))}
+								</div>
+							) : null}
+
+							{showTemplateExclusionPicker ? (
+								<TemplateMultiSelect
+									options={templateFilterOptions}
+									selectedValues={sentTemplateFilterNames}
+									search={templateExclusionSearch}
+									onSearchChange={setTemplateExclusionSearch}
+									onToggleValue={toggleSentTemplateFilter}
+									onClear={clearSentTemplateFilters}
+								/>
+							) : null}
 
 							<label className="field">
 								<span>Producto comprado</span>

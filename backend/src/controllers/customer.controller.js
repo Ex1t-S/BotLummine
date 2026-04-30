@@ -261,15 +261,25 @@ function buildPhoneLookupVariants(value = '') {
 async function getPhonesWithSentTemplate({
 	workspaceId,
 	templateName,
+	templateNames,
 	excludeSentTemplate,
 }) {
-	const normalizedTemplateName = String(templateName || '').trim();
+	const normalizedTemplateNames = Array.from(
+		new Set(
+			[
+				...String(templateNames || '')
+					.split('||')
+					.map((item) => item.trim()),
+				String(templateName || '').trim(),
+			].filter(Boolean)
+		)
+	);
 	const shouldExclude =
 		excludeSentTemplate === '1' ||
 		excludeSentTemplate === 'true' ||
 		excludeSentTemplate === true;
 
-	if (!shouldExclude || !normalizedTemplateName) {
+	if (!shouldExclude || !normalizedTemplateNames.length) {
 		return [];
 	}
 
@@ -286,10 +296,12 @@ async function getPhonesWithSentTemplate({
 				{ status: { in: ['SENT', 'DELIVERED', 'READ'] } },
 			],
 			campaign: {
-				templateName: {
-					equals: normalizedTemplateName,
-					mode: 'insensitive',
-				},
+				OR: normalizedTemplateNames.map((name) => ({
+					templateName: {
+						equals: name,
+						mode: 'insensitive',
+					},
+				})),
 			},
 		},
 		select: {
@@ -394,6 +406,7 @@ export async function getCustomers(req, res) {
 			hasPhoneOnly = '',
 			excludeSentTemplate = '',
 			sentTemplateName = '',
+			sentTemplateNames = '',
 			sort = 'purchase_desc',
 			page = '1',
 			pageSize = '24',
@@ -406,6 +419,7 @@ export async function getCustomers(req, res) {
 		const excludedPhones = await getPhonesWithSentTemplate({
 			workspaceId,
 			templateName: sentTemplateName,
+			templateNames: sentTemplateNames,
 			excludeSentTemplate,
 		});
 

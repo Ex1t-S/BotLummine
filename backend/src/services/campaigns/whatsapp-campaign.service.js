@@ -162,11 +162,24 @@ function dedupeRecipients(recipients = []) {
 
 async function getPhonesAlreadySentTemplate({
 	workspaceId = DEFAULT_WORKSPACE_ID,
-	templateName = ''
+	templateName = '',
+	templateNames = []
 } = {}) {
-	const normalizedTemplateName = normalizeString(templateName);
+	const normalizedTemplateNames = Array.from(
+		new Set(
+			[
+				...safeArray(templateNames).map((name) => normalizeString(name)),
+				...(Array.isArray(templateNames)
+					? []
+					: String(templateNames || '')
+							.split('||')
+							.map((name) => normalizeString(name))),
+				normalizeString(templateName)
+			].filter(Boolean)
+		)
+	);
 
-	if (!normalizedTemplateName) {
+	if (!normalizedTemplateNames.length) {
 		return new Set();
 	}
 
@@ -183,10 +196,12 @@ async function getPhonesAlreadySentTemplate({
 				{ status: { in: ['SENT', 'DELIVERED', 'READ'] } }
 			],
 			campaign: {
-				templateName: {
-					equals: normalizedTemplateName,
-					mode: 'insensitive'
-				}
+				OR: normalizedTemplateNames.map((name) => ({
+					templateName: {
+						equals: name,
+						mode: 'insensitive'
+					}
+				}))
 			}
 		},
 		select: {
@@ -1430,7 +1445,8 @@ export async function createCampaignDraft({
 	const alreadySentTemplatePhones = excludeSentTemplate
 		? await getPhonesAlreadySentTemplate({
 				workspaceId: resolvedWorkspaceId,
-				templateName: template.name
+				templateName: audienceFilters?.sentTemplateName || template.name,
+				templateNames: audienceFilters?.sentTemplateNames || []
 		  })
 		: new Set();
 
