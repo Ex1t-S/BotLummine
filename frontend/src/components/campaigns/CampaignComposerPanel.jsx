@@ -27,6 +27,7 @@ const initialCustomerFilters = {
 	pageSize: 24,
 	minSpent: '',
 	hasPhoneOnly: true,
+	excludeSentTemplate: true,
 };
 const PAYMENT_STATUS_OPTIONS = [
 	{ value: '', label: 'Todos' },
@@ -887,6 +888,8 @@ export default function CampaignComposerPanel({
 		if (!contactLimitNumber) return totalFoundCount;
 		return Math.min(totalFoundCount, contactLimitNumber);
 	}, [totalFoundCount, contactLimitNumber]);
+	const excludedByTemplateCount = Number(customerAudience?.stats?.excludedByTemplate || 0);
+	const sentTemplateFilterName = selectedTemplate?.name || '';
 
 	const selectionButtonLabel = useMemo(() => {
 		if (customerAudience.loadingAll) return 'Seleccionando…';
@@ -927,8 +930,25 @@ export default function CampaignComposerPanel({
 					? undefined
 					: Number(nextFilters.minSpent),
 			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
+			excludeSentTemplate:
+				nextFilters.excludeSentTemplate && sentTemplateFilterName ? 'true' : 'false',
+			sentTemplateName:
+				nextFilters.excludeSentTemplate && sentTemplateFilterName
+					? sentTemplateFilterName
+					: '',
 		};
 	}
+
+	useEffect(() => {
+		if (
+			form.audienceMode === 'customers' &&
+			customerFilters.excludeSentTemplate &&
+			sentTemplateFilterName
+		) {
+			void loadCustomers({ ...customerFilters, page: 1 });
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [sentTemplateFilterName]);
 
 	async function fetchAllFilteredCustomers(nextFilters = customerFilters) {
 		const firstPage = await fetchCampaignCustomers({
@@ -1235,6 +1255,8 @@ export default function CampaignComposerPanel({
 						hasPhoneOnly: Boolean(customerFilters.hasPhoneOnly),
 						hasOrders: Boolean(customerFilters.hasOrders),
 						productQuery: customerFilters.productQuery || '',
+						excludeSentTemplate: Boolean(customerFilters.excludeSentTemplate),
+						sentTemplateName: sentTemplateFilterName,
 						selectedProducts: selectedProductFilters,
 						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
 						selectedCount: selectedCustomers.length,
@@ -1632,6 +1654,21 @@ export default function CampaignComposerPanel({
 						</div>
 
 						<div className="campaign-product-filter-group">
+							<label className="campaign-toggle">
+								<input
+									type="checkbox"
+									checked={Boolean(customerFilters.excludeSentTemplate)}
+									onChange={(event) =>
+										updateCustomerFilter('excludeSentTemplate', event.target.checked)
+									}
+									disabled={!sentTemplateFilterName}
+								/>
+								<span>
+									Excluir clientes que ya recibieron este template
+									{sentTemplateFilterName ? ` (${sentTemplateFilterName})` : ''}
+								</span>
+							</label>
+
 							<label className="field">
 								<span>Producto comprado</span>
 								<button
@@ -1737,6 +1774,11 @@ export default function CampaignComposerPanel({
 							<div className="campaign-audience-summary-card">
 								<strong>{formatCompactNumber(selectedProductFilters.length)}</strong>
 								<span>productos marcados</span>
+							</div>
+
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(excludedByTemplateCount)}</strong>
+								<span>ya recibieron template</span>
 							</div>
 						</div>
 

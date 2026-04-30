@@ -104,6 +104,7 @@ function buildCustomersWhere({
 	paymentStatus,
 	minSpent,
 	hasPhoneOnly,
+	excludedPhones = [],
 }) {
 	const and = [{ workspaceId }];
 
@@ -206,7 +207,75 @@ function buildCustomersWhere({
 		});
 	}
 
+	if (excludedPhones.length > 0) {
+		and.push({
+			OR: [
+				{ normalizedPhone: null },
+				{ normalizedPhone: '' },
+				{
+					normalizedPhone: {
+						notIn: excludedPhones,
+					},
+				},
+			],
+		});
+	}
+
 	return and.length ? { AND: and } : {};
+}
+
+function normalizePhone(value = '') {
+	return String(value || '').replace(/\D/g, '').trim();
+}
+
+async function getPhonesWithSentTemplate({
+	workspaceId,
+	templateName,
+	excludeSentTemplate,
+}) {
+	const normalizedTemplateName = String(templateName || '').trim();
+	const shouldExclude =
+		excludeSentTemplate === '1' ||
+		excludeSentTemplate === 'true' ||
+		excludeSentTemplate === true;
+
+	if (!shouldExclude || !normalizedTemplateName) {
+		return [];
+	}
+
+	const recipients = await prisma.campaignRecipient.findMany({
+		where: {
+			workspaceId,
+			phone: {
+				not: '',
+			},
+			OR: [
+				{ sentAt: { not: null } },
+				{ deliveredAt: { not: null } },
+				{ readAt: { not: null } },
+				{ status: { in: ['SENT', 'DELIVERED', 'READ'] } },
+			],
+			campaign: {
+				templateName: {
+					equals: normalizedTemplateName,
+					mode: 'insensitive',
+				},
+			},
+		},
+		select: {
+			phone: true,
+			waId: true,
+		},
+	});
+
+	return Array.from(
+		new Set(
+			recipients
+				.flatMap((recipient) => [recipient.phone, recipient.waId])
+				.map(normalizePhone)
+				.filter(Boolean)
+		)
+	);
 }
 
 function buildOrderBy(sort = 'purchase_desc') {
@@ -293,6 +362,8 @@ export async function getCustomers(req, res) {
 			paymentStatus = '',
 			minSpent = '',
 			hasPhoneOnly = '',
+			excludeSentTemplate = '',
+			sentTemplateName = '',
 			sort = 'purchase_desc',
 			page = '1',
 			pageSize = '24',
@@ -301,9 +372,15 @@ export async function getCustomers(req, res) {
 		const parsedPage = Math.max(1, Number(page) || 1);
 		const parsedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 24));
 		const skip = (parsedPage - 1) * parsedPageSize;
+		const workspaceId = requireRequestWorkspaceId(req);
+		const excludedPhones = await getPhonesWithSentTemplate({
+			workspaceId,
+			templateName: sentTemplateName,
+			excludeSentTemplate,
+		});
 
 		const where = buildCustomersWhere({
-			workspaceId: requireRequestWorkspaceId(req),
+			workspaceId,
 			q,
 			productQuery,
 			orderNumber,
@@ -312,6 +389,7 @@ export async function getCustomers(req, res) {
 			paymentStatus,
 			minSpent,
 			hasPhoneOnly,
+			excludedPhones,
 		});
 
 		const orderBy = buildOrderBy(sort);
@@ -375,6 +453,7 @@ export async function getCustomers(req, res) {
 				totalOrders: totalItems,
 				totalCustomers: uniquePhones.size + uniqueFallback.size,
 				withPhone: metricsBase.filter((row) => String(row.contactPhone || '').trim()).length,
+				excludedByTemplate: excludedPhones.length,
 				totalSpent,
 				avgTicket: totalItems > 0 ? totalSpent / totalItems : 0,
 				currency: 'ARS',
