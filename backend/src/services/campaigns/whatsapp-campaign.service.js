@@ -160,6 +160,49 @@ function dedupeRecipients(recipients = []) {
 	return [...seen.values()];
 }
 
+async function getPhonesAlreadySentTemplate({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	templateName = ''
+} = {}) {
+	const normalizedTemplateName = normalizeString(templateName);
+
+	if (!normalizedTemplateName) {
+		return new Set();
+	}
+
+	const recipients = await prisma.campaignRecipient.findMany({
+		where: {
+			workspaceId,
+			phone: {
+				not: ''
+			},
+			OR: [
+				{ sentAt: { not: null } },
+				{ deliveredAt: { not: null } },
+				{ readAt: { not: null } },
+				{ status: { in: ['SENT', 'DELIVERED', 'READ'] } }
+			],
+			campaign: {
+				templateName: {
+					equals: normalizedTemplateName,
+					mode: 'insensitive'
+				}
+			}
+		},
+		select: {
+			phone: true,
+			waId: true
+		}
+	});
+
+	return new Set(
+		recipients
+			.flatMap((recipient) => [recipient.phone, recipient.waId])
+			.map((phone) => normalizeCampaignPhone(phone || ''))
+			.filter(Boolean)
+	);
+}
+
 async function resolveRecipientsFromContacts(contactIds = [], workspaceId = DEFAULT_WORKSPACE_ID) {
 	if (!Array.isArray(contactIds) || !contactIds.length) {
 		return [];
@@ -1380,6 +1423,16 @@ export async function createCampaignDraft({
 	}
 
 	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || 'manual');
+	const excludeSentTemplate =
+		audienceFilters?.excludeSentTemplate === true ||
+		audienceFilters?.excludeSentTemplate === 'true' ||
+		audienceFilters?.excludeSentTemplate === '1';
+	const alreadySentTemplatePhones = excludeSentTemplate
+		? await getPhonesAlreadySentTemplate({
+				workspaceId: resolvedWorkspaceId,
+				templateName: template.name
+		  })
+		: new Set();
 
 	const resolvedRecipients = await resolveCampaignRecipients({
 		workspaceId: resolvedWorkspaceId,
@@ -1406,6 +1459,10 @@ export async function createCampaignDraft({
 		const normalizedPhone = normalizeCampaignPhone(recipient.phone || recipient.waId || '');
 
 		if (!normalizedPhone) {
+			continue;
+		}
+
+		if (alreadySentTemplatePhones.has(normalizedPhone)) {
 			continue;
 		}
 

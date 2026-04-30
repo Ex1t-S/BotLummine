@@ -637,6 +637,7 @@ export default function CampaignComposerPanel({
 		setUploadedMediaId('');
 		setUploadedFileName('');
 		setImageError('');
+		clearFilteredSelection();
 	}, [selectedTemplate?.id]);
 
 	const templatePlaceholders = useMemo(
@@ -1038,6 +1039,10 @@ export default function CampaignComposerPanel({
 			[field]: value,
 			page: field === 'page' ? value : 1,
 		}));
+
+		if (field !== 'page') {
+			clearFilteredSelection();
+		}
 	}
 
 	function updateVariableMapping(key, patch) {
@@ -1061,6 +1066,7 @@ export default function CampaignComposerPanel({
 				page: 1,
 				productQuery: next.join('||'),
 			}));
+			clearFilteredSelection();
 
 			return next;
 		});
@@ -1074,6 +1080,7 @@ export default function CampaignComposerPanel({
 			page: 1,
 			productQuery: '',
 		}));
+		clearFilteredSelection();
 	}
 
 		async function handleSelectAllFilteredCustomers() {

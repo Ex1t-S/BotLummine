@@ -228,6 +228,36 @@ function normalizePhone(value = '') {
 	return String(value || '').replace(/\D/g, '').trim();
 }
 
+function buildPhoneLookupVariants(value = '') {
+	const digits = normalizePhone(value);
+	const variants = new Set();
+
+	if (!digits) return [];
+
+	variants.add(digits);
+
+	if (digits.startsWith('549') && digits.length > 3) {
+		const national = digits.slice(3);
+		variants.add(national);
+		variants.add(`54${national}`);
+	}
+
+	if (digits.startsWith('54') && digits.length > 2) {
+		const national = digits.slice(2);
+		variants.add(national);
+		if (!national.startsWith('9')) {
+			variants.add(`549${national}`);
+		}
+	}
+
+	if (!digits.startsWith('54')) {
+		variants.add(`54${digits}`);
+		variants.add(`549${digits}`);
+	}
+
+	return Array.from(variants).filter(Boolean);
+}
+
 async function getPhonesWithSentTemplate({
 	workspaceId,
 	templateName,
@@ -272,7 +302,7 @@ async function getPhonesWithSentTemplate({
 		new Set(
 			recipients
 				.flatMap((recipient) => [recipient.phone, recipient.waId])
-				.map(normalizePhone)
+				.flatMap(buildPhoneLookupVariants)
 				.filter(Boolean)
 		)
 	);
