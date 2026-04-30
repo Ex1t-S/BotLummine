@@ -545,18 +545,26 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 	}
 
 	if (!contact) {
-		contact = await prisma.contact.upsert({
+		const existingContact = await prisma.contact.findFirst({
 			where: { waId: normalizedPhone },
-			update: {
-				name: contactName || undefined,
-				phone: normalizedPhone
-			},
-			create: {
-				waId: normalizedPhone,
-				phone: normalizedPhone,
-				name: contactName || normalizedPhone
-			}
+			orderBy: { updatedAt: 'desc' }
 		});
+
+		contact = existingContact
+			? await prisma.contact.update({
+				where: { id: existingContact.id },
+				data: {
+					name: contactName || undefined,
+					phone: normalizedPhone
+				}
+			})
+			: await prisma.contact.create({
+				data: {
+					waId: normalizedPhone,
+					phone: normalizedPhone,
+					name: contactName || normalizedPhone
+				}
+			});
 	}
 
 	let conversation = await prisma.conversation.findUnique({

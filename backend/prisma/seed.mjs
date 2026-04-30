@@ -40,18 +40,26 @@ async function main() {
 
   const waId = '5490000000000';
 
-  const contact = await prisma.contact.upsert({
+  const existingContact = await prisma.contact.findFirst({
     where: { waId },
-    update: {
-      name: 'Cliente Demo',
-      phone: waId
-    },
-    create: {
-      waId,
-      phone: waId,
-      name: 'Cliente Demo'
-    }
+    orderBy: { updatedAt: 'desc' }
   });
+
+  const contact = existingContact
+    ? await prisma.contact.update({
+      where: { id: existingContact.id },
+      data: {
+        name: 'Cliente Demo',
+        phone: waId
+      }
+    })
+    : await prisma.contact.create({
+      data: {
+        waId,
+        phone: waId,
+        name: 'Cliente Demo'
+      }
+    });
 
   let conversation = await prisma.conversation.findFirst({
     where: { contactId: contact.id }

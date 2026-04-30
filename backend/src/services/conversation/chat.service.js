@@ -246,18 +246,26 @@ export async function getOrCreateConversation({
 }) {
 	const normalizedWaId = normalizeThreadPhone(waId);
 
-	const contact = await prisma.contact.upsert({
+	const existingContact = await prisma.contact.findFirst({
 		where: { waId: normalizedWaId },
-		update: {
-			name: contactName || undefined,
-			phone: normalizedWaId
-		},
-		create: {
-			waId: normalizedWaId,
-			phone: normalizedWaId,
-			name: contactName || normalizedWaId
-		}
+		orderBy: { updatedAt: 'desc' }
 	});
+
+	const contact = existingContact
+		? await prisma.contact.update({
+			where: { id: existingContact.id },
+			data: {
+				name: contactName || undefined,
+				phone: normalizedWaId
+			}
+		})
+		: await prisma.contact.create({
+			data: {
+				waId: normalizedWaId,
+				phone: normalizedWaId,
+				name: contactName || normalizedWaId
+			}
+		});
 
 	let conversation = await prisma.conversation.findFirst({
 		where: { contactId: contact.id },
