@@ -83,13 +83,18 @@ const EMPTY_POLICY_FORM = {
 	humanHandoff: ''
 };
 
-const tabs = [
-	{ key: 'brand', label: 'Marca' },
+const platformTabs = [
+	{ key: 'workspaces', label: 'Marcas' },
+	{ key: 'integrations', label: 'Integraciones' },
 	{ key: 'users', label: 'Usuarios' },
-	{ key: 'whatsapp', label: 'WhatsApp' },
-	{ key: 'commerce', label: 'Ecommerce' },
-	{ key: 'logistics', label: 'Envios' },
+	{ key: 'analytics', label: 'Estadisticas' },
 	{ key: 'operations', label: 'Operaciones' }
+];
+
+const brandAdminTabs = [
+	{ key: 'brand', label: 'Marca' },
+	{ key: 'content', label: 'Contenido' },
+	{ key: 'users', label: 'Usuarios' }
 ];
 
 function fieldValue(value) {
@@ -190,10 +195,36 @@ function StatusPill({ children }) {
 	return <span className="tenant-admin-pill">{children || 'Sin datos'}</span>;
 }
 
+function formatNumber(value) {
+	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
+}
+
+function formatCurrency(value, currency = 'ARS') {
+	const amount = Number(value || 0);
+	try {
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: currency || 'ARS',
+			maximumFractionDigits: 0
+		}).format(amount);
+	} catch {
+		return `$${amount.toLocaleString('es-AR')}`;
+	}
+}
+
+function formatUsd(value) {
+	return new Intl.NumberFormat('en-US', {
+		style: 'currency',
+		currency: 'USD',
+		maximumFractionDigits: 2
+	}).format(Number(value || 0));
+}
+
 export default function AdminPage() {
 	const { user } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);
-	const [activeTab, setActiveTab] = useState('brand');
+	const visibleTabs = platformAdmin ? platformTabs : brandAdminTabs;
+	const [activeTab, setActiveTab] = useState(platformAdmin ? 'workspaces' : 'brand');
 	const [workspaces, setWorkspaces] = useState([]);
 	const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(user?.workspaceId || '');
 	const [workspace, setWorkspace] = useState(null);
@@ -209,6 +240,8 @@ export default function AdminPage() {
 	const [commerceForm, setCommerceForm] = useState(EMPTY_COMMERCE_FORM);
 	const [logisticsForm, setLogisticsForm] = useState(EMPTY_LOGISTICS_FORM);
 	const [catalogStatus, setCatalogStatus] = useState(null);
+	const [analytics, setAnalytics] = useState(null);
+	const [analyticsLoading, setAnalyticsLoading] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [notice, setNotice] = useState('');
@@ -301,6 +334,19 @@ export default function AdminPage() {
 		});
 	}
 
+	async function loadAnalytics(workspaceId = selectedWorkspaceId) {
+		if (!platformAdmin) return;
+		setAnalyticsLoading(true);
+		try {
+			const res = await api.get('/admin/analytics/workspaces', {
+				params: workspaceId ? { workspaceId } : {}
+			});
+			setAnalytics(res.data || null);
+		} finally {
+			setAnalyticsLoading(false);
+		}
+	}
+
 	useEffect(() => {
 		let mounted = true;
 		setLoading(true);
@@ -317,12 +363,24 @@ export default function AdminPage() {
 	}, [platformAdmin]);
 
 	useEffect(() => {
+		const firstTab = platformAdmin ? 'workspaces' : 'brand';
+		if (!visibleTabs.some((tab) => tab.key === activeTab)) {
+			setActiveTab(firstTab);
+		}
+	}, [platformAdmin, activeTab, visibleTabs]);
+
+	useEffect(() => {
 		if (!selectedWorkspaceId) return;
 		setLoading(true);
 		loadWorkspaceDetail(selectedWorkspaceId)
 			.catch((err) => setError(err.response?.data?.error || err.message))
 			.finally(() => setLoading(false));
 	}, [selectedWorkspaceId]);
+
+	useEffect(() => {
+		if (!platformAdmin) return;
+		loadAnalytics(selectedWorkspaceId).catch((err) => setError(err.response?.data?.error || err.message));
+	}, [platformAdmin, selectedWorkspaceId]);
 
 	useEffect(() => {
 		if (workspace) selectCommerceConnection(workspace, commerceProvider);
@@ -552,8 +610,8 @@ export default function AdminPage() {
 					<h2>{platformAdmin ? 'Admin plataforma' : 'Configuracion de marca'}</h2>
 					<p>
 						{platformAdmin
-							? (workspace?.name || 'Workspaces, accesos e integraciones')
-							: (workspace?.name || 'Cuenta, accesos e integraciones de la marca')}
+							? (workspace?.name || 'Marcas, integraciones y auditoria')
+							: (workspace?.name || 'Branding, contenido y agentes de la marca')}
 					</p>
 				</div>
 				{workspaceOptions.length ? (
@@ -571,7 +629,7 @@ export default function AdminPage() {
 			{error ? <div className="tenant-admin-alert error">{error}</div> : null}
 
 			<div className="tenant-admin-tabs">
-				{tabs.map((tab) => (
+				{visibleTabs.map((tab) => (
 					<button
 						type="button"
 						key={tab.key}
@@ -584,7 +642,7 @@ export default function AdminPage() {
 			</div>
 
 			<div className="tenant-admin-scroll">
-				{platformAdmin && activeTab === 'brand' ? (
+				{platformAdmin && activeTab === 'workspaces' ? (
 					<section className="tenant-admin-panel">
 						<h3>Nueva marca</h3>
 						<form className="tenant-admin-grid" onSubmit={handleCreateWorkspace}>
@@ -598,32 +656,52 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{activeTab === 'brand' ? (
+				{activeTab === 'workspaces' || activeTab === 'brand' ? (
 					<section className="tenant-admin-panel">
-						<h3>Marca, branding e IA</h3>
+						<h3>{platformAdmin ? 'Datos de plataforma y branding' : 'Branding visible'}</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
-							<Input label="Nombre" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
-							<Input label="Slug" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
-							<Select label="Estado" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
-								<option value="ACTIVE">ACTIVE</option>
-								<option value="SUSPENDED">SUSPENDED</option>
-								<option value="ARCHIVED">ARCHIVED</option>
-							</Select>
+							{platformAdmin ? (
+								<>
+									<Input label="Nombre" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
+									<Input label="Slug" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
+									<Select label="Estado" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
+										<option value="ACTIVE">ACTIVE</option>
+										<option value="SUSPENDED">SUSPENDED</option>
+										<option value="ARCHIVED">ARCHIVED</option>
+									</Select>
+								</>
+							) : null}
 							<Input label="Logo URL" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
 							<Input label="Color primario" type="color" value={workspaceForm.branding?.primaryColor || '#0f172a'} onChange={(value) => setNestedForm('branding', 'primaryColor', value)} />
 							<Input label="Color secundario" type="color" value={workspaceForm.branding?.secondaryColor || '#f8fafc'} onChange={(value) => setNestedForm('branding', 'secondaryColor', value)} />
 							<Input label="Color acento" type="color" value={workspaceForm.branding?.accentColor || '#10b981'} onChange={(value) => setNestedForm('branding', 'accentColor', value)} />
-							<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
-							<Input label="Agente IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
-							<Textarea label="Tono" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
-							<Textarea label="Contexto de negocio" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
-							<Textarea label="System prompt extra" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
+							{platformAdmin ? null : (
+								<>
+									<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
+									<Input label="Agente IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
+									<Textarea label="Tono" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
+								</>
+							)}
 							<button type="submit" disabled={saving || loading}>Guardar marca</button>
 						</form>
 					</section>
 				) : null}
 
-				{activeTab === 'brand' ? (
+				{activeTab === 'content' ? (
+					<section className="tenant-admin-panel">
+						<h3>Contenido operativo e IA</h3>
+						<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
+							<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
+							<Input label="Agente IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
+							<Textarea label="Tono" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
+							<Textarea label="Contexto de negocio" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
+							<Textarea label="System prompt extra" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
+							<button type="submit" disabled={saving || loading}>Guardar contenido IA</button>
+						</form>
+					</section>
+				) : null}
+
+				{activeTab === 'content' ? (
 					<section className="tenant-admin-panel">
 						<h3>Pagos, politicas y catalogo contextual</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSavePayment}>
@@ -659,7 +737,13 @@ export default function AdminPage() {
 									<strong>{item.name}</strong>
 									<span>{item.email}</span>
 									<small>{item.role}</small>
-									<button type="button" onClick={() => editUser(item)}>Editar</button>
+									<button
+										type="button"
+										disabled={!platformAdmin && item.role !== 'AGENT'}
+										onClick={() => editUser(item)}
+									>
+										Editar
+									</button>
 								</div>
 							))}
 						</div>
@@ -669,7 +753,7 @@ export default function AdminPage() {
 							<Input label={userForm.id ? 'Nuevo password' : 'Password'} type="password" value={userForm.password} required={!userForm.id} onChange={(value) => setUserForm((cur) => ({ ...cur, password: value }))} />
 							<Select label="Rol" value={userForm.role} onChange={(value) => setUserForm((cur) => ({ ...cur, role: value }))}>
 								<option value="AGENT">AGENT - solo inbox</option>
-								<option value="ADMIN">ADMIN - marca completa</option>
+								{platformAdmin ? <option value="ADMIN">ADMIN - marca completa</option> : null}
 								{platformAdmin ? <option value="PLATFORM_ADMIN">PLATFORM_ADMIN</option> : null}
 							</Select>
 							<button type="submit" disabled={saving}>{userForm.id ? 'Actualizar usuario' : 'Crear usuario'}</button>
@@ -678,7 +762,7 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{activeTab === 'whatsapp' ? (
+				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">
 						<h3>WhatsApp Cloud API</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
@@ -700,7 +784,7 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{activeTab === 'commerce' ? (
+				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">
 						<h3>Ecommerce</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSaveCommerce}>
@@ -730,7 +814,7 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{activeTab === 'logistics' ? (
+				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">
 						<h3>Enbox</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSaveLogistics}>
@@ -752,7 +836,98 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{activeTab === 'operations' ? (
+				{platformAdmin && activeTab === 'analytics' ? (
+					<section className="tenant-admin-panel">
+						<h3>Estadisticas multi-marca</h3>
+						<div className="tenant-admin-metrics">
+							<StatusPill>Campanas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
+							<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
+							<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
+							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
+							<StatusPill>Pedidos: {formatNumber(analytics?.totals?.ordersCount)}</StatusPill>
+							<StatusPill>Facturacion: {formatCurrency(analytics?.totals?.revenueTotal, analytics?.totals?.currency)}</StatusPill>
+							<StatusPill>Costo estimado: {formatUsd(analytics?.totals?.estimatedCampaignCostUsd)}</StatusPill>
+						</div>
+						<div className="tenant-admin-table-wrap">
+							<table className="tenant-admin-table">
+								<thead>
+									<tr>
+										<th>Marca</th>
+										<th>Campanas</th>
+										<th>Enviados</th>
+										<th>Entregados</th>
+										<th>Leidos</th>
+										<th>Fallidos</th>
+										<th>Clientes</th>
+										<th>Pedidos</th>
+										<th>Facturacion</th>
+										<th>Costo est.</th>
+									</tr>
+								</thead>
+								<tbody>
+									{(analytics?.workspaces || []).map((item) => (
+										<tr
+											key={item.workspace.id}
+											className={analytics?.detail?.workspaceId === item.workspace.id ? 'selected' : ''}
+											onClick={() => setSelectedWorkspaceId(item.workspace.id)}
+										>
+											<td>
+												<strong>{item.workspace.name}</strong>
+												<span>{item.workspace.slug}</span>
+											</td>
+											<td>{formatNumber(item.metrics.campaignsCount)} ({formatNumber(item.metrics.activeCampaignsCount)} activas)</td>
+											<td>{formatNumber(item.metrics.sentRecipientsCount)}</td>
+											<td>{formatNumber(item.metrics.deliveredRecipientsCount)}</td>
+											<td>{formatNumber(item.metrics.readRecipientsCount)}</td>
+											<td>{formatNumber(item.metrics.failedRecipientsCount)}</td>
+											<td>{formatNumber(item.metrics.customersCount)}</td>
+											<td>{formatNumber(item.metrics.ordersCount)}</td>
+											<td>{formatCurrency(item.metrics.revenueTotal, item.metrics.currency)}</td>
+											<td>{formatUsd(item.metrics.estimatedCampaignCostUsd)}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+						{analyticsLoading ? <StatusPill>Cargando estadisticas...</StatusPill> : null}
+					</section>
+				) : null}
+
+				{platformAdmin && activeTab === 'analytics' && analytics?.detail ? (
+					<section className="tenant-admin-panel">
+						<h3>Detalle de marca</h3>
+						<div className="tenant-admin-analytics-grid">
+							<div>
+								<h4>Campanas recientes</h4>
+								<div className="tenant-admin-list">
+									{(analytics.detail.campaigns || []).map((campaign) => (
+										<div className="tenant-admin-list-row" key={campaign.id}>
+											<strong>{campaign.name}</strong>
+											<span>{campaign.status} - {campaign.templateName}</span>
+											<small>
+												{formatNumber(campaign.sentRecipients)} enviados - {formatNumber(campaign.deliveredRecipients)} entregados - {formatNumber(campaign.readRecipients)} leidos - {formatUsd(campaign.estimatedCostUsd)}
+											</small>
+										</div>
+									))}
+								</div>
+							</div>
+							<div>
+								<h4>Clientes y pedidos</h4>
+								<div className="tenant-admin-list">
+									{(analytics.detail.customers?.topCustomers || []).map((customer) => (
+										<div className="tenant-admin-list-row" key={customer.id}>
+											<strong>{customer.displayName || customer.email || customer.phone || 'Cliente'}</strong>
+											<span>{formatNumber(customer.orderCount)} pedidos</span>
+											<small>{formatCurrency(customer.totalSpent, analytics?.totals?.currency)}</small>
+										</div>
+									))}
+								</div>
+							</div>
+						</div>
+					</section>
+				) : null}
+
+				{platformAdmin && activeTab === 'operations' ? (
 					<section className="tenant-admin-panel">
 						<h3>Operaciones</h3>
 						<div className="tenant-admin-metrics">

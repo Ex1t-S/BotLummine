@@ -13,6 +13,9 @@ import {
 	syncCatalogFromProvider,
 } from '../services/catalog/catalog.service.js';
 
+const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
+const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
+
 function normalizeString(value = '') {
 	return String(value || '').trim();
 }
@@ -90,6 +93,22 @@ function getDatabaseHostFingerprint() {
 function assertPlatformAdmin(req) {
 	if (!isPlatformAdmin(req.user)) {
 		const error = new Error('Solo un superadmin puede realizar esta accion.');
+		error.status = 403;
+		throw error;
+	}
+}
+
+function assertCanManageRole(req, role, targetUser = null) {
+	if (isPlatformAdmin(req.user)) return;
+
+	if (targetUser && normalizeRole(targetUser.role) !== 'AGENT') {
+		const error = new Error('Un administrador de marca solo puede editar usuarios AGENT.');
+		error.status = 403;
+		throw error;
+	}
+
+	if (normalizeRole(role) !== 'AGENT') {
+		const error = new Error('Un administrador de marca solo puede crear o asignar usuarios AGENT.');
 		error.status = 403;
 		throw error;
 	}
@@ -180,6 +199,139 @@ async function buildWorkspacePayload(workspaceId) {
 	});
 
 	return workspace ? getWorkspacePublicPayload(workspace) : null;
+}
+
+function toNumber(value) {
+	if (value == null) return 0;
+	if (typeof value === 'number') return value;
+	if (typeof value.toNumber === 'function') return value.toNumber();
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function emptyAnalyticsMetrics() {
+	return {
+		campaignsCount: 0,
+		activeCampaignsCount: 0,
+		recipientsCount: 0,
+		sentRecipientsCount: 0,
+		deliveredRecipientsCount: 0,
+		readRecipientsCount: 0,
+		failedRecipientsCount: 0,
+		billableRecipientsCount: 0,
+		customersCount: 0,
+		ordersCount: 0,
+		revenueTotal: 0,
+		currency: 'ARS',
+		estimatedCampaignCostUsd: 0,
+	};
+}
+
+function applyEstimatedCost(metrics) {
+	metrics.estimatedCampaignCostUsd = Number(
+		(metrics.billableRecipientsCount * DEFAULT_ESTIMATED_MESSAGE_COST_USD).toFixed(2)
+	);
+	return metrics;
+}
+
+async function buildWorkspaceAnalyticsDetail(workspaceId) {
+	if (!workspaceId) return null;
+
+	const [
+		recentCampaigns,
+		campaignBillableRows,
+		customersSummary,
+		recentOrders,
+		topCustomers,
+	] = await Promise.all([
+		prisma.campaign.findMany({
+			where: { workspaceId },
+			select: {
+				id: true,
+				name: true,
+				templateName: true,
+				status: true,
+				totalRecipients: true,
+				sentRecipients: true,
+				deliveredRecipients: true,
+				readRecipients: true,
+				failedRecipients: true,
+				startedAt: true,
+				finishedAt: true,
+				createdAt: true,
+			},
+			orderBy: { createdAt: 'desc' },
+			take: 8,
+		}),
+		prisma.campaignRecipient.groupBy({
+			by: ['campaignId'],
+			where: { workspaceId, billable: true },
+			_count: { _all: true },
+		}),
+		prisma.customerOrder.aggregate({
+			where: { workspaceId },
+			_count: { _all: true },
+			_sum: { totalAmount: true },
+		}),
+		prisma.customerOrder.findMany({
+			where: { workspaceId },
+			select: {
+				id: true,
+				orderNumber: true,
+				contactName: true,
+				totalAmount: true,
+				currency: true,
+				status: true,
+				paymentStatus: true,
+				orderCreatedAt: true,
+				createdAt: true,
+			},
+			orderBy: [{ orderCreatedAt: 'desc' }, { createdAt: 'desc' }],
+			take: 8,
+		}),
+		prisma.customerProfile.findMany({
+			where: { workspaceId },
+			select: {
+				id: true,
+				displayName: true,
+				email: true,
+				phone: true,
+				orderCount: true,
+				totalSpent: true,
+			},
+			orderBy: { totalSpent: 'desc' },
+			take: 8,
+		}),
+	]);
+
+	const billableByCampaign = new Map(
+		campaignBillableRows.map((row) => [row.campaignId, row._count?._all || 0])
+	);
+
+	return {
+		campaigns: recentCampaigns.map((campaign) => {
+			const billableRecipientsCount = billableByCampaign.get(campaign.id) || 0;
+			return {
+				...campaign,
+				billableRecipientsCount,
+				estimatedCostUsd: Number(
+					(billableRecipientsCount * DEFAULT_ESTIMATED_MESSAGE_COST_USD).toFixed(2)
+				),
+			};
+		}),
+		customers: {
+			ordersCount: customersSummary._count?._all || 0,
+			revenueTotal: toNumber(customersSummary._sum?.totalAmount),
+			recentOrders: recentOrders.map((order) => ({
+				...order,
+				totalAmount: toNumber(order.totalAmount),
+			})),
+			topCustomers: topCustomers.map((customer) => ({
+				...customer,
+				totalSpent: toNumber(customer.totalSpent),
+			})),
+		},
+	};
 }
 
 export async function getWorkspaceCatalogStatus(req, res, next) {
@@ -427,6 +579,144 @@ export async function getPlatformDiagnostics(req, res, next) {
 	}
 }
 
+export async function getWorkspaceAnalytics(req, res, next) {
+	try {
+		assertPlatformAdmin(req);
+
+		const selectedWorkspaceId = normalizeString(req.query?.workspaceId);
+		const workspaces = await prisma.workspace.findMany({
+			select: {
+				id: true,
+				name: true,
+				slug: true,
+				status: true,
+				createdAt: true,
+				branding: {
+					select: {
+						logoUrl: true,
+						primaryColor: true,
+					},
+				},
+				aiConfig: {
+					select: {
+						businessName: true,
+					},
+				},
+			},
+			orderBy: { createdAt: 'desc' },
+		});
+
+		const workspaceIds = workspaces.map((workspace) => workspace.id);
+		const [
+			campaignRows,
+			recipientRows,
+			customerRows,
+			orderRows,
+		] = await Promise.all([
+			prisma.campaign.groupBy({
+				by: ['workspaceId', 'status'],
+				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				_count: { _all: true },
+			}),
+			prisma.campaignRecipient.groupBy({
+				by: ['workspaceId', 'status', 'billable'],
+				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				_count: { _all: true },
+			}),
+			prisma.customerProfile.groupBy({
+				by: ['workspaceId'],
+				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				_count: { _all: true },
+			}),
+			prisma.customerOrder.groupBy({
+				by: ['workspaceId', 'currency'],
+				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				_count: { _all: true },
+				_sum: { totalAmount: true },
+			}),
+		]);
+
+		const metricsByWorkspace = new Map(
+			workspaceIds.map((workspaceId) => [workspaceId, emptyAnalyticsMetrics()])
+		);
+
+		for (const row of campaignRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			metrics.campaignsCount += count;
+			if (ACTIVE_CAMPAIGN_STATUSES.includes(row.status)) {
+				metrics.activeCampaignsCount += count;
+			}
+		}
+
+		for (const row of recipientRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			metrics.recipientsCount += count;
+			if (['SENT', 'DELIVERED', 'READ'].includes(row.status)) metrics.sentRecipientsCount += count;
+			if (['DELIVERED', 'READ'].includes(row.status)) metrics.deliveredRecipientsCount += count;
+			if (row.status === 'READ') metrics.readRecipientsCount += count;
+			if (row.status === 'FAILED') metrics.failedRecipientsCount += count;
+			if (row.billable === true) metrics.billableRecipientsCount += count;
+		}
+
+		for (const row of customerRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.customersCount = row._count?._all || 0;
+		}
+
+		for (const row of orderRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.ordersCount += row._count?._all || 0;
+			metrics.revenueTotal += toNumber(row._sum?.totalAmount);
+			if (row.currency) metrics.currency = row.currency;
+		}
+
+		const workspaceAnalytics = workspaces.map((workspace) => ({
+			workspace,
+			metrics: applyEstimatedCost(metricsByWorkspace.get(workspace.id) || emptyAnalyticsMetrics()),
+		}));
+
+		const totals = applyEstimatedCost(workspaceAnalytics.reduce((acc, item) => {
+			const metrics = item.metrics || {};
+			acc.campaignsCount += metrics.campaignsCount || 0;
+			acc.activeCampaignsCount += metrics.activeCampaignsCount || 0;
+			acc.recipientsCount += metrics.recipientsCount || 0;
+			acc.sentRecipientsCount += metrics.sentRecipientsCount || 0;
+			acc.deliveredRecipientsCount += metrics.deliveredRecipientsCount || 0;
+			acc.readRecipientsCount += metrics.readRecipientsCount || 0;
+			acc.failedRecipientsCount += metrics.failedRecipientsCount || 0;
+			acc.billableRecipientsCount += metrics.billableRecipientsCount || 0;
+			acc.customersCount += metrics.customersCount || 0;
+			acc.ordersCount += metrics.ordersCount || 0;
+			acc.revenueTotal += metrics.revenueTotal || 0;
+			return acc;
+		}, emptyAnalyticsMetrics()));
+
+		const detailWorkspaceId = selectedWorkspaceId || workspaceAnalytics[0]?.workspace?.id || '';
+		const detail = detailWorkspaceId
+			? {
+					workspaceId: detailWorkspaceId,
+					...(await buildWorkspaceAnalyticsDetail(detailWorkspaceId)),
+			  }
+			: null;
+
+		return res.json({
+			ok: true,
+			estimatedMessageCostUsd: DEFAULT_ESTIMATED_MESSAGE_COST_USD,
+			totals,
+			workspaces: workspaceAnalytics,
+			detail,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
 export async function createWorkspace(req, res, next) {
 	try {
 		assertPlatformAdmin(req);
@@ -607,6 +897,7 @@ export async function createWorkspaceUser(req, res, next) {
 		const email = normalizeString(req.body?.email).toLowerCase();
 		const password = normalizeString(req.body?.password);
 		const role = normalizeRole(req.body?.role);
+		assertCanManageRole(req, role);
 
 		if (!name || !email || !password) {
 			return res.status(400).json({
@@ -658,14 +949,13 @@ export async function updateWorkspaceUser(req, res, next) {
 		}
 
 		assertWorkspaceAdmin(req, user.workspaceId || '');
+		assertCanManageRole(req, user.role, user);
 
 		const data = {};
 		if (req.body?.name !== undefined) data.name = normalizeString(req.body.name);
 		if (req.body?.role !== undefined) {
 			const role = normalizeRole(req.body.role);
-			if (role === 'PLATFORM_ADMIN' && !isPlatformAdmin(req.user)) {
-				return res.status(403).json({ ok: false, error: 'Solo superadmin puede asignar ese rol.' });
-			}
+			assertCanManageRole(req, role, user);
 			data.role = role;
 			data.workspaceId = role === 'PLATFORM_ADMIN' ? null : user.workspaceId;
 		}

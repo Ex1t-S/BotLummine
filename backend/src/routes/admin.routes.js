@@ -4,6 +4,7 @@ import {
 	createWorkspace,
 	createWorkspaceUser,
 	getPlatformDiagnostics,
+	getWorkspaceAnalytics,
 	getWorkspace,
 	getWorkspaceCatalogStatus,
 	listWorkspaceUsers,
@@ -22,6 +23,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/diagnostics', requirePlatformAdmin, getPlatformDiagnostics);
+router.get('/analytics/workspaces', requirePlatformAdmin, getWorkspaceAnalytics);
 router.get('/workspaces', requirePlatformAdmin, listWorkspaces);
 router.post('/workspaces', requirePlatformAdmin, createWorkspace);
 router.get('/workspaces/:workspaceId', requireAdmin, getWorkspace);
@@ -31,9 +33,9 @@ router.post('/workspaces/:workspaceId/users', requireAdmin, createWorkspaceUser)
 router.get('/workspaces/:workspaceId/catalog/status', requireAdmin, getWorkspaceCatalogStatus);
 router.post('/workspaces/:workspaceId/catalog/sync', requireAdmin, runWorkspaceCatalogSync);
 router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspaceBranding);
-router.put('/workspaces/:workspaceId/whatsapp-channel', requireAdmin, upsertWhatsAppChannel);
-router.put('/workspaces/:workspaceId/commerce-connections/:provider', requireAdmin, upsertCommerceConnection);
-router.put('/workspaces/:workspaceId/logistics-connections/:provider', requireAdmin, upsertLogisticsConnection);
+router.put('/workspaces/:workspaceId/whatsapp-channel', requirePlatformAdmin, upsertWhatsAppChannel);
+router.put('/workspaces/:workspaceId/commerce-connections/:provider', requirePlatformAdmin, upsertCommerceConnection);
+router.put('/workspaces/:workspaceId/logistics-connections/:provider', requirePlatformAdmin, upsertLogisticsConnection);
 router.patch('/users/:userId', requireAdmin, updateWorkspaceUser);
 
 export default router;
