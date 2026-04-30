@@ -49,7 +49,7 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className="page-center">
+		<div className="page-center login-page">
 			<form className="card login-card" onSubmit={handleSubmit}>
 				<h2>Ingresar</h2>
 

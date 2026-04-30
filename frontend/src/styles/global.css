@@ -35,6 +35,10 @@ body {
 	padding: 24px;
 }
 
+.login-page {
+	background: #1d4ed8;
+}
+
 .card {
 	background: #ffffff;
 	border-radius: 18px;
