@@ -41,6 +41,7 @@ model Workspace {
   templateSyncLogs    TemplateSyncLog[]
   campaigns           Campaign[]
   campaignRecipients  CampaignRecipient[]
+  campaignConversions CampaignConversion[]
 }
 
 model WorkspaceBranding {
@@ -723,6 +724,7 @@ model Campaign {
 
   workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recipients CampaignRecipient[]
+  conversions CampaignConversion[]
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, dispatchLockedAt])
@@ -759,10 +761,49 @@ model CampaignRecipient {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  conversions CampaignConversion[]
 
   @@unique([workspaceId, waMessageId])
   @@index([workspaceId, campaignId, status])
   @@index([workspaceId, phone])
+}
+
+model CampaignConversion {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  campaignId             String
+  recipientId            String?
+  conversionKey          String
+  source                 String
+  confidence             String
+  orderId                String?
+  orderNumber            String?
+  checkoutId             String?
+  cartId                 String?
+  contactName            String?
+  phone                  String?
+  email                  String?
+  amount                 Decimal? @db.Decimal(12, 2)
+  currency               String?
+  paymentStatus          String?
+  sentAt                 DateTime?
+  convertedAt            DateTime
+  attributionWindowHours Int      @default(168)
+  matchReason            String?
+  rawPayload             Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient CampaignRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, conversionKey])
+  @@index([workspaceId, campaignId, source])
+  @@index([workspaceId, recipientId])
+  @@index([workspaceId, orderId])
+  @@index([workspaceId, checkoutId])
+  @@index([workspaceId, convertedAt])
 }
 
 enum WorkspaceStatus {

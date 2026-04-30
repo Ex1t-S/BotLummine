@@ -52,6 +52,10 @@ function DashboardTabButton({ tab, isActive, onClick }) {
 	return (
 		<button
 			type="button"
+			role="tab"
+			id={`campaigns-tab-${tab.id}`}
+			aria-selected={isActive}
+			aria-controls={`campaigns-panel-${tab.id}`}
 			className={`campaigns-tab-button ${isActive ? 'is-active' : ''}`.trim()}
 			onClick={() => onClick(tab.id)}
 		>
@@ -60,9 +64,14 @@ function DashboardTabButton({ tab, isActive, onClick }) {
 	);
 }
 
-function CampaignSectionShell({ eyebrow, title, description, children }) {
+function CampaignSectionShell({ tabId, eyebrow, title, description, children }) {
 	return (
-		<section className="campaigns-tab-shell page-card campaign-shell-card campaigns-tab-shell--clean">
+		<section
+			id={`campaigns-panel-${tabId}`}
+			role="tabpanel"
+			aria-labelledby={`campaigns-tab-${tabId}`}
+			className="campaigns-tab-shell page-card campaign-shell-card campaigns-tab-shell--clean"
+		>
 			<div className="campaigns-tab-shell__header campaigns-tab-shell__header--stacked">
 				<div>
 					{eyebrow ? <span className="campaigns-tab-shell__eyebrow">{eyebrow}</span> : null}
@@ -144,6 +153,7 @@ export default function CampaignsFeaturePage() {
 			case 'library':
 				return (
 					<CampaignSectionShell
+						tabId={currentTab.id}
 						eyebrow={currentTab.eyebrow}
 						title={currentTab.title}
 						description={currentTab.description}
@@ -169,6 +179,7 @@ export default function CampaignsFeaturePage() {
 			case 'builder':
 				return (
 					<CampaignSectionShell
+						tabId={currentTab.id}
 						eyebrow={currentTab.eyebrow}
 						title={currentTab.title}
 						description={currentTab.description}
@@ -190,6 +201,7 @@ export default function CampaignsFeaturePage() {
 			case 'segment':
 				return (
 					<CampaignSectionShell
+						tabId={currentTab.id}
 						eyebrow={currentTab.eyebrow}
 						title={currentTab.title}
 						description={currentTab.description}
@@ -209,6 +221,7 @@ export default function CampaignsFeaturePage() {
 			case 'tracking':
 				return (
 					<CampaignSectionShell
+						tabId={currentTab.id}
 						eyebrow={currentTab.eyebrow}
 						title={currentTab.title}
 						description={currentTab.description}

@@ -1,6 +1,14 @@
 import { getRelevantStoreFacts } from '../../data/lummine-style.js';
 import { buildRelevantBusinessData } from '../../data/lummine-business.js';
 
+const BASE_ASSISTANT_POLICY = [
+	'Responde como asesora humana de ventas por WhatsApp.',
+	'Usa solo datos confirmados por el catalogo, pedidos, pagos y contexto operativo disponible.',
+	'No inventes productos, precios, promos, stock, links, estados de pago, envios ni tracking.',
+	'Diferencia soporte de venta: si el cliente pregunta por pedido, pago o envio, resolvelo sin abrir promociones salvo pedido explicito.',
+	'Se breve, natural y comercial; no uses listas largas ni repitas saludos, links o precios ya dados.'
+].join(' ');
+
 function formatTranscript({ businessName, contactName, recentMessages }) {
 	return recentMessages
 		.slice(-10)
@@ -100,7 +108,8 @@ export function buildPrompt({
 	menuAssistantContext = null
 }) {
 	const aiConfig = workspaceConfig?.ai || {};
-	const systemPrompt = aiConfig.systemPrompt || process.env.SYSTEM_PROMPT || 'Responde como asesora humana de ventas por WhatsApp. Sona natural, directa y comercial.';
+	const systemPrompt = process.env.GLOBAL_SYSTEM_PROMPT || process.env.SYSTEM_PROMPT || BASE_ASSISTANT_POLICY;
+	const systemPromptExtra = aiConfig.systemPrompt || '';
 	const businessContext = aiConfig.businessContext || process.env.BUSINESS_CONTEXT || '';
 	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi';
 	const tone = aiConfig.tone || 'amigable_directo';
@@ -140,6 +149,7 @@ export function buildPrompt({
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
+		systemPromptExtra ? `REGLAS EXTRA DE PLATAFORMA:\n${systemPromptExtra}` : '',
 		`NEGOCIO: ${businessName}`,
 		`ASESORA: ${agentName}`,
 		`TONO DE MARCA: ${tone}`,

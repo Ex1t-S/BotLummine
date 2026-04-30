@@ -14,6 +14,7 @@ import {
 	upsertTiendanubeOrder,
 	resolveStoreCredentials
 } from '../services/customers/customer.service.js';
+import { attributeOrderConversions } from '../services/campaigns/campaign-attribution.service.js';
 import { resolveWorkspaceIdFromPhoneNumberId } from '../services/workspaces/workspace-context.service.js';
 
 function extractInboundBody(message = {}) {
@@ -367,6 +368,14 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 		const saved = await upsertTiendanubeOrder(order, credentials.storeId, {
 			workspaceId: credentials.workspaceId,
 		});
+		const attribution = await attributeOrderConversions({
+			workspaceId: credentials.workspaceId,
+			storeId: credentials.storeId,
+			orderId: resourceId
+		}).catch((error) => {
+			console.error('[TIENDANUBE][WEBHOOK][ATTRIBUTION]', error?.message || error);
+			return { conversions: 0, recoveredCarts: 0 };
+		});
 
 		return res.status(200).json({
 			ok: true,
@@ -375,7 +384,9 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			orderId: resourceId,
 			source: credentials.source,
 			ordersUpserted: saved.ordersUpserted,
-			itemsUpserted: saved.itemsUpserted
+			itemsUpserted: saved.itemsUpserted,
+			conversionsAttributed: attribution.conversions || 0,
+			recoveredCarts: attribution.recoveredCarts || 0
 		});
 	} catch (error) {
 		console.error('[TIENDANUBE][WEBHOOK][ERROR]', error);

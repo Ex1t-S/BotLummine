@@ -46,6 +46,10 @@ function formatUsdCost(value = 0) {
 	}
 }
 
+function formatCompactNumber(value) {
+	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
+}
+
 function badgeClass(value = '') {
 	return `campaign-badge ${String(value).toLowerCase()}`;
 }
@@ -277,6 +281,8 @@ export default function CampaignRunsPanel({
 	);
 	const analytics = selectedCampaign?.analytics || {};
 	const campaignCost = calculateCampaignCost(recipientMetrics.sent);
+	const attributedRevenue = Number(analytics.attributedRevenue || 0);
+	const attributedCurrency = analytics.attributedCurrency || 'ARS';
 
 	const filteredRecipients = useMemo(() => {
 		return allRecipients.filter((recipient) => {
@@ -334,18 +340,13 @@ export default function CampaignRunsPanel({
 								const listCost = calculateCampaignCost(listSentRecipients);
 
 								return (
-									<article
+									<button
+										type="button"
 										key={campaign.id}
 										className={`campaign-list-card campaign-list-card--run${isSelected ? ' selected' : ''}`}
 										onClick={() => onSelectCampaign(campaign)}
-										role="button"
-										tabIndex={0}
-										onKeyDown={(event) => {
-											if (event.key === 'Enter' || event.key === ' ') {
-												event.preventDefault();
-												onSelectCampaign(campaign);
-											}
-										}}
+										aria-pressed={isSelected}
+										aria-label={`Ver tracking de ${campaign.name}`}
 									>
 										<div className="campaign-list-card-top">
 											<div>
@@ -369,7 +370,7 @@ export default function CampaignRunsPanel({
 											<span>Compraron {Number(campaignAnalytics.conversionSignalRecipients || campaignAnalytics.purchasedRecipients || 0)}</span>
 											<span>Costo {formatUsdCost(listCost)}</span>
 										</div>
-									</article>
+									</button>
 								);
 							})
 						)}
@@ -431,6 +432,16 @@ export default function CampaignRunsPanel({
 							</div>
 
 							<div className="campaign-tracking-kpis">
+								<div className="campaign-tracking-kpi campaign-tracking-kpi--featured">
+									<span>Conversión</span>
+									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.conversionSignalRate || 0)} con señal de compra</small>
+								</div>
+								<div className="campaign-tracking-kpi campaign-tracking-kpi--featured">
+									<span>Facturación atribuida</span>
+									<strong>{formatMoney(attributedRevenue, attributedCurrency)}</strong>
+									<small>Compras detectadas post campaña</small>
+								</div>
 								<div className="campaign-tracking-kpi">
 									<span>Total</span>
 									<strong>{recipientMetrics.total}</strong>
@@ -476,11 +487,6 @@ export default function CampaignRunsPanel({
 									<small>{formatPercent(analytics.chatConfirmedPurchaseRate || 0)}</small>
 								</div>
 								<div className="campaign-tracking-kpi">
-									<span>Conversion total</span>
-									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
-									<small>{formatPercent(analytics.conversionSignalRate || 0)}</small>
-								</div>
-								<div className="campaign-tracking-kpi">
 									<span>Costo</span>
 									<strong>{formatUsdCost(campaignCost)}</strong>
 									<small>{recipientMetrics.sent} enviados x USD 0.06</small>
@@ -520,8 +526,17 @@ export default function CampaignRunsPanel({
 								</div>
 							</div>
 
+							<div className="campaign-results-summary" aria-live="polite">
+								<strong>{formatCompactNumber(filteredRecipients.length)}</strong>
+								<span>
+									destinatario{filteredRecipients.length === 1 ? '' : 's'} en la vista actual
+									{statusFilter !== 'ALL' ? ` · filtro ${statusFilter}` : ''}
+									{search ? ' · búsqueda aplicada' : ''}
+								</span>
+							</div>
+
 							<div className="campaign-recipient-table-wrapper campaign-recipient-table-wrapper--tracking">
-								<table className="campaign-table">
+								<table className="campaign-table" aria-label="Destinatarios y resultados de la campaña">
 									<thead>
 										<tr>
 											<th>Destinatario</th>
@@ -536,14 +551,14 @@ export default function CampaignRunsPanel({
 										{paginatedRecipients.length ? (
 											paginatedRecipients.map((recipient) => (
 												<tr key={recipient.id || recipient.phone}>
-													<td>{recipient.contactName || recipient.name || 'Sin nombre'}</td>
-													<td>{recipient.phone || recipient.contactPhone || '--'}</td>
-													<td>
+													<td data-label="Destinatario">{recipient.contactName || recipient.name || 'Sin nombre'}</td>
+													<td data-label="Teléfono">{recipient.phone || recipient.contactPhone || '--'}</td>
+													<td data-label="Estado">
 														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
 															{normalizeRecipientStatus(recipient.status)}
 														</span>
 													</td>
-													<td>
+													<td data-label="Interacción">
 														<div className="campaign-recipient-meta">
 															<span
 																className={badgeClass(
@@ -569,7 +584,7 @@ export default function CampaignRunsPanel({
 															</small>
 														</div>
 													</td>
-													<td>
+													<td data-label="Compra detectada">
 														<div className="campaign-recipient-meta">
 															<span
 																className={badgeClass(
@@ -590,7 +605,7 @@ export default function CampaignRunsPanel({
 															</small>
 														</div>
 													</td>
-													<td>
+													<td data-label="Última actualización">
 														{formatDate(
 															recipient.readAt ||
 															recipient.deliveredAt ||

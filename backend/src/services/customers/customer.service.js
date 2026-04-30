@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -13,6 +14,7 @@ const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES
 const ORDER_FIELDS = [
 	'id',
 	'number',
+	'token',
 	'created_at',
 	'updated_at',
 	'total',
@@ -436,6 +438,7 @@ function mapOrderPayload(order, storeId, customerProfileId, workspaceId) {
 		storeId,
 		orderId: String(order?.id),
 		orderNumber: cleanString(order?.number),
+		token: cleanString(order?.token),
 		contactName: cleanString(order?.contact_name) || 'Cliente sin nombre',
 		contactEmail: cleanString(order?.contact_email),
 		normalizedEmail: normalizeEmail(order?.contact_email),
@@ -568,7 +571,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKS
 		}
 	}
 
-	return { ordersUpserted: orders.length, itemsUpserted: items.length };
+	return { ordersUpserted: orders.length, itemsUpserted: items.length, orderIds };
 }
 
 
@@ -627,6 +630,13 @@ async function processWindow({ storeId, accessToken, workspaceId, from, to, labe
 		windowOrders += orders.length;
 
 		const saved = await upsertOrdersAndItems(orders, storeId, workspaceId);
+		await attributeOrdersByIds({
+			workspaceId,
+			storeId,
+			orderIds: saved.orderIds || orders.map((order) => String(order.id)),
+		}).catch((error) => {
+			pushWarning(`No se pudo atribuir conversiones de campaÃ±a: ${error?.message || error}`);
+		});
 		syncState.ordersUpserted += saved.ordersUpserted;
 		syncState.itemsUpserted += saved.itemsUpserted;
 		windowUpserted += saved.ordersUpserted;

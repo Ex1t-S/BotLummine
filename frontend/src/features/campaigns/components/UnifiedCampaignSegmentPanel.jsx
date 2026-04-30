@@ -23,11 +23,13 @@ function SourceButton({ option, active, onClick }) {
 	return (
 		<button
 			type="button"
+			aria-pressed={active}
+			aria-describedby={`campaign-source-${option.id}-description`}
 			className={`campaign-source-switch__button ${active ? 'is-active' : ''}`.trim()}
 			onClick={() => onClick(option.id)}
 		>
 			<strong>{option.label}</strong>
-			<span>{option.description}</span>
+			<span id={`campaign-source-${option.id}-description`}>{option.description}</span>
 		</button>
 	);
 }

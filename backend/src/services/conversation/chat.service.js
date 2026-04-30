@@ -46,6 +46,7 @@ import {
 	getWorkspaceRuntimeConfig,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
+import { persistChatConfirmationConversions } from '../campaigns/campaign-attribution.service.js';
 
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	const baseText = String(text || '').trim();
@@ -353,7 +354,7 @@ export async function processInboundMessage({
 
 	const createdInboundAt = new Date();
 
-	await prisma.message.create({
+	const inboundMessage = await prisma.message.create({
 		data: {
 			conversationId: conversation.id,
 			workspaceId: resolvedWorkspaceId,
@@ -368,6 +369,17 @@ export async function processInboundMessage({
 			rawPayload,
 			createdAt: createdInboundAt,
 		}
+	});
+	await persistChatConfirmationConversions({
+		workspaceId: resolvedWorkspaceId,
+		conversationId: conversation.id,
+		messageId: inboundMessage.id,
+		messageBody,
+		contactName,
+		phone: normalizedWaId,
+		createdAt: createdInboundAt,
+	}).catch((error) => {
+		console.error('[CAMPAIGN ATTRIBUTION][CHAT]', error?.message || error);
 	});
 
 	await prisma.conversation.update({

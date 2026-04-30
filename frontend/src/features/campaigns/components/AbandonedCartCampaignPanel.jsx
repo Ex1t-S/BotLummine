@@ -59,7 +59,7 @@ export default function AbandonedCartCampaignPanel({
 
 			<div className="campaign-custom-audience-grid campaign-custom-audience-grid--balanced">
 				<div className="campaign-custom-audience-card campaign-custom-audience-card--form">
-					<div className="field">
+					<label className="field">
 						<span>Template</span>
 						<select
 							value={selectedTemplate?.id || ''}
@@ -75,19 +75,19 @@ export default function AbandonedCartCampaignPanel({
 								</option>
 							))}
 						</select>
-					</div>
+					</label>
 
 					<div className="campaign-form-grid two-columns">
-						<div className="field">
+						<label className="field">
 							<span>Nombre</span>
 							<input
 								value={form.name}
 								onChange={(e) => onUpdateField('name', e.target.value)}
 								placeholder="Recuperación carritos 7 días"
 							/>
-						</div>
+						</label>
 
-						<div className="field">
+						<label className="field">
 							<span>Ventana</span>
 							<select
 								value={form.daysBack}
@@ -97,11 +97,11 @@ export default function AbandonedCartCampaignPanel({
 								<option value={15}>15 días</option>
 								<option value={30}>30 días</option>
 							</select>
-						</div>
+						</label>
 					</div>
 
 					<div className="campaign-custom-audience-grid-4">
-						<div className="field">
+						<label className="field">
 							<span>Estado</span>
 							<select
 								value={form.status}
@@ -111,9 +111,9 @@ export default function AbandonedCartCampaignPanel({
 								<option value="CONTACTED">Contactados</option>
 								<option value="ALL">Todos</option>
 							</select>
-						</div>
+						</label>
 
-						<div className="field">
+						<label className="field">
 							<span>Límite</span>
 							<input
 								type="number"
@@ -122,9 +122,9 @@ export default function AbandonedCartCampaignPanel({
 								value={form.limit}
 								onChange={(e) => onUpdateField('limit', Number(e.target.value || 50))}
 							/>
-						</div>
+						</label>
 
-						<div className="field">
+						<label className="field">
 							<span>Monto mínimo</span>
 							<input
 								type="number"
@@ -133,19 +133,19 @@ export default function AbandonedCartCampaignPanel({
 								onChange={(e) => onUpdateField('minTotal', e.target.value)}
 								placeholder="0"
 							/>
-						</div>
+						</label>
 
-						<div className="field">
+						<label className="field">
 							<span>Producto</span>
 							<input
 								value={form.productQuery}
 								onChange={(e) => onUpdateField('productQuery', e.target.value)}
 								placeholder="body, faja, calza"
 							/>
-						</div>
+						</label>
 					</div>
 
-					<div className="field">
+					<label className="field">
 						<span>Notas internas</span>
 						<textarea
 							value={form.notes}
@@ -153,7 +153,7 @@ export default function AbandonedCartCampaignPanel({
 							placeholder="Referencia interna"
 							rows={3}
 						/>
-					</div>
+					</label>
 
 					<label className="campaign-toggle campaign-toggle--card">
 						<input
@@ -172,7 +172,7 @@ export default function AbandonedCartCampaignPanel({
 							type="button"
 							className="button ghost"
 							onClick={onPreview}
-							disabled={previewing}
+							disabled={previewing || !selectedTemplate}
 						>
 							{previewing ? 'Generando...' : 'Previsualizar'}
 						</button>
@@ -181,7 +181,7 @@ export default function AbandonedCartCampaignPanel({
 							type="button"
 							className="button primary"
 							onClick={() => onCreate(form.launchNow)}
-							disabled={creating}
+							disabled={creating || !selectedTemplate}
 						>
 							{creating
 								? 'Creando campaña...'
@@ -206,7 +206,11 @@ export default function AbandonedCartCampaignPanel({
 						) : null}
 					</div>
 
-					<div className="campaign-custom-audience-preview-list">
+					<div
+						className="campaign-custom-audience-preview-list"
+						aria-live="polite"
+						aria-busy={previewing}
+					>
 						{preview.recipients?.length ? (
 							preview.recipients.slice(0, 8).map((recipient, index) => (
 								<div
@@ -235,7 +239,8 @@ export default function AbandonedCartCampaignPanel({
 							))
 						) : (
 							<div className="campaign-custom-audience-empty">
-								Hacé una previsualización para ver los primeros destinatarios.
+								<strong>Sin destinatarios para mostrar</strong>
+								<span>Elegí un template y previsualizá para revisar los primeros contactos antes de crear la campaña.</span>
 							</div>
 						)}
 					</div>

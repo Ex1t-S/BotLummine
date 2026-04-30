@@ -9,6 +9,10 @@ import {
 	getWorkspaceRuntimeConfig,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
+import {
+	filterRecoverableAbandonedCarts,
+	getPersistedConversionInsights,
+} from './campaign-attribution.service.js';
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -363,10 +367,11 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 		],
 		take: Math.min(filters.limit * 4, 1000)
 	});
+	const recoverableCarts = await filterRecoverableAbandonedCarts(rawCarts, workspaceId);
 
 	const latestByPhone = new Map();
 
-	for (const cart of rawCarts) {
+	for (const cart of recoverableCarts) {
 		const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 		const checkoutUrl = normalizeString(cart.abandonedCheckoutUrl || '');
 
@@ -1036,6 +1041,7 @@ export async function listCampaigns({ workspaceId = DEFAULT_WORKSPACE_ID, limit 
 				where: { workspaceId: resolvedWorkspaceId, campaignId: campaign.id },
 				select: {
 					id: true,
+					campaignId: true,
 					phone: true,
 					waId: true,
 					externalKey: true,
@@ -1321,20 +1327,39 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 	}
 
 	const base = recipientsWithDispatch.length || 0;
+	const persistedInsights = await getPersistedConversionInsights({
+		workspaceId: resolvedWorkspaceId,
+		recipientIds: normalizedRecipients.map((recipient) => recipient.id),
+	});
+	const persistedSummary = persistedInsights.summary || {};
+	const persistedById = persistedInsights.recipientsById || new Map();
+	const finalPurchasedRecipients = Math.max(purchasedRecipients, persistedSummary.purchasedRecipients || 0);
+	const finalChatConfirmedRecipients = Math.max(chatConfirmedPurchaseRecipients, persistedSummary.chatConfirmedPurchaseRecipients || 0);
+	const finalConversionSignalRecipients = Math.max(conversionSignalRecipients, persistedSummary.conversionSignalRecipients || 0);
+
+	for (const [recipientId, persisted] of persistedById.entries()) {
+		recipientsById.set(recipientId, {
+			...(recipientsById.get(recipientId) || {}),
+			...persisted,
+		});
+	}
 
 	return {
 		summary: {
 			...emptySummary,
 			repliedRecipients,
 			effectiveReadRecipients,
-			purchasedRecipients,
-			chatConfirmedPurchaseRecipients,
-			conversionSignalRecipients,
+			purchasedRecipients: finalPurchasedRecipients,
+			chatConfirmedPurchaseRecipients: finalChatConfirmedRecipients,
+			conversionSignalRecipients: finalConversionSignalRecipients,
 			replyRate: base > 0 ? repliedRecipients / base : 0,
 			effectiveReadRate: base > 0 ? effectiveReadRecipients / base : 0,
-			purchaseRate: base > 0 ? purchasedRecipients / base : 0,
-			chatConfirmedPurchaseRate: base > 0 ? chatConfirmedPurchaseRecipients / base : 0,
-			conversionSignalRate: base > 0 ? conversionSignalRecipients / base : 0,
+			purchaseRate: base > 0 ? finalPurchasedRecipients / base : 0,
+			chatConfirmedPurchaseRate: base > 0 ? finalChatConfirmedRecipients / base : 0,
+			conversionSignalRate: base > 0 ? finalConversionSignalRecipients / base : 0,
+			attributedRevenue: persistedSummary.attributedRevenue || 0,
+			attributedCurrency: persistedSummary.attributedCurrency || 'ARS',
+			conversionsBySource: persistedSummary.conversionsBySource || {},
 			purchaseAttributionModel: 'prefer_same_abandoned_cart_token_paid_after_campaign_else_phone_order_after_campaign',
 		},
 		recipientsById,
@@ -1374,6 +1399,7 @@ export async function getCampaignDetail(campaignId, { workspaceId = DEFAULT_WORK
 			where: { workspaceId: resolvedWorkspaceId, campaignId },
 			select: {
 				id: true,
+				campaignId: true,
 				phone: true,
 				waId: true,
 				externalKey: true,

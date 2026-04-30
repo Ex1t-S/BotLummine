@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
+import { filterRecoverableAbandonedCarts } from '../services/campaigns/campaign-attribution.service.js';
 import { getOrCreateConversation } from '../services/conversation/chat.service.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
@@ -253,6 +254,14 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 			return res.status(404).json({
 				ok: false,
 				error: 'Carrito o teléfono no disponible'
+			});
+		}
+
+		const [recoverableCart] = await filterRecoverableAbandonedCarts([cart], workspaceId);
+		if (!recoverableCart) {
+			return res.status(409).json({
+				ok: false,
+				error: 'Este carrito ya tiene una compra pagada o completada asociada.'
 			});
 		}
 
