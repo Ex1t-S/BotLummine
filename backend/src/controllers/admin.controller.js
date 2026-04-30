@@ -136,6 +136,10 @@ function parseJsonObject(value, fallback = null) {
 	}
 }
 
+function hasOwn(object = {}, key = '') {
+	return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 async function buildWorkspacePayload(workspaceId) {
 	const workspace = await prisma.workspace.findUnique({
 		where: { id: workspaceId },
@@ -792,10 +796,11 @@ export async function updateWorkspace(req, res, next) {
 		const workspaceId = requireRequestWorkspaceId(req);
 		assertWorkspaceAdmin(req, workspaceId);
 
-		await getWorkspaceOrThrow(workspaceId);
+		const existingWorkspace = await getWorkspaceOrThrow(workspaceId);
+		const platformAdmin = isPlatformAdmin(req.user);
 
 		const updateData = {};
-		if (isPlatformAdmin(req.user)) {
+		if (platformAdmin) {
 			if (req.body?.name !== undefined) updateData.name = normalizeString(req.body.name);
 			if (req.body?.slug !== undefined) updateData.slug = normalizeSlug(req.body.slug);
 			if (req.body?.status !== undefined) updateData.status = normalizeString(req.body.status).toUpperCase();
@@ -808,7 +813,7 @@ export async function updateWorkspace(req, res, next) {
 			});
 		}
 
-		if (req.body?.branding) {
+		if (platformAdmin && req.body?.branding) {
 			const branding = req.body.branding || {};
 			await prisma.workspaceBranding.upsert({
 				where: { workspaceId },
@@ -830,29 +835,63 @@ export async function updateWorkspace(req, res, next) {
 
 		if (req.body?.aiConfig) {
 			const ai = req.body.aiConfig || {};
+			const aiUpdateData = {};
+			const aiCreateData = {
+				workspaceId,
+				businessName: existingWorkspace.name || 'Marca',
+				agentName: 'Sofi',
+				tone: 'humana, directa y comercial',
+			};
+
+			if (platformAdmin && hasOwn(ai, 'businessName')) {
+				aiUpdateData.businessName = normalizeString(ai.businessName) || undefined;
+				aiCreateData.businessName = normalizeString(ai.businessName) || 'Marca';
+			}
+
+			if (hasOwn(ai, 'agentName')) {
+				aiUpdateData.agentName = normalizeString(ai.agentName) || undefined;
+				aiCreateData.agentName = normalizeString(ai.agentName) || 'Sofi';
+			}
+
+			if (hasOwn(ai, 'tone')) {
+				aiUpdateData.tone = normalizeString(ai.tone) || undefined;
+				aiCreateData.tone = normalizeString(ai.tone) || 'humana, directa y comercial';
+			}
+
+			if (platformAdmin && hasOwn(ai, 'systemPrompt')) {
+				aiUpdateData.systemPrompt = normalizeString(ai.systemPrompt) || null;
+				aiCreateData.systemPrompt = normalizeString(ai.systemPrompt) || null;
+			}
+
+			if (platformAdmin && hasOwn(ai, 'businessContext')) {
+				aiUpdateData.businessContext = normalizeString(ai.businessContext) || null;
+				aiCreateData.businessContext = normalizeString(ai.businessContext) || null;
+			}
+
+			if (hasOwn(ai, 'paymentConfig')) {
+				aiUpdateData.paymentConfig = parseJsonObject(ai.paymentConfig, null);
+				aiCreateData.paymentConfig = parseJsonObject(ai.paymentConfig, null);
+			}
+
+			if (platformAdmin && hasOwn(ai, 'policyConfig')) {
+				aiUpdateData.policyConfig = parseJsonObject(ai.policyConfig, null);
+				aiCreateData.policyConfig = parseJsonObject(ai.policyConfig, null);
+			}
+
+			if (platformAdmin && hasOwn(ai, 'catalogConfig')) {
+				aiUpdateData.catalogConfig = parseJsonObject(ai.catalogConfig, null);
+				aiCreateData.catalogConfig = parseJsonObject(ai.catalogConfig, null);
+			}
+
+			if (!Object.keys(aiUpdateData).length) {
+				const workspace = await buildWorkspacePayload(workspaceId);
+				return res.json({ ok: true, workspace });
+			}
+
 			await prisma.workspaceAiConfig.upsert({
 				where: { workspaceId },
-				update: {
-					businessName: normalizeString(ai.businessName) || undefined,
-					agentName: normalizeString(ai.agentName) || undefined,
-					tone: normalizeString(ai.tone) || undefined,
-					systemPrompt: normalizeString(ai.systemPrompt) || null,
-					businessContext: normalizeString(ai.businessContext) || null,
-					paymentConfig: parseJsonObject(ai.paymentConfig, null),
-					policyConfig: parseJsonObject(ai.policyConfig, null),
-					catalogConfig: parseJsonObject(ai.catalogConfig, null),
-				},
-				create: {
-					workspaceId,
-					businessName: normalizeString(ai.businessName) || 'Marca',
-					agentName: normalizeString(ai.agentName) || 'Sofi',
-					tone: normalizeString(ai.tone) || 'humana, directa y comercial',
-					systemPrompt: normalizeString(ai.systemPrompt) || null,
-					businessContext: normalizeString(ai.businessContext) || null,
-					paymentConfig: parseJsonObject(ai.paymentConfig, null),
-					policyConfig: parseJsonObject(ai.policyConfig, null),
-					catalogConfig: parseJsonObject(ai.catalogConfig, null),
-				},
+				update: aiUpdateData,
+				create: aiCreateData,
 			});
 		}
 

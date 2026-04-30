@@ -67,22 +67,6 @@ const EMPTY_PAYMENT_FORM = {
 	transferExtra: ''
 };
 
-const EMPTY_CATALOG_FORM = {
-	bodys: '',
-	bombachasModeladoras: '',
-	calzasLinfaticas: '',
-	fajas: '',
-	shortsFaja: '',
-	general: ''
-};
-
-const EMPTY_POLICY_FORM = {
-	shipping: '',
-	promotions: '',
-	minPurchase: '',
-	humanHandoff: ''
-};
-
 const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
 	{ key: 'integrations', label: 'Integraciones' },
@@ -131,28 +115,6 @@ function mapPaymentForm(workspace) {
 		transferAlias: fieldValue(transfer.alias),
 		transferCbu: fieldValue(transfer.cbu),
 		transferExtra: fieldValue(transfer.extra)
-	};
-}
-
-function mapCatalogForm(workspace) {
-	const catalog = workspace?.aiConfig?.catalogConfig || {};
-	return {
-		bodys: fieldValue(catalog.bodys),
-		bombachasModeladoras: fieldValue(catalog.bombachasModeladoras),
-		calzasLinfaticas: fieldValue(catalog.calzasLinfaticas),
-		fajas: fieldValue(catalog.fajas),
-		shortsFaja: fieldValue(catalog.shortsFaja),
-		general: fieldValue(catalog.general)
-	};
-}
-
-function mapPolicyForm(workspace) {
-	const policy = workspace?.aiConfig?.policyConfig || {};
-	return {
-		shipping: fieldValue(policy.shipping),
-		promotions: fieldValue(policy.promotions),
-		minPurchase: fieldValue(policy.minPurchase),
-		humanHandoff: fieldValue(policy.humanHandoff)
 	};
 }
 
@@ -231,8 +193,6 @@ export default function AdminPage() {
 	const [workspaceForm, setWorkspaceForm] = useState(mapWorkspaceForm(user?.workspace || null));
 	const [workspaceCreateForm, setWorkspaceCreateForm] = useState(EMPTY_WORKSPACE_FORM);
 	const [paymentForm, setPaymentForm] = useState(EMPTY_PAYMENT_FORM);
-	const [catalogForm, setCatalogForm] = useState(EMPTY_CATALOG_FORM);
-	const [policyForm, setPolicyForm] = useState(EMPTY_POLICY_FORM);
 	const [users, setUsers] = useState([]);
 	const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
 	const [channelForm, setChannelForm] = useState(EMPTY_CHANNEL_FORM);
@@ -297,8 +257,6 @@ export default function AdminPage() {
 		setWorkspace(nextWorkspace);
 		setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 		setPaymentForm(mapPaymentForm(nextWorkspace));
-		setCatalogForm(mapCatalogForm(nextWorkspace));
-		setPolicyForm(mapPolicyForm(nextWorkspace));
 		setUsers(usersRes.data.users || []);
 		setCatalogStatus(catalogRes?.data?.catalog || null);
 
@@ -408,7 +366,6 @@ export default function AdminPage() {
 
 	function buildAiConfig(extra = {}) {
 		return {
-			...workspaceForm.aiConfig,
 			paymentConfig: {
 				transfer: {
 					bank: paymentForm.transferBank,
@@ -417,20 +374,6 @@ export default function AdminPage() {
 					cbu: paymentForm.transferCbu,
 					extra: paymentForm.transferExtra
 				}
-			},
-			catalogConfig: {
-				bodys: catalogForm.bodys,
-				bombachasModeladoras: catalogForm.bombachasModeladoras,
-				calzasLinfaticas: catalogForm.calzasLinfaticas,
-				fajas: catalogForm.fajas,
-				shortsFaja: catalogForm.shortsFaja,
-				general: catalogForm.general
-			},
-			policyConfig: {
-				shipping: policyForm.shipping,
-				promotions: policyForm.promotions,
-				minPurchase: policyForm.minPurchase,
-				humanHandoff: policyForm.humanHandoff
 			},
 			...extra
 		};
@@ -444,8 +387,6 @@ export default function AdminPage() {
 			setWorkspace(nextWorkspace);
 			setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 			setPaymentForm(mapPaymentForm(nextWorkspace));
-			setCatalogForm(mapCatalogForm(nextWorkspace));
-			setPolicyForm(mapPolicyForm(nextWorkspace));
 			showNotice(successMessage);
 		} catch (err) {
 			showError(err);
@@ -473,23 +414,34 @@ export default function AdminPage() {
 
 	async function handleSaveBrand(event) {
 		event.preventDefault();
+		if (platformAdmin) {
+			await saveWorkspace({
+				name: workspaceForm.name,
+				slug: workspaceForm.slug,
+				status: workspaceForm.status,
+				branding: {
+					logoUrl: workspaceForm.branding?.logoUrl || ''
+				},
+				aiConfig: {
+					businessName: workspaceForm.aiConfig?.businessName || '',
+					systemPrompt: workspaceForm.aiConfig?.systemPrompt || '',
+					businessContext: workspaceForm.aiConfig?.businessContext || ''
+				}
+			}, 'Marca y configuracion avanzada guardadas.');
+			return;
+		}
+
 		await saveWorkspace({
-			name: workspaceForm.name,
-			slug: workspaceForm.slug,
-			status: workspaceForm.status,
-			branding: workspaceForm.branding,
-			aiConfig: buildAiConfig(workspaceForm.aiConfig)
-		}, 'Marca e IA guardadas.');
+			aiConfig: {
+				agentName: workspaceForm.aiConfig?.agentName || '',
+				tone: workspaceForm.aiConfig?.tone || ''
+			}
+		}, 'Contenido de marca guardado.');
 	}
 
 	async function handleSavePayment(event) {
 		event.preventDefault();
-		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Pagos y politicas guardadas.');
-	}
-
-	async function handleSaveCatalogConfig(event) {
-		event.preventDefault();
-		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Catalogo contextual guardado.');
+		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Datos de pago guardados.');
 	}
 
 	async function handleSaveUser(event) {
@@ -658,32 +610,37 @@ export default function AdminPage() {
 
 				{activeTab === 'workspaces' || activeTab === 'brand' ? (
 					<section className="tenant-admin-panel">
-						<h3>{platformAdmin ? 'Datos de plataforma y branding' : 'Branding visible'}</h3>
-						<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
-							{platformAdmin ? (
-								<>
-									<Input label="Nombre" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
-									<Input label="Slug" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
-									<Select label="Estado" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
-										<option value="ACTIVE">ACTIVE</option>
-										<option value="SUSPENDED">SUSPENDED</option>
-										<option value="ARCHIVED">ARCHIVED</option>
-									</Select>
-								</>
-							) : null}
-							<Input label="Logo URL" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
-							<Input label="Color primario" type="color" value={workspaceForm.branding?.primaryColor || '#0f172a'} onChange={(value) => setNestedForm('branding', 'primaryColor', value)} />
-							<Input label="Color secundario" type="color" value={workspaceForm.branding?.secondaryColor || '#f8fafc'} onChange={(value) => setNestedForm('branding', 'secondaryColor', value)} />
-							<Input label="Color acento" type="color" value={workspaceForm.branding?.accentColor || '#10b981'} onChange={(value) => setNestedForm('branding', 'accentColor', value)} />
-							{platformAdmin ? null : (
-								<>
-									<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
-									<Input label="Agente IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
-									<Textarea label="Tono" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
-								</>
-							)}
-							<button type="submit" disabled={saving || loading}>Guardar marca</button>
-						</form>
+						<h3>{platformAdmin ? 'Datos de plataforma y branding' : 'Marca conectada'}</h3>
+						{platformAdmin ? (
+							<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
+								<Input label="Nombre" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
+								<Input label="Slug" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
+								<Select label="Estado" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
+									<option value="ACTIVE">ACTIVE</option>
+									<option value="SUSPENDED">SUSPENDED</option>
+									<option value="ARCHIVED">ARCHIVED</option>
+								</Select>
+								<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
+								<Input label="Logo URL" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
+								<Textarea label="Contexto de negocio" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
+								<Textarea label="System prompt extra" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
+								<button type="submit" disabled={saving || loading}>Guardar marca</button>
+							</form>
+						) : (
+							<div className="tenant-admin-brand-summary">
+								<div className="tenant-admin-brand-logo-box">
+									{workspaceForm.branding?.logoUrl ? (
+										<img src={workspaceForm.branding.logoUrl} alt={workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca'} />
+									) : (
+										<span>Sin logo</span>
+									)}
+								</div>
+								<div className="tenant-admin-brand-copy">
+									<strong>{workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca'}</strong>
+									<span>{workspace?.storeInstallations?.[0]?.storeUrl || workspace?.commerceConnections?.[0]?.storeUrl || 'Tienda Nube sin URL sincronizada'}</span>
+								</div>
+							</div>
+						)}
 					</section>
 				) : null}
 
@@ -691,11 +648,8 @@ export default function AdminPage() {
 					<section className="tenant-admin-panel">
 						<h3>Contenido operativo e IA</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
-							<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
 							<Input label="Agente IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
 							<Textarea label="Tono" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
-							<Textarea label="Contexto de negocio" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
-							<Textarea label="System prompt extra" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
 							<button type="submit" disabled={saving || loading}>Guardar contenido IA</button>
 						</form>
 					</section>
@@ -703,27 +657,14 @@ export default function AdminPage() {
 
 				{activeTab === 'content' ? (
 					<section className="tenant-admin-panel">
-						<h3>Pagos, politicas y catalogo contextual</h3>
+						<h3>Datos de pago</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSavePayment}>
 							<Input label="Banco transferencia" value={paymentForm.transferBank} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferBank: value }))} />
 							<Input label="Titular" value={paymentForm.transferHolder} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferHolder: value }))} />
 							<Input label="Alias" value={paymentForm.transferAlias} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferAlias: value }))} />
 							<Input label="CBU/CVU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
 							<Textarea label="Texto transferencia" value={paymentForm.transferExtra} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferExtra: value }))} />
-							<Textarea label="Envios" value={policyForm.shipping} onChange={(value) => setPolicyForm((cur) => ({ ...cur, shipping: value }))} />
-							<Textarea label="Promos" value={policyForm.promotions} onChange={(value) => setPolicyForm((cur) => ({ ...cur, promotions: value }))} />
-							<Input label="Compra minima" value={policyForm.minPurchase} onChange={(value) => setPolicyForm((cur) => ({ ...cur, minPurchase: value }))} />
-							<Textarea label="Derivacion humana" value={policyForm.humanHandoff} onChange={(value) => setPolicyForm((cur) => ({ ...cur, humanHandoff: value }))} />
-							<button type="submit" disabled={saving}>Guardar pagos y politicas</button>
-						</form>
-						<form className="tenant-admin-grid" onSubmit={handleSaveCatalogConfig}>
-							<Input label="Catalogo general" value={catalogForm.general} onChange={(value) => setCatalogForm((cur) => ({ ...cur, general: value }))} />
-							<Input label="Bodys" value={catalogForm.bodys} onChange={(value) => setCatalogForm((cur) => ({ ...cur, bodys: value }))} />
-							<Input label="Bombachas modeladoras" value={catalogForm.bombachasModeladoras} onChange={(value) => setCatalogForm((cur) => ({ ...cur, bombachasModeladoras: value }))} />
-							<Input label="Calzas linfaticas" value={catalogForm.calzasLinfaticas} onChange={(value) => setCatalogForm((cur) => ({ ...cur, calzasLinfaticas: value }))} />
-							<Input label="Fajas" value={catalogForm.fajas} onChange={(value) => setCatalogForm((cur) => ({ ...cur, fajas: value }))} />
-							<Input label="Shorts faja" value={catalogForm.shortsFaja} onChange={(value) => setCatalogForm((cur) => ({ ...cur, shortsFaja: value }))} />
-							<button type="submit" disabled={saving}>Guardar catalogo contextual</button>
+							<button type="submit" disabled={saving}>Guardar datos de pago</button>
 						</form>
 					</section>
 				) : null}

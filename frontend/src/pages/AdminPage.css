@@ -237,6 +237,60 @@
 	padding: 9px 11px;
 }
 
+.tenant-admin-brand-summary {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	min-width: 0;
+}
+
+.tenant-admin-brand-logo-box {
+	width: 72px;
+	height: 72px;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #f8fafc;
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+	flex: 0 0 auto;
+}
+
+.tenant-admin-brand-logo-box img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	padding: 8px;
+}
+
+.tenant-admin-brand-logo-box span {
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.tenant-admin-brand-copy {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.tenant-admin-brand-copy strong,
+.tenant-admin-brand-copy span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-brand-copy strong {
+	font-size: 16px;
+}
+
+.tenant-admin-brand-copy span {
+	color: #64748b;
+	font-size: 13px;
+}
+
 .tenant-admin-table-wrap {
 	overflow: auto;
 	border: 1px solid #d9e2ef;
