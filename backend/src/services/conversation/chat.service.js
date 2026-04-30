@@ -347,7 +347,7 @@ export async function processInboundMessage({
 	});
 
 	if (metaMessageId) {
-		const existingMessage = await prisma.message.findUnique({
+		const existingMessage = await prisma.message.findFirst({
 			where: { metaMessageId }
 		});
 

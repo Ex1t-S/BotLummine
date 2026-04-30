@@ -567,7 +567,7 @@ async function ensureCampaignConversation({ phone, contactId = null, contactName
 			});
 	}
 
-	let conversation = await prisma.conversation.findUnique({
+	let conversation = await prisma.conversation.findFirst({
 		where: { contactId: contact.id }
 	});
 
