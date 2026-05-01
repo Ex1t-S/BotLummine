@@ -24,6 +24,17 @@ const READ_FILTERS = [
 	{ key: 'READ', label: 'Leidos' },
 ];
 
+const EXTENDED_QUICK_EMOJIS = [
+	'\u{1F600}', '\u{1F603}', '\u{1F604}', '\u{1F601}', '\u{1F606}', '\u{1F605}', '\u{1F602}', '\u{1F923}',
+	'\u{1F60A}', '\u{1F607}', '\u{1F642}', '\u{1F609}', '\u{1F60D}', '\u{1F970}', '\u{1F618}', '\u{1F617}',
+	'\u{1F61C}', '\u{1F61D}', '\u{1F911}', '\u{1F917}', '\u{1F914}', '\u{1F92D}', '\u{1F92B}', '\u{1F928}',
+	'\u{1F610}', '\u{1F62E}', '\u{1F632}', '\u{1F97A}', '\u{1F622}', '\u{1F62D}', '\u{1F621}', '\u{1F624}',
+	'\u{1F44B}', '\u{1F91A}', '\u{1F44C}', '\u{1F44D}', '\u{1F44E}', '\u{1F64C}', '\u{1F64F}', '\u{1F91D}',
+	'\u{1F44F}', '\u{1F4AA}', '\u{1F525}', '\u{2728}', '\u{2B50}', '\u{1F389}', '\u{1F381}', '\u{1F48C}',
+	'\u{2764}\u{FE0F}', '\u{1F9E1}', '\u{1F49B}', '\u{1F49A}', '\u{1F499}', '\u{1F49C}', '\u{1F90D}', '\u{1F5A4}',
+	'\u{1F4AC}', '\u{1F4A1}', '\u{1F4E6}', '\u{1F6CD}\u{FE0F}', '\u{1F457}', '\u{1F460}', '\u{1F48E}', '\u{2705}',
+];
+
 const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Audio recibido]',
 	'[Imagen recibida]',
@@ -86,7 +97,7 @@ function getMediaKind(message = {}) {
 	if (type === 'image' || mime.startsWith('image/')) return 'image';
 	if (type === 'video' || mime.startsWith('video/')) return 'video';
 	if (type === 'document') return 'document';
-	if (type === 'sticker') return mime.startsWith('image/') ? 'image' : 'file';
+	if (type === 'sticker') return 'image';
 	if (mime === 'application/pdf') return 'document';
 	if (message.attachmentUrl) return 'file';
 
@@ -278,7 +289,11 @@ function AttachmentPreview({ message }) {
 						src={attachmentUrl}
 						alt={attachmentName || 'Imagen recibida'}
 						loading="lazy"
-						className="inbox-attachment-media inbox-attachment-image"
+						className={`inbox-attachment-media inbox-attachment-image ${
+							String(message.type || '').toLowerCase() === 'sticker'
+								? 'inbox-attachment-sticker'
+								: ''
+						}`}
 					/>
 				</a>
 			</div>
@@ -1395,7 +1410,7 @@ export default function InboxPage() {
 											<div className="inbox-emoji-title">Elegi un emoji</div>
 
 											<div className="inbox-emoji-grid">
-												{QUICK_EMOJIS.map((emoji) => (
+												{EXTENDED_QUICK_EMOJIS.map((emoji) => (
 													<button
 														key={emoji}
 														type="button"

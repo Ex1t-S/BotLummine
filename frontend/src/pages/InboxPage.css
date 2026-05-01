@@ -599,7 +599,10 @@
 	position: absolute;
 	left: 0;
 	bottom: 48px;
-	width: 260px;
+	width: 320px;
+	max-width: min(86vw, 320px);
+	max-height: 310px;
+	overflow-y: auto;
 	background: #ffffff;
 	border: 1px solid rgba(15, 23, 42, 0.12);
 	border-radius: 16px;
@@ -617,7 +620,7 @@
 
 .inbox-emoji-grid {
 	display: grid;
-	grid-template-columns: repeat(6, 1fr);
+	grid-template-columns: repeat(8, 1fr);
 	gap: 8px;
 }
 
@@ -919,6 +922,13 @@
 
 .inbox-attachment-image {
 	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.inbox-attachment-sticker {
+	width: min(180px, 100%);
+	background: transparent;
+	border: none;
+	box-shadow: none;
 }
 
 .inbox-attachment-video {

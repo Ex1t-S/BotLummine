@@ -528,7 +528,10 @@ export async function saveInboundWhatsAppMedia({
 	const storageDir = await ensureInboundMediaDir();
 
 	const effectiveMimeType = normalizeString(
-		attachmentMimeType || metadata.mimeType || 'application/octet-stream'
+		attachmentMimeType ||
+			metadata.mimeType ||
+			(String(messageType || '').toLowerCase() === 'sticker' ? 'image/webp' : '') ||
+			'application/octet-stream'
 	);
 
 	const storedFileName = buildStoredInboundFileName({

@@ -103,7 +103,14 @@ export async function serveInboxMediaController(req, res) {
 			});
 		}
 
+		const inferredMimeType =
+			message.attachmentMimeType ||
+			(message?.rawPayload?.attachment?.type === 'sticker' ? 'image/webp' : '');
+
 		res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+		if (inferredMimeType) {
+			res.type(inferredMimeType);
+		}
 		return res.sendFile(absolutePath);
 	} catch (error) {
 		return res.status(400).json({
