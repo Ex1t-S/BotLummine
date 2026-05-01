@@ -547,6 +547,7 @@ async function fetchInboxData({
 	offset = 0,
 	q = '',
 	readFilter = 'ALL',
+	attentionFilter = 'ALL',
 } = {}) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 	const safeLimit = Math.min(100, Math.max(20, Number(limit) || 60));
@@ -562,6 +563,17 @@ async function fetchInboxData({
 			? { unreadCount: { gt: 0 } }
 			: readFilter === 'READ'
 				? { unreadCount: 0 }
+				: {}),
+		...(attentionFilter === 'NEEDS_HUMAN'
+			? {
+					state: {
+						is: {
+							needsHuman: true,
+						},
+					},
+			  }
+			: attentionFilter === 'AI_ACTIVE'
+				? { aiEnabled: true }
 				: {}),
 		...(searchTerm
 			? {
@@ -791,6 +803,7 @@ export async function getInbox(req, res, next) {
 		const limit = Number(req.query.limit || 60);
 		const offset = Number(req.query.offset || 0);
 		const readFilter = String(req.query.read || 'ALL').toUpperCase();
+		const attentionFilter = String(req.query.attention || 'ALL').toUpperCase();
 
 		const data = await fetchInboxData({
 			selectedConversationId: req.query.conversationId || null,
@@ -801,6 +814,7 @@ export async function getInbox(req, res, next) {
 			offset,
 			q: req.query.q || '',
 			readFilter,
+			attentionFilter,
 		});
 
 		return res.json({
@@ -904,6 +918,9 @@ export async function getConversationMessagesJson(req, res, next) {
 	try {
 		const { conversationId } = req.params;
 		const workspaceId = requireRequestWorkspaceId(req);
+		const limit = Math.min(120, Math.max(20, Number(req.query.limit || 80) || 80));
+		const before = req.query.before ? new Date(String(req.query.before)) : null;
+		const hasValidBefore = before instanceof Date && Number.isFinite(before.getTime());
 
 		const conversation = await prisma.conversation.findFirst({
 			where: { id: conversationId, workspaceId },
@@ -928,25 +945,50 @@ export async function getConversationMessagesJson(req, res, next) {
 						lastDetectedIntent: true,
 						lastIntent: true,
 						lastUserGoal: true,
+						currentProductFocus: true,
+						currentProductFamily: true,
+						requestedOfferType: true,
+						frequentSize: true,
+						paymentPreference: true,
+						deliveryPreference: true,
+						salesStage: true,
+						buyingIntentLevel: true,
+						frictionLevel: true,
+						needsHuman: true,
+						commercialSummary: true,
+						interestedProducts: true,
+						objections: true,
+						lastRecommendedProduct: true,
+						lastRecommendedOffer: true,
+						menuActive: true,
+						menuPath: true,
 					},
 				},
 				messages: {
-				select: {
-					id: true,
-					direction: true,
-					body: true,
-					type: true,
-					createdAt: true,
-					senderName: true,
-					tokenTotal: true,
-					attachmentName: true,
-					attachmentMimeType: true,
-					attachmentUrl: true,
-					rawPayload: true,
-				},
-					orderBy: {
-						createdAt: 'asc',
+					where: hasValidBefore
+						? {
+								createdAt: {
+									lt: before,
+								},
+						  }
+						: undefined,
+					select: {
+						id: true,
+						direction: true,
+						body: true,
+						type: true,
+						createdAt: true,
+						senderName: true,
+						tokenTotal: true,
+						attachmentName: true,
+						attachmentMimeType: true,
+						attachmentUrl: true,
+						rawPayload: true,
 					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+					take: limit + 1,
 				},
 			},
 		});
@@ -957,6 +999,12 @@ export async function getConversationMessagesJson(req, res, next) {
 				error: 'Conversation not found',
 			});
 		}
+
+		const hasMoreMessages = (conversation.messages || []).length > limit;
+		const pageMessages = (conversation.messages || []).slice(0, limit).reverse();
+		const nextBefore = hasMoreMessages
+			? pageMessages[0]?.createdAt?.toISOString?.() || null
+			: null;
 
 		return res.json({
 			ok: true,
@@ -978,8 +1026,29 @@ export async function getConversationMessagesJson(req, res, next) {
 					lastDetectedIntent: conversation.state?.lastDetectedIntent || '',
 					lastIntent: conversation.state?.lastIntent || '',
 					lastUserGoal: conversation.state?.lastUserGoal || '',
+					currentProductFocus: conversation.state?.currentProductFocus || '',
+					currentProductFamily: conversation.state?.currentProductFamily || '',
+					requestedOfferType: conversation.state?.requestedOfferType || '',
+					frequentSize: conversation.state?.frequentSize || '',
+					paymentPreference: conversation.state?.paymentPreference || '',
+					deliveryPreference: conversation.state?.deliveryPreference || '',
+					salesStage: conversation.state?.salesStage || '',
+					buyingIntentLevel: conversation.state?.buyingIntentLevel || '',
+					frictionLevel: conversation.state?.frictionLevel || '',
+					needsHuman: Boolean(conversation.state?.needsHuman),
+					commercialSummary: conversation.state?.commercialSummary || '',
+					interestedProducts: Array.isArray(conversation.state?.interestedProducts)
+						? conversation.state.interestedProducts
+						: [],
+					objections: Array.isArray(conversation.state?.objections)
+						? conversation.state.objections
+						: [],
+					lastRecommendedProduct: conversation.state?.lastRecommendedProduct || '',
+					lastRecommendedOffer: conversation.state?.lastRecommendedOffer || '',
+					menuActive: Boolean(conversation.state?.menuActive),
+					menuPath: conversation.state?.menuPath || '',
 				},
-				messages: (conversation.messages || []).map((msg) => ({
+				messages: pageMessages.map((msg) => ({
 					id: msg.id,
 					direction: msg.direction,
 					body: msg.body,
@@ -993,6 +1062,11 @@ export async function getConversationMessagesJson(req, res, next) {
 					attachmentUrl: msg.attachmentUrl || null,
 					rawPayload: msg.rawPayload || null,
 				})),
+				messagesPage: {
+					limit,
+					hasMore: hasMoreMessages,
+					nextBefore,
+				},
 			},
 		});
 	} catch (error) {

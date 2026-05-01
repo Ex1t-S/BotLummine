@@ -24,6 +24,12 @@ const READ_FILTERS = [
 	{ key: 'READ', label: 'Leidos' },
 ];
 
+const ATTENTION_FILTERS = [
+	{ key: 'ALL', label: 'Todo' },
+	{ key: 'NEEDS_HUMAN', label: 'Humano' },
+	{ key: 'AI_ACTIVE', label: 'IA activa' },
+];
+
 const EXTENDED_QUICK_EMOJIS = [
 	'\u{1F600}', '\u{1F603}', '\u{1F604}', '\u{1F601}', '\u{1F606}', '\u{1F605}', '\u{1F602}', '\u{1F923}',
 	'\u{1F60A}', '\u{1F607}', '\u{1F642}', '\u{1F609}', '\u{1F60D}', '\u{1F970}', '\u{1F618}', '\u{1F617}',
@@ -254,6 +260,95 @@ function renderFormattedText(text = '') {
 	});
 }
 
+function formatContextValue(value) {
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => {
+				if (typeof item === 'string') return item;
+				if (item?.name) return item.name;
+				if (item?.label) return item.label;
+				return '';
+			})
+			.filter(Boolean)
+			.slice(0, 4)
+			.join(', ');
+	}
+
+	return String(value || '').trim();
+}
+
+function ContextItem({ label, value }) {
+	const formatted = formatContextValue(value);
+
+	if (!formatted) return null;
+
+	return (
+		<div className="inbox-context-item">
+			<span>{label}</span>
+			<strong>{formatted}</strong>
+		</div>
+	);
+}
+
+function AiContextPanel({ conversation, activeContact }) {
+	const state = conversation?.state || {};
+	const hasContext = Boolean(
+		state.commercialSummary ||
+			state.currentProductFocus ||
+			state.currentProductFamily ||
+			state.lastUserGoal ||
+			state.frequentSize ||
+			state.paymentPreference ||
+			state.deliveryPreference ||
+			state.interestedProducts?.length ||
+			state.objections?.length ||
+			state.needsHuman
+	);
+
+	return (
+		<aside className="inbox-context-panel">
+			<div className="inbox-context-header">
+				<div>
+					<div className="inbox-context-title">Contexto IA</div>
+					<div className="inbox-context-subtitle">
+						{activeContact?.displayName || conversation?.contact?.name || 'Cliente'}
+					</div>
+				</div>
+			</div>
+
+			<div className="inbox-context-status">
+				<span className={state.needsHuman ? 'is-hot' : ''}>
+					{state.needsHuman ? 'Necesita humano' : 'Sin alerta humana'}
+				</span>
+				<span>{conversation?.aiEnabled ? 'IA activa' : 'IA pausada'}</span>
+			</div>
+
+			{!hasContext ? (
+				<div className="inbox-context-empty">Sin contexto comercial todavia.</div>
+			) : (
+				<div className="inbox-context-list">
+					<ContextItem label="Resumen" value={state.commercialSummary} />
+					<ContextItem label="Producto foco" value={state.currentProductFocus} />
+					<ContextItem label="Familia" value={state.currentProductFamily} />
+					<ContextItem label="Objetivo" value={state.lastUserGoal} />
+					<ContextItem label="Etapa" value={state.salesStage} />
+					<ContextItem label="Intencion" value={state.lastDetectedIntent || state.lastIntent} />
+					<ContextItem label="Talle" value={state.frequentSize} />
+					<ContextItem label="Pago" value={state.paymentPreference} />
+					<ContextItem label="Envio" value={state.deliveryPreference} />
+					<ContextItem label="Interes" value={state.interestedProducts} />
+					<ContextItem label="Objeciones" value={state.objections} />
+					<ContextItem label="Ultima recomendacion" value={state.lastRecommendedProduct} />
+					<ContextItem label="Oferta" value={state.lastRecommendedOffer} />
+					<ContextItem label="Compra" value={state.buyingIntentLevel} />
+					<ContextItem label="Friccion" value={state.frictionLevel} />
+					<ContextItem label="Menu" value={state.menuActive ? state.menuPath || 'activo' : ''} />
+				</div>
+			)}
+		</aside>
+	);
+}
+
 function AttachmentPreview({ message }) {
 	const mediaKind = getMediaKind(message);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
@@ -462,10 +557,13 @@ export default function InboxPage() {
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState('ALL');
+	const [attentionFilter, setAttentionFilter] = useState('ALL');
+	const [olderMessages, setOlderMessages] = useState([]);
+	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const inboxQuery = useInfiniteQuery({
-		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter),
+		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter, attentionFilter),
 		queryFn: async ({ pageParam = 0 }) => {
 			const res = await api.get('/dashboard/inbox', {
 				params: {
@@ -474,6 +572,7 @@ export default function InboxPage() {
 					offset: pageParam,
 					q: normalizedSearch || undefined,
 					read: readFilter,
+					attention: attentionFilter,
 				},
 			});
 
@@ -741,6 +840,16 @@ export default function InboxPage() {
 	});
 
 	const conversation = conversationQuery.data?.conversation || null;
+	const conversationMessages = conversation?.messages || [];
+	const displayedMessages = useMemo(() => {
+		const seen = new Set();
+		return [...olderMessages, ...conversationMessages].filter((message) => {
+			if (!message?.id || seen.has(message.id)) return false;
+			seen.add(message.id);
+			return true;
+		});
+	}, [olderMessages, conversationMessages]);
+	const hasOlderMessages = Boolean(conversation?.messagesPage?.hasMore);
 
 	const activeContact = useMemo(() => {
 		return (
@@ -807,7 +916,6 @@ export default function InboxPage() {
 				};
 			});
 
-			await invalidateInboxAndConversation(result.conversationId);
 		},
 		onError: (error) => {
 			console.error(error);
@@ -903,6 +1011,11 @@ export default function InboxPage() {
 		const timeout = window.setTimeout(run, 60);
 
 		return () => window.clearTimeout(timeout);
+	}, [selectedConversationId]);
+
+	useEffect(() => {
+		setOlderMessages([]);
+		setIsLoadingOlderMessages(false);
 	}, [selectedConversationId]);
 
 	useEffect(() => {
@@ -1038,6 +1151,63 @@ export default function InboxPage() {
 		shouldStickToBottomRef.current = distanceFromBottom < 120;
 	}
 
+	async function handleLoadOlderMessages() {
+		if (
+			!selectedConversationId ||
+			!conversation?.messagesPage?.nextBefore ||
+			isLoadingOlderMessages
+		) {
+			return;
+		}
+
+		const el = messagesContainerRef.current;
+		const previousScrollHeight = el?.scrollHeight || 0;
+		const previousScrollTop = el?.scrollTop || 0;
+
+		try {
+			setIsLoadingOlderMessages(true);
+			const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`, {
+				params: {
+					limit: 80,
+					before: conversation.messagesPage.nextBefore,
+				},
+			});
+
+			const olderPage = res.data?.conversation?.messages || [];
+			setOlderMessages((current) => {
+				const seen = new Set(current.map((message) => message.id));
+				const nextMessages = olderPage.filter((message) => !seen.has(message.id));
+				return [...nextMessages, ...current];
+			});
+
+			queryClient.setQueryData(queryKeys.conversation(selectedConversationId), (current) => {
+				if (!current?.conversation) return current;
+
+				return {
+					...current,
+					conversation: {
+						...current.conversation,
+						messagesPage: res.data?.conversation?.messagesPage || {
+							limit: 80,
+							hasMore: false,
+							nextBefore: null,
+						},
+					},
+				};
+			});
+
+			requestAnimationFrame(() => {
+				const nextEl = messagesContainerRef.current;
+				if (!nextEl) return;
+				nextEl.scrollTop = nextEl.scrollHeight - previousScrollHeight + previousScrollTop;
+			});
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setIsLoadingOlderMessages(false);
+		}
+	}
+
 	function handleContactsScroll() {
 		const el = contactsContainerRef.current;
 		if (!el || !inboxQuery.hasNextPage || inboxQuery.isFetchingNextPage) return;
@@ -1138,6 +1308,21 @@ export default function InboxPage() {
 							onClick={() => setReadFilter(item.key)}
 							className={`inbox-read-filter-btn ${
 								readFilter === item.key ? 'inbox-read-filter-btn--active' : ''
+							}`}
+						>
+							{item.label}
+						</button>
+					))}
+				</div>
+
+				<div className="inbox-read-filters inbox-attention-filters">
+					{ATTENTION_FILTERS.map((item) => (
+						<button
+							key={item.key}
+							type="button"
+							onClick={() => setAttentionFilter(item.key)}
+							className={`inbox-read-filter-btn ${
+								attentionFilter === item.key ? 'inbox-read-filter-btn--active' : ''
 							}`}
 						>
 							{item.label}
@@ -1263,7 +1448,8 @@ export default function InboxPage() {
 						Seleccioná una conversación
 					</div>
 				) : (
-					<>
+					<div className="inbox-chat-workspace">
+						<div className="inbox-chat-main">
 						<div className="inbox-chat-header">
 							<div className="inbox-chat-header-top">
 								<div>
@@ -1380,14 +1566,27 @@ export default function InboxPage() {
 									<div className="inbox-empty">Cargando mensajes...</div>
 								) : null}
 
+								{hasOlderMessages ? (
+									<button
+										type="button"
+										className="inbox-load-older-messages"
+										disabled={isLoadingOlderMessages}
+										onClick={handleLoadOlderMessages}
+									>
+										{isLoadingOlderMessages
+											? 'Cargando mensajes...'
+											: 'Cargar mensajes anteriores'}
+									</button>
+								) : null}
+
 								{!conversationQuery.isLoading &&
-								(conversation?.messages || []).length === 0 ? (
+								displayedMessages.length === 0 ? (
 									<div className="inbox-empty">
 										Esta conversación todavía no tiene mensajes.
 									</div>
 								) : null}
 
-								{(conversation?.messages || []).map((msg) => (
+								{displayedMessages.map((msg) => (
 									<MessageBubble key={msg.id} message={msg} conversation={conversation} />
 								))}
 							</div>
@@ -1448,7 +1647,10 @@ export default function InboxPage() {
 								</button>
 							</form>
 						</div>
-					</>
+						</div>
+
+						<AiContextPanel conversation={conversation} activeContact={activeContact} />
+					</div>
 				)}
 			</section>
 		</div>
