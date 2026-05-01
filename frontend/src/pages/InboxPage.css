@@ -397,13 +397,9 @@
 
 .inbox-chat-workspace {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 300px;
+	grid-template-columns: minmax(0, 1fr);
 	min-height: 0;
 	height: 100%;
-}
-
-.inbox-page--context-hidden .inbox-chat-workspace {
-	grid-template-columns: minmax(0, 1fr);
 }
 
 .inbox-chat-main {
@@ -604,99 +600,6 @@
 	cursor: wait;
 }
 
-.inbox-context-panel {
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
-	min-width: 0;
-	padding: 16px;
-	border-left: 1px solid rgba(15, 23, 42, 0.08);
-	background: #ffffff;
-	overflow-y: auto;
-}
-
-.inbox-context-header {
-	display: flex;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.inbox-context-title {
-	font-size: 16px;
-	font-weight: 900;
-	color: #0f172a;
-}
-
-.inbox-context-subtitle {
-	margin-top: 3px;
-	font-size: 12px;
-	font-weight: 700;
-	color: #64748b;
-}
-
-.inbox-context-status {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 8px;
-}
-
-.inbox-context-status span {
-	display: block;
-	padding: 9px 10px;
-	border-radius: 11px;
-	background: #f8fafc;
-	border: 1px solid rgba(15, 23, 42, 0.07);
-	color: #334155;
-	font-size: 12px;
-	font-weight: 800;
-}
-
-.inbox-context-status .is-hot {
-	background: #fff7ed;
-	border-color: rgba(249, 115, 22, 0.24);
-	color: #c2410c;
-}
-
-.inbox-context-empty {
-	padding: 14px;
-	border: 1px dashed rgba(100, 116, 139, 0.28);
-	border-radius: 13px;
-	color: #64748b;
-	font-size: 13px;
-	font-weight: 700;
-	text-align: center;
-}
-
-.inbox-context-list {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.inbox-context-item {
-	display: grid;
-	gap: 4px;
-	padding: 10px;
-	border-radius: 12px;
-	background: #f8fafc;
-	border: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.inbox-context-item span {
-	color: #64748b;
-	font-size: 11px;
-	font-weight: 800;
-	text-transform: uppercase;
-}
-
-.inbox-context-item strong {
-	color: #0f172a;
-	font-size: 13px;
-	line-height: 1.35;
-	font-weight: 750;
-	word-break: break-word;
-}
-
 .inbox-composer-shell {
 	flex: 0 0 auto;
 	border-top: none;
@@ -859,13 +762,6 @@
 
 	.inbox-chat-workspace {
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: minmax(0, 1fr) auto;
-	}
-
-	.inbox-context-panel {
-		max-height: 260px;
-		border-left: none;
-		border-top: 1px solid rgba(15, 23, 42, 0.08);
 	}
 }
 

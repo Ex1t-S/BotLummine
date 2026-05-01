@@ -260,115 +260,6 @@ function renderFormattedText(text = '') {
 	});
 }
 
-function formatContextValue(value) {
-	if (Array.isArray(value)) {
-		return value
-			.map((item) => {
-				if (typeof item === 'string') return item;
-				if (item?.name) return item.name;
-				if (item?.label) return item.label;
-				return '';
-			})
-			.filter(Boolean)
-			.slice(0, 4)
-			.join(', ');
-	}
-
-	return String(value || '').trim();
-}
-
-function ContextItem({ label, value }) {
-	const formatted = formatContextValue(value);
-
-	if (!formatted) return null;
-
-	return (
-		<div className="inbox-context-item">
-			<span>{label}</span>
-			<strong>{formatted}</strong>
-		</div>
-	);
-}
-
-function AiContextPanel({ conversation, activeContact }) {
-	const state = conversation?.state || {};
-	const displayName = activeContact?.displayName || conversation?.contact?.name || 'Cliente';
-	const phone = conversation?.contact?.phone || activeContact?.phoneDisplay || '';
-	const unreadCount = Number(conversation?.unreadCount || activeContact?.unreadCount || 0);
-	const queueLabel = conversation?.queue || activeContact?.queue || '';
-	const aiStatus = conversation?.aiEnabled ? 'IA activa' : 'IA pausada';
-	const latestIntent = state.lastDetectedIntent || state.lastIntent;
-	const menuContext = state.menuActive ? state.menuPath || 'activo' : '';
-	const hasContext = Boolean(
-		displayName ||
-			phone ||
-			queueLabel ||
-			latestIntent ||
-			menuContext ||
-			state.handoffReason ||
-			state.commercialSummary ||
-			state.currentProductFocus ||
-			state.currentProductFamily ||
-			state.lastUserGoal ||
-			state.salesStage ||
-			state.frequentSize ||
-			state.paymentPreference ||
-			state.deliveryPreference ||
-			state.interestedProducts?.length ||
-			state.objections?.length ||
-			state.needsHuman ||
-			unreadCount > 0
-	);
-
-	return (
-		<aside className="inbox-context-panel">
-			<div className="inbox-context-header">
-				<div>
-					<div className="inbox-context-title">Contexto IA</div>
-					<div className="inbox-context-subtitle">
-						{displayName}
-					</div>
-				</div>
-			</div>
-
-			<div className="inbox-context-status">
-				<span className={state.needsHuman ? 'is-hot' : ''}>
-					{state.needsHuman ? 'Necesita humano' : 'Sin alerta humana'}
-				</span>
-				<span>{aiStatus}</span>
-			</div>
-
-			{!hasContext ? (
-				<div className="inbox-context-empty">Sin contexto registrado todavia.</div>
-			) : (
-				<div className="inbox-context-list">
-					<ContextItem label="Contacto" value={displayName} />
-					<ContextItem label="Telefono" value={phone} />
-					<ContextItem label="Estado" value={queueLabel} />
-					<ContextItem label="No leidos" value={unreadCount > 0 ? unreadCount : ''} />
-					<ContextItem label="Ultima intencion" value={latestIntent} />
-					<ContextItem label="Handoff" value={state.handoffReason} />
-					<ContextItem label="Resumen" value={state.commercialSummary} />
-					<ContextItem label="Producto foco" value={state.currentProductFocus} />
-					<ContextItem label="Familia" value={state.currentProductFamily} />
-					<ContextItem label="Objetivo" value={state.lastUserGoal} />
-					<ContextItem label="Etapa" value={state.salesStage} />
-					<ContextItem label="Talle" value={state.frequentSize} />
-					<ContextItem label="Pago" value={state.paymentPreference} />
-					<ContextItem label="Envio" value={state.deliveryPreference} />
-					<ContextItem label="Interes" value={state.interestedProducts} />
-					<ContextItem label="Objeciones" value={state.objections} />
-					<ContextItem label="Ultima recomendacion" value={state.lastRecommendedProduct} />
-					<ContextItem label="Oferta" value={state.lastRecommendedOffer} />
-					<ContextItem label="Compra" value={state.buyingIntentLevel} />
-					<ContextItem label="Friccion" value={state.frictionLevel} />
-					<ContextItem label="Menu" value={menuContext} />
-				</div>
-			)}
-		</aside>
-	);
-}
-
 function AttachmentPreview({ message }) {
 	const mediaKind = getMediaKind(message);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
@@ -581,7 +472,6 @@ export default function InboxPage() {
 	const [olderMessages, setOlderMessages] = useState([]);
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
-	const [showContextPanel, setShowContextPanel] = useState(true);
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const inboxQuery = useInfiniteQuery({
@@ -1274,7 +1164,6 @@ export default function InboxPage() {
 	const inboxPageClassName = [
 		'inbox-page',
 		!showConversationSidebar ? 'inbox-page--contacts-hidden' : '',
-		!showContextPanel ? 'inbox-page--context-hidden' : '',
 	]
 		.filter(Boolean)
 		.join(' ');
@@ -1528,13 +1417,6 @@ export default function InboxPage() {
 								</ActionButton>
 
 								<ActionButton
-									active={showContextPanel}
-									onClick={() => setShowContextPanel((prev) => !prev)}
-								>
-									{showContextPanel ? 'Ocultar contexto IA' : 'Mostrar contexto IA'}
-								</ActionButton>
-
-								<ActionButton
 									active={conversation?.queue === 'AUTO'}
 									disabled={moveQueueMutation.isPending}
 									onClick={() => handleMoveQueue('AUTO')}
@@ -1700,9 +1582,6 @@ export default function InboxPage() {
 						</div>
 						</div>
 
-						{showContextPanel ? (
-							<AiContextPanel conversation={conversation} activeContact={activeContact} />
-						) : null}
 					</div>
 				)}
 			</section>
