@@ -58,16 +58,11 @@ const corsOptions = {
 	origin(origin, callback) {
 		const normalizedOrigin = normalizeOrigin(origin);
 
-		console.log('[CORS] Origin recibido:', origin);
-		console.log('[CORS] Origin normalizado:', normalizedOrigin);
-		console.log('[CORS] Allowed origins:', allowedOrigins);
-
 		if (isAllowedOrigin(origin)) {
-			console.log('[CORS] Permitido');
 			return callback(null, true);
 		}
 
-		console.log('[CORS] Bloqueado');
+		console.warn('[CORS] origin blocked:', normalizedOrigin || '(sin origin)');
 		return callback(new Error(`Origen no permitido por CORS: ${origin}`));
 	},
 	credentials: true,

@@ -27,22 +27,12 @@ export async function attachUser(req, _res, next) {
 
 		const token = parsedCookies?.[cookieName];
 
-		console.log('---------------- AUTH DEBUG ----------------');
-		console.log('[AUTH] method:', req.method);
-		console.log('[AUTH] path:', req.originalUrl || req.url);
-		console.log('[AUTH] origin:', req.headers.origin || '(sin origin)');
-		console.log('[AUTH] cookie header:', rawCookieHeader || '(sin cookie header)');
-		console.log('[AUTH] cookie name esperado:', cookieName);
-		console.log('[AUTH] cookies parseadas:', parsedCookies);
-		console.log('[AUTH] token presente:', Boolean(token));
-
 		if (!token) {
 			req.user = null;
 			return next();
 		}
 
 		const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-		console.log('[AUTH] jwt ok, payload:', payload);
 
 		const user = await prisma.user.findUnique({
 			where: { id: payload.sub },
@@ -56,14 +46,10 @@ export async function attachUser(req, _res, next) {
 			},
 		});
 
-		console.log('[AUTH] user found:', Boolean(user));
-		console.log('[AUTH] user id:', user?.id || null);
-		console.log('[AUTH] user email:', user?.email || null);
-
 		req.user = user || null;
 		return next();
 	} catch (error) {
-		console.log('[AUTH] attachUser error:', error.message);
+		console.warn('[AUTH] attachUser failed:', error.message);
 		req.user = null;
 		return next();
 	}
@@ -135,11 +121,11 @@ export function issueAuthCookie(res, user) {
 		maxAge: 7 * 24 * 60 * 60 * 1000
 	};
 
-	console.log('---------------- AUTH COOKIE ISSUE ----------------');
-	console.log('[AUTH] seteando cookie:', cookieName);
-	console.log('[AUTH] para user id:', user.id);
-	console.log('[AUTH] para email:', user.email);
-	console.log('[AUTH] cookie options:', cookieOptions);
+	console.log('[AUTH] cookie issued', {
+		cookieName,
+		userId: user.id,
+		workspaceId: user.workspaceId || null,
+	});
 
 	res.cookie(cookieName, token, cookieOptions);
 }
@@ -152,9 +138,7 @@ export function clearAuthCookie(res) {
 		path: '/'
 	};
 
-	console.log('---------------- AUTH COOKIE CLEAR ----------------');
-	console.log('[AUTH] limpiando cookie:', cookieName);
-	console.log('[AUTH] cookie options:', cookieOptions);
+	console.log('[AUTH] cookie cleared', { cookieName });
 
 	res.clearCookie(cookieName, cookieOptions);
 }

@@ -125,7 +125,6 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 	const purpose = String(req.body?.purpose || '').trim().toLowerCase();
 	const generateHeaderHandle = purpose === 'template_header';
 
-	console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
 	console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
 
 	if (!req.user) {

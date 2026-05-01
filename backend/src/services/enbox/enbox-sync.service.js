@@ -13,8 +13,6 @@ const RECENT_LOOKBACK_DAYS = Math.max(1, Number(process.env.ENBOX_RECENT_LOOKBAC
 const BACKFILL_BATCH_SIZE = Math.max(10, Number(process.env.ENBOX_BACKFILL_BATCH_SIZE || 150));
 const INCREMENTAL_BATCH_SIZE = Math.max(5, Number(process.env.ENBOX_INCREMENTAL_BATCH_SIZE || 40));
 const REFRESH_BATCH_SIZE = Math.max(5, Number(process.env.ENBOX_REFRESH_BATCH_SIZE || 120));
-const SYNC_INTERVAL_MS = Math.max(5 * 60 * 1000, Number(process.env.ENBOX_SYNC_INTERVAL_MS || 15 * 60 * 1000));
-const STARTUP_DELAY_MS = Math.max(5_000, Number(process.env.ENBOX_SYNC_STARTUP_DELAY_MS || 15_000));
 const DISCOVERY_SEED_DID = Math.max(1, Number(process.env.ENBOX_DISCOVERY_SEED_DID || 332490));
 const BACKFILL_DID_WINDOW = Math.max(50, Number(process.env.ENBOX_BACKFILL_DID_WINDOW || 1500));
 const INCREMENTAL_DID_WINDOW = Math.max(20, Number(process.env.ENBOX_INCREMENTAL_DID_WINDOW || 180));
@@ -33,8 +31,6 @@ const syncState = {
 	errors: [],
 	workspaceId: DEFAULT_WORKSPACE_ID,
 };
-
-let schedulerTimer = null;
 
 function pushError(message) {
 	syncState.errors.push({ message, at: new Date().toISOString() });
@@ -503,29 +499,3 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 	}
 }
 
-export function startEnboxSyncScheduler() {
-	if (String(process.env.ENBOX_SYNC_ENABLED || 'true').trim().toLowerCase() === 'false') {
-		console.log('[ENBOX SYNC] deshabilitado por configuración.');
-		return;
-	}
-
-	if (schedulerTimer) return;
-
-	setTimeout(() => {
-		syncEnboxShipments({ mode: 'backfill' }).catch((error) => {
-			console.error('[ENBOX SYNC] error en backfill inicial', error);
-		});
-	}, STARTUP_DELAY_MS);
-
-	schedulerTimer = setInterval(() => {
-		syncEnboxShipments({ mode: 'incremental' }).catch((error) => {
-			console.error('[ENBOX SYNC] error en sincronización incremental', error);
-		});
-	}, SYNC_INTERVAL_MS);
-
-	if (typeof schedulerTimer.unref === 'function') {
-		schedulerTimer.unref();
-	}
-
-	console.log(`[ENBOX SYNC] activo cada ${SYNC_INTERVAL_MS} ms.`);
-}
