@@ -100,12 +100,13 @@ const initialScheduleForm = {
 	templateId: '',
 	timeOfDay: '22:00',
 	status: 'ACTIVE',
+	audienceSource: 'abandoned_carts',
 	daysBack: 1,
-	audienceStatus: 'ALL',
+	audienceStatus: 'NEW',
 	limit: 100,
 	minTotal: '',
 	productQuery: '',
-	notes: 'Carritos abandonados y pagos pendientes del ultimo dia.',
+	notes: 'Recuperacion diaria del ultimo dia.',
 };
 
 function formatScheduleDate(value) {
@@ -133,8 +134,9 @@ function scheduleToForm(schedule = {}) {
 		templateId: schedule.templateLocalId || '',
 		timeOfDay: schedule.timeOfDay || '22:00',
 		status: schedule.status || 'ACTIVE',
+		audienceSource: schedule.audienceSource || 'abandoned_carts',
 		daysBack: Number(filters.daysBack || 1),
-		audienceStatus: filters.status || 'ALL',
+		audienceStatus: filters.status || 'NEW',
 		limit: Number(filters.limit || 100),
 		minTotal: filters.minTotal ?? '',
 		productQuery: filters.productQuery || '',
@@ -149,10 +151,11 @@ function buildSchedulePayload(form) {
 		timeOfDay: form.timeOfDay,
 		timezone: 'America/Argentina/Buenos_Aires',
 		status: form.status,
+		audienceSource: form.audienceSource,
 		notes: form.notes || null,
 		audienceFilters: buildAbandonedCartFilters({
 			daysBack: form.daysBack,
-			status: form.audienceStatus,
+			status: form.audienceSource === 'abandoned_carts' ? form.audienceStatus : 'ALL',
 			limit: form.limit,
 			minTotal: form.minTotal,
 			productQuery: form.productQuery,
@@ -172,6 +175,10 @@ function CampaignSchedulesPanel({
 
 	function updateField(field, value) {
 		setForm((prev) => ({ ...prev, [field]: value }));
+	}
+
+	function formatScheduleAudience(schedule) {
+		return schedule.audienceSource === 'pending_payment' ? 'Pagos pendientes' : 'Carritos abandonados';
 	}
 
 	function resetForm() {
@@ -214,6 +221,7 @@ function CampaignSchedulesPanel({
 				timeOfDay: schedule.timeOfDay,
 				timezone: schedule.timezone,
 				status: nextStatus,
+				audienceSource: schedule.audienceSource || 'abandoned_carts',
 				notes: schedule.notes,
 				audienceFilters: schedule.audienceFilters || {},
 			},
@@ -259,6 +267,31 @@ function CampaignSchedulesPanel({
 					</label>
 				</div>
 
+				<div className="campaign-form-grid two-columns">
+					<label className="field">
+						<span>Audiencia</span>
+						<select
+							value={form.audienceSource}
+							onChange={(event) => updateField('audienceSource', event.target.value)}
+						>
+							<option value="abandoned_carts">Carritos abandonados</option>
+							<option value="pending_payment">Pagos pendientes</option>
+						</select>
+					</label>
+					<label className="field">
+						<span>Estado</span>
+						<select
+							value={form.audienceStatus}
+							onChange={(event) => updateField('audienceStatus', event.target.value)}
+							disabled={form.audienceSource === 'pending_payment'}
+						>
+							<option value="NEW">Carritos nuevos</option>
+							<option value="CONTACTED">Carritos ya contactados</option>
+							<option value="ALL">Todos los carritos</option>
+						</select>
+					</label>
+				</div>
+
 				<div className="campaign-custom-audience-grid-4">
 					<label className="field">
 						<span>Hora</span>
@@ -277,17 +310,6 @@ function CampaignSchedulesPanel({
 							value={form.daysBack}
 							onChange={(event) => updateField('daysBack', Number(event.target.value || 1))}
 						/>
-					</label>
-					<label className="field">
-						<span>Estado</span>
-						<select
-							value={form.audienceStatus}
-							onChange={(event) => updateField('audienceStatus', event.target.value)}
-						>
-							<option value="ALL">Carritos y pagos pendientes</option>
-							<option value="NEW">Solo nuevos</option>
-							<option value="CONTACTED">Ya contactados</option>
-						</select>
 					</label>
 					<label className="field">
 						<span>Limite</span>
@@ -363,7 +385,7 @@ function CampaignSchedulesPanel({
 				{!loading && !schedules.length ? (
 					<div className="campaign-custom-audience-empty">
 						<strong>No hay programaciones creadas</strong>
-						<span>Crea una recuperacion diaria para los carritos y pagos pendientes del ultimo dia.</span>
+						<span>Crea una recuperacion diaria para carritos o pagos pendientes.</span>
 					</div>
 				) : null}
 
@@ -376,7 +398,7 @@ function CampaignSchedulesPanel({
 								</span>
 								<h4>{schedule.name}</h4>
 								<p>
-									{schedule.templateName} - todos los dias {schedule.timeOfDay} - {schedule.audienceFilters?.daysBack || 1} dia(s)
+									{formatScheduleAudience(schedule)} - {schedule.templateName} - todos los dias {schedule.timeOfDay} - {schedule.audienceFilters?.daysBack || 1} dia(s)
 								</p>
 							</div>
 							<div className="campaign-schedule-meta">

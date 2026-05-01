@@ -19,6 +19,11 @@ function normalizeStatus(value) {
 	return normalized === 'PAUSED' ? 'PAUSED' : 'ACTIVE';
 }
 
+function normalizeAudienceSource(value) {
+	const normalized = normalizeString(value, 'abandoned_carts').toLowerCase();
+	return normalized === 'pending_payment' ? 'pending_payment' : 'abandoned_carts';
+}
+
 function normalizeTimeOfDay(value) {
 	const match = normalizeString(value, DEFAULT_TIME_OF_DAY).match(/^(\d{1,2}):(\d{2})$/);
 	if (!match) return DEFAULT_TIME_OF_DAY;
@@ -157,13 +162,14 @@ function buildScheduleData(input = {}, template) {
 	const timezone = normalizeString(input.timezone, DEFAULT_TIMEZONE);
 	const timeOfDay = normalizeTimeOfDay(input.timeOfDay);
 	const status = normalizeStatus(input.status);
+	const audienceSource = normalizeAudienceSource(input.audienceSource);
 
 	return {
 		name: normalizeString(input.name, `Programacion ${template.name}`),
 		templateLocalId: template.id,
 		templateName: template.name,
 		templateLanguage: template.language || 'es_AR',
-		audienceSource: 'abandoned_carts',
+		audienceSource,
 		audienceFilters: normalizeFilters(input.audienceFilters || input.filters || {}),
 		defaultComponents: safeArray(input.defaultComponents).length
 			? input.defaultComponents
@@ -228,6 +234,7 @@ export async function updateCampaignSchedule(scheduleId, {
 	const data = buildScheduleData(
 		{
 			name: input.name ?? current.name,
+			audienceSource: input.audienceSource ?? current.audienceSource,
 			audienceFilters: input.audienceFilters ?? current.audienceFilters,
 			defaultComponents: input.defaultComponents ?? current.defaultComponents,
 			notes: input.notes ?? current.notes,

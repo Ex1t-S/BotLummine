@@ -285,6 +285,7 @@ export async function createCampaignScheduleController(req, res) {
 			timeOfDay: req.body?.timeOfDay,
 			timezone: req.body?.timezone,
 			status: req.body?.status,
+			audienceSource: req.body?.audienceSource,
 			audienceFilters: req.body?.audienceFilters || {},
 			defaultComponents: Array.isArray(req.body?.defaultComponents) ? req.body.defaultComponents : [],
 			notes: req.body?.notes || null,
@@ -304,6 +305,7 @@ export async function updateCampaignScheduleController(req, res) {
 			timeOfDay: req.body?.timeOfDay,
 			timezone: req.body?.timezone,
 			status: req.body?.status,
+			audienceSource: req.body?.audienceSource,
 			audienceFilters: req.body?.audienceFilters,
 			defaultComponents: Array.isArray(req.body?.defaultComponents)
 				? req.body.defaultComponents

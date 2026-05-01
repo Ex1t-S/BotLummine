@@ -91,6 +91,10 @@ function getPrimaryCartProductName(cart = {}) {
 	return getCartProductName(getCartProducts(cart)[0] || {});
 }
 
+function getPrimaryOrderProductName(order = {}) {
+	return getCartProductName(safeArray(order.products)[0] || {});
+}
+
 function cartMatchesProductQuery(cart = {}, productQuery = '') {
 	const needle = normalizeString(productQuery).toLowerCase();
 	if (!needle) return true;
@@ -138,6 +142,46 @@ function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder = null
 
 		last_order_id: lastOrderId,
 		last_order_number: lastOrderNumber
+	};
+}
+
+function buildPendingPaymentVariables(order = {}, contact = null) {
+	const normalizedPhone = normalizeCampaignPhone(order.normalizedPhone || order.contactPhone || '');
+	const contactName = normalizeString(order.contactName || contact?.name || '', normalizedPhone);
+	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
+	const primaryProductName = getPrimaryOrderProductName(order);
+	const totalFormatted = formatCurrency(order.totalAmount, order.currency || 'ARS');
+	const orderId = normalizeString(order.orderId || '');
+	const orderNumber = normalizeString(order.orderNumber || orderId);
+	const paymentLink = normalizeString(order.gatewayLink || '');
+
+	return {
+		'1': firstName,
+		'2': orderNumber,
+		'3': totalFormatted,
+		'4': paymentLink,
+		'5': primaryProductName,
+
+		contact_name: contactName,
+		first_name: firstName,
+		wa_id: normalizedPhone,
+		phone: normalizedPhone,
+
+		order_id: orderId,
+		order_number: orderNumber,
+		last_order_id: orderId,
+		last_order_number: orderNumber,
+
+		payment_status: normalizeString(order.paymentStatus || ''),
+		payment_link: paymentLink,
+		gateway_link: paymentLink,
+		gateway_name: normalizeString(order.gatewayName || order.gateway || ''),
+
+		product_name: primaryProductName,
+		first_product_name: primaryProductName,
+
+		total_amount: totalFormatted,
+		total_raw: order.totalAmount != null ? String(order.totalAmount) : '',
 	};
 }
 
@@ -458,12 +502,132 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	});
 }
 
+async function resolveRecipientsFromPendingPayments(input = {}) {
+	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
+	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
+	const since = new Date();
+	since.setDate(since.getDate() - filters.daysBack);
+	const pendingStatuses = ['pending', 'pending_confirmation', 'unpaid', 'pago pendiente', 'pago en espera'];
+
+	const where = {
+		workspaceId,
+		normalizedPhone: {
+			not: null
+		},
+		orderCreatedAt: {
+			gte: since
+		},
+		OR: pendingStatuses.map((paymentStatus) => ({
+			paymentStatus: {
+				equals: paymentStatus,
+				mode: 'insensitive'
+			}
+		}))
+	};
+
+	if (typeof filters.minTotal === 'number' && Number.isFinite(filters.minTotal)) {
+		where.totalAmount = {
+			gte: filters.minTotal
+		};
+	}
+
+	const rawOrders = await prisma.customerOrder.findMany({
+		where,
+		orderBy: [
+			{ orderCreatedAt: 'desc' },
+			{ orderUpdatedAt: 'desc' },
+			{ createdAt: 'desc' }
+		],
+		take: Math.min(filters.limit * 4, 1000)
+	});
+
+	const latestByPhone = new Map();
+
+	for (const order of rawOrders) {
+		const normalizedPhone = normalizeCampaignPhone(order.normalizedPhone || order.contactPhone || '');
+		if (!normalizedPhone) continue;
+		if (!cartMatchesProductQuery(order, filters.productQuery)) continue;
+
+		const previous = latestByPhone.get(normalizedPhone);
+		const orderTs = new Date(order.orderCreatedAt || order.orderUpdatedAt || order.createdAt || 0).getTime();
+		const prevTs = previous
+			? new Date(previous.orderCreatedAt || previous.orderUpdatedAt || previous.createdAt || 0).getTime()
+			: -1;
+
+		if (!previous || orderTs > prevTs) {
+			latestByPhone.set(normalizedPhone, order);
+		}
+	}
+
+	const orders = [...latestByPhone.values()].slice(0, filters.limit);
+	const normalizedPhones = orders
+		.map((order) => normalizeCampaignPhone(order.normalizedPhone || order.contactPhone || ''))
+		.filter(Boolean);
+
+	let contacts = [];
+	if (normalizedPhones.length) {
+		contacts = await prisma.contact.findMany({
+			where: {
+				workspaceId,
+				OR: [
+					{ waId: { in: normalizedPhones } },
+					{ phone: { in: normalizedPhones } }
+				]
+			},
+			select: {
+				id: true,
+				name: true,
+				phone: true,
+				waId: true,
+				marketingOptIn: true,
+				marketingOptedOutAt: true,
+				marketingOptOutReason: true
+			}
+		});
+	}
+
+	const contactByPhone = new Map();
+	for (const contact of contacts) {
+		const keys = [
+			normalizeCampaignPhone(contact.waId || ''),
+			normalizeCampaignPhone(contact.phone || '')
+		].filter(Boolean);
+
+		for (const key of keys) {
+			if (!contactByPhone.has(key)) {
+				contactByPhone.set(key, contact);
+			}
+		}
+	}
+
+	return orders.map((order) => {
+		const normalizedPhone = normalizeCampaignPhone(order.normalizedPhone || order.contactPhone || '');
+		const contact = contactByPhone.get(normalizedPhone) || null;
+		const variables = buildPendingPaymentVariables(order, contact);
+
+		return {
+			contactId: contact?.id || null,
+			contactName: variables.contact_name,
+			phone: normalizedPhone,
+			waId: normalizedPhone,
+			variables,
+			externalKey: `pending_payment:${normalizeString(order.orderId || order.orderNumber || '')}`,
+			isOptedOut: contact ? contact.marketingOptIn === false || Boolean(contact.marketingOptedOutAt) : false,
+			optOutReason: contact?.marketingOptOutReason || null
+		};
+	});
+}
+
 async function resolveCampaignRecipients(input = {}) {
 	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
 	const audienceSource = normalizeAudienceSource(input.audienceSource || 'manual');
 
 	if (audienceSource === 'abandoned_carts') {
 		return resolveRecipientsFromAbandonedCarts(input);
+	}
+
+	if (audienceSource === 'pending_payment') {
+		return resolveRecipientsFromPendingPayments(input);
 	}
 
 	const manualRecipients = safeArray(input.recipients).map((recipient) => ({
