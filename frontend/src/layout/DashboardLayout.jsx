@@ -39,7 +39,7 @@ export default function DashboardLayout() {
 
 					<div className="admin-brand-copy">
 						<h1>{brandName}</h1>
-						<p>{isPlatformAdmin ? 'Gestion multi marca' : (isAdmin ? 'Ventas conversacionales' : 'Inbox de atencion')}</p>
+						<p>{isPlatformAdmin ? 'Gestion multi marca' : (isAdmin ? 'Atencion conversacional' : 'Inbox de atencion')}</p>
 					</div>
 				</div>
 
@@ -50,20 +50,14 @@ export default function DashboardLayout() {
 
 				<nav className="admin-menu">
 					{!isPlatformAdmin ? (
-						<>
-							<NavLink to="/sales" className={navClass}>
-								Ventas
-							</NavLink>
-
-							<NavLink
-								to="/inbox/automatico"
-								className={({ isActive }) =>
-									navClass({ isActive: isActive || location.pathname.startsWith('/inbox') })
-								}
-							>
-								Inbox
-							</NavLink>
-						</>
+						<NavLink
+							to="/inbox/automatico"
+							className={({ isActive }) =>
+								navClass({ isActive: isActive || location.pathname.startsWith('/inbox') })
+							}
+						>
+							Inbox
+						</NavLink>
 					) : null}
 
 					{isAdmin ? (
