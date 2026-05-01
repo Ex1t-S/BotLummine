@@ -73,6 +73,40 @@ function normalizeCommercialLevel(value = '') {
 	return value || '';
 }
 
+function toActivityDate(...values) {
+	for (const value of values) {
+		if (!value) continue;
+		const date = value instanceof Date ? value : new Date(value);
+		if (Number.isFinite(date.getTime())) return date;
+	}
+
+	return null;
+}
+
+function toActivityTime(value) {
+	const date = toActivityDate(value);
+	return date ? date.getTime() : 0;
+}
+
+function sortByRecentActivity(items = []) {
+	return [...items].sort((a, b) => toActivityTime(b.activityAt || b.date) - toActivityTime(a.activityAt || a.date));
+}
+
+function hasHotCommercialSignals(state = {}) {
+	const haystack = [
+		state?.buyingIntentLevel,
+		state?.salesStage,
+		state?.frictionLevel,
+		state?.lastUserGoal,
+		state?.commercialSummary,
+	]
+		.filter(Boolean)
+		.join(' ')
+		.toLowerCase();
+
+	return /high|alto|alta|ready|buy|compra|comprar|cerrar|pago|transfer/i.test(haystack);
+}
+
 function buildAvatar(name = '', phone = '') {
 	const base = (name || phone || '?').trim();
 	const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
@@ -926,18 +960,22 @@ async function getConversationLinksByPhones(workspaceId, phones = []) {
 
 function mapCartOpportunity(cart, conversationLink = null) {
 	const products = Array.isArray(cart.products) ? cart.products : [];
+	const activityAt = toActivityDate(cart.checkoutCreatedAt, cart.updatedAt, cart.createdAt);
 
 	return {
 		id: `abandoned_cart:${cart.id}`,
 		type: 'abandoned_cart',
+		typeLabel: 'Carrito',
 		title: cart.contactName || cart.contactPhone || 'Carrito sin nombre',
 		subtitle: 'Carrito abandonado',
 		phone: cart.contactPhone || '',
 		amount: Number(cart.totalAmount || cart.subtotal || 0),
 		amountLabel: formatCurrency(cart.totalAmount || cart.subtotal || 0, cart.currency || 'ARS'),
 		status: cart.status || 'NEW',
-		date: cart.checkoutCreatedAt || cart.updatedAt || cart.createdAt,
-		dateLabel: formatDateTime(cart.checkoutCreatedAt || cart.updatedAt || cart.createdAt),
+		date: activityAt,
+		dateLabel: formatDateTime(activityAt),
+		activityAt,
+		activityLabel: formatDateTime(activityAt),
 		reason: cart.status === 'CONTACTED' ? 'Ya contactado, revisar seguimiento' : 'Sin contacto registrado',
 		nextAction: cart.status === 'CONTACTED' ? 'Abrir conversación' : 'Crear campaña o contactar',
 		products: products
@@ -951,17 +989,22 @@ function mapCartOpportunity(cart, conversationLink = null) {
 }
 
 function mapPendingPaymentOpportunity(order, conversationLink = null) {
+	const activityAt = toActivityDate(order.orderCreatedAt, order.updatedAt, order.createdAt);
+
 	return {
 		id: `pending_payment:${order.id}`,
 		type: 'pending_payment',
+		typeLabel: 'Pago pendiente',
 		title: order.contactName || order.contactPhone || order.contactEmail || 'Pedido pendiente',
 		subtitle: `Pedido ${order.orderNumber || order.orderId || ''}`.trim(),
 		phone: order.contactPhone || '',
 		amount: Number(order.totalAmount || order.subtotal || 0),
 		amountLabel: formatCurrency(order.totalAmount || order.subtotal || 0, order.currency || 'ARS'),
 		status: order.paymentStatus || order.status || 'PENDING',
-		date: order.orderCreatedAt || order.updatedAt || order.createdAt,
-		dateLabel: formatDateTime(order.orderCreatedAt || order.updatedAt || order.createdAt),
+		date: activityAt,
+		dateLabel: formatDateTime(activityAt),
+		activityAt,
+		activityLabel: formatDateTime(activityAt),
 		reason: 'Pedido con pago pendiente',
 		nextAction: 'Contactar para cerrar pago',
 		products: Array.isArray(order.products)
@@ -1002,6 +1045,46 @@ function mapConversationOpportunity(conversation) {
 	};
 }
 
+function mapRecentConversationOpportunity(conversation) {
+	const state = conversation.state || {};
+	const contact = conversation.contact || {};
+	const phone = contact.phone || contact.waId || '';
+	const title = contact.name || normalizePhone(phone) || 'Conversacion sin nombre';
+	const context = buildCommercialContext(state);
+	const isHumanFollowup = Boolean(state.needsHuman);
+	const isHot = hasHotCommercialSignals(state);
+	const activityAt = toActivityDate(
+		conversation.lastInboundMessageAt,
+		conversation.lastMessageAt,
+		conversation.updatedAt
+	);
+	const type = isHumanFollowup ? 'human_followup' : isHot ? 'hot_conversation' : 'recent_conversation';
+
+	return {
+		id: `conversation:${conversation.id}`,
+		type,
+		typeLabel: isHumanFollowup ? 'Seguimiento humano' : isHot ? 'Conversacion caliente' : 'Conversacion',
+		title,
+		subtitle: isHumanFollowup ? 'Necesita seguimiento humano' : isHot ? 'Alta intencion comercial' : 'Ultima conversacion',
+		phone: normalizePhone(phone),
+		status: conversation.queue || 'AUTO',
+		date: activityAt,
+		dateLabel: formatDateTime(activityAt),
+		activityAt,
+		activityLabel: formatDateTime(activityAt),
+		reason:
+			state.handoffReason ||
+			state.commercialSummary ||
+			state.lastUserGoal ||
+			state.lastDetectedIntent ||
+			'Conversacion reciente',
+		nextAction: isHumanFollowup ? 'Responder desde inbox' : 'Revisar conversacion',
+		conversationId: conversation.id,
+		queue: conversation.queue || 'AUTO',
+		commercialContext: context,
+	};
+}
+
 export async function getSalesOpportunities(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req);
@@ -1015,8 +1098,8 @@ export async function getSalesOpportunities(req, res, next) {
 					checkoutCreatedAt: { gte: thirtyDaysAgo },
 					status: { in: ['NEW', 'CONTACTED'] },
 				},
-				orderBy: [{ status: 'asc' }, { totalAmount: 'desc' }, { checkoutCreatedAt: 'desc' }],
-				take: limit,
+				orderBy: [{ checkoutCreatedAt: 'desc' }, { updatedAt: 'desc' }],
+				take: limit * 2,
 			}),
 			prisma.customerOrder.findMany({
 				where: {
@@ -1028,24 +1111,29 @@ export async function getSalesOpportunities(req, res, next) {
 						{ status: { contains: 'pending', mode: 'insensitive' } },
 					],
 				},
-				orderBy: [{ totalAmount: 'desc' }, { orderCreatedAt: 'desc' }],
-				take: limit,
+				orderBy: [{ orderCreatedAt: 'desc' }, { updatedAt: 'desc' }],
+				take: limit * 2,
 			}),
 			prisma.conversation.findMany({
 				where: {
 					workspaceId,
 					archivedAt: null,
-					state: {
-						is: {
-							OR: [
-								{ needsHuman: true },
-								{ buyingIntentLevel: { contains: 'high', mode: 'insensitive' } },
-								{ buyingIntentLevel: { contains: 'alto', mode: 'insensitive' } },
-								{ salesStage: { contains: 'buy', mode: 'insensitive' } },
-								{ salesStage: { contains: 'compra', mode: 'insensitive' } },
-								{ frictionLevel: { contains: 'high', mode: 'insensitive' } },
-								{ frictionLevel: { contains: 'alto', mode: 'insensitive' } },
-							],
+					OR: [
+						{ lastInboundMessageAt: { gte: thirtyDaysAgo } },
+						{ lastMessageAt: { gte: thirtyDaysAgo } },
+						{
+							state: {
+								is: {
+									needsHuman: true,
+								},
+							},
+						},
+					],
+					NOT: {
+						contact: {
+							name: {
+								startsWith: '__AI_LAB__::',
+							},
 						},
 					},
 				},
@@ -1065,7 +1153,7 @@ export async function getSalesOpportunities(req, res, next) {
 					state: true,
 				},
 				orderBy: [{ lastInboundMessageAt: 'desc' }, { lastMessageAt: 'desc' }],
-				take: limit * 2,
+				take: limit * 3,
 			}),
 			prisma.campaignConversion.aggregate({
 				where: {
@@ -1089,16 +1177,16 @@ export async function getSalesOpportunities(req, res, next) {
 			]
 		);
 
-		const abandonedCartItems = abandonedCarts.map((cart) =>
+		const abandonedCartItems = sortByRecentActivity(abandonedCarts.map((cart) =>
 			mapCartOpportunity(cart, phoneLinks.get(normalizePhone(cart.contactPhone || '')))
-		);
-		const pendingPaymentItems = pendingOrders.map((order) =>
+		)).slice(0, limit);
+		const pendingPaymentItems = sortByRecentActivity(pendingOrders.map((order) =>
 			mapPendingPaymentOpportunity(
 				order,
 				phoneLinks.get(normalizePhone(order.contactPhone || order.normalizedPhone || ''))
 			)
-		);
-		const conversationItems = conversations.map(mapConversationOpportunity);
+		)).slice(0, limit);
+		const conversationItems = sortByRecentActivity(conversations.map(mapRecentConversationOpportunity));
 
 		const humanFollowups = conversationItems
 			.filter((item) => item.type === 'human_followup')
@@ -1106,6 +1194,11 @@ export async function getSalesOpportunities(req, res, next) {
 		const hotConversations = conversationItems
 			.filter((item) => item.type === 'hot_conversation')
 			.slice(0, limit);
+		const feed = sortByRecentActivity([
+			...conversationItems,
+			...abandonedCartItems,
+			...pendingPaymentItems,
+		]).slice(0, limit * 2);
 
 		return res.json({
 			ok: true,
@@ -1116,9 +1209,11 @@ export async function getSalesOpportunities(req, res, next) {
 				pendingPayments: pendingPaymentItems.length,
 				hotConversations: hotConversations.length,
 				humanFollowups: humanFollowups.length,
+				recentFeed: feed.length,
 				conversions: recentConversions?._count?.id || 0,
 				revenueLabel: formatCurrency(recentConversions?._sum?.amount || 0, 'ARS'),
 			},
+			feed,
 			groups: {
 				abandonedCarts: abandonedCartItems,
 				pendingPayments: pendingPaymentItems,

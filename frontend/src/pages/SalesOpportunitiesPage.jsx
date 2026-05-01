@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../lib/api.js';
@@ -17,7 +18,7 @@ const GROUPS = [
 		description: 'Carritos recientes con oportunidad de contacto o seguimiento.',
 		empty: 'No hay carritos recientes para recuperar.',
 		cta: '/campaigns/segment',
-		ctaLabel: 'Crear campaña',
+		ctaLabel: 'Crear campana',
 	},
 	{
 		key: 'pendingPayments',
@@ -30,15 +31,23 @@ const GROUPS = [
 	{
 		key: 'hotConversations',
 		title: 'Conversaciones calientes',
-		description: 'Chats con señales de intención comercial o etapa avanzada.',
+		description: 'Chats con senales de intencion comercial o etapa avanzada.',
 		empty: 'No hay conversaciones calientes detectadas.',
 	},
 	{
 		key: 'humanFollowups',
 		title: 'Seguimiento humano',
-		description: 'Conversaciones que la IA o el flujo marcaron para atención manual.',
+		description: 'Conversaciones que la IA o el flujo marcaron para atencion manual.',
 		empty: 'No hay seguimientos humanos pendientes.',
 	},
+];
+
+const FEED_FILTERS = [
+	{ key: 'ALL', label: 'Todo' },
+	{ key: 'CONVERSATIONS', label: 'Conversaciones' },
+	{ key: 'CARTS', label: 'Carritos' },
+	{ key: 'PAYMENTS', label: 'Pagos pendientes' },
+	{ key: 'HUMAN', label: 'Humanos' },
 ];
 
 function inboxLinkFor(item) {
@@ -47,14 +56,33 @@ function inboxLinkFor(item) {
 	return `/inbox/${slug}?conversation=${encodeURIComponent(item.conversationId)}`;
 }
 
-function OpportunityCard({ item }) {
+function matchesFeedFilter(item, filter) {
+	if (filter === 'ALL') return true;
+	if (filter === 'CONVERSATIONS') {
+		return ['recent_conversation', 'hot_conversation'].includes(item.type);
+	}
+	if (filter === 'CARTS') return item.type === 'abandoned_cart';
+	if (filter === 'PAYMENTS') return item.type === 'pending_payment';
+	if (filter === 'HUMAN') return item.type === 'human_followup';
+	return true;
+}
+
+function actionLinkFor(item) {
 	const inboxLink = inboxLinkFor(item);
+	if (inboxLink) return { to: inboxLink, label: 'Abrir inbox' };
+	if (item.type === 'abandoned_cart') return { to: '/campaigns/segment', label: 'Crear campana' };
+	if (item.type === 'pending_payment') return { to: '/campaigns/schedules', label: 'Programar seguimiento' };
+	return null;
+}
+
+function OpportunityCard({ item }) {
+	const actionLink = actionLinkFor(item);
 	const context = item.commercialContext || {};
 	const chips = [
 		item.amountLabel,
-		context.buyingIntentLevel ? `Intención ${context.buyingIntentLevel}` : '',
+		context.buyingIntentLevel ? `Intencion ${context.buyingIntentLevel}` : '',
 		context.salesStage,
-		context.frictionLevel ? `Fricción ${context.frictionLevel}` : '',
+		context.frictionLevel ? `Friccion ${context.frictionLevel}` : '',
 	]
 		.filter(Boolean)
 		.slice(0, 4);
@@ -63,10 +91,13 @@ function OpportunityCard({ item }) {
 		<article className="sales-opportunity-card">
 			<div className="sales-opportunity-card__top">
 				<div>
+					<span className={`sales-type-pill sales-type-pill--${item.type}`}>
+						{item.typeLabel || item.type}
+					</span>
 					<h3>{item.title}</h3>
 					<p>{item.subtitle}</p>
 				</div>
-				<span>{item.dateLabel || 'Sin fecha'}</span>
+				<span>{item.activityLabel || item.dateLabel || 'Sin fecha'}</span>
 			</div>
 
 			<div className="sales-opportunity-card__reason">{item.reason}</div>
@@ -89,9 +120,50 @@ function OpportunityCard({ item }) {
 
 			<div className="sales-opportunity-card__footer">
 				<strong>{item.nextAction}</strong>
-				{inboxLink ? <Link to={inboxLink}>Abrir inbox</Link> : null}
+				{actionLink ? <Link to={actionLink.to}>{actionLink.label}</Link> : null}
 			</div>
 		</article>
+	);
+}
+
+function RecentActivityFeed({ items = [], activeFilter, onFilterChange }) {
+	const filteredItems = useMemo(
+		() => items.filter((item) => matchesFeedFilter(item, activeFilter)),
+		[items, activeFilter]
+	);
+
+	return (
+		<section className="sales-opportunity-group sales-recent-feed">
+			<div className="sales-opportunity-group__header">
+				<div>
+					<h2>Actividad reciente</h2>
+					<p>Lo ultimo que entro y requiere revisar: conversaciones, carritos y pagos pendientes.</p>
+				</div>
+			</div>
+
+			<div className="sales-feed-filters" role="tablist" aria-label="Filtrar actividad reciente">
+				{FEED_FILTERS.map((filter) => (
+					<button
+						key={filter.key}
+						type="button"
+						className={activeFilter === filter.key ? 'is-active' : ''}
+						onClick={() => onFilterChange(filter.key)}
+					>
+						{filter.label}
+					</button>
+				))}
+			</div>
+
+			{filteredItems.length ? (
+				<div className="sales-opportunity-grid sales-opportunity-grid--feed">
+					{filteredItems.map((item) => (
+						<OpportunityCard key={item.id} item={item} />
+					))}
+				</div>
+			) : (
+				<div className="sales-opportunity-empty">No hay actividad reciente para este filtro.</div>
+			)}
+		</section>
 	);
 }
 
@@ -120,6 +192,7 @@ function OpportunityGroup({ group, items = [] }) {
 }
 
 export default function SalesOpportunitiesPage() {
+	const [activeFeedFilter, setActiveFeedFilter] = useState('ALL');
 	const opportunitiesQuery = useQuery({
 		queryKey: queryKeys.salesOpportunities,
 		queryFn: async () => {
@@ -132,6 +205,7 @@ export default function SalesOpportunitiesPage() {
 	const data = opportunitiesQuery.data || {};
 	const summary = data.summary || {};
 	const groups = data.groups || {};
+	const feed = data.feed || [];
 
 	return (
 		<div className="sales-opportunities-page">
@@ -140,18 +214,22 @@ export default function SalesOpportunitiesPage() {
 					<span>Ventas</span>
 					<h1>Oportunidades de venta</h1>
 					<p>
-						Priorizá carritos, pagos pendientes y conversaciones con intención comercial desde
-						un solo tablero operativo.
+						Prioriza conversaciones, carritos y pagos pendientes recientes desde un solo
+						tablero operativo.
 					</p>
 				</div>
 
 				<div className="sales-opportunities-hero__actions">
-					<Link to="/campaigns/segment">Nueva campaña</Link>
-					<Link to="/inbox/atencion-humana">Ver atención humana</Link>
+					<Link to="/campaigns/segment">Nueva campana</Link>
+					<Link to="/inbox/atencion-humana">Ver atencion humana</Link>
 				</div>
 			</section>
 
 			<div className="sales-summary-grid">
+				<div>
+					<span>Actividad reciente</span>
+					<strong>{summary.recentFeed || 0}</strong>
+				</div>
 				<div>
 					<span>Carritos</span>
 					<strong>{summary.abandonedCarts || 0}</strong>
@@ -159,10 +237,6 @@ export default function SalesOpportunitiesPage() {
 				<div>
 					<span>Pagos pendientes</span>
 					<strong>{summary.pendingPayments || 0}</strong>
-				</div>
-				<div>
-					<span>Conversaciones calientes</span>
-					<strong>{summary.hotConversations || 0}</strong>
 				</div>
 				<div>
 					<span>Ingresos atribuidos</span>
@@ -180,15 +254,22 @@ export default function SalesOpportunitiesPage() {
 				</div>
 			) : null}
 
-			{!opportunitiesQuery.isLoading && !opportunitiesQuery.isError
-				? GROUPS.map((group) => (
+			{!opportunitiesQuery.isLoading && !opportunitiesQuery.isError ? (
+				<>
+					<RecentActivityFeed
+						items={feed}
+						activeFilter={activeFeedFilter}
+						onFilterChange={setActiveFeedFilter}
+					/>
+					{GROUPS.map((group) => (
 						<OpportunityGroup
 							key={group.key}
 							group={group}
 							items={groups[group.key] || []}
 						/>
-				  ))
-				: null}
+					))}
+				</>
+			) : null}
 		</div>
 	);
 }

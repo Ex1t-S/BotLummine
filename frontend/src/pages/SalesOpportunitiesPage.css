@@ -129,6 +129,10 @@
 	padding: 16px;
 }
 
+.sales-recent-feed {
+	border-color: #bfdbfe;
+}
+
 .sales-opportunity-group__header {
 	justify-content: space-between;
 	align-items: flex-start;
@@ -154,6 +158,44 @@
 	gap: 12px;
 }
 
+.sales-opportunity-grid--feed {
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.sales-feed-filters {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 14px;
+	padding: 5px;
+	border-radius: 14px;
+	background: #eef2f7;
+}
+
+.sales-feed-filters button {
+	min-height: 34px;
+	padding: 7px 11px;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	color: #475569;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.sales-feed-filters button:hover {
+	background: rgba(255, 255, 255, 0.76);
+}
+
+.sales-feed-filters button.is-active {
+	background: #ffffff;
+	border-color: rgba(15, 23, 42, 0.06);
+	color: #0f172a;
+	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
 .sales-opportunity-card {
 	display: flex;
 	flex-direction: column;
@@ -169,6 +211,41 @@
 	display: flex;
 	justify-content: space-between;
 	gap: 12px;
+}
+
+.sales-type-pill {
+	display: inline-flex;
+	width: fit-content;
+	margin-bottom: 7px;
+	padding: 5px 8px;
+	border-radius: 999px;
+	background: #e2e8f0;
+	color: #334155;
+	font-size: 11px;
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.sales-type-pill--recent_conversation,
+.sales-type-pill--hot_conversation {
+	background: #dbeafe;
+	color: #1d4ed8;
+}
+
+.sales-type-pill--human_followup {
+	background: #ffedd5;
+	color: #c2410c;
+}
+
+.sales-type-pill--abandoned_cart {
+	background: #dcfce7;
+	color: #15803d;
+}
+
+.sales-type-pill--pending_payment {
+	background: #fef3c7;
+	color: #92400e;
 }
 
 .sales-opportunity-card h3 {
