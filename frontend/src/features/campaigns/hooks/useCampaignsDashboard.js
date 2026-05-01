@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api.js';
 import {
 	createCampaign,
+	createCampaignSchedule,
 	createTemplate,
 	deleteCampaign,
+	deleteCampaignSchedule,
 	deleteTemplate,
 	dispatchCampaign,
 	fetchCampaignOverview,
+	fetchCampaignSchedules,
 	fetchCampaigns,
 	fetchTemplates,
 	pauseCampaign,
@@ -15,6 +18,7 @@ import {
 	purgeDeletedTemplates,
 	resumeCampaign,
 	syncTemplates,
+	updateCampaignSchedule,
 	updateTemplate,
 } from '../../../lib/campaigns.js';
 import { queryKeys } from '../../../lib/queryClient.js';
@@ -211,6 +215,11 @@ export function useCampaignsDashboard() {
 		refetchIntervalInBackground: true,
 	});
 
+	const schedulesQuery = useQuery({
+		queryKey: queryKeys.campaigns.schedules,
+		queryFn: fetchCampaignSchedules,
+	});
+
 	const campaignDetailQuery = useQuery({
 		queryKey: [
 			...queryKeys.campaigns.detail(selectedCampaignId),
@@ -236,6 +245,11 @@ export function useCampaignsDashboard() {
 
 	const templates = useMemo(() => getTemplateCollection(templatesQuery.data), [templatesQuery.data]);
 	const campaigns = useMemo(() => getCampaignCollection(campaignsQuery.data), [campaignsQuery.data]);
+	const schedules = useMemo(() => {
+		const data = schedulesQuery.data;
+		if (Array.isArray(data)) return data;
+		return data?.schedules || data?.items || [];
+	}, [schedulesQuery.data]);
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
 
 	const selectedCampaign = useMemo(() => {
@@ -301,6 +315,7 @@ export function useCampaignsDashboard() {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.overview });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
 
 		if (nextCampaignId) {
 			queryClient.invalidateQueries({
@@ -483,6 +498,33 @@ export function useCampaignsDashboard() {
 		},
 	});
 
+	const createScheduleMutation = useMutation({
+		mutationFn: createCampaignSchedule,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Programacion creada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la programacion.'),
+	});
+
+	const updateScheduleMutation = useMutation({
+		mutationFn: ({ scheduleId, payload }) => updateCampaignSchedule(scheduleId, payload),
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Programacion actualizada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar la programacion.'),
+	});
+
+	const deleteScheduleMutation = useMutation({
+		mutationFn: deleteCampaignSchedule,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Programacion eliminada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la programacion.'),
+	});
+
 	const actionMutation = useMutation({
 		mutationFn: async ({ type, campaignId }) => {
 			if (type === 'dispatch') return dispatchCampaign(campaignId);
@@ -526,6 +568,7 @@ export function useCampaignsDashboard() {
 		overview,
 		templates,
 		campaigns,
+		schedules,
 		selectedTemplate,
 		setSelectedTemplate,
 		selectedCampaign,
@@ -535,6 +578,7 @@ export function useCampaignsDashboard() {
 			templates: templatesQuery,
 			campaigns: campaignsQuery,
 			campaignDetail: campaignDetailQuery,
+			schedules: schedulesQuery,
 		},
 		mutations: {
 			sync: syncMutation,
@@ -547,6 +591,9 @@ export function useCampaignsDashboard() {
 			action: actionMutation,
 			abandonedPreview: abandonedCartPreviewMutation,
 			createAbandonedCampaign: createAbandonedCartCampaignMutation,
+			createSchedule: createScheduleMutation,
+			updateSchedule: updateScheduleMutation,
+			deleteSchedule: deleteScheduleMutation,
 		},
 		tracking: {
 			statusFilter: campaignTrackingStatus,

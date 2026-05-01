@@ -24,12 +24,6 @@ const READ_FILTERS = [
 	{ key: 'READ', label: 'Leidos' },
 ];
 
-const ATTENTION_FILTERS = [
-	{ key: 'ALL', label: 'Todo' },
-	{ key: 'NEEDS_HUMAN', label: 'Humano' },
-	{ key: 'AI_ACTIVE', label: 'IA activa' },
-];
-
 const EXTENDED_QUICK_EMOJIS = [
 	'\u{1F600}', '\u{1F603}', '\u{1F604}', '\u{1F601}', '\u{1F606}', '\u{1F605}', '\u{1F602}', '\u{1F923}',
 	'\u{1F60A}', '\u{1F607}', '\u{1F642}', '\u{1F609}', '\u{1F60D}', '\u{1F970}', '\u{1F618}', '\u{1F617}',
@@ -468,14 +462,13 @@ export default function InboxPage() {
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState('ALL');
-	const [attentionFilter, setAttentionFilter] = useState('ALL');
 	const [olderMessages, setOlderMessages] = useState([]);
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const inboxQuery = useInfiniteQuery({
-		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter, attentionFilter),
+		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter),
 		queryFn: async ({ pageParam = 0 }) => {
 			const res = await api.get('/dashboard/inbox', {
 				params: {
@@ -484,7 +477,6 @@ export default function InboxPage() {
 					offset: pageParam,
 					q: normalizedSearch || undefined,
 					read: readFilter,
-					attention: attentionFilter,
 				},
 			});
 
@@ -1228,21 +1220,6 @@ export default function InboxPage() {
 							onClick={() => setReadFilter(item.key)}
 							className={`inbox-read-filter-btn ${
 								readFilter === item.key ? 'inbox-read-filter-btn--active' : ''
-							}`}
-						>
-							{item.label}
-						</button>
-					))}
-				</div>
-
-				<div className="inbox-read-filters inbox-attention-filters">
-					{ATTENTION_FILTERS.map((item) => (
-						<button
-							key={item.key}
-							type="button"
-							onClick={() => setAttentionFilter(item.key)}
-							className={`inbox-read-filter-btn ${
-								attentionFilter === item.key ? 'inbox-read-filter-btn--active' : ''
 							}`}
 						>
 							{item.label}

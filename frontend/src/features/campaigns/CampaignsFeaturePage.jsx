@@ -6,6 +6,7 @@ import TemplateLibraryPanel from '../../components/campaigns/TemplateLibraryPane
 import UnifiedCampaignSegmentPanel from './components/UnifiedCampaignSegmentPanel.jsx';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
+import { buildAbandonedCartFilters } from './utils.js';
 import './CampaignsFeaturePage.css';
 
 const TAB_DEFINITIONS = [
@@ -46,6 +47,15 @@ const TAB_DEFINITIONS = [
 		description:
 			'Revisa estados, resultados y destinatarios desde una vista separada para controlar lo que ya salio.',
 	},
+	{
+		id: 'schedules',
+		path: 'schedules',
+		label: 'Programaciones',
+		eyebrow: 'Automatizaciones',
+		title: 'Programar campanas',
+		description:
+			'Crea envios recurrentes para carritos abandonados y pagos pendientes, con pausa, edicion y eliminacion.',
+	},
 ];
 
 function DashboardTabButton({ tab, isActive, onClick }) {
@@ -84,6 +94,341 @@ function CampaignSectionShell({ tabId, eyebrow, title, description, children }) 
 	);
 }
 
+const initialScheduleForm = {
+	id: null,
+	name: 'Recuperacion diaria 22 hs',
+	templateId: '',
+	timeOfDay: '22:00',
+	status: 'ACTIVE',
+	daysBack: 1,
+	audienceStatus: 'ALL',
+	limit: 100,
+	minTotal: '',
+	productQuery: '',
+	notes: 'Carritos abandonados y pagos pendientes del ultimo dia.',
+};
+
+function formatScheduleDate(value) {
+	if (!value) return 'Sin fecha';
+
+	try {
+		return new Date(value).toLocaleString('es-AR', {
+			timeZone: 'America/Argentina/Buenos_Aires',
+			day: '2-digit',
+			month: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
+	} catch {
+		return 'Sin fecha';
+	}
+}
+
+function scheduleToForm(schedule = {}) {
+	const filters = schedule.audienceFilters || {};
+
+	return {
+		id: schedule.id || null,
+		name: schedule.name || initialScheduleForm.name,
+		templateId: schedule.templateLocalId || '',
+		timeOfDay: schedule.timeOfDay || '22:00',
+		status: schedule.status || 'ACTIVE',
+		daysBack: Number(filters.daysBack || 1),
+		audienceStatus: filters.status || 'ALL',
+		limit: Number(filters.limit || 100),
+		minTotal: filters.minTotal ?? '',
+		productQuery: filters.productQuery || '',
+		notes: schedule.notes || '',
+	};
+}
+
+function buildSchedulePayload(form) {
+	return {
+		name: form.name,
+		templateId: form.templateId,
+		timeOfDay: form.timeOfDay,
+		timezone: 'America/Argentina/Buenos_Aires',
+		status: form.status,
+		notes: form.notes || null,
+		audienceFilters: buildAbandonedCartFilters({
+			daysBack: form.daysBack,
+			status: form.audienceStatus,
+			limit: form.limit,
+			minTotal: form.minTotal,
+			productQuery: form.productQuery,
+		}),
+	};
+}
+
+function CampaignSchedulesPanel({
+	templates = [],
+	schedules = [],
+	loading = false,
+	mutations,
+}) {
+	const [form, setForm] = useState(initialScheduleForm);
+	const isEditing = Boolean(form.id);
+	const saving = mutations.createSchedule.isPending || mutations.updateSchedule.isPending;
+
+	function updateField(field, value) {
+		setForm((prev) => ({ ...prev, [field]: value }));
+	}
+
+	function resetForm() {
+		setForm({
+			...initialScheduleForm,
+			templateId: templates[0]?.id || '',
+		});
+	}
+
+	useEffect(() => {
+		if (!form.templateId && templates[0]?.id) {
+			setForm((prev) => ({ ...prev, templateId: templates[0].id }));
+		}
+	}, [form.templateId, templates]);
+
+	function handleSubmit(event) {
+		event.preventDefault();
+		const payload = buildSchedulePayload(form);
+
+		if (!payload.templateId) return;
+
+		if (isEditing) {
+			mutations.updateSchedule.mutate(
+				{ scheduleId: form.id, payload },
+				{ onSuccess: resetForm }
+			);
+			return;
+		}
+
+		mutations.createSchedule.mutate(payload, { onSuccess: resetForm });
+	}
+
+	function toggleSchedule(schedule) {
+		const nextStatus = schedule.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+		mutations.updateSchedule.mutate({
+			scheduleId: schedule.id,
+			payload: {
+				name: schedule.name,
+				templateId: schedule.templateLocalId,
+				timeOfDay: schedule.timeOfDay,
+				timezone: schedule.timezone,
+				status: nextStatus,
+				notes: schedule.notes,
+				audienceFilters: schedule.audienceFilters || {},
+			},
+		});
+	}
+
+	return (
+		<div className="campaign-schedules">
+			<form className="campaign-schedule-form campaign-custom-audience-card" onSubmit={handleSubmit}>
+				<div className="campaign-schedule-form__header">
+					<div>
+						<span className="campaigns-eyebrow">Envio diario</span>
+						<h4>{isEditing ? 'Editar programacion' : 'Nueva programacion'}</h4>
+					</div>
+					{isEditing ? (
+						<button type="button" className="button ghost" onClick={resetForm}>
+							Cancelar edicion
+						</button>
+					) : null}
+				</div>
+
+				<div className="campaign-form-grid two-columns">
+					<label className="field">
+						<span>Nombre</span>
+						<input
+							value={form.name}
+							onChange={(event) => updateField('name', event.target.value)}
+						/>
+					</label>
+					<label className="field">
+						<span>Template</span>
+						<select
+							value={form.templateId}
+							onChange={(event) => updateField('templateId', event.target.value)}
+						>
+							<option value="">Seleccionar template</option>
+							{templates.map((template) => (
+								<option key={template.id} value={template.id}>
+									{template.name} - {template.language} - {template.status}
+								</option>
+							))}
+						</select>
+					</label>
+				</div>
+
+				<div className="campaign-custom-audience-grid-4">
+					<label className="field">
+						<span>Hora</span>
+						<input
+							type="time"
+							value={form.timeOfDay}
+							onChange={(event) => updateField('timeOfDay', event.target.value)}
+						/>
+					</label>
+					<label className="field">
+						<span>Ultimos dias</span>
+						<input
+							type="number"
+							min="1"
+							max="90"
+							value={form.daysBack}
+							onChange={(event) => updateField('daysBack', Number(event.target.value || 1))}
+						/>
+					</label>
+					<label className="field">
+						<span>Estado</span>
+						<select
+							value={form.audienceStatus}
+							onChange={(event) => updateField('audienceStatus', event.target.value)}
+						>
+							<option value="ALL">Carritos y pagos pendientes</option>
+							<option value="NEW">Solo nuevos</option>
+							<option value="CONTACTED">Ya contactados</option>
+						</select>
+					</label>
+					<label className="field">
+						<span>Limite</span>
+						<input
+							type="number"
+							min="1"
+							max="500"
+							value={form.limit}
+							onChange={(event) => updateField('limit', Number(event.target.value || 100))}
+						/>
+					</label>
+				</div>
+
+				<div className="campaign-form-grid two-columns">
+					<label className="field">
+						<span>Monto minimo</span>
+						<input
+							type="number"
+							min="0"
+							value={form.minTotal}
+							onChange={(event) => updateField('minTotal', event.target.value)}
+							placeholder="Sin minimo"
+						/>
+					</label>
+					<label className="field">
+						<span>Producto</span>
+						<input
+							value={form.productQuery}
+							onChange={(event) => updateField('productQuery', event.target.value)}
+							placeholder="Opcional"
+						/>
+					</label>
+				</div>
+
+				<label className="field">
+					<span>Notas internas</span>
+					<textarea
+						value={form.notes}
+						onChange={(event) => updateField('notes', event.target.value)}
+						rows={3}
+					/>
+				</label>
+
+				<label className="campaign-toggle campaign-toggle--card">
+					<input
+						type="checkbox"
+						checked={form.status === 'ACTIVE'}
+						onChange={(event) => updateField('status', event.target.checked ? 'ACTIVE' : 'PAUSED')}
+					/>
+					<span>
+						<strong>Programacion activa</strong>
+						<small>Si esta activa, se ejecuta todos los dias a la hora indicada.</small>
+					</span>
+				</label>
+
+				<div className="campaign-form-actions campaign-form-actions--end">
+					<button
+						type="submit"
+						className="button primary"
+						disabled={saving || !form.templateId}
+					>
+						{saving
+							? 'Guardando...'
+							: isEditing
+								? 'Guardar cambios'
+								: 'Crear programacion'}
+					</button>
+				</div>
+			</form>
+
+			<div className="campaign-schedule-list">
+				{loading ? <div className="campaign-custom-audience-empty">Cargando programaciones...</div> : null}
+				{!loading && !schedules.length ? (
+					<div className="campaign-custom-audience-empty">
+						<strong>No hay programaciones creadas</strong>
+						<span>Crea una recuperacion diaria para los carritos y pagos pendientes del ultimo dia.</span>
+					</div>
+				) : null}
+
+				{schedules.map((schedule) => (
+					<div className="campaign-schedule-card" key={schedule.id}>
+						<div className="campaign-schedule-card__main">
+							<div>
+								<span className={`campaign-schedule-status ${schedule.status === 'ACTIVE' ? 'is-active' : ''}`}>
+									{schedule.status === 'ACTIVE' ? 'Activa' : 'Pausada'}
+								</span>
+								<h4>{schedule.name}</h4>
+								<p>
+									{schedule.templateName} - todos los dias {schedule.timeOfDay} - {schedule.audienceFilters?.daysBack || 1} dia(s)
+								</p>
+							</div>
+							<div className="campaign-schedule-meta">
+								<span>Proxima</span>
+								<strong>{formatScheduleDate(schedule.nextRunAt)}</strong>
+							</div>
+							<div className="campaign-schedule-meta">
+								<span>Ejecuciones</span>
+								<strong>{schedule.runCount || 0}</strong>
+							</div>
+						</div>
+
+						{schedule.lastError ? (
+							<div className="campaign-schedule-error">{schedule.lastError}</div>
+						) : null}
+
+						<div className="campaign-detail-actions campaign-detail-actions--spaced">
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => setForm(scheduleToForm(schedule))}
+							>
+								Editar
+							</button>
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => toggleSchedule(schedule)}
+								disabled={mutations.updateSchedule.isPending}
+							>
+								{schedule.status === 'ACTIVE' ? 'Pausar' : 'Activar'}
+							</button>
+							<button
+								type="button"
+								className="button danger"
+								onClick={() => {
+									if (window.confirm(`Eliminar la programacion "${schedule.name}"?`)) {
+										mutations.deleteSchedule.mutate(schedule.id);
+									}
+								}}
+								disabled={mutations.deleteSchedule.isPending}
+							>
+								Eliminar
+							</button>
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
 export default function CampaignsFeaturePage() {
 	const location = useLocation();
 	const navigate = useNavigate();
@@ -91,6 +436,7 @@ export default function CampaignsFeaturePage() {
 		feedback,
 		templates,
 		campaigns,
+		schedules,
 		selectedTemplate,
 		setSelectedTemplate,
 		selectedCampaign,
@@ -246,6 +592,23 @@ export default function CampaignsFeaturePage() {
 							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
 							deleteLoading={mutations.deleteCampaign.isPending}
 							tracking={tracking}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'schedules':
+				return (
+					<CampaignSectionShell
+						tabId={currentTab.id}
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
+						description={currentTab.description}
+					>
+						<CampaignSchedulesPanel
+							templates={templates}
+							schedules={schedules}
+							loading={queries.schedules.isLoading}
+							mutations={mutations}
 						/>
 					</CampaignSectionShell>
 				);

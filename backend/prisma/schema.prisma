@@ -42,6 +42,7 @@ model Workspace {
   campaigns           Campaign[]
   campaignRecipients  CampaignRecipient[]
   campaignConversions CampaignConversion[]
+  campaignSchedules   CampaignSchedule[]
 }
 
 model WorkspaceBranding {
@@ -804,6 +805,35 @@ model CampaignConversion {
   @@index([workspaceId, orderId])
   @@index([workspaceId, checkoutId])
   @@index([workspaceId, convertedAt])
+}
+
+model CampaignSchedule {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  templateLocalId   String?
+  templateName      String
+  templateLanguage  String    @default("es_AR")
+  audienceSource    String    @default("abandoned_carts")
+  audienceFilters   Json?
+  defaultComponents Json?
+  notes             String?
+  status            String    @default("ACTIVE")
+  timeOfDay         String    @default("22:00")
+  timezone          String    @default("America/Argentina/Buenos_Aires")
+  nextRunAt         DateTime?
+  lastRunAt         DateTime?
+  lastRunKey        String?
+  lastCampaignId    String?
+  lastError         String?
+  runCount          Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, nextRunAt])
+  @@index([workspaceId, createdAt])
 }
 
 enum WorkspaceStatus {

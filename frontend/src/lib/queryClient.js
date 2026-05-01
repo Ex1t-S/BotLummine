@@ -1,6 +1,6 @@
 export const queryKeys = {
 	authMe: ['auth', 'me'],
-	inbox: (queue, search = '', readFilter = 'ALL', attentionFilter = 'ALL') => ['dashboard', 'inbox', queue, search, readFilter, attentionFilter],
+	inbox: (queue, search = '', readFilter = 'ALL') => ['dashboard', 'inbox', queue, search, readFilter],
 	conversation: (conversationId) => ['dashboard', 'conversation', conversationId],
 	abandonedCarts: (filters) => ['dashboard', 'abandoned-carts', filters],
 	catalog: (params) => ['dashboard', 'catalog', params],
@@ -9,6 +9,7 @@ export const queryKeys = {
 		templates: (filters = {}) => ['campaigns', 'templates', filters],
 		runs: (filters = {}) => ['campaigns', 'runs', filters],
 		detail: (campaignId) => ['campaigns', 'detail', campaignId],
+		schedules: ['campaigns', 'schedules'],
 	},
 };
 

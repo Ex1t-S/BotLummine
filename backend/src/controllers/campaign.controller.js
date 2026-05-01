@@ -20,6 +20,12 @@ import {
 	renderTemplatePreviewFromComponents,
 } from '../services/whatsapp/whatsapp-template.service.js';
 import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
+import {
+	createCampaignSchedule,
+	deleteCampaignSchedule,
+	listCampaignSchedules,
+	updateCampaignSchedule,
+} from '../services/campaigns/campaign-schedule.service.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
 	normalizeBoolean,
@@ -256,5 +262,67 @@ export async function getCampaignStatsController(req, res) {
 		return res.json({ ok: true, stats });
 	} catch (error) {
 		return sendError(res, error, 500);
+	}
+}
+
+export async function listCampaignSchedulesController(req, res) {
+	try {
+		const schedules = await listCampaignSchedules({
+			workspaceId: requireRequestWorkspaceId(req),
+		});
+		return res.json({ ok: true, schedules });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function createCampaignScheduleController(req, res) {
+	try {
+		const schedule = await createCampaignSchedule({
+			workspaceId: requireRequestWorkspaceId(req),
+			templateId: req.body?.templateId,
+			name: req.body?.name,
+			timeOfDay: req.body?.timeOfDay,
+			timezone: req.body?.timezone,
+			status: req.body?.status,
+			audienceFilters: req.body?.audienceFilters || {},
+			defaultComponents: Array.isArray(req.body?.defaultComponents) ? req.body.defaultComponents : [],
+			notes: req.body?.notes || null,
+		});
+		return res.status(201).json({ ok: true, schedule });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function updateCampaignScheduleController(req, res) {
+	try {
+		const schedule = await updateCampaignSchedule(req.params.scheduleId, {
+			workspaceId: requireRequestWorkspaceId(req),
+			templateId: req.body?.templateId || null,
+			name: req.body?.name,
+			timeOfDay: req.body?.timeOfDay,
+			timezone: req.body?.timezone,
+			status: req.body?.status,
+			audienceFilters: req.body?.audienceFilters,
+			defaultComponents: Array.isArray(req.body?.defaultComponents)
+				? req.body.defaultComponents
+				: undefined,
+			notes: req.body?.notes,
+		});
+		return res.json({ ok: true, schedule });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function deleteCampaignScheduleController(req, res) {
+	try {
+		const result = await deleteCampaignSchedule(req.params.scheduleId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error);
 	}
 }

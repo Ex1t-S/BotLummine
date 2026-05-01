@@ -1,4 +1,5 @@
 import { runCampaignDispatchTick } from './whatsapp-campaign.service.js';
+import { processDueCampaignSchedules } from './campaign-schedule.service.js';
 
 let dispatcherTimer = null;
 let dispatcherBusy = false;
@@ -23,7 +24,14 @@ export async function executeCampaignDispatcherTick() {
 	dispatcherBusy = true;
 
 	try {
-		return await runCampaignDispatchTick();
+		const schedules = await processDueCampaignSchedules();
+		const campaigns = await runCampaignDispatchTick();
+
+		return {
+			ok: true,
+			schedules,
+			campaigns,
+		};
 	} finally {
 		dispatcherBusy = false;
 	}
