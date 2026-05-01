@@ -36,7 +36,7 @@ export default function App() {
 			>
 				<Route index element={<RoleHomeRedirect />} />
 				<Route
-					path="inbox"
+					path="inbox/:queueSlug?"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
 							<InboxPage />

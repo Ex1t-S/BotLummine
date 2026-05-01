@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
 import logoLummine from '../assets/lummine-logo.png';
@@ -10,6 +10,7 @@ function navClass({ isActive }) {
 
 export default function DashboardLayout() {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const { user, logout } = useAuth();
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
@@ -49,7 +50,12 @@ export default function DashboardLayout() {
 
 				<nav className="admin-menu">
 					{!isPlatformAdmin ? (
-						<NavLink to="/inbox" className={navClass}>
+						<NavLink
+							to="/inbox/automatico"
+							className={({ isActive }) =>
+								navClass({ isActive: isActive || location.pathname.startsWith('/inbox') })
+							}
+						>
 							Inbox
 						</NavLink>
 					) : null}

@@ -20,7 +20,7 @@ export function isPlatformAdminUser(user = null) {
 
 export function getDefaultRouteForRole(role = '') {
 	if (normalizeRole(role) === ROLE_PLATFORM_ADMIN) return '/admin';
-	return isAdminRole(role) ? '/catalog' : '/inbox';
+	return isAdminRole(role) ? '/catalog' : '/inbox/automatico';
 }
 
 export function canAccessRoute(role = '', path = '/') {

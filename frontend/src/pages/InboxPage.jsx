@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
@@ -11,6 +12,26 @@ const QUEUES = [
 	{ key: 'HUMAN', label: 'Atención humana' },
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
+
+const QUEUE_ROUTES = {
+	AUTO: 'automatico',
+	HUMAN: 'atencion-humana',
+	PAYMENT_REVIEW: 'comprobantes',
+};
+
+const QUEUE_BY_ROUTE = Object.fromEntries(
+	Object.entries(QUEUE_ROUTES).map(([queueKey, slug]) => [slug, queueKey])
+);
+
+function resolveQueueFromSlug(slug = '') {
+	return QUEUE_BY_ROUTE[String(slug || '').trim().toLowerCase()] || 'AUTO';
+}
+
+function buildInboxPath(queueKey = 'AUTO', conversationId = '') {
+	const slug = QUEUE_ROUTES[queueKey] || QUEUE_ROUTES.AUTO;
+	const query = conversationId ? `?conversation=${encodeURIComponent(conversationId)}` : '';
+	return `/inbox/${slug}${query}`;
+}
 
 const QUICK_EMOJIS = [
 	'😊', '😂', '😍', '😉', '👍', '🙏',
@@ -444,6 +465,9 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 
 export default function InboxPage() {
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const { queueSlug } = useParams();
+	const [searchParams] = useSearchParams();
 	const { user } = useAuth();
 	const isAdmin = isAdminUser(user);
 	const contactsContainerRef = useRef(null);
@@ -455,10 +479,13 @@ export default function InboxPage() {
 	const lastReadRequestRef = useRef('');
 	const manuallyUnreadConversationIdRef = useRef(null);
 
-	const [queue, setQueue] = useState('AUTO');
+	const routeQueue = resolveQueueFromSlug(queueSlug);
+	const routeConversationId = searchParams.get('conversation') || null;
+
+	const [queue, setQueue] = useState(routeQueue);
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-	const [selectedConversationId, setSelectedConversationId] = useState(null);
+	const [selectedConversationId, setSelectedConversationId] = useState(routeConversationId);
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState('ALL');
@@ -466,6 +493,37 @@ export default function InboxPage() {
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
 	const normalizedSearch = searchTerm.trim().toLowerCase();
+
+	useEffect(() => {
+		const expectedPath = buildInboxPath(routeQueue, routeConversationId || '');
+
+		if (!queueSlug || !QUEUE_BY_ROUTE[String(queueSlug || '').trim().toLowerCase()]) {
+			navigate(expectedPath, { replace: true });
+			return;
+		}
+
+		setQueue((current) => (current === routeQueue ? current : routeQueue));
+		setSelectedConversationId((current) => (
+			current === routeConversationId ? current : routeConversationId
+		));
+	}, [navigate, queueSlug, routeQueue, routeConversationId]);
+
+	function selectQueue(nextQueue) {
+		if (nextQueue === queue) return;
+		setQueue(nextQueue);
+		setSelectedConversationId(null);
+		navigate(buildInboxPath(nextQueue), { replace: false });
+	}
+
+	function selectConversation(conversationId) {
+		setSelectedConversationId(conversationId);
+		navigate(buildInboxPath(queue, conversationId), { replace: false });
+	}
+
+	function clearSelectedConversation() {
+		setSelectedConversationId(null);
+		navigate(buildInboxPath(queue), { replace: true });
+	}
 
 	const inboxQuery = useInfiniteQuery({
 		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter),
@@ -562,20 +620,15 @@ export default function InboxPage() {
 
 	useEffect(() => {
 		if (readFilter === 'UNREAD' && !selectedConversationId) {
-			setSelectedConversationId(null);
 			return;
 		}
+
+		if (selectedConversationId) return;
+		if (inboxQuery.isPlaceholderData) return;
 
 		if (!visibleContacts.length) {
-			setSelectedConversationId(null);
 			return;
 		}
-
-		const stillExists = visibleContacts.some(
-			(contact) => contact.conversationId === selectedConversationId
-		);
-
-		if (stillExists) return;
 
 		const preferredSelectedId = firstInboxPage?.selectedContact?.conversationId;
 		const preferredExists = visibleContacts.some(
@@ -588,7 +641,18 @@ export default function InboxPage() {
 			null;
 
 		setSelectedConversationId(preferredId);
-	}, [visibleContacts, selectedConversationId, firstInboxPage, readFilter]);
+		if (preferredId) {
+			navigate(buildInboxPath(queue, preferredId), { replace: true });
+		}
+	}, [
+		visibleContacts,
+		selectedConversationId,
+		firstInboxPage,
+		readFilter,
+		navigate,
+		queue,
+		inboxQuery.isPlaceholderData,
+	]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return undefined;
@@ -1011,7 +1075,7 @@ export default function InboxPage() {
 			});
 
 			if (result.nextQueue !== queue) {
-				setSelectedConversationId(null);
+				clearSelectedConversation();
 			}
 		},
 		onError: (error) => {
@@ -1173,10 +1237,7 @@ export default function InboxPage() {
 								key={item.key}
 								active={isActive}
 								disabled={inboxQuery.isFetching && isActive}
-								onClick={() => {
-									setQueue(item.key);
-									setSelectedConversationId(null);
-								}}
+								onClick={() => selectQueue(item.key)}
 							>
 								{item.label} · {counts[item.key] || 0}
 							</ActionButton>
@@ -1251,7 +1312,7 @@ export default function InboxPage() {
 							<button
 								key={contact.conversationId}
 								type="button"
-								onClick={() => setSelectedConversationId(contact.conversationId)}
+								onClick={() => selectConversation(contact.conversationId)}
 								className={`inbox-contact-card ${
 									isSelected ? 'inbox-contact-card--selected' : ''
 								} ${hasUnread ? 'inbox-contact-card--unread' : ''}`}
