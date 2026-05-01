@@ -13,11 +13,11 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'library',
 		path: 'library',
-		label: 'Biblioteca de templates',
+		label: 'Biblioteca',
 		eyebrow: 'Templates',
 		title: 'Biblioteca de templates',
 		description:
-			'Busca, filtra y elegi la plantilla con la que queres trabajar. Desde aca arrancas sin dar vueltas.',
+			'Elegí la plantilla correcta para crear, editar o programar campañas sin salir del flujo.',
 	},
 	{
 		id: 'builder',
@@ -26,23 +26,23 @@ const TAB_DEFINITIONS = [
 		eyebrow: 'Templates',
 		title: 'Editor de templates',
 		description:
-			'Edita variables, botones y contenido del template sin salir del flujo de campanas.',
+			'Editá variables, botones y contenido del template sin salir del flujo de campañas.',
 		hiddenFromNav: true,
 	},
 	{
 		id: 'segment',
 		path: 'segment',
-		label: 'Segmentar campana',
-		eyebrow: 'Campanas',
-		title: 'Segmentar campana',
+		label: 'Crear campañas',
+		eyebrow: 'Campañas',
+		title: 'Crear campañas',
 		description:
-			'Elegi si la audiencia sale de carritos abandonados o de clientes con compras, y arma la campana desde un solo flujo.',
+			'Elegí si la audiencia sale de carritos abandonados o de clientes con compras, y armá cada campaña con su objetivo claro.',
 	},
 	{
 		id: 'tracking',
 		path: 'tracking',
 		label: 'Seguimiento',
-		eyebrow: 'Campanas',
+		eyebrow: 'Campañas',
 		title: 'Seguimiento',
 		description:
 			'Revisa estados, resultados y destinatarios desde una vista separada para controlar lo que ya salio.',
@@ -50,11 +50,11 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'schedules',
 		path: 'schedules',
-		label: 'Programaciones',
+		label: 'Programar campañas',
 		eyebrow: 'Automatizaciones',
-		title: 'Programar campanas',
+		title: 'Programar campañas',
 		description:
-			'Crea envios recurrentes para carritos abandonados y pagos pendientes, con pausa, edicion y eliminacion.',
+			'Creá envíos recurrentes separados para carritos abandonados o pagos pendientes, con pausa, edición y eliminación.',
 	},
 ];
 
@@ -96,7 +96,7 @@ function CampaignSectionShell({ tabId, eyebrow, title, description, children }) 
 
 const initialScheduleForm = {
 	id: null,
-	name: 'Recuperacion diaria 22 hs',
+	name: 'Recuperación diaria 22 hs',
 	templateId: '',
 	timeOfDay: '22:00',
 	status: 'ACTIVE',
@@ -106,7 +106,20 @@ const initialScheduleForm = {
 	limit: 100,
 	minTotal: '',
 	productQuery: '',
-	notes: 'Recuperacion diaria del ultimo dia.',
+	notes: 'Recuperación diaria del último día.',
+};
+
+const SCHEDULE_AUDIENCE_OPTIONS = {
+	abandoned_carts: {
+		label: 'Carritos abandonados',
+		helper: 'Contacta carritos sin finalizar según estado, ventana, monto y producto.',
+		statusLabel: 'Estado del carrito',
+	},
+	pending_payment: {
+		label: 'Pagos pendientes',
+		helper: 'Contacta pedidos pendientes de pago sin mezclar esta regla con carritos.',
+		statusLabel: 'Estado de pago',
+	},
 };
 
 function formatScheduleDate(value) {
@@ -178,7 +191,7 @@ function CampaignSchedulesPanel({
 	}
 
 	function formatScheduleAudience(schedule) {
-		return schedule.audienceSource === 'pending_payment' ? 'Pagos pendientes' : 'Carritos abandonados';
+		return SCHEDULE_AUDIENCE_OPTIONS[schedule.audienceSource]?.label || 'Carritos abandonados';
 	}
 
 	function resetForm() {
@@ -233,115 +246,140 @@ function CampaignSchedulesPanel({
 			<form className="campaign-schedule-form campaign-custom-audience-card" onSubmit={handleSubmit}>
 				<div className="campaign-schedule-form__header">
 					<div>
-						<span className="campaigns-eyebrow">Envio diario</span>
-						<h4>{isEditing ? 'Editar programacion' : 'Nueva programacion'}</h4>
+						<span className="campaigns-eyebrow">Envío diario</span>
+						<h4>{isEditing ? 'Editar programación' : 'Nueva programación'}</h4>
 					</div>
 					{isEditing ? (
 						<button type="button" className="button ghost" onClick={resetForm}>
-							Cancelar edicion
+							Cancelar edición
 						</button>
 					) : null}
 				</div>
 
-				<div className="campaign-form-grid two-columns">
-					<label className="field">
-						<span>Nombre</span>
-						<input
-							value={form.name}
-							onChange={(event) => updateField('name', event.target.value)}
-						/>
-					</label>
-					<label className="field">
-						<span>Template</span>
-						<select
-							value={form.templateId}
-							onChange={(event) => updateField('templateId', event.target.value)}
-						>
-							<option value="">Seleccionar template</option>
-							{templates.map((template) => (
-								<option key={template.id} value={template.id}>
-									{template.name} - {template.language} - {template.status}
-								</option>
-							))}
-						</select>
-					</label>
+				<div className="campaign-schedule-section">
+					<div className="campaign-schedule-section__title">
+						<strong>Configuración</strong>
+						<span>Nombre, template y horario de ejecución.</span>
+					</div>
+					<div className="campaign-form-grid two-columns">
+						<label className="field">
+							<span>Nombre</span>
+							<input
+								value={form.name}
+								onChange={(event) => updateField('name', event.target.value)}
+							/>
+						</label>
+						<label className="field">
+							<span>Template</span>
+							<select
+								value={form.templateId}
+								onChange={(event) => updateField('templateId', event.target.value)}
+							>
+								<option value="">Seleccionar template</option>
+								{templates.map((template) => (
+									<option key={template.id} value={template.id}>
+										{template.name} - {template.language} - {template.status}
+									</option>
+								))}
+							</select>
+						</label>
+					</div>
+					<div className="campaign-form-grid two-columns">
+						<label className="field">
+							<span>Hora</span>
+							<input
+								type="time"
+								value={form.timeOfDay}
+								onChange={(event) => updateField('timeOfDay', event.target.value)}
+							/>
+						</label>
+						<label className="field">
+							<span>Últimos días</span>
+							<input
+								type="number"
+								min="1"
+								max="90"
+								value={form.daysBack}
+								onChange={(event) => updateField('daysBack', Number(event.target.value || 1))}
+							/>
+						</label>
+					</div>
 				</div>
 
-				<div className="campaign-form-grid two-columns">
-					<label className="field">
-						<span>Audiencia</span>
-						<select
-							value={form.audienceSource}
-							onChange={(event) => updateField('audienceSource', event.target.value)}
-						>
-							<option value="abandoned_carts">Carritos abandonados</option>
-							<option value="pending_payment">Pagos pendientes</option>
-						</select>
-					</label>
-					<label className="field">
-						<span>Estado</span>
-						<select
-							value={form.audienceStatus}
-							onChange={(event) => updateField('audienceStatus', event.target.value)}
-							disabled={form.audienceSource === 'pending_payment'}
-						>
-							<option value="NEW">Carritos nuevos</option>
-							<option value="CONTACTED">Carritos ya contactados</option>
-							<option value="ALL">Todos los carritos</option>
-						</select>
-					</label>
+				<div className="campaign-schedule-section">
+					<div className="campaign-schedule-section__title">
+						<strong>Audiencia</strong>
+						<span>{SCHEDULE_AUDIENCE_OPTIONS[form.audienceSource]?.helper}</span>
+					</div>
+					<div className="campaign-schedule-audience-choice" role="radiogroup" aria-label="Audiencia programada">
+						{Object.entries(SCHEDULE_AUDIENCE_OPTIONS).map(([value, option]) => (
+							<button
+								key={value}
+								type="button"
+								role="radio"
+								aria-checked={form.audienceSource === value}
+								className={`campaign-schedule-audience-choice__button ${form.audienceSource === value ? 'is-active' : ''}`.trim()}
+								onClick={() => updateField('audienceSource', value)}
+							>
+								<strong>{option.label}</strong>
+								<span>{option.helper}</span>
+							</button>
+						))}
+					</div>
+					<div className="campaign-form-grid two-columns">
+						<label className="field">
+							<span>{SCHEDULE_AUDIENCE_OPTIONS[form.audienceSource]?.statusLabel}</span>
+							<select
+								value={form.audienceSource === 'pending_payment' ? 'ALL' : form.audienceStatus}
+								onChange={(event) => updateField('audienceStatus', event.target.value)}
+								disabled={form.audienceSource === 'pending_payment'}
+							>
+								<option value="NEW">Carritos nuevos</option>
+								<option value="CONTACTED">Carritos ya contactados</option>
+								<option value="ALL">Todos los carritos</option>
+							</select>
+							{form.audienceSource === 'pending_payment' ? (
+								<small>Pagos pendientes usa pedidos con estado pendiente; no aplica estado de carrito.</small>
+							) : null}
+						</label>
+						<label className="field">
+							<span>Límite</span>
+							<input
+								type="number"
+								min="1"
+								max="500"
+								value={form.limit}
+								onChange={(event) => updateField('limit', Number(event.target.value || 100))}
+							/>
+						</label>
+					</div>
 				</div>
 
-				<div className="campaign-custom-audience-grid-4">
-					<label className="field">
-						<span>Hora</span>
-						<input
-							type="time"
-							value={form.timeOfDay}
-							onChange={(event) => updateField('timeOfDay', event.target.value)}
-						/>
-					</label>
-					<label className="field">
-						<span>Ultimos dias</span>
-						<input
-							type="number"
-							min="1"
-							max="90"
-							value={form.daysBack}
-							onChange={(event) => updateField('daysBack', Number(event.target.value || 1))}
-						/>
-					</label>
-					<label className="field">
-						<span>Limite</span>
-						<input
-							type="number"
-							min="1"
-							max="500"
-							value={form.limit}
-							onChange={(event) => updateField('limit', Number(event.target.value || 100))}
-						/>
-					</label>
-				</div>
-
-				<div className="campaign-form-grid two-columns">
-					<label className="field">
-						<span>Monto minimo</span>
-						<input
-							type="number"
-							min="0"
-							value={form.minTotal}
-							onChange={(event) => updateField('minTotal', event.target.value)}
-							placeholder="Sin minimo"
-						/>
-					</label>
-					<label className="field">
-						<span>Producto</span>
-						<input
-							value={form.productQuery}
-							onChange={(event) => updateField('productQuery', event.target.value)}
-							placeholder="Opcional"
-						/>
-					</label>
+				<div className="campaign-schedule-section">
+					<div className="campaign-schedule-section__title">
+						<strong>Reglas de envío</strong>
+						<span>Filtros opcionales para acotar la campaña programada.</span>
+					</div>
+					<div className="campaign-form-grid two-columns">
+						<label className="field">
+							<span>Monto mínimo</span>
+							<input
+								type="number"
+								min="0"
+								value={form.minTotal}
+								onChange={(event) => updateField('minTotal', event.target.value)}
+								placeholder="Sin mínimo"
+							/>
+						</label>
+						<label className="field">
+							<span>Producto</span>
+							<input
+								value={form.productQuery}
+								onChange={(event) => updateField('productQuery', event.target.value)}
+								placeholder="Opcional"
+							/>
+						</label>
+					</div>
 				</div>
 
 				<label className="field">
@@ -360,8 +398,8 @@ function CampaignSchedulesPanel({
 						onChange={(event) => updateField('status', event.target.checked ? 'ACTIVE' : 'PAUSED')}
 					/>
 					<span>
-						<strong>Programacion activa</strong>
-						<small>Si esta activa, se ejecuta todos los dias a la hora indicada.</small>
+						<strong>Programación activa</strong>
+						<small>Si está activa, se ejecuta todos los días a la hora indicada.</small>
 					</span>
 				</label>
 
@@ -375,7 +413,7 @@ function CampaignSchedulesPanel({
 							? 'Guardando...'
 							: isEditing
 								? 'Guardar cambios'
-								: 'Crear programacion'}
+								: 'Crear programación'}
 					</button>
 				</div>
 			</form>
@@ -385,7 +423,7 @@ function CampaignSchedulesPanel({
 				{!loading && !schedules.length ? (
 					<div className="campaign-custom-audience-empty">
 						<strong>No hay programaciones creadas</strong>
-						<span>Crea una recuperacion diaria para carritos o pagos pendientes.</span>
+						<span>Creá una programación para carritos abandonados o una distinta para pagos pendientes.</span>
 					</div>
 				) : null}
 
@@ -398,11 +436,11 @@ function CampaignSchedulesPanel({
 								</span>
 								<h4>{schedule.name}</h4>
 								<p>
-									{formatScheduleAudience(schedule)} - {schedule.templateName} - todos los dias {schedule.timeOfDay} - {schedule.audienceFilters?.daysBack || 1} dia(s)
+									{formatScheduleAudience(schedule)} - {schedule.templateName} - todos los días {schedule.timeOfDay} - últimos {schedule.audienceFilters?.daysBack || 1} día(s)
 								</p>
 							</div>
 							<div className="campaign-schedule-meta">
-								<span>Proxima</span>
+								<span>Próxima</span>
 								<strong>{formatScheduleDate(schedule.nextRunAt)}</strong>
 							</div>
 							<div className="campaign-schedule-meta">
@@ -435,7 +473,7 @@ function CampaignSchedulesPanel({
 								type="button"
 								className="button danger"
 								onClick={() => {
-									if (window.confirm(`Eliminar la programacion "${schedule.name}"?`)) {
+									if (window.confirm(`Eliminar la programación "${schedule.name}"?`)) {
 										mutations.deleteSchedule.mutate(schedule.id);
 									}
 								}}
@@ -605,7 +643,7 @@ export default function CampaignsFeaturePage() {
 								if (!campaign?.id) return;
 
 								const confirmed = window.confirm(
-									`Eliminar la campana "${campaign.name}"?\n\nEsta accion no se puede deshacer.`
+									`Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
 								);
 
 								if (!confirmed) return;
@@ -644,16 +682,15 @@ export default function CampaignsFeaturePage() {
 		<section className="campaigns-page campaigns-page--tabs campaigns-page--feature-refresh">
 			<div className="campaigns-hero page-card campaign-shell-card campaigns-hero--tabs campaigns-hero--feature-refresh">
 				<div className="campaigns-hero-copy campaigns-hero-copy--full">
-					<span className="campaigns-eyebrow">Campanas - WhatsApp Templates</span>
-					<h2>Creacion y seguimiento de campanas</h2>
+					<span className="campaigns-eyebrow">Campañas - WhatsApp Templates</span>
+					<h2>Campañas de WhatsApp</h2>
 					<p className="campaigns-hero-lead">
-						Crea campanas de WhatsApp, elegi audiencia, edita templates y segui resultados desde
-						un solo lugar sin perderte en paneles gigantes.
+						Creá campañas, elegí audiencias, editá templates y programá envíos desde un solo lugar.
 					</p>
 
 					<CampaignFeedbackAlert feedback={feedback} />
 
-					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campanas">
+					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campañas">
 						{TAB_DEFINITIONS.filter((tab) => !tab.hiddenFromNav).map((tab) => (
 							<DashboardTabButton
 								key={tab.id}

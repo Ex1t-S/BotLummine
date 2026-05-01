@@ -90,9 +90,9 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryLabel: 'En curso',
 			primaryDisabled: true,
 			primaryAction: null,
-			secondaryLabel: 'Cancelar campana',
+			secondaryLabel: 'Cancelar campaña',
 			secondaryAction: 'pause',
-			helperText: 'La campana ya esta en ejecucion o en cola. Solo podes cancelarla.',
+			helperText: 'La campaña ya está en ejecución o en cola. Solo podés cancelarla.',
 		};
 	}
 
@@ -105,7 +105,7 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				failedCount > 0
-					? 'La campana tuvo fallidos. Podes reintentar solo esos destinatarios.'
+					? 'La campaña tuvo fallidos. Podés reintentar solo esos destinatarios.'
 					: 'No hay destinatarios fallidos ni pendientes para volver a lanzar.',
 		};
 	}
@@ -119,8 +119,8 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				pendingCount > 0 || failedCount > 0
-					? 'La campana fue cancelada, pero todavia podes volver a intentar los pendientes.'
-					: 'La campana fue cancelada y ya no tiene destinatarios para relanzar.',
+					? 'La campaña fue cancelada, pero todavía podés volver a intentar los pendientes.'
+					: 'La campaña fue cancelada y ya no tiene destinatarios para relanzar.',
 		};
 	}
 
@@ -131,17 +131,17 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryAction: null,
 			secondaryLabel: null,
 			secondaryAction: null,
-			helperText: 'La campana ya termino. Si queres repetirla, conviene crear una nueva a partir de este mismo template.',
+			helperText: 'La campaña ya terminó. Si querés repetirla, conviene crear una nueva a partir de este mismo template.',
 		};
 	}
 
 	return {
-		primaryLabel: 'Lanzar campana',
+		primaryLabel: 'Lanzar campaña',
 		primaryDisabled: false,
 		primaryAction: 'dispatch',
 		secondaryLabel: null,
 		secondaryAction: null,
-		helperText: 'Esta campana todavia esta en borrador. Cuando la lances, empieza el despacho.',
+		helperText: 'Esta campaña todavía está en borrador. Cuando la lances, empieza el despacho.',
 	};
 }
 
@@ -308,10 +308,10 @@ export default function CampaignRunsPanel({
 		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Historial y tracking de campanas</h3>
+					<h3>Historial y tracking de campañas</h3>
 					<p>
-						Segui borradores, campanas activas y resultados desde una vista mas clara,
-						con tracking real de envios, entregas y lecturas.
+						Seguí borradores, campañas activas y resultados desde una vista más clara,
+						con tracking real de envíos, entregas y lecturas.
 					</p>
 				</div>
 			</div>
@@ -321,15 +321,15 @@ export default function CampaignRunsPanel({
 					<div className="campaign-detail-header">
 						<div>
 								<h4>Campañas cargadas</h4>
-								<p>Elegi una campana para revisar su tracking y sus destinatarios.</p>
+								<p>Elegí una campaña para revisar su tracking y sus destinatarios.</p>
 						</div>
 					</div>
 
 					<div className="campaign-list compact campaign-list--airy campaign-list--tracking">
 						{campaigns.length === 0 ? (
 							<div className="campaign-empty-state">
-								<strong>Todavia no hay campanas.</strong>
-								<p>Crea una y te va a aparecer aca con sus metricas.</p>
+								<strong>Todavía no hay campañas.</strong>
+								<p>Creá una y va a aparecer acá con sus métricas.</p>
 							</div>
 						) : (
 							campaigns.map((campaign) => {
@@ -423,8 +423,8 @@ export default function CampaignRunsPanel({
 									disabled={!canDelete || deleteBusy}
 									title={
 										canDelete
-											? 'Eliminar campana'
-											: 'No se puede eliminar una campana en cola o en ejecucion'
+											? 'Eliminar campaña'
+											: 'No se puede eliminar una campaña en cola o en ejecución'
 									}
 								>
 									{deleteBusy ? 'Eliminando...' : 'Eliminar'}
@@ -542,7 +542,7 @@ export default function CampaignRunsPanel({
 											<th>Destinatario</th>
 											<th>Telefono</th>
 											<th>Estado</th>
-											<th>Interaccion</th>
+											<th>Interacción</th>
 											<th>Compra detectada</th>
 											<th>Ultima actualizacion</th>
 										</tr>
@@ -658,8 +658,8 @@ export default function CampaignRunsPanel({
 						</>
 					) : (
 						<div className="campaign-empty-state">
-							<strong>Elegi una campana.</strong>
-							<p>Aca vas a ver el detalle, los estados y las acciones disponibles.</p>
+							<strong>Elegí una campaña.</strong>
+							<p>Acá vas a ver el detalle, los estados y las acciones disponibles.</p>
 						</div>
 					)}
 				</div>

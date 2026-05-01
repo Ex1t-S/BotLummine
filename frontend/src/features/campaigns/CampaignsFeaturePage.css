@@ -12,6 +12,75 @@
 	gap: 16px;
 }
 
+.campaign-schedule-section {
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 12px;
+	background: #f8fafc;
+}
+
+.campaign-schedule-section__title {
+	display: flex;
+	justify-content: space-between;
+	gap: 14px;
+	align-items: flex-start;
+}
+
+.campaign-schedule-section__title strong {
+	color: #0f172a;
+	font-size: 14px;
+	font-weight: 900;
+}
+
+.campaign-schedule-section__title span {
+	max-width: 360px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.45;
+	text-align: right;
+}
+
+.campaign-schedule-audience-choice {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.campaign-schedule-audience-choice__button {
+	display: grid;
+	gap: 6px;
+	padding: 12px;
+	border: 1px solid rgba(15, 23, 42, 0.1);
+	border-radius: 10px;
+	background: #ffffff;
+	color: #0f172a;
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.campaign-schedule-audience-choice__button:hover,
+.campaign-schedule-audience-choice__button.is-active {
+	border-color: rgba(79, 70, 229, 0.38);
+	background: #eef2ff;
+	box-shadow: 0 10px 24px rgba(79, 70, 229, 0.12);
+}
+
+.campaign-schedule-audience-choice__button strong {
+	font-size: 13px;
+	font-weight: 900;
+}
+
+.campaign-schedule-audience-choice__button span {
+	color: #475569;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
 .campaign-schedule-form__header,
 .campaign-schedule-card__main {
 	display: flex;
@@ -107,5 +176,20 @@
 
 	.campaign-schedule-card__main {
 		flex-wrap: wrap;
+	}
+}
+
+@media (max-width: 720px) {
+	.campaign-schedule-section__title {
+		display: grid;
+	}
+
+	.campaign-schedule-section__title span {
+		max-width: none;
+		text-align: left;
+	}
+
+	.campaign-schedule-audience-choice {
+		grid-template-columns: 1fr;
 	}
 }

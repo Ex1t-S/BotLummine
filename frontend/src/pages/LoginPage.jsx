@@ -68,7 +68,7 @@ export default function LoginPage() {
 						<p className="login-eyebrow">Panel operativo multi-marca</p>
 						<h1>Gestiona WhatsApp, ventas y clientes de cada marca.</h1>
 						<p className="login-lead">
-							Ingresa con tu usuario y accede al workspace correspondiente para operar inbox, campanas, catalogo y automatizaciones.
+							Ingresá con tu usuario y accedé al workspace correspondiente para operar inbox, campañas, catálogo y automatizaciones.
 						</p>
 					</div>
 
@@ -95,7 +95,7 @@ export default function LoginPage() {
 						<div className="login-flow-list">
 							<span>WhatsApp</span>
 							<span>Tiendanube</span>
-							<span>Campanas</span>
+							<span>Campañas</span>
 						</div>
 					</div>
 				</section>

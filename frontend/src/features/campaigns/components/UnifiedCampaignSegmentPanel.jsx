@@ -6,16 +6,16 @@ const SOURCE_OPTIONS = [
 	{
 		id: 'abandoned',
 		label: 'Carritos abandonados',
-		description: 'Recuperacion rapida con filtros por ventana, monto y producto.',
-		highlight: 'Ideal para recuperar ventas frias en pocas horas.',
-		steps: '1. Elegi template 2. Filtra carritos 3. Previsualiza 4. Crea o lanza',
+		description: 'Recuperación rápida con filtros por ventana, monto y producto.',
+		highlight: 'Ideal para recuperar ventas recientes en pocas horas.',
+		steps: '1. Elegí template 2. Filtrá carritos 3. Previsualizá 4. Creá o lanzá',
 	},
 	{
 		id: 'customers',
 		label: 'Clientes y compras',
-		description: 'Segmenta por compras, productos y filtros comerciales antes de lanzar.',
-		highlight: 'Ideal para promociones, reactivacion y audiencias comerciales.',
-		steps: '1. Elegi template 2. Filtra clientes 3. Selecciona audiencia 4. Revisa y lanza',
+		description: 'Segmentá por compras, productos y filtros comerciales antes de lanzar.',
+		highlight: 'Ideal para promociones, reactivación y audiencias comerciales.',
+		steps: '1. Elegí template 2. Filtrá clientes 3. Seleccioná audiencia 4. Revisá y lanzá',
 	},
 ];
 
@@ -55,11 +55,10 @@ export default function UnifiedCampaignSegmentPanel({
 			<div className="campaign-source-switch">
 				<div className="campaign-source-switch__header">
 					<span className="campaigns-tab-shell__eyebrow">Origen de audiencia</span>
-					<h4>Elegi de donde sale la audiencia</h4>
+					<h4>Elegí de dónde sale la audiencia</h4>
 					<p>
-						Primero defini si queres trabajar con recuperacion de carritos o con
-						segmentacion de clientes. Despues el panel cambia sin mezclar dos modulos
-						distintos.
+						Primero definí si vas a recuperar carritos o crear una campaña para clientes.
+						Después el panel cambia para que cada objetivo tenga su propio flujo.
 					</p>
 				</div>
 
@@ -89,8 +88,8 @@ export default function UnifiedCampaignSegmentPanel({
 						<span>Consejo</span>
 						<strong>No mezclar objetivos</strong>
 						<p>
-							Si queres recuperar ventas usa carritos. Si queres comunicar promos o
-							reactivar clientes, usa clientes y compras.
+							Si querés recuperar ventas, usá carritos. Si querés comunicar promos o
+							reactivar clientes, usá clientes y compras.
 						</p>
 					</div>
 				</div>

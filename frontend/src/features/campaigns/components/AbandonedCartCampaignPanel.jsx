@@ -53,7 +53,7 @@ export default function AbandonedCartCampaignPanel({
 				</div>
 
 				<p className="campaign-custom-audience-subtext">
-					Filtrá, previsualizá y creá la campaña.
+					Filtrá carritos, revisá destinatarios y creá una campaña específica de recuperación.
 				</p>
 			</div>
 
@@ -186,7 +186,7 @@ export default function AbandonedCartCampaignPanel({
 							{creating
 								? 'Creando campaña...'
 								: form.launchNow
-									? 'Crear y lanzar'
+									? 'Crear y lanzar campaña'
 									: 'Guardar campaña'}
 						</button>
 					</div>
@@ -240,7 +240,7 @@ export default function AbandonedCartCampaignPanel({
 						) : (
 							<div className="campaign-custom-audience-empty">
 								<strong>Sin destinatarios para mostrar</strong>
-								<span>Elegí un template y previsualizá para revisar los primeros contactos antes de crear la campaña.</span>
+								<span>Elegí un template y previsualizá los primeros contactos antes de crear la campaña.</span>
 							</div>
 						)}
 					</div>

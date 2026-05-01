@@ -1439,7 +1439,7 @@ export default function CampaignComposerPanel({
 				<div>
 					<h3>Crear campaña</h3>
 					<p>
-						Ahora la campaña no adivina las variables: vos le decís exactamente de dónde sale cada una.
+						Definí variables, filtros y destinatarios antes de crear la campaña.
 					</p>
 				</div>
 
@@ -1460,7 +1460,7 @@ export default function CampaignComposerPanel({
 
 				<div className="campaign-helper-box">
 					<div className="campaign-helper-text">
-						Revision rapida antes de crear la campana. Si algo no esta listo, aparece marcado aca y no recien al final.
+						Revisión rápida antes de crear la campaña. Si algo no está listo, aparece marcado acá.
 					</div>
 
 					<div className="campaign-review-grid">
@@ -1474,11 +1474,11 @@ export default function CampaignComposerPanel({
 
 					{campaignReadyToCreate ? (
 						<div className="campaign-inline-success">
-							La campana ya tiene todo lo necesario para crearse.
+							La campaña ya tiene todo lo necesario para crearse.
 						</div>
 					) : (
 						<div className="campaign-inline-warning">
-							Completa los puntos pendientes antes de crear o lanzar la campana.
+							Completá los puntos pendientes antes de crear o lanzar la campaña.
 						</div>
 					)}
 				</div>

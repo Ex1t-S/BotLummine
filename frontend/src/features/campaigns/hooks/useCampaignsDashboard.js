@@ -502,27 +502,27 @@ export function useCampaignsDashboard() {
 		mutationFn: createCampaignSchedule,
 		onSuccess: () => {
 			invalidateAll();
-			showFeedback('success', 'Programacion creada.');
+			showFeedback('success', 'Programación creada.');
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la programacion.'),
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la programación.'),
 	});
 
 	const updateScheduleMutation = useMutation({
 		mutationFn: ({ scheduleId, payload }) => updateCampaignSchedule(scheduleId, payload),
 		onSuccess: () => {
 			invalidateAll();
-			showFeedback('success', 'Programacion actualizada.');
+			showFeedback('success', 'Programación actualizada.');
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar la programacion.'),
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar la programación.'),
 	});
 
 	const deleteScheduleMutation = useMutation({
 		mutationFn: deleteCampaignSchedule,
 		onSuccess: () => {
 			invalidateAll();
-			showFeedback('success', 'Programacion eliminada.');
+			showFeedback('success', 'Programación eliminada.');
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la programacion.'),
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la programación.'),
 	});
 
 	const actionMutation = useMutation({

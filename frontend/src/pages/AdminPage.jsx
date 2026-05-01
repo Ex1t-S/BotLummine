@@ -781,7 +781,7 @@ export default function AdminPage() {
 					<section className="tenant-admin-panel">
 						<h3>Estadisticas multi-marca</h3>
 						<div className="tenant-admin-metrics">
-							<StatusPill>Campanas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
+							<StatusPill>Campañas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
 							<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
 							<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
 							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
@@ -794,7 +794,7 @@ export default function AdminPage() {
 								<thead>
 									<tr>
 										<th>Marca</th>
-										<th>Campanas</th>
+										<th>Campañas</th>
 										<th>Enviados</th>
 										<th>Entregados</th>
 										<th>Leidos</th>
@@ -839,7 +839,7 @@ export default function AdminPage() {
 						<h3>Detalle de marca</h3>
 						<div className="tenant-admin-analytics-grid">
 							<div>
-								<h4>Campanas recientes</h4>
+								<h4>Campañas recientes</h4>
 								<div className="tenant-admin-list">
 									{(analytics.detail.campaigns || []).map((campaign) => (
 										<div className="tenant-admin-list-row" key={campaign.id}>
