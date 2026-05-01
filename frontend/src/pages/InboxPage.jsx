@@ -292,17 +292,32 @@ function ContextItem({ label, value }) {
 
 function AiContextPanel({ conversation, activeContact }) {
 	const state = conversation?.state || {};
+	const displayName = activeContact?.displayName || conversation?.contact?.name || 'Cliente';
+	const phone = conversation?.contact?.phone || activeContact?.phoneDisplay || '';
+	const unreadCount = Number(conversation?.unreadCount || activeContact?.unreadCount || 0);
+	const queueLabel = conversation?.queue || activeContact?.queue || '';
+	const aiStatus = conversation?.aiEnabled ? 'IA activa' : 'IA pausada';
+	const latestIntent = state.lastDetectedIntent || state.lastIntent;
+	const menuContext = state.menuActive ? state.menuPath || 'activo' : '';
 	const hasContext = Boolean(
-		state.commercialSummary ||
+		displayName ||
+			phone ||
+			queueLabel ||
+			latestIntent ||
+			menuContext ||
+			state.handoffReason ||
+			state.commercialSummary ||
 			state.currentProductFocus ||
 			state.currentProductFamily ||
 			state.lastUserGoal ||
+			state.salesStage ||
 			state.frequentSize ||
 			state.paymentPreference ||
 			state.deliveryPreference ||
 			state.interestedProducts?.length ||
 			state.objections?.length ||
-			state.needsHuman
+			state.needsHuman ||
+			unreadCount > 0
 	);
 
 	return (
@@ -311,7 +326,7 @@ function AiContextPanel({ conversation, activeContact }) {
 				<div>
 					<div className="inbox-context-title">Contexto IA</div>
 					<div className="inbox-context-subtitle">
-						{activeContact?.displayName || conversation?.contact?.name || 'Cliente'}
+						{displayName}
 					</div>
 				</div>
 			</div>
@@ -320,19 +335,24 @@ function AiContextPanel({ conversation, activeContact }) {
 				<span className={state.needsHuman ? 'is-hot' : ''}>
 					{state.needsHuman ? 'Necesita humano' : 'Sin alerta humana'}
 				</span>
-				<span>{conversation?.aiEnabled ? 'IA activa' : 'IA pausada'}</span>
+				<span>{aiStatus}</span>
 			</div>
 
 			{!hasContext ? (
-				<div className="inbox-context-empty">Sin contexto comercial todavia.</div>
+				<div className="inbox-context-empty">Sin contexto registrado todavia.</div>
 			) : (
 				<div className="inbox-context-list">
+					<ContextItem label="Contacto" value={displayName} />
+					<ContextItem label="Telefono" value={phone} />
+					<ContextItem label="Estado" value={queueLabel} />
+					<ContextItem label="No leidos" value={unreadCount > 0 ? unreadCount : ''} />
+					<ContextItem label="Ultima intencion" value={latestIntent} />
+					<ContextItem label="Handoff" value={state.handoffReason} />
 					<ContextItem label="Resumen" value={state.commercialSummary} />
 					<ContextItem label="Producto foco" value={state.currentProductFocus} />
 					<ContextItem label="Familia" value={state.currentProductFamily} />
 					<ContextItem label="Objetivo" value={state.lastUserGoal} />
 					<ContextItem label="Etapa" value={state.salesStage} />
-					<ContextItem label="Intencion" value={state.lastDetectedIntent || state.lastIntent} />
 					<ContextItem label="Talle" value={state.frequentSize} />
 					<ContextItem label="Pago" value={state.paymentPreference} />
 					<ContextItem label="Envio" value={state.deliveryPreference} />
@@ -342,7 +362,7 @@ function AiContextPanel({ conversation, activeContact }) {
 					<ContextItem label="Oferta" value={state.lastRecommendedOffer} />
 					<ContextItem label="Compra" value={state.buyingIntentLevel} />
 					<ContextItem label="Friccion" value={state.frictionLevel} />
-					<ContextItem label="Menu" value={state.menuActive ? state.menuPath || 'activo' : ''} />
+					<ContextItem label="Menu" value={menuContext} />
 				</div>
 			)}
 		</aside>
@@ -560,6 +580,8 @@ export default function InboxPage() {
 	const [attentionFilter, setAttentionFilter] = useState('ALL');
 	const [olderMessages, setOlderMessages] = useState([]);
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
+	const [showContextPanel, setShowContextPanel] = useState(true);
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const inboxQuery = useInfiniteQuery({
@@ -1249,8 +1271,17 @@ export default function InboxPage() {
 		}
 	}
 
+	const inboxPageClassName = [
+		'inbox-page',
+		!showConversationSidebar ? 'inbox-page--contacts-hidden' : '',
+		!showContextPanel ? 'inbox-page--context-hidden' : '',
+	]
+		.filter(Boolean)
+		.join(' ');
+
 	return (
-		<div className="inbox-page">
+		<div className={inboxPageClassName}>
+			{showConversationSidebar ? (
 			<aside className="inbox-sidebar">
 				<div className="inbox-queue-tabs">
 					{QUEUES.map((item) => {
@@ -1441,10 +1472,16 @@ export default function InboxPage() {
 					) : null}
 				</div>
 			</aside>
+			) : null}
 
 			<section className="inbox-chat-panel">
 				{!selectedConversationId ? (
 					<div className="inbox-chat-empty">
+						{!showConversationSidebar ? (
+							<ActionButton onClick={() => setShowConversationSidebar(true)}>
+								Mostrar conversaciones
+							</ActionButton>
+						) : null}
 						Seleccioná una conversación
 					</div>
 				) : (
@@ -1483,6 +1520,20 @@ export default function InboxPage() {
 							</div>
 
 							<div className="inbox-actions">
+								<ActionButton
+									active={showConversationSidebar}
+									onClick={() => setShowConversationSidebar((prev) => !prev)}
+								>
+									{showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones'}
+								</ActionButton>
+
+								<ActionButton
+									active={showContextPanel}
+									onClick={() => setShowContextPanel((prev) => !prev)}
+								>
+									{showContextPanel ? 'Ocultar contexto IA' : 'Mostrar contexto IA'}
+								</ActionButton>
+
 								<ActionButton
 									active={conversation?.queue === 'AUTO'}
 									disabled={moveQueueMutation.isPending}
@@ -1649,7 +1700,9 @@ export default function InboxPage() {
 						</div>
 						</div>
 
-						<AiContextPanel conversation={conversation} activeContact={activeContact} />
+						{showContextPanel ? (
+							<AiContextPanel conversation={conversation} activeContact={activeContact} />
+						) : null}
 					</div>
 				)}
 			</section>

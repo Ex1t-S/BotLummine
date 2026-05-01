@@ -11,6 +11,14 @@
 		linear-gradient(315deg, rgba(37, 99, 235, 0.05), transparent 38%);
 }
 
+.inbox-page--contacts-hidden {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.inbox-page--contacts-hidden .inbox-chat-panel {
+	grid-column: 1 / -1;
+}
+
 .inbox-sidebar,
 .inbox-chat-panel {
 	background: #ffffff;
@@ -394,6 +402,10 @@
 	height: 100%;
 }
 
+.inbox-page--context-hidden .inbox-chat-workspace {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 .inbox-chat-main {
 	display: flex;
 	flex-direction: column;
@@ -536,7 +548,9 @@
 
 .inbox-chat-empty {
 	display: grid;
-	place-items: center;
+	place-content: center;
+	justify-items: center;
+	gap: 14px;
 	padding: 24px;
 	color: #64748b;
 	font-size: 16px;
@@ -839,12 +853,19 @@
 		grid-template-columns: 310px minmax(0, 1fr);
 	}
 
-	.inbox-chat-workspace {
+	.inbox-page--contacts-hidden {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
+	.inbox-chat-workspace {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) auto;
+	}
+
 	.inbox-context-panel {
-		display: none;
+		max-height: 260px;
+		border-left: none;
+		border-top: 1px solid rgba(15, 23, 42, 0.08);
 	}
 }
 
