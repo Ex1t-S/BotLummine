@@ -718,6 +718,38 @@ async function markConversationAsRead(conversationId, workspaceId) {
 
 	return updatedConversation;
 }
+
+async function markConversationAsUnread(conversationId, workspaceId) {
+	await prisma.conversation.updateMany({
+		where: { id: conversationId, workspaceId },
+		data: {
+			unreadCount: 1,
+			lastReadAt: null,
+		},
+	});
+
+	const updatedConversation = await prisma.conversation.findFirst({
+		where: { id: conversationId, workspaceId },
+		select: {
+			id: true,
+			queue: true,
+			lastReadAt: true,
+			unreadCount: true,
+		},
+	});
+
+	publishInboxEvent({
+		workspaceId,
+		scope: 'conversation',
+		action: 'unread',
+		conversationId: updatedConversation.id,
+		queue: updatedConversation.queue,
+		unreadCount: updatedConversation.unreadCount,
+		lastReadAt: null,
+	});
+
+	return updatedConversation;
+}
 export async function getInbox(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req);
@@ -994,6 +1026,32 @@ export async function patchConversationRead(req, res, next) {
 		}
 
 		const updatedConversation = await markConversationAsRead(conversationId, workspaceId);
+
+		return res.json({
+			ok: true,
+			conversationId: updatedConversation.id,
+			unreadCount: updatedConversation.unreadCount,
+			lastReadAt: updatedConversation.lastReadAt,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function patchConversationUnread(req, res, next) {
+	try {
+		const { conversationId } = req.params;
+		const workspaceId = requireRequestWorkspaceId(req);
+		const conversation = await ensureConversationExists(conversationId, workspaceId);
+
+		if (!conversation) {
+			return res.status(404).json({
+				ok: false,
+				error: 'ConversaciÃƒÂ³n no encontrada',
+			});
+		}
+
+		const updatedConversation = await markConversationAsUnread(conversationId, workspaceId);
 
 		return res.json({
 			ok: true,

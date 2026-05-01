@@ -435,6 +435,7 @@ export default function InboxPage() {
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
 	const lastReadRequestRef = useRef('');
+	const manuallyUnreadConversationIdRef = useRef(null);
 
 	const [queue, setQueue] = useState('AUTO');
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
@@ -731,6 +732,58 @@ export default function InboxPage() {
 		},
 	});
 
+	const markConversationUnreadMutation = useMutation({
+		mutationFn: async (conversationId) => {
+			if (!conversationId) return null;
+
+			const res = await api.patch(`/dashboard/conversations/${conversationId}/unread`);
+			return { conversationId, data: res.data };
+		},
+		onSuccess: async (result) => {
+			if (!result?.conversationId) return;
+
+			manuallyUnreadConversationIdRef.current = result.conversationId;
+			lastReadRequestRef.current = `${result.conversationId}:manual-unread`;
+
+			queryClient.setQueryData(queryKeys.inbox(queue), (current) => {
+				if (!current) return current;
+
+				return {
+					...current,
+					contacts: (current.contacts || []).map((contact) =>
+						contact.conversationId === result.conversationId
+							? {
+									...contact,
+									unreadCount: result.data?.unreadCount || 1,
+									hasUnread: true,
+									lastReadAt: null,
+							  }
+							: contact
+					),
+				};
+			});
+
+			queryClient.setQueryData(queryKeys.conversation(result.conversationId), (current) => {
+				if (!current?.conversation) return current;
+
+				return {
+					...current,
+					conversation: {
+						...current.conversation,
+						unreadCount: result.data?.unreadCount || 1,
+						hasUnread: true,
+						lastReadAt: null,
+					},
+				};
+			});
+
+			await invalidateInboxAndConversation(result.conversationId);
+		},
+		onError: (error) => {
+			console.error(error);
+		},
+	});
+
 	useEffect(() => {
 		if (!selectedConversationId || !isDocumentVisible()) return;
 
@@ -741,6 +794,13 @@ export default function InboxPage() {
 
 		if (unreadCount < 1) {
 			lastReadRequestRef.current = '';
+			if (manuallyUnreadConversationIdRef.current === selectedConversationId) {
+				manuallyUnreadConversationIdRef.current = null;
+			}
+			return;
+		}
+
+		if (manuallyUnreadConversationIdRef.current === selectedConversationId) {
 			return;
 		}
 
@@ -918,6 +978,11 @@ export default function InboxPage() {
 
 	function handleMoveQueue(nextQueue) {
 		moveQueueMutation.mutate(nextQueue);
+	}
+
+	function handleMarkUnread() {
+		if (!selectedConversationId || markConversationUnreadMutation.isPending) return;
+		markConversationUnreadMutation.mutate(selectedConversationId);
 	}
 
 	function insertEmoji(emoji) {
@@ -1160,6 +1225,17 @@ export default function InboxPage() {
 								</ActionButton>
 
 								<div className="inbox-actions-spacer" />
+
+								<ActionButton
+									active={Boolean(activeContact?.hasUnread || conversation?.hasUnread)}
+									disabled={
+										markConversationUnreadMutation.isPending ||
+										!selectedConversationId
+									}
+									onClick={handleMarkUnread}
+								>
+									Marcar no leido
+								</ActionButton>
 
 								{isAdmin ? (
 									<>
