@@ -538,13 +538,41 @@ function buildContactCard(conversation, lastMessage) {
 	};
 }
 
-async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', archived = false, workspaceId) {
+async function fetchInboxData({
+	selectedConversationId = null,
+	queue = 'AUTO',
+	archived = false,
+	workspaceId,
+	limit = 60,
+	offset = 0,
+	q = '',
+	readFilter = 'ALL',
+} = {}) {
 	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
+	const safeLimit = Math.min(100, Math.max(20, Number(limit) || 60));
+	const safeOffset = Math.max(0, Number(offset) || 0);
+	const searchTerm = String(q || '').trim();
+	const normalizedSearchPhone = normalizePhone(searchTerm);
 
 	const where = {
 		workspaceId,
 		...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
 		...(queue === 'ALL' ? {} : { queue }),
+		...(readFilter === 'UNREAD'
+			? { unreadCount: { gt: 0 } }
+			: readFilter === 'READ'
+				? { unreadCount: 0 }
+				: {}),
+		...(searchTerm
+			? {
+					OR: [
+						{ contact: { name: { contains: searchTerm, mode: 'insensitive' } } },
+						{ contact: { phone: { contains: normalizedSearchPhone || searchTerm } } },
+						{ contact: { waId: { contains: normalizedSearchPhone || searchTerm } } },
+						{ lastSummary: { contains: searchTerm, mode: 'insensitive' } },
+					],
+			  }
+			: {}),
 		NOT: {
 			contact: {
 				name: {
@@ -597,9 +625,12 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', arc
 		orderBy: {
 			lastMessageAt: 'desc',
 		},
+		skip: safeOffset,
+		take: safeLimit + 1,
 	});
 
-	const contacts = conversations.map((conversation) =>
+	const pageConversations = conversations.slice(0, safeLimit);
+	const contacts = pageConversations.map((conversation) =>
 		buildContactCard(conversation, conversation.messages?.[0] || null)
 	);
 
@@ -641,6 +672,8 @@ async function fetchInboxData(selectedConversationId = null, queue = 'AUTO', arc
 	return {
 		contacts,
 		selectedContact,
+		hasMore: conversations.length > safeLimit,
+		nextOffset: conversations.length > safeLimit ? safeOffset + contacts.length : null,
 		counts: {
 			AUTO: autoCount,
 			HUMAN: humanCount,
@@ -755,18 +788,27 @@ export async function getInbox(req, res, next) {
 		const workspaceId = requireRequestWorkspaceId(req);
 		const currentQueue = String(req.query.queue || 'AUTO').toUpperCase();
 		const archived = String(req.query.archived || 'false') === 'true';
+		const limit = Number(req.query.limit || 60);
+		const offset = Number(req.query.offset || 0);
+		const readFilter = String(req.query.read || 'ALL').toUpperCase();
 
-		const data = await fetchInboxData(
-			req.query.conversationId || null,
-			currentQueue,
+		const data = await fetchInboxData({
+			selectedConversationId: req.query.conversationId || null,
+			queue: currentQueue,
 			archived,
-			workspaceId
-		);
+			workspaceId,
+			limit,
+			offset,
+			q: req.query.q || '',
+			readFilter,
+		});
 
 		return res.json({
 			ok: true,
 			currentQueue,
 			archived,
+			limit,
+			offset,
 			...data,
 		});
 	} catch (error) {

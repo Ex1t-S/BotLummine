@@ -181,6 +181,31 @@
 	text-align: center;
 }
 
+.inbox-load-more {
+	width: 100%;
+	min-height: 40px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 12px;
+	background: #ffffff;
+	color: #0f766e;
+	font-size: 13px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.inbox-load-more:disabled {
+	color: #94a3b8;
+	cursor: wait;
+}
+
+.inbox-list-end {
+	padding: 8px 0 2px;
+	color: #94a3b8;
+	font-size: 12px;
+	font-weight: 700;
+	text-align: center;
+}
+
 .inbox-contact-card {
 	text-align: left;
 	padding: 14px 13px;

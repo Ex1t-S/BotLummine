@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
@@ -30,6 +30,8 @@ const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Video recibido]',
 	'[Sticker recibido]',
 ]);
+
+const INBOX_PAGE_SIZE = 60;
 
 function isDocumentVisible() {
 	if (typeof document === 'undefined') return true;
@@ -429,6 +431,7 @@ export default function InboxPage() {
 	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const isAdmin = isAdminUser(user);
+	const contactsContainerRef = useRef(null);
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
 	const textareaRef = useRef(null);
@@ -444,18 +447,25 @@ export default function InboxPage() {
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState('ALL');
+	const normalizedSearch = searchTerm.trim().toLowerCase();
 
-	const inboxQuery = useQuery({
-		queryKey: queryKeys.inbox(queue),
-		queryFn: async () => {
+	const inboxQuery = useInfiniteQuery({
+		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter),
+		queryFn: async ({ pageParam = 0 }) => {
 			const res = await api.get('/dashboard/inbox', {
 				params: {
 					queue,
+					limit: INBOX_PAGE_SIZE,
+					offset: pageParam,
+					q: normalizedSearch || undefined,
+					read: readFilter,
 				},
 			});
 
 			return res.data;
 		},
+		initialPageParam: 0,
+		getNextPageParam: (lastPage) => lastPage?.nextOffset ?? undefined,
 		placeholderData: (previousData) => previousData,
 		refetchInterval: false,
 		refetchIntervalInBackground: false,
@@ -463,14 +473,14 @@ export default function InboxPage() {
 		...queryPresets.inbox,
 	});
 
-	const contacts = inboxQuery.data?.contacts || [];
-	const counts = inboxQuery.data?.counts || {
+	const inboxPages = inboxQuery.data?.pages || [];
+	const contacts = inboxPages.flatMap((page) => page?.contacts || []);
+	const firstInboxPage = inboxPages[0] || null;
+	const counts = firstInboxPage?.counts || {
 		AUTO: 0,
 		HUMAN: 0,
 		PAYMENT_REVIEW: 0,
 	};
-
-	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const filteredContacts = useMemo(() => {
 		const normalizedContacts = contacts.map((contact) => ({
@@ -549,7 +559,7 @@ export default function InboxPage() {
 
 		if (stillExists) return;
 
-		const preferredSelectedId = inboxQuery.data?.selectedContact?.conversationId;
+		const preferredSelectedId = firstInboxPage?.selectedContact?.conversationId;
 		const preferredExists = visibleContacts.some(
 			(contact) => contact.conversationId === preferredSelectedId
 		);
@@ -560,7 +570,7 @@ export default function InboxPage() {
 			null;
 
 		setSelectedConversationId(preferredId);
-	}, [visibleContacts, selectedConversationId, inboxQuery.data, readFilter]);
+	}, [visibleContacts, selectedConversationId, firstInboxPage, readFilter]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return undefined;
@@ -579,7 +589,7 @@ export default function InboxPage() {
 			if (!isDocumentVisible()) return;
 
 			queryClient.invalidateQueries({
-				queryKey: queryKeys.inbox(queue),
+				queryKey: ['dashboard', 'inbox'],
 			});
 
 			const activeConversationId = selectedConversationIdRef.current;
@@ -611,9 +621,55 @@ export default function InboxPage() {
 			const activeConversationId = selectedConversationIdRef.current;
 			const eventConversationId = payload?.conversationId || null;
 
+			if (payload?.action === 'read' && eventConversationId) {
+				updateInboxContactCache(eventConversationId, {
+					unreadCount: 0,
+					hasUnread: false,
+					lastReadAt: payload.lastReadAt || new Date().toISOString(),
+				});
+
+				queryClient.setQueryData(queryKeys.conversation(eventConversationId), (current) => {
+					if (!current?.conversation) return current;
+
+					return {
+						...current,
+						conversation: {
+							...current.conversation,
+							unreadCount: 0,
+							hasUnread: false,
+							lastReadAt: payload.lastReadAt || new Date().toISOString(),
+						},
+					};
+				});
+				return;
+			}
+
+			if (payload?.action === 'unread' && eventConversationId) {
+				updateInboxContactCache(eventConversationId, {
+					unreadCount: payload.unreadCount || 1,
+					hasUnread: true,
+					lastReadAt: null,
+				});
+
+				queryClient.setQueryData(queryKeys.conversation(eventConversationId), (current) => {
+					if (!current?.conversation) return current;
+
+					return {
+						...current,
+						conversation: {
+							...current.conversation,
+							unreadCount: payload.unreadCount || 1,
+							hasUnread: true,
+							lastReadAt: null,
+						},
+					};
+				});
+				return;
+			}
+
 			if (!eventQueue || eventQueue === queue || eventConversationId === activeConversationId) {
 				queryClient.invalidateQueries({
-					queryKey: queryKeys.inbox(queue),
+					queryKey: ['dashboard', 'inbox'],
 				});
 			}
 
@@ -635,7 +691,7 @@ export default function InboxPage() {
 			stopFallbackPolling();
 
 			queryClient.invalidateQueries({
-				queryKey: queryKeys.inbox(queue),
+				queryKey: ['dashboard', 'inbox'],
 			});
 		};
 
@@ -683,6 +739,29 @@ export default function InboxPage() {
 		);
 	}, [filteredContacts, contacts, selectedConversationId]);
 
+	function updateInboxContactCache(conversationId, patch) {
+		if (!conversationId) return;
+
+		queryClient.setQueriesData({ queryKey: ['dashboard', 'inbox'] }, (current) => {
+			if (!current?.pages) return current;
+
+			return {
+				...current,
+				pages: current.pages.map((page) => ({
+					...page,
+					contacts: (page.contacts || []).map((contact) =>
+						contact.conversationId === conversationId
+							? {
+									...contact,
+									...(typeof patch === 'function' ? patch(contact) : patch),
+							  }
+							: contact
+					),
+				})),
+			};
+		});
+	}
+
 	const markConversationReadMutation = useMutation({
 		mutationFn: async (conversationId) => {
 			if (!conversationId) return null;
@@ -693,22 +772,10 @@ export default function InboxPage() {
 		onSuccess: async (result) => {
 			if (!result?.conversationId) return;
 
-			queryClient.setQueryData(queryKeys.inbox(queue), (current) => {
-				if (!current) return current;
-
-				return {
-					...current,
-					contacts: (current.contacts || []).map((contact) =>
-						contact.conversationId === result.conversationId
-							? {
-									...contact,
-									unreadCount: 0,
-									hasUnread: false,
-									lastReadAt: result.data?.lastReadAt || new Date().toISOString(),
-							  }
-							: contact
-					),
-				};
+			updateInboxContactCache(result.conversationId, {
+				unreadCount: 0,
+				hasUnread: false,
+				lastReadAt: result.data?.lastReadAt || new Date().toISOString(),
 			});
 
 			queryClient.setQueryData(queryKeys.conversation(result.conversationId), (current) => {
@@ -745,22 +812,10 @@ export default function InboxPage() {
 			manuallyUnreadConversationIdRef.current = result.conversationId;
 			lastReadRequestRef.current = `${result.conversationId}:manual-unread`;
 
-			queryClient.setQueryData(queryKeys.inbox(queue), (current) => {
-				if (!current) return current;
-
-				return {
-					...current,
-					contacts: (current.contacts || []).map((contact) =>
-						contact.conversationId === result.conversationId
-							? {
-									...contact,
-									unreadCount: result.data?.unreadCount || 1,
-									hasUnread: true,
-									lastReadAt: null,
-							  }
-							: contact
-					),
-				};
+			updateInboxContactCache(result.conversationId, {
+				unreadCount: result.data?.unreadCount || 1,
+				hasUnread: true,
+				lastReadAt: null,
 			});
 
 			queryClient.setQueryData(queryKeys.conversation(result.conversationId), (current) => {
@@ -776,8 +831,6 @@ export default function InboxPage() {
 					},
 				};
 			});
-
-			await invalidateInboxAndConversation(result.conversationId);
 		},
 		onError: (error) => {
 			console.error(error);
@@ -970,6 +1023,16 @@ export default function InboxPage() {
 		shouldStickToBottomRef.current = distanceFromBottom < 120;
 	}
 
+	function handleContactsScroll() {
+		const el = contactsContainerRef.current;
+		if (!el || !inboxQuery.hasNextPage || inboxQuery.isFetchingNextPage) return;
+
+		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		if (distanceFromBottom < 260) {
+			inboxQuery.fetchNextPage();
+		}
+	}
+
 	function handleSubmit(event) {
 		event.preventDefault();
 		if (!messageText.trim()) return;
@@ -1067,7 +1130,11 @@ export default function InboxPage() {
 					))}
 				</div>
 
-				<div className="inbox-contacts-scroll">
+				<div
+					ref={contactsContainerRef}
+					className="inbox-contacts-scroll"
+					onScroll={handleContactsScroll}
+				>
 					{inboxQuery.isLoading ? (
 						<div className="inbox-empty">Cargando conversaciones...</div>
 					) : null}
@@ -1157,6 +1224,21 @@ export default function InboxPage() {
 							</button>
 						);
 					})}
+
+					{inboxQuery.hasNextPage ? (
+						<button
+							type="button"
+							className="inbox-load-more"
+							disabled={inboxQuery.isFetchingNextPage}
+							onClick={() => inboxQuery.fetchNextPage()}
+						>
+							{inboxQuery.isFetchingNextPage
+								? 'Cargando...'
+								: 'Cargar mas conversaciones'}
+						</button>
+					) : contacts.length > 0 ? (
+						<div className="inbox-list-end">No hay mas conversaciones.</div>
+					) : null}
 				</div>
 			</aside>
 

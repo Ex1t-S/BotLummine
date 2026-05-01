@@ -1,6 +1,6 @@
 export const queryKeys = {
 	authMe: ['auth', 'me'],
-	inbox: (queue) => ['dashboard', 'inbox', queue],
+	inbox: (queue, search = '', readFilter = 'ALL') => ['dashboard', 'inbox', queue, search, readFilter],
 	conversation: (conversationId) => ['dashboard', 'conversation', conversationId],
 	abandonedCarts: (filters) => ['dashboard', 'abandoned-carts', filters],
 	catalog: (params) => ['dashboard', 'catalog', params],
