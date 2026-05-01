@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin, requireAnyRole } from '../middleware/auth.js
 import {
 	getInbox,
 	getInboxStream,
+	getSalesOpportunities,
 	getConversationMessagesJson,
 	postConversationMessage,
 	patchConversationRead,
@@ -35,6 +36,7 @@ const requireInboxAccess = requireAnyRole(['ADMIN', 'AGENT']);
 
 router.use(requireAuth);
 
+router.get('/sales-opportunities', requireAnyRole(['ADMIN', 'AGENT']), getSalesOpportunities);
 router.get('/inbox', requireInboxAccess, getInbox);
 router.get('/inbox/stream', requireInboxAccess, getInboxStream);
 router.get('/conversations/:conversationId/messages', requireInboxAccess, getConversationMessagesJson);

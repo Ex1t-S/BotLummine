@@ -33,6 +33,46 @@ function formatDateTime(value) {
 	}
 }
 
+function formatCurrency(value, currency = 'ARS') {
+	const numericValue = Number(value || 0);
+
+	if (!Number.isFinite(numericValue)) return '';
+
+	try {
+		return new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: currency || 'ARS',
+			maximumFractionDigits: 0,
+		}).format(numericValue);
+	} catch {
+		return `${currency || 'ARS'} ${numericValue}`;
+	}
+}
+
+function compactList(values = []) {
+	return values
+		.map((value) => String(value || '').trim())
+		.filter(Boolean);
+}
+
+function normalizeCommercialLevel(value = '') {
+	const normalized = String(value || '').trim().toLowerCase();
+
+	if (['high', 'hot', 'alto', 'alta', 'ready_to_buy', 'ready'].includes(normalized)) {
+		return 'Alta';
+	}
+
+	if (['medium', 'medio', 'media'].includes(normalized)) {
+		return 'Media';
+	}
+
+	if (['low', 'bajo', 'baja'].includes(normalized)) {
+		return 'Baja';
+	}
+
+	return value || '';
+}
+
 function buildAvatar(name = '', phone = '') {
 	const base = (name || phone || '?').trim();
 	const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
@@ -764,6 +804,47 @@ async function markConversationAsRead(conversationId, workspaceId) {
 	return updatedConversation;
 }
 
+function buildCommercialContext(state = {}, campaign = null) {
+	const interestedProducts = Array.isArray(state?.interestedProducts)
+		? state.interestedProducts
+		: [];
+	const objections = Array.isArray(state?.objections) ? state.objections : [];
+	const highlights = compactList([
+		state?.commercialSummary,
+		state?.lastUserGoal,
+		state?.currentProductFocus,
+		state?.lastRecommendedProduct,
+		state?.lastRecommendedOffer,
+	]).slice(0, 4);
+
+	return {
+		summary: state?.commercialSummary || state?.lastUserGoal || '',
+		salesStage: state?.salesStage || '',
+		buyingIntentLevel: normalizeCommercialLevel(state?.buyingIntentLevel || ''),
+		frictionLevel: normalizeCommercialLevel(state?.frictionLevel || ''),
+		needsHuman: Boolean(state?.needsHuman),
+		handoffReason: state?.handoffReason || '',
+		currentProductFocus: state?.currentProductFocus || '',
+		currentProductFamily: state?.currentProductFamily || '',
+		requestedOfferType: state?.requestedOfferType || '',
+		lastRecommendedProduct: state?.lastRecommendedProduct || '',
+		lastRecommendedOffer: state?.lastRecommendedOffer || '',
+		paymentPreference: state?.paymentPreference || '',
+		deliveryPreference: state?.deliveryPreference || '',
+		interestedProducts,
+		objections,
+		highlights,
+		lastCampaign: campaign
+			? {
+					id: campaign.campaign?.id || '',
+					name: campaign.campaign?.name || '',
+					status: campaign.status || '',
+					sentAt: campaign.sentAt || null,
+			  }
+			: null,
+	};
+}
+
 async function markConversationAsUnread(conversationId, workspaceId) {
 	await prisma.conversation.updateMany({
 		where: { id: conversationId, workspaceId },
@@ -794,6 +875,260 @@ async function markConversationAsUnread(conversationId, workspaceId) {
 	});
 
 	return updatedConversation;
+}
+
+async function getConversationLinksByPhones(workspaceId, phones = []) {
+	const normalizedPhones = [...new Set(phones.map(normalizePhone).filter(Boolean))];
+
+	if (!normalizedPhones.length) return new Map();
+
+	const conversations = await prisma.conversation.findMany({
+		where: {
+			workspaceId,
+			archivedAt: null,
+			OR: normalizedPhones.flatMap((phone) => [
+				{ contact: { phone: { contains: phone } } },
+				{ contact: { waId: { contains: phone } } },
+			]),
+		},
+		select: {
+			id: true,
+			queue: true,
+			lastMessageAt: true,
+			contact: {
+				select: {
+					phone: true,
+					waId: true,
+				},
+			},
+		},
+		orderBy: {
+			lastMessageAt: 'desc',
+		},
+	});
+
+	const byPhone = new Map();
+
+	for (const conversation of conversations) {
+		for (const value of [conversation.contact?.phone, conversation.contact?.waId]) {
+			const phone = normalizePhone(value || '');
+			if (!phone || byPhone.has(phone)) continue;
+
+			byPhone.set(phone, {
+				conversationId: conversation.id,
+				queue: conversation.queue || 'AUTO',
+			});
+		}
+	}
+
+	return byPhone;
+}
+
+function mapCartOpportunity(cart, conversationLink = null) {
+	const products = Array.isArray(cart.products) ? cart.products : [];
+
+	return {
+		id: `abandoned_cart:${cart.id}`,
+		type: 'abandoned_cart',
+		title: cart.contactName || cart.contactPhone || 'Carrito sin nombre',
+		subtitle: 'Carrito abandonado',
+		phone: cart.contactPhone || '',
+		amount: Number(cart.totalAmount || cart.subtotal || 0),
+		amountLabel: formatCurrency(cart.totalAmount || cart.subtotal || 0, cart.currency || 'ARS'),
+		status: cart.status || 'NEW',
+		date: cart.checkoutCreatedAt || cart.updatedAt || cart.createdAt,
+		dateLabel: formatDateTime(cart.checkoutCreatedAt || cart.updatedAt || cart.createdAt),
+		reason: cart.status === 'CONTACTED' ? 'Ya contactado, revisar seguimiento' : 'Sin contacto registrado',
+		nextAction: cart.status === 'CONTACTED' ? 'Abrir conversación' : 'Crear campaña o contactar',
+		products: products
+			.map((product) => product?.name || product?.title || '')
+			.filter(Boolean)
+			.slice(0, 3),
+		sourceId: cart.id,
+		conversationId: conversationLink?.conversationId || null,
+		queue: conversationLink?.queue || null,
+	};
+}
+
+function mapPendingPaymentOpportunity(order, conversationLink = null) {
+	return {
+		id: `pending_payment:${order.id}`,
+		type: 'pending_payment',
+		title: order.contactName || order.contactPhone || order.contactEmail || 'Pedido pendiente',
+		subtitle: `Pedido ${order.orderNumber || order.orderId || ''}`.trim(),
+		phone: order.contactPhone || '',
+		amount: Number(order.totalAmount || order.subtotal || 0),
+		amountLabel: formatCurrency(order.totalAmount || order.subtotal || 0, order.currency || 'ARS'),
+		status: order.paymentStatus || order.status || 'PENDING',
+		date: order.orderCreatedAt || order.updatedAt || order.createdAt,
+		dateLabel: formatDateTime(order.orderCreatedAt || order.updatedAt || order.createdAt),
+		reason: 'Pedido con pago pendiente',
+		nextAction: 'Contactar para cerrar pago',
+		products: Array.isArray(order.products)
+			? order.products.map((product) => product?.name || product?.title || '').filter(Boolean).slice(0, 3)
+			: [],
+		sourceId: order.id,
+		conversationId: conversationLink?.conversationId || null,
+		queue: conversationLink?.queue || null,
+	};
+}
+
+function mapConversationOpportunity(conversation) {
+	const state = conversation.state || {};
+	const contact = conversation.contact || {};
+	const phone = contact.phone || contact.waId || '';
+	const title = contact.name || normalizePhone(phone) || 'Conversación sin nombre';
+	const context = buildCommercialContext(state);
+
+	return {
+		id: `conversation:${conversation.id}`,
+		type: state.needsHuman ? 'human_followup' : 'hot_conversation',
+		title,
+		subtitle: state.needsHuman ? 'Necesita seguimiento humano' : 'Alta intención comercial',
+		phone: normalizePhone(phone),
+		status: conversation.queue || 'AUTO',
+		date: conversation.lastInboundMessageAt || conversation.lastMessageAt || conversation.updatedAt,
+		dateLabel: formatDateTime(conversation.lastInboundMessageAt || conversation.lastMessageAt || conversation.updatedAt),
+		reason:
+			state.handoffReason ||
+			state.commercialSummary ||
+			state.lastUserGoal ||
+			state.lastDetectedIntent ||
+			'Conversación con señales comerciales',
+		nextAction: state.needsHuman ? 'Responder desde inbox' : 'Revisar y cerrar venta',
+		conversationId: conversation.id,
+		queue: conversation.queue || 'AUTO',
+		commercialContext: context,
+	};
+}
+
+export async function getSalesOpportunities(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		const limit = Math.min(20, Math.max(4, Number(req.query.limit || 8) || 8));
+		const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+		const [abandonedCarts, pendingOrders, conversations, recentConversions] = await Promise.all([
+			prisma.abandonedCart.findMany({
+				where: {
+					workspaceId,
+					checkoutCreatedAt: { gte: thirtyDaysAgo },
+					status: { in: ['NEW', 'CONTACTED'] },
+				},
+				orderBy: [{ status: 'asc' }, { totalAmount: 'desc' }, { checkoutCreatedAt: 'desc' }],
+				take: limit,
+			}),
+			prisma.customerOrder.findMany({
+				where: {
+					workspaceId,
+					orderCreatedAt: { gte: thirtyDaysAgo },
+					OR: [
+						{ paymentStatus: { contains: 'pending', mode: 'insensitive' } },
+						{ paymentStatus: { contains: 'waiting', mode: 'insensitive' } },
+						{ status: { contains: 'pending', mode: 'insensitive' } },
+					],
+				},
+				orderBy: [{ totalAmount: 'desc' }, { orderCreatedAt: 'desc' }],
+				take: limit,
+			}),
+			prisma.conversation.findMany({
+				where: {
+					workspaceId,
+					archivedAt: null,
+					state: {
+						is: {
+							OR: [
+								{ needsHuman: true },
+								{ buyingIntentLevel: { contains: 'high', mode: 'insensitive' } },
+								{ buyingIntentLevel: { contains: 'alto', mode: 'insensitive' } },
+								{ salesStage: { contains: 'buy', mode: 'insensitive' } },
+								{ salesStage: { contains: 'compra', mode: 'insensitive' } },
+								{ frictionLevel: { contains: 'high', mode: 'insensitive' } },
+								{ frictionLevel: { contains: 'alto', mode: 'insensitive' } },
+							],
+						},
+					},
+				},
+				select: {
+					id: true,
+					queue: true,
+					lastMessageAt: true,
+					lastInboundMessageAt: true,
+					updatedAt: true,
+					contact: {
+						select: {
+							name: true,
+							phone: true,
+							waId: true,
+						},
+					},
+					state: true,
+				},
+				orderBy: [{ lastInboundMessageAt: 'desc' }, { lastMessageAt: 'desc' }],
+				take: limit * 2,
+			}),
+			prisma.campaignConversion.aggregate({
+				where: {
+					workspaceId,
+					convertedAt: { gte: thirtyDaysAgo },
+				},
+				_sum: {
+					amount: true,
+				},
+				_count: {
+					id: true,
+				},
+			}),
+		]);
+
+		const phoneLinks = await getConversationLinksByPhones(
+			workspaceId,
+			[
+				...abandonedCarts.map((cart) => cart.contactPhone),
+				...pendingOrders.map((order) => order.contactPhone || order.normalizedPhone),
+			]
+		);
+
+		const abandonedCartItems = abandonedCarts.map((cart) =>
+			mapCartOpportunity(cart, phoneLinks.get(normalizePhone(cart.contactPhone || '')))
+		);
+		const pendingPaymentItems = pendingOrders.map((order) =>
+			mapPendingPaymentOpportunity(
+				order,
+				phoneLinks.get(normalizePhone(order.contactPhone || order.normalizedPhone || ''))
+			)
+		);
+		const conversationItems = conversations.map(mapConversationOpportunity);
+
+		const humanFollowups = conversationItems
+			.filter((item) => item.type === 'human_followup')
+			.slice(0, limit);
+		const hotConversations = conversationItems
+			.filter((item) => item.type === 'hot_conversation')
+			.slice(0, limit);
+
+		return res.json({
+			ok: true,
+			generatedAt: new Date().toISOString(),
+			windowDays: 30,
+			summary: {
+				abandonedCarts: abandonedCartItems.length,
+				pendingPayments: pendingPaymentItems.length,
+				hotConversations: hotConversations.length,
+				humanFollowups: humanFollowups.length,
+				conversions: recentConversions?._count?.id || 0,
+				revenueLabel: formatCurrency(recentConversions?._sum?.amount || 0, 'ARS'),
+			},
+			groups: {
+				abandonedCarts: abandonedCartItems,
+				pendingPayments: pendingPaymentItems,
+				hotConversations,
+				humanFollowups,
+			},
+		});
+	} catch (error) {
+		next(error);
+	}
 }
 export async function getInbox(req, res, next) {
 	try {
@@ -1000,6 +1335,23 @@ export async function getConversationMessagesJson(req, res, next) {
 			});
 		}
 
+		const lastCampaignRecipient = await prisma.campaignRecipient.findFirst({
+			where: { workspaceId, conversationId: conversation.id },
+			select: {
+				status: true,
+				sentAt: true,
+				campaign: {
+					select: {
+						id: true,
+						name: true,
+					},
+				},
+			},
+			orderBy: {
+				updatedAt: 'desc',
+			},
+		});
+
 		const hasMoreMessages = (conversation.messages || []).length > limit;
 		const pageMessages = (conversation.messages || []).slice(0, limit).reverse();
 		const nextBefore = hasMoreMessages
@@ -1048,6 +1400,10 @@ export async function getConversationMessagesJson(req, res, next) {
 					menuActive: Boolean(conversation.state?.menuActive),
 					menuPath: conversation.state?.menuPath || '',
 				},
+				commercialContext: buildCommercialContext(
+					conversation.state || {},
+					lastCampaignRecipient || null
+				),
 				messages: pageMessages.map((msg) => ({
 					id: msg.id,
 					direction: msg.direction,

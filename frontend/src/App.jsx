@@ -10,6 +10,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import { getDefaultRouteForRole } from './lib/authz.js';
 
 const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
+const SalesOpportunitiesPage = lazy(() => import('./pages/SalesOpportunitiesPage.jsx'));
 const CatalogPage = lazy(() => import('./pages/CatalogPage.jsx'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
 const AbandonedCartsPage = lazy(() => import('./pages/AbandonedCartsPage.jsx'));
@@ -47,6 +48,16 @@ export default function App() {
 						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
 							<Suspense fallback={<PageLoader />}>
 								<InboxPage />
+							</Suspense>
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="sales"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
+							<Suspense fallback={<PageLoader />}>
+								<SalesOpportunitiesPage />
 							</Suspense>
 						</ProtectedRoute>
 					}

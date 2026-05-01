@@ -50,14 +50,20 @@ export default function DashboardLayout() {
 
 				<nav className="admin-menu">
 					{!isPlatformAdmin ? (
-						<NavLink
-							to="/inbox/automatico"
-							className={({ isActive }) =>
-								navClass({ isActive: isActive || location.pathname.startsWith('/inbox') })
-							}
-						>
-							Inbox
-						</NavLink>
+						<>
+							<NavLink to="/sales" className={navClass}>
+								Ventas
+							</NavLink>
+
+							<NavLink
+								to="/inbox/automatico"
+								className={({ isActive }) =>
+									navClass({ isActive: isActive || location.pathname.startsWith('/inbox') })
+								}
+							>
+								Inbox
+							</NavLink>
+						</>
 					) : null}
 
 					{isAdmin ? (

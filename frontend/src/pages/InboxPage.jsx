@@ -463,6 +463,79 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 	);
 }
 
+function CommercialContextPanel({ context }) {
+	if (!context) return null;
+
+	const chips = [
+		context.salesStage,
+		context.buyingIntentLevel ? `Intencion ${context.buyingIntentLevel}` : '',
+		context.frictionLevel ? `Friccion ${context.frictionLevel}` : '',
+		context.currentProductFocus,
+		context.lastRecommendedOffer,
+	]
+		.filter(Boolean)
+		.slice(0, 5);
+	const products = Array.isArray(context.interestedProducts)
+		? context.interestedProducts.slice(0, 4)
+		: [];
+	const objections = Array.isArray(context.objections)
+		? context.objections.slice(0, 3)
+		: [];
+	const hasContent =
+		context.summary ||
+		context.needsHuman ||
+		context.handoffReason ||
+		chips.length ||
+		products.length ||
+		objections.length ||
+		context.lastCampaign;
+
+	if (!hasContent) return null;
+
+	return (
+		<div className="inbox-commercial-context">
+			<div className="inbox-commercial-context__header">
+				<div>
+					<strong>Contexto comercial</strong>
+					<span>{context.summary || context.handoffReason || 'Señales detectadas en la conversación'}</span>
+				</div>
+				{context.needsHuman ? <em>Requiere humano</em> : null}
+			</div>
+
+			{chips.length ? (
+				<div className="inbox-commercial-context__chips">
+					{chips.map((chip) => (
+						<span key={chip}>{chip}</span>
+					))}
+				</div>
+			) : null}
+
+			{products.length || objections.length || context.lastCampaign ? (
+				<div className="inbox-commercial-context__details">
+					{products.length ? (
+						<div>
+							<span>Interes</span>
+							<strong>{products.join(', ')}</strong>
+						</div>
+					) : null}
+					{objections.length ? (
+						<div>
+							<span>Objeciones</span>
+							<strong>{objections.join(', ')}</strong>
+						</div>
+					) : null}
+					{context.lastCampaign ? (
+						<div>
+							<span>Campaña</span>
+							<strong>{context.lastCampaign.name || 'Campaña reciente'}</strong>
+						</div>
+					) : null}
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 export default function InboxPage() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -1526,6 +1599,8 @@ export default function InboxPage() {
 								) : null}
 							</div>
 						</div>
+
+						<CommercialContextPanel context={conversation?.commercialContext} />
 
 						<div
 							ref={messagesContainerRef}
