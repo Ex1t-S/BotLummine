@@ -75,12 +75,16 @@
 	backdrop-filter: blur(16px);
 }
 
-.login-brand img {
+.login-brand__mark {
 	width: 36px;
 	height: 36px;
 	border-radius: 10px;
-	object-fit: contain;
-	background: rgba(255, 255, 255, 0.92);
+	display: grid;
+	place-items: center;
+	background: linear-gradient(135deg, #ffffff, #b8fff4);
+	color: #0f2b4f;
+	font-size: 0.78rem;
+	font-weight: 950;
 }
 
 .login-brand strong,

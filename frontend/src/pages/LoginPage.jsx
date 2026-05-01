@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
-import lummineLogo from '../assets/lummine-logo.png';
 import './LoginPage.css';
 
 function resolveRedirectPath(user, requestedPath = '') {
@@ -58,18 +57,18 @@ export default function LoginPage() {
 			<main className="login-shell">
 				<section className="login-story" aria-label="Resumen de la plataforma">
 					<div className="login-brand">
-						<img src={lummineLogo} alt="Lummine" />
+						<span className="login-brand__mark" aria-hidden="true">AI</span>
 						<div>
-							<strong>Lummine</strong>
-							<span>Commerce AI</span>
+							<strong>Commerce AI</strong>
+							<span>Acceso multi-marca</span>
 						</div>
 					</div>
 
 					<div>
-						<p className="login-eyebrow">Panel operativo</p>
-						<h1>Gestiona WhatsApp, ventas y clientes desde un solo panel.</h1>
+						<p className="login-eyebrow">Panel operativo multi-marca</p>
+						<h1>Gestiona WhatsApp, ventas y clientes de cada marca.</h1>
 						<p className="login-lead">
-							Accede al inbox, campanas, catalogo y automatizaciones con una experiencia pensada para operar todos los dias.
+							Ingresa con tu usuario y accede al workspace correspondiente para operar inbox, campanas, catalogo y automatizaciones.
 						</p>
 					</div>
 
@@ -105,7 +104,7 @@ export default function LoginPage() {
 					<div className="login-card__header">
 						<span className="login-card__kicker">Acceso seguro</span>
 						<h2>Ingresar al workspace</h2>
-						<p>Usa tus credenciales internas para continuar.</p>
+						<p>La cuenta define a que marca y permisos accedes.</p>
 					</div>
 
 					<label className="login-field">
@@ -113,7 +112,7 @@ export default function LoginPage() {
 						<input
 							type="email"
 							autoComplete="email"
-							placeholder="nombre@marca.com"
+							placeholder="usuario@empresa.com"
 							value={form.email}
 							onChange={(e) => setForm({ ...form, email: e.target.value })}
 							aria-invalid={Boolean(error)}
