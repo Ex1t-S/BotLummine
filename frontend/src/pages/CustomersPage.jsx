@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api.js';
+import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './CustomersPage.css';
 
 const DEFAULT_PAGE_SIZE = 24;
@@ -34,6 +36,17 @@ const initialSyncStatus = {
 	finishedAt: null,
 	startedAt: null,
 };
+
+function useDebouncedValue(value, delay = 350) {
+	const [debounced, setDebounced] = useState(value);
+
+	useEffect(() => {
+		const timeout = window.setTimeout(() => setDebounced(value), delay);
+		return () => window.clearTimeout(timeout);
+	}, [value, delay]);
+
+	return debounced;
+}
 
 function formatCurrency(value, currency = 'ARS') {
 	const amount = Number(value || 0);
@@ -258,22 +271,107 @@ function EyeToggleIcon({ hidden = false }) {
 }
 
 export default function CustomersPage() {
+	const queryClient = useQueryClient();
 	const [filters, setFilters] = useState(initialFilters);
-	const [data, setData] = useState({
-		customers: [],
-		stats: {},
-		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
-	});
-	const [loading, setLoading] = useState(true);
-	const [syncing, setSyncing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
-	const [syncStatus, setSyncStatus] = useState(initialSyncStatus);
-	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [selectedProducts, setSelectedProducts] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
 	const [showProductFilter, setShowProductFilter] = useState(false);
 	const [billingVisible, setBillingVisible] = useState(true);
-	const pollRef = useRef(null);
+	const debouncedFilters = useDebouncedValue(filters);
+	const requestFilters = useMemo(
+		() => normalizeRequestFilters(debouncedFilters),
+		[debouncedFilters]
+	);
+
+	const customersQuery = useQuery({
+		queryKey: queryKeys.customers(requestFilters),
+		queryFn: async () => {
+			const response = await api.get('/dashboard/customers', {
+				params: requestFilters,
+			});
+
+			return {
+				customers: Array.isArray(response.data?.customers) ? response.data.customers : [],
+				stats: response.data?.stats || {},
+				pagination: {
+					page: Number(response.data?.pagination?.page || 1),
+					totalPages: Number(response.data?.pagination?.totalPages || 1),
+					totalItems: Number(response.data?.pagination?.totalItems || 0),
+					pageSize: Number(response.data?.pagination?.pageSize || DEFAULT_PAGE_SIZE),
+				},
+			};
+		},
+		placeholderData: keepPreviousData,
+		...queryPresets.customers,
+	});
+
+	const catalogOptionsQuery = useQuery({
+		queryKey: queryKeys.catalog({ page: 1, pageSize: 250, purpose: 'customer-options' }),
+		queryFn: async () => {
+			const response = await api.get('/dashboard/catalog', {
+				params: { page: 1, pageSize: 250 },
+			});
+			const rawItems =
+				response.data?.items ||
+				response.data?.products ||
+				response.data?.rows ||
+				[];
+			return buildCatalogProducts(rawItems);
+		},
+		...queryPresets.catalog,
+	});
+
+	const syncStatusQuery = useQuery({
+		queryKey: queryKeys.customersSyncStatus,
+		queryFn: async () => {
+			const response = await api.get('/dashboard/customers/sync-status');
+			return response.data || initialSyncStatus;
+		},
+		refetchInterval: (query) => (query.state.data?.running ? POLL_MS : false),
+		refetchIntervalInBackground: true,
+		staleTime: 3 * 1000,
+		gcTime: 5 * 60 * 1000,
+	});
+
+	const syncMutation = useMutation({
+		mutationFn: async () => {
+			const response = await api.post('/dashboard/customers/sync', {});
+			return response.data || initialSyncStatus;
+		},
+		onSuccess: async () => {
+			setErrorMessage('');
+			await queryClient.invalidateQueries({ queryKey: queryKeys.customersSyncStatus });
+		},
+		onError: (error) => {
+			console.error(error);
+			setErrorMessage(
+				error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.'
+			);
+		},
+	});
+
+	useEffect(() => {
+		if (!syncStatusQuery.data?.running) return;
+		queryClient.invalidateQueries({ queryKey: ['dashboard', 'customers'] });
+	}, [queryClient, syncStatusQuery.data?.ordersUpserted, syncStatusQuery.data?.running]);
+
+	useEffect(() => {
+		if (!customersQuery.isError) return;
+		setErrorMessage(
+			customersQuery.error?.response?.data?.message || 'No se pudieron cargar las compras.'
+		);
+	}, [customersQuery.error, customersQuery.isError]);
+
+	const data = customersQuery.data || {
+		customers: [],
+		stats: {},
+		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
+	};
+	const loading = customersQuery.isLoading;
+	const syncStatus = syncStatusQuery.data || initialSyncStatus;
+	const syncing = syncMutation.isPending || Boolean(syncStatus.running);
+	const catalogOptions = catalogOptionsQuery.data || [];
 
 	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
 	const currentPage = Number(data.pagination?.page || 1);
@@ -284,101 +382,6 @@ export default function CustomersPage() {
 	);
 	const displayAvgTicketLabel = billingVisible ? normalizedStats.avgTicketLabel : '********';
 	const displayTotalSpentLabel = billingVisible ? normalizedStats.totalSpentLabel : '********';
-
-	async function loadCatalogOptions() {
-		try {
-			const response = await api.get('/dashboard/catalog', {
-				params: { page: 1, pageSize: 250 },
-			});
-			const rawItems =
-				response.data?.items ||
-				response.data?.products ||
-				response.data?.rows ||
-				[];
-			setCatalogOptions(buildCatalogProducts(rawItems));
-		} catch (error) {
-			console.error('[CUSTOMERS][CATALOG] error:', error);
-		}
-	}
-
-	async function loadOrders(nextFilters = filters, { silent = false } = {}) {
-		if (!silent) setLoading(true);
-
-		try {
-			const response = await api.get('/dashboard/customers', {
-				params: normalizeRequestFilters(nextFilters),
-			});
-			setData({
-				customers: Array.isArray(response.data?.customers) ? response.data.customers : [],
-				stats: response.data?.stats || {},
-				pagination: {
-					page: Number(response.data?.pagination?.page || 1),
-					totalPages: Number(response.data?.pagination?.totalPages || 1),
-					totalItems: Number(response.data?.pagination?.totalItems || 0),
-					pageSize: Number(response.data?.pagination?.pageSize || DEFAULT_PAGE_SIZE),
-				},
-			});
-			setErrorMessage('');
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(
-				error?.response?.data?.message || 'No se pudieron cargar las compras.'
-			);
-		} finally {
-			if (!silent) setLoading(false);
-		}
-	}
-
-	async function loadSyncStatus({ silentRefresh = true } = {}) {
-		try {
-			const response = await api.get('/dashboard/customers/sync-status');
-			const nextStatus = response.data || initialSyncStatus;
-			setSyncStatus(nextStatus);
-
-			if (nextStatus.running) {
-				setSyncing(true);
-				if (!silentRefresh) {
-					await loadOrders(filters, { silent: true });
-				}
-				return;
-			}
-
-			setSyncing(false);
-			if (pollRef.current) {
-				clearInterval(pollRef.current);
-				pollRef.current = null;
-			}
-			await loadOrders(filters, { silent: true });
-		} catch (error) {
-			console.error(error);
-		}
-	}
-
-	function startPolling() {
-		if (pollRef.current) return;
-		pollRef.current = setInterval(() => {
-			loadSyncStatus({ silentRefresh: false }).catch(() => {});
-		}, POLL_MS);
-	}
-
-	function stopPolling() {
-		if (pollRef.current) {
-			clearInterval(pollRef.current);
-			pollRef.current = null;
-		}
-	}
-
-	useEffect(() => {
-		loadOrders(initialFilters).catch(() => {});
-		loadSyncStatus().catch(() => {});
-		loadCatalogOptions().catch(() => {});
-		return () => stopPolling();
-	}, []);
-
-	useEffect(() => {
-		if (syncStatus.running) startPolling();
-		else stopPolling();
-	}, [syncStatus.running]);
 
 	function handleFilterChange(event) {
 		const { name, value, type, checked } = event.target;
@@ -419,44 +422,30 @@ export default function CustomersPage() {
 		}));
 	}
 
-	async function handleApplyFilters() {
+	function handleApplyFilters() {
 		const next = {
 			...filters,
 			page: 1,
 			productQuery: selectedProducts.join('||'),
 		};
 		setFilters(next);
-		await loadOrders(next);
 	}
 
-	async function handleResetFilters() {
+	function handleResetFilters() {
 		setFilters(initialFilters);
 		setSelectedProducts([]);
 		setProductSearch('');
-		await loadOrders(initialFilters);
 	}
 
-	async function handleSync() {
+	function handleSync() {
 		setErrorMessage('');
-		try {
-			const response = await api.post('/dashboard/customers/sync', {});
-			const nextStatus = response.data || initialSyncStatus;
-			setSyncStatus(nextStatus);
-			setSyncing(Boolean(nextStatus.running || nextStatus.started));
-			startPolling();
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(
-				error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.'
-			);
-		}
+		syncMutation.mutate();
 	}
 
-	async function handlePageChange(page) {
+	function handlePageChange(page) {
 		if (page < 1 || page > totalPages || page === currentPage) return;
 		const next = { ...filters, page };
 		setFilters(next);
-		await loadOrders(next);
 	}
 
 	return (

@@ -1,24 +1,30 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 import DashboardLayout from './layout/DashboardLayout.jsx';
 
 import LoginPage from './pages/LoginPage.jsx';
-import InboxPage from './pages/InboxPage.jsx';
-import CatalogPage from './pages/CatalogPage.jsx';
-import CampaignsPage from './pages/CampaignsPage.jsx';
-import AbandonedCartsPage from './pages/AbandonedCartsPage.jsx';
-import CustomersPage from './pages/CustomersPage.jsx';
-import AiLabPage from './pages/AiLabPage.jsx';
-import WhatsAppMenuPage from './pages/WhatsAppMenuPage.jsx';
-import AdminPage from './pages/AdminPage.jsx';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { getDefaultRouteForRole } from './lib/authz.js';
 
+const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
+const CatalogPage = lazy(() => import('./pages/CatalogPage.jsx'));
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
+const AbandonedCartsPage = lazy(() => import('./pages/AbandonedCartsPage.jsx'));
+const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx'));
+const AiLabPage = lazy(() => import('./pages/AiLabPage.jsx'));
+const WhatsAppMenuPage = lazy(() => import('./pages/WhatsAppMenuPage.jsx'));
+const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
+
 function RoleHomeRedirect() {
 	const { user } = useAuth();
 	return <Navigate to={getDefaultRouteForRole(user?.role)} replace />;
+}
+
+function PageLoader() {
+	return <div className="page-card">Cargando modulo...</div>;
 }
 
 export default function App() {
@@ -39,7 +45,9 @@ export default function App() {
 					path="inbox/:queueSlug?"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
-							<InboxPage />
+							<Suspense fallback={<PageLoader />}>
+								<InboxPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -47,7 +55,9 @@ export default function App() {
 					path="admin"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<AdminPage />
+							<Suspense fallback={<PageLoader />}>
+								<AdminPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -55,7 +65,9 @@ export default function App() {
 					path="catalog"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<CatalogPage />
+							<Suspense fallback={<PageLoader />}>
+								<CatalogPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -63,7 +75,9 @@ export default function App() {
 					path="campaigns/*"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<CampaignsPage />
+							<Suspense fallback={<PageLoader />}>
+								<CampaignsPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -71,7 +85,9 @@ export default function App() {
 					path="abandoned-carts"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<AbandonedCartsPage />
+							<Suspense fallback={<PageLoader />}>
+								<AbandonedCartsPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -79,7 +95,9 @@ export default function App() {
 					path="customers"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<CustomersPage />
+							<Suspense fallback={<PageLoader />}>
+								<CustomersPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -87,7 +105,9 @@ export default function App() {
 					path="whatsapp-menu"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<WhatsAppMenuPage />
+							<Suspense fallback={<PageLoader />}>
+								<WhatsAppMenuPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
@@ -95,7 +115,9 @@ export default function App() {
 					path="ai-lab"
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<AiLabPage />
+							<Suspense fallback={<PageLoader />}>
+								<AiLabPage />
+							</Suspense>
 						</ProtectedRoute>
 					}
 				/>
