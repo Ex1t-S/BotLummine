@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
+import lummineLogo from '../assets/lummine-logo.png';
 import './LoginPage.css';
 
 function resolveRedirectPath(user, requestedPath = '') {
@@ -23,7 +24,7 @@ export default function LoginPage() {
 	});
 	const [error, setError] = useState('');
 	const [submitting, setSubmitting] = useState(false);
-	const [pointer, setPointer] = useState({ x: 50, y: 45 });
+	const [showPassword, setShowPassword] = useState(false);
 
 	const requestedPath = location.state?.from?.pathname || '';
 	const redirectTo = resolveRedirectPath(user, requestedPath);
@@ -50,58 +51,40 @@ export default function LoginPage() {
 		}
 	}
 
-	function handlePointerMove(event) {
-		const rect = event.currentTarget.getBoundingClientRect();
-		setPointer({
-			x: Math.round(((event.clientX - rect.left) / rect.width) * 100),
-			y: Math.round(((event.clientY - rect.top) / rect.height) * 100),
-		});
-	}
-
 	return (
-		<div
-			className="login-page"
-			style={{ '--pointer-x': `${pointer.x}%`, '--pointer-y': `${pointer.y}%` }}
-			onPointerMove={handlePointerMove}
-		>
-			<div className="login-orb login-orb--one" aria-hidden="true" />
-			<div className="login-orb login-orb--two" aria-hidden="true" />
+		<div className="login-page">
 			<div className="login-grid" aria-hidden="true" />
-			<div className="login-signal-field" aria-hidden="true">
-				<span />
-				<span />
-				<span />
-				<span />
-				<span />
-			</div>
 
 			<main className="login-shell">
 				<section className="login-story" aria-label="Resumen de la plataforma">
-					<div className="login-brand-chip">
-						<span className="login-brand-chip__dot" />
-						Lummine Commerce AI
+					<div className="login-brand">
+						<img src={lummineLogo} alt="Lummine" />
+						<div>
+							<strong>Lummine</strong>
+							<span>Commerce AI</span>
+						</div>
 					</div>
 
 					<div>
 						<p className="login-eyebrow">Panel operativo</p>
-						<h1>Ventas conversacionales con senales en tiempo real.</h1>
+						<h1>Gestiona WhatsApp, ventas y clientes desde un solo panel.</h1>
 						<p className="login-lead">
-							Un acceso central para inbox, campanas, clientes, catalogo y automatizacion de WhatsApp.
+							Accede al inbox, campanas, catalogo y automatizaciones con una experiencia pensada para operar todos los dias.
 						</p>
 					</div>
 
 					<div className="login-metrics" aria-label="Capacidades principales">
 						<div>
 							<strong>24/7</strong>
-							<span>asistencia IA</span>
+							<span>Asistencia IA</span>
 						</div>
 						<div>
 							<strong>Multi</strong>
-							<span>marca</span>
+							<span>Marca</span>
 						</div>
 						<div>
 							<strong>Live</strong>
-							<span>tracking</span>
+							<span>Tracking</span>
 						</div>
 					</div>
 
@@ -111,9 +94,9 @@ export default function LoginPage() {
 							<strong>Sincronizado</strong>
 						</div>
 						<div className="login-flow-list">
-							<span>WhatsApp conectado</span>
-							<span>Tiendanube preparada</span>
-							<span>Campanas auditables</span>
+							<span>WhatsApp</span>
+							<span>Tiendanube</span>
+							<span>Campanas</span>
 						</div>
 					</div>
 				</section>
@@ -121,30 +104,44 @@ export default function LoginPage() {
 				<form className="login-card" onSubmit={handleSubmit}>
 					<div className="login-card__header">
 						<span className="login-card__kicker">Acceso seguro</span>
-						<h2>Entra a tu workspace</h2>
-						<p>Usa tus credenciales internas para continuar al panel de operacion.</p>
+						<h2>Ingresar al workspace</h2>
+						<p>Usa tus credenciales internas para continuar.</p>
 					</div>
 
 					<label className="login-field">
-						<span>Correo de acceso</span>
+						<span>Email</span>
 						<input
 							type="email"
 							autoComplete="email"
 							placeholder="nombre@marca.com"
 							value={form.email}
 							onChange={(e) => setForm({ ...form, email: e.target.value })}
+							aria-invalid={Boolean(error)}
+							required
 						/>
 					</label>
 
 					<label className="login-field">
-						<span>Clave segura</span>
-						<input
-							type="password"
-							autoComplete="current-password"
-							placeholder="Tu clave privada"
-							value={form.password}
-							onChange={(e) => setForm({ ...form, password: e.target.value })}
-						/>
+						<span>Contrasena</span>
+						<div className="login-password-control">
+							<input
+								type={showPassword ? 'text' : 'password'}
+								autoComplete="current-password"
+								placeholder="Tu contrasena"
+								value={form.password}
+								onChange={(e) => setForm({ ...form, password: e.target.value })}
+								aria-invalid={Boolean(error)}
+								required
+							/>
+							<button
+								type="button"
+								className="login-password-toggle"
+								onClick={() => setShowPassword((current) => !current)}
+								aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+							>
+								{showPassword ? 'Ocultar' : 'Mostrar'}
+							</button>
+						</div>
 					</label>
 
 					{error ? (
@@ -153,13 +150,13 @@ export default function LoginPage() {
 						</p>
 					) : null}
 
-					<button className="login-submit" type="submit" disabled={submitting}>
+					<button className="login-submit" type="submit" disabled={submitting || !form.email || !form.password}>
 						<span>{submitting ? 'Validando acceso...' : 'Ingresar al panel'}</span>
 						<i aria-hidden="true">-&gt;</i>
 					</button>
 
 					<p className="login-footnote">
-						Acceso protegido para equipos autorizados. Las sesiones se validan con cookies seguras.
+						Sesion protegida para equipos autorizados.
 					</p>
 				</form>
 			</main>
