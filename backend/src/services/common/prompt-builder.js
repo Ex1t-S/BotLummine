@@ -30,6 +30,19 @@ function formatArrayField(value = [], fallback = 'ninguno') {
 	return Array.isArray(value) && value.length ? value.join(', ') : fallback;
 }
 
+function formatTransferPaymentBlock(transfer = {}) {
+	if (!transfer?.enabled) return '';
+
+	return [
+		`- Alias: ${transfer.alias || 'No informado'}`,
+		`- CBU/CVU: ${transfer.cbu || 'No informado'}`,
+		`- Titular: ${transfer.holder || 'No informado'}`,
+		transfer.cuil ? `- CUIL: ${transfer.cuil}` : '',
+		`- Banco/billetera: ${transfer.bank || 'No informado'}`,
+		transfer.extraInstructions ? `- Instruccion: ${transfer.extraInstructions}` : ''
+	].filter(Boolean).join('\n');
+}
+
 function buildPolicyBlock(responsePolicy = {}) {
 	return [
 		`- Accion permitida: ${responsePolicy.action || 'general_help'}`,
@@ -141,6 +154,9 @@ export function buildPrompt({
 		`CATALOGO RELEVANTE:\n${compactCatalog}`,
 		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',
+		businessData.intent === 'payment'
+			? `DATOS DE TRANSFERENCIA CONFIRMADOS:\n${formatTransferPaymentBlock(businessData.paymentRules.transfer)}`
+			: '',
 		`POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
 		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podes presentarte una sola vez como ${agentName} de ${businessName}.` : 'Si el cliente solo retoma con hola o buenas, podes volver a presentarte breve como Sofi de Lummine. Si no, segui el hilo sin saludar de nuevo.'}\n- Si el mensaje del cliente es solo un saludo, responde breve, presentate como ${agentName} de ${businessName} y pregunta que esta buscando.\n- Si el resumen comercial indica una campana reciente, el saludo corto se responde retomando esa campana; no preguntes desde cero, no abras menu y no te presentes otra vez salvo que sea estrictamente necesario.\n- Si el resumen comercial indica una campana promocional, no digas que recibiste una consulta si la charla empezo por campana; deci que le escribimos para compartir la promo.\n- Si el resumen comercial indica una campana reciente, no uses "Cliente" como nombre propio; si no hay nombre real, no nombres a la persona.\n- Si la clienta dice que ya compro, ya pago o ya hizo la operacion, no la felicites de forma exagerada: agradece breve y ofrece revisar comprobante, pedido o seguimiento.\n- Si la intencion es soporte (pedido, pago, envio o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.\n- Si el catalogo local no esta disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.\n- Si el catalogo local no esta disponible o no hay productos confirmados, pedi una aclaracion breve o ofrece derivar con una asesora.\n- Si el cliente ya fijo familia o promo, respetala y no cambies de producto por tu cuenta.\n- Si el cliente excluyo una opcion, no la vuelvas a mencionar como recomendacion.\n- Si la promo exacta no existe dentro de esa familia, decilo explicitamente y ofrece la mejor alternativa dentro de la misma familia.\n- Si mostras opciones, prioriza una sola principal segun el plan comercial, salvo que este comparando.\n- Si ya se venia hablando de otro producto mas reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explicito.\n- Si usas el menu como guia, integralo natural solo cuando el cliente este abierto o desorientado.\n- No pegues una coletilla fija de menu al final de respuestas concretas.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenisimo o dale.\n- Si la respuesta es continuidad y no es un saludo nuevo, no repitas nombre ni saludo.`,
 		`CONVERSACION RECIENTE:\n${transcript}`,

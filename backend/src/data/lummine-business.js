@@ -9,6 +9,16 @@ export const STORE_LINKS = {
 	politicaDevolucion: 'https://lummine.com/politica-de-devolucion/'
 };
 
+export const PAYMENT_TRANSFER_DETAILS = {
+	enabled: true,
+	alias: 'setal.pisada.lemon',
+	cbu: '0000168300000011153157',
+	holder: 'Lucas Fernando Bonafini',
+	cuil: '20-37791981-6',
+	bank: 'Lemon',
+	extraInstructions: 'No te olvides de enviarnos el comprobante a nuestro WhatsApp Empresa: +54 2216051100.'
+};
+
 export const PAYMENT_RULES = {
 	general: [
 		'No mencionar promociones ni transferencia en todos los mensajes.',
@@ -22,16 +32,7 @@ export const PAYMENT_RULES = {
 		'En productos visibles se muestran cuotas sin interés.',
 		'No forzar la promo en respuestas donde no suma.'
 	],
-	transfer: {
-		enabled: true,
-		alias: process.env.TRANSFER_ALIAS || 'TU_ALIAS_REAL',
-		cbu: process.env.TRANSFER_CBU || 'TU_CBU_REAL',
-		holder: process.env.TRANSFER_HOLDER || 'TITULAR_REAL',
-		bank: process.env.TRANSFER_BANK || 'BANCO_REAL',
-		extraInstructions:
-			process.env.TRANSFER_EXTRA ||
-			'Una vez realizada la transferencia, enviar comprobante por este medio para validarlo.'
-	}
+	transfer: PAYMENT_TRANSFER_DETAILS
 };
 
 export const POLICY_SUMMARY = {

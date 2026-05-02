@@ -1,9 +1,7 @@
+import { PAYMENT_TRANSFER_DETAILS } from '../../data/lummine-business.js';
+
 export async function handlePaymentIntent({ currentState = {} } = {}) {
-	const alias = process.env.TRANSFER_ALIAS;
-	const cbu = process.env.TRANSFER_CBU;
-	const holder = process.env.TRANSFER_HOLDER;
-	const bank = process.env.TRANSFER_BANK;
-	const extra = process.env.TRANSFER_EXTRA;
+	const { alias, cbu, holder, cuil, bank, extraInstructions } = PAYMENT_TRANSFER_DETAILS;
 
 	const missing = [];
 
@@ -33,8 +31,9 @@ export async function handlePaymentIntent({ currentState = {} } = {}) {
 				alias: alias || null,
 				cbu: cbu || null,
 				holder: holder || null,
+				cuil: cuil || null,
 				bank: bank || null,
-				extra: extra || null
+				extra: extraInstructions || null
 			}
 		}
 	};
