@@ -7,7 +7,7 @@ import LoginPage from './pages/LoginPage.jsx';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
-import { getDefaultRouteForRole } from './lib/authz.js';
+import { getDefaultRouteForRole, isPlatformAdminUser } from './lib/authz.js';
 
 const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
 const CatalogPage = lazy(() => import('./pages/CatalogPage.jsx'));
@@ -25,6 +25,15 @@ function RoleHomeRedirect() {
 
 function PageLoader() {
 	return <div className="page-card">Cargando modulo...</div>;
+}
+
+function BrandAnalyticsRoute() {
+	const { user } = useAuth();
+	if (isPlatformAdminUser(user)) {
+		return <Navigate to="/admin" replace />;
+	}
+
+	return <AdminPage defaultTab="analytics" />;
 }
 
 export default function App() {
@@ -67,6 +76,16 @@ export default function App() {
 						<ProtectedRoute allowedRoles={['ADMIN']}>
 							<Suspense fallback={<PageLoader />}>
 								<CatalogPage />
+							</Suspense>
+						</ProtectedRoute>
+					}
+				/>
+				<Route
+					path="analytics"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<Suspense fallback={<PageLoader />}>
+								<BrandAnalyticsRoute />
 							</Suspense>
 						</ProtectedRoute>
 					}

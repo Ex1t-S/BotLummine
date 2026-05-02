@@ -71,14 +71,12 @@ const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
 	{ key: 'integrations', label: 'Integraciones' },
 	{ key: 'users', label: 'Usuarios' },
-	{ key: 'analytics', label: 'Estadisticas' },
 	{ key: 'operations', label: 'Operaciones' }
 ];
 
 const brandAdminTabs = [
 	{ key: 'brand', label: 'Marca' },
 	{ key: 'content', label: 'Contenido' },
-	{ key: 'analytics', label: 'Estadisticas' },
 	{ key: 'users', label: 'Usuarios' }
 ];
 
@@ -317,11 +315,11 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 	);
 }
 
-export default function AdminPage() {
+export default function AdminPage({ defaultTab = '' }) {
 	const { user } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);
 	const visibleTabs = platformAdmin ? platformTabs : brandAdminTabs;
-	const [activeTab, setActiveTab] = useState(platformAdmin ? 'workspaces' : 'brand');
+	const [activeTab, setActiveTab] = useState(defaultTab || (platformAdmin ? 'workspaces' : 'brand'));
 	const [workspaces, setWorkspaces] = useState([]);
 	const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(user?.workspaceId || '');
 	const [workspace, setWorkspace] = useState(null);
@@ -456,7 +454,7 @@ export default function AdminPage() {
 
 	useEffect(() => {
 		const firstTab = platformAdmin ? 'workspaces' : 'brand';
-		if (!visibleTabs.some((tab) => tab.key === activeTab)) {
+		if (activeTab !== 'analytics' && !visibleTabs.some((tab) => tab.key === activeTab)) {
 			setActiveTab(firstTab);
 		}
 	}, [platformAdmin, activeTab, visibleTabs]);
@@ -713,18 +711,20 @@ export default function AdminPage() {
 			{notice ? <div className="tenant-admin-alert success">{notice}</div> : null}
 			{error ? <div className="tenant-admin-alert error">{error}</div> : null}
 
-			<div className="tenant-admin-tabs">
-				{visibleTabs.map((tab) => (
-					<button
-						type="button"
-						key={tab.key}
-						className={activeTab === tab.key ? 'active' : ''}
-						onClick={() => setActiveTab(tab.key)}
-					>
-						{tab.label}
-					</button>
-				))}
-			</div>
+			{activeTab !== 'analytics' ? (
+				<div className="tenant-admin-tabs">
+					{visibleTabs.map((tab) => (
+						<button
+							type="button"
+							key={tab.key}
+							className={activeTab === tab.key ? 'active' : ''}
+							onClick={() => setActiveTab(tab.key)}
+						>
+							{tab.label}
+						</button>
+					))}
+				</div>
+			) : null}
 
 			<div className="tenant-admin-scroll">
 				{platformAdmin && activeTab === 'workspaces' ? (

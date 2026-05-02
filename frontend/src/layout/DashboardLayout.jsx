@@ -72,6 +72,10 @@ export default function DashboardLayout() {
 										Catalogo
 									</NavLink>
 
+									<NavLink to="/analytics" className={navClass}>
+										Estadisticas
+									</NavLink>
+
 									<NavLink to="/campaigns" className={navClass}>
 										Campañas
 									</NavLink>
