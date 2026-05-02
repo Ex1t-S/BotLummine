@@ -182,6 +182,140 @@ function formatUsd(value) {
 	}).format(Number(value || 0));
 }
 
+function formatPercent(value) {
+	return `${new Intl.NumberFormat('es-AR', {
+		maximumFractionDigits: 1
+	}).format(Number(value || 0))}%`;
+}
+
+function clampPercent(value) {
+	return Math.max(0, Math.min(100, Number(value || 0)));
+}
+
+function getBrandColor(workspace = {}) {
+	const color = String(workspace?.branding?.primaryColor || '').trim();
+	return /^#[0-9a-f]{3,8}$/i.test(color) ? color : '#0f766e';
+}
+
+function getWorkspaceName(workspace = {}) {
+	return workspace?.aiConfig?.businessName || workspace?.name || workspace?.slug || 'Marca';
+}
+
+function getInitials(value = '') {
+	const parts = String(value || 'Marca').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+	return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'M';
+}
+
+function getActivityBars(metrics = {}) {
+	const values = [
+		metrics.messages30dInbound,
+		metrics.messages30dOutbound,
+		metrics.readRecipientsCount,
+		metrics.ordersCount,
+		metrics.conversionCount,
+	].map((value) => Number(value || 0));
+	const max = Math.max(...values, 1);
+	return values.map((value) => Math.max(12, Math.round((value / max) * 100)));
+}
+
+function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
+	const workspace = item.workspace || {};
+	const metrics = item.metrics || {};
+	const name = getWorkspaceName(workspace);
+	const brandColor = getBrandColor(workspace);
+	const sent = Number(metrics.sentRecipientsCount || 0);
+	const conversionRate = sent ? (Number(metrics.conversionCount || 0) / sent) * 100 : 0;
+	const readWidth = clampPercent(metrics.readRate);
+	const deliveryWidth = clampPercent(metrics.deliveryRate);
+	const bars = getActivityBars(metrics);
+
+	return (
+		<button
+			type="button"
+			className={`workspace-analytics-card ${selected ? 'is-selected' : ''}`.trim()}
+			style={{ '--brand-color': brandColor }}
+			onClick={onSelect}
+		>
+			<div className="workspace-card-head">
+				<div className="workspace-card-brand">
+					<div className="workspace-card-logo">
+						{workspace.branding?.logoUrl ? (
+							<img src={workspace.branding.logoUrl} alt={name} />
+						) : (
+							<span>{getInitials(name)}</span>
+						)}
+					</div>
+					<div>
+						<strong>{name}</strong>
+						<span>{workspace.slug || workspace.status || 'workspace'}</span>
+					</div>
+				</div>
+				<span className="workspace-card-status">{workspace.status || 'ACTIVE'}</span>
+			</div>
+
+			<div className="workspace-card-hero">
+				<div>
+					<span>Conversion por WhatsApp</span>
+					<strong>{formatPercent(conversionRate)}</strong>
+					<small>{formatNumber(metrics.conversionCount)} conversiones atribuidas</small>
+				</div>
+				<div className="workspace-card-ring" aria-hidden="true">
+					<div style={{ '--progress': `${clampPercent(conversionRate)}%` }}>
+						<span>{formatPercent(conversionRate)}</span>
+					</div>
+				</div>
+			</div>
+
+			<div className="workspace-card-progress">
+				<div>
+					<span>Entregados</span>
+					<strong>{formatPercent(metrics.deliveryRate)}</strong>
+					<i><b style={{ width: `${deliveryWidth}%` }} /></i>
+				</div>
+				<div>
+					<span>Leidos</span>
+					<strong>{formatPercent(metrics.readRate)}</strong>
+					<i><b style={{ width: `${readWidth}%` }} /></i>
+				</div>
+			</div>
+
+			<div className="workspace-card-body">
+				<div className="workspace-card-chart" aria-label="Actividad por marca">
+					{bars.map((height, index) => (
+						<span key={index} style={{ height: `${height}%` }} />
+					))}
+				</div>
+				<div className="workspace-card-chat">
+					<span>WhatsApp 30d</span>
+					<strong>{formatNumber(Number(metrics.messages30dInbound || 0) + Number(metrics.messages30dOutbound || 0))}</strong>
+					<small>
+						{formatNumber(metrics.activeConversations30d)} conversaciones activas
+					</small>
+				</div>
+			</div>
+
+			<div className="workspace-card-stats">
+				<div>
+					<span>Ventas atribuidas</span>
+					<strong>{formatCurrency(metrics.attributedRevenue, metrics.attributedCurrency || metrics.currency)}</strong>
+				</div>
+				<div>
+					<span>Carritos rec.</span>
+					<strong>{formatNumber(metrics.recoveredCartsCount)}</strong>
+				</div>
+				<div>
+					<span>Costo est.</span>
+					<strong>{formatUsd(metrics.estimatedCampaignCostUsd)}</strong>
+				</div>
+				<div>
+					<span>No leidos</span>
+					<strong>{formatNumber(metrics.unreadMessagesCount)}</strong>
+				</div>
+			</div>
+		</button>
+	);
+}
+
 export default function AdminPage() {
 	const { user } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);
@@ -778,58 +912,41 @@ export default function AdminPage() {
 				) : null}
 
 				{platformAdmin && activeTab === 'analytics' ? (
-					<section className="tenant-admin-panel">
-						<h3>Estadisticas multi-marca</h3>
+					<section className="tenant-admin-panel tenant-admin-panel--analytics">
+						<div className="tenant-admin-panel-heading">
+							<div>
+								<h3>Estadisticas multi-marca</h3>
+								<p>Resumen visual por marca con actividad de WhatsApp, ventas, campanas y recuperacion.</p>
+							</div>
+							{analytics?.activityWindowDays ? (
+								<span>Ultimos {formatNumber(analytics.activityWindowDays)} dias</span>
+							) : null}
+						</div>
 						<div className="tenant-admin-metrics">
-							<StatusPill>Campañas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
+							<StatusPill>Campanas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
 							<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
 							<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
 							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
 							<StatusPill>Pedidos: {formatNumber(analytics?.totals?.ordersCount)}</StatusPill>
 							<StatusPill>Facturacion: {formatCurrency(analytics?.totals?.revenueTotal, analytics?.totals?.currency)}</StatusPill>
+							<StatusPill>Ventas atribuidas: {formatCurrency(analytics?.totals?.attributedRevenue, analytics?.totals?.attributedCurrency || analytics?.totals?.currency)}</StatusPill>
+							<StatusPill>Conversaciones 30d: {formatNumber(analytics?.totals?.activeConversations30d)}</StatusPill>
+							<StatusPill>Carritos recuperados: {formatNumber(analytics?.totals?.recoveredCartsCount)}</StatusPill>
 							<StatusPill>Costo estimado: {formatUsd(analytics?.totals?.estimatedCampaignCostUsd)}</StatusPill>
 						</div>
-						<div className="tenant-admin-table-wrap">
-							<table className="tenant-admin-table">
-								<thead>
-									<tr>
-										<th>Marca</th>
-										<th>Campañas</th>
-										<th>Enviados</th>
-										<th>Entregados</th>
-										<th>Leidos</th>
-										<th>Fallidos</th>
-										<th>Clientes</th>
-										<th>Pedidos</th>
-										<th>Facturacion</th>
-										<th>Costo est.</th>
-									</tr>
-								</thead>
-								<tbody>
-									{(analytics?.workspaces || []).map((item) => (
-										<tr
-											key={item.workspace.id}
-											className={analytics?.detail?.workspaceId === item.workspace.id ? 'selected' : ''}
-											onClick={() => setSelectedWorkspaceId(item.workspace.id)}
-										>
-											<td>
-												<strong>{item.workspace.name}</strong>
-												<span>{item.workspace.slug}</span>
-											</td>
-											<td>{formatNumber(item.metrics.campaignsCount)} ({formatNumber(item.metrics.activeCampaignsCount)} activas)</td>
-											<td>{formatNumber(item.metrics.sentRecipientsCount)}</td>
-											<td>{formatNumber(item.metrics.deliveredRecipientsCount)}</td>
-											<td>{formatNumber(item.metrics.readRecipientsCount)}</td>
-											<td>{formatNumber(item.metrics.failedRecipientsCount)}</td>
-											<td>{formatNumber(item.metrics.customersCount)}</td>
-											<td>{formatNumber(item.metrics.ordersCount)}</td>
-											<td>{formatCurrency(item.metrics.revenueTotal, item.metrics.currency)}</td>
-											<td>{formatUsd(item.metrics.estimatedCampaignCostUsd)}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
+						<div className="workspace-analytics-grid">
+							{(analytics?.workspaces || []).map((item) => (
+								<WorkspaceAnalyticsCard
+									key={item.workspace.id}
+									item={item}
+									selected={analytics?.detail?.workspaceId === item.workspace.id}
+									onSelect={() => setSelectedWorkspaceId(item.workspace.id)}
+								/>
+							))}
 						</div>
+						{!analyticsLoading && !(analytics?.workspaces || []).length ? (
+							<div className="tenant-admin-empty">No hay marcas para mostrar.</div>
+						) : null}
 						{analyticsLoading ? <StatusPill>Cargando estadisticas...</StatusPill> : null}
 					</section>
 				) : null}

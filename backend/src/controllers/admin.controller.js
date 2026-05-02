@@ -15,6 +15,7 @@ import {
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
+const ANALYTICS_ACTIVITY_DAYS = 30;
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
@@ -213,6 +214,16 @@ function toNumber(value) {
 	return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function subtractDays(days = 0) {
+	return new Date(Date.now() - Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000);
+}
+
+function ratio(numerator = 0, denominator = 0) {
+	const den = Number(denominator || 0);
+	if (!den) return 0;
+	return Number(((Number(numerator || 0) / den) * 100).toFixed(1));
+}
+
 function emptyAnalyticsMetrics() {
 	return {
 		campaignsCount: 0,
@@ -228,6 +239,20 @@ function emptyAnalyticsMetrics() {
 		revenueTotal: 0,
 		currency: 'ARS',
 		estimatedCampaignCostUsd: 0,
+		messages30dInbound: 0,
+		messages30dOutbound: 0,
+		activeConversations30d: 0,
+		unreadConversationsCount: 0,
+		unreadMessagesCount: 0,
+		readRate: 0,
+		deliveryRate: 0,
+		conversionCount: 0,
+		attributedRevenue: 0,
+		attributedCurrency: 'ARS',
+		abandonedCartsCount: 0,
+		contactedCartsCount: 0,
+		recoveredCartsCount: 0,
+		recoveredCartValue: 0,
 	};
 }
 
@@ -235,6 +260,8 @@ function applyEstimatedCost(metrics) {
 	metrics.estimatedCampaignCostUsd = Number(
 		(metrics.billableRecipientsCount * DEFAULT_ESTIMATED_MESSAGE_COST_USD).toFixed(2)
 	);
+	metrics.deliveryRate = ratio(metrics.deliveredRecipientsCount, metrics.sentRecipientsCount);
+	metrics.readRate = ratio(metrics.readRecipientsCount, metrics.deliveredRecipientsCount || metrics.sentRecipientsCount);
 	return metrics;
 }
 
@@ -588,6 +615,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 		assertPlatformAdmin(req);
 
 		const selectedWorkspaceId = normalizeString(req.query?.workspaceId);
+		const activitySince = subtractDays(ANALYTICS_ACTIVITY_DAYS);
 		const workspaces = await prisma.workspace.findMany({
 			select: {
 				id: true,
@@ -616,6 +644,11 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			recipientRows,
 			customerRows,
 			orderRows,
+			messageRows30d,
+			activeConversationRows30d,
+			unreadConversationRows,
+			conversionRows,
+			abandonedCartRows,
 		] = await Promise.all([
 			prisma.campaign.groupBy({
 				by: ['workspaceId', 'status'],
@@ -634,6 +667,40 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			}),
 			prisma.customerOrder.groupBy({
 				by: ['workspaceId', 'currency'],
+				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				_count: { _all: true },
+				_sum: { totalAmount: true },
+			}),
+			prisma.message.groupBy({
+				by: ['workspaceId', 'direction'],
+				where: workspaceIds.length
+					? { workspaceId: { in: workspaceIds }, createdAt: { gte: activitySince } }
+					: { createdAt: { gte: activitySince } },
+				_count: { _all: true },
+			}),
+			prisma.conversation.groupBy({
+				by: ['workspaceId'],
+				where: workspaceIds.length
+					? { workspaceId: { in: workspaceIds }, lastMessageAt: { gte: activitySince } }
+					: { lastMessageAt: { gte: activitySince } },
+				_count: { _all: true },
+			}),
+			prisma.conversation.groupBy({
+				by: ['workspaceId'],
+				where: workspaceIds.length
+					? { workspaceId: { in: workspaceIds }, unreadCount: { gt: 0 }, archivedAt: null }
+					: { unreadCount: { gt: 0 }, archivedAt: null },
+				_count: { _all: true },
+				_sum: { unreadCount: true },
+			}),
+			prisma.campaignConversion.groupBy({
+				by: ['workspaceId', 'source', 'currency'],
+				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				_count: { _all: true },
+				_sum: { amount: true },
+			}),
+			prisma.abandonedCart.groupBy({
+				by: ['workspaceId', 'status'],
 				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
 				_count: { _all: true },
 				_sum: { totalAmount: true },
@@ -680,6 +747,47 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			if (row.currency) metrics.currency = row.currency;
 		}
 
+		for (const row of messageRows30d) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			if (row.direction === 'INBOUND') metrics.messages30dInbound += count;
+			if (row.direction === 'OUTBOUND') metrics.messages30dOutbound += count;
+		}
+
+		for (const row of activeConversationRows30d) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.activeConversations30d = row._count?._all || 0;
+		}
+
+		for (const row of unreadConversationRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.unreadConversationsCount = row._count?._all || 0;
+			metrics.unreadMessagesCount = row._sum?.unreadCount || 0;
+		}
+
+		for (const row of conversionRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.conversionCount += row._count?._all || 0;
+			metrics.attributedRevenue += toNumber(row._sum?.amount);
+			if (row.currency) metrics.attributedCurrency = row.currency;
+		}
+
+		for (const row of abandonedCartRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			metrics.abandonedCartsCount += count;
+			if (['CONTACTED', 'RECOVERED'].includes(row.status)) metrics.contactedCartsCount += count;
+			if (row.status === 'RECOVERED') {
+				metrics.recoveredCartsCount += count;
+				metrics.recoveredCartValue += toNumber(row._sum?.totalAmount);
+			}
+		}
+
 		const workspaceAnalytics = workspaces.map((workspace) => ({
 			workspace,
 			metrics: applyEstimatedCost(metricsByWorkspace.get(workspace.id) || emptyAnalyticsMetrics()),
@@ -698,6 +806,19 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			acc.customersCount += metrics.customersCount || 0;
 			acc.ordersCount += metrics.ordersCount || 0;
 			acc.revenueTotal += metrics.revenueTotal || 0;
+			acc.messages30dInbound += metrics.messages30dInbound || 0;
+			acc.messages30dOutbound += metrics.messages30dOutbound || 0;
+			acc.activeConversations30d += metrics.activeConversations30d || 0;
+			acc.unreadConversationsCount += metrics.unreadConversationsCount || 0;
+			acc.unreadMessagesCount += metrics.unreadMessagesCount || 0;
+			acc.conversionCount += metrics.conversionCount || 0;
+			acc.attributedRevenue += metrics.attributedRevenue || 0;
+			acc.abandonedCartsCount += metrics.abandonedCartsCount || 0;
+			acc.contactedCartsCount += metrics.contactedCartsCount || 0;
+			acc.recoveredCartsCount += metrics.recoveredCartsCount || 0;
+			acc.recoveredCartValue += metrics.recoveredCartValue || 0;
+			if (metrics.currency) acc.currency = metrics.currency;
+			if (metrics.attributedCurrency) acc.attributedCurrency = metrics.attributedCurrency;
 			return acc;
 		}, emptyAnalyticsMetrics()));
 
@@ -712,6 +833,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 		return res.json({
 			ok: true,
 			estimatedMessageCostUsd: DEFAULT_ESTIMATED_MESSAGE_COST_USD,
+			activityWindowDays: ANALYTICS_ACTIVITY_DAYS,
 			totals,
 			workspaces: workspaceAnalytics,
 			detail,
