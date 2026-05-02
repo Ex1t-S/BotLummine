@@ -205,10 +205,13 @@ export async function getWhatsAppChannelForWorkspace(workspaceId) {
 
 export async function resolveWorkspaceIdFromPhoneNumberId(phoneNumberId = '') {
 	const normalizedPhoneNumberId = normalizeWorkspaceId(phoneNumberId);
-	if (!normalizedPhoneNumberId) return DEFAULT_WORKSPACE_ID;
+	if (!normalizedPhoneNumberId) return null;
 
-	const channel = await prisma.whatsAppChannel.findUnique({
-		where: { phoneNumberId: normalizedPhoneNumberId },
+	const channel = await prisma.whatsAppChannel.findFirst({
+		where: {
+			phoneNumberId: normalizedPhoneNumberId,
+			status: 'ACTIVE',
+		},
 		select: { workspaceId: true },
 	});
 
@@ -221,7 +224,7 @@ export async function resolveWorkspaceIdFromPhoneNumberId(phoneNumberId = '') {
 		return DEFAULT_WORKSPACE_ID;
 	}
 
-	return DEFAULT_WORKSPACE_ID;
+	return null;
 }
 
 export function getWorkspacePublicPayload(workspace = {}) {

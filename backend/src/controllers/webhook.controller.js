@@ -116,6 +116,20 @@ async function processInboundMessages(req, value = {}) {
 	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
 	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
 
+	if (!workspaceId) {
+		if (messages.length) {
+			logger.warn('webhook.whatsapp_unresolved_channel', {
+				requestId: req.requestId || null,
+				eventType: 'messages',
+				reason: phoneNumberId ? 'unknown_or_inactive_phone_number_id' : 'missing_phone_number_id',
+				phoneNumberId: phoneNumberId || null,
+				messages: messages.length,
+				statuses: 0,
+			});
+		}
+		return;
+	}
+
 	for (const message of messages) {
 		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
 		const baseAttachmentMeta = extractAttachmentMeta(message);
@@ -147,10 +161,24 @@ async function processInboundMessages(req, value = {}) {
 	}
 }
 
-async function processOutboundStatuses(value = {}) {
+async function processOutboundStatuses(req, value = {}) {
 	const statuses = Array.isArray(value.statuses) ? value.statuses : [];
 	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
 	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
+
+	if (!workspaceId) {
+		if (statuses.length) {
+			logger.warn('webhook.whatsapp_unresolved_channel', {
+				requestId: req.requestId || null,
+				eventType: 'statuses',
+				reason: phoneNumberId ? 'unknown_or_inactive_phone_number_id' : 'missing_phone_number_id',
+				phoneNumberId: phoneNumberId || null,
+				messages: 0,
+				statuses: statuses.length,
+			});
+		}
+		return;
+	}
 
 	for (const status of statuses) {
 		await applyCampaignMessageStatusWebhook(status, { workspaceId });
@@ -287,12 +315,12 @@ export async function receiveWhatsappWebhook(req, res) {
 
 				if (change.field === 'messages') {
 					await processInboundMessages(req, value);
-					await processOutboundStatuses(value);
+					await processOutboundStatuses(req, value);
 					continue;
 				}
 
 				if (Array.isArray(value.statuses) && value.statuses.length) {
-					await processOutboundStatuses(value);
+					await processOutboundStatuses(req, value);
 				}
 
 				await processTemplateWebhook(change);
