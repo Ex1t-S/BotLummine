@@ -11,22 +11,6 @@ function formatNumber(value) {
 	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
 }
 
-function formatDateTime(value) {
-	if (!value) return 'Sin registro';
-
-	try {
-		return new Date(value).toLocaleString('es-AR', {
-			timeZone: 'America/Argentina/Buenos_Aires',
-			day: '2-digit',
-			month: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-		});
-	} catch {
-		return 'Sin registro';
-	}
-}
-
 function getSeverityLabel(severity = '') {
 	if (severity === 'critical') return 'Critico';
 	if (severity === 'warning') return 'Atencion';
@@ -55,15 +39,6 @@ function MetricCard({ label, value, helper, tone = 'neutral', onClick }) {
 	}
 
 	return <div className={`operations-metric-card tone-${tone}`}>{content}</div>;
-}
-
-function HealthRow({ label, value, ok = true }) {
-	return (
-		<div className="operations-health-row">
-			<span>{label}</span>
-			<strong className={ok ? 'is-ok' : 'is-warning'}>{value}</strong>
-		</div>
-	);
 }
 
 function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
@@ -97,8 +72,6 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 
 function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 	const metrics = item.metrics || {};
-	const health = item.health || {};
-	const channel = item.channel || null;
 	const issueCount = item.issues?.length || 0;
 
 	return (
@@ -115,13 +88,6 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 
 			<div className="operations-workspace-metrics">
 				<MetricCard
-					label="Humano"
-					value={metrics.human}
-					helper="Conversaciones escaladas"
-					tone={metrics.human ? 'warning' : 'neutral'}
-					onClick={!platformAdmin ? () => onNavigate('/inbox/atencion-humana') : null}
-				/>
-				<MetricCard
 					label="Comprobantes"
 					value={metrics.paymentReview}
 					helper="Pendientes de revision"
@@ -133,30 +99,7 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 					value={metrics.unreadMessages}
 					helper={`${formatNumber(metrics.unreadConversations)} conversaciones`}
 					tone={metrics.unreadMessages ? 'info' : 'neutral'}
-					onClick={!platformAdmin ? () => onNavigate('/inbox/automatico') : null}
-				/>
-			</div>
-
-			<div className="operations-health-grid">
-				<HealthRow
-					label="WhatsApp"
-					value={channel ? (channel.displayPhoneNumber || channel.phoneNumberId || 'Activo') : 'Sin canal activo'}
-					ok={Boolean(channel)}
-				/>
-				<HealthRow
-					label="Catalogo"
-					value={health.latestCatalogSync?.status ? `${health.latestCatalogSync.status} - ${formatDateTime(health.latestCatalogSync.finishedAt || health.latestCatalogSync.startedAt)}` : 'Sin sync'}
-					ok={Boolean(health.latestCatalogSync && health.latestCatalogSync.status !== 'ERROR')}
-				/>
-				<HealthRow
-					label="Clientes"
-					value={health.latestCustomerSync?.status ? `${health.latestCustomerSync.status} - ${formatDateTime(health.latestCustomerSync.finishedAt || health.latestCustomerSync.startedAt)}` : 'Sin sync'}
-					ok={!health.latestCustomerSync || health.latestCustomerSync.status !== 'ERROR'}
-				/>
-				<HealthRow
-					label="Campanas activas"
-					value={formatNumber(metrics.activeCampaigns)}
-					ok={metrics.failedCampaigns < 1}
+					onClick={!platformAdmin ? () => onNavigate('/inbox/automatico?read=UNREAD') : null}
 				/>
 			</div>
 
@@ -193,13 +136,6 @@ export default function OperationsPage() {
 	const quickActions = useMemo(() => {
 		const actions = [
 			{
-				label: 'Responder humano',
-				value: totals.human,
-				helper: 'Conversaciones esperando atencion',
-				tone: totals.human ? 'warning' : 'neutral',
-				href: platformAdmin ? '/admin' : '/inbox/atencion-humana',
-			},
-			{
 				label: 'Revisar comprobantes',
 				value: totals.paymentReview,
 				helper: 'Pagos para validar',
@@ -211,7 +147,7 @@ export default function OperationsPage() {
 				value: totals.unreadMessages,
 				helper: 'Mensajes pendientes',
 				tone: totals.unreadMessages ? 'info' : 'neutral',
-				href: platformAdmin ? '/admin' : '/inbox/automatico',
+				href: platformAdmin ? '/admin' : '/inbox/automatico?read=UNREAD',
 			},
 			{
 				label: 'Campanas activas',

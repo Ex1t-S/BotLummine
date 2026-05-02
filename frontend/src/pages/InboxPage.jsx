@@ -27,9 +27,12 @@ function resolveQueueFromSlug(slug = '') {
 	return QUEUE_BY_ROUTE[String(slug || '').trim().toLowerCase()] || 'AUTO';
 }
 
-function buildInboxPath(queueKey = 'AUTO', conversationId = '') {
+function buildInboxPath(queueKey = 'AUTO', conversationId = '', readFilter = 'ALL') {
 	const slug = QUEUE_ROUTES[queueKey] || QUEUE_ROUTES.AUTO;
-	const query = conversationId ? `?conversation=${encodeURIComponent(conversationId)}` : '';
+	const params = new URLSearchParams();
+	if (conversationId) params.set('conversation', conversationId);
+	if (readFilter && readFilter !== 'ALL') params.set('read', readFilter);
+	const query = params.toString() ? `?${params.toString()}` : '';
 	return `/inbox/${slug}${query}`;
 }
 
@@ -44,6 +47,11 @@ const READ_FILTERS = [
 	{ key: 'UNREAD', label: 'No leidos' },
 	{ key: 'READ', label: 'Leidos' },
 ];
+
+function resolveReadFilter(value = '') {
+	const normalized = String(value || '').trim().toUpperCase();
+	return READ_FILTERS.some((item) => item.key === normalized) ? normalized : 'ALL';
+}
 
 const EXTENDED_QUICK_EMOJIS = [
 	'\u{1F600}', '\u{1F603}', '\u{1F604}', '\u{1F601}', '\u{1F606}', '\u{1F605}', '\u{1F602}', '\u{1F923}',
@@ -481,6 +489,7 @@ export default function InboxPage() {
 
 	const routeQueue = resolveQueueFromSlug(queueSlug);
 	const routeConversationId = searchParams.get('conversation') || null;
+	const routeReadFilter = resolveReadFilter(searchParams.get('read') || '');
 
 	const [queue, setQueue] = useState(routeQueue);
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
@@ -488,14 +497,14 @@ export default function InboxPage() {
 	const [selectedConversationId, setSelectedConversationId] = useState(routeConversationId);
 	const [messageText, setMessageText] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
-	const [readFilter, setReadFilter] = useState('ALL');
+	const [readFilter, setReadFilter] = useState(routeReadFilter);
 	const [olderMessages, setOlderMessages] = useState([]);
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	useEffect(() => {
-		const expectedPath = buildInboxPath(routeQueue, routeConversationId || '');
+		const expectedPath = buildInboxPath(routeQueue, routeConversationId || '', routeReadFilter);
 
 		if (!queueSlug || !QUEUE_BY_ROUTE[String(queueSlug || '').trim().toLowerCase()]) {
 			navigate(expectedPath, { replace: true });
@@ -506,23 +515,30 @@ export default function InboxPage() {
 		setSelectedConversationId((current) => (
 			current === routeConversationId ? current : routeConversationId
 		));
-	}, [navigate, queueSlug, routeQueue, routeConversationId]);
+		setReadFilter((current) => (current === routeReadFilter ? current : routeReadFilter));
+	}, [navigate, queueSlug, routeQueue, routeConversationId, routeReadFilter]);
 
 	function selectQueue(nextQueue) {
 		if (nextQueue === queue) return;
 		setQueue(nextQueue);
 		setSelectedConversationId(null);
-		navigate(buildInboxPath(nextQueue), { replace: false });
+		navigate(buildInboxPath(nextQueue, '', readFilter), { replace: false });
 	}
 
 	function selectConversation(conversationId) {
 		setSelectedConversationId(conversationId);
-		navigate(buildInboxPath(queue, conversationId), { replace: false });
+		navigate(buildInboxPath(queue, conversationId, readFilter), { replace: false });
 	}
 
 	function clearSelectedConversation() {
 		setSelectedConversationId(null);
-		navigate(buildInboxPath(queue), { replace: true });
+		navigate(buildInboxPath(queue, '', readFilter), { replace: true });
+	}
+
+	function selectReadFilter(nextFilter) {
+		setReadFilter(nextFilter);
+		setSelectedConversationId(null);
+		navigate(buildInboxPath(queue, '', nextFilter), { replace: false });
 	}
 
 	const inboxQuery = useInfiniteQuery({
@@ -642,7 +658,7 @@ export default function InboxPage() {
 
 		setSelectedConversationId(preferredId);
 		if (preferredId) {
-			navigate(buildInboxPath(queue, preferredId), { replace: true });
+			navigate(buildInboxPath(queue, preferredId, readFilter), { replace: true });
 		}
 	}, [
 		visibleContacts,
@@ -1196,6 +1212,11 @@ export default function InboxPage() {
 		moveQueueMutation.mutate(nextQueue);
 	}
 
+	function handlePaymentVerified() {
+		if (!selectedConversationId || moveQueueMutation.isPending) return;
+		moveQueueMutation.mutate('HUMAN');
+	}
+
 	function handleMarkUnread() {
 		if (!selectedConversationId || markConversationUnreadMutation.isPending) return;
 		markConversationUnreadMutation.mutate(selectedConversationId);
@@ -1278,7 +1299,7 @@ export default function InboxPage() {
 						<button
 							key={item.key}
 							type="button"
-							onClick={() => setReadFilter(item.key)}
+							onClick={() => selectReadFilter(item.key)}
 							className={`inbox-read-filter-btn ${
 								readFilter === item.key ? 'inbox-read-filter-btn--active' : ''
 							}`}
@@ -1477,6 +1498,15 @@ export default function InboxPage() {
 								>
 									Comprobantes
 								</ActionButton>
+
+								{conversation?.queue === 'PAYMENT_REVIEW' ? (
+									<ActionButton
+										disabled={moveQueueMutation.isPending}
+										onClick={handlePaymentVerified}
+									>
+										Comprobante verificado
+									</ActionButton>
+								) : null}
 
 								<div className="inbox-actions-spacer" />
 

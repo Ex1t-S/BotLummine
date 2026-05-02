@@ -142,16 +142,6 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 		});
 	}
 
-	if (metrics.human > 0) {
-		issues.push({
-			type: 'inbox',
-			severity: 'warning',
-			label: `${metrics.human} conversaciones requieren humano`,
-			action: 'Responder',
-			href: '/inbox/atencion-humana',
-		});
-	}
-
 	if (metrics.paymentReview > 0) {
 		issues.push({
 			type: 'payment',
@@ -197,16 +187,6 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 			label: 'Ultima sync de clientes con error',
 			action: 'Revisar clientes',
 			href: '/customers',
-		});
-	}
-
-	if (metrics.failedCampaigns > 0) {
-		issues.push({
-			type: 'campaigns',
-			severity: 'warning',
-			label: `${metrics.failedCampaigns} campanas con error`,
-			action: 'Ver campanas',
-			href: '/campaigns/tracking',
 		});
 	}
 
