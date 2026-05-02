@@ -80,6 +80,20 @@ function isDocumentVisible() {
 	return !document.hidden;
 }
 
+function isCompactInboxViewport() {
+	if (typeof window === 'undefined') return false;
+	return window.matchMedia('(max-width: 900px)').matches;
+}
+
+function getRequestErrorMessage(error, fallback = 'No se pudo completar la accion.') {
+	return (
+		error?.response?.data?.error ||
+		error?.response?.data?.message ||
+		error?.message ||
+		fallback
+	);
+}
+
 function toTimestamp(value) {
 	if (!value) return 0;
 	const time = new Date(value).getTime();
@@ -513,6 +527,8 @@ export default function InboxPage() {
 	const [olderMessages, setOlderMessages] = useState([]);
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
+	const [composerError, setComposerError] = useState('');
+	const [actionFeedback, setActionFeedback] = useState('');
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	useEffect(() => {
@@ -540,10 +556,14 @@ export default function InboxPage() {
 	function selectConversation(conversationId) {
 		setSelectedConversationId(conversationId);
 		navigate(buildInboxPath(queue, conversationId, readFilter), { replace: false });
+		if (isCompactInboxViewport()) {
+			setShowConversationSidebar(false);
+		}
 	}
 
 	function clearSelectedConversation() {
 		setSelectedConversationId(null);
+		setShowConversationSidebar(true);
 		navigate(buildInboxPath(queue, '', readFilter), { replace: true });
 	}
 
@@ -1013,6 +1033,8 @@ export default function InboxPage() {
 	useEffect(() => {
 		setOlderMessages([]);
 		setIsLoadingOlderMessages(false);
+		setComposerError('');
+		setActionFeedback('');
 	}, [selectedConversationId]);
 
 	useEffect(() => {
@@ -1047,6 +1069,16 @@ export default function InboxPage() {
 		el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
 	}, [messageText]);
 
+	useEffect(() => {
+		if (!actionFeedback) return undefined;
+
+		const timeout = window.setTimeout(() => {
+			setActionFeedback('');
+		}, 3200);
+
+		return () => window.clearTimeout(timeout);
+	}, [actionFeedback]);
+
 	const invalidateInboxAndConversation = async (
 		conversationId = selectedConversationId
 	) => {
@@ -1062,37 +1094,45 @@ export default function InboxPage() {
 	};
 
 	const sendMessageMutation = useMutation({
-		mutationFn: async () => {
-			const body = messageText.trim();
-			if (!selectedConversationId || (!body && !selectedFile)) return;
+		mutationFn: async ({ conversationId, body, file }) => {
+			if (!conversationId || (!body && !file)) return null;
 
-			if (selectedFile) {
+			if (file) {
 				const formData = new FormData();
 				formData.append('body', body);
-				formData.append('file', selectedFile);
+				formData.append('file', file);
 
 				await api.post(
-					`/dashboard/conversations/${selectedConversationId}/messages`,
+					`/dashboard/conversations/${conversationId}/messages`,
 					formData
 				);
-				return;
+				return { conversationId, body, fileName: file.name || '' };
 			}
 
 			await api.post(
-				`/dashboard/conversations/${selectedConversationId}/messages`,
+				`/dashboard/conversations/${conversationId}/messages`,
 				{ body }
 			);
+			return { conversationId, body, fileName: '' };
 		},
-		onSuccess: async () => {
-			setMessageText('');
-			setSelectedFile(null);
-			if (fileInputRef.current) fileInputRef.current.value = '';
+		onSuccess: async (result) => {
+			if (result?.conversationId === selectedConversationId) {
+				setMessageText((current) => (
+					current.trim() === result.body ? '' : current
+				));
+				setSelectedFile((current) => (
+					!current || current.name === result.fileName ? null : current
+				));
+				if (fileInputRef.current) fileInputRef.current.value = '';
+			}
+			setComposerError('');
 			setShowEmojiPicker(false);
 			shouldStickToBottomRef.current = true;
-			await invalidateInboxAndConversation();
+			await invalidateInboxAndConversation(result?.conversationId || selectedConversationId);
 		},
 		onError: (error) => {
 			console.error(error);
+			setComposerError(getRequestErrorMessage(error, 'No se pudo enviar el mensaje. Revisa la conexion e intenta de nuevo.'));
 		},
 	});
 
@@ -1109,6 +1149,7 @@ export default function InboxPage() {
 		},
 		onSuccess: async (result) => {
 			if (!result) return;
+			setActionFeedback('Bandeja actualizada.');
 
 			await queryClient.invalidateQueries({
 				queryKey: ['dashboard', 'inbox'],
@@ -1124,6 +1165,7 @@ export default function InboxPage() {
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedback(getRequestErrorMessage(error, 'No se pudo cambiar la bandeja.'));
 		},
 	});
 
@@ -1135,10 +1177,12 @@ export default function InboxPage() {
 			);
 		},
 		onSuccess: async () => {
+			setActionFeedback('Contexto de IA reiniciado.');
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedback(getRequestErrorMessage(error, 'No se pudo reiniciar la IA.'));
 		},
 	});
 
@@ -1148,10 +1192,12 @@ export default function InboxPage() {
 			await api.delete(`/dashboard/conversations/${selectedConversationId}/history`);
 		},
 		onSuccess: async () => {
+			setActionFeedback('Historial borrado.');
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedback(getRequestErrorMessage(error, 'No se pudo borrar el historial.'));
 		},
 	});
 
@@ -1232,12 +1278,19 @@ export default function InboxPage() {
 
 	function handleSubmit(event) {
 		event.preventDefault();
-		if (!messageText.trim() && !selectedFile) return;
-		sendMessageMutation.mutate();
+		const body = messageText.trim();
+		if (!selectedConversationId || (!body && !selectedFile)) return;
+		setComposerError('');
+		sendMessageMutation.mutate({
+			conversationId: selectedConversationId,
+			body,
+			file: selectedFile,
+		});
 	}
 
 	function handleSelectFile(event) {
 		const file = event.target.files?.[0] || null;
+		setComposerError('');
 		setSelectedFile(file);
 	}
 
@@ -1270,8 +1323,14 @@ export default function InboxPage() {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 
-			if ((messageText.trim() || selectedFile) && !sendMessageMutation.isPending) {
-				sendMessageMutation.mutate();
+			const body = messageText.trim();
+			if (selectedConversationId && (body || selectedFile) && !sendMessageMutation.isPending) {
+				setComposerError('');
+				sendMessageMutation.mutate({
+					conversationId: selectedConversationId,
+					body,
+					file: selectedFile,
+				});
 			}
 		}
 	}
@@ -1282,6 +1341,14 @@ export default function InboxPage() {
 	]
 		.filter(Boolean)
 		.join(' ');
+	const currentQueue = conversation?.queue || activeContact?.queue || queue;
+	const currentQueueLabel =
+		QUEUES.find((item) => item.key === currentQueue)?.label || currentQueue;
+	const isBusyWithConversationAction =
+		moveQueueMutation.isPending ||
+		resetContextMutation.isPending ||
+		clearHistoryMutation.isPending ||
+		markConversationUnreadMutation.isPending;
 
 	return (
 		<div className={inboxPageClassName}>
@@ -1471,7 +1538,15 @@ export default function InboxPage() {
 						<div className="inbox-chat-main">
 						<div className="inbox-chat-header">
 							<div className="inbox-chat-header-top">
-								<div>
+								<button
+									type="button"
+									className="inbox-back-to-list-btn"
+									onClick={() => setShowConversationSidebar(true)}
+								>
+									Conversaciones
+								</button>
+
+								<div className="inbox-chat-identity">
 									<div className="inbox-chat-title">
 										{conversation?.contact?.name ||
 											activeContact?.displayName ||
@@ -1486,7 +1561,7 @@ export default function InboxPage() {
 
 								<div className="inbox-badges">
 									<span className="inbox-badge inbox-badge--neutral">
-										{conversation?.queue || activeContact?.queue || queue}
+										{currentQueueLabel}
 									</span>
 
 									<span
@@ -1589,6 +1664,16 @@ export default function InboxPage() {
 									</>
 								) : null}
 							</div>
+
+							{actionFeedback || isBusyWithConversationAction ? (
+								<div
+									className={`inbox-action-feedback ${
+										isBusyWithConversationAction ? 'inbox-action-feedback--busy' : ''
+									}`}
+								>
+									{isBusyWithConversationAction ? 'Procesando accion...' : actionFeedback}
+								</div>
+							) : null}
 						</div>
 
 						<div
@@ -1628,6 +1713,16 @@ export default function InboxPage() {
 						</div>
 
 						<div className="inbox-composer-shell">
+							{composerError ? (
+								<div className="inbox-composer-feedback inbox-composer-feedback--error">
+									{composerError}
+								</div>
+							) : sendMessageMutation.isPending ? (
+								<div className="inbox-composer-feedback inbox-composer-feedback--sending">
+									Enviando mensaje...
+								</div>
+							) : null}
+
 							{selectedFile ? (
 								<div className="inbox-selected-file">
 									<div className="inbox-selected-file-main">
@@ -1703,11 +1798,13 @@ export default function InboxPage() {
 								<textarea
 									ref={textareaRef}
 									value={messageText}
-									onChange={(event) => setMessageText(event.target.value)}
+									onChange={(event) => {
+										setComposerError('');
+										setMessageText(event.target.value);
+									}}
 									onKeyDown={handleComposerKeyDown}
 									placeholder="Escribe un mensaje"
 									rows={1}
-									disabled={sendMessageMutation.isPending}
 									className="inbox-textarea"
 								/>
 
