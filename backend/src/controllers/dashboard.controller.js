@@ -13,6 +13,18 @@ import {
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
 
+const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
+
+const VISIBLE_INBOX_CONTACT_WHERE = {
+	NOT: {
+		contact: {
+			name: {
+				startsWith: AI_LAB_CONTACT_PREFIX,
+			},
+		},
+	},
+};
+
 function formatTime(value) {
 	if (!value) return '';
 
@@ -380,18 +392,10 @@ function buildMergedConversationState(primaryState = null, extraStates = []) {
 }
 
 async function deduplicateInboxContacts(workspaceId) {
-	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
-
 	const conversations = await prisma.conversation.findMany({
 		where: {
 			workspaceId,
-			NOT: {
-				contact: {
-					name: {
-						startsWith: AI_LAB_CONTACT_PREFIX,
-					},
-				},
-			},
+			...VISIBLE_INBOX_CONTACT_WHERE,
 		},
 		select: {
 			id: true,
@@ -679,7 +683,6 @@ async function fetchInboxData({
 	readFilter = 'ALL',
 	attentionFilter = 'ALL',
 } = {}) {
-	const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 	const safeLimit = Math.min(100, Math.max(20, Number(limit) || 60));
 	const safeOffset = Math.max(0, Number(offset) || 0);
 	const searchTerm = String(q || '').trim();
@@ -715,13 +718,7 @@ async function fetchInboxData({
 					],
 			  }
 			: {}),
-		NOT: {
-			contact: {
-				name: {
-					startsWith: AI_LAB_CONTACT_PREFIX,
-				},
-			},
-		},
+		...VISIBLE_INBOX_CONTACT_WHERE,
 	};
 
 	const conversations = await prisma.conversation.findMany({
@@ -790,13 +787,7 @@ async function fetchInboxData({
 	const countsWhere = {
 		workspaceId,
 		archivedAt: null,
-		NOT: {
-			contact: {
-				name: {
-					startsWith: AI_LAB_CONTACT_PREFIX,
-				},
-			},
-		},
+		...VISIBLE_INBOX_CONTACT_WHERE,
 	};
 
 	const [allCount, autoCount, humanCount, paymentCount] = await Promise.all([
@@ -1012,18 +1003,27 @@ export async function getOperationSummary(req, res, next) {
 		] = await Promise.all([
 			prisma.conversation.groupBy({
 				by: ['workspaceId', 'queue'],
-				where: { ...scopedWhere, archivedAt: null },
+				where: { ...scopedWhere, ...VISIBLE_INBOX_CONTACT_WHERE, archivedAt: null },
 				_count: { _all: true },
 			}),
 			prisma.conversation.groupBy({
 				by: ['workspaceId'],
-				where: { ...scopedWhere, archivedAt: null, unreadCount: { gt: 0 } },
+				where: {
+					...scopedWhere,
+					...VISIBLE_INBOX_CONTACT_WHERE,
+					archivedAt: null,
+					unreadCount: { gt: 0 },
+				},
 				_count: { _all: true },
 				_sum: { unreadCount: true },
 			}),
 			prisma.conversation.groupBy({
 				by: ['workspaceId'],
-				where: { ...scopedWhere, lastMessageAt: { gte: activitySince } },
+				where: {
+					...scopedWhere,
+					...VISIBLE_INBOX_CONTACT_WHERE,
+					lastMessageAt: { gte: activitySince },
+				},
 				_count: { _all: true },
 			}),
 			prisma.message.groupBy({
