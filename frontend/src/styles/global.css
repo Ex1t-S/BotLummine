@@ -782,3 +782,332 @@ body {
 		padding-right: 16px;
 	}
 }
+
+/* =========================================================
+   DESIGN SYSTEM REFRESH
+   - Tokens y componentes visuales compartidos para el panel
+========================================================= */
+
+:root {
+	--ui-bg: #f5f7fb;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f8fafc;
+	--ui-surface-strong: #eef2f7;
+	--ui-border: #dbe4ef;
+	--ui-border-soft: rgba(148, 163, 184, 0.22);
+	--ui-text: #101828;
+	--ui-muted: #667085;
+	--ui-subtle: #94a3b8;
+	--ui-primary: #0f766e;
+	--ui-primary-strong: #115e59;
+	--ui-primary-soft: #ccfbf1;
+	--ui-accent: #2563eb;
+	--ui-danger: #dc2626;
+	--ui-warning: #b45309;
+	--ui-success: #15803d;
+	--ui-radius-xs: 8px;
+	--ui-radius-sm: 10px;
+	--ui-radius-md: 12px;
+	--ui-radius-lg: 16px;
+	--ui-radius-xl: 20px;
+	--ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+	--ui-shadow-md: 0 12px 28px rgba(15, 23, 42, 0.08);
+	--ui-shadow-lg: 0 24px 56px rgba(15, 23, 42, 0.12);
+	--ui-focus: 0 0 0 4px rgba(15, 118, 110, 0.16);
+}
+
+html,
+body,
+#root {
+	background:
+		radial-gradient(circle at top left, rgba(37, 99, 235, 0.07), transparent 30%),
+		linear-gradient(180deg, #f8fafc 0%, var(--ui-bg) 100%);
+	color: var(--ui-text);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+body {
+	overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+	-webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: none;
+	box-shadow: var(--ui-focus);
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+	cursor: not-allowed;
+	opacity: 0.58;
+}
+
+::selection {
+	background: rgba(15, 118, 110, 0.18);
+	color: var(--ui-text);
+}
+
+.page-card,
+.card,
+.tenant-admin-panel,
+.customers-hero-card,
+.customers-sync-panel,
+.customers-filters-card,
+.customers-list-card,
+.customers-stat-card,
+.abandoned-card,
+.stat-box,
+.catalog-card,
+.inbox-sidebar,
+.inbox-chat-panel,
+.campaign-shell-card,
+.campaign-custom-audience-card,
+.campaign-schedule-card,
+.wam-card,
+.ai-lab-card {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: rgba(255, 255, 255, 0.94);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.page-card:hover,
+.catalog-card:hover,
+.customers-stat-card:hover,
+.abandoned-card:hover,
+.workspace-analytics-card:hover {
+	border-color: #c8d6e6;
+	box-shadow: var(--ui-shadow-md);
+}
+
+.page-header,
+.tenant-admin-header,
+.customers-hero-card,
+.campaigns-hero,
+.abandoned-carts-page .page-header {
+	border-radius: var(--ui-radius-lg);
+	background:
+		linear-gradient(135deg, rgba(15, 118, 110, 0.06), transparent 45%),
+		var(--ui-surface);
+	border: 1px solid var(--ui-border);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.page-header h1,
+.page-header h2,
+.tenant-admin-header h2,
+.customers-hero-copy h1,
+.campaigns-hero h2,
+.abandoned-carts-page .page-header h2 {
+	color: var(--ui-text);
+	letter-spacing: 0;
+}
+
+.muted-text,
+.page-header p,
+.tenant-admin-header p,
+.customers-hero-copy p,
+.customers-list-topbar p,
+.customers-sync-top p {
+	color: var(--ui-muted);
+}
+
+.inline-actions button,
+.catalog-search-form button,
+.page-header button,
+.primary-action-btn,
+.customers-apply-btn,
+.tenant-admin-grid button,
+.tenant-admin-actions button,
+.filters-form button,
+.button.primary {
+	min-height: 42px;
+	border: 1px solid transparent;
+	border-radius: var(--ui-radius-md);
+	background: linear-gradient(180deg, var(--ui-primary), var(--ui-primary-strong));
+	color: #ffffff;
+	font-weight: 800;
+	box-shadow: 0 10px 20px rgba(15, 118, 110, 0.16);
+	transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.inline-actions button:hover:not(:disabled),
+.catalog-search-form button:hover:not(:disabled),
+.page-header button:hover:not(:disabled),
+.primary-action-btn:hover:not(:disabled),
+.customers-apply-btn:hover:not(:disabled),
+.tenant-admin-grid button:hover:not(:disabled),
+.tenant-admin-actions button:hover:not(:disabled),
+.filters-form button:hover:not(:disabled),
+.button.primary:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 14px 26px rgba(15, 118, 110, 0.22);
+}
+
+.secondary-link-btn,
+.tenant-admin-grid button[type="button"],
+.toolbar-group button,
+.abandoned-carts-page .inline-actions button,
+.catalog-sync-controls select,
+.pagination-btn,
+.pagination-page-btn,
+.button.ghost {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-md);
+	background: #ffffff;
+	color: var(--ui-text);
+	font-weight: 800;
+	box-shadow: var(--ui-shadow-sm);
+	transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.secondary-link-btn:hover:not(:disabled),
+.tenant-admin-grid button[type="button"]:hover:not(:disabled),
+.toolbar-group button:hover:not(:disabled),
+.abandoned-carts-page .inline-actions button:hover:not(:disabled),
+.pagination-btn:hover:not(:disabled),
+.pagination-page-btn:hover:not(:disabled),
+.button.ghost:hover:not(:disabled) {
+	transform: translateY(-1px);
+	border-color: #b8c7d9;
+	background: var(--ui-surface-soft);
+}
+
+input,
+select,
+textarea,
+.admin-field input,
+.admin-field select,
+.admin-field textarea,
+.catalog-search-form input,
+.filters-form input,
+.filters-form select,
+.inbox-search-input,
+.chat-form textarea {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-md);
+	background: #ffffff;
+	color: var(--ui-text);
+	transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: var(--ui-subtle);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus,
+.catalog-search-form input:focus,
+.filters-form input:focus,
+.filters-form select:focus,
+.inbox-search-input:focus,
+.chat-form textarea:focus {
+	border-color: rgba(15, 118, 110, 0.52);
+	background: #ffffff;
+	box-shadow: var(--ui-focus);
+	outline: none;
+}
+
+.tenant-admin-pill,
+.queue-pill,
+.campaign-badge,
+.campaign-schedule-status,
+.ai-lab-chip {
+	border-radius: 999px;
+	border: 1px solid var(--ui-border-soft);
+	background: var(--ui-surface-soft);
+	color: #344054;
+	font-weight: 850;
+}
+
+.tenant-admin-alert.success,
+.customers-feedback--success,
+.sync-summary-banner {
+	border: 1px solid #bbf7d0;
+	background: #f0fdf4;
+	color: #166534;
+}
+
+.tenant-admin-alert.error,
+.customers-feedback--error,
+.campaign-schedule-error {
+	border: 1px solid #fecaca;
+	background: #fef2f2;
+	color: #991b1b;
+}
+
+.empty-state,
+.tenant-admin-empty,
+.inbox-empty,
+.abandoned-empty-state,
+.campaign-custom-audience-empty {
+	border: 1px dashed #cbd5e1;
+	border-radius: var(--ui-radius-lg);
+	background: rgba(255, 255, 255, 0.78);
+	color: var(--ui-muted);
+}
+
+.tenant-admin-table-wrap,
+.campaign-recipient-preview-table,
+.customer-table-scroll {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: #ffffff;
+	overflow: auto;
+}
+
+@media (max-width: 720px) {
+	.page-card,
+	.card,
+	.tenant-admin-panel,
+	.customers-hero-card,
+	.customers-sync-panel,
+	.customers-filters-card,
+	.customers-list-card,
+	.abandoned-card,
+	.catalog-card {
+		border-radius: var(--ui-radius-md);
+	}
+
+	.inline-actions,
+	.page-header,
+	.customers-hero-actions,
+	.tenant-admin-actions {
+		align-items: stretch;
+	}
+
+	.inline-actions button,
+	.page-header button,
+	.primary-action-btn,
+	.secondary-link-btn,
+	.customers-visibility-btn {
+		width: 100%;
+		justify-content: center;
+	}
+}
