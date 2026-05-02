@@ -612,11 +612,22 @@ export async function getPlatformDiagnostics(req, res, next) {
 
 export async function getWorkspaceAnalytics(req, res, next) {
 	try {
-		assertPlatformAdmin(req);
+		const platformAdmin = isPlatformAdmin(req.user);
+		const requestedWorkspaceId = normalizeString(req.query?.workspaceId);
+		const selectedWorkspaceId = platformAdmin
+			? requestedWorkspaceId
+			: normalizeString(req.user?.workspaceId);
 
-		const selectedWorkspaceId = normalizeString(req.query?.workspaceId);
+		if (!platformAdmin && !selectedWorkspaceId) {
+			return res.status(400).json({
+				ok: false,
+				error: 'No se pudo resolver el workspace de la solicitud.',
+			});
+		}
+
 		const activitySince = subtractDays(ANALYTICS_ACTIVITY_DAYS);
 		const workspaces = await prisma.workspace.findMany({
+			where: platformAdmin ? undefined : { id: selectedWorkspaceId },
 			select: {
 				id: true,
 				name: true,

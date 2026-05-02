@@ -23,7 +23,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/diagnostics', requirePlatformAdmin, getPlatformDiagnostics);
-router.get('/analytics/workspaces', requirePlatformAdmin, getWorkspaceAnalytics);
+router.get('/analytics/workspaces', requireAdmin, getWorkspaceAnalytics);
 router.get('/workspaces', requirePlatformAdmin, listWorkspaces);
 router.post('/workspaces', requirePlatformAdmin, createWorkspace);
 router.get('/workspaces/:workspaceId', requireAdmin, getWorkspace);

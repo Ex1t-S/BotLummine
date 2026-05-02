@@ -78,6 +78,7 @@ const platformTabs = [
 const brandAdminTabs = [
 	{ key: 'brand', label: 'Marca' },
 	{ key: 'content', label: 'Contenido' },
+	{ key: 'analytics', label: 'Estadisticas' },
 	{ key: 'users', label: 'Usuarios' }
 ];
 
@@ -427,7 +428,6 @@ export default function AdminPage() {
 	}
 
 	async function loadAnalytics(workspaceId = selectedWorkspaceId) {
-		if (!platformAdmin) return;
 		setAnalyticsLoading(true);
 		try {
 			const res = await api.get('/admin/analytics/workspaces', {
@@ -470,9 +470,8 @@ export default function AdminPage() {
 	}, [selectedWorkspaceId]);
 
 	useEffect(() => {
-		if (!platformAdmin) return;
 		loadAnalytics(selectedWorkspaceId).catch((err) => setError(err.response?.data?.error || err.message));
-	}, [platformAdmin, selectedWorkspaceId]);
+	}, [selectedWorkspaceId]);
 
 	useEffect(() => {
 		if (workspace) selectCommerceConnection(workspace, commerceProvider);
@@ -911,12 +910,14 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{platformAdmin && activeTab === 'analytics' ? (
+				{activeTab === 'analytics' ? (
 					<section className="tenant-admin-panel tenant-admin-panel--analytics">
 						<div className="tenant-admin-panel-heading">
 							<div>
-								<h3>Estadisticas multi-marca</h3>
-								<p>Resumen visual por marca con actividad de WhatsApp, ventas, campanas y recuperacion.</p>
+								<h3>{platformAdmin ? 'Estadisticas multi-marca' : 'Estadisticas de marca'}</h3>
+								<p>{platformAdmin
+									? 'Resumen visual por marca con actividad de WhatsApp, ventas, campanas y recuperacion.'
+									: 'Resumen visual de WhatsApp, ventas, campanas y recuperacion de esta marca.'}</p>
 							</div>
 							{analytics?.activityWindowDays ? (
 								<span>Ultimos {formatNumber(analytics.activityWindowDays)} dias</span>
@@ -951,7 +952,7 @@ export default function AdminPage() {
 					</section>
 				) : null}
 
-				{platformAdmin && activeTab === 'analytics' && analytics?.detail ? (
+				{activeTab === 'analytics' && analytics?.detail ? (
 					<section className="tenant-admin-panel">
 						<h3>Detalle de marca</h3>
 						<div className="tenant-admin-analytics-grid">
