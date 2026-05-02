@@ -170,7 +170,7 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 			severity: 'info',
 			label: `${metrics.unreadMessages} mensajes no leidos`,
 			action: 'Ver inbox',
-			href: '/inbox/automatico',
+			href: '/inbox/todos?read=UNREAD',
 		});
 	}
 
