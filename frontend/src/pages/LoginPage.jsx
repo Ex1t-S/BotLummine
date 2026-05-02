@@ -1,8 +1,36 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
 import './LoginPage.css';
+
+const pricingPlans = [
+	{
+		name: 'Basico',
+		price: 'A definir',
+		description: 'Para ordenar la atencion diaria y centralizar clientes desde WhatsApp.',
+		features: [
+			'Inbox de WhatsApp',
+			'CRM de clientes',
+			'Respuestas asistidas',
+			'Catalogo conectado',
+			'Reportes basicos',
+		],
+	},
+	{
+		name: 'Avanzado',
+		price: 'A definir',
+		description: 'Para crecer con automatizaciones, campanas y medicion comercial.',
+		features: [
+			'Todo lo del plan Basico',
+			'Campanas por WhatsApp API',
+			'Segmentacion de audiencias',
+			'Recuperacion de carritos',
+			'Metricas avanzadas y atribucion',
+			'Soporte prioritario',
+		],
+	},
+];
 
 function resolveRedirectPath(user, requestedPath = '') {
 	if (requestedPath && canAccessRoute(user?.role, requestedPath)) {
@@ -16,6 +44,7 @@ export default function LoginPage() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { user, login, loading } = useAuth();
+	const publicPath = location.pathname;
 
 	const [form, setForm] = useState({
 		email: '',
@@ -52,112 +81,176 @@ export default function LoginPage() {
 
 	return (
 		<div className="login-page">
+			<div className="login-orb login-orb--one" aria-hidden="true" />
+			<div className="login-orb login-orb--two" aria-hidden="true" />
 			<div className="login-grid" aria-hidden="true" />
+			<div className="login-signal-field" aria-hidden="true">
+				<span />
+				<span />
+				<span />
+				<span />
+				<span />
+				<span />
+				<span />
+				<span />
+			</div>
+
+			<header className="public-nav">
+				<Link className="public-nav__brand" to="/inicio" aria-label="Ir a inicio">
+					<span className="login-brand-chip__dot" />
+					Lummine Commerce AI
+				</Link>
+				<nav className="public-nav__links" aria-label="Navegacion publica">
+					<Link className={publicPath === '/inicio' ? 'active' : ''} to="/inicio">
+						Inicio
+					</Link>
+					<Link className={publicPath === '/contacto' ? 'active' : ''} to="/contacto">
+						Contacto
+					</Link>
+					<Link className={publicPath === '/precios' ? 'active' : ''} to="/precios">
+						Precios
+					</Link>
+				</nav>
+			</header>
 
 			<main className="login-shell">
-				<section className="login-story" aria-label="Resumen de la plataforma">
-					<div className="login-brand">
-						<span className="login-brand__mark" aria-hidden="true">AI</span>
-						<div>
-							<strong>Commerce AI</strong>
-							<span>Acceso multi-marca</span>
-						</div>
-					</div>
-
-					<div>
-						<p className="login-eyebrow">Panel operativo multi-marca</p>
-						<h1>Gestiona WhatsApp, ventas y clientes de cada marca.</h1>
+				{publicPath === '/contacto' ? (
+					<section className="public-section public-section--single" aria-labelledby="contact-title">
+						<p className="login-eyebrow">Contacto</p>
+						<h1 id="contact-title">Hablemos de tu operacion comercial.</h1>
 						<p className="login-lead">
-							Ingresá con tu usuario y accedé al workspace correspondiente para operar inbox, campañas, catálogo y automatizaciones.
+							Dejanos tus datos o escribinos por los canales principales para evaluar como conectar WhatsApp,
+							ventas y campanas en tu marca.
 						</p>
-					</div>
 
-					<div className="login-metrics" aria-label="Capacidades principales">
-						<div>
-							<strong>24/7</strong>
-							<span>Asistencia IA</span>
+						<div className="contact-grid">
+							<article className="contact-card">
+								<span>Email</span>
+								<strong>contacto@tumarca.com</strong>
+							</article>
+							<article className="contact-card">
+								<span>Telefono</span>
+								<strong>+54 9 11 0000-0000</strong>
+							</article>
+							<article className="contact-card">
+								<span>WhatsApp</span>
+								<strong>+54 9 11 0000-0000</strong>
+							</article>
 						</div>
-						<div>
-							<strong>Multi</strong>
-							<span>Marca</span>
-						</div>
-						<div>
-							<strong>Live</strong>
-							<span>Tracking</span>
-						</div>
-					</div>
+					</section>
+				) : null}
 
-					<div className="login-flow-card">
-						<div className="login-flow-card__header">
-							<span>Estado del ecosistema</span>
-							<strong>Sincronizado</strong>
+				{publicPath === '/precios' ? (
+					<section className="public-section public-section--single" aria-labelledby="pricing-title">
+						<p className="login-eyebrow">Precios</p>
+						<h1 id="pricing-title">Planes para operar y crecer con WhatsApp.</h1>
+						<p className="login-lead">
+							El plan Basico ordena la atencion y el CRM. El Avanzado suma campanas, automatizacion y
+							medicion para escalar ventas.
+						</p>
+
+						<div className="pricing-board" aria-label="Comparacion de planes">
+							{pricingPlans.map((plan) => (
+								<article className="pricing-plan" key={plan.name}>
+									<div>
+										<h2>{plan.name}</h2>
+										<strong>{plan.price}</strong>
+										<p>{plan.description}</p>
+									</div>
+									<ul>
+										{plan.features.map((feature) => (
+											<li key={feature}>{feature}</li>
+										))}
+									</ul>
+								</article>
+							))}
 						</div>
-						<div className="login-flow-list">
-							<span>WhatsApp</span>
-							<span>Tiendanube</span>
-							<span>Campañas</span>
-						</div>
-					</div>
-				</section>
+					</section>
+				) : null}
 
-				<form className="login-card" onSubmit={handleSubmit}>
-					<div className="login-card__header">
-						<span className="login-card__kicker">Acceso seguro</span>
-						<h2>Ingresar al workspace</h2>
-						<p>La cuenta define a que marca y permisos accedes.</p>
-					</div>
+				{publicPath !== '/contacto' && publicPath !== '/precios' ? (
+					<>
+						<section className="login-story" aria-label="Resumen de la plataforma">
+							<div className="login-brand-chip">
+								<span className="login-brand-chip__dot" />
+								Lummine Commerce AI
+							</div>
 
-					<label className="login-field">
-						<span>Email</span>
-						<input
-							type="email"
-							autoComplete="email"
-							placeholder="usuario@empresa.com"
-							value={form.email}
-							onChange={(e) => setForm({ ...form, email: e.target.value })}
-							aria-invalid={Boolean(error)}
-							required
-						/>
-					</label>
+							<div>
+								<p className="login-eyebrow">Panel operativo</p>
+								<h1>Gestiona WhatsApp, ventas y campanas de marketing.</h1>
+							</div>
 
-					<label className="login-field">
-						<span>Contrasena</span>
-						<div className="login-password-control">
-							<input
-								type={showPassword ? 'text' : 'password'}
-								autoComplete="current-password"
-								placeholder="Tu contrasena"
-								value={form.password}
-								onChange={(e) => setForm({ ...form, password: e.target.value })}
-								aria-invalid={Boolean(error)}
-								required
-							/>
-							<button
-								type="button"
-								className="login-password-toggle"
-								onClick={() => setShowPassword((current) => !current)}
-								aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
-							>
-								{showPassword ? 'Ocultar' : 'Mostrar'}
+							<div className="login-metrics" aria-label="Capacidades principales">
+								<div>
+									<strong>24/7</strong>
+									<span>asistencia IA</span>
+								</div>
+								<div>
+									<strong>CRM</strong>
+									<span>clientes y seguimiento</span>
+								</div>
+								<div>
+									<strong>API</strong>
+									<span>campanas por WhatsApp</span>
+								</div>
+							</div>
+						</section>
+
+						<form className="login-card" onSubmit={handleSubmit}>
+							<div className="login-card__header">
+								<h2>Entra a tu workspace</h2>
+							</div>
+
+							<label className="login-field">
+								<span>Email</span>
+								<input
+									type="email"
+									autoComplete="email"
+									placeholder="usuario@empresa.com"
+									value={form.email}
+									onChange={(e) => setForm({ ...form, email: e.target.value })}
+									aria-invalid={Boolean(error)}
+									required
+								/>
+							</label>
+
+							<label className="login-field">
+								<span>Contrasena</span>
+								<div className="login-password-control">
+									<input
+										type={showPassword ? 'text' : 'password'}
+										autoComplete="current-password"
+										placeholder="Tu contrasena"
+										value={form.password}
+										onChange={(e) => setForm({ ...form, password: e.target.value })}
+										aria-invalid={Boolean(error)}
+										required
+									/>
+									<button
+										type="button"
+										className="login-password-toggle"
+										onClick={() => setShowPassword((current) => !current)}
+										aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+									>
+										{showPassword ? 'Ocultar' : 'Mostrar'}
+									</button>
+								</div>
+							</label>
+
+							{error ? (
+								<p className="login-error" role="alert">
+									{error}
+								</p>
+							) : null}
+
+							<button className="login-submit" type="submit" disabled={submitting || !form.email || !form.password}>
+								<span>{submitting ? 'Validando acceso...' : 'Ingresar al panel'}</span>
+								<i aria-hidden="true">-&gt;</i>
 							</button>
-						</div>
-					</label>
-
-					{error ? (
-						<p className="login-error" role="alert">
-							{error}
-						</p>
-					) : null}
-
-					<button className="login-submit" type="submit" disabled={submitting || !form.email || !form.password}>
-						<span>{submitting ? 'Validando acceso...' : 'Ingresar al panel'}</span>
-						<i aria-hidden="true">-&gt;</i>
-					</button>
-
-					<p className="login-footnote">
-						Sesion protegida para equipos autorizados.
-					</p>
-				</form>
+						</form>
+					</>
+				) : null}
 			</main>
 		</div>
 	);

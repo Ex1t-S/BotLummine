@@ -23,7 +23,7 @@ export default function DashboardLayout() {
 	async function handleLogout() {
 		try {
 			await logout();
-			navigate('/login', { replace: true });
+			navigate('/inicio', { replace: true });
 		} catch (error) {
 			console.error(error);
 		}
