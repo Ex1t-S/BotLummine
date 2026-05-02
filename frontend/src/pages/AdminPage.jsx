@@ -205,16 +205,45 @@ function getInitials(value = '') {
 	return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'M';
 }
 
-function getActivityBars(metrics = {}) {
-	const values = [
-		metrics.messages30dInbound,
-		metrics.messages30dOutbound,
-		metrics.readRecipientsCount,
-		metrics.ordersCount,
-		metrics.conversionCount,
-	].map((value) => Number(value || 0));
+function getActivityItems(metrics = {}) {
+	const items = [
+		{
+			key: 'inbound',
+			label: 'Entrada',
+			value: Number(metrics.messages30dInbound || 0),
+			help: 'Mensajes recibidos por WhatsApp en los ultimos 30 dias.',
+		},
+		{
+			key: 'outbound',
+			label: 'Salida',
+			value: Number(metrics.messages30dOutbound || 0),
+			help: 'Mensajes enviados por la marca en los ultimos 30 dias.',
+		},
+		{
+			key: 'read',
+			label: 'Leidos',
+			value: Number(metrics.readRecipientsCount || 0),
+			help: 'Destinatarios de campanas que llegaron a estado leido.',
+		},
+		{
+			key: 'orders',
+			label: 'Pedidos',
+			value: Number(metrics.ordersCount || 0),
+			help: 'Pedidos sincronizados desde el ecommerce de la marca.',
+		},
+		{
+			key: 'conversions',
+			label: 'Conv.',
+			value: Number(metrics.conversionCount || 0),
+			help: 'Ventas o senales de compra atribuidas a mensajes o campanas.',
+		},
+	];
+	const values = items.map((item) => item.value);
 	const max = Math.max(...values, 1);
-	return values.map((value) => Math.max(12, Math.round((value / max) * 100)));
+	return items.map((item) => ({
+		...item,
+		height: Math.max(12, Math.round((item.value / max) * 100)),
+	}));
 }
 
 function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
@@ -226,7 +255,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 	const conversionRate = sent ? (Number(metrics.conversionCount || 0) / sent) * 100 : 0;
 	const readWidth = clampPercent(metrics.readRate);
 	const deliveryWidth = clampPercent(metrics.deliveryRate);
-	const bars = getActivityBars(metrics);
+	const activityItems = getActivityItems(metrics);
 
 	return (
 		<button
@@ -252,7 +281,11 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 				<span className="workspace-card-status">{workspace.status || 'ACTIVE'}</span>
 			</div>
 
-			<div className="workspace-card-hero">
+			<div
+				className="workspace-card-hero metric-help"
+				data-help="Conversiones atribuidas dividido por mensajes enviados en campanas. Sirve para ver que tanto WhatsApp termina en venta o senal de compra."
+				title="Conversiones atribuidas / mensajes enviados en campanas."
+			>
 				<div>
 					<span>Conversion por WhatsApp</span>
 					<strong>{formatPercent(conversionRate)}</strong>
@@ -266,12 +299,20 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			</div>
 
 			<div className="workspace-card-progress">
-				<div>
+				<div
+					className="metric-help"
+					data-help="Porcentaje de mensajes de campana que Meta marco como entregados sobre el total enviado."
+					title="Mensajes entregados / mensajes enviados."
+				>
 					<span>Entregados</span>
 					<strong>{formatPercent(metrics.deliveryRate)}</strong>
 					<i><b style={{ width: `${deliveryWidth}%` }} /></i>
 				</div>
-				<div>
+				<div
+					className="metric-help"
+					data-help="Porcentaje de mensajes entregados que llegaron a estado leido."
+					title="Mensajes leidos / mensajes entregados."
+				>
 					<span>Leidos</span>
 					<strong>{formatPercent(metrics.readRate)}</strong>
 					<i><b style={{ width: `${readWidth}%` }} /></i>
@@ -280,11 +321,27 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 
 			<div className="workspace-card-body">
 				<div className="workspace-card-chart" aria-label="Actividad por marca">
-					{bars.map((height, index) => (
-						<span key={index} style={{ height: `${height}%` }} />
+					{activityItems.map((item) => (
+						<span
+							key={item.key}
+							className="metric-help"
+							style={{ height: `${item.height}%` }}
+							data-help={`${item.help} Total: ${formatNumber(item.value)}.`}
+							title={`${item.label}: ${formatNumber(item.value)}. ${item.help}`}
+							aria-label={`${item.label}: ${formatNumber(item.value)}`}
+						/>
 					))}
+					<div className="workspace-card-chart-labels" aria-hidden="true">
+						{activityItems.map((item) => (
+							<small key={item.key}>{item.label}</small>
+						))}
+					</div>
 				</div>
-				<div className="workspace-card-chat">
+				<div
+					className="workspace-card-chat metric-help"
+					data-help="Suma de mensajes entrantes y salientes de WhatsApp durante los ultimos 30 dias."
+					title="Mensajes WhatsApp de los ultimos 30 dias."
+				>
 					<span>WhatsApp 30d</span>
 					<strong>{formatNumber(Number(metrics.messages30dInbound || 0) + Number(metrics.messages30dOutbound || 0))}</strong>
 					<small>
@@ -294,19 +351,35 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			</div>
 
 			<div className="workspace-card-stats">
-				<div>
+				<div
+					className="metric-help"
+					data-help="Monto de ventas asociado a conversiones detectadas despues de mensajes o campanas."
+					title="Revenue atribuido a conversiones por WhatsApp."
+				>
 					<span>Ventas atribuidas</span>
 					<strong>{formatCurrency(metrics.attributedRevenue, metrics.attributedCurrency || metrics.currency)}</strong>
 				</div>
-				<div>
+				<div
+					className="metric-help"
+					data-help="Carritos abandonados que luego terminaron como recuperados."
+					title="Carritos con estado RECOVERED."
+				>
 					<span>Carritos rec.</span>
 					<strong>{formatNumber(metrics.recoveredCartsCount)}</strong>
 				</div>
-				<div>
+				<div
+					className="metric-help"
+					data-help="Costo estimado de mensajes facturables segun la variable WHATSAPP_ESTIMATED_MESSAGE_COST_USD."
+					title="Mensajes facturables por costo estimado configurado."
+				>
 					<span>Costo est.</span>
 					<strong>{formatUsd(metrics.estimatedCampaignCostUsd)}</strong>
 				</div>
-				<div>
+				<div
+					className="metric-help"
+					data-help="Mensajes pendientes de lectura interna en conversaciones abiertas."
+					title="Suma de mensajes no leidos en el inbox."
+				>
 					<span>No leidos</span>
 					<strong>{formatNumber(metrics.unreadMessagesCount)}</strong>
 				</div>

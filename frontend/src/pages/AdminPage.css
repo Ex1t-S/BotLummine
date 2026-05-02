@@ -646,6 +646,7 @@
 	min-height: 118px;
 	display: grid;
 	grid-template-columns: repeat(5, minmax(16px, 1fr));
+	grid-template-rows: minmax(76px, 1fr) auto;
 	align-items: end;
 	gap: 8px;
 	padding: 12px;
@@ -658,6 +659,8 @@
 }
 
 .workspace-card-chart span {
+	align-self: end;
+	width: 100%;
 	min-height: 12px;
 	border-radius: 7px 7px 3px 3px;
 	background: var(--brand-color);
@@ -670,6 +673,25 @@
 
 .workspace-card-chart span:nth-child(5) {
 	background: #0f172a;
+}
+
+.workspace-card-chart-labels {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 8px;
+	padding-top: 2px;
+}
+
+.workspace-card-chart-labels small {
+	overflow: hidden;
+	color: #64748b;
+	font-size: 10px;
+	font-weight: 900;
+	line-height: 1.1;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .workspace-card-chat {
@@ -713,6 +735,58 @@
 	font-size: 15px;
 	line-height: 1.1;
 	color: #0f172a;
+}
+
+.metric-help {
+	position: relative;
+}
+
+.metric-help::after {
+	content: attr(data-help);
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 10px);
+	z-index: 20;
+	width: min(260px, 78vw);
+	padding: 9px 10px;
+	border-radius: 8px;
+	background: #0f172a;
+	color: #ffffff;
+	box-shadow: 0 16px 36px rgba(15, 23, 42, 0.24);
+	font-size: 12px;
+	font-weight: 800;
+	line-height: 1.35;
+	text-transform: none;
+	white-space: normal;
+	opacity: 0;
+	pointer-events: none;
+	transform: translate(-50%, 4px);
+	transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.metric-help::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 4px);
+	z-index: 21;
+	width: 10px;
+	height: 10px;
+	background: #0f172a;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateX(-50%) rotate(45deg);
+	transition: opacity 0.14s ease;
+}
+
+.metric-help:hover::after,
+.metric-help:hover::before {
+	opacity: 1;
+	transform: translate(-50%, 0);
+}
+
+.metric-help:hover::before {
+	transform: translateX(-50%) rotate(45deg);
 }
 
 @media (max-width: 980px) {
