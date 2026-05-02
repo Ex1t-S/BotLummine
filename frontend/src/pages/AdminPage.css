@@ -961,3 +961,160 @@
 		width: 100%;
 	}
 }
+
+/* Professional polish */
+
+.tenant-admin-page {
+	gap: 12px;
+	color: var(--ui-text, #111827);
+}
+
+.tenant-admin-header {
+	padding: 16px 18px;
+	border-radius: 12px;
+	background: #ffffff;
+}
+
+.tenant-admin-header h2 {
+	font-size: clamp(20px, 1.8vw, 25px);
+	font-weight: 760;
+}
+
+.tenant-admin-tabs {
+	min-height: 44px;
+	padding: 4px;
+	border-radius: 10px;
+	background: #eef2f6;
+}
+
+.tenant-admin-tabs button {
+	min-height: 34px;
+	border-radius: 8px;
+	font-weight: 650;
+}
+
+.tenant-admin-tabs button.active {
+	background: #ffffff;
+	border-color: var(--ui-border, #d8dee8);
+	color: var(--ui-primary, #0d6b64);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+.tenant-admin-panel {
+	border-radius: 12px;
+	padding: 16px;
+	box-shadow: none;
+}
+
+.tenant-admin-panel--analytics {
+	background: #ffffff;
+}
+
+.tenant-admin-panel h3 {
+	font-size: 16px;
+	font-weight: 740;
+}
+
+.tenant-admin-grid {
+	gap: 12px;
+}
+
+.admin-field span {
+	color: var(--ui-muted, #5f6b7a);
+	font-weight: 700;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+	min-height: 40px;
+	border-radius: 8px;
+}
+
+.tenant-admin-user-row,
+.tenant-admin-list-row,
+.workspace-card-hero,
+.workspace-card-progress > div,
+.workspace-card-stats > div,
+.workspace-card-chart {
+	border-color: var(--ui-border, #d8dee8);
+	border-radius: 10px;
+	background: #ffffff;
+}
+
+.workspace-analytics-grid {
+	gap: 12px;
+}
+
+.workspace-analytics-card {
+	gap: 12px;
+	padding: 14px;
+	border-radius: 12px;
+	background: #ffffff;
+	box-shadow: none;
+}
+
+.workspace-analytics-card:hover,
+.workspace-analytics-card.is-selected {
+	transform: none;
+	box-shadow: 0 0 0 2px rgba(13, 107, 100, 0.18);
+}
+
+.workspace-card-logo {
+	width: 40px;
+	height: 40px;
+	border-radius: 8px;
+}
+
+.workspace-card-status {
+	background: var(--ui-primary-soft, #e6f5f2);
+	color: var(--ui-primary, #0d6b64);
+	font-weight: 700;
+}
+
+.workspace-card-hero {
+	padding: 12px;
+	background: #fbfcfe;
+}
+
+.workspace-card-hero strong {
+	font-size: 26px;
+	font-weight: 760;
+}
+
+.workspace-card-ring {
+	width: 72px;
+	height: 72px;
+	padding: 7px;
+}
+
+.workspace-card-body {
+	gap: 10px;
+}
+
+.workspace-card-chart {
+	background:
+		linear-gradient(180deg, transparent 31%, rgba(15, 23, 42, 0.08) 32%, transparent 33%),
+		linear-gradient(180deg, transparent 64%, rgba(15, 23, 42, 0.08) 65%, transparent 66%),
+		#ffffff;
+}
+
+.workspace-card-chat {
+	border: 1px solid #cce8df;
+	border-radius: 10px;
+	background: #effaf6;
+}
+
+.workspace-card-stats {
+	gap: 8px;
+}
+
+.workspace-card-stats strong {
+	font-size: 14px;
+	font-weight: 740;
+}
+
+.metric-help::after {
+	border-radius: 8px;
+	font-weight: 600;
+}

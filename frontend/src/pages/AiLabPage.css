@@ -518,3 +518,90 @@
 		overflow: auto;
 	}
 }
+
+/* Professional polish */
+
+.ai-lab-page {
+	gap: 14px;
+}
+
+.ai-lab-sidebar-card,
+.ai-lab-chat-card,
+.ai-lab-debug-card,
+.ai-lab-meta-box,
+.ai-lab-fixture-card,
+.ai-lab-debug-item,
+.ai-lab-inline-menu,
+.ai-lab-inline-menu__option {
+	border-radius: 12px;
+	border-color: var(--ui-border, #d8dee8);
+	box-shadow: none;
+}
+
+.ai-lab-sidebar-card,
+.ai-lab-debug-card {
+	padding: 16px;
+}
+
+.ai-lab-sidebar-header h1,
+.ai-lab-debug-header h2,
+.ai-lab-chat-header h2 {
+	font-size: clamp(19px, 1.8vw, 24px);
+	font-weight: 760;
+}
+
+.ai-lab-field {
+	font-weight: 650;
+}
+
+.ai-lab-field select,
+.ai-lab-chat-form textarea {
+	border-radius: 8px;
+	background: #ffffff;
+}
+
+.ai-lab-primary-btn,
+.ai-lab-secondary-btn,
+.ai-lab-chat-form button,
+.ai-lab-debug-toggles button {
+	border-radius: 8px;
+	box-shadow: none;
+	font-weight: 650;
+}
+
+.ai-lab-fixture-card {
+	background: #fbfcfe;
+}
+
+.ai-lab-fixture-card.active {
+	border-color: var(--ui-primary, #0d6b64);
+	background: #f4fbf9;
+}
+
+.ai-lab-chat-header,
+.ai-lab-chat-form,
+.ai-lab-inline-actions {
+	background: #ffffff;
+}
+
+.ai-lab-chat-body {
+	background: #f7f8fa;
+}
+
+.ai-lab-bubble {
+	border-radius: 12px;
+	box-shadow: none;
+}
+
+.ai-lab-bubble.assistant {
+	background: #e3f7e9;
+	border-color: #bde7c8;
+}
+
+.ai-lab-inline-menu {
+	background: #fbfcfe;
+}
+
+.ai-lab-code-block {
+	border-radius: 10px;
+}

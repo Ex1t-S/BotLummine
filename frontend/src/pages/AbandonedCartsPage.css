@@ -547,3 +547,76 @@
 		padding: 14px;
 	}
 }
+
+/* Professional polish */
+
+.abandoned-carts-page {
+	gap: 14px;
+}
+
+.abandoned-carts-page .page-header,
+.filters-form,
+.stat-box,
+.abandoned-card {
+	border-radius: 12px;
+	box-shadow: none;
+	background: #ffffff;
+}
+
+.abandoned-carts-page .page-header h2 {
+	font-size: clamp(21px, 2vw, 27px);
+	font-weight: 760;
+}
+
+.stat-box {
+	padding: 14px;
+	border-color: var(--ui-border, #d8dee8);
+}
+
+.stat-box strong {
+	font-size: 22px;
+	font-weight: 760;
+}
+
+.filters-form {
+	padding: 12px;
+}
+
+.abandoned-card {
+	padding: 14px;
+	border-color: var(--ui-border, #d8dee8);
+}
+
+.abandoned-card:hover {
+	transform: none;
+	border-color: var(--ui-border-strong, #c4ccd8);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.abandoned-avatar,
+.abandoned-meta-grid div,
+.abandoned-contact-note,
+.abandoned-message-box {
+	border-radius: 10px;
+}
+
+.abandoned-avatar {
+	background: #edf4ff;
+	color: #184a9b;
+	box-shadow: none;
+}
+
+.abandoned-head-copy h3 {
+	font-weight: 740;
+}
+
+.abandoned-products span {
+	border-radius: 999px;
+	background: #f2f6ff;
+	color: #184a9b;
+	border-color: #cfe1ff;
+}
+
+.pagination-row button {
+	border-radius: 8px;
+}

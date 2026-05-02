@@ -1136,3 +1136,155 @@
 		min-height: 460px;
 	}
 }
+
+/* Professional polish */
+
+.inbox-page {
+	gap: 14px;
+	background: transparent;
+}
+
+.inbox-sidebar,
+.inbox-chat-panel {
+	border-radius: 12px;
+	border-color: var(--ui-border, #d8dee8);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.inbox-sidebar {
+	padding: 12px;
+	background: #ffffff;
+}
+
+.inbox-section-title {
+	font-size: 16px;
+	font-weight: 740;
+}
+
+.inbox-section-subtle,
+.inbox-contact-phone,
+.inbox-contact-time,
+.inbox-chat-subtitle {
+	color: var(--ui-muted, #5f6b7a);
+}
+
+.inbox-queue-tabs,
+.inbox-read-filters {
+	padding: 4px;
+	border-radius: 10px;
+	background: #eef2f6;
+	border-color: var(--ui-border, #d8dee8);
+}
+
+.inbox-queue-tabs .inbox-action-btn,
+.inbox-read-filter-btn {
+	border-radius: 8px;
+	font-weight: 650;
+}
+
+.inbox-queue-tabs .inbox-action-btn--active,
+.inbox-read-filter-btn--active {
+	background: #ffffff;
+	color: var(--ui-primary, #0d6b64);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+.inbox-contact-card {
+	min-height: 84px;
+	border-radius: 10px;
+	border-color: var(--ui-border, #d8dee8);
+	box-shadow: none;
+}
+
+.inbox-contact-card:hover {
+	border-color: var(--ui-border-strong, #c4ccd8);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+	transform: none;
+}
+
+.inbox-contact-card--selected {
+	border-color: var(--ui-primary, #0d6b64);
+	background: #f4fbf9;
+	box-shadow: inset 3px 0 0 var(--ui-primary, #0d6b64);
+}
+
+.inbox-contact-card--selected::before {
+	display: none;
+}
+
+.inbox-contact-avatar {
+	width: 42px;
+	height: 42px;
+	border-radius: 10px;
+	box-shadow: none;
+}
+
+.inbox-contact-name {
+	font-size: 14px;
+	font-weight: 720;
+}
+
+.inbox-chat-panel {
+	background: #ffffff;
+}
+
+.inbox-chat-header {
+	padding: 14px 16px;
+	background: #ffffff;
+	backdrop-filter: none;
+}
+
+.inbox-chat-title {
+	font-size: 18px;
+	font-weight: 760;
+}
+
+.inbox-badge {
+	border-radius: 999px;
+	font-weight: 650;
+}
+
+.inbox-action-btn {
+	min-height: 36px;
+	border-radius: 8px;
+	font-weight: 650;
+}
+
+.inbox-messages,
+.inbox-chat-empty {
+	background: #f7f8fa;
+}
+
+.inbox-message-row {
+	margin-bottom: 8px;
+}
+
+.inbox-message-bubble {
+	border-radius: 12px;
+	box-shadow: none;
+}
+
+.inbox-message-bubble--outbound {
+	background: #e3f7e9;
+	border-color: #bde7c8;
+}
+
+.inbox-message-bubble--inbound {
+	background: #ffffff;
+	border-color: var(--ui-border, #d8dee8);
+}
+
+.inbox-composer-shell {
+	background: #ffffff;
+	border-top: 1px solid var(--ui-border, #d8dee8);
+}
+
+.inbox-composer {
+	border-radius: 10px;
+	box-shadow: none;
+}
+
+.inbox-emoji-trigger,
+.inbox-send-btn {
+	border-radius: 8px;
+}

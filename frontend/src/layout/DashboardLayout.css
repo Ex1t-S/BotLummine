@@ -252,3 +252,95 @@
 		font-size: 0.72rem;
 	}
 }
+
+/* Professional polish */
+
+.admin-shell {
+	background: var(--ui-bg, #f3f5f8);
+}
+
+.admin-sidebar {
+	background: #101828;
+	border-right: 1px solid rgba(255, 255, 255, 0.08);
+	padding: 16px 14px;
+}
+
+.admin-brand {
+	margin-bottom: 16px;
+}
+
+.admin-brand-mark--logo {
+	width: 42px;
+	height: 42px;
+	border-radius: 10px;
+	box-shadow: none;
+}
+
+.admin-brand-copy h1 {
+	font-size: 19px;
+	font-weight: 760;
+	line-height: 1.05;
+}
+
+.admin-brand-copy p {
+	font-size: 12px;
+	font-weight: 600;
+	color: #b8c2d2;
+}
+
+.admin-user-box {
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.07);
+	box-shadow: none;
+}
+
+.admin-menu {
+	gap: 4px;
+}
+
+.admin-menu-link {
+	border-radius: 8px;
+	padding: 10px 11px;
+	color: #d0d5dd;
+	font-size: 14px;
+	font-weight: 650;
+}
+
+.admin-menu-link:hover {
+	background: rgba(255, 255, 255, 0.07);
+	transform: none;
+}
+
+.admin-menu-link.active {
+	background: #263244;
+	border-color: rgba(255, 255, 255, 0.08);
+	box-shadow: none;
+	color: #ffffff;
+}
+
+.admin-content {
+	padding: 16px;
+}
+
+.logout-btn {
+	border-radius: 8px;
+	background: #263244;
+	box-shadow: none;
+	font-weight: 650;
+}
+
+.logout-btn:hover {
+	background: #344054;
+	transform: none;
+}
+
+@media (max-width: 900px) {
+	.admin-sidebar {
+		background: #101828;
+	}
+
+	.admin-menu-link {
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: rgba(255, 255, 255, 0.04);
+	}
+}

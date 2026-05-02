@@ -1111,3 +1111,336 @@ textarea:focus,
 		justify-content: center;
 	}
 }
+
+/* =========================================================
+   PROFESSIONAL UI FOUNDATION
+   - Capa final de sobriedad visual para todo el panel
+========================================================= */
+
+:root {
+	--ui-bg: #f3f5f8;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f8fafc;
+	--ui-surface-muted: #f1f5f9;
+	--ui-border: #d8dee8;
+	--ui-border-strong: #c4ccd8;
+	--ui-text: #111827;
+	--ui-heading: #0b1220;
+	--ui-muted: #5f6b7a;
+	--ui-subtle: #8a96a8;
+	--ui-primary: #0d6b64;
+	--ui-primary-strong: #09544f;
+	--ui-primary-soft: #e6f5f2;
+	--ui-accent: #1f5fbf;
+	--ui-danger: #b42318;
+	--ui-warning: #b54708;
+	--ui-success: #067647;
+	--ui-radius-xs: 6px;
+	--ui-radius-sm: 8px;
+	--ui-radius-md: 10px;
+	--ui-radius-lg: 12px;
+	--ui-radius-xl: 14px;
+	--ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+	--ui-shadow-md: 0 8px 18px rgba(16, 24, 40, 0.07);
+	--ui-shadow-lg: 0 14px 34px rgba(16, 24, 40, 0.09);
+	--ui-focus: 0 0 0 3px rgba(13, 107, 100, 0.16);
+}
+
+html,
+body,
+#root {
+	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+	font-size: 14px;
+	line-height: 1.45;
+	background: var(--ui-bg);
+	color: var(--ui-text);
+}
+
+body {
+	font-weight: 450;
+	letter-spacing: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	color: var(--ui-heading);
+	letter-spacing: 0;
+}
+
+h1 {
+	font-size: clamp(24px, 2.2vw, 32px);
+	line-height: 1.15;
+	font-weight: 760;
+}
+
+h2 {
+	font-size: clamp(20px, 1.8vw, 26px);
+	line-height: 1.2;
+	font-weight: 740;
+}
+
+h3 {
+	font-size: 17px;
+	line-height: 1.25;
+	font-weight: 720;
+}
+
+p,
+span,
+small,
+label,
+input,
+select,
+textarea,
+button {
+	letter-spacing: 0;
+}
+
+button,
+input,
+select,
+textarea {
+	font-weight: 500;
+}
+
+.page-card,
+.card,
+.tenant-admin-panel,
+.customers-hero-card,
+.customers-sync-panel,
+.customers-filters-card,
+.customers-list-card,
+.customers-stat-card,
+.customer-card,
+.abandoned-card,
+.stat-box,
+.catalog-card,
+.inbox-sidebar,
+.inbox-chat-panel,
+.campaign-shell-card,
+.campaigns-hero,
+.campaigns-tab-shell,
+.campaign-custom-audience-card,
+.campaign-schedule-card,
+.wam-card,
+.wam-hero,
+.ai-lab-sidebar-card,
+.ai-lab-chat-card,
+.ai-lab-debug-card,
+.ai-lab-card {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.page-card:hover,
+.catalog-card:hover,
+.customers-stat-card:hover,
+.customer-card:hover,
+.abandoned-card:hover,
+.workspace-analytics-card:hover,
+.wam-card:hover,
+.ai-lab-debug-item:hover {
+	border-color: var(--ui-border-strong);
+	box-shadow: var(--ui-shadow-md);
+	transform: none;
+}
+
+.page-header,
+.tenant-admin-header,
+.customers-hero-card,
+.campaigns-hero,
+.abandoned-carts-page .page-header,
+.wam-hero {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.page-header h1,
+.page-header h2,
+.tenant-admin-header h2,
+.customers-hero-copy h1,
+.campaigns-hero h2,
+.abandoned-carts-page .page-header h2,
+.wam-hero h1 {
+	margin-top: 0;
+	font-weight: 760;
+}
+
+.muted-text,
+.page-header p,
+.tenant-admin-header p,
+.customers-hero-copy p,
+.customers-list-topbar p,
+.customers-sync-top p,
+.campaigns-hero-lead,
+.wam-hero p,
+.ai-lab-sidebar-header p,
+.ai-lab-chat-header p {
+	color: var(--ui-muted);
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+.inline-actions button,
+.catalog-search-form button,
+.page-header button,
+.primary-action-btn,
+.customers-apply-btn,
+.tenant-admin-grid button,
+.tenant-admin-actions button,
+.filters-form button,
+.button.primary,
+.wam-button--primary,
+.ai-lab-primary-btn,
+.ai-lab-chat-form button,
+.inbox-send-btn {
+	min-height: 40px;
+	border: 1px solid var(--ui-primary-strong);
+	border-radius: var(--ui-radius-sm);
+	background: var(--ui-primary);
+	color: #ffffff;
+	font-weight: 680;
+	box-shadow: none;
+	transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.inline-actions button:hover:not(:disabled),
+.catalog-search-form button:hover:not(:disabled),
+.page-header button:hover:not(:disabled),
+.primary-action-btn:hover:not(:disabled),
+.customers-apply-btn:hover:not(:disabled),
+.tenant-admin-grid button:hover:not(:disabled),
+.tenant-admin-actions button:hover:not(:disabled),
+.filters-form button:hover:not(:disabled),
+.button.primary:hover:not(:disabled),
+.wam-button--primary:hover:not(:disabled),
+.ai-lab-primary-btn:hover:not(:disabled),
+.ai-lab-chat-form button:hover:not(:disabled),
+.inbox-send-btn:hover:not(:disabled) {
+	background: var(--ui-primary-strong);
+	border-color: var(--ui-primary-strong);
+	box-shadow: var(--ui-shadow-sm);
+	transform: none;
+}
+
+.secondary-link-btn,
+.tenant-admin-grid button[type="button"],
+.toolbar-group button,
+.abandoned-carts-page .inline-actions button,
+.catalog-sync-controls select,
+.pagination-btn,
+.pagination-page-btn,
+.button.ghost,
+.wam-button--secondary,
+.ai-lab-secondary-btn,
+.inbox-action-btn {
+	min-height: 40px;
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-sm);
+	background: #ffffff;
+	color: var(--ui-text);
+	font-weight: 650;
+	box-shadow: none;
+}
+
+.secondary-link-btn:hover:not(:disabled),
+.tenant-admin-grid button[type="button"]:hover:not(:disabled),
+.toolbar-group button:hover:not(:disabled),
+.abandoned-carts-page .inline-actions button:hover:not(:disabled),
+.pagination-btn:hover:not(:disabled),
+.pagination-page-btn:hover:not(:disabled),
+.button.ghost:hover:not(:disabled),
+.wam-button--secondary:hover:not(:disabled),
+.ai-lab-secondary-btn:hover:not(:disabled),
+.inbox-action-btn:hover:not(:disabled) {
+	border-color: var(--ui-border-strong);
+	background: var(--ui-surface-soft);
+	box-shadow: none;
+	transform: none;
+}
+
+input,
+select,
+textarea,
+.admin-field input,
+.admin-field select,
+.admin-field textarea,
+.catalog-search-form input,
+.filters-form input,
+.filters-form select,
+.inbox-search-input,
+.chat-form textarea,
+.field input,
+.field select,
+.field textarea,
+.wam-form-grid input,
+.wam-form-grid select,
+.wam-form-grid textarea {
+	min-height: 40px;
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-sm);
+	background: #ffffff;
+	color: var(--ui-text);
+	box-shadow: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus,
+.catalog-search-form input:focus,
+.filters-form input:focus,
+.filters-form select:focus,
+.inbox-search-input:focus,
+.chat-form textarea:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.wam-form-grid input:focus,
+.wam-form-grid select:focus,
+.wam-form-grid textarea:focus {
+	border-color: var(--ui-primary);
+	box-shadow: var(--ui-focus);
+	outline: none;
+}
+
+.tenant-admin-pill,
+.queue-pill,
+.campaign-badge,
+.campaign-schedule-status,
+.ai-lab-chip,
+.status-badge,
+.wam-chip,
+.wam-pill,
+.customer-payment-badge,
+.inbox-badge {
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0;
+}
+
+.tenant-admin-table th,
+.customers-stat-label,
+.stat-box span,
+.workspace-card-hero span,
+.workspace-card-chat span,
+.workspace-card-stats span,
+.workspace-card-progress span,
+.admin-field span,
+.customer-meta-chip span,
+.abandoned-meta-grid span {
+	color: var(--ui-muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}

@@ -421,3 +421,74 @@
 		border-radius: 10px;
 	}
 }
+
+/* Professional polish */
+
+.login-page {
+	background:
+		linear-gradient(135deg, rgba(16, 24, 40, 0.96), rgba(13, 107, 100, 0.88)),
+		#101828;
+}
+
+.login-brand,
+.login-metrics div,
+.login-flow-card,
+.login-card {
+	border-color: rgba(255, 255, 255, 0.14);
+	box-shadow: 0 14px 34px rgba(6, 18, 42, 0.22);
+}
+
+.login-brand {
+	border-radius: 12px;
+}
+
+.login-brand__mark {
+	border-radius: 8px;
+}
+
+.login-story h1 {
+	font-size: clamp(2.3rem, 4.6vw, 4.1rem);
+	font-weight: 760;
+	line-height: 1.02;
+}
+
+.login-lead {
+	font-size: 1rem;
+	line-height: 1.65;
+}
+
+.login-metrics div,
+.login-flow-card {
+	border-radius: 10px;
+}
+
+.login-card {
+	border-radius: 12px;
+	background: rgba(11, 18, 32, 0.82);
+}
+
+.login-card__header h2 {
+	font-size: clamp(1.5rem, 2.4vw, 2rem);
+	font-weight: 760;
+}
+
+.login-field span {
+	font-weight: 650;
+}
+
+.login-field input,
+.login-password-toggle,
+.login-error,
+.login-submit {
+	border-radius: 8px;
+}
+
+.login-submit {
+	background: #2dd4bf;
+	box-shadow: none;
+}
+
+.login-submit:hover:not(:disabled) {
+	transform: none;
+	box-shadow: 0 10px 20px rgba(45, 212, 191, 0.18);
+}
