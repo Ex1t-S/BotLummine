@@ -95,11 +95,11 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 					onClick={!platformAdmin ? () => onNavigate('/inbox/comprobantes') : null}
 				/>
 				<MetricCard
-					label="No leidos"
-					value={metrics.unreadMessages}
-					helper={`${formatNumber(metrics.unreadConversations)} conversaciones`}
-					tone={metrics.unreadMessages ? 'info' : 'neutral'}
-					onClick={!platformAdmin ? () => onNavigate('/inbox/automatico?read=UNREAD') : null}
+					label="Chats no leidos"
+					value={metrics.unreadConversations}
+					helper={`${formatNumber(metrics.unreadMessages)} mensajes pendientes`}
+					tone={metrics.unreadConversations ? 'info' : 'neutral'}
+					onClick={!platformAdmin ? () => onNavigate('/inbox/todos?read=UNREAD') : null}
 				/>
 			</div>
 
@@ -143,11 +143,11 @@ export default function OperationsPage() {
 				href: platformAdmin ? '/admin' : '/inbox/comprobantes',
 			},
 			{
-				label: 'No leidos',
-				value: totals.unreadMessages,
-				helper: 'Mensajes pendientes',
-				tone: totals.unreadMessages ? 'info' : 'neutral',
-				href: platformAdmin ? '/admin' : '/inbox/automatico?read=UNREAD',
+				label: 'Chats no leidos',
+				value: totals.unreadConversations,
+				helper: `${formatNumber(totals.unreadMessages)} mensajes pendientes`,
+				tone: totals.unreadConversations ? 'info' : 'neutral',
+				href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD',
 			},
 			{
 				label: 'Campanas activas',

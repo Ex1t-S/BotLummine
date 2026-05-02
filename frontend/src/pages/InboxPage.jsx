@@ -8,12 +8,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
 
 const QUEUES = [
+	{ key: 'ALL', label: 'Todos' },
 	{ key: 'AUTO', label: 'Automático' },
 	{ key: 'HUMAN', label: 'Atención humana' },
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
 
 const QUEUE_ROUTES = {
+	ALL: 'todos',
 	AUTO: 'automatico',
 	HUMAN: 'atencion-humana',
 	PAYMENT_REVIEW: 'comprobantes',
@@ -569,6 +571,7 @@ export default function InboxPage() {
 	const contacts = inboxPages.flatMap((page) => page?.contacts || []);
 	const firstInboxPage = inboxPages[0] || null;
 	const counts = firstInboxPage?.counts || {
+		ALL: 0,
 		AUTO: 0,
 		HUMAN: 0,
 		PAYMENT_REVIEW: 0,

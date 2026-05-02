@@ -799,7 +799,10 @@ async function fetchInboxData({
 		},
 	};
 
-	const [autoCount, humanCount, paymentCount] = await Promise.all([
+	const [allCount, autoCount, humanCount, paymentCount] = await Promise.all([
+		prisma.conversation.count({
+			where: countsWhere,
+		}),
 		prisma.conversation.count({
 			where: { ...countsWhere, queue: 'AUTO' },
 		}),
@@ -817,6 +820,7 @@ async function fetchInboxData({
 		hasMore: conversations.length > safeLimit,
 		nextOffset: conversations.length > safeLimit ? safeOffset + contacts.length : null,
 		counts: {
+			ALL: allCount,
 			AUTO: autoCount,
 			HUMAN: humanCount,
 			PAYMENT_REVIEW: paymentCount,
