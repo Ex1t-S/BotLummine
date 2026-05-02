@@ -1,5 +1,6 @@
 export const queryKeys = {
 	authMe: ['auth', 'me'],
+	operationsSummary: ['dashboard', 'operations', 'summary'],
 	inbox: (queue, search = '', readFilter = 'ALL') => ['dashboard', 'inbox', queue, search, readFilter],
 	conversation: (conversationId) => ['dashboard', 'conversation', conversationId],
 	abandonedCarts: (filters) => ['dashboard', 'abandoned-carts', filters],

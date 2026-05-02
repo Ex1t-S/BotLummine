@@ -17,6 +17,7 @@ const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx'));
 const AiLabPage = lazy(() => import('./pages/AiLabPage.jsx'));
 const WhatsAppMenuPage = lazy(() => import('./pages/WhatsAppMenuPage.jsx'));
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
+const OperationsPage = lazy(() => import('./pages/OperationsPage.jsx'));
 
 function RoleHomeRedirect() {
 	const { user } = useAuth();
@@ -50,6 +51,16 @@ export default function App() {
 				}
 			>
 				<Route index element={<RoleHomeRedirect />} />
+				<Route
+					path="operations"
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN', 'AGENT']}>
+							<Suspense fallback={<PageLoader />}>
+								<OperationsPage />
+							</Suspense>
+						</ProtectedRoute>
+					}
+				/>
 				<Route
 					path="inbox/:queueSlug?"
 					element={

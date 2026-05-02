@@ -8,7 +8,10 @@ import {
 	getEnboxSyncStatus,
 	syncEnboxShipments,
 } from '../services/enbox/enbox-sync.service.js';
-import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
+import {
+	isPlatformAdmin,
+	requireRequestWorkspaceId,
+} from '../services/workspaces/workspace-context.service.js';
 
 function formatTime(value) {
 	if (!value) return '';
@@ -61,6 +64,153 @@ function buildAvatar(name = '', phone = '') {
 
 function normalizePhone(value = '') {
 	return String(value || '').replace(/\D/g, '');
+}
+
+function subtractDays(days = 0) {
+	return new Date(Date.now() - Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000);
+}
+
+function normalizeCount(value = 0) {
+	return Math.max(0, Number(value || 0) || 0);
+}
+
+function emptyOperationMetrics() {
+	return {
+		auto: 0,
+		human: 0,
+		paymentReview: 0,
+		unreadConversations: 0,
+		unreadMessages: 0,
+		activeConversations30d: 0,
+		messages30dInbound: 0,
+		messages30dOutbound: 0,
+		activeCampaigns: 0,
+		failedCampaigns: 0,
+		abandonedCartsNew: 0,
+		abandonedCartsRecovered: 0,
+		catalogProducts: 0,
+	};
+}
+
+function addMetrics(target, source = {}) {
+	for (const key of Object.keys(target)) {
+		target[key] += normalizeCount(source[key]);
+	}
+	return target;
+}
+
+function getWorkspaceDisplayName(workspace = {}) {
+	return workspace?.aiConfig?.businessName || workspace?.name || workspace?.slug || 'Marca';
+}
+
+function getLatestByWorkspace(rows = [], dateField = 'createdAt') {
+	const byWorkspace = new Map();
+
+	for (const row of rows) {
+		if (!row?.workspaceId || byWorkspace.has(row.workspaceId)) continue;
+		byWorkspace.set(row.workspaceId, {
+			status: row.status || null,
+			message: row.message || null,
+			startedAt: row.startedAt || row[dateField] || null,
+			finishedAt: row.finishedAt || null,
+		});
+	}
+
+	return byWorkspace;
+}
+
+function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, latestCustomerSync }) {
+	const issues = [];
+
+	if (workspace?.status && workspace.status !== 'ACTIVE') {
+		issues.push({
+			type: 'workspace',
+			severity: 'warning',
+			label: 'Workspace inactivo',
+			action: 'Revisar estado',
+			href: '/admin',
+		});
+	}
+
+	if (!channel) {
+		issues.push({
+			type: 'whatsapp',
+			severity: 'critical',
+			label: 'WhatsApp sin canal activo',
+			action: 'Configurar WhatsApp',
+			href: '/admin',
+		});
+	}
+
+	if (metrics.human > 0) {
+		issues.push({
+			type: 'inbox',
+			severity: 'warning',
+			label: `${metrics.human} conversaciones requieren humano`,
+			action: 'Responder',
+			href: '/inbox/atencion-humana',
+		});
+	}
+
+	if (metrics.paymentReview > 0) {
+		issues.push({
+			type: 'payment',
+			severity: 'warning',
+			label: `${metrics.paymentReview} comprobantes pendientes`,
+			action: 'Revisar comprobantes',
+			href: '/inbox/comprobantes',
+		});
+	}
+
+	if (metrics.unreadMessages > 0) {
+		issues.push({
+			type: 'unread',
+			severity: 'info',
+			label: `${metrics.unreadMessages} mensajes no leidos`,
+			action: 'Ver inbox',
+			href: '/inbox/automatico',
+		});
+	}
+
+	if (!latestCatalogSync) {
+		issues.push({
+			type: 'catalog',
+			severity: 'info',
+			label: 'Catalogo sin sync registrada',
+			action: 'Actualizar catalogo',
+			href: '/catalog',
+		});
+	} else if (latestCatalogSync.status === 'ERROR') {
+		issues.push({
+			type: 'catalog',
+			severity: 'warning',
+			label: 'Ultima sync de catalogo con error',
+			action: 'Revisar catalogo',
+			href: '/catalog',
+		});
+	}
+
+	if (latestCustomerSync?.status === 'ERROR') {
+		issues.push({
+			type: 'customers',
+			severity: 'warning',
+			label: 'Ultima sync de clientes con error',
+			action: 'Revisar clientes',
+			href: '/customers',
+		});
+	}
+
+	if (metrics.failedCampaigns > 0) {
+		issues.push({
+			type: 'campaigns',
+			severity: 'warning',
+			label: `${metrics.failedCampaigns} campanas con error`,
+			action: 'Ver campanas',
+			href: '/campaigns/tracking',
+		});
+	}
+
+	return issues;
 }
 
 function buildResetStateData() {
@@ -824,6 +974,248 @@ export async function getInbox(req, res, next) {
 			limit,
 			offset,
 			...data,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getOperationSummary(req, res, next) {
+	try {
+		const platformAdmin = isPlatformAdmin(req.user);
+		const workspaceWhere = platformAdmin ? undefined : { id: requireRequestWorkspaceId(req) };
+		const activitySince = subtractDays(30);
+
+		const workspaces = await prisma.workspace.findMany({
+			where: workspaceWhere,
+			select: {
+				id: true,
+				name: true,
+				slug: true,
+				status: true,
+				aiConfig: {
+					select: {
+						businessName: true,
+					},
+				},
+				branding: {
+					select: {
+						logoUrl: true,
+						primaryColor: true,
+					},
+				},
+			},
+			orderBy: { createdAt: 'desc' },
+		});
+
+		const workspaceIds = workspaces.map((workspace) => workspace.id);
+		const scopedWhere = workspaceIds.length ? { workspaceId: { in: workspaceIds } } : { workspaceId: '__none__' };
+		const metricsByWorkspace = new Map(
+			workspaceIds.map((workspaceId) => [workspaceId, emptyOperationMetrics()])
+		);
+
+		const [
+			queueRows,
+			unreadRows,
+			activeConversationRows,
+			messageRows,
+			campaignRows,
+			cartRows,
+			catalogProductRows,
+			activeChannels,
+			catalogSyncRows,
+			customerSyncRows,
+		] = await Promise.all([
+			prisma.conversation.groupBy({
+				by: ['workspaceId', 'queue'],
+				where: { ...scopedWhere, archivedAt: null },
+				_count: { _all: true },
+			}),
+			prisma.conversation.groupBy({
+				by: ['workspaceId'],
+				where: { ...scopedWhere, archivedAt: null, unreadCount: { gt: 0 } },
+				_count: { _all: true },
+				_sum: { unreadCount: true },
+			}),
+			prisma.conversation.groupBy({
+				by: ['workspaceId'],
+				where: { ...scopedWhere, lastMessageAt: { gte: activitySince } },
+				_count: { _all: true },
+			}),
+			prisma.message.groupBy({
+				by: ['workspaceId', 'direction'],
+				where: { ...scopedWhere, createdAt: { gte: activitySince } },
+				_count: { _all: true },
+			}),
+			prisma.campaign.groupBy({
+				by: ['workspaceId', 'status'],
+				where: scopedWhere,
+				_count: { _all: true },
+			}),
+			prisma.abandonedCart.groupBy({
+				by: ['workspaceId', 'status'],
+				where: scopedWhere,
+				_count: { _all: true },
+			}),
+			prisma.catalogProduct.groupBy({
+				by: ['workspaceId'],
+				where: scopedWhere,
+				_count: { _all: true },
+			}),
+			prisma.whatsAppChannel.findMany({
+				where: { ...scopedWhere, status: 'ACTIVE' },
+				select: {
+					id: true,
+					workspaceId: true,
+					name: true,
+					wabaId: true,
+					phoneNumberId: true,
+					displayPhoneNumber: true,
+					status: true,
+					updatedAt: true,
+				},
+				orderBy: { updatedAt: 'desc' },
+			}),
+			prisma.catalogSyncLog.findMany({
+				where: scopedWhere,
+				select: {
+					workspaceId: true,
+					status: true,
+					message: true,
+					startedAt: true,
+					finishedAt: true,
+					createdAt: true,
+				},
+				orderBy: { startedAt: 'desc' },
+				take: Math.max(workspaceIds.length * 3, 20),
+			}),
+			prisma.customerSyncLog.findMany({
+				where: scopedWhere,
+				select: {
+					workspaceId: true,
+					status: true,
+					message: true,
+					startedAt: true,
+					finishedAt: true,
+					createdAt: true,
+				},
+				orderBy: { startedAt: 'desc' },
+				take: Math.max(workspaceIds.length * 3, 20),
+			}),
+		]);
+
+		for (const row of queueRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			if (row.queue === 'HUMAN') metrics.human += count;
+			else if (row.queue === 'PAYMENT_REVIEW') metrics.paymentReview += count;
+			else metrics.auto += count;
+		}
+
+		for (const row of unreadRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.unreadConversations = row._count?._all || 0;
+			metrics.unreadMessages = row._sum?.unreadCount || 0;
+		}
+
+		for (const row of activeConversationRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.activeConversations30d = row._count?._all || 0;
+		}
+
+		for (const row of messageRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			if (row.direction === 'INBOUND') metrics.messages30dInbound += count;
+			if (row.direction === 'OUTBOUND') metrics.messages30dOutbound += count;
+		}
+
+		for (const row of campaignRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			if (['QUEUED', 'RUNNING'].includes(row.status)) metrics.activeCampaigns += count;
+			if (['FAILED', 'PARTIAL'].includes(row.status)) metrics.failedCampaigns += count;
+		}
+
+		for (const row of cartRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			const count = row._count?._all || 0;
+			if (row.status === 'NEW') metrics.abandonedCartsNew += count;
+			if (row.status === 'RECOVERED') metrics.abandonedCartsRecovered += count;
+		}
+
+		for (const row of catalogProductRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics) continue;
+			metrics.catalogProducts = row._count?._all || 0;
+		}
+
+		const channelByWorkspace = new Map();
+		for (const channel of activeChannels) {
+			if (!channelByWorkspace.has(channel.workspaceId)) {
+				channelByWorkspace.set(channel.workspaceId, channel);
+			}
+		}
+
+		const latestCatalogSyncByWorkspace = getLatestByWorkspace(catalogSyncRows);
+		const latestCustomerSyncByWorkspace = getLatestByWorkspace(customerSyncRows);
+
+		const workspacesPayload = workspaces.map((workspace) => {
+			const metrics = metricsByWorkspace.get(workspace.id) || emptyOperationMetrics();
+			const channel = channelByWorkspace.get(workspace.id) || null;
+			const latestCatalogSync = latestCatalogSyncByWorkspace.get(workspace.id) || null;
+			const latestCustomerSync = latestCustomerSyncByWorkspace.get(workspace.id) || null;
+
+			return {
+				workspace: {
+					id: workspace.id,
+					name: workspace.name,
+					slug: workspace.slug,
+					status: workspace.status,
+					displayName: getWorkspaceDisplayName(workspace),
+					branding: workspace.branding || null,
+				},
+				metrics,
+				channel,
+				health: {
+					hasActiveWhatsapp: Boolean(channel),
+					latestCatalogSync,
+					latestCustomerSync,
+				},
+				issues: buildOperationIssues({
+					workspace,
+					metrics,
+					channel,
+					latestCatalogSync,
+					latestCustomerSync,
+				}),
+			};
+		});
+
+		const totals = workspacesPayload.reduce(
+			(acc, item) => addMetrics(acc, item.metrics),
+			emptyOperationMetrics()
+		);
+		const openIssuesCount = workspacesPayload.reduce(
+			(acc, item) => acc + item.issues.length,
+			0
+		);
+
+		return res.json({
+			ok: true,
+			role: platformAdmin ? 'PLATFORM_ADMIN' : req.user?.role || 'AGENT',
+			activityWindowDays: 30,
+			totals,
+			openIssuesCount,
+			workspaces: platformAdmin
+				? workspacesPayload
+				: workspacesPayload.slice(0, 1),
 		});
 	} catch (error) {
 		next(error);

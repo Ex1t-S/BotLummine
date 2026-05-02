@@ -49,6 +49,10 @@ export default function DashboardLayout() {
 				</div>
 
 				<nav className="admin-menu">
+					<NavLink to="/operations" className={navClass}>
+						Operacion
+					</NavLink>
+
 					{!isPlatformAdmin ? (
 						<NavLink
 							to="/inbox/automatico"
