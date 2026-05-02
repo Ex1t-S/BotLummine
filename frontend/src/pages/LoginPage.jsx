@@ -32,6 +32,21 @@ const pricingPlans = [
 	},
 ];
 
+const featureCards = [
+	{
+		title: 'Entende cada conversacion',
+		description: 'Centraliza inbox, clientes y contexto comercial para responder con mas precision.',
+	},
+	{
+		title: 'Activa campanas medibles',
+		description: 'Segmenta audiencias y lanza mensajes por WhatsApp API con seguimiento comercial.',
+	},
+	{
+		title: 'Opera con continuidad',
+		description: 'Combina asistencia 24/7, CRM y catalogo para que el equipo venda sin perder historial.',
+	},
+];
+
 function resolveRedirectPath(user, requestedPath = '') {
 	if (requestedPath && canAccessRoute(user?.role, requestedPath)) {
 		return requestedPath;
@@ -252,6 +267,64 @@ export default function LoginPage() {
 					</>
 				) : null}
 			</main>
+
+			{publicPath !== '/contacto' && publicPath !== '/precios' ? (
+				<section className="product-showcase" aria-label="Vista previa de la plataforma">
+					<div className="product-window">
+						<div className="product-window__topbar">
+							<span />
+							<span />
+							<span />
+							<strong>Lummine workspace</strong>
+						</div>
+						<div className="product-window__body">
+							<aside className="product-sidebar" aria-hidden="true">
+								<span className="active" />
+								<span />
+								<span />
+								<span />
+							</aside>
+							<div className="product-panel product-panel--main">
+								<div className="product-panel__header">
+									<span>Inbox comercial</span>
+									<strong>Automatico</strong>
+								</div>
+								<div className="product-message product-message--inbound">
+									<p>Necesito ayuda para elegir talle y consultar envio.</p>
+								</div>
+								<div className="product-message product-message--outbound">
+									<p>Te ayudo. Tengo tu historial, catalogo y stock actualizados.</p>
+								</div>
+								<div className="product-composer">
+									<span>Respuesta sugerida por IA</span>
+									<button type="button">Enviar</button>
+								</div>
+							</div>
+							<div className="product-panel product-panel--side">
+								<span>CRM</span>
+								<strong>Cliente activo</strong>
+								<div className="product-chart" aria-hidden="true">
+									<i />
+								</div>
+								<ul>
+									<li>Campana: recuperacion</li>
+									<li>Ultimo pedido: hace 12 dias</li>
+									<li>Canal: WhatsApp API</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+
+					<div className="feature-strip">
+						{featureCards.map((feature) => (
+							<article className="feature-card" key={feature.title}>
+								<h2>{feature.title}</h2>
+								<p>{feature.description}</p>
+							</article>
+						))}
+					</div>
+				</section>
+			) : null}
 		</div>
 	);
 }
