@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
 import {
 	sendWhatsAppText,
+	sendWhatsAppMedia,
 	sendWhatsAppInteractiveList,
 } from '../whatsapp/whatsapp.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
@@ -17,15 +18,18 @@ export async function sendAndPersistOutbound({
 	aiMeta = null,
 	messageType = 'text',
 	interactivePayload = null,
+	mediaPayload = null,
+	attachmentMeta = null,
 	deliveryMode = 'live',
 }) {
 	const cleanBody = String(body || '').trim();
+	const hasMedia = Boolean(mediaPayload?.mediaId && mediaPayload?.mediaType);
 
 	if (!conversationId) {
 		throw new Error('Falta conversationId para enviar el mensaje.');
 	}
 
-	if (!cleanBody) {
+	if (!cleanBody && !hasMedia) {
 		throw new Error('El mensaje no puede estar vacío.');
 	}
 
@@ -82,6 +86,15 @@ export async function sendAndPersistOutbound({
 				]
 			}
 		};
+	} else if (hasMedia) {
+		sendResult = await sendWhatsAppMedia({
+			workspaceId,
+			to: waId,
+			mediaType: mediaPayload.mediaType,
+			mediaId: mediaPayload.mediaId,
+			caption: cleanBody,
+			fileName: attachmentMeta?.attachmentName || mediaPayload.fileName || '',
+		});
 	} else if (messageType === 'interactive') {
 		sendResult = await sendWhatsAppInteractiveList({
 			workspaceId,
@@ -127,6 +140,9 @@ export async function sendAndPersistOutbound({
 				messageType === 'interactive' && interactivePayload?.fallbackText
 					? interactivePayload.fallbackText
 					: cleanBody,
+			attachmentUrl: attachmentMeta?.attachmentUrl || null,
+			attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
+			attachmentName: attachmentMeta?.attachmentName || null,
 			senderName: workspaceConfig.ai.businessName || 'Marca',
 			provider: aiMeta?.provider || provider,
 			model: aiMeta?.model || model,
@@ -141,9 +157,15 @@ export async function sendAndPersistOutbound({
 			userId,
 			messageType,
 			interactivePayload,
+			mediaPayload,
+			attachment: attachmentMeta,
 			deliveryMode,
 				}
-				: sendResult?.rawPayload || null,
+				: {
+					...(sendResult?.rawPayload || {}),
+					...(mediaPayload ? { mediaPayload } : {}),
+					...(attachmentMeta ? { attachment: attachmentMeta } : {}),
+				},
 		},
 	});
 
@@ -167,6 +189,7 @@ export async function sendAndPersistOutbound({
 	});
 
 	return {
+		ok: true,
 		message: createdMessage,
 		sendResult,
 	};

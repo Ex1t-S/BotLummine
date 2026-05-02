@@ -120,6 +120,14 @@ function cleanPreviewText(value = '') {
 		.trim();
 }
 
+function formatFileSize(bytes = 0) {
+	const size = Number(bytes || 0);
+	if (!Number.isFinite(size) || size <= 0) return '';
+	if (size < 1024) return `${size} B`;
+	if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+	return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function getMediaKind(message = {}) {
 	const type = String(message.type || '').toLowerCase();
 	const mime = String(message.attachmentMimeType || '').toLowerCase();
@@ -483,6 +491,7 @@ export default function InboxPage() {
 	const contactsContainerRef = useRef(null);
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
+	const fileInputRef = useRef(null);
 	const textareaRef = useRef(null);
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
@@ -498,6 +507,7 @@ export default function InboxPage() {
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(routeConversationId);
 	const [messageText, setMessageText] = useState('');
+	const [selectedFile, setSelectedFile] = useState(null);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState(routeReadFilter);
 	const [olderMessages, setOlderMessages] = useState([]);
@@ -1054,14 +1064,29 @@ export default function InboxPage() {
 	const sendMessageMutation = useMutation({
 		mutationFn: async () => {
 			const body = messageText.trim();
-			if (!selectedConversationId || !body) return;
+			if (!selectedConversationId || (!body && !selectedFile)) return;
 
-			await api.post(`/dashboard/conversations/${selectedConversationId}/messages`, {
-				body,
-			});
+			if (selectedFile) {
+				const formData = new FormData();
+				formData.append('body', body);
+				formData.append('file', selectedFile);
+
+				await api.post(
+					`/dashboard/conversations/${selectedConversationId}/messages`,
+					formData
+				);
+				return;
+			}
+
+			await api.post(
+				`/dashboard/conversations/${selectedConversationId}/messages`,
+				{ body }
+			);
 		},
 		onSuccess: async () => {
 			setMessageText('');
+			setSelectedFile(null);
+			if (fileInputRef.current) fileInputRef.current.value = '';
 			setShowEmojiPicker(false);
 			shouldStickToBottomRef.current = true;
 			await invalidateInboxAndConversation();
@@ -1207,8 +1232,18 @@ export default function InboxPage() {
 
 	function handleSubmit(event) {
 		event.preventDefault();
-		if (!messageText.trim()) return;
+		if (!messageText.trim() && !selectedFile) return;
 		sendMessageMutation.mutate();
+	}
+
+	function handleSelectFile(event) {
+		const file = event.target.files?.[0] || null;
+		setSelectedFile(file);
+	}
+
+	function handleClearSelectedFile() {
+		setSelectedFile(null);
+		if (fileInputRef.current) fileInputRef.current.value = '';
 	}
 
 	function handleMoveQueue(nextQueue) {
@@ -1235,7 +1270,7 @@ export default function InboxPage() {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 
-			if (messageText.trim() && !sendMessageMutation.isPending) {
+			if ((messageText.trim() || selectedFile) && !sendMessageMutation.isPending) {
 				sendMessageMutation.mutate();
 			}
 		}
@@ -1593,6 +1628,28 @@ export default function InboxPage() {
 						</div>
 
 						<div className="inbox-composer-shell">
+							{selectedFile ? (
+								<div className="inbox-selected-file">
+									<div className="inbox-selected-file-main">
+										<span className="inbox-selected-file-icon">+</span>
+										<span className="inbox-selected-file-name">{selectedFile.name}</span>
+										<span className="inbox-selected-file-size">
+											{formatFileSize(selectedFile.size)}
+										</span>
+									</div>
+
+									<button
+										type="button"
+										className="inbox-selected-file-remove"
+										onClick={handleClearSelectedFile}
+										disabled={sendMessageMutation.isPending}
+										title="Quitar archivo"
+									>
+										x
+									</button>
+								</div>
+							) : null}
+
 							<form onSubmit={handleSubmit} className="inbox-composer">
 								<div className="inbox-composer-leading" ref={emojiPickerRef}>
 									<button
@@ -1624,6 +1681,25 @@ export default function InboxPage() {
 									) : null}
 								</div>
 
+								<input
+									ref={fileInputRef}
+									type="file"
+									className="inbox-file-input"
+									accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv"
+									onChange={handleSelectFile}
+									disabled={sendMessageMutation.isPending}
+								/>
+
+								<button
+									type="button"
+									className="inbox-attach-trigger"
+									onClick={() => fileInputRef.current?.click()}
+									disabled={sendMessageMutation.isPending}
+									title="Adjuntar archivo"
+								>
+									+
+								</button>
+
 								<textarea
 									ref={textareaRef}
 									value={messageText}
@@ -1638,7 +1714,7 @@ export default function InboxPage() {
 								<button
 									type="submit"
 									disabled={
-										sendMessageMutation.isPending || !messageText.trim()
+										sendMessageMutation.isPending || (!messageText.trim() && !selectedFile)
 									}
 									title="Enviar"
 									className="inbox-send-btn"

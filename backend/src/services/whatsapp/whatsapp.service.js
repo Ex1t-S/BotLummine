@@ -153,6 +153,52 @@ export async function sendWhatsAppText({ workspaceId = null, to, body }) {
 	});
 }
 
+export async function sendWhatsAppMedia({
+	workspaceId = null,
+	to,
+	mediaType,
+	mediaId,
+	caption = '',
+	fileName = '',
+}) {
+	const cleanMediaType = String(mediaType || '').trim().toLowerCase();
+	const cleanMediaId = String(mediaId || '').trim();
+	const cleanCaption = String(caption || '').trim();
+	const cleanFileName = String(fileName || '').trim();
+	const supportedTypes = new Set(['image', 'video', 'audio', 'document']);
+
+	if (!supportedTypes.has(cleanMediaType) || !cleanMediaId) {
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta media valido para enviar por WhatsApp.' },
+		};
+	}
+
+	const mediaPayload = {
+		id: cleanMediaId,
+	};
+
+	if (cleanCaption && ['image', 'video', 'document'].includes(cleanMediaType)) {
+		mediaPayload.caption = cleanCaption;
+	}
+
+	if (cleanMediaType === 'document' && cleanFileName) {
+		mediaPayload.filename = cleanFileName;
+	}
+
+	return sendWhatsAppRequest({
+		workspaceId,
+		to,
+		debugLabel: 'MEDIA',
+		payload: {
+			type: cleanMediaType,
+			[cleanMediaType]: mediaPayload,
+		},
+	});
+}
+
 export async function sendWhatsAppInteractiveList({
 	workspaceId = null,
 	to,

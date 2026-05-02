@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { requireAuth, requireAdmin, requireAnyRole } from '../middleware/auth.js';
 import {
 	getInbox,
@@ -33,6 +34,12 @@ import {
 
 const router = Router();
 const requireInboxAccess = requireAnyRole(['ADMIN', 'AGENT']);
+const uploadInboxAttachment = multer({
+	dest: 'tmp/',
+	limits: {
+		fileSize: 100 * 1024 * 1024,
+	},
+});
 
 router.use(requireAuth);
 
@@ -40,7 +47,12 @@ router.get('/operations/summary', requireInboxAccess, getOperationSummary);
 router.get('/inbox', requireInboxAccess, getInbox);
 router.get('/inbox/stream', requireInboxAccess, getInboxStream);
 router.get('/conversations/:conversationId/messages', requireInboxAccess, getConversationMessagesJson);
-router.post('/conversations/:conversationId/messages', requireInboxAccess, postConversationMessage);
+router.post(
+	'/conversations/:conversationId/messages',
+	requireInboxAccess,
+	uploadInboxAttachment.single('file'),
+	postConversationMessage
+);
 router.patch('/conversations/:conversationId/read', requireInboxAccess, patchConversationRead);
 router.patch('/conversations/:conversationId/unread', requireInboxAccess, patchConversationUnread);
 router.patch('/conversations/:conversationId/queue', requireInboxAccess, patchConversationQueue);

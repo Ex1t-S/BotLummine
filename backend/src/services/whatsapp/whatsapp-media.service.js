@@ -430,6 +430,39 @@ export async function uploadWhatsAppMedia({
 	}
 }
 
+export async function saveLocalInboxMediaCopy({
+	filePath,
+	fileName = '',
+	mimeType = '',
+	messageType = 'media',
+	metaMessageId = ''
+}) {
+	const absolutePath = path.resolve(filePath);
+	const [buffer, stats] = await Promise.all([fs.readFile(absolutePath), fs.stat(absolutePath)]);
+	const storedFileName = buildStoredInboundFileName({
+		messageType,
+		mimeType,
+		preferredFileName: fileName,
+		metaMessageId
+	});
+	const storageDir = await ensureInboundMediaDir();
+	const storedPath = path.join(storageDir, storedFileName);
+
+	await fs.writeFile(storedPath, buffer);
+
+	return {
+		attachmentUrl: buildPublicInboxMediaUrl(storedFileName),
+		storedFileName,
+		attachmentMimeType: normalizeString(mimeType || 'application/octet-stream'),
+		attachmentName: buildReadableAttachmentName({
+			messageType,
+			mimeType,
+			originalName: fileName
+		}),
+		attachmentSize: stats.size
+	};
+}
+
 export async function getWhatsAppMediaMetadata({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	attachmentId,

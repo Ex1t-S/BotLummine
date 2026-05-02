@@ -1,8 +1,10 @@
+import fs from 'node:fs/promises';
 import { prisma } from '../lib/prisma.js';
 import { getCatalogPage, syncCatalogFromProvider } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
+import { saveLocalInboxMediaCopy, uploadWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
 import { publishInboxEvent, subscribeInboxEvents } from '../lib/inbox-events.js';
 import {
 	getEnboxSyncStatus,
@@ -84,6 +86,15 @@ function subtractDays(days = 0) {
 
 function normalizeCount(value = 0) {
 	return Math.max(0, Number(value || 0) || 0);
+}
+
+function resolveOutboundMediaType(mimeType = '') {
+	const normalized = String(mimeType || '').toLowerCase();
+
+	if (normalized.startsWith('image/')) return 'image';
+	if (normalized.startsWith('video/')) return 'video';
+	if (normalized.startsWith('audio/')) return 'audio';
+	return 'document';
 }
 
 function emptyOperationMetrics() {
@@ -1557,12 +1568,14 @@ export async function patchConversationUnread(req, res, next) {
 }
 
 export async function postConversationMessage(req, res, next) {
+	const uploadedFile = req.file || null;
+
 	try {
 		const { conversationId } = req.params;
 		const workspaceId = requireRequestWorkspaceId(req);
 		const body = String(req.body?.body || '').trim();
 
-		if (!body) {
+		if (!body && !uploadedFile) {
 			return res.status(400).json({
 				ok: false,
 				error: 'El mensaje está vacío',
@@ -1592,16 +1605,70 @@ export async function postConversationMessage(req, res, next) {
 			});
 		}
 
+		let messageType = 'text';
+		let mediaPayload = null;
+		let attachmentMeta = null;
+
+		if (uploadedFile) {
+			messageType = resolveOutboundMediaType(uploadedFile.mimetype);
+
+			const uploadResult = await uploadWhatsAppMedia({
+				workspaceId,
+				filePath: uploadedFile.path,
+				fileName: uploadedFile.originalname || uploadedFile.filename || 'archivo',
+				mimeType: uploadedFile.mimetype,
+			});
+
+			if (!uploadResult.ok || !uploadResult.mediaId) {
+				return res.status(400).json({
+					ok: false,
+					error: 'No se pudo subir el archivo a WhatsApp.',
+					details: uploadResult.error || null,
+				});
+			}
+
+			const localCopy = await saveLocalInboxMediaCopy({
+				filePath: uploadedFile.path,
+				fileName: uploadedFile.originalname || uploadResult.fileName || 'archivo',
+				mimeType: uploadResult.mimeType || uploadedFile.mimetype,
+				messageType,
+				metaMessageId: uploadResult.mediaId,
+			});
+
+			attachmentMeta = {
+				attachmentUrl: localCopy.attachmentUrl,
+				attachmentMimeType: localCopy.attachmentMimeType,
+				attachmentName: localCopy.attachmentName,
+				id: uploadResult.mediaId,
+				type: messageType,
+				url: localCopy.attachmentUrl,
+				mimeType: localCopy.attachmentMimeType,
+				name: localCopy.attachmentName,
+				storageFileName: localCopy.storedFileName,
+				size: localCopy.attachmentSize,
+			};
+
+			mediaPayload = {
+				mediaId: uploadResult.mediaId,
+				mediaType: messageType,
+				fileName: localCopy.attachmentName,
+			};
+		}
+
 		const result = await sendAndPersistOutbound({
 			conversationId: conversation.id,
 			workspaceId,
 			waId,
 			body,
+			messageType,
+			mediaPayload,
+			attachmentMeta,
 			aiMeta: {
 				provider: 'manual',
 				model: null,
 				raw: {
 					source: 'dashboard-manual-reply',
+					...(attachmentMeta ? { attachment: attachmentMeta } : {}),
 				},
 			},
 		});
@@ -1625,6 +1692,10 @@ export async function postConversationMessage(req, res, next) {
 		});
 	} catch (error) {
 		next(error);
+	} finally {
+		if (uploadedFile?.path) {
+			await fs.unlink(uploadedFile.path).catch(() => {});
+		}
 	}
 }
 
