@@ -10,6 +10,7 @@
     "start:prod": "node src/server.js",
     "jobs:enbox-sync": "node src/jobs/enbox-sync.job.js",
     "jobs:campaign-dispatch": "node src/jobs/campaign-dispatch.job.js",
+    "jobs:diagnose": "node src/jobs/diagnose.job.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",

@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 const DEFAULT_PANEL_BASE_URL = 'https://enbox.lightdata.com.ar';
@@ -6,6 +7,7 @@ const DEFAULT_PUBLIC_BASE_URL = 'https://enbox.lightdata.com.ar';
 const DEFAULT_PUBLIC_TRACKING_SALT = 'd54df4s8a';
 const BROWSER_USER_AGENT =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
+const ENBOX_TIMEOUT_MS = getHttpTimeoutMs('ENBOX_TIMEOUT_MS', 20000);
 
 const LIST_COLUMNS = [
 	{ id: 161, CDB: 'nombre_fantasia' },
@@ -127,7 +129,7 @@ async function loginToEnbox(config = {}) {
 	body.set('pos', ',');
 	body.set('mantener', '1');
 
-	const response = await fetch(buildPanelUrl(config, '/system_user/process_login.php'), {
+	const response = await fetchWithTimeout(buildPanelUrl(config, '/system_user/process_login.php'), {
 		method: 'POST',
 		headers: buildBrowserHeaders(config, null, {
 			'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -135,7 +137,7 @@ async function loginToEnbox(config = {}) {
 			'x-requested-with': 'XMLHttpRequest',
 		}),
 		body: body.toString(),
-	});
+	}, ENBOX_TIMEOUT_MS);
 
 	const raw = await response.text();
 	let parsed = null;
@@ -158,11 +160,11 @@ async function warmUpPanelSession(sessionCookie, config = {}) {
 	if (!sessionCookie) return;
 
 	try {
-		await fetch(buildPanelUrl(config, '/index.php'), {
+		await fetchWithTimeout(buildPanelUrl(config, '/index.php'), {
 			headers: buildBrowserHeaders(config, sessionCookie, {
 				accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			}),
-		});
+		}, ENBOX_TIMEOUT_MS);
 	} catch {
 		// The tracking flow can still work without this warmup.
 	}
@@ -233,14 +235,14 @@ async function fetchShipmentRows(sessionCookie, filters = {}, config = {}) {
 		}))
 	);
 
-	const response = await fetch(buildPanelUrl(config, '/modules/envios/listado/procesar_listado.php'), {
+	const response = await fetchWithTimeout(buildPanelUrl(config, '/modules/envios/listado/procesar_listado.php'), {
 		method: 'POST',
 		headers: buildBrowserHeaders(config, sessionCookie, {
 			'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
 			'x-requested-with': 'XMLHttpRequest',
 		}),
 		body: params.toString(),
-	});
+	}, ENBOX_TIMEOUT_MS);
 
 	const raw = await response.text();
 	if (!response.ok || !raw) return [];
@@ -262,14 +264,14 @@ async function fetchShipmentDetail(sessionCookie, did, config = {}) {
 	params.set('operador', 'get');
 	params.set('did', String(did));
 
-	const response = await fetch(buildPanelUrl(config, '/modules/envios/alta/controlador.php'), {
+	const response = await fetchWithTimeout(buildPanelUrl(config, '/modules/envios/alta/controlador.php'), {
 		method: 'POST',
 		headers: buildBrowserHeaders(config, sessionCookie, {
 			'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
 			'x-requested-with': 'XMLHttpRequest',
 		}),
 		body: params.toString(),
-	});
+	}, ENBOX_TIMEOUT_MS);
 
 	const raw = await response.text();
 	if (!response.ok || !raw) return null;

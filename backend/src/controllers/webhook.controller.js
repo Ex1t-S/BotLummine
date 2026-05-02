@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
+import { logger, maskPhone } from '../lib/logger.js';
 import { processInboundMessage } from '../services/conversation/chat.service.js';
 import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
 import { applyCampaignMessageStatusWebhook } from '../services/campaigns/whatsapp-campaign.service.js';
@@ -95,9 +96,9 @@ async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, wo
 			attachmentSha256: attachmentMeta.attachmentSha256 || savedMedia.attachmentSha256 || null
 		};
 	} catch (error) {
-		console.error('[WEBHOOK][MEDIA][DOWNLOAD ERROR]', {
+		logger.warn('webhook.media_download_failed', {
 			messageId: message.id || null,
-			from: message.from || null,
+			from: maskPhone(message.from || ''),
 			attachmentId: attachmentMeta?.attachmentId || null,
 			error: error?.message || error
 		});
@@ -253,7 +254,8 @@ export function verifyWhatsappWebhook(req, res) {
 	const token = req.query['hub.verify_token'];
 	const challenge = req.query['hub.challenge'];
 
-	console.log('[WEBHOOK DEBUG] verify request', {
+	logger.info('webhook.whatsapp_verify', {
+		requestId: req.requestId || null,
 		mode,
 		hasChallenge: Boolean(challenge),
 		tokenMatches: token === process.env.WHATSAPP_VERIFY_TOKEN
@@ -268,12 +270,16 @@ export function verifyWhatsappWebhook(req, res) {
 
 export async function receiveWhatsappWebhook(req, res) {
 	try {
-		console.log('[WEBHOOK DEBUG] POST /api/webhook/whatsapp hit');
-		console.log('[WEBHOOK DEBUG] body:', JSON.stringify(req.body, null, 2));
-
 		res.sendStatus(200);
 
 		const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+		const changesCount = entries.reduce((total, entry) => total + (entry.changes?.length || 0), 0);
+
+		logger.info('webhook.whatsapp_received', {
+			requestId: req.requestId || null,
+			entries: entries.length,
+			changes: changesCount,
+		});
 
 		for (const entry of entries) {
 			for (const change of entry.changes || []) {
@@ -293,7 +299,10 @@ export async function receiveWhatsappWebhook(req, res) {
 			}
 		}
 	} catch (error) {
-		console.error('Error webhook WhatsApp:', error);
+		logger.error('webhook.whatsapp_failed', {
+			requestId: req.requestId || null,
+			error,
+		});
 	}
 }
 
@@ -373,7 +382,12 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			storeId: credentials.storeId,
 			orderId: resourceId
 		}).catch((error) => {
-			console.error('[TIENDANUBE][WEBHOOK][ATTRIBUTION]', error?.message || error);
+			logger.warn('webhook.tiendanube_attribution_failed', {
+				requestId: req.requestId || null,
+				storeId: credentials.storeId,
+				orderId: resourceId,
+				error,
+			});
 			return { conversions: 0, recoveredCarts: 0 };
 		});
 
@@ -389,10 +403,16 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			recoveredCarts: attribution.recoveredCarts || 0
 		});
 	} catch (error) {
-		console.error('[TIENDANUBE][WEBHOOK][ERROR]', error);
+		logger.error('webhook.tiendanube_failed', {
+			requestId: req.requestId || null,
+			error,
+		});
 		return res.status(500).json({
 			ok: false,
-			error: error?.message || 'No se pudo procesar el webhook de Tiendanube.'
+			error: process.env.NODE_ENV === 'production'
+				? 'No se pudo procesar el webhook de Tiendanube.'
+				: error?.message || 'No se pudo procesar el webhook de Tiendanube.',
+			requestId: req.requestId || null,
 		});
 	}
 }

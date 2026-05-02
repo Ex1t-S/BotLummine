@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
 
@@ -11,6 +12,7 @@ const UPDATE_BATCH_SIZE = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_UPDAT
 const ITEM_BATCH_SIZE = Math.max(50, Number(process.env.TIENDANUBE_ORDER_ITEMS_BATCH_SIZE || 500));
 const MAX_MONTH_WINDOWS_PER_SYNC = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_MAX_MONTH_WINDOWS || 120));
 const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES_PER_WINDOW || 120));
+const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const ORDER_FIELDS = [
 	'id',
 	'number',
@@ -209,14 +211,14 @@ async function fetchJson(url, accessToken, resourceLabel) {
 	let lastError = null;
 	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
 		try {
-			const response = await fetch(url, {
+			const response = await fetchWithTimeout(url, {
 				method: 'GET',
 				headers: {
 					Authentication: `bearer ${accessToken}`,
 					'User-Agent': userAgent,
 					'Content-Type': 'application/json',
 				},
-			});
+			}, TIENDANUBE_TIMEOUT_MS);
 
 			if (!response.ok) {
 				const text = await response.text();

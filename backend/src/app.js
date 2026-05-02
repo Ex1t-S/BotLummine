@@ -14,6 +14,9 @@ import aiLabRoutes from './routes/ai-lab.routes.js';
 import mediaRoutes from './routes/media.routes.js';
 import whatsappMenuRoutes from './routes/whatsapp-menu.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import { prisma } from './lib/prisma.js';
+import { logger } from './lib/logger.js';
+import { attachRequestId } from './lib/request-id.js';
 
 dotenv.config();
 
@@ -62,7 +65,7 @@ const corsOptions = {
 			return callback(null, true);
 		}
 
-		console.warn('[CORS] origin blocked:', normalizedOrigin || '(sin origin)');
+		logger.warn('cors.origin_blocked', { origin: normalizedOrigin || null });
 		return callback(new Error(`Origen no permitido por CORS: ${origin}`));
 	},
 	credentials: true,
@@ -77,13 +80,14 @@ const corsOptions = {
 	]
 };
 
+app.use(attachRequestId);
 app.use(cors(corsOptions));
 
 app.options('/api/auth/login', cors(corsOptions));
 app.options('/api/auth/me', cors(corsOptions));
 app.options('/api/tiendanube/webhooks/register', cors(corsOptions));
 
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use('/api/webhook/tiendanube', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -91,30 +95,29 @@ app.use(cookieParser());
 
 app.use(attachUser);
 
-const RELEASE_ID = 'platform-admin-prisma-runtime-check-20260429';
+const RELEASE_ID = 'backend-hardening-20260501';
 
 app.get('/api/health', async (_req, res) => {
-	let prismaUserRoleValues = [];
-	let userRoleFieldType = null;
+	const shouldCheckDb = String(process.env.HEALTHCHECK_DB || 'false').trim().toLowerCase() === 'true';
+	let database = shouldCheckDb ? 'unchecked' : 'skipped';
 
-	try {
-		const prismaClient = await import('@prisma/client');
-		prismaUserRoleValues = Object.keys(prismaClient.UserRole || {});
-		const userModel = prismaClient.Prisma?.dmmf?.datamodel?.models?.find((model) => model.name === 'User');
-		userRoleFieldType = userModel?.fields?.find((field) => field.name === 'role')?.type || null;
-	} catch (error) {
-		prismaUserRoleValues = [`error:${error.message}`];
+	if (shouldCheckDb) {
+		try {
+			await prisma.$queryRaw`SELECT 1`;
+			database = 'ok';
+		} catch (error) {
+			database = 'error';
+			logger.warn('health.database_check_failed', { error });
+		}
 	}
 
 	res.json({
 		ok: true,
 		service: 'whatsapp-ai-assistant-backend',
 		release: RELEASE_ID,
+		env: process.env.NODE_ENV || 'development',
 		commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || null,
-		prismaUserRoleValues,
-		userRoleFieldType,
-		userRoleStorage: userRoleFieldType === 'String' ? 'text' : 'enum',
-		hasPlatformAdminRole: prismaUserRoleValues.includes('PLATFORM_ADMIN') || userRoleFieldType === 'String',
+		database,
 	});
 });
 
@@ -128,19 +131,30 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/whatsapp-menu', whatsappMenuRoutes);
 app.use('/api/admin', adminRoutes);
 
-app.use((err, _req, res, _next) => {
-	console.error(err);
+app.use((err, req, res, _next) => {
+	const status = err.status || err.statusCode || 500;
+	logger.error('http.unhandled_error', {
+		requestId: req.requestId || null,
+		method: req.method,
+		path: req.originalUrl || req.url,
+		status,
+		error: err,
+	});
 
 	if (err.message?.startsWith('Origen no permitido por CORS')) {
 		return res.status(403).json({
 			ok: false,
-			error: err.message
+			error: 'Origen no permitido por CORS',
+			requestId: req.requestId || null,
 		});
 	}
 
-	res.status(err.status || 500).json({
+	res.status(status).json({
 		ok: false,
-		error: err.message || 'Internal server error'
+		error: status >= 500 && process.env.NODE_ENV === 'production'
+			? 'Internal server error'
+			: err.message || 'Internal server error',
+		requestId: req.requestId || null,
 	});
 });
 

@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger, maskPhone } from '../../lib/logger.js';
 import { runAssistantReply } from '../ai/index.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
@@ -731,11 +732,16 @@ export async function processInboundMessage({
 		queueDecision.aiEnabled &&
 		queueDecision.queue === 'AUTO';
 
-	console.log('[AI DEBUG] isAiEnabledGlobal:', isAiEnabledGlobal);
-	console.log('[AI DEBUG] queueDecision:', queueDecision);
-	console.log('[AI DEBUG] shouldReply:', shouldReply);
-	console.log('[AI DEBUG] intent:', intent);
-	console.log('[AI DEBUG] waId:', freshConversation.contact.waId);
+	logger.debug('ai.autoreply_decision', {
+		workspaceId: resolvedWorkspaceId,
+		conversationId: freshConversation.id,
+		isAiEnabledGlobal,
+		queue: queueDecision.queue,
+		queueAiEnabled: queueDecision.aiEnabled,
+		shouldReply,
+		intent: intent?.name || intent?.type || intent || null,
+		waId: maskPhone(freshConversation.contact.waId),
+	});
 
 	if (!shouldReply) {
 		trace = {

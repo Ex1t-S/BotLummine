@@ -135,6 +135,12 @@ Recomendado para producción:
 - Neon para PostgreSQL
 - nginx o proxy
 - HTTPS real para el webhook
+- Railway web: `npm start`
+- Railway cron Enbox: `npm --prefix backend run jobs:enbox-sync`
+- Railway cron campaÃ±as: `npm --prefix backend run jobs:campaign-dispatch`
+- DiagnÃ³stico operativo: `npm --prefix backend run jobs:diagnose`
+- hardening env: `LOG_LEVEL=info`, `DEBUG_EXTERNAL_PAYLOADS=false`, `HEALTHCHECK_DB=false`
+- timeouts env: `META_GRAPH_TIMEOUT_MS`, `WHATSAPP_SEND_TIMEOUT_MS`, `TIENDANUBE_TIMEOUT_MS`, `ENBOX_TIMEOUT_MS`, `AI_PROVIDER_TIMEOUT_MS`
 - `WHATSAPP_DRY_RUN=false`
 - rotación de logs
 - rate limiting

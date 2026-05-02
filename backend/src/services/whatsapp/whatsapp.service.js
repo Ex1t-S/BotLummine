@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import axios from 'axios';
+import { getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { logger, maskPhone } from '../../lib/logger.js';
 import {
 	normalizeWhatsAppNumber,
 	debugWhatsAppRecipient,
@@ -13,6 +15,8 @@ import {
 	getWhatsAppPhoneNumberId,
 } from './meta-graph.service.js';
 import { getWhatsAppChannelForWorkspace } from '../workspaces/workspace-context.service.js';
+
+const WHATSAPP_TIMEOUT_MS = getHttpTimeoutMs('WHATSAPP_SEND_TIMEOUT_MS', 15000);
 
 function buildTokenDebugFingerprint(token = '') {
 	const normalized = String(token || '').trim();
@@ -84,6 +88,7 @@ async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel
 				Authorization: `Bearer ${accessToken}`,
 				'Content-Type': 'application/json',
 			},
+			timeout: WHATSAPP_TIMEOUT_MS,
 		});
 
 		debugWhatsAppRecipient(`${debugLabel} RESPONSE`, response.data);
@@ -95,27 +100,19 @@ async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel
 			rawPayload: response.data,
 		};
 	} catch (error) {
-		console.error(`[WA DEBUG] ${debugLabel} ERROR MESSAGE`, error.message);
-		console.error(`[WA DEBUG] ${debugLabel} ERROR STATUS`, error.response?.status);
-		console.error(
-			`[WA DEBUG] ${debugLabel} ERROR CONTEXT`,
-			JSON.stringify(
-				{
-					rawTo,
-					finalTo,
-					graphVersion,
-					phoneNumberId,
-					...tokenDebug,
-					payloadType: payload?.type || null,
-				},
-				null,
-				2
-			)
-		);
-		console.error(
-			`[WA DEBUG] ${debugLabel} ERROR DATA`,
-			JSON.stringify(error.response?.data || {}, null, 2)
-		);
+		logger.warn('whatsapp.send_failed', {
+			label: debugLabel,
+			status: error.response?.status || null,
+			message: error.message,
+			to: maskPhone(finalTo || rawTo || ''),
+			graphVersion,
+			phoneNumberId,
+			tokenFingerprint: tokenDebug.tokenFingerprint,
+			payloadType: payload?.type || null,
+			providerCode: error.response?.data?.error?.code || null,
+			providerSubcode: error.response?.data?.error?.error_subcode || null,
+			providerMessage: error.response?.data?.error?.message || null,
+		});
 
 		return {
 			ok: false,

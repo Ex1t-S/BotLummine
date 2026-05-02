@@ -1,4 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
+import { getHttpTimeoutMs, withTimeout } from '../../lib/http-timeout.js';
+import { logger } from '../../lib/logger.js';
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -23,6 +25,7 @@ export async function runGeminiReply(prompt, options = {}) {
 	const apiKey = process.env.GEMINI_API_KEY;
 	const modelName = options.model || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 	const maxRetries = Number(process.env.GEMINI_MAX_RETRIES || 2);
+	const timeoutMs = getHttpTimeoutMs('AI_PROVIDER_TIMEOUT_MS', 30000);
 
 	if (!apiKey) {
 		throw new Error("Falta GEMINI_API_KEY en el archivo .env");
@@ -33,10 +36,14 @@ export async function runGeminiReply(prompt, options = {}) {
 
 	for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
 		try {
-			const response = await ai.models.generateContent({
-				model: modelName,
-				contents: prompt,
-			});
+			const response = await withTimeout(
+				ai.models.generateContent({
+					model: modelName,
+					contents: prompt,
+				}),
+				timeoutMs,
+				`Gemini timeout after ${timeoutMs}ms`
+			);
 
 			return {
 				provider: "gemini",
@@ -51,8 +58,11 @@ export async function runGeminiReply(prompt, options = {}) {
 			};
 		} catch (error) {
 			lastError = error;
-			console.error("--- ERROR EN GEMINI SERVICE ---");
-			console.error(`Intento ${attempt}:`, error.message);
+			logger.warn('ai.gemini_attempt_failed', {
+				attempt,
+				model: modelName,
+				error,
+			});
 
 			if (!isRetryableGeminiError(error) || attempt > maxRetries) {
 				break;

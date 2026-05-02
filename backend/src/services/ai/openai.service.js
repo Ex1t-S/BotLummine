@@ -1,14 +1,16 @@
 import OpenAI from 'openai';
+import { getHttpTimeoutMs } from '../../lib/http-timeout.js';
 
 export async function runOpenAIReply(prompt) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || 'gpt-5.4';
+  const timeout = getHttpTimeoutMs('AI_PROVIDER_TIMEOUT_MS', 30000);
 
   if (!apiKey) {
     throw new Error('Falta OPENAI_API_KEY en el archivo .env');
   }
 
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, timeout });
 
   const response = await client.responses.create({
     model,

@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
@@ -22,6 +23,7 @@ const DELETE_CHUNK_SIZE = Math.max(
 	25,
 	Number(process.env.TIENDANUBE_ABANDONED_DELETE_CHUNK_SIZE || 250)
 );
+const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const DEFAULT_DAYS_BACK = 30;
 const ALLOWED_WINDOWS = new Set([30]);
 
@@ -129,10 +131,10 @@ async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKO
 
 	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
 		try {
-			const response = await fetch(url, {
+			const response = await fetchWithTimeout(url, {
 				method: 'GET',
 				headers: buildHeaders(accessToken)
-			});
+			}, TIENDANUBE_TIMEOUT_MS);
 
 			const text = await response.text();
 

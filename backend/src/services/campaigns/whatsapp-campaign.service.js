@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { prisma } from '../../lib/prisma.js';
+import { logger, maskPhone } from '../../lib/logger.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
 import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
@@ -2026,12 +2027,17 @@ async function dispatchSingleRecipient(campaign, recipient) {
 		variables: recipient.variables || {}
 	});
 
-	console.log('[CAMPAIGN][SEND] original phone:', recipient.phone);
-	console.log('[CAMPAIGN][SEND] normalized phone:', normalizeCampaignPhone(recipient.phone || ''));
-	console.log('[CAMPAIGN][SEND] campaign:', campaign.id, campaign.name, campaign.audienceSource || 'manual');
-	console.log('[CAMPAIGN][SEND] recipient:', recipient.id, recipient.contactId || 'no-contact', recipient.externalKey || 'no-external-key');
-	console.log('[CAMPAIGN][SEND] template:', campaign.templateName, campaign.templateLanguage);
-	console.log('[CAMPAIGN][SEND] components:', JSON.stringify(componentsToSend, null, 2));
+	logger.info('campaign.recipient_send_started', {
+		workspaceId: campaign.workspaceId,
+		campaignId: campaign.id,
+		audienceSource: campaign.audienceSource || 'manual',
+		recipientId: recipient.id,
+		contactId: recipient.contactId || null,
+		phone: maskPhone(recipient.phone || ''),
+		templateName: campaign.templateName,
+		templateLanguage: campaign.templateLanguage,
+		componentsCount: componentsToSend.length,
+	});
 
 	const sendResult = await sendWhatsAppTemplate({
 		workspaceId: campaign.workspaceId,
@@ -2044,10 +2050,15 @@ async function dispatchSingleRecipient(campaign, recipient) {
 	if (!sendResult?.ok) {
 		const providerError = extractCampaignProviderError(sendResult);
 
-		console.log('[CAMPAIGN][SEND][ERROR] phone:', recipient.phone);
-		console.log('[CAMPAIGN][SEND][ERROR] campaign:', campaign.id, recipient.id);
-		console.log('[CAMPAIGN][SEND][ERROR] provider:', providerError.code, providerError.subcode, providerError.message);
-		console.log('[CAMPAIGN][SEND][ERROR] raw:', JSON.stringify(sendResult?.error || {}, null, 2));
+		logger.warn('campaign.recipient_send_failed', {
+			workspaceId: campaign.workspaceId,
+			campaignId: campaign.id,
+			recipientId: recipient.id,
+			phone: maskPhone(recipient.phone || ''),
+			providerCode: providerError.code,
+			providerSubcode: providerError.subcode,
+			providerMessage: providerError.message,
+		});
 
 		const failedRecipient = await prisma.campaignRecipient.update({
 			where: { id: recipient.id },

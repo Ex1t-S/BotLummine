@@ -1,4 +1,8 @@
 import axios from 'axios';
+import { getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { isDebugPayloadLoggingEnabled, logger } from '../../lib/logger.js';
+
+const GRAPH_TIMEOUT_MS = getHttpTimeoutMs('META_GRAPH_TIMEOUT_MS', 15000);
 
 function normalizeEnvValue(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -65,11 +69,8 @@ function buildHeaders(extraHeaders = {}, accessToken = null) {
 }
 
 function logGraph(label, payload) {
-	try {
-		console.log(`[META GRAPH] ${label}`, JSON.stringify(payload, null, 2));
-	} catch {
-		console.log(`[META GRAPH] ${label}`, payload);
-	}
+	if (!isDebugPayloadLoggingEnabled()) return;
+	logger.debug('meta_graph.debug', { label, ...payload });
 }
 
 function normalizeAxiosGraphError(error) {
@@ -91,7 +92,8 @@ export async function graphGet(path, { params = {}, headers = {}, accessToken = 
 	try {
 		const response = await axios.get(url, {
 			params,
-			headers: buildHeaders(headers, accessToken)
+			headers: buildHeaders(headers, accessToken),
+			timeout: GRAPH_TIMEOUT_MS,
 		});
 
 		return response.data;
@@ -115,7 +117,8 @@ export async function graphPost(path, data = {}, { params = {}, headers = {}, ac
 	try {
 		const response = await axios.post(url, data, {
 			params,
-			headers: buildHeaders(headers, accessToken)
+			headers: buildHeaders(headers, accessToken),
+			timeout: GRAPH_TIMEOUT_MS,
 		});
 
 		return response.data;
@@ -141,7 +144,8 @@ export async function graphDelete(path, { params = {}, data = {}, headers = {}, 
 		const response = await axios.delete(url, {
 			params,
 			data,
-			headers: buildHeaders(headers, accessToken)
+			headers: buildHeaders(headers, accessToken),
+			timeout: GRAPH_TIMEOUT_MS,
 		});
 
 		return response.data;
