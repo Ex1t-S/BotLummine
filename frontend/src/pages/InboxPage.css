@@ -342,12 +342,6 @@
 	flex-shrink: 0;
 }
 
-.inbox-contact-phone {
-	font-size: 12px;
-	color: #64748b;
-	margin-bottom: 7px;
-}
-
 .inbox-contact-preview-row {
 	display: flex;
 	align-items: flex-start;
@@ -1162,7 +1156,6 @@
 }
 
 .inbox-section-subtle,
-.inbox-contact-phone,
 .inbox-contact-time,
 .inbox-chat-subtitle {
 	color: var(--ui-muted, #5f6b7a);

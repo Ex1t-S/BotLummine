@@ -1380,10 +1380,6 @@ export default function InboxPage() {
 											</div>
 										</div>
 
-										<div className="inbox-contact-phone">
-											{contact.phoneDisplay || 'Sin teléfono'}
-										</div>
-
 										<div className="inbox-contact-preview-row">
 											{contact.lastMessageDirection ? (
 												<span
