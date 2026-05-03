@@ -9,6 +9,10 @@ import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 import { buildAbandonedCartFilters } from './utils.js';
 import './CampaignsFeaturePage.css';
 
+function cleanCampaignCopy(value = '') {
+	return String(value || '');
+}
+
 const TAB_DEFINITIONS = [
 	{
 		id: 'library',
@@ -69,7 +73,7 @@ function DashboardTabButton({ tab, isActive, onClick }) {
 			className={`campaigns-tab-button ${isActive ? 'is-active' : ''}`.trim()}
 			onClick={() => onClick(tab.id)}
 		>
-			<span className="campaigns-tab-button__label">{tab.label}</span>
+			<span className="campaigns-tab-button__label">{cleanCampaignCopy(tab.label)}</span>
 		</button>
 	);
 }
@@ -84,13 +88,39 @@ function CampaignSectionShell({ tabId, eyebrow, title, description, children }) 
 		>
 			<div className="campaigns-tab-shell__header campaigns-tab-shell__header--stacked">
 				<div>
-					{eyebrow ? <span className="campaigns-tab-shell__eyebrow">{eyebrow}</span> : null}
-					<h3>{title}</h3>
-					{description ? <p>{description}</p> : null}
+					{eyebrow ? <span className="campaigns-tab-shell__eyebrow">{cleanCampaignCopy(eyebrow)}</span> : null}
+					<h3>{cleanCampaignCopy(title)}</h3>
+					{description ? <p>{cleanCampaignCopy(description)}</p> : null}
 				</div>
 			</div>
 			<div className="campaigns-tab-shell__body">{children}</div>
 		</section>
+	);
+}
+
+function CampaignConfirmDialog({ confirm, onCancel, onConfirm }) {
+	if (!confirm) return null;
+
+	return (
+		<div className="campaign-confirm-backdrop" role="presentation">
+			<div
+				className="campaign-confirm-dialog"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="campaign-confirm-title"
+			>
+				<h3 id="campaign-confirm-title">{confirm.title}</h3>
+				<p>{confirm.message}</p>
+				<div className="campaign-confirm-actions">
+					<button type="button" className="button ghost" onClick={onCancel}>
+						Cancelar
+					</button>
+					<button type="button" className="button danger" onClick={onConfirm}>
+						{confirm.confirmLabel || 'Eliminar'}
+					</button>
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -181,6 +211,7 @@ function CampaignSchedulesPanel({
 	schedules = [],
 	loading = false,
 	mutations,
+	onDeleteSchedule,
 }) {
 	const [form, setForm] = useState(initialScheduleForm);
 	const isEditing = Boolean(form.id);
@@ -472,11 +503,7 @@ function CampaignSchedulesPanel({
 							<button
 								type="button"
 								className="button danger"
-								onClick={() => {
-									if (window.confirm(`Eliminar la programación "${schedule.name}"?`)) {
-										mutations.deleteSchedule.mutate(schedule.id);
-									}
-								}}
+								onClick={() => onDeleteSchedule?.(schedule)}
 								disabled={mutations.deleteSchedule.isPending}
 							>
 								Eliminar
@@ -508,6 +535,7 @@ export default function CampaignsFeaturePage() {
 	} = useCampaignsDashboard();
 
 	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
+	const [pendingConfirm, setPendingConfirm] = useState(null);
 	const tabsByPath = useMemo(
 		() =>
 			TAB_DEFINITIONS.reduce((acc, tab) => {
@@ -554,6 +582,57 @@ export default function CampaignsFeaturePage() {
 		openTab('builder');
 	}
 
+	function requestDeleteTemplate(template) {
+		if (!template?.id) return;
+		setPendingConfirm({
+			type: 'template',
+			id: template.id,
+			title: 'Eliminar template',
+			message: `Vas a eliminar "${template.name}". Esta accion no se puede deshacer desde la biblioteca local.`,
+			confirmLabel: 'Eliminar template',
+		});
+	}
+
+	function requestDeleteCampaign(campaign) {
+		if (!campaign?.id) return;
+		setPendingConfirm({
+			type: 'campaign',
+			id: campaign.id,
+			title: 'Eliminar campana',
+			message: `Vas a eliminar "${campaign.name}". Esta accion no se puede deshacer.`,
+			confirmLabel: 'Eliminar campana',
+		});
+	}
+
+	function requestDeleteSchedule(schedule) {
+		if (!schedule?.id) return;
+		setPendingConfirm({
+			type: 'schedule',
+			id: schedule.id,
+			title: 'Eliminar programacion',
+			message: `Vas a eliminar "${schedule.name}". La automatizacion dejara de ejecutarse.`,
+			confirmLabel: 'Eliminar programacion',
+		});
+	}
+
+	function confirmPendingAction() {
+		if (!pendingConfirm) return;
+
+		if (pendingConfirm.type === 'template') {
+			mutations.deleteTemplate.mutate(pendingConfirm.id);
+		}
+
+		if (pendingConfirm.type === 'campaign') {
+			mutations.deleteCampaign.mutate(pendingConfirm.id);
+		}
+
+		if (pendingConfirm.type === 'schedule') {
+			mutations.deleteSchedule.mutate(pendingConfirm.id);
+		}
+
+		setPendingConfirm(null);
+	}
+
 	function renderContent() {
 		switch (activeTab) {
 			case 'library':
@@ -574,10 +653,7 @@ export default function CampaignsFeaturePage() {
 							syncing={mutations.sync.isPending}
 							onPurgeDeleted={() => mutations.purgeDeletedTemplates.mutate()}
 							purgingDeleted={mutations.purgeDeletedTemplates.isPending}
-							onDeleteTemplate={(template) => {
-								const confirmed = window.confirm(`Eliminar el template ${template.name}?`);
-								if (confirmed) mutations.deleteTemplate.mutate(template.id);
-							}}
+							onDeleteTemplate={requestDeleteTemplate}
 						/>
 					</CampaignSectionShell>
 				);
@@ -639,16 +715,7 @@ export default function CampaignsFeaturePage() {
 							onDispatch={(campaignId) => mutations.action.mutate({ type: 'dispatch', campaignId })}
 							onPause={(campaignId) => mutations.action.mutate({ type: 'pause', campaignId })}
 							onResume={(campaignId) => mutations.action.mutate({ type: 'resume', campaignId })}
-							onDelete={(campaign) => {
-								if (!campaign?.id) return;
-
-								const confirmed = window.confirm(
-									`Eliminar la campaña "${campaign.name}"?\n\nEsta acción no se puede deshacer.`
-								);
-
-								if (!confirmed) return;
-								mutations.deleteCampaign.mutate(campaign.id);
-							}}
+							onDelete={requestDeleteCampaign}
 							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
 							deleteLoading={mutations.deleteCampaign.isPending}
 							tracking={tracking}
@@ -669,6 +736,7 @@ export default function CampaignsFeaturePage() {
 							schedules={schedules}
 							loading={queries.schedules.isLoading}
 							mutations={mutations}
+							onDeleteSchedule={requestDeleteSchedule}
 						/>
 					</CampaignSectionShell>
 				);
@@ -704,6 +772,12 @@ export default function CampaignsFeaturePage() {
 			</div>
 
 			{renderContent()}
+
+			<CampaignConfirmDialog
+				confirm={pendingConfirm}
+				onCancel={() => setPendingConfirm(null)}
+				onConfirm={confirmPendingAction}
+			/>
 		</section>
 	);
 }

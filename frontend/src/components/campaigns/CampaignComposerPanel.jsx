@@ -245,15 +245,7 @@ function normalizeText(value = '') {
 }
 
 function sanitizeCampaignCopy(value = '') {
-	return String(value || '')
-		.replace(/ÃƒÂ¡|Ã¡/g, 'a')
-		.replace(/ÃƒÂ©|Ã©/g, 'e')
-		.replace(/ÃƒÂ­|Ã­/g, 'i')
-		.replace(/ÃƒÂ³|Ã³/g, 'o')
-		.replace(/ÃƒÂº|Ãº/g, 'u')
-		.replace(/ÃƒÂ±|Ã±/g, 'n')
-		.replace(/â€¦/g, '...')
-		.replace(/Â·/g, '-');
+	return String(value || '');
 }
 
 function getTemplateComponents(template) {
@@ -988,7 +980,7 @@ export default function CampaignComposerPanel({
 	const sentTemplateFilterKey = sentTemplateFilterNames.join('||');
 
 	const selectionButtonLabel = useMemo(() => {
-		if (customerAudience.loadingAll) return 'Seleccionando…';
+		if (customerAudience.loadingAll) return 'Seleccionando...';
 
 		if (contactLimitNumber) {
 			return `Seleccionar primeros ${formatCompactNumber(effectiveSelectionCount)} filtrados`;
@@ -1599,7 +1591,7 @@ export default function CampaignComposerPanel({
 										style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer' }}
 									>
 										{uploadingImage
-											? 'Subiendo…'
+											? 'Subiendo...'
 											: uploadedMediaId
 												? `Cambiar ${getTemplateHeaderMediaLabel(selectedTemplate)}`
 												: hasTemplateResolvedHeaderMedia
@@ -1891,7 +1883,7 @@ export default function CampaignComposerPanel({
 								onClick={() => loadCustomers(customerFilters)}
 								disabled={customerAudience.loading}
 							>
-								{customerAudience.loading ? 'Buscando…' : 'Actualizar audiencia'}
+								{customerAudience.loading ? 'Buscando...' : 'Actualizar audiencia'}
 							</button>
 
 							<label className="field campaign-contact-limit-field">
@@ -2065,7 +2057,7 @@ export default function CampaignComposerPanel({
 							<div className="campaign-variable-list">
 								{templatePlaceholders.map((placeholder) => (
 									<span key={placeholder}>
-										{`{{${placeholder}}} → ${sampleResolvedVariables?.[placeholder] || '—'}`}
+										{`{{${placeholder}}} -> ${sampleResolvedVariables?.[placeholder] || '—'}`}
 									</span>
 								))}
 							</div>
@@ -2135,7 +2127,7 @@ export default function CampaignComposerPanel({
 								<span>
 									Mostrando{' '}
 									{previewFilteredCustomers.length
-										? `${(previewPage - 1) * PREVIEW_PAGE_SIZE + 1}–${Math.min(
+										? `${(previewPage - 1) * PREVIEW_PAGE_SIZE + 1}-${Math.min(
 												previewPage * PREVIEW_PAGE_SIZE,
 												previewFilteredCustomers.length
 										)}`
@@ -2190,7 +2182,7 @@ export default function CampaignComposerPanel({
 							type="submit"
 							disabled={creating || uploadingImage || !campaignReadyToCreate}
 						>
-							{creating ? 'Creando…' : 'Crear campaña'}
+							{creating ? 'Creando...' : 'Crear campaña'}
 						</button>
 					</div>
 				</div>

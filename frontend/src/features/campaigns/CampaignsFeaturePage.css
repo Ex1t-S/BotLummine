@@ -169,6 +169,46 @@
 	font-weight: 700;
 }
 
+.campaign-confirm-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	display: grid;
+	place-items: center;
+	padding: 20px;
+	background: rgba(15, 23, 42, 0.42);
+}
+
+.campaign-confirm-dialog {
+	width: min(420px, 100%);
+	padding: 18px;
+	border: 1px solid var(--ui-border, #d8dee8);
+	border-radius: 12px;
+	background: #ffffff;
+	box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+}
+
+.campaign-confirm-dialog h3 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 760;
+	color: var(--ui-heading, #0b1220);
+}
+
+.campaign-confirm-dialog p {
+	margin: 8px 0 0;
+	color: var(--ui-muted, #5f6b7a);
+	line-height: 1.5;
+}
+
+.campaign-confirm-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 18px;
+	flex-wrap: wrap;
+}
+
 @media (max-width: 1080px) {
 	.campaign-schedules {
 		grid-template-columns: 1fr;
