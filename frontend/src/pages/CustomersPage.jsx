@@ -153,7 +153,7 @@ function formatDuration(startedAt) {
 function buildSyncBadgeLabel(syncStatus) {
 	if (syncStatus.running) return 'Sincronizando en vivo';
 	if (syncStatus.errors?.length) return 'Sync con errores';
-	if (syncStatus.hasMoreHistory) return 'Histórico pendiente';
+	if (syncStatus.hasMoreHistory) return 'Historico pendiente';
 	return 'Listo';
 }
 
@@ -204,7 +204,7 @@ function ProductMultiSelect({
 			<input
 				type="text"
 				className="product-multiselect-search"
-				placeholder="Buscar productos del catálogo..."
+				placeholder="Buscar productos del catalogo..."
 				value={search}
 				onChange={(event) => onSearchChange(event.target.value)}
 			/>
@@ -225,7 +225,7 @@ function ProductMultiSelect({
 						);
 					})
 				) : (
-					<div className="product-option-empty">No hay coincidencias en el catálogo.</div>
+					<div className="product-option-empty">No hay coincidencias en el catalogo.</div>
 				)}
 			</div>
 
@@ -346,7 +346,7 @@ export default function CustomersPage() {
 		onError: (error) => {
 			console.error(error);
 			setErrorMessage(
-				error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.'
+				error?.response?.data?.message || 'No se pudo iniciar la sincronizacion de pedidos.'
 			);
 		},
 	});
@@ -380,6 +380,11 @@ export default function CustomersPage() {
 		() => buildVisiblePages(currentPage, totalPages),
 		[currentPage, totalPages]
 	);
+	const activeFilterCount = useMemo(() => {
+		const keys = ['q', 'productQuery', 'orderNumber', 'dateFrom', 'dateTo', 'paymentStatus', 'minSpent'];
+		const filled = keys.filter((key) => String(filters[key] || '').trim()).length;
+		return filled + (filters.hasPhoneOnly ? 1 : 0);
+	}, [filters]);
 	const displayAvgTicketLabel = billingVisible ? normalizedStats.avgTicketLabel : '********';
 	const displayTotalSpentLabel = billingVisible ? normalizedStats.totalSpentLabel : '********';
 
@@ -435,6 +440,7 @@ export default function CustomersPage() {
 		setFilters(initialFilters);
 		setSelectedProducts([]);
 		setProductSearch('');
+		setShowProductFilter(false);
 	}
 
 	function handleSync() {
@@ -455,8 +461,8 @@ export default function CustomersPage() {
 					<span className="customers-kicker">VENTAS REALES</span>
 					<h1>Clientes y compras</h1>
 					<p>
-						Vista comercial basada en pedidos reales. Vas viendo resultados mientras la sync avanza,
-						sin dejar la pantalla colgada ni depender de recargar manualmente.
+						Pedidos reales, clientes y productos comprados en una vista para buscar oportunidades
+						sin perder el estado de sincronizacion.
 					</p>
 				</div>
 
@@ -465,7 +471,7 @@ export default function CustomersPage() {
 						{syncing ? 'Sincronizando pedidos...' : 'Sincronizar pedidos'}
 					</button>
 					<button type="button" className="secondary-link-btn" onClick={handleResetFilters}>
-						Limpiar filtros
+						Limpiar filtros{activeFilterCount ? ` (${activeFilterCount})` : ''}
 					</button>
 					<button
 						type="button"
@@ -486,19 +492,19 @@ export default function CustomersPage() {
 				<div className="customers-sync-top">
 					<div>
 						<span className="customers-sync-kicker">{buildSyncBadgeLabel(syncStatus)}</span>
-						<h3>{syncStatus.message || 'Todavía no corriste una sincronización.'}</h3>
+						<h3>{syncStatus.message || 'Todavia no corriste una sincronizacion.'}</h3>
 						<p>
 							{syncStatus.running
-								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} · páginas ${syncStatus.pagesFetched} · pedidos leídos ${syncStatus.ordersFetched} · pedidos guardados ${syncStatus.ordersUpserted}.`
+								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} - paginas ${syncStatus.pagesFetched} - pedidos leidos ${syncStatus.ordersFetched} - pedidos guardados ${syncStatus.ordersUpserted}.`
 								: syncStatus.finishedAt
-									? `Última finalización ${formatDateTime(syncStatus.finishedAt)}.`
-									: 'Cuando empiece la sync, acá vas a ver el progreso en vivo.'}
+									? `Ultima finalizacion ${formatDateTime(syncStatus.finishedAt)}.`
+									: 'Cuando empiece la sync, aca vas a ver el progreso en vivo.'}
 						</p>
 					</div>
 					<div className="customers-sync-stats">
-						<div><span>Páginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
+						<div><span>Paginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
 						<div><span>Pedidos</span><strong>{syncStatus.ordersFetched || 0}</strong></div>
-						<div><span>Ítems</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
+						<div><span>Items</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
 					</div>
 				</div>
 
@@ -511,8 +517,8 @@ export default function CustomersPage() {
 
 				{syncStatus.activeWindow ? (
 					<p className="customers-sync-window">
-						Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> ·{' '}
-						{formatDateTime(syncStatus.activeWindow.from)} → {formatDateTime(syncStatus.activeWindow.to)}
+						Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> -{' '}
+						{formatDateTime(syncStatus.activeWindow.from)} a {formatDateTime(syncStatus.activeWindow.to)}
 					</p>
 				) : null}
 
@@ -545,18 +551,23 @@ export default function CustomersPage() {
 
 			<div className="customers-stats-grid">
 				<div className="customers-stat-card"><span className="customers-stat-label">Pedidos</span><strong>{normalizedStats.totalOrders}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Clientes únicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Con teléfono</span><strong>{normalizedStats.withPhone}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Clientes unicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Con telefono</span><strong>{normalizedStats.withPhone}</strong></div>
 					<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{displayAvgTicketLabel}</strong></div>
-					<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{displayTotalSpentLabel}</strong></div>
+					<div className="customers-stat-card"><span className="customers-stat-label">Facturacion</span><strong>{displayTotalSpentLabel}</strong></div>
 			</div>
 
 			<div className="customers-filters-card">
 				<div className="customers-list-topbar">
 					<div>
 						<h3>Filtros comerciales</h3>
-						<p>Filtrá por cliente, pedido, monto y productos reales del catálogo.</p>
+						<p>Filtra por cliente, pedido, monto y productos reales del catalogo.</p>
 					</div>
+					{activeFilterCount ? (
+						<span className="customers-active-filter-badge">
+							{activeFilterCount} filtros activos
+						</span>
+					) : null}
 				</div>
 
 				<div className="customers-filter-grid">
@@ -565,7 +576,7 @@ export default function CustomersPage() {
 						<input
 							type="text"
 							name="q"
-							placeholder="Nombre, email, teléfono, SKU o nro. de pedido"
+							placeholder="Nombre, email, telefono, SKU o nro. de pedido"
 							value={filters.q}
 							onChange={handleFilterChange}
 						/>
@@ -611,7 +622,7 @@ export default function CustomersPage() {
 					</div>
 
 					<div className="customers-filter-group">
-						<label>N° pedido</label>
+						<label>Nro. pedido</label>
 						<input
 							type="text"
 							name="orderNumber"
@@ -649,7 +660,7 @@ export default function CustomersPage() {
             </select>
           </div>
 					<div className="customers-filter-group">
-						<label>Total mínimo</label>
+						<label>Total minimo</label>
 						<input
 							type="number"
 							name="minSpent"
@@ -662,8 +673,8 @@ export default function CustomersPage() {
 					<div className="customers-filter-group">
 						<label>Ordenar por</label>
 						<select name="sort" value={filters.sort} onChange={handleFilterChange}>
-							<option value="purchase_desc">Compra más reciente</option>
-							<option value="purchase_asc">Compra más antigua</option>
+							<option value="purchase_desc">Compra mas reciente</option>
+							<option value="purchase_asc">Compra mas antigua</option>
 							<option value="spent_desc">Mayor monto</option>
 							<option value="spent_asc">Menor monto</option>
 							<option value="name_asc">Nombre A-Z</option>
@@ -682,7 +693,7 @@ export default function CustomersPage() {
 							checked={filters.hasPhoneOnly}
 							onChange={handleFilterChange}
 						/>
-						<span>Solo con teléfono</span>
+						<span>Solo con telefono</span>
 					</label>
 
 					<div className="customers-filter-actions">
@@ -708,7 +719,7 @@ export default function CustomersPage() {
 
 				{!loading && !data.customers?.length ? (
 					<div className="customers-empty-state">
-						No hay compras para esos filtros. Probá ampliar la búsqueda o dejar que la sync avance un poco más.
+						No hay compras para esos filtros. Proba ampliar la busqueda o dejar que la sync avance un poco mas.
 					</div>
 				) : null}
 
@@ -766,7 +777,7 @@ export default function CustomersPage() {
 										</ul>
 									) : (
 										<p className="customer-products-empty">
-											Todavía no quedó guardado el detalle de productos.
+											Todavia no quedo guardado el detalle de productos.
 										</p>
 									)}
 								</div>
@@ -788,13 +799,13 @@ export default function CustomersPage() {
 							disabled={currentPage === 1}
 							onClick={() => handlePageChange(currentPage - 1)}
 						>
-							← Anterior
+							Anterior
 						</button>
 
 						<div className="pagination-pages">
 							{visiblePages.map((page) =>
 								String(page).includes('ellipsis') ? (
-									<span key={page} className="pagination-ellipsis">…</span>
+									<span key={page} className="pagination-ellipsis">...</span>
 								) : (
 									<button
 										key={page}
@@ -814,7 +825,7 @@ export default function CustomersPage() {
 							disabled={currentPage === totalPages}
 							onClick={() => handlePageChange(currentPage + 1)}
 						>
-							Siguiente →
+							Siguiente
 						</button>
 					</div>
 				) : null}

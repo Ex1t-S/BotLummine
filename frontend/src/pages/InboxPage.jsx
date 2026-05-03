@@ -9,8 +9,8 @@ import { isAdminUser } from '../lib/authz.js';
 
 const QUEUES = [
 	{ key: 'ALL', label: 'Todos' },
-	{ key: 'AUTO', label: 'Automático' },
-	{ key: 'HUMAN', label: 'Atención humana' },
+	{ key: 'AUTO', label: 'Automatico' },
+	{ key: 'HUMAN', label: 'Atencion humana' },
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
 
@@ -49,6 +49,17 @@ const READ_FILTERS = [
 	{ key: 'UNREAD', label: 'No leidos' },
 	{ key: 'READ', label: 'Leidos' },
 ];
+
+const QUEUE_LABELS = {
+	ALL: 'Todos',
+	AUTO: 'Automatico',
+	HUMAN: 'Atencion humana',
+	PAYMENT_REVIEW: 'Comprobantes',
+};
+
+function getQueueLabel(queueKey = '') {
+	return QUEUE_LABELS[queueKey] || queueKey || 'Bandeja';
+}
 
 function resolveReadFilter(value = '') {
 	const normalized = String(value || '').trim().toUpperCase();
@@ -1342,8 +1353,7 @@ export default function InboxPage() {
 		.filter(Boolean)
 		.join(' ');
 	const currentQueue = conversation?.queue || activeContact?.queue || queue;
-	const currentQueueLabel =
-		QUEUES.find((item) => item.key === currentQueue)?.label || currentQueue;
+	const currentQueueLabel = getQueueLabel(currentQueue);
 	const isBusyWithConversationAction =
 		moveQueueMutation.isPending ||
 		resetContextMutation.isPending ||
@@ -1354,6 +1364,21 @@ export default function InboxPage() {
 		<div className={inboxPageClassName}>
 			{showConversationSidebar ? (
 			<aside className="inbox-sidebar">
+				<div className="inbox-sidebar-top">
+					<div>
+						<strong>Inbox</strong>
+						<span>{counts.ALL || 0} conversaciones cargadas</span>
+					</div>
+					<button
+						type="button"
+						className="inbox-sidebar-refresh"
+						onClick={() => inboxQuery.refetch()}
+						disabled={inboxQuery.isFetching}
+					>
+						{inboxQuery.isFetching ? '...' : 'Actualizar'}
+					</button>
+				</div>
+
 				<div className="inbox-queue-tabs">
 					{QUEUES.map((item) => {
 						const isActive = queue === item.key;
@@ -1365,7 +1390,8 @@ export default function InboxPage() {
 								disabled={inboxQuery.isFetching && isActive}
 								onClick={() => selectQueue(item.key)}
 							>
-								{item.label} · {counts[item.key] || 0}
+								<span>{getQueueLabel(item.key)}</span>
+								<strong>{counts[item.key] || 0}</strong>
 							</ActionButton>
 						);
 					})}
@@ -1393,7 +1419,7 @@ export default function InboxPage() {
 					<input
 						type="text"
 						className="inbox-search-input"
-						placeholder="Buscar por nombre, teléfono o mensaje..."
+						placeholder="Buscar por nombre, telefono o mensaje..."
 						value={searchTerm}
 						onChange={(event) => setSearchTerm(event.target.value)}
 					/>
@@ -1420,12 +1446,22 @@ export default function InboxPage() {
 					onScroll={handleContactsScroll}
 				>
 					{inboxQuery.isLoading ? (
-						<div className="inbox-empty">Cargando conversaciones...</div>
+						<div className="inbox-empty">
+							<strong>Cargando conversaciones</strong>
+							<span>Estamos sincronizando la bandeja.</span>
+						</div>
 					) : null}
 
 					{!inboxQuery.isLoading && !visibleContacts.length ? (
 						<div className="inbox-empty">
-							No hay conversaciones en esta bandeja.
+							<strong>No hay conversaciones para mostrar</strong>
+							<span>
+								{normalizedSearch
+									? 'Proba con otro nombre, telefono o mensaje.'
+									: readFilter === 'UNREAD'
+										? 'No quedan chats no leidos en esta vista.'
+										: 'Cuando entren mensajes nuevos, apareceran aca.'}
+							</span>
 						</div>
 					) : null}
 
@@ -1531,7 +1567,7 @@ export default function InboxPage() {
 								Mostrar conversaciones
 							</ActionButton>
 						) : null}
-						Seleccioná una conversación
+						Selecciona una conversacion
 					</div>
 				) : (
 					<div className="inbox-chat-workspace">
@@ -1555,7 +1591,7 @@ export default function InboxPage() {
 									<div className="inbox-chat-subtitle">
 										{conversation?.contact?.phone ||
 											activeContact?.phoneDisplay ||
-											'Sin teléfono'}
+											'Sin telefono'}
 									</div>
 								</div>
 
@@ -1589,7 +1625,7 @@ export default function InboxPage() {
 									disabled={moveQueueMutation.isPending}
 									onClick={() => handleMoveQueue('AUTO')}
 								>
-									Automático
+									Automatico
 								</ActionButton>
 
 								<ActionButton
@@ -1597,7 +1633,7 @@ export default function InboxPage() {
 									disabled={moveQueueMutation.isPending}
 									onClick={() => handleMoveQueue('HUMAN')}
 								>
-									Atención humana
+									Atencion humana
 								</ActionButton>
 
 								<ActionButton
@@ -1651,7 +1687,7 @@ export default function InboxPage() {
 											}
 											onClick={() => {
 												const confirmed = window.confirm(
-													'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
+													'Esto va a borrar el historial y limpiar el contexto de esta conversacion. Continuar?'
 												);
 
 												if (confirmed) {
@@ -1683,7 +1719,10 @@ export default function InboxPage() {
 						>
 							<div className="inbox-messages-list">
 								{conversationQuery.isLoading ? (
-									<div className="inbox-empty">Cargando mensajes...</div>
+									<div className="inbox-empty">
+										<strong>Cargando mensajes</strong>
+										<span>Preparando el historial de esta conversacion.</span>
+									</div>
 								) : null}
 
 								{hasOlderMessages ? (
@@ -1702,7 +1741,7 @@ export default function InboxPage() {
 								{!conversationQuery.isLoading &&
 								displayedMessages.length === 0 ? (
 									<div className="inbox-empty">
-										Esta conversación todavía no tiene mensajes.
+										Esta conversacion todavia no tiene mensajes.
 									</div>
 								) : null}
 

@@ -156,13 +156,13 @@
 }
 
 .customers-sync-stats {
-	display: flex;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 12px;
-	flex-wrap: wrap;
 }
 
 .customers-sync-stats > div {
-	min-width: 96px;
+	min-width: 0;
 	padding: 10px 12px;
 	border-radius: 14px;
 	background: #f8fafc;
@@ -229,8 +229,8 @@
 
 .customers-stats-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-	gap: 14px;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 10px;
 }
 
 .customers-stat-card {
@@ -268,6 +268,19 @@
 	flex-wrap: wrap;
 }
 
+.customers-active-filter-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 30px;
+	padding: 6px 10px;
+	border: 1px solid #cfe1ff;
+	border-radius: 999px;
+	background: #f2f6ff;
+	color: #184a9b;
+	font-size: 12px;
+	font-weight: 760;
+}
+
 .customers-list-topbar h3 {
 	margin: 0 0 6px;
 	font-size: 20px;
@@ -277,7 +290,7 @@
 .customers-filter-grid {
 	display: grid;
 	grid-template-columns: repeat(12, 1fr);
-	gap: 14px;
+	gap: 12px;
 }
 
 .customers-filter-group {
@@ -285,6 +298,7 @@
 	flex-direction: column;
 	gap: 8px;
 	grid-column: span 3;
+	min-width: 0;
 }
 
 .customers-filter-group--grow {
@@ -726,6 +740,17 @@
 @media (max-width: 720px) {
 	.customers-page {
 		padding: 14px;
+	}
+
+	.customers-hero-card,
+	.customers-sync-panel,
+	.customers-filters-card,
+	.customers-list-card {
+		padding: 14px;
+	}
+
+	.customers-sync-stats {
+		grid-template-columns: 1fr;
 	}
 
 	.customers-filter-grid {

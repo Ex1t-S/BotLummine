@@ -874,14 +874,14 @@ export default function CampaignComposerPanel({
 				label: 'Template elegido',
 				ok: Boolean(selectedTemplate?.id),
 				readyText: selectedTemplate?.name || 'Listo',
-				pendingText: 'ElegÃ­ un template',
+				pendingText: 'Elegi un template',
 			},
 			{
 				id: 'image',
 				label: 'Header media',
 				ok: !requiresHeaderMedia || !needsHeaderMediaUpload,
 				readyText: campaignOverridesTemplateMedia
-					? 'Se reemplaza para esta campaÃ±a'
+					? 'Se reemplaza para esta campana'
 					: hasTemplateResolvedHeaderMedia
 						? 'Resuelta en la plantilla'
 						: 'No aplica',
@@ -903,8 +903,8 @@ export default function CampaignComposerPanel({
 				readyText: `${formatCompactNumber(recipients.length)} destinatarios`,
 				pendingText:
 					form.audienceMode === 'customers'
-						? 'SeleccionÃ¡ clientes'
-						: 'CargÃ¡ destinatarios',
+						? 'Selecciona clientes'
+						: 'Carga destinatarios',
 			},
 		],
 		[
@@ -1454,7 +1454,7 @@ export default function CampaignComposerPanel({
 					</div>
 					<div className="campaign-builder-top-summary-item">
 						<strong>USD {estimatedCost.toFixed(2)}</strong>
-						<span>{sanitizeCampaignCopy('estimado rÃ¡pido')}</span>
+						<span>{sanitizeCampaignCopy('estimado rapido')}</span>
 					</div>
 				</div>
 
@@ -1485,7 +1485,7 @@ export default function CampaignComposerPanel({
 
 				<div className="campaign-helper-box" style={{ display: 'none' }}>
 					<div className="campaign-helper-text">
-						RevisiÃ³n rÃ¡pida antes de crear la campaÃ±a. Si algo no estÃ¡ listo, aparece marcado acÃ¡ y no reciÃ©n al final.
+						Revision rapida antes de crear la campana. Si algo no esta listo, aparece marcado aca y no recien al final.
 					</div>
 
 					<div className="campaign-review-grid">
@@ -1499,11 +1499,11 @@ export default function CampaignComposerPanel({
 
 					{campaignReadyToCreate ? (
 						<div className="campaign-inline-success">
-							La campaÃ±a ya tiene todo lo necesario para crearse.
+							La campana ya tiene todo lo necesario para crearse.
 						</div>
 					) : (
 						<div className="campaign-inline-warning">
-							CompletÃ¡ los puntos pendientes antes de crear o lanzar la campaÃ±a.
+							Completa los puntos pendientes antes de crear o lanzar la campana.
 						</div>
 					)}
 				</div>

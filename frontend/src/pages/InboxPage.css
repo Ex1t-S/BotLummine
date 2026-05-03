@@ -33,10 +33,49 @@
 
 .inbox-sidebar {
 	display: grid;
-	grid-template-rows: auto auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto auto minmax(0, 1fr);
 	padding: 14px;
 	min-height: 0;
 	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.inbox-sidebar-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 2px 2px 12px;
+}
+
+.inbox-sidebar-top strong {
+	display: block;
+	font-size: 18px;
+	line-height: 1.1;
+	color: #0f172a;
+}
+
+.inbox-sidebar-top span {
+	display: block;
+	margin-top: 3px;
+	font-size: 12px;
+	font-weight: 650;
+	color: #64748b;
+}
+
+.inbox-sidebar-refresh {
+	min-height: 34px;
+	padding: 7px 10px;
+	border-radius: 10px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	background: #ffffff;
+	color: #0f766e;
+	font-size: 12px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.inbox-sidebar-refresh:disabled {
+	color: #94a3b8;
 }
 
 .inbox-queue-tabs {
@@ -187,6 +226,17 @@
 	border-radius: 14px;
 	padding: 18px;
 	text-align: center;
+	display: grid;
+	gap: 5px;
+}
+
+.inbox-empty strong {
+	color: #0f172a;
+	font-size: 14px;
+}
+
+.inbox-empty span {
+	line-height: 1.4;
 }
 
 .inbox-load-more {
@@ -519,6 +569,19 @@
 	color: #475569;
 }
 
+.inbox-queue-tabs .inbox-action-btn strong {
+	min-width: 24px;
+	height: 24px;
+	padding: 0 7px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(15, 23, 42, 0.06);
+	color: inherit;
+	font-size: 12px;
+}
+
 .inbox-queue-tabs .inbox-action-btn:hover:not(:disabled) {
 	background: rgba(255, 255, 255, 0.72);
 	color: #0f172a;
@@ -848,20 +911,21 @@
 @media (max-width: 900px) {
 	.inbox-page {
 		grid-template-columns: 1fr;
-		height: auto;
-		min-height: auto;
+		height: 100%;
+		min-height: 0;
+		overflow-y: auto;
 	}
 
 	.inbox-sidebar {
-		max-height: 410px;
+		max-height: 44vh;
 	}
 
 	.inbox-chat-panel {
-		min-height: 70vh;
+		min-height: 62vh;
 	}
 
 	.inbox-queue-tabs {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 

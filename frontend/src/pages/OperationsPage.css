@@ -91,15 +91,21 @@
 	color: var(--ui-text);
 	text-align: left;
 	box-shadow: var(--ui-shadow-sm);
+	position: relative;
 }
 
 button.operations-metric-card {
 	cursor: pointer;
+	padding-right: 46px;
 }
 
 button.operations-metric-card:hover {
 	border-color: var(--ui-border-strong);
 	background: var(--ui-surface-soft);
+}
+
+button.operations-metric-card:focus-visible {
+	box-shadow: var(--ui-focus);
 }
 
 .operations-metric-card span {
@@ -118,6 +124,16 @@ button.operations-metric-card:hover {
 .operations-metric-card small {
 	color: var(--ui-muted);
 	line-height: 1.35;
+}
+
+.operations-metric-card em {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	font-style: normal;
+	font-size: 12px;
+	font-weight: 760;
+	color: var(--ui-primary);
 }
 
 .operations-metric-card.tone-warning {
@@ -240,6 +256,7 @@ button.operations-metric-card:hover {
 .operations-empty {
 	display: grid;
 	place-items: center;
+	gap: 6px;
 	min-height: 160px;
 	padding: 20px;
 	border: 1px dashed #cbd5e1;
@@ -247,6 +264,19 @@ button.operations-metric-card:hover {
 	background: #ffffff;
 	color: var(--ui-muted);
 	text-align: center;
+}
+
+.operations-empty strong {
+	color: var(--ui-heading);
+	font-size: 16px;
+}
+
+.operations-empty span {
+	max-width: 520px;
+}
+
+.operations-empty--status {
+	place-content: center;
 }
 
 .operations-empty.compact {

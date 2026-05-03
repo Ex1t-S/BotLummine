@@ -27,6 +27,7 @@ function MetricCard({ label, value, helper, tone = 'neutral', onClick }) {
 			<span>{label}</span>
 			<strong>{formatNumber(value)}</strong>
 			<small>{helper}</small>
+			{onClick ? <em>Abrir</em> : null}
 		</>
 	);
 
@@ -178,7 +179,10 @@ export default function OperationsPage() {
 	if (summaryQuery.isLoading) {
 		return (
 			<section className="operations-page">
-				<div className="operations-empty">Cargando operacion diaria...</div>
+				<div className="operations-empty operations-empty--status">
+					<strong>Cargando operacion diaria</strong>
+					<span>Estamos buscando conversaciones, comprobantes y alertas abiertas.</span>
+				</div>
 			</section>
 		);
 	}
@@ -187,7 +191,8 @@ export default function OperationsPage() {
 		return (
 			<section className="operations-page">
 				<div className="operations-empty error">
-					No se pudo cargar la operacion. Reintenta en unos segundos.
+					<strong>No se pudo cargar la operacion</strong>
+					<span>Reintenta en unos segundos. Si persiste, revisa la conexion del backend.</span>
 				</div>
 			</section>
 		);
@@ -204,7 +209,7 @@ export default function OperationsPage() {
 					<p>
 						{platformAdmin
 							? 'Marcas con alertas, conversaciones pendientes y salud operativa.'
-							: 'Conversaciones, comprobantes y tareas que conviene resolver primero.'}
+							: 'Empeza por los comprobantes y chats pendientes. Esta vista resume lo que requiere accion hoy.'}
 					</p>
 				</div>
 				<div className="operations-header-actions">
@@ -251,7 +256,10 @@ export default function OperationsPage() {
 			</div>
 
 			{!workspaces.length ? (
-				<div className="operations-empty">No hay marcas para mostrar.</div>
+				<div className="operations-empty operations-empty--status">
+					<strong>No hay marcas para mostrar</strong>
+					<span>Cuando exista un workspace activo, sus prioridades apareceran aca.</span>
+				</div>
 			) : null}
 		</section>
 	);
