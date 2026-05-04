@@ -188,6 +188,7 @@ export function useCampaignsDashboard() {
 	});
 
 	const [campaignTrackingStatus, setCampaignTrackingStatus] = useState('ALL');
+	const [campaignTrackingPurchase, setCampaignTrackingPurchase] = useState('ALL');
 	const [campaignTrackingSearch, setCampaignTrackingSearch] = useState('');
 	const [campaignTrackingPage, setCampaignTrackingPage] = useState(1);
 
@@ -309,6 +310,7 @@ export function useCampaignsDashboard() {
 		setCampaignTrackingPage(1);
 		setCampaignTrackingSearch('');
 		setCampaignTrackingStatus('ALL');
+		setCampaignTrackingPurchase('ALL');
 	}, [selectedCampaignId]);
 
 	function invalidateAll(nextCampaignId = selectedCampaignId) {
@@ -598,6 +600,8 @@ export function useCampaignsDashboard() {
 		tracking: {
 			statusFilter: campaignTrackingStatus,
 			setStatusFilter: setCampaignTrackingStatus,
+			purchaseFilter: campaignTrackingPurchase,
+			setPurchaseFilter: setCampaignTrackingPurchase,
 			search: campaignTrackingSearch,
 			setSearch: setCampaignTrackingSearch,
 			page: campaignTrackingPage,

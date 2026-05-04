@@ -7,8 +7,18 @@ export function normalizeOverview(data = {}) {
 	const activeCampaignsCount =
 		stats?.activeCampaignsCount ?? data?.activeCampaignsCount ?? data?.activeCampaigns ?? 0;
 	const recipientsCount = stats?.recipientsCount ?? data?.recipientsCount ?? 0;
+	const sentRecipientsCount = stats?.sentRecipientsCount ?? data?.sentRecipientsCount ?? 0;
 	const estimatedMonthlyCostUsd =
 		stats?.estimatedMonthlyCostUsd ?? data?.estimatedMonthlyCostUsd ?? 0;
+	const conversionSignalRecipients =
+		stats?.conversionSignalRecipients ?? data?.conversionSignalRecipients ?? 0;
+	const purchasedRecipients = stats?.purchasedRecipients ?? data?.purchasedRecipients ?? 0;
+	const chatConfirmedPurchaseRecipients =
+		stats?.chatConfirmedPurchaseRecipients ?? data?.chatConfirmedPurchaseRecipients ?? 0;
+	const attributedRevenue = stats?.attributedRevenue ?? data?.attributedRevenue ?? 0;
+	const attributedCurrency = stats?.attributedCurrency ?? data?.attributedCurrency ?? 'ARS';
+	const conversionSignalRate = stats?.conversionSignalRate ?? data?.conversionSignalRate ?? 0;
+	const purchaseRate = stats?.purchaseRate ?? data?.purchaseRate ?? 0;
 
 	return {
 		templatesCount,
@@ -16,7 +26,16 @@ export function normalizeOverview(data = {}) {
 		campaignsCount,
 		activeCampaignsCount,
 		recipientsCount,
+		sentRecipientsCount,
 		estimatedMonthlyCostUsd,
+		conversionSignalRecipients,
+		purchasedRecipients,
+		chatConfirmedPurchaseRecipients,
+		attributedRevenue,
+		attributedCurrency,
+		conversionSignalRate,
+		purchaseRate,
+		conversionsBySource: stats?.conversionsBySource || data?.conversionsBySource || {},
 		statusBreakdown: stats?.statusBreakdown || data?.statusBreakdown || {},
 	};
 }

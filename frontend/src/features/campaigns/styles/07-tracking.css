@@ -103,7 +103,7 @@
 
 .campaign-tracking-toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
+    grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(190px, 0.55fr));
     gap: 14px;
     align-items: end;
 }
@@ -115,6 +115,34 @@
 .campaign-inline-stats--analytics {
     padding-top: 2px;
     border-top: 1px dashed #e2e8f0;
+}
+
+.campaign-conversion-source-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    background: #eff6ff;
+}
+
+.campaign-conversion-source-strip span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 5px 9px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.campaign-conversion-source-strip strong {
+    color: #1d4ed8;
 }
 
 .campaign-recipient-table-wrapper--tracking {
