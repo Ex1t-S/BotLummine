@@ -1613,61 +1613,61 @@ export default function InboxPage() {
 							</div>
 
 							<div className="inbox-actions">
-								<ActionButton
-									active={showConversationSidebar}
-									onClick={() => setShowConversationSidebar((prev) => !prev)}
-								>
-									{showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones'}
-								</ActionButton>
-
-								<ActionButton
-									active={conversation?.queue === 'AUTO'}
-									disabled={moveQueueMutation.isPending}
-									onClick={() => handleMoveQueue('AUTO')}
-								>
-									Automatico
-								</ActionButton>
-
-								<ActionButton
-									active={conversation?.queue === 'HUMAN'}
-									disabled={moveQueueMutation.isPending}
-									onClick={() => handleMoveQueue('HUMAN')}
-								>
-									Atencion humana
-								</ActionButton>
-
-								<ActionButton
-									active={conversation?.queue === 'PAYMENT_REVIEW'}
-									disabled={moveQueueMutation.isPending}
-									onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
-								>
-									Comprobantes
-								</ActionButton>
-
-								{conversation?.queue === 'PAYMENT_REVIEW' ? (
+								<div className="inbox-actions-primary">
 									<ActionButton
-										disabled={moveQueueMutation.isPending}
-										onClick={handlePaymentVerified}
+										active={showConversationSidebar}
+										onClick={() => setShowConversationSidebar((prev) => !prev)}
 									>
-										Comprobante verificado
+										{showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones'}
 									</ActionButton>
-								) : null}
 
-								<div className="inbox-actions-spacer" />
+									<ActionButton
+										active={conversation?.queue === 'AUTO'}
+										disabled={moveQueueMutation.isPending}
+										onClick={() => handleMoveQueue('AUTO')}
+									>
+										Automatico
+									</ActionButton>
 
-								<ActionButton
-									active={Boolean(activeContact?.hasUnread || conversation?.hasUnread)}
-									disabled={
-										markConversationUnreadMutation.isPending ||
-										!selectedConversationId
-									}
-									onClick={handleMarkUnread}
-								>
-									Marcar no leido
-								</ActionButton>
+									<ActionButton
+										active={conversation?.queue === 'HUMAN'}
+										disabled={moveQueueMutation.isPending}
+										onClick={() => handleMoveQueue('HUMAN')}
+									>
+										Atencion humana
+									</ActionButton>
+
+									<ActionButton
+										active={conversation?.queue === 'PAYMENT_REVIEW'}
+										disabled={moveQueueMutation.isPending}
+										onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
+									>
+										Comprobantes
+									</ActionButton>
+
+									{conversation?.queue === 'PAYMENT_REVIEW' ? (
+										<ActionButton
+											disabled={moveQueueMutation.isPending}
+											onClick={handlePaymentVerified}
+										>
+											Comprobante verificado
+										</ActionButton>
+									) : null}
+
+									<ActionButton
+										active={Boolean(activeContact?.hasUnread || conversation?.hasUnread)}
+										disabled={
+											markConversationUnreadMutation.isPending ||
+											!selectedConversationId
+										}
+										onClick={handleMarkUnread}
+									>
+										Marcar no leido
+									</ActionButton>
+								</div>
 
 								{isAdmin ? (
-									<>
+									<div className="inbox-actions-danger">
 										<ActionButton
 											danger
 											disabled={
@@ -1697,7 +1697,7 @@ export default function InboxPage() {
 										>
 											Borrar historial
 										</ActionButton>
-									</>
+									</div>
 								) : null}
 							</div>
 
