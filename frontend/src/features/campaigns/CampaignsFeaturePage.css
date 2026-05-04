@@ -576,3 +576,208 @@
 .button.primary:hover:not(:disabled) {
 	background: var(--ui-primary-strong, #0a5f59);
 }
+
+/* Final campaign consistency pass over legacy campaign styles */
+
+.campaigns-page,
+.campaigns-page--feature-refresh {
+	gap: 12px;
+}
+
+.campaigns-hero,
+.campaigns-tab-shell,
+.campaign-shell-card,
+.campaign-panel,
+.campaign-panel--soft,
+.campaign-custom-audience-card,
+.campaign-custom-audience-preview,
+.campaign-schedule-card,
+.campaign-schedule-section,
+.campaign-schedule-meta,
+.campaign-source-switch,
+.campaign-source-switch__button,
+.campaign-schedule-audience-choice__button,
+.campaign-list-card,
+.template-list-card,
+.template-button-card,
+.campaign-review-card,
+.campaign-recipient-preview-box,
+.campaign-product-picker-panel--inline,
+.campaign-product-picker-trigger--field,
+.campaign-confirm-dialog,
+.campaign-accordion,
+.campaign-inline-summary,
+.campaign-segment-summary-card {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-lg, 12px);
+	background: var(--ui-surface, #ffffff);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.campaigns-hero--feature-refresh,
+.campaigns-tab-shell--clean,
+.campaign-source-switch,
+.campaign-schedule-section,
+.campaign-schedule-card,
+.campaign-product-picker-panel--inline {
+	background: #ffffff;
+}
+
+.campaigns-hero h2,
+.campaigns-tab-shell h3,
+.campaign-panel h3,
+.campaign-panel h4,
+.campaign-source-switch__header h4,
+.campaign-source-switch__button strong,
+.campaign-schedule-section__title strong,
+.campaign-schedule-card h4,
+.campaign-list-card h4,
+.template-list-card-title strong,
+.campaign-confirm-dialog h3,
+.campaign-accordion-summary strong {
+	color: var(--ui-heading, #0d151b);
+	letter-spacing: 0;
+}
+
+.campaigns-hero-lead,
+.campaigns-tab-shell p,
+.campaign-panel p,
+.campaign-source-switch__header p,
+.campaign-source-switch__button span,
+.campaign-schedule-section__title span,
+.campaign-schedule-card p,
+.campaign-list-body,
+.campaign-confirm-dialog p,
+.campaign-accordion-summary span {
+	color: var(--ui-muted, #66737d);
+}
+
+.campaigns-eyebrow,
+.campaigns-tab-shell__eyebrow,
+.campaign-badge,
+.template-chip,
+.campaign-schedule-status,
+.campaign-inline-summary-item,
+.campaign-source-switch__button.is-active::after {
+	border: 1px solid rgba(15, 118, 110, 0.2);
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+}
+
+.campaigns-tab-nav {
+	border-color: var(--ui-border, #d7dee5);
+	background: var(--ui-surface-muted, #eef3f5);
+	box-shadow: none;
+}
+
+.campaigns-tab-button,
+.button.ghost,
+.button.secondary,
+.campaign-source-switch__button,
+.campaign-schedule-audience-choice__button,
+.campaign-product-picker-trigger--field {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+	box-shadow: none;
+}
+
+.campaigns-tab-button:hover,
+.button.ghost:hover:not(:disabled),
+.button.secondary:hover:not(:disabled),
+.campaign-source-switch__button:hover,
+.campaign-schedule-audience-choice__button:hover,
+.campaign-product-picker-trigger--field:hover {
+	border-color: var(--ui-border-strong, #b8c4cc);
+	background: var(--ui-surface-soft, #f8fafb);
+	box-shadow: none;
+	transform: none;
+}
+
+.campaigns-tab-button.is-active,
+.campaign-source-switch__button.is-active,
+.campaign-schedule-audience-choice__button.is-active,
+.campaign-product-picker-trigger--field.open,
+.template-list-card.selected,
+.campaign-list-card.selected {
+	border-color: rgba(15, 118, 110, 0.34);
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+	box-shadow: inset 3px 0 0 var(--ui-primary, #0f766e);
+}
+
+.button.primary,
+.campaign-form-actions .button.primary {
+	border-color: var(--ui-primary-strong, #0a5f59);
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+	box-shadow: none;
+}
+
+.button.primary:hover:not(:disabled),
+.campaign-form-actions .button.primary:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+	transform: none;
+}
+
+.button.danger,
+.campaign-schedule-error,
+.campaign-feedback.error {
+	border-color: #f3b8b1;
+	background: var(--ui-danger-soft, #fef3f2);
+	color: var(--ui-danger, #b42318);
+}
+
+.campaign-feedback.success {
+	border-color: #b7e4c7;
+	background: var(--ui-success-soft, #ecfdf3);
+	color: var(--ui-success, #067647);
+}
+
+.campaign-schedule-status.is-active {
+	border-color: #b7e4c7;
+	background: var(--ui-success-soft, #ecfdf3);
+	color: var(--ui-success, #067647);
+}
+
+.field input,
+.field select,
+.field textarea,
+.campaign-product-picker-search input,
+.campaign-product-multiselect-search {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.campaign-product-picker-search input:focus,
+.campaign-product-multiselect-search:focus {
+	border-color: var(--ui-primary, #0f766e);
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+	outline: none;
+}
+
+.campaign-recipient-preview-table,
+.campaign-recipient-preview-table th,
+.campaign-recipient-preview-table td {
+	border-color: var(--ui-border, #d7dee5);
+}
+
+.campaign-recipient-preview-table th {
+	background: var(--ui-surface-soft, #f8fafb);
+	color: var(--ui-muted, #66737d);
+}
+
+.campaign-confirm-backdrop {
+	background: rgba(13, 21, 27, 0.42);
+}
+
+@media (max-width: 720px) {
+	.campaigns-tab-nav {
+		display: grid;
+		grid-template-columns: 1fr;
+	}
+}

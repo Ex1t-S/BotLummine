@@ -812,3 +812,166 @@
 	border-radius: 12px;
 	background: #eef3f0;
 }
+
+/* Final professional WhatsApp menu palette */
+
+.wam-page {
+	gap: 12px;
+	padding: 0;
+}
+
+.wam-empty,
+.wam-hero,
+.wam-card,
+.wam-alert,
+.wam-menu-item,
+.wam-option-card,
+.wam-advanced,
+.wam-phone,
+.wam-phone__bubble,
+.wam-phone__option,
+.wam-phone__button {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-lg, 12px);
+	background: var(--ui-surface, #ffffff);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.wam-hero {
+	padding: 16px;
+}
+
+.wam-hero h1,
+.wam-section-head h2,
+.wam-sidebar__header h2,
+.wam-editor__header h2,
+.wam-preview__header h2,
+.wam-menu-item strong,
+.wam-option-card__summary-main strong,
+.wam-block__header h3,
+.wam-advanced summary,
+.wam-phone__top strong,
+.wam-phone__option strong {
+	color: var(--ui-heading, #0d151b);
+}
+
+.wam-hero p,
+.wam-section-head p,
+.wam-editor__header p,
+.wam-preview__header p,
+.wam-menu-item p,
+.wam-option-card__summary-main p,
+.wam-form-grid label > span,
+.wam-phone__top span,
+.wam-phone__bubble p,
+.wam-phone__bubble small,
+.wam-phone__option span {
+	color: var(--ui-muted, #66737d);
+}
+
+.wam-hero__eyebrow,
+.wam-section-label,
+.wam-menu-item__index,
+.wam-option-card__eyebrow,
+.wam-pill,
+.wam-chip {
+	border: 1px solid rgba(15, 118, 110, 0.2);
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+}
+
+.wam-pill--soft,
+.wam-menu-item__meta span {
+	border-color: var(--ui-border, #d7dee5);
+	background: var(--ui-surface-soft, #f8fafb);
+	color: var(--ui-muted, #66737d);
+}
+
+.wam-button--primary {
+	border: 1px solid var(--ui-primary-strong, #0a5f59);
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+}
+
+.wam-button--primary:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+}
+
+.wam-button--secondary {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+}
+
+.wam-button--secondary:hover:not(:disabled),
+.wam-menu-item:hover,
+.wam-option-card:hover,
+.wam-phone__button:hover {
+	border-color: var(--ui-border-strong, #b8c4cc);
+	background: var(--ui-surface-soft, #f8fafb);
+}
+
+.wam-button--danger {
+	border-color: #f3b8b1;
+	background: var(--ui-danger-soft, #fef3f2);
+	color: var(--ui-danger, #b42318);
+}
+
+.wam-form-grid input,
+.wam-form-grid select,
+.wam-form-grid textarea {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+}
+
+.wam-form-grid input:focus,
+.wam-form-grid select:focus,
+.wam-form-grid textarea:focus {
+	border-color: var(--ui-primary, #0f766e);
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+}
+
+.wam-alert--success {
+	border-color: #b7e4c7;
+	background: var(--ui-success-soft, #ecfdf3);
+	color: var(--ui-success, #067647);
+}
+
+.wam-alert--error {
+	border-color: #f3b8b1;
+	background: var(--ui-danger-soft, #fef3f2);
+	color: var(--ui-danger, #b42318);
+}
+
+.wam-menu-item.is-active,
+.wam-option-card[open] {
+	border-color: rgba(15, 118, 110, 0.32);
+	background: #ffffff;
+	box-shadow: inset 3px 0 0 var(--ui-primary, #0f766e);
+}
+
+.wam-phone {
+	background: var(--ui-surface-soft, #f8fafb);
+}
+
+.wam-phone__screen {
+	border: 1px solid var(--ui-border, #d7dee5);
+	background: #eef3f0;
+}
+
+.wam-phone__avatar,
+.wam-phone__button {
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+}
+
+.wam-phone__option {
+	background: #ffffff;
+}
+
+@media (max-width: 960px) {
+	.wam-layout {
+		gap: 12px;
+	}
+}
