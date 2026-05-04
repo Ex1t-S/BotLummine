@@ -338,9 +338,9 @@ export default function AbandonedCartsPage() {
 					</select>
 				</label>
 
-				<button type="submit">Aplicar</button>
+				<button type="submit">Aplicar filtros</button>
 				<button type="button" onClick={handleResetFilters}>
-					Limpiar
+					Limpiar filtros
 				</button>
 			</form>
 
@@ -390,7 +390,7 @@ export default function AbandonedCartsPage() {
 											onClick={() => handleToggleMessageBox(cart)}
 											disabled={sendingCartId === cart.id}
 										>
-											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
+											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Preparar mensaje'}
 										</button>
 									) : (
 										<button type="button" className="primary-action-btn" disabled>

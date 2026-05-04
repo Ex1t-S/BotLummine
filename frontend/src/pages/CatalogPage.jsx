@@ -70,13 +70,15 @@ export default function CatalogPage() {
 	};
 	const loading = catalogQuery.isLoading;
 	const syncing = syncMutation.isPending;
+	const hasItems = data.items.length > 0;
 
 	return (
 		<section className="page-card">
 			<div className="page-header">
 				<div>
-					<h2>Catalogo</h2>
-					<p>Total: <strong>{data.total}</strong> productos</p>
+					<span className="catalog-header-kicker">Inventario conectado</span>
+					<h2>Catalogo comercial</h2>
+					<p><strong>{data.total}</strong> productos sincronizados para busqueda y campanas.</p>
 				</div>
 
 				<div className="catalog-sync-controls">
@@ -85,7 +87,7 @@ export default function CatalogPage() {
 						<option value="SHOPIFY">Shopify</option>
 					</select>
 					<button onClick={() => syncMutation.mutate()} disabled={syncing} type="button">
-						{syncing ? 'Sincronizando...' : 'Actualizar catalogo'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar catalogo'}
 					</button>
 				</div>
 			</div>
@@ -98,34 +100,52 @@ export default function CatalogPage() {
 						setQuery(event.target.value);
 						setPage(1);
 					}}
-					placeholder="Buscar por nombre, marca o tags..."
+					placeholder="Buscar producto, marca, SKU o etiqueta"
 				/>
-				<button type="submit">Buscar</button>
+				<button type="submit">Buscar productos</button>
 			</form>
 
-			{loading ? <p>Cargando catalogo...</p> : null}
-			{catalogQuery.isError ? <p>No se pudo cargar el catalogo.</p> : null}
+			{loading ? (
+				<div className="catalog-state">
+					<strong>Cargando catalogo</strong>
+					<span>Estamos trayendo productos, marcas e imagenes disponibles.</span>
+				</div>
+			) : null}
 
-			<div className="catalog-grid">
-				{data.items.map((item) => (
-					<article key={item.id} className="catalog-card">
-						{item.featuredImage ? (
-							<img
-								src={item.featuredImage}
-								alt={item.name}
-								className="catalog-thumb"
-								loading="lazy"
-							/>
-						) : (
-							<div className="catalog-thumb-empty">Sin imagen</div>
-						)}
+			{catalogQuery.isError ? (
+				<div className="catalog-state catalog-state--error">
+					<strong>No pudimos cargar el catalogo</strong>
+					<span>Reintenta en unos segundos o verifica la integracion activa.</span>
+				</div>
+			) : null}
 
-						<h3>{item.name}</h3>
-						<p>{item.brand || item.provider || 'Sin marca'}</p>
-						<strong>{item.currentPriceLabel || 'Sin precio'}</strong>
-					</article>
-				))}
-			</div>
+			{hasItems ? (
+				<div className="catalog-grid">
+					{data.items.map((item) => (
+						<article key={item.id} className="catalog-card">
+							{item.featuredImage ? (
+								<img
+									src={item.featuredImage}
+									alt={item.name}
+									className="catalog-thumb"
+									loading="lazy"
+								/>
+							) : (
+								<div className="catalog-thumb-empty">Sin imagen</div>
+							)}
+
+							<h3>{item.name}</h3>
+							<p>{item.brand || item.provider || 'Sin marca'}</p>
+							<strong>{item.currentPriceLabel || 'Sin precio'}</strong>
+						</article>
+					))}
+				</div>
+			) : !loading && !catalogQuery.isError ? (
+				<div className="catalog-empty-state">
+					<strong>No encontramos productos</strong>
+					<span>Ajusta la busqueda o sincroniza el proveedor para actualizar el inventario.</span>
+				</div>
+			) : null}
 
 			{data.totalPages > 1 ? (
 				<div className="pagination-row compact-pagination">

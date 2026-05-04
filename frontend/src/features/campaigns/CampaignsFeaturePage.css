@@ -219,6 +219,96 @@
 	}
 }
 
+/* Internal product palette alignment */
+
+.campaigns-hero--feature-refresh,
+.campaigns-tab-shell,
+.campaign-shell-card,
+.campaigns-tab-shell--clean,
+.campaign-source-switch,
+.campaign-schedule-section,
+.campaign-schedule-card {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-lg, 12px);
+	background: var(--ui-surface, #ffffff);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.campaigns-hero--feature-refresh .campaigns-hero-copy--full h2,
+.campaigns-tab-shell--clean h3,
+.campaigns-tab-shell h3,
+.campaign-source-switch__header h4,
+.campaign-source-switch__button strong,
+.campaign-schedule-section__title strong,
+.campaign-schedule-form__header h4,
+.campaign-schedule-card h4 {
+	color: var(--ui-heading, #0d151b);
+	letter-spacing: 0;
+}
+
+.campaigns-hero--feature-refresh .campaigns-hero-lead,
+.campaigns-tab-shell--clean p,
+.campaigns-tab-shell p,
+.campaign-source-switch__header p,
+.campaign-source-switch__button span,
+.campaign-schedule-section__title span,
+.campaign-schedule-card p {
+	color: var(--ui-muted, #66737d);
+}
+
+.campaigns-tab-button,
+.campaign-source-switch__button,
+.campaign-schedule-audience-choice__button {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-sm, 8px);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+	box-shadow: none;
+}
+
+.campaigns-tab-button:hover,
+.campaign-source-switch__button:hover,
+.campaign-schedule-audience-choice__button:hover {
+	border-color: var(--ui-border-strong, #b8c4cc);
+	background: var(--ui-surface-soft, #f8fafb);
+	box-shadow: none;
+	transform: none;
+}
+
+.campaigns-tab-button:focus-visible,
+.campaign-source-switch__button:focus-visible,
+.campaign-schedule-audience-choice__button:focus-visible {
+	outline: none;
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+}
+
+.campaigns-tab-button.is-active,
+.campaign-source-switch__button.is-active,
+.campaign-schedule-audience-choice__button.is-active {
+	border-color: var(--ui-primary, #0f766e);
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+	box-shadow: none;
+}
+
+.campaign-source-switch__button.is-active::after,
+.campaigns-tab-shell__eyebrow,
+.campaign-schedule-status.is-active {
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+}
+
+.campaign-schedule-meta {
+	border-color: var(--ui-border, #d7dee5);
+	background: var(--ui-surface-soft, #f8fafb);
+}
+
+.campaign-schedule-error {
+	border-color: #f3b8b1;
+	background: var(--ui-danger-soft, #fef3f2);
+	color: var(--ui-danger, #b42318);
+}
+
 @media (max-width: 720px) {
 	.campaign-schedule-section__title {
 		display: grid;

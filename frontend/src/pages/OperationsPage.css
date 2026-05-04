@@ -413,6 +413,12 @@ button.operations-metric-card:focus-visible {
 
 .operations-metric-card em {
 	color: var(--ui-primary, #0f766e);
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: var(--ui-primary-muted, #f0fdfa);
 }
 
 button.operations-metric-card:hover {
@@ -469,4 +475,17 @@ button.operations-metric-card:hover {
 	border-color: var(--ui-border-strong, #b8c4cc);
 	border-radius: var(--ui-radius-lg, 12px);
 	background: rgba(255, 255, 255, 0.82);
+}
+
+.operations-empty.compact {
+	min-height: 88px;
+	align-content: center;
+	padding: 16px;
+	text-align: center;
+}
+
+.operations-empty.compact span {
+	color: var(--ui-muted, #66737d);
+	font-size: 13px;
+	line-height: 1.4;
 }

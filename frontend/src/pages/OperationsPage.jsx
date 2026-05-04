@@ -27,7 +27,7 @@ function MetricCard({ label, value, helper, tone = 'neutral', onClick }) {
 			<span>{label}</span>
 			<strong>{formatNumber(value)}</strong>
 			<small>{helper}</small>
-			{onClick ? <em>Abrir</em> : null}
+			{onClick ? <em>Ver</em> : null}
 		</>
 	);
 
@@ -46,7 +46,8 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 	if (!issues.length) {
 		return (
 			<div className="operations-empty compact">
-				No hay alertas operativas para esta marca.
+				<strong>Sin alertas abiertas</strong>
+				<span>La marca no tiene tareas criticas para resolver ahora.</span>
 			</div>
 		);
 	}
@@ -91,12 +92,12 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 				<MetricCard
 					label="Comprobantes"
 					value={metrics.paymentReview}
-					helper="Pendientes de revision"
+					helper="Pagos pendientes de validar"
 					tone={metrics.paymentReview ? 'warning' : 'neutral'}
 					onClick={!platformAdmin ? () => onNavigate('/inbox/comprobantes') : null}
 				/>
 				<MetricCard
-					label="Chats no leidos"
+					label="Chats sin leer"
 					value={metrics.unreadConversations}
 					helper={`${formatNumber(metrics.unreadMessages)} mensajes pendientes`}
 					tone={metrics.unreadConversations ? 'info' : 'neutral'}
@@ -144,7 +145,7 @@ export default function OperationsPage() {
 				href: platformAdmin ? '/admin' : '/inbox/comprobantes',
 			},
 			{
-				label: 'Chats no leidos',
+				label: 'Chats sin leer',
 				value: totals.unreadConversations,
 				helper: `${formatNumber(totals.unreadMessages)} mensajes pendientes`,
 				tone: totals.unreadConversations ? 'info' : 'neutral',
@@ -153,7 +154,7 @@ export default function OperationsPage() {
 			{
 				label: 'Campañas activas',
 				value: totals.activeCampaigns,
-				helper: 'Envios en curso o cola',
+				helper: 'Envios activos o en cola',
 				tone: totals.failedCampaigns ? 'warning' : 'neutral',
 				href: platformAdmin ? '/admin' : '/campaigns/tracking',
 			},
@@ -180,7 +181,7 @@ export default function OperationsPage() {
 		return (
 			<section className="operations-page">
 				<div className="operations-empty operations-empty--status">
-					<strong>Cargando operacion diaria</strong>
+					<strong>Cargando prioridades operativas</strong>
 					<span>Estamos buscando conversaciones, comprobantes y alertas abiertas.</span>
 				</div>
 			</section>
@@ -191,7 +192,7 @@ export default function OperationsPage() {
 		return (
 			<section className="operations-page">
 				<div className="operations-empty error">
-					<strong>No se pudo cargar la operacion</strong>
+					<strong>No pudimos cargar la operacion</strong>
 					<span>Reintenta en unos segundos. Si persiste, revisa la conexion del backend.</span>
 				</div>
 			</section>
@@ -208,8 +209,8 @@ export default function OperationsPage() {
 					<h2>{platformAdmin ? 'Prioridades de la plataforma' : getWorkspaceName(primaryWorkspace)}</h2>
 					<p>
 						{platformAdmin
-							? 'Marcas con alertas, conversaciones pendientes y salud operativa.'
-							: 'Empeza por los comprobantes y chats pendientes. Esta vista resume lo que requiere accion hoy.'}
+							? 'Control de marcas con alertas, conversaciones pendientes y salud operativa.'
+							: 'Prioriza comprobantes, chats y oportunidades que requieren accion hoy.'}
 					</p>
 				</div>
 				<div className="operations-header-actions">
