@@ -1966,3 +1966,241 @@
 		max-width: 92%;
 	}
 }
+
+/* Unified inbox palette and context */
+
+.inbox-page {
+	gap: 12px;
+	background: transparent;
+}
+
+.inbox-sidebar,
+.inbox-chat-panel {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-lg, 12px);
+	background: var(--ui-surface, #ffffff);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.inbox-sidebar {
+	background: #ffffff;
+}
+
+.inbox-sidebar-top strong,
+.inbox-section-title,
+.inbox-chat-title,
+.inbox-contact-name,
+.inbox-message-body,
+.inbox-attachment-file-name {
+	color: var(--ui-heading, #0d151b);
+}
+
+.inbox-sidebar-top span,
+.inbox-contact-time,
+.inbox-contact-preview,
+.inbox-chat-subtitle,
+.inbox-message-meta,
+.inbox-emoji-title,
+.inbox-list-end {
+	color: var(--ui-muted, #66737d);
+}
+
+.inbox-sidebar-refresh,
+.inbox-load-more,
+.inbox-load-older-messages {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-primary, #0f766e);
+}
+
+.inbox-queue-tabs,
+.inbox-read-filters {
+	border-color: var(--ui-border, #d7dee5);
+	background: var(--ui-surface-muted, #eef3f5);
+}
+
+.inbox-queue-tabs .inbox-action-btn,
+.inbox-read-filter-btn {
+	color: #52616b;
+}
+
+.inbox-queue-tabs .inbox-action-btn--active,
+.inbox-read-filter-btn--active {
+	background: #ffffff;
+	color: var(--ui-primary, #0f766e);
+	border-color: rgba(15, 118, 110, 0.18);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.inbox-search-input {
+	border-color: var(--ui-border, #d7dee5);
+}
+
+.inbox-search-input:focus {
+	border-color: var(--ui-primary, #0f766e);
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+}
+
+.inbox-search-box::before {
+	border-color: var(--ui-subtle, #94a1aa);
+}
+
+.inbox-search-box::after {
+	background: var(--ui-subtle, #94a1aa);
+}
+
+.inbox-contact-card {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+}
+
+.inbox-contact-card:hover {
+	border-color: var(--ui-border-strong, #b8c4cc);
+	background: var(--ui-surface-soft, #f8fafb);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.inbox-contact-card--selected {
+	border-color: var(--ui-primary, #0f766e);
+	background: var(--ui-primary-muted, #f0fdfa);
+	box-shadow: inset 3px 0 0 var(--ui-primary, #0f766e);
+}
+
+.inbox-contact-card--unread {
+	border-color: rgba(15, 118, 110, 0.28);
+}
+
+.inbox-contact-avatar--unread {
+	box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+}
+
+.inbox-contact-dot,
+.inbox-contact-unread-badge {
+	background: var(--ui-primary, #0f766e);
+}
+
+.inbox-contact-preview-prefix--outbound,
+.inbox-message-link,
+.inbox-message-status--read {
+	color: var(--ui-info, #246b86);
+}
+
+.inbox-contact-preview-prefix--inbound {
+	color: var(--ui-primary, #0f766e);
+}
+
+.inbox-chat-header,
+.inbox-composer-shell,
+.inbox-composer,
+.inbox-selected-file,
+.inbox-emoji-picker {
+	background: #ffffff;
+	border-color: var(--ui-border, #d7dee5);
+}
+
+.inbox-badge {
+	border-radius: 999px;
+}
+
+.inbox-badge--neutral {
+	border-color: var(--ui-border, #d7dee5);
+	background: var(--ui-surface-soft, #f8fafb);
+	color: var(--ui-text, #172027);
+}
+
+.inbox-badge--ai {
+	border-color: #b8d6df;
+	background: var(--ui-info-soft, #e7f5f8);
+	color: var(--ui-info, #246b86);
+}
+
+.inbox-badge--human {
+	border-color: #f4c790;
+	background: var(--ui-warning-soft, #fff7ed);
+	color: var(--ui-warning, #b54708);
+}
+
+.inbox-action-btn {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+}
+
+.inbox-action-btn:hover:not(:disabled) {
+	border-color: var(--ui-border-strong, #b8c4cc);
+	background: var(--ui-surface-soft, #f8fafb);
+}
+
+.inbox-action-btn--active {
+	border-color: rgba(15, 118, 110, 0.28);
+	background: var(--ui-primary-soft, #dff7f3);
+	color: var(--ui-primary-strong, #0a5f59);
+}
+
+.inbox-action-btn--danger,
+.inbox-actions-danger .inbox-action-btn {
+	border-color: #f3b8b1;
+	background: var(--ui-danger-soft, #fef3f2);
+	color: var(--ui-danger, #b42318);
+}
+
+.inbox-messages,
+.inbox-chat-empty {
+	background:
+		linear-gradient(rgba(13, 21, 27, 0.025) 1px, transparent 1px),
+		var(--ui-surface-soft, #f8fafb);
+	background-size: 100% 34px;
+}
+
+.inbox-message-bubble--outbound {
+	background: #dff7e7;
+	border-color: #b8dfc5;
+}
+
+.inbox-message-bubble--inbound {
+	background: #ffffff;
+	border-color: var(--ui-border, #d7dee5);
+}
+
+.inbox-message-sender-pill {
+	color: #52616b;
+}
+
+.inbox-promo-action {
+	border-color: rgba(15, 118, 110, 0.22);
+	color: var(--ui-primary, #0f766e);
+}
+
+.inbox-emoji-trigger,
+.inbox-attach-trigger,
+.inbox-selected-file-remove {
+	border-color: var(--ui-border, #d7dee5);
+	background: var(--ui-surface-soft, #f8fafb);
+	color: var(--ui-primary, #0f766e);
+}
+
+.inbox-send-btn {
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+}
+
+.inbox-send-btn:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+	transform: none;
+}
+
+.inbox-send-btn:disabled {
+	background: #cbd5dc;
+}
+
+.inbox-realtime-badge--live {
+	border-color: #b7e4c7;
+	background: var(--ui-success-soft, #ecfdf3);
+	color: var(--ui-success, #067647);
+}
+
+.inbox-realtime-badge--fallback {
+	border-color: #f4c790;
+	background: var(--ui-warning-soft, #fff7ed);
+	color: var(--ui-warning, #b54708);
+}

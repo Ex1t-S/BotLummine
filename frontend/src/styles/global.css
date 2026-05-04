@@ -783,6 +783,43 @@ body {
 	}
 }
 
+/* Final dashboard palette lock: keep later legacy layers on the teal + graphite system. */
+
+:root {
+	--ui-bg: #f4f6f8;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f8fafb;
+	--ui-surface-muted: #eef3f5;
+	--ui-surface-tint: #f0fdfa;
+	--ui-border: #d7dee5;
+	--ui-border-strong: #b8c4cc;
+	--ui-text: #172027;
+	--ui-heading: #0d151b;
+	--ui-muted: #66737d;
+	--ui-subtle: #94a1aa;
+	--ui-primary: #0f766e;
+	--ui-primary-strong: #0a5f59;
+	--ui-primary-soft: #dff7f3;
+	--ui-primary-muted: #f0fdfa;
+	--ui-info: #246b86;
+	--ui-info-soft: #e7f5f8;
+	--ui-success: #067647;
+	--ui-success-soft: #ecfdf3;
+	--ui-warning: #b54708;
+	--ui-warning-soft: #fff7ed;
+	--ui-danger: #b42318;
+	--ui-danger-soft: #fef3f2;
+	--ui-radius-xs: 6px;
+	--ui-radius-sm: 8px;
+	--ui-radius-md: 10px;
+	--ui-radius-lg: 12px;
+	--ui-radius-xl: 14px;
+	--ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+	--ui-shadow-md: 0 10px 24px rgba(16, 24, 40, 0.08);
+	--ui-shadow-lg: 0 18px 44px rgba(16, 24, 40, 0.12);
+	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
+}
+
 /* =========================================================
    DESIGN SYSTEM REFRESH
    - Tokens y componentes visuales compartidos para el panel
@@ -1111,6 +1148,304 @@ textarea:focus,
 		width: 100%;
 		justify-content: center;
 	}
+}
+
+/* =========================================================
+   UNIFIED INTERNAL DASHBOARD PALETTE
+   - Teal + graphite system for operational screens
+========================================================= */
+
+:root {
+	--ui-bg: #f4f6f8;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f8fafb;
+	--ui-surface-muted: #eef3f5;
+	--ui-surface-tint: #f0fdfa;
+	--ui-border: #d7dee5;
+	--ui-border-strong: #b8c4cc;
+	--ui-text: #172027;
+	--ui-heading: #0d151b;
+	--ui-muted: #66737d;
+	--ui-subtle: #94a1aa;
+	--ui-primary: #0f766e;
+	--ui-primary-strong: #0a5f59;
+	--ui-primary-soft: #dff7f3;
+	--ui-primary-muted: #f0fdfa;
+	--ui-info: #246b86;
+	--ui-info-soft: #e7f5f8;
+	--ui-success: #067647;
+	--ui-success-soft: #ecfdf3;
+	--ui-warning: #b54708;
+	--ui-warning-soft: #fff7ed;
+	--ui-danger: #b42318;
+	--ui-danger-soft: #fef3f2;
+	--ui-radius-xs: 6px;
+	--ui-radius-sm: 8px;
+	--ui-radius-md: 10px;
+	--ui-radius-lg: 12px;
+	--ui-radius-xl: 14px;
+	--ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+	--ui-shadow-md: 0 10px 24px rgba(16, 24, 40, 0.08);
+	--ui-shadow-lg: 0 18px 44px rgba(16, 24, 40, 0.12);
+	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
+}
+
+html,
+body,
+#root {
+	background: var(--ui-bg);
+	color: var(--ui-text);
+}
+
+.admin-shell {
+	background:
+		linear-gradient(180deg, #f8fafb 0%, var(--ui-bg) 100%);
+}
+
+.admin-content {
+	background: transparent;
+}
+
+.page-card,
+.tenant-admin-panel,
+.customers-hero-card,
+.customers-sync-panel,
+.customers-filters-card,
+.customers-list-card,
+.customers-stat-card,
+.customer-card,
+.abandoned-card,
+.stat-box,
+.catalog-card,
+.campaign-shell-card,
+.campaigns-hero,
+.campaigns-tab-shell,
+.campaign-custom-audience-card,
+.campaign-schedule-card,
+.wam-card,
+.ai-lab-sidebar-card,
+.ai-lab-chat-card,
+.ai-lab-debug-card,
+.ai-lab-card,
+.operations-header,
+.operations-metric-card,
+.operations-workspace-card,
+.inbox-sidebar,
+.inbox-chat-panel {
+	border-color: var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.page-header,
+.tenant-admin-header,
+.customers-hero-card,
+.campaigns-hero,
+.abandoned-carts-page .page-header,
+.wam-hero,
+.operations-header {
+	background: var(--ui-surface);
+	border-color: var(--ui-border);
+}
+
+.page-header h1,
+.page-header h2,
+.tenant-admin-header h2,
+.customers-hero-copy h1,
+.campaigns-hero h2,
+.abandoned-carts-page .page-header h2,
+.wam-hero h1,
+.operations-header h2 {
+	color: var(--ui-heading);
+}
+
+.muted-text,
+.page-header p,
+.tenant-admin-header p,
+.customers-hero-copy p,
+.customers-list-topbar p,
+.customers-sync-top p,
+.campaigns-hero-lead,
+.campaigns-tab-shell__header p,
+.wam-hero p,
+.ai-lab-sidebar-header p,
+.ai-lab-chat-header p,
+.operations-header p {
+	color: var(--ui-muted);
+}
+
+.inline-actions button,
+.catalog-search-form button,
+.page-header button,
+.primary-action-btn,
+.customers-apply-btn,
+.tenant-admin-grid button,
+.tenant-admin-actions button,
+.filters-form button,
+.button.primary,
+.wam-button--primary,
+.ai-lab-primary-btn,
+.ai-lab-chat-form button,
+.inbox-send-btn,
+.operations-header-actions button,
+.operations-issue button {
+	border-color: var(--ui-primary-strong);
+	background: var(--ui-primary);
+	color: #ffffff;
+	box-shadow: none;
+}
+
+.inline-actions button:hover:not(:disabled),
+.catalog-search-form button:hover:not(:disabled),
+.page-header button:hover:not(:disabled),
+.primary-action-btn:hover:not(:disabled),
+.customers-apply-btn:hover:not(:disabled),
+.tenant-admin-grid button:hover:not(:disabled),
+.tenant-admin-actions button:hover:not(:disabled),
+.filters-form button:hover:not(:disabled),
+.button.primary:hover:not(:disabled),
+.wam-button--primary:hover:not(:disabled),
+.ai-lab-primary-btn:hover:not(:disabled),
+.ai-lab-chat-form button:hover:not(:disabled),
+.inbox-send-btn:hover:not(:disabled),
+.operations-header-actions button:hover:not(:disabled),
+.operations-issue button:hover:not(:disabled) {
+	background: var(--ui-primary-strong);
+	border-color: var(--ui-primary-strong);
+	transform: none;
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.secondary-link-btn,
+.tenant-admin-grid button[type="button"],
+.toolbar-group button,
+.abandoned-carts-page .inline-actions button,
+.catalog-sync-controls select,
+.pagination-btn,
+.pagination-page-btn,
+.button.ghost,
+.button.secondary,
+.wam-button--secondary,
+.ai-lab-secondary-btn,
+.inbox-action-btn,
+.operations-header-actions button.secondary {
+	border-color: var(--ui-border);
+	background: #ffffff;
+	color: var(--ui-text);
+	box-shadow: none;
+}
+
+.secondary-link-btn:hover:not(:disabled),
+.tenant-admin-grid button[type="button"]:hover:not(:disabled),
+.toolbar-group button:hover:not(:disabled),
+.abandoned-carts-page .inline-actions button:hover:not(:disabled),
+.pagination-btn:hover:not(:disabled),
+.pagination-page-btn:hover:not(:disabled),
+.button.ghost:hover:not(:disabled),
+.button.secondary:hover:not(:disabled),
+.wam-button--secondary:hover:not(:disabled),
+.ai-lab-secondary-btn:hover:not(:disabled),
+.inbox-action-btn:hover:not(:disabled),
+.operations-header-actions button.secondary:hover:not(:disabled) {
+	border-color: var(--ui-border-strong);
+	background: var(--ui-surface-soft);
+	transform: none;
+}
+
+input,
+select,
+textarea,
+.admin-field input,
+.admin-field select,
+.admin-field textarea,
+.catalog-search-form input,
+.filters-form input,
+.filters-form select,
+.inbox-search-input,
+.chat-form textarea,
+.field input,
+.field select,
+.field textarea,
+.wam-form-grid input,
+.wam-form-grid select,
+.wam-form-grid textarea {
+	border-color: var(--ui-border);
+	border-radius: var(--ui-radius-sm);
+	background: #ffffff;
+	color: var(--ui-text);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus,
+.catalog-search-form input:focus,
+.filters-form input:focus,
+.filters-form select:focus,
+.inbox-search-input:focus,
+.chat-form textarea:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.wam-form-grid input:focus,
+.wam-form-grid select:focus,
+.wam-form-grid textarea:focus {
+	border-color: var(--ui-primary);
+	box-shadow: var(--ui-focus);
+}
+
+.tenant-admin-pill,
+.queue-pill,
+.campaign-badge,
+.campaign-schedule-status,
+.ai-lab-chip,
+.status-badge,
+.wam-chip,
+.wam-pill,
+.customer-payment-badge,
+.inbox-badge,
+.customers-active-filter-badge {
+	border-color: var(--ui-border);
+	background: var(--ui-surface-soft);
+	color: var(--ui-text);
+}
+
+.tenant-admin-alert.success,
+.customers-feedback--success,
+.sync-summary-banner {
+	border-color: #b7e4c7;
+	background: var(--ui-success-soft);
+	color: var(--ui-success);
+}
+
+.tenant-admin-alert.error,
+.customers-feedback--error,
+.campaign-schedule-error {
+	border-color: #f3b8b1;
+	background: var(--ui-danger-soft);
+	color: var(--ui-danger);
+}
+
+.empty-state,
+.tenant-admin-empty,
+.inbox-empty,
+.abandoned-empty-state,
+.campaign-custom-audience-empty,
+.customers-empty-state,
+.operations-empty {
+	border-color: var(--ui-border-strong);
+	background: rgba(255, 255, 255, 0.82);
+	color: var(--ui-muted);
+}
+
+.tenant-admin-table-wrap,
+.campaign-recipient-preview-table,
+.customer-table-scroll {
+	border-color: var(--ui-border);
+	background: #ffffff;
 }
 
 /* =========================================================
@@ -1444,4 +1779,41 @@ textarea:focus,
 	font-weight: 700;
 	letter-spacing: 0.02em;
 	text-transform: uppercase;
+}
+
+/* Final dashboard palette lock: keep later legacy layers on the teal + graphite system. */
+
+:root {
+	--ui-bg: #f4f6f8;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f8fafb;
+	--ui-surface-muted: #eef3f5;
+	--ui-surface-tint: #f0fdfa;
+	--ui-border: #d7dee5;
+	--ui-border-strong: #b8c4cc;
+	--ui-text: #172027;
+	--ui-heading: #0d151b;
+	--ui-muted: #66737d;
+	--ui-subtle: #94a1aa;
+	--ui-primary: #0f766e;
+	--ui-primary-strong: #0a5f59;
+	--ui-primary-soft: #dff7f3;
+	--ui-primary-muted: #f0fdfa;
+	--ui-info: #246b86;
+	--ui-info-soft: #e7f5f8;
+	--ui-success: #067647;
+	--ui-success-soft: #ecfdf3;
+	--ui-warning: #b54708;
+	--ui-warning-soft: #fff7ed;
+	--ui-danger: #b42318;
+	--ui-danger-soft: #fef3f2;
+	--ui-radius-xs: 6px;
+	--ui-radius-sm: 8px;
+	--ui-radius-md: 10px;
+	--ui-radius-lg: 12px;
+	--ui-radius-xl: 14px;
+	--ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+	--ui-shadow-md: 0 10px 24px rgba(16, 24, 40, 0.08);
+	--ui-shadow-lg: 0 18px 44px rgba(16, 24, 40, 0.12);
+	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }

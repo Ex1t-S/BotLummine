@@ -407,3 +407,123 @@
 	}
 
 }
+
+/* Unified dashboard chrome */
+
+.admin-shell {
+	grid-template-columns: 260px minmax(0, 1fr);
+	background: var(--ui-bg, #f4f6f8);
+	color: var(--ui-text, #172027);
+}
+
+.admin-sidebar {
+	background: #121a21;
+	border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+.admin-brand-mark--logo {
+	border-radius: 9px;
+	border-color: rgba(255, 255, 255, 0.16);
+	background: #ffffff;
+}
+
+.admin-brand-copy h1 {
+	color: #f8fafc;
+	font-size: 18px;
+	font-weight: 760;
+}
+
+.admin-brand-copy p,
+.admin-user-box span,
+.admin-topbar-user span {
+	color: #aebbc6;
+}
+
+.admin-user-box,
+.admin-topbar-user,
+.logout-btn {
+	background: rgba(255, 255, 255, 0.06);
+	border-color: rgba(255, 255, 255, 0.09);
+	border-radius: var(--ui-radius-sm, 8px);
+}
+
+.admin-menu {
+	gap: 12px;
+}
+
+.admin-menu-group-label {
+	color: #8d9aa6;
+	letter-spacing: 0.04em;
+}
+
+.admin-menu-link {
+	min-height: 38px;
+	border-radius: var(--ui-radius-sm, 8px);
+	color: #c9d2dc;
+	font-weight: 650;
+}
+
+.admin-menu-link:hover {
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.07);
+}
+
+.admin-menu-link.active {
+	background: rgba(15, 118, 110, 0.26);
+	border-color: rgba(45, 212, 191, 0.22);
+	color: #ffffff;
+	box-shadow: inset 3px 0 0 #2dd4bf;
+}
+
+.logout-btn {
+	color: #eef2f6;
+}
+
+.logout-btn:hover {
+	background: rgba(15, 118, 110, 0.24);
+	border-color: rgba(45, 212, 191, 0.2);
+}
+
+.admin-main {
+	background: var(--ui-bg, #f4f6f8);
+}
+
+.admin-topbar {
+	min-height: 54px;
+	max-height: 58px;
+	background: rgba(255, 255, 255, 0.9);
+	border-bottom-color: var(--ui-border, #d7dee5);
+	backdrop-filter: blur(14px);
+}
+
+.admin-topbar span {
+	color: var(--ui-primary, #0f766e);
+	font-weight: 760;
+}
+
+.admin-topbar h2 {
+	color: var(--ui-heading, #0d151b);
+}
+
+.admin-topbar-user {
+	background: #121a21;
+}
+
+.admin-content {
+	padding: 14px;
+	background: transparent;
+}
+
+@media (max-width: 900px) {
+	.admin-shell {
+		grid-template-columns: 1fr;
+	}
+
+	.admin-sidebar {
+		background: #121a21;
+	}
+
+	.admin-menu-link.active {
+		box-shadow: inset 0 -3px 0 #2dd4bf;
+	}
+}
