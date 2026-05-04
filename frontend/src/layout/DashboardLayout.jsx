@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
@@ -82,6 +83,9 @@ export default function DashboardLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { user, logout } = useAuth();
+	const contentRef = useRef(null);
+	const lastScrollTopRef = useRef(0);
+	const [topbarHidden, setTopbarHidden] = useState(false);
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
 	const workspace = user?.workspace || null;
@@ -96,6 +100,41 @@ export default function DashboardLayout() {
 			description: 'Marcas, usuarios, canales y salud operativa.',
 		}
 		: basePageMeta;
+
+	useEffect(() => {
+		lastScrollTopRef.current = 0;
+		setTopbarHidden(false);
+		if (contentRef.current) {
+			contentRef.current.scrollTop = 0;
+		}
+	}, [location.pathname]);
+
+	function updateTopbarForScroll(scrollTop) {
+		const previousScrollTop = lastScrollTopRef.current;
+		const delta = scrollTop - previousScrollTop;
+
+		if (scrollTop <= 8) {
+			setTopbarHidden(false);
+		} else if (delta > 10) {
+			setTopbarHidden(true);
+		} else if (delta < -10) {
+			setTopbarHidden(false);
+		}
+
+		lastScrollTopRef.current = Math.max(0, scrollTop);
+	}
+
+	function handleContentScroll(event) {
+		updateTopbarForScroll(event.currentTarget.scrollTop || 0);
+	}
+
+	function handleMainWheel(event) {
+		if (event.deltaY > 10) {
+			setTopbarHidden(true);
+		} else if (event.deltaY < -10) {
+			setTopbarHidden(false);
+		}
+	}
 
 	async function handleLogout() {
 		try {
@@ -189,7 +228,10 @@ export default function DashboardLayout() {
 				</button>
 			</aside>
 
-			<div className="admin-main">
+			<div
+				className={`admin-main${topbarHidden ? ' topbar-hidden' : ''}`}
+				onWheelCapture={handleMainWheel}
+			>
 				<header className="admin-topbar">
 					<div>
 						<span>{isPlatformAdmin ? 'Plataforma' : brandName}</span>
@@ -202,7 +244,7 @@ export default function DashboardLayout() {
 					</div>
 				</header>
 
-				<main className="admin-content">
+				<main className="admin-content" ref={contentRef} onScroll={handleContentScroll}>
 					<Outlet />
 				</main>
 			</div>
