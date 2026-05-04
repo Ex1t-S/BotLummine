@@ -153,7 +153,7 @@ function formatDuration(startedAt) {
 function buildSyncBadgeLabel(syncStatus) {
 	if (syncStatus.running) return 'Sincronizando en vivo';
 	if (syncStatus.errors?.length) return 'Sync con errores';
-	if (syncStatus.hasMoreHistory) return 'Historico pendiente';
+	if (syncStatus.hasMoreHistory) return 'Histórico pendiente';
 	return 'Listo';
 }
 
@@ -204,7 +204,7 @@ function ProductMultiSelect({
 			<input
 				type="text"
 				className="product-multiselect-search"
-				placeholder="Buscar productos del catalogo..."
+				placeholder="Buscar productos del catálogo..."
 				value={search}
 				onChange={(event) => onSearchChange(event.target.value)}
 			/>
@@ -225,7 +225,7 @@ function ProductMultiSelect({
 						);
 					})
 				) : (
-					<div className="product-option-empty">No hay coincidencias en el catalogo.</div>
+					<div className="product-option-empty">No hay coincidencias en el catálogo.</div>
 				)}
 			</div>
 
@@ -346,7 +346,7 @@ export default function CustomersPage() {
 		onError: (error) => {
 			console.error(error);
 			setErrorMessage(
-				error?.response?.data?.message || 'No se pudo iniciar la sincronizacion de pedidos.'
+				error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.'
 			);
 		},
 	});
@@ -462,7 +462,7 @@ export default function CustomersPage() {
 					<h1>Clientes y compras</h1>
 					<p>
 						Pedidos reales, clientes y productos comprados en una vista para buscar oportunidades
-						sin perder el estado de sincronizacion.
+						sin perder el estado de sincronización.
 					</p>
 				</div>
 
@@ -492,17 +492,17 @@ export default function CustomersPage() {
 				<div className="customers-sync-top">
 					<div>
 						<span className="customers-sync-kicker">{buildSyncBadgeLabel(syncStatus)}</span>
-						<h3>{syncStatus.message || 'Todavia no corriste una sincronizacion.'}</h3>
+						<h3>{syncStatus.message || 'Todavía no corriste una sincronización.'}</h3>
 						<p>
 							{syncStatus.running
-								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} - paginas ${syncStatus.pagesFetched} - pedidos leidos ${syncStatus.ordersFetched} - pedidos guardados ${syncStatus.ordersUpserted}.`
+								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} - páginas ${syncStatus.pagesFetched} - pedidos leídos ${syncStatus.ordersFetched} - pedidos guardados ${syncStatus.ordersUpserted}.`
 								: syncStatus.finishedAt
-									? `Ultima finalizacion ${formatDateTime(syncStatus.finishedAt)}.`
-									: 'Cuando empiece la sync, aca vas a ver el progreso en vivo.'}
+									? `Última finalización ${formatDateTime(syncStatus.finishedAt)}.`
+									: 'Cuando empiece la sync, acá vas a ver el progreso en vivo.'}
 						</p>
 					</div>
 					<div className="customers-sync-stats">
-						<div><span>Paginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
+						<div><span>Páginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
 						<div><span>Pedidos</span><strong>{syncStatus.ordersFetched || 0}</strong></div>
 						<div><span>Items</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
 					</div>
@@ -551,17 +551,17 @@ export default function CustomersPage() {
 
 			<div className="customers-stats-grid">
 				<div className="customers-stat-card"><span className="customers-stat-label">Pedidos</span><strong>{normalizedStats.totalOrders}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Clientes unicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
-				<div className="customers-stat-card"><span className="customers-stat-label">Con telefono</span><strong>{normalizedStats.withPhone}</strong></div>
-					<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{displayAvgTicketLabel}</strong></div>
-					<div className="customers-stat-card"><span className="customers-stat-label">Facturacion</span><strong>{displayTotalSpentLabel}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Clientes únicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Con teléfono</span><strong>{normalizedStats.withPhone}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{displayAvgTicketLabel}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{displayTotalSpentLabel}</strong></div>
 			</div>
 
 			<div className="customers-filters-card">
 				<div className="customers-list-topbar">
 					<div>
 						<h3>Filtros comerciales</h3>
-						<p>Filtra por cliente, pedido, monto y productos reales del catalogo.</p>
+						<p>Filtrá por cliente, pedido, monto y productos reales del catálogo.</p>
 					</div>
 					{activeFilterCount ? (
 						<span className="customers-active-filter-badge">
@@ -576,7 +576,7 @@ export default function CustomersPage() {
 						<input
 							type="text"
 							name="q"
-							placeholder="Nombre, email, telefono, SKU o nro. de pedido"
+							placeholder="Nombre, email, teléfono, SKU o nro. de pedido"
 							value={filters.q}
 							onChange={handleFilterChange}
 						/>
@@ -641,26 +641,26 @@ export default function CustomersPage() {
 						<label>Compra hasta</label>
 						<input type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
 					</div>
-            <div className="customers-filter-group">
-            <label>Pago</label>
-            <select
-              name="paymentStatus"
-              value={filters.paymentStatus}
-              onChange={handleFilterChange}
-            >
-              <option value="">Todos</option>
-              <option value="pending">Pendiente</option>
-              <option value="authorized">Autorizado</option>
-              <option value="paid">Pagado</option>
-              <option value="partially_paid">Pago parcial</option>
-              <option value="abandoned">Abandonado</option>
-              <option value="refunded">Reembolsado</option>
-              <option value="partially_refunded">Reembolso parcial</option>
-              <option value="voided">Anulado</option>
-            </select>
-          </div>
 					<div className="customers-filter-group">
-						<label>Total minimo</label>
+						<label>Pago</label>
+						<select
+							name="paymentStatus"
+							value={filters.paymentStatus}
+							onChange={handleFilterChange}
+						>
+							<option value="">Todos</option>
+							<option value="pending">Pendiente</option>
+							<option value="authorized">Autorizado</option>
+							<option value="paid">Pagado</option>
+							<option value="partially_paid">Pago parcial</option>
+							<option value="abandoned">Abandonado</option>
+							<option value="refunded">Reembolsado</option>
+							<option value="partially_refunded">Reembolso parcial</option>
+							<option value="voided">Anulado</option>
+						</select>
+					</div>
+					<div className="customers-filter-group">
+						<label>Total mínimo</label>
 						<input
 							type="number"
 							name="minSpent"
@@ -673,8 +673,8 @@ export default function CustomersPage() {
 					<div className="customers-filter-group">
 						<label>Ordenar por</label>
 						<select name="sort" value={filters.sort} onChange={handleFilterChange}>
-							<option value="purchase_desc">Compra mas reciente</option>
-							<option value="purchase_asc">Compra mas antigua</option>
+							<option value="purchase_desc">Compra más reciente</option>
+							<option value="purchase_asc">Compra más antigua</option>
 							<option value="spent_desc">Mayor monto</option>
 							<option value="spent_asc">Menor monto</option>
 							<option value="name_asc">Nombre A-Z</option>
@@ -693,7 +693,7 @@ export default function CustomersPage() {
 							checked={filters.hasPhoneOnly}
 							onChange={handleFilterChange}
 						/>
-						<span>Solo con telefono</span>
+						<span>Solo con teléfono</span>
 					</label>
 
 					<div className="customers-filter-actions">
@@ -719,7 +719,7 @@ export default function CustomersPage() {
 
 				{!loading && !data.customers?.length ? (
 					<div className="customers-empty-state">
-						No hay compras para esos filtros. Proba ampliar la busqueda o dejar que la sync avance un poco mas.
+						No hay compras para esos filtros. Probá ampliar la búsqueda o dejar que la sync avance un poco más.
 					</div>
 				) : null}
 
@@ -742,11 +742,18 @@ export default function CustomersPage() {
 									</div>
 								</div>
 
-								<div className="customer-meta-row">
-									<div className="customer-meta-chip">
+								<div className="customer-card-focus">
+									<div className="customer-total-box">
 										<span>Total</span>
 										<strong>{billingVisible ? customer.totalSpentLabel || '$0' : '********'}</strong>
 									</div>
+									<div className={`customer-payment-badge ${getPaymentStatusTone(customer.paymentStatus)}`}>
+										<span>Pago</span>
+										<strong>{formatPaymentStatusLabel(customer.paymentStatus)}</strong>
+									</div>
+								</div>
+
+								<div className="customer-meta-row">
 									<div className="customer-meta-chip">
 										<span>Fecha</span>
 										<strong>{customer.lastOrderDateLabel || '-'}</strong>
@@ -754,13 +761,6 @@ export default function CustomersPage() {
 									<div className="customer-meta-chip">
 										<span>Unidades</span>
 										<strong>{customer.totalUnitsPurchased || 0}</strong>
-									</div>
-								</div>
-
-								<div className="customer-status-row">
-									<div className={`customer-payment-badge ${getPaymentStatusTone(customer.paymentStatus)}`}>
-										<span>Pago</span>
-										<strong>{formatPaymentStatusLabel(customer.paymentStatus)}</strong>
 									</div>
 								</div>
 
@@ -777,7 +777,7 @@ export default function CustomersPage() {
 										</ul>
 									) : (
 										<p className="customer-products-empty">
-											Todavia no quedo guardado el detalle de productos.
+											Todavía no quedó guardado el detalle de productos.
 										</p>
 									)}
 								</div>
