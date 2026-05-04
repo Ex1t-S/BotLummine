@@ -686,3 +686,263 @@
 .pagination-row button {
 	border-radius: 8px;
 }
+
+/* Recovery-first compact pass */
+
+.abandoned-carts-page {
+	gap: 10px;
+}
+
+.abandoned-carts-page .page-header {
+	align-items: center;
+	padding: 12px 14px;
+	gap: 10px;
+}
+
+.abandoned-carts-page .page-header h2 {
+	margin-bottom: 3px;
+	font-size: 20px;
+}
+
+.abandoned-carts-page .page-header p {
+	max-width: 720px;
+	color: #5f6b7a;
+	font-size: 13px;
+	line-height: 1.35;
+}
+
+.abandoned-carts-page .inline-actions button {
+	height: 36px;
+	border-radius: 8px;
+	font-size: 12px;
+}
+
+.sync-summary-banner {
+	gap: 3px;
+	padding: 10px 12px;
+	border-radius: 10px;
+}
+
+.sync-summary-banner strong {
+	font-size: 13px;
+}
+
+.sync-summary-banner span,
+.sync-summary-banner small {
+	font-size: 12px;
+}
+
+.stats-row {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.stat-box {
+	gap: 3px;
+	padding: 10px 12px;
+	border-radius: 10px;
+}
+
+.stat-box span {
+	font-size: 10px;
+}
+
+.stat-box strong {
+	font-size: 18px;
+}
+
+.filters-form {
+	gap: 8px;
+	margin-bottom: 8px;
+	padding: 10px;
+	border-radius: 10px;
+}
+
+.filters-form input,
+.filters-form select,
+.filters-form button {
+	height: 36px;
+	border-radius: 8px;
+	font-size: 12px;
+}
+
+.abandoned-filters-form label {
+	gap: 4px;
+}
+
+.abandoned-filters-form label span,
+.abandoned-message-box label span {
+	font-size: 11px;
+}
+
+.abandoned-carts-grid {
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 10px;
+}
+
+.abandoned-card {
+	gap: 8px;
+	padding: 10px;
+	border-radius: 10px;
+}
+
+.abandoned-topline {
+	grid-template-columns: 36px minmax(0, 1fr) auto;
+	gap: 8px;
+	align-items: center;
+}
+
+.abandoned-avatar {
+	width: 36px;
+	height: 36px;
+	border-radius: 9px;
+	font-size: 12px;
+}
+
+.abandoned-head-copy h3 {
+	font-size: 14px;
+}
+
+.abandoned-head-copy p {
+	font-size: 11px;
+}
+
+.status-badge {
+	padding: 5px 8px;
+	font-size: 11px;
+}
+
+.abandoned-card-focus {
+	display: grid;
+	grid-template-columns: minmax(84px, 0.42fr) minmax(0, 1fr);
+	gap: 8px;
+	align-items: stretch;
+}
+
+.abandoned-card-focus > div:first-child {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 3px;
+	min-width: 0;
+	padding: 8px 10px;
+	border: 1px solid var(--ui-border, #d8dee8);
+	border-radius: 9px;
+	background: #f8fafc;
+}
+
+.abandoned-card-focus span {
+	font-size: 10px;
+	font-weight: 800;
+	color: #64748b;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.abandoned-card-focus strong {
+	font-size: 16px;
+	color: #0f172a;
+}
+
+.abandoned-card-actions {
+	margin-top: 0;
+	gap: 6px;
+}
+
+.secondary-link-btn,
+.primary-action-btn {
+	height: 34px;
+	padding: 0 9px;
+	border-radius: 8px;
+	font-size: 12px;
+}
+
+.abandoned-meta-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.abandoned-meta-grid div {
+	padding: 8px 9px;
+	border-radius: 9px;
+}
+
+.abandoned-meta-grid span {
+	font-size: 10px;
+}
+
+.abandoned-meta-grid strong {
+	font-size: 12px;
+}
+
+.abandoned-products {
+	gap: 5px;
+}
+
+.abandoned-products span {
+	padding: 4px 7px;
+	font-size: 11px;
+}
+
+.abandoned-contact-note {
+	padding: 8px 9px;
+	border-radius: 9px;
+	font-size: 11px;
+}
+
+.abandoned-message-box {
+	padding: 9px;
+	border-radius: 10px;
+}
+
+.abandoned-message-box textarea {
+	min-height: 78px;
+	padding: 9px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+
+.abandoned-message-actions .secondary-link-btn,
+.abandoned-message-actions .primary-action-btn {
+	min-width: 112px;
+}
+
+.pagination-row {
+	gap: 5px;
+	margin-top: 4px;
+	padding: 4px 8px;
+}
+
+.pagination-row button {
+	min-width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	font-size: 12px;
+}
+
+@media (max-width: 900px) {
+	.stats-row {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.filters-form {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (max-width: 640px) {
+	.abandoned-carts-page .page-header {
+		align-items: flex-start;
+	}
+
+	.stats-row,
+	.filters-form,
+	.abandoned-card-focus,
+	.abandoned-meta-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.abandoned-card-actions {
+		grid-template-columns: 1fr 1fr;
+	}
+}

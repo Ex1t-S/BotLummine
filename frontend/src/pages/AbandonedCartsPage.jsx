@@ -153,13 +153,13 @@ export default function AbandonedCartsPage() {
 
 			setFilters(next);
 			await loadAbandonedCarts(next);
-			setSuccessMessage('Sincronizacion completada.');
+			setSuccessMessage('Sincronización completada.');
 		} catch (error) {
 			console.error(error);
 			setErrorMessage(
 				error?.response?.data?.error ||
 				error?.response?.data?.message ||
-				'No pudimos sincronizar los carritos abandonados. Proba nuevamente.'
+				'No pudimos sincronizar los carritos abandonados. Probá nuevamente.'
 			);
 		} finally {
 			setSyncing(false);
@@ -186,7 +186,7 @@ export default function AbandonedCartsPage() {
 		const body = String(messageDrafts[cart.id] || '').trim();
 
 		if (!body) {
-			setErrorMessage('Escribi un mensaje antes de enviarlo.');
+			setErrorMessage('Escribí un mensaje antes de enviarlo.');
 			return;
 		}
 
@@ -204,7 +204,7 @@ export default function AbandonedCartsPage() {
 			setErrorMessage(
 				error?.response?.data?.error ||
 				error?.response?.data?.message ||
-				'No pudimos enviar el mensaje. Proba nuevamente.'
+				'No pudimos enviar el mensaje. Probá nuevamente.'
 			);
 		} finally {
 			setSendingCartId('');
@@ -244,15 +244,13 @@ export default function AbandonedCartsPage() {
 				<div>
 					<h2>Carritos abandonados</h2>
 					<p>
-						Total: <strong>{stats.total || 0}</strong>
-						<br />
-						La sync toma siempre los ultimos 30 dias y conserva el estado de los carritos ya contactados por campañas.
+						<strong>{stats.total || 0}</strong> carritos en los últimos 30 días. Se conserva el estado de los ya contactados por campañas.
 					</p>
 				</div>
 
 				<div className="inline-actions">
 					<button type="button" onClick={handleSync} disabled={syncing}>
-						{syncing ? 'Sincronizando ultimos 30 dias...' : 'Sincronizar ultimos 30 dias'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar 30 días'}
 					</button>
 				</div>
 			</section>
@@ -267,7 +265,7 @@ export default function AbandonedCartsPage() {
 
 			{syncSummary ? (
 				<div className="sync-summary-banner">
-					<strong>Ultima sync {syncSummary.daysBack} dias</strong>
+					<strong>Última sync {syncSummary.daysBack} días</strong>
 					<span>{syncSummary.message || 'Sin resumen disponible.'}</span>
 					<small>
 						Guardados: {syncSummary.syncedCount} - Eliminados fuera de ventana: {syncSummary.deletedCount} - Vigentes: {syncSummary.remainingCount}
@@ -304,7 +302,7 @@ export default function AbandonedCartsPage() {
 					<span>Buscar</span>
 					<input
 						type="text"
-						placeholder="Nombre, mail, telefono, ciudad o checkout"
+						placeholder="Nombre, mail, teléfono, ciudad o checkout"
 						value={filters.q}
 						onChange={(e) => updateFilter('q', e.target.value)}
 					/>
@@ -354,7 +352,7 @@ export default function AbandonedCartsPage() {
 			) : carts.length === 0 ? (
 				<div className="abandoned-empty-state">
 					<strong>No hay carritos para mostrar</strong>
-					<span>Proba limpiar los filtros o sincronizar los ultimos 30 dias.</span>
+					<span>Probá limpiar los filtros o sincronizar los últimos 30 días.</span>
 				</div>
 			) : (
 				<div className="abandoned-carts-grid">
@@ -378,25 +376,54 @@ export default function AbandonedCartsPage() {
 								</span>
 							</div>
 
-							<div className="abandoned-meta-grid">
+							<div className="abandoned-card-focus">
 								<div>
-									<span>Total</span>
+									<span>Monto</span>
 									<strong>{cart.totalLabel}</strong>
 								</div>
 
+								<div className="abandoned-card-actions">
+									{cart.canMessage ? (
+										<button
+											type="button"
+											className="primary-action-btn"
+											onClick={() => handleToggleMessageBox(cart)}
+											disabled={sendingCartId === cart.id}
+										>
+											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
+										</button>
+									) : (
+										<button type="button" className="primary-action-btn" disabled>
+											Sin teléfono
+										</button>
+									)}
+
+									{cart.canOpenCart ? (
+										<a
+											href={cart.abandonedCheckoutUrl}
+											target="_blank"
+											rel="noreferrer"
+											className="secondary-link-btn"
+										>
+											Abrir carrito
+										</a>
+									) : (
+										<button type="button" className="secondary-link-btn" disabled>
+											Sin link
+										</button>
+									)}
+								</div>
+							</div>
+
+							<div className="abandoned-meta-grid">
 								<div>
 									<span>Fecha</span>
 									<strong>{cart.displayCreatedAt || '-'}</strong>
 								</div>
 
 								<div>
-									<span>Ciudad</span>
-									<strong>{cart.shippingCity || '-'}</strong>
-								</div>
-
-								<div>
-									<span>Provincia</span>
-									<strong>{cart.shippingProvince || '-'}</strong>
+									<span>Ubicación</span>
+									<strong>{[cart.shippingCity, cart.shippingProvince].filter(Boolean).join(', ') || '-'}</strong>
 								</div>
 							</div>
 
@@ -412,42 +439,9 @@ export default function AbandonedCartsPage() {
 
 							{cart.status === 'CONTACTED' ? (
 								<div className="abandoned-contact-note">
-									Ultimo envio: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
+									Último envío: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
 								</div>
 							) : null}
-
-							<div className="abandoned-card-actions">
-								{cart.canMessage ? (
-									<button
-										type="button"
-										className="primary-action-btn"
-										onClick={() => handleToggleMessageBox(cart)}
-										disabled={sendingCartId === cart.id}
-									>
-										{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
-									</button>
-								) : (
-									<button type="button" className="primary-action-btn" disabled>
-										Sin telefono
-									</button>
-								)}
-
-								{cart.canOpenCart ? (
-									<a
-										href={cart.abandonedCheckoutUrl}
-										target="_blank"
-										rel="noreferrer"
-										className="secondary-link-btn"
-									>
-										Abrir carrito
-									</a>
-								) : (
-									<button type="button" className="secondary-link-btn" disabled>
-										Sin link
-									</button>
-								)}
-
-							</div>
 
 							{activeMessageCartId === cart.id ? (
 								<div className="abandoned-message-box">
