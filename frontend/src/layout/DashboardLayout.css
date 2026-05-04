@@ -207,7 +207,8 @@
 	justify-content: space-between;
 	gap: 16px;
 	min-width: 0;
-	padding: 15px 18px;
+	min-height: 52px;
+	padding: 8px 14px;
 	background: rgba(255, 255, 255, 0.82);
 	border-bottom: 1px solid #e4e7ec;
 	backdrop-filter: blur(10px);
@@ -220,7 +221,7 @@
 .admin-topbar span {
 	display: block;
 	color: #667085;
-	font-size: 12px;
+	font-size: 11px;
 	font-weight: 760;
 	line-height: 1.2;
 }
@@ -231,28 +232,32 @@
 }
 
 .admin-topbar h2 {
-	margin-top: 2px;
+	margin-top: 1px;
 	color: #101828;
-	font-size: 22px;
+	font-size: 18px;
 	font-weight: 780;
 	line-height: 1.12;
 	letter-spacing: 0;
 }
 
 .admin-topbar p {
-	margin-top: 4px;
-	color: #667085;
-	font-size: 13px;
-	font-weight: 500;
-	line-height: 1.35;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 .admin-topbar-user {
 	display: grid;
 	justify-items: end;
-	flex: 0 1 220px;
+	flex: 0 1 180px;
 	min-width: 120px;
-	padding: 9px 11px;
+	padding: 7px 10px;
 	background: #101828;
 	border-radius: 8px;
 }
@@ -340,7 +345,8 @@
 	}
 
 	.admin-topbar {
-		padding: 12px;
+		min-height: 48px;
+		padding: 8px 12px;
 	}
 
 	.admin-topbar-user {
@@ -374,10 +380,7 @@
 	}
 
 	.admin-topbar h2 {
-		font-size: 19px;
+		font-size: 17px;
 	}
 
-	.admin-topbar p {
-		font-size: 12px;
-	}
 }
