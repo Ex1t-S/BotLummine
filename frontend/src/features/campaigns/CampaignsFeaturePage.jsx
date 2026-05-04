@@ -598,9 +598,9 @@ export default function CampaignsFeaturePage() {
 		setPendingConfirm({
 			type: 'campaign',
 			id: campaign.id,
-			title: 'Eliminar campana',
+			title: 'Eliminar campaña',
 			message: `Vas a eliminar "${campaign.name}". Esta accion no se puede deshacer.`,
-			confirmLabel: 'Eliminar campana',
+			confirmLabel: 'Eliminar campaña',
 		});
 	}
 

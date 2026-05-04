@@ -20,10 +20,10 @@ const pricingPlans = [
 	{
 		name: 'Avanzado',
 		price: 'A definir',
-		description: 'Para crecer con automatizaciones, campanas y medicion comercial.',
+		description: 'Para crecer con automatizaciones, campañas y medicion comercial.',
 		features: [
 			'Todo lo del plan Basico',
-			'Campanas por WhatsApp API',
+			'Campañas por WhatsApp API',
 			'Segmentacion de audiencias',
 			'Recuperacion de carritos',
 			'Metricas avanzadas y atribucion',
@@ -38,7 +38,7 @@ const featureCards = [
 		description: 'Centraliza inbox, clientes y contexto comercial para responder con mas precision.',
 	},
 	{
-		title: 'Activa campanas medibles',
+		title: 'Activa campañas medibles',
 		description: 'Segmenta audiencias y lanza mensajes por WhatsApp API con seguimiento comercial.',
 	},
 	{
@@ -135,7 +135,7 @@ export default function LoginPage() {
 						<h1 id="contact-title">Hablemos de tu operacion comercial.</h1>
 						<p className="login-lead">
 							Dejanos tus datos o escribinos por los canales principales para evaluar como conectar WhatsApp,
-							ventas y campanas en tu marca.
+							ventas y campañas en tu marca.
 						</p>
 
 						<div className="contact-grid">
@@ -160,7 +160,7 @@ export default function LoginPage() {
 						<p className="login-eyebrow">Precios</p>
 						<h1 id="pricing-title">Planes para operar y crecer con WhatsApp.</h1>
 						<p className="login-lead">
-							El plan Basico ordena la atencion y el CRM. El Avanzado suma campanas, automatizacion y
+							El plan Basico ordena la atencion y el CRM. El Avanzado suma campañas, automatizacion y
 							medicion para escalar ventas.
 						</p>
 
@@ -193,7 +193,7 @@ export default function LoginPage() {
 
 							<div>
 								<p className="login-eyebrow">Panel operativo</p>
-								<h1>Gestiona WhatsApp, ventas y campanas de marketing.</h1>
+								<h1>Gestiona WhatsApp, ventas y campañas de marketing.</h1>
 							</div>
 
 							<div className="login-metrics" aria-label="Capacidades principales">
@@ -207,7 +207,7 @@ export default function LoginPage() {
 								</div>
 								<div>
 									<strong>API</strong>
-									<span>campanas por WhatsApp</span>
+									<span>campañas por WhatsApp</span>
 								</div>
 							</div>
 						</section>
@@ -307,7 +307,7 @@ export default function LoginPage() {
 									<i />
 								</div>
 								<ul>
-									<li>Campana: recuperacion</li>
+									<li>Campaña: recuperacion</li>
 									<li>Ultimo pedido: hace 12 dias</li>
 									<li>Canal: WhatsApp API</li>
 								</ul>

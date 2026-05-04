@@ -873,7 +873,7 @@ export default function CampaignComposerPanel({
 				label: 'Header media',
 				ok: !requiresHeaderMedia || !needsHeaderMediaUpload,
 				readyText: campaignOverridesTemplateMedia
-					? 'Se reemplaza para esta campana'
+					? 'Se reemplaza para esta campaña'
 					: hasTemplateResolvedHeaderMedia
 						? 'Resuelta en la plantilla'
 						: 'No aplica',
@@ -1477,7 +1477,7 @@ export default function CampaignComposerPanel({
 
 				<div className="campaign-helper-box" style={{ display: 'none' }}>
 					<div className="campaign-helper-text">
-						Revision rapida antes de crear la campana. Si algo no esta listo, aparece marcado aca y no recien al final.
+						Revision rapida antes de crear la campaña. Si algo no esta listo, aparece marcado aca y no recien al final.
 					</div>
 
 					<div className="campaign-review-grid">
@@ -1491,11 +1491,11 @@ export default function CampaignComposerPanel({
 
 					{campaignReadyToCreate ? (
 						<div className="campaign-inline-success">
-							La campana ya tiene todo lo necesario para crearse.
+							La campaña ya tiene todo lo necesario para crearse.
 						</div>
 					) : (
 						<div className="campaign-inline-warning">
-							Completa los puntos pendientes antes de crear o lanzar la campana.
+							Completa los puntos pendientes antes de crear o lanzar la campaña.
 						</div>
 					)}
 				</div>

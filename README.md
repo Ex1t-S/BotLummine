@@ -137,7 +137,7 @@ Recomendado para producción:
 - HTTPS real para el webhook
 - Railway web: `npm start`
 - Railway cron Enbox: `npm run jobs:enbox-sync`, schedule `*/30 * * * *`
-- Railway cron campanas: `npm run jobs:campaign-dispatch`, schedule `*/5 * * * *`
+- Railway cron campañas: `npm run jobs:campaign-dispatch`, schedule `*/5 * * * *`
 - Diagnostico operativo opcional: `npm run jobs:diagnose`, schedule `0 */6 * * *`
 - guia de workers/cron: `docs/railway-cron.md`
 - hardening env: `LOG_LEVEL=info`, `DEBUG_EXTERNAL_PAYLOADS=false`, `HEALTHCHECK_DB=false`

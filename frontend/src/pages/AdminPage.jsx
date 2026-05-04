@@ -223,7 +223,7 @@ function getActivityItems(metrics = {}) {
 			key: 'read',
 			label: 'Leidos',
 			value: Number(metrics.readRecipientsCount || 0),
-			help: 'Destinatarios de campanas que llegaron a estado leido.',
+			help: 'Destinatarios de campañas que llegaron a estado leido.',
 		},
 		{
 			key: 'orders',
@@ -235,7 +235,7 @@ function getActivityItems(metrics = {}) {
 			key: 'conversions',
 			label: 'Conv.',
 			value: Number(metrics.conversionCount || 0),
-			help: 'Ventas o senales de compra atribuidas a mensajes o campanas.',
+			help: 'Ventas o senales de compra atribuidas a mensajes o campañas.',
 		},
 	];
 	const values = items.map((item) => item.value);
@@ -283,8 +283,8 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 
 			<div
 				className="workspace-card-hero metric-help"
-				data-help="Conversiones atribuidas dividido por mensajes enviados en campanas. Sirve para ver que tanto WhatsApp termina en venta o senal de compra."
-				title="Conversiones atribuidas / mensajes enviados en campanas."
+				data-help="Conversiones atribuidas dividido por mensajes enviados en campañas. Sirve para ver que tanto WhatsApp termina en venta o senal de compra."
+				title="Conversiones atribuidas / mensajes enviados en campañas."
 			>
 				<div>
 					<span>Conversion por WhatsApp</span>
@@ -301,7 +301,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			<div className="workspace-card-progress">
 				<div
 					className="metric-help"
-					data-help="Porcentaje de mensajes de campana que Meta marco como entregados sobre el total enviado."
+					data-help="Porcentaje de mensajes de campaña que Meta marco como entregados sobre el total enviado."
 					title="Mensajes entregados / mensajes enviados."
 				>
 					<span>Entregados</span>
@@ -353,7 +353,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			<div className="workspace-card-stats">
 				<div
 					className="metric-help"
-					data-help="Monto de ventas asociado a conversiones detectadas despues de mensajes o campanas."
+					data-help="Monto de ventas asociado a conversiones detectadas despues de mensajes o campañas."
 					title="Revenue atribuido a conversiones por WhatsApp."
 				>
 					<span>Ventas atribuidas</span>
@@ -989,15 +989,15 @@ export default function AdminPage({ defaultTab = '' }) {
 							<div>
 								<h3>{platformAdmin ? 'Estadisticas multi-marca' : 'Estadisticas de marca'}</h3>
 								<p>{platformAdmin
-									? 'Resumen visual por marca con actividad de WhatsApp, ventas, campanas y recuperacion.'
-									: 'Resumen visual de WhatsApp, ventas, campanas y recuperacion de esta marca.'}</p>
+									? 'Resumen visual por marca con actividad de WhatsApp, ventas, campañas y recuperacion.'
+									: 'Resumen visual de WhatsApp, ventas, campañas y recuperacion de esta marca.'}</p>
 							</div>
 							{analytics?.activityWindowDays ? (
 								<span>Ultimos {formatNumber(analytics.activityWindowDays)} dias</span>
 							) : null}
 						</div>
 						<div className="tenant-admin-metrics">
-							<StatusPill>Campanas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
+							<StatusPill>Campañas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
 							<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
 							<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
 							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>

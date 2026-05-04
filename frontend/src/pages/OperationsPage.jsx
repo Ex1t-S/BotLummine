@@ -151,7 +151,7 @@ export default function OperationsPage() {
 				href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD',
 			},
 			{
-				label: 'Campanas activas',
+				label: 'Campañas activas',
 				value: totals.activeCampaigns,
 				helper: 'Envios en curso o cola',
 				tone: totals.failedCampaigns ? 'warning' : 'neutral',
@@ -218,7 +218,7 @@ export default function OperationsPage() {
 					</button>
 					{isAdmin ? (
 						<button type="button" className="secondary" onClick={() => goTo(platformAdmin ? '/admin' : '/campaigns/tracking')}>
-							{platformAdmin ? 'Admin plataforma' : 'Ver campanas'}
+							{platformAdmin ? 'Admin plataforma' : 'Ver campañas'}
 						</button>
 					) : null}
 				</div>

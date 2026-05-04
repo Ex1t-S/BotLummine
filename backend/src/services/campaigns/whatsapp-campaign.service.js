@@ -788,7 +788,7 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 	const totalAmount = normalizeString(recipient?.variables?.total_amount || '');
 
 	const commercialSummary = [
-		'Ultimo contacto: campana de carrito abandonado.',
+		'Ultimo contacto: campaña de carrito abandonado.',
 		primaryProductName ? `Producto del carrito: ${primaryProductName}.` : null,
 		totalAmount ? `Total mostrado: ${totalAmount}.` : null,
 		checkoutUrl ? `Checkout pendiente: ${checkoutUrl}.` : null,

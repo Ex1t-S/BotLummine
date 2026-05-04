@@ -246,7 +246,7 @@ export default function AbandonedCartsPage() {
 					<p>
 						Total: <strong>{stats.total || 0}</strong>
 						<br />
-						La sync toma siempre los ultimos 30 dias y conserva el estado de los carritos ya contactados por campanas.
+						La sync toma siempre los ultimos 30 dias y conserva el estado de los carritos ya contactados por campañas.
 					</p>
 				</div>
 
