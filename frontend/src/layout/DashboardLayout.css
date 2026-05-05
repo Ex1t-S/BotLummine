@@ -731,3 +731,259 @@
 		display: none;
 	}
 }
+
+/* Reference-inspired light shell */
+
+.admin-shell {
+	grid-template-columns: 232px minmax(0, 1fr);
+	height: 100dvh;
+	padding: 18px;
+	background:
+		radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.92), transparent 34%),
+		#eef0f5;
+	color: var(--ui-text, #1d2433);
+	gap: 0;
+}
+
+.admin-sidebar,
+.admin-main {
+	min-height: 0;
+	background: #ffffff;
+}
+
+.admin-sidebar {
+	padding: 18px 14px;
+	color: var(--ui-text, #1d2433);
+	border: 1px solid #e6eaf2;
+	border-right: 0;
+	border-radius: 28px 0 0 28px;
+	box-shadow: 0 24px 70px rgba(25, 35, 58, 0.13);
+}
+
+.admin-main {
+	border: 1px solid #e6eaf2;
+	border-left: 0;
+	border-radius: 0 28px 28px 0;
+	box-shadow: 22px 24px 70px rgba(25, 35, 58, 0.13);
+	overflow: hidden;
+}
+
+.admin-brand {
+	padding: 0 4px 16px;
+	margin-bottom: 14px;
+	border-bottom: 1px solid #eef1f6;
+}
+
+.admin-brand-mark--logo {
+	width: 38px;
+	height: 38px;
+	padding: 7px;
+	border: 1px solid #e8edf5;
+	border-radius: 13px;
+	background: #ffffff;
+	box-shadow: 0 8px 22px rgba(42, 79, 201, 0.1);
+}
+
+.admin-brand-copy h1 {
+	color: #151b29;
+	font-size: 17px;
+	font-weight: 780;
+}
+
+.admin-brand-copy p {
+	color: #7b8496;
+	font-size: 11px;
+}
+
+.admin-user-box {
+	margin-bottom: 16px;
+	padding: 12px;
+	border: 1px solid #edf1f6;
+	border-radius: 18px;
+	background: #f7f9fc;
+}
+
+.admin-user-box strong,
+.admin-topbar-user strong {
+	color: #1d2433;
+}
+
+.admin-user-box span,
+.admin-topbar-user span {
+	color: #7d8798;
+}
+
+.admin-menu {
+	gap: 15px;
+	padding: 0 2px 0 0;
+}
+
+.admin-menu-group {
+	gap: 7px;
+}
+
+.admin-menu-group-label {
+	padding: 0 12px;
+	color: #9aa4b5;
+	font-size: 10px;
+	letter-spacing: 0.04em;
+}
+
+.admin-menu-link {
+	display: grid;
+	grid-template-columns: 20px minmax(0, 1fr) 14px;
+	gap: 9px;
+	min-height: 39px;
+	padding: 9px 11px;
+	border: 1px solid transparent;
+	border-radius: 13px;
+	color: #626d80;
+	background: transparent;
+	font-size: 13px;
+	font-weight: 690;
+}
+
+.admin-menu-link svg {
+	color: #6673a7;
+}
+
+.admin-menu-link:hover {
+	color: #2f57d6;
+	background: #f4f6ff;
+	border-color: #edf1ff;
+}
+
+.admin-menu-link.active {
+	color: #2f57d6;
+	background: #eef2ff;
+	border-color: #dfe6ff;
+	box-shadow: none;
+}
+
+.admin-menu-link.active svg,
+.admin-menu-link:hover svg {
+	color: #3157d5;
+}
+
+.admin-menu-link.active .admin-menu-link-chevron,
+.admin-menu-link:hover .admin-menu-link-chevron {
+	opacity: 1;
+	transform: translateX(0);
+}
+
+.logout-btn {
+	min-height: 39px;
+	border: 1px solid #e7ebf2;
+	border-radius: 999px;
+	background: #ffffff;
+	color: #667085;
+	box-shadow: 0 8px 20px rgba(25, 35, 58, 0.06);
+}
+
+.logout-btn:hover {
+	background: #f6f8fc;
+	border-color: #dce2ed;
+	color: #3157d5;
+}
+
+.admin-topbar {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	min-height: 62px;
+	max-height: 68px;
+	padding: 12px 20px;
+	background: rgba(255, 255, 255, 0.88);
+	border-bottom: 1px solid #edf1f6;
+	backdrop-filter: blur(16px);
+}
+
+.admin-topbar span {
+	color: #3157d5;
+	font-size: 10px;
+	font-weight: 760;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.admin-topbar h2 {
+	margin-top: 2px;
+	color: #151b29;
+	font-size: 19px;
+	font-weight: 780;
+}
+
+.admin-topbar p {
+	position: static;
+	width: auto;
+	height: auto;
+	margin: 2px 0 0;
+	clip: auto;
+	white-space: normal;
+	color: #7b8496;
+	font-size: 12px;
+}
+
+.admin-topbar-user {
+	padding: 8px 12px;
+	border: 1px solid #edf1f6;
+	border-radius: 18px;
+	background: #f7f9fc;
+}
+
+.admin-content {
+	padding: 16px;
+	background: #f7f8fb;
+}
+
+@media (min-width: 1280px) {
+	.admin-shell {
+		padding: 24px;
+	}
+}
+
+@media (max-width: 900px) {
+	.admin-shell {
+		grid-template-columns: 1fr;
+		grid-template-rows: auto minmax(0, 1fr);
+		padding: 10px;
+	}
+
+	.admin-sidebar {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		border: 1px solid #e6eaf2;
+		border-bottom: 0;
+		border-radius: 22px 22px 0 0;
+		box-shadow: 0 16px 46px rgba(25, 35, 58, 0.1);
+	}
+
+	.admin-main {
+		border: 1px solid #e6eaf2;
+		border-top: 0;
+		border-radius: 0 0 22px 22px;
+		box-shadow: 0 20px 52px rgba(25, 35, 58, 0.12);
+	}
+
+	.admin-brand {
+		padding: 0;
+		border-bottom: 0;
+	}
+
+	.admin-menu-link.active {
+		box-shadow: none;
+	}
+}
+
+@media (max-width: 560px) {
+	.admin-shell {
+		padding: 0;
+		background: #ffffff;
+	}
+
+	.admin-sidebar,
+	.admin-main {
+		border-radius: 0;
+		box-shadow: none;
+	}
+}

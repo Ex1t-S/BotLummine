@@ -819,6 +819,430 @@ body {
 }
 
 /* =========================================================
+   LIGHT BLUE INTERNAL APP LOCK
+   - Reference-inspired final visual layer for the internal app.
+   - Scoped to dashboard so login/landing routes keep their CSS.
+========================================================= */
+
+.admin-shell {
+	--ui-bg: #f7f8fb;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f7f9fd;
+	--ui-surface-muted: #f0f3f8;
+	--ui-border: #e5eaf2;
+	--ui-border-strong: #d5dce8;
+	--ui-text: #1d2433;
+	--ui-heading: #121827;
+	--ui-muted: #778195;
+	--ui-subtle: #9aa4b5;
+	--ui-primary: #3157d5;
+	--ui-primary-strong: #2446b8;
+	--ui-primary-soft: #e8edff;
+	--ui-primary-muted: #f2f5ff;
+	--ui-info: #3157d5;
+	--ui-info-soft: #eef2ff;
+	--ui-success: #12805c;
+	--ui-success-soft: #ecfbf4;
+	--ui-warning: #b75f00;
+	--ui-warning-soft: #fff7ea;
+	--ui-danger: #c23b32;
+	--ui-danger-soft: #fff2f1;
+	--ui-radius-sm: 12px;
+	--ui-radius-md: 16px;
+	--ui-radius-lg: 20px;
+	--ui-radius-xl: 26px;
+	--ui-shadow-sm: 0 8px 22px rgba(25, 35, 58, 0.06);
+	--ui-shadow-md: 0 18px 42px rgba(25, 35, 58, 0.1);
+	--ui-shadow-lg: 0 28px 70px rgba(25, 35, 58, 0.14);
+	--ui-focus: 0 0 0 4px rgba(49, 87, 213, 0.14);
+}
+
+.admin-shell .admin-content {
+	background:
+		linear-gradient(180deg, #fbfcff 0, #f7f8fb 260px),
+		#f7f8fb;
+}
+
+.admin-shell .admin-content .page-card,
+.admin-shell .admin-content .internal-page-header,
+.admin-shell .admin-content .tenant-admin-header,
+.admin-shell .admin-content .tenant-admin-panel,
+.admin-shell .admin-content .customers-hero-card,
+.admin-shell .admin-content .customers-sync-panel,
+.admin-shell .admin-content .customers-filters-card,
+.admin-shell .admin-content .customers-list-card,
+.admin-shell .admin-content .customers-stat-card,
+.admin-shell .admin-content .customer-card,
+.admin-shell .admin-content .abandoned-card,
+.admin-shell .admin-content .stat-box,
+.admin-shell .admin-content .catalog-card,
+.admin-shell .admin-content .campaign-shell-card,
+.admin-shell .admin-content .campaigns-hero,
+.admin-shell .admin-content .campaigns-tab-shell,
+.admin-shell .admin-content .campaign-custom-audience-card,
+.admin-shell .admin-content .campaign-schedule-card,
+.admin-shell .admin-content .wam-card,
+.admin-shell .admin-content .wam-hero,
+.admin-shell .admin-content .operations-header,
+.admin-shell .admin-content .operations-workspace-card,
+.admin-shell .admin-content .inbox-sidebar,
+.admin-shell .admin-content .inbox-chat-panel,
+.admin-shell .admin-content .inbox-contact-card,
+.admin-shell .admin-content .inbox-composer-shell,
+.admin-shell .admin-content .metric-panel {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: #ffffff;
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.admin-shell .admin-content .page-card::before,
+.admin-shell .admin-content .page-card::after,
+.admin-shell .admin-content .tenant-admin-panel::before,
+.admin-shell .admin-content .tenant-admin-panel::after,
+.admin-shell .admin-content .customers-hero-card::before,
+.admin-shell .admin-content .customers-hero-card::after,
+.admin-shell .admin-content .customers-sync-panel::before,
+.admin-shell .admin-content .customers-sync-panel::after,
+.admin-shell .admin-content .customers-filters-card::before,
+.admin-shell .admin-content .customers-filters-card::after,
+.admin-shell .admin-content .customers-list-card::before,
+.admin-shell .admin-content .customers-list-card::after,
+.admin-shell .admin-content .customers-stat-card::before,
+.admin-shell .admin-content .customers-stat-card::after,
+.admin-shell .admin-content .customer-card::before,
+.admin-shell .admin-content .customer-card::after,
+.admin-shell .admin-content .abandoned-card::before,
+.admin-shell .admin-content .abandoned-card::after,
+.admin-shell .admin-content .stat-box::before,
+.admin-shell .admin-content .stat-box::after,
+.admin-shell .admin-content .catalog-card::before,
+.admin-shell .admin-content .catalog-card::after,
+.admin-shell .admin-content .campaign-shell-card::before,
+.admin-shell .admin-content .campaign-shell-card::after,
+.admin-shell .admin-content .campaigns-hero::before,
+.admin-shell .admin-content .campaigns-hero::after,
+.admin-shell .admin-content .campaigns-tab-shell::before,
+.admin-shell .admin-content .campaigns-tab-shell::after,
+.admin-shell .admin-content .wam-card::before,
+.admin-shell .admin-content .wam-card::after,
+.admin-shell .admin-content .wam-hero::before,
+.admin-shell .admin-content .wam-hero::after,
+.admin-shell .admin-content .operations-header::before,
+.admin-shell .admin-content .operations-header::after,
+.admin-shell .admin-content .operations-workspace-card::before,
+.admin-shell .admin-content .operations-workspace-card::after,
+.admin-shell .admin-content .inbox-sidebar::before,
+.admin-shell .admin-content .inbox-sidebar::after,
+.admin-shell .admin-content .inbox-chat-panel::before,
+.admin-shell .admin-content .inbox-chat-panel::after {
+	content: none;
+}
+
+.admin-shell .admin-content .page-card,
+.admin-shell .admin-content .tenant-admin-page,
+.admin-shell .admin-content .customers-page,
+.admin-shell .admin-content .abandoned-carts-page,
+.admin-shell .admin-content .operations-page,
+.admin-shell .admin-content .wam-page {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.admin-shell .admin-content .page-card {
+	padding: 18px;
+}
+
+.admin-shell .admin-content .internal-page-header,
+.admin-shell .admin-content .page-header,
+.admin-shell .admin-content .tenant-admin-header,
+.admin-shell .admin-content .customers-hero-card,
+.admin-shell .admin-content .abandoned-carts-page .page-header,
+.admin-shell .admin-content .campaigns-hero,
+.admin-shell .admin-content .wam-hero,
+.admin-shell .admin-content .operations-header {
+	padding: 20px;
+	border-radius: 24px;
+	background:
+		linear-gradient(135deg, rgba(49, 87, 213, 0.055), transparent 42%),
+		#ffffff;
+}
+
+.admin-shell .admin-content .internal-page-header__eyebrow,
+.admin-shell .admin-content .catalog-header-kicker,
+.admin-shell .admin-content .customers-kicker,
+.admin-shell .admin-content .operations-eyebrow,
+.admin-shell .admin-content .wam-hero__eyebrow,
+.admin-shell .admin-content .campaigns-tab-shell__eyebrow {
+	color: var(--ui-primary);
+	font-size: 10px;
+	font-weight: 780;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.admin-shell .admin-content h1,
+.admin-shell .admin-content h2,
+.admin-shell .admin-content h3 {
+	color: var(--ui-heading);
+	letter-spacing: 0;
+}
+
+.admin-shell .admin-content p,
+.admin-shell .admin-content .muted-text,
+.admin-shell .admin-content .internal-page-header p,
+.admin-shell .admin-content .page-header p,
+.admin-shell .admin-content .tenant-admin-header p,
+.admin-shell .admin-content .customers-hero-card p,
+.admin-shell .admin-content .operations-header p,
+.admin-shell .admin-content .wam-hero p,
+.admin-shell .admin-content .campaigns-hero-lead {
+	color: var(--ui-muted);
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.admin-shell .admin-content input,
+.admin-shell .admin-content select,
+.admin-shell .admin-content textarea {
+	min-height: 42px;
+	border: 1px solid var(--ui-border);
+	border-radius: 14px;
+	background: #ffffff;
+	color: var(--ui-text);
+	box-shadow: none;
+}
+
+.admin-shell .admin-content input:focus,
+.admin-shell .admin-content select:focus,
+.admin-shell .admin-content textarea:focus {
+	border-color: rgba(49, 87, 213, 0.45);
+	box-shadow: var(--ui-focus);
+	outline: none;
+}
+
+.admin-shell .admin-content .inline-actions button,
+.admin-shell .admin-content .page-header button,
+.admin-shell .admin-content .catalog-search-form button,
+.admin-shell .admin-content .primary-action-btn,
+.admin-shell .admin-content .customers-apply-btn,
+.admin-shell .admin-content .tenant-admin-grid button,
+.admin-shell .admin-content .tenant-admin-actions button,
+.admin-shell .admin-content .filters-form button,
+.admin-shell .admin-content .button.primary,
+.admin-shell .admin-content .wam-button--primary,
+.admin-shell .admin-content .inbox-send-btn,
+.admin-shell .admin-content .operations-header-actions button,
+.admin-shell .admin-content .operations-issue button,
+.admin-shell .admin-content .internal-action-btn.is-primary {
+	min-height: 42px;
+	border: 1px solid #3157d5;
+	border-radius: 999px;
+	background: #3157d5;
+	color: #ffffff;
+	font-weight: 720;
+	box-shadow: 0 10px 24px rgba(49, 87, 213, 0.22);
+}
+
+.admin-shell .admin-content .inline-actions button:hover:not(:disabled),
+.admin-shell .admin-content .page-header button:hover:not(:disabled),
+.admin-shell .admin-content .catalog-search-form button:hover:not(:disabled),
+.admin-shell .admin-content .primary-action-btn:hover:not(:disabled),
+.admin-shell .admin-content .customers-apply-btn:hover:not(:disabled),
+.admin-shell .admin-content .tenant-admin-grid button:hover:not(:disabled),
+.admin-shell .admin-content .tenant-admin-actions button:hover:not(:disabled),
+.admin-shell .admin-content .filters-form button:hover:not(:disabled),
+.admin-shell .admin-content .button.primary:hover:not(:disabled),
+.admin-shell .admin-content .wam-button--primary:hover:not(:disabled),
+.admin-shell .admin-content .inbox-send-btn:hover:not(:disabled),
+.admin-shell .admin-content .operations-header-actions button:hover:not(:disabled),
+.admin-shell .admin-content .operations-issue button:hover:not(:disabled),
+.admin-shell .admin-content .internal-action-btn.is-primary:hover:not(:disabled) {
+	background: #2446b8;
+	border-color: #2446b8;
+	box-shadow: 0 12px 28px rgba(49, 87, 213, 0.26);
+	transform: none;
+}
+
+.admin-shell .admin-content .secondary-link-btn,
+.admin-shell .admin-content .tenant-admin-grid button[type="button"],
+.admin-shell .admin-content .toolbar-group button,
+.admin-shell .admin-content .pagination-btn,
+.admin-shell .admin-content .pagination-page-btn,
+.admin-shell .admin-content .button.ghost,
+.admin-shell .admin-content .button.secondary,
+.admin-shell .admin-content .wam-button--secondary,
+.admin-shell .admin-content .inbox-action-btn,
+.admin-shell .admin-content .operations-header-actions button.secondary,
+.admin-shell .admin-content .internal-action-btn.is-secondary {
+	min-height: 42px;
+	border: 1px solid var(--ui-border);
+	border-radius: 999px;
+	background: #ffffff;
+	color: var(--ui-text);
+	box-shadow: none;
+}
+
+.admin-shell .admin-content .secondary-link-btn:hover:not(:disabled),
+.admin-shell .admin-content .tenant-admin-grid button[type="button"]:hover:not(:disabled),
+.admin-shell .admin-content .toolbar-group button:hover:not(:disabled),
+.admin-shell .admin-content .pagination-btn:hover:not(:disabled),
+.admin-shell .admin-content .pagination-page-btn:hover:not(:disabled),
+.admin-shell .admin-content .button.ghost:hover:not(:disabled),
+.admin-shell .admin-content .button.secondary:hover:not(:disabled),
+.admin-shell .admin-content .wam-button--secondary:hover:not(:disabled),
+.admin-shell .admin-content .inbox-action-btn:hover:not(:disabled),
+.admin-shell .admin-content .operations-header-actions button.secondary:hover:not(:disabled),
+.admin-shell .admin-content .internal-action-btn.is-secondary:hover:not(:disabled) {
+	border-color: #d8deeb;
+	background: #f8faff;
+	color: #3157d5;
+}
+
+.admin-shell .admin-content .metric-panel,
+.admin-shell .admin-content .stat-box,
+.admin-shell .admin-content .customers-stat-card {
+	min-height: 112px;
+	border-radius: 22px;
+	background: #ffffff;
+	box-shadow: 0 12px 28px rgba(25, 35, 58, 0.07);
+}
+
+.admin-shell .admin-content .metric-panel__icon {
+	border-color: #dfe6ff;
+	border-radius: 15px;
+	background: #eef2ff;
+	color: #3157d5;
+}
+
+.admin-shell .admin-content .metric-panel__action,
+.admin-shell .admin-content .tenant-admin-pill,
+.admin-shell .admin-content .queue-pill,
+.admin-shell .admin-content .campaign-badge,
+.admin-shell .admin-content .campaign-schedule-status,
+.admin-shell .admin-content .status-badge,
+.admin-shell .admin-content .wam-chip,
+.admin-shell .admin-content .wam-pill,
+.admin-shell .admin-content .customer-payment-badge,
+.admin-shell .admin-content .inbox-badge,
+.admin-shell .admin-content .customers-active-filter-badge,
+.admin-shell .admin-content .internal-status-badge {
+	border: 1px solid #e0e6f5;
+	border-radius: 999px;
+	background: #f4f6ff;
+	color: #3157d5;
+	font-weight: 740;
+}
+
+.admin-shell .admin-content .catalog-search-form,
+.admin-shell .admin-content .filters-form,
+.admin-shell .admin-content .abandoned-filters-form,
+.admin-shell .admin-content .customers-filters-card {
+	border-radius: 22px;
+	border-color: var(--ui-border);
+	background: #ffffff;
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.admin-shell .admin-content .catalog-card,
+.admin-shell .admin-content .customer-card,
+.admin-shell .admin-content .abandoned-card {
+	border-radius: 22px;
+}
+
+.admin-shell .admin-content .catalog-thumb,
+.admin-shell .admin-content .catalog-thumb-empty {
+	border-radius: 18px;
+	background: #f1f4fa;
+}
+
+.admin-shell .admin-content .empty-state,
+.admin-shell .admin-content .tenant-admin-empty,
+.admin-shell .admin-content .inbox-empty,
+.admin-shell .admin-content .abandoned-empty-state,
+.admin-shell .admin-content .campaign-custom-audience-empty,
+.admin-shell .admin-content .customers-empty-state,
+.admin-shell .admin-content .operations-empty,
+.admin-shell .admin-content .wam-empty,
+.admin-shell .admin-content .internal-empty-state {
+	border-color: #dce3ef;
+	border-radius: 22px;
+	background: #ffffff;
+	color: var(--ui-muted);
+}
+
+.admin-shell .admin-content .inbox-page {
+	gap: 16px;
+	background: transparent;
+}
+
+.admin-shell .admin-content .inbox-sidebar,
+.admin-shell .admin-content .inbox-chat-panel {
+	border-radius: 24px;
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.admin-shell .admin-content .inbox-sidebar {
+	background: #ffffff;
+}
+
+.admin-shell .admin-content .inbox-queue-tabs,
+.admin-shell .admin-content .inbox-read-filters {
+	border: 1px solid #e6ebf4;
+	background: #f4f6fa;
+}
+
+.admin-shell .admin-content .queue-pill.active,
+.admin-shell .admin-content .inbox-read-filter-btn--active {
+	background: #ffffff;
+	color: #3157d5;
+	border-color: #dfe6ff;
+	box-shadow: 0 8px 20px rgba(25, 35, 58, 0.08);
+}
+
+.admin-shell .admin-content .inbox-contact-card.active {
+	border-color: #dfe6ff;
+	background: #f4f6ff;
+	box-shadow: 0 12px 26px rgba(49, 87, 213, 0.1);
+}
+
+.admin-shell .admin-content .inbox-messages {
+	background:
+		linear-gradient(180deg, #fbfcff, #f7f8fb);
+}
+
+.admin-shell .admin-content .inbox-message-row.outbound .inbox-message-bubble,
+.admin-shell .admin-content .chat-message.outbound .chat-bubble {
+	background: #eef2ff;
+	border-color: #dfe6ff;
+}
+
+.admin-shell .admin-content .inbox-composer,
+.admin-shell .admin-content .chat-form {
+	border-radius: 999px;
+	background: #ffffff;
+}
+
+@media (max-width: 900px) {
+	.admin-shell .admin-content {
+		padding: 12px;
+	}
+
+	.admin-shell .admin-content .internal-page-header,
+	.admin-shell .admin-content .page-header,
+	.admin-shell .admin-content .tenant-admin-header,
+	.admin-shell .admin-content .customers-hero-card,
+	.admin-shell .admin-content .abandoned-carts-page .page-header,
+	.admin-shell .admin-content .campaigns-hero,
+	.admin-shell .admin-content .wam-hero,
+	.admin-shell .admin-content .operations-header {
+		padding: 16px;
+		border-radius: 20px;
+	}
+}
+
+/* =========================================================
    INTERNAL MODERN LOCK
    - Capa final del panel interno. No toca login.
    - Neutraliza overrides decorativos previos y unifica cajas.

@@ -7,15 +7,15 @@
 		"value icon"
 		"helper action";
 	gap: 6px 10px;
-	min-height: 112px;
-	padding: 15px;
+	min-height: 114px;
+	padding: 16px;
 	overflow: hidden;
 	border: 1px solid var(--ui-border, #d7dee5);
-	border-radius: var(--ui-radius-lg, 12px);
+	border-radius: 22px;
 	background: var(--ui-surface, #ffffff);
 	color: var(--ui-text, #172027);
 	text-align: left;
-	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+	box-shadow: var(--ui-shadow-sm, 0 8px 22px rgba(25, 35, 58, 0.06));
 	isolation: isolate;
 }
 
@@ -32,9 +32,9 @@ button.metric-panel {
 }
 
 button.metric-panel:hover {
-	border-color: var(--ui-border-strong, #b8c4cc);
-	background: var(--ui-surface-soft, #f8fafb);
-	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+	border-color: var(--ui-border-strong, #d5dce8);
+	background: var(--ui-surface-soft, #f7f9fd);
+	box-shadow: var(--ui-shadow-md, 0 18px 42px rgba(25, 35, 58, 0.1));
 }
 
 .metric-panel__orb {
@@ -47,10 +47,10 @@ button.metric-panel:hover {
 	place-items: center;
 	width: 38px;
 	height: 38px;
-	border: 1px solid var(--ui-border, #d7dee5);
-	border-radius: var(--ui-radius-sm, 8px);
-	background: var(--ui-primary-muted, #f0fdfa);
-	color: var(--ui-primary, #0f766e);
+	border: 1px solid #dfe6ff;
+	border-radius: 15px;
+	background: var(--ui-primary-muted, #f2f5ff);
+	color: var(--ui-primary, #3157d5);
 }
 
 .metric-panel__label {
@@ -58,8 +58,8 @@ button.metric-panel:hover {
 	align-self: end;
 	color: var(--ui-muted, #66737d);
 	font-size: 11px;
-	font-weight: 760;
-	letter-spacing: 0.02em;
+	font-weight: 780;
+	letter-spacing: 0.04em;
 	text-transform: uppercase;
 }
 
@@ -67,7 +67,7 @@ button.metric-panel:hover {
 	grid-area: value;
 	color: var(--ui-heading, #0d151b);
 	font-size: 30px;
-	font-weight: 780;
+	font-weight: 800;
 	line-height: 1;
 	letter-spacing: 0;
 }
@@ -86,35 +86,35 @@ button.metric-panel:hover {
 	gap: 4px;
 	min-height: 24px;
 	padding: 0 8px;
-	border: 1px solid var(--ui-border, #d7dee5);
+	border: 1px solid #dfe6ff;
 	border-radius: 999px;
-	background: var(--ui-primary-muted, #f0fdfa);
-	color: var(--ui-primary, #0f766e);
+	background: var(--ui-primary-muted, #f2f5ff);
+	color: var(--ui-primary, #3157d5);
 	font-size: 12px;
 	font-style: normal;
 	font-weight: 800;
 }
 
 .metric-panel.tone-warning {
-	border-color: #f4c790;
+	border-color: #f2d2a6;
 	background: var(--ui-warning-soft, #fff7ed);
 }
 
 .metric-panel.tone-warning .metric-panel__icon {
-	border-color: #f4c790;
+	border-color: #f2d2a6;
 	background: #ffffff;
 	color: var(--ui-warning, #b54708);
 }
 
 .metric-panel.tone-info {
-	border-color: #b8d6df;
-	background: var(--ui-info-soft, #e7f5f8);
+	border-color: #dfe6ff;
+	background: var(--ui-info-soft, #eef2ff);
 }
 
 .metric-panel.tone-info .metric-panel__icon {
-	border-color: #b8d6df;
+	border-color: #dfe6ff;
 	background: #ffffff;
-	color: var(--ui-info, #246b86);
+	color: var(--ui-info, #3157d5);
 }
 
 @media (max-width: 640px) {
