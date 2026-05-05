@@ -484,7 +484,7 @@ function MessageBubble({ message, conversation }) {
 
 					<div className="inbox-message-meta">
 						<span className="inbox-message-sender-pill">
-							{message.senderName || (isOutbound ? 'Lummine' : 'Cliente')}
+							{message.senderName || (isOutbound ? 'Marca' : 'Cliente')}
 						</span>
 
 						<span>{formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || ''}</span>

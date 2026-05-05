@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const DEFAULT_WORKSPACE_ID = 'workspace_lummine';
+const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
 
 async function main() {
   const name = process.argv[2];

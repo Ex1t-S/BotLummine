@@ -13,7 +13,7 @@ function buildHeaders(accessToken) {
 	return {
 		Authentication: `bearer ${accessToken}`,
 		'Content-Type': 'application/json',
-		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant'
+		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'BladeIA AI Assistant'
 	};
 }
 

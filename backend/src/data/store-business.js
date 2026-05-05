@@ -1,26 +1,24 @@
 import { normalizeText } from '../lib/text.js';
 
 export const STORE_LINKS = {
-	home: 'https://lummine.com/',
-	indumentaria: 'https://lummine.com/indumentaria/',
-	packs: 'https://lummine.com/packs/',
-	contacto: 'https://lummine.com/contacto/',
-	politicaEnvio: 'https://lummine.com/politica-de-envio/',
-	politicaDevolucion: 'https://lummine.com/politica-de-devolucion/'
+	home: process.env.STORE_HOME_URL || '',
+	catalog: process.env.STORE_CATALOG_URL || '',
+	contacto: process.env.STORE_CONTACT_URL || '',
+	politicaEnvio: process.env.STORE_SHIPPING_POLICY_URL || '',
+	politicaDevolucion: process.env.STORE_RETURNS_POLICY_URL || ''
 };
 
 export const PAYMENT_RULES = {
 	general: [
 		'No mencionar promociones ni transferencia en todos los mensajes.',
 		'Solo hablar de pagos si el cliente pregunta por pagos, precios, promociones o está cerca de comprar.',
-		'Si la clienta ya definió producto o está lista para avanzar, responder directo y orientar el siguiente paso.',
+		'Si la persona ya definió producto o está lista para avanzar, responder directo y orientar el siguiente paso.',
 		'No volver a recomendar el producto cuando la conversación ya está en etapa de pago.',
 		'No pedir de nuevo datos que ya estén claros en la conversación.'
 	],
 	publicInfo: [
-		'En la tienda se comunica 15% OFF por transferencia.',
-		'En productos visibles se muestran cuotas sin interés.',
-		'No forzar la promo en respuestas donde no suma.'
+		'Usa solo promociones, cuotas o descuentos configurados para este workspace.',
+		'No inventes beneficios comerciales si no están presentes en el contexto.'
 	],
 	transfer: {
 		enabled: true,
@@ -36,15 +34,12 @@ export const PAYMENT_RULES = {
 
 export const POLICY_SUMMARY = {
 	shipping: [
-		'Se realizan envíos a todo el país.',
-		'La referencia general es Correo Argentino.',
-		'El tiempo estimado informado es de hasta 8 días hábiles desde la confirmación del pago.',
-		'Si la clienta pregunta por envío dentro de una compra, responder como continuidad natural del cierre.'
+		'Usa solo la política de envíos cargada para este workspace.',
+		'Si falta ubicación o método de envío, pedir el dato sin cortar el hilo comercial.'
 	],
 	returns: [
-		'No se aceptan devoluciones por higiene salvo error de empaquetado, defecto o daño comprobado.',
-		'Los inconvenientes deben reportarse dentro de las 48 horas posteriores a la recepción.',
-		'Si hay error de envío o daño, corresponde revisión y resolución.'
+		'Usa solo la política de cambios y devoluciones cargada para este workspace.',
+		'Si falta información para resolver el caso, pedir el dato puntual y ofrecer revisión humana.'
 	]
 };
 
@@ -62,15 +57,13 @@ export function detectBusinessIntent(text = '') {
 	if (/(cambio|devolucion|devolución|reclamo|defecto|dañado|danado)/.test(q)) return 'returns';
 	if (/(talle|medida|medidas|m\/l|xl\/xxl|xl|xxl)/.test(q)) return 'size_help';
 	if (/(stock|disponible|queda|color|colores|negro|blanco|beige)/.test(q)) return 'stock_check';
-	if (/(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley)/.test(q)) return 'product';
+	if (/(producto|productos|catalogo|catálogo|promo|combo|oferta)/.test(q)) return 'product';
 	return 'general';
 }
 
 export function buildRelevantBusinessData(userText = '') {
-	const intent = detectBusinessIntent(userText);
-
 	return {
-		intent,
+		intent: detectBusinessIntent(userText),
 		links: STORE_LINKS,
 		products: [],
 		paymentRules: PAYMENT_RULES,

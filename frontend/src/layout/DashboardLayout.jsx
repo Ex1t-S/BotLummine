@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
-import logoLummine from '../assets/lummine-logo.png';
+import logoBladeIA from '../assets/bladeia-logo.svg';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
 
 const PAGE_META = [
@@ -116,7 +116,7 @@ export default function DashboardLayout() {
 	const brandName = isPlatformAdmin
 		? 'Admin plataforma'
 		: (workspace?.aiConfig?.businessName || workspace?.name || 'Marca');
-	const logoUrl = workspace?.branding?.logoUrl || logoLummine;
+	const logoUrl = workspace?.branding?.logoUrl || logoBladeIA;
 	const basePageMeta = getPageMeta(location.pathname);
 	const pageMeta = isPlatformAdmin && location.pathname.startsWith('/admin')
 		? {

@@ -3,20 +3,20 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const DEFAULT_WORKSPACE_ID = 'workspace_lummine';
-const DEFAULT_WORKSPACE_SLUG = 'lummine';
+const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
+const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'default';
 
 async function ensureDefaultWorkspace() {
   const workspace = await prisma.workspace.upsert({
     where: { id: DEFAULT_WORKSPACE_ID },
     update: {
-      name: process.env.BUSINESS_NAME || 'Lummine',
+      name: process.env.BUSINESS_NAME || 'Marca demo',
       slug: DEFAULT_WORKSPACE_SLUG,
       status: 'ACTIVE'
     },
     create: {
       id: DEFAULT_WORKSPACE_ID,
-      name: process.env.BUSINESS_NAME || 'Lummine',
+      name: process.env.BUSINESS_NAME || 'Marca demo',
       slug: DEFAULT_WORKSPACE_SLUG,
       status: 'ACTIVE'
     }
@@ -25,14 +25,14 @@ async function ensureDefaultWorkspace() {
   await prisma.workspaceAiConfig.upsert({
     where: { workspaceId: DEFAULT_WORKSPACE_ID },
     update: {
-      businessName: process.env.BUSINESS_NAME || 'Lummine',
+      businessName: process.env.BUSINESS_NAME || 'Marca demo',
       agentName: process.env.AGENT_NAME || 'Sofi',
       tone: process.env.BRAND_TONE || 'cercano, claro y comercial',
       catalogMode: 'TIENDANUBE'
     },
     create: {
       workspaceId: DEFAULT_WORKSPACE_ID,
-      businessName: process.env.BUSINESS_NAME || 'Lummine',
+      businessName: process.env.BUSINESS_NAME || 'Marca demo',
       agentName: process.env.AGENT_NAME || 'Sofi',
       tone: process.env.BRAND_TONE || 'cercano, claro y comercial',
       catalogMode: 'TIENDANUBE'
@@ -131,7 +131,7 @@ async function main() {
             {
               workspaceId: workspace.id,
               direction: 'OUTBOUND',
-              senderName: process.env.BUSINESS_NAME || 'Lummine',
+              senderName: process.env.BUSINESS_NAME || 'Marca demo',
               body: '¡Hola! Sí, trabajamos ese modelo. Si querés te ayudo con talle, promo y envío.'
             }
           ]

@@ -51,7 +51,7 @@ function formatDateTime(value) {
 
 function buildLegacySuggestedMessage(cart) {
 	return [
-		`Hola ${cart.contactName || '¿cómo estás?'}, soy Sofi de Lummine 😊`,
+		`Hola ${cart.contactName || '¿cómo estás?'}, soy el equipo de la marca.`,
 		'Vimos que te quedó una compra pendiente y quería ayudarte a terminarla.',
 		`Podés retomarlo desde acá: ${cart.abandonedCheckoutUrl || ''}`,
 		'Si querés, también te asesoro por acá con talle, envío o pago.'

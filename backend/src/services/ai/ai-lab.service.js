@@ -373,7 +373,7 @@ async function resetConversationForFixture(conversationId, fixture, workspaceId 
 				body: message.body,
 				senderName:
 					message.direction === 'OUTBOUND'
-						? (process.env.BUSINESS_NAME || 'Lummine')
+						? (process.env.BUSINESS_NAME || 'Marca demo')
 						: (fixture.contactName || 'Cliente'),
 				provider: message.direction === 'OUTBOUND' ? 'fixture' : null,
 				model: message.direction === 'OUTBOUND' ? 'fixture' : null,

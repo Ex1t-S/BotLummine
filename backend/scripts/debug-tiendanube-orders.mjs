@@ -24,7 +24,7 @@ const ACCESS_TOKEN =
 const USER_AGENT =
 	process.env.TIENDANUBE_USER_AGENT ||
 	process.env.NUVEMSHOP_USER_AGENT ||
-	'BotLummine (tu-email@dominio.com)';
+	'BladeIA Debug (tu-email@dominio.com)';
 
 function buildUrl(page = 1, perPage = 5) {
 	const url = new URL(`https://api.tiendanube.com/v1/${STORE_ID}/orders`);

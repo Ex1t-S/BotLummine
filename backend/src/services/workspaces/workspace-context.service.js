@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 
-export const DEFAULT_WORKSPACE_ID = 'workspace_lummine';
-export const DEFAULT_WORKSPACE_SLUG = 'lummine';
+export const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
+export const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'default';
 
 export function normalizeWorkspaceId(value = '') {
 	return String(value || '').trim();
@@ -73,12 +73,12 @@ export async function ensureDefaultWorkspace() {
 		update: {},
 		create: {
 			id: DEFAULT_WORKSPACE_ID,
-			name: 'Lummine',
+			name: process.env.BUSINESS_NAME || 'Marca demo',
 			slug: DEFAULT_WORKSPACE_SLUG,
 			status: 'ACTIVE',
 			aiConfig: {
 				create: {
-					businessName: process.env.BUSINESS_NAME || 'Lummine',
+					businessName: process.env.BUSINESS_NAME || 'Marca demo',
 					agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi',
 					tone: 'humana, directa y comercial',
 					systemPrompt:
@@ -102,7 +102,7 @@ export async function ensureDefaultWorkspace() {
 		update: {},
 		create: {
 			workspaceId: workspace.id,
-			businessName: process.env.BUSINESS_NAME || workspace.name || 'Lummine',
+			businessName: process.env.BUSINESS_NAME || workspace.name || 'Marca demo',
 			agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi',
 			tone: 'humana, directa y comercial',
 			systemPrompt:
@@ -135,14 +135,14 @@ export async function getWorkspaceRuntimeConfig(workspaceId) {
 
 	return {
 		workspaceId: normalizedWorkspaceId,
-		workspaceName: workspace?.name || process.env.BUSINESS_NAME || 'Lummine',
+		workspaceName: workspace?.name || process.env.BUSINESS_NAME || 'Marca demo',
 		branding: workspace?.branding || null,
 		ai: {
 			businessName:
 				aiConfig.businessName ||
 				workspace?.name ||
 				process.env.BUSINESS_NAME ||
-				'Lummine',
+				'Marca demo',
 			agentName: aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi',
 			tone: aiConfig.tone || 'humana, directa y comercial',
 			systemPrompt:

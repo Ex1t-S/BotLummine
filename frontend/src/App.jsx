@@ -42,7 +42,7 @@ export default function App() {
 			<Route path="/inicio" element={<LoginPage />} />
 			<Route path="/contacto" element={<LoginPage />} />
 			<Route path="/precios" element={<LoginPage />} />
-			<Route path="/login" element={<Navigate to="/inicio" replace />} />
+			<Route path="/login" element={<LoginPage />} />
 
 			<Route
 				path="/"

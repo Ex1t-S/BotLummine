@@ -1,5 +1,5 @@
-import { getRelevantStoreFacts } from '../../data/lummine-style.js';
-import { buildRelevantBusinessData } from '../../data/lummine-business.js';
+import { getRelevantStoreFacts } from '../../data/store-style.js';
+import { buildRelevantBusinessData } from '../../data/store-business.js';
 
 const BASE_ASSISTANT_POLICY = [
 	'Responde como asesora humana de ventas por WhatsApp.',
@@ -114,20 +114,9 @@ export function buildPrompt({
 	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi';
 	const tone = aiConfig.tone || 'amigable_directo';
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
-	const useLegacyLummineData =
-		!workspaceConfig?.workspaceId ||
-		workspaceConfig.workspaceId === 'workspace_lummine' ||
-		String(businessName || '').toLowerCase().includes('lummine');
-	const facts = useLegacyLummineData ? getRelevantStoreFacts(recentMessages) : [];
+	const facts = getRelevantStoreFacts(recentMessages);
 	const firstContact = isFirstContact(recentMessages);
-	const businessData = useLegacyLummineData
-		? buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '')
-		: {
-			policySummary: {
-				shipping: ['Usa solo las politicas cargadas para este workspace.'],
-				returns: ['Usa solo las politicas cargadas para este workspace.']
-			}
-		};
+	const businessData = buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '');
 	const commercialHintsBlock = Array.isArray(commercialHints) && commercialHints.length
 		? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n')
 		: '- Guia una sola opcion principal y no abras todo el catalogo.';

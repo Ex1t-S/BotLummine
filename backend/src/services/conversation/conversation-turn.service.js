@@ -48,7 +48,7 @@ export async function runConversationTurn({
 	currentState = {},
 	messages = [],
 	workspaceId = currentConversation?.workspaceId,
-	businessName = process.env.BUSINESS_NAME || 'Lummine'
+	businessName = process.env.BUSINESS_NAME || 'la marca'
 }) {
 	const normalizedWaId = normalizeThreadPhone(
 		customerContext?.waId || currentConversation?.waId || currentConversation?.phone || ''

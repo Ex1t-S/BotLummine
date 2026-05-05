@@ -16,7 +16,10 @@ import {
 	resolveStoreCredentials
 } from '../services/customers/customer.service.js';
 import { attributeOrderConversions } from '../services/campaigns/campaign-attribution.service.js';
-import { resolveWorkspaceIdFromPhoneNumberId } from '../services/workspaces/workspace-context.service.js';
+import {
+	DEFAULT_WORKSPACE_ID,
+	resolveWorkspaceIdFromPhoneNumberId
+} from '../services/workspaces/workspace-context.service.js';
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
@@ -269,7 +272,7 @@ async function resolveWebhookStoreCredentials(storeId) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
-			workspaceId: 'workspace_lummine',
+			workspaceId: DEFAULT_WORKSPACE_ID,
 			source: 'env'
 		};
 	}

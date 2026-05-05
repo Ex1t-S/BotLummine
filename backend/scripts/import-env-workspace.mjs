@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_lummine';
-const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'lummine';
+const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
+const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'default';
 
 function clean(value = '') {
 	const text = String(value || '').trim();
@@ -22,7 +22,7 @@ function numberString(value, fallback = null) {
 }
 
 async function upsertWorkspace() {
-	const name = clean(process.env.BUSINESS_NAME) || 'Lummine';
+	const name = clean(process.env.BUSINESS_NAME) || 'Marca demo';
 	const workspace = await prisma.workspace.upsert({
 		where: { id: DEFAULT_WORKSPACE_ID },
 		update: {
@@ -76,7 +76,7 @@ async function upsertAiConfig(workspaceId) {
 	return prisma.workspaceAiConfig.upsert({
 		where: { workspaceId },
 		update: {
-			businessName: clean(process.env.BUSINESS_NAME) || 'Lummine',
+			businessName: clean(process.env.BUSINESS_NAME) || 'Marca demo',
 			agentName: clean(process.env.BUSINESS_AGENT_NAME) || 'Sofi',
 			tone: clean(process.env.BRAND_TONE) || 'humana, directa y comercial',
 			systemPrompt: clean(process.env.SYSTEM_PROMPT),
@@ -86,7 +86,7 @@ async function upsertAiConfig(workspaceId) {
 		},
 		create: {
 			workspaceId,
-			businessName: clean(process.env.BUSINESS_NAME) || 'Lummine',
+			businessName: clean(process.env.BUSINESS_NAME) || 'Marca demo',
 			agentName: clean(process.env.BUSINESS_AGENT_NAME) || 'Sofi',
 			tone: clean(process.env.BRAND_TONE) || 'humana, directa y comercial',
 			systemPrompt: clean(process.env.SYSTEM_PROMPT),

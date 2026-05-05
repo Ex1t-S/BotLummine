@@ -862,9 +862,9 @@ export default function WhatsAppMenuPage() {
 					{selectedMenu ? (
 						<div className="wam-phone">
 							<div className="wam-phone__top">
-								<div className="wam-phone__avatar">L</div>
+								<div className="wam-phone__avatar">M</div>
 								<div>
-									<strong>{selectedMenu.headerText || selectedMenu.title || 'Lummine'}</strong>
+									<strong>{selectedMenu.headerText || selectedMenu.title || 'Tu marca'}</strong>
 									<span>Mensaje interactivo</span>
 								</div>
 							</div>
