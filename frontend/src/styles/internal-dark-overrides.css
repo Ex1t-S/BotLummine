@@ -436,6 +436,291 @@
 	color: var(--ui-heading) !important;
 }
 
+/* Campaigns dark mode hardening. Campaign route CSS has many legacy white
+   backgrounds and gradients, so these route-scoped rules must use background. */
+.dark .admin-shell .admin-content .campaigns-page {
+	background: transparent !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaigns-hero,
+	.campaigns-tab-shell,
+	.campaign-shell-card,
+	.campaign-panel,
+	.campaign-panel--soft,
+	.campaign-custom-audience,
+	.campaign-custom-audience-card,
+	.campaign-custom-audience-preview,
+	.campaign-builder-section,
+	.campaign-helper-box,
+	.campaign-variable-box,
+	.campaign-composer-summary,
+	.campaign-status-grid,
+	.campaign-detail-box,
+	.campaign-empty-state,
+	.campaign-recipient-table-wrapper,
+	.campaign-accordion-summary,
+	.campaign-source-switch,
+	.campaign-product-picker-panel--inline,
+	.campaign-product-picker-trigger--field,
+	.campaign-recipient-preview-box,
+	.campaign-recipient-preview-table,
+	.campaign-recipient-preview-row,
+	.campaign-schedule-form,
+	.campaign-schedule-section,
+	.campaign-schedule-card,
+	.campaign-schedule-meta,
+	.template-library-shell,
+	.template-builder-shell,
+	.template-builder-section,
+	.template-builder-progress-step,
+	.template-media-upload-box,
+	.template-media-preview-card,
+	.template-media-preview-meta,
+	.template-media-empty,
+	.template-soft-empty,
+	.template-button-card,
+	.template-review-card,
+	.template-preview-card-sticky,
+	.template-preview-tip,
+	.template-preview-image-wrap,
+	.template-preview-image-empty,
+	.template-list-card,
+	.template-library-selected-banner,
+	.campaign-list-card,
+	.campaign-schedule-audience-choice__button,
+	.campaign-source-switch__button,
+	.campaign-choice-card,
+	.campaign-customer-filters,
+	.campaign-customer-results,
+	.campaign-customer-card,
+	.campaign-customer-product,
+	.campaign-custom-audience-recipient,
+	.campaign-custom-audience-recipient-product,
+	.campaign-custom-audience-recipient-preview,
+	.campaign-custom-audience-empty
+) {
+	background:
+		linear-gradient(135deg, rgba(124, 156, 255, 0.035), transparent 46%),
+		var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: var(--ui-shadow-sm) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-inline-summary,
+	.campaign-inline-summary-item,
+	.campaign-review-card,
+	.campaign-audience-summary-card,
+	.campaign-builder-top-summary-item,
+	.campaign-product-option,
+	.campaign-product-multiselect-search,
+	.campaign-product-picker-search,
+	.campaign-recipient-preview-row--head,
+	.campaign-table th,
+	.template-builder-progress-step,
+	.template-review-card,
+	.template-chip,
+	.campaign-chip,
+	.campaign-badge,
+	.campaign-status-grid > div,
+	.campaign-composer-summary > div,
+	.campaign-customer-kpi,
+	.campaign-customer-meta span,
+	.campaign-toggle--card
+) {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaigns-tab-button.is-active,
+	.campaign-source-switch__button.is-active,
+	.campaign-schedule-audience-choice__button.is-active,
+	.campaign-product-picker-trigger--field.open,
+	.campaign-choice-card.active,
+	.campaign-list-card.selected,
+	.template-list-card.selected,
+	.template-builder-section.is-active,
+	.template-builder-progress-step.is-done,
+	.campaign-customer-card.selected
+) {
+	background:
+		linear-gradient(135deg, rgba(124, 156, 255, 0.16), transparent 48%),
+		var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.5) !important;
+	color: var(--ui-heading) !important;
+	box-shadow: inset 3px 0 0 var(--ui-primary) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.field input,
+	.field select,
+	.field textarea,
+	.campaign-product-picker-search input,
+	.campaign-contact-limit-field input,
+	.campaign-product-multiselect-search
+) {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-whatsapp-preview,
+	.campaign-preview-shell,
+	.template-preview-shell--sticky
+) {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-preview-bubble,
+	.wam-phone__bubble
+) {
+	background:
+		linear-gradient(135deg, rgba(91, 216, 160, 0.12), transparent 46%),
+		#183528 !important;
+	border-color: rgba(91, 216, 160, 0.28) !important;
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-table,
+	.campaign-table thead,
+	.campaign-table tbody,
+	.campaign-table tr,
+	.campaign-table th,
+	.campaign-table td,
+	.campaign-recipient-preview-row
+) {
+	background: transparent !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.button.ghost,
+	.button.secondary,
+	.campaigns-tab-button,
+	.campaign-source-switch__button,
+	.campaign-schedule-audience-choice__button,
+	.campaign-product-picker-trigger--field,
+	.template-upload-button
+) {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.button.primary,
+	.campaign-form-actions .button.primary,
+	.template-library-header-actions .button.primary
+) {
+	background: var(--ui-primary) !important;
+	border-color: var(--ui-primary) !important;
+	color: #08111f !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.button.danger,
+	.campaign-inline-error,
+	.campaign-feedback.error,
+	.campaign-schedule-error,
+	.template-chip--warning
+) {
+	background: var(--ui-danger-soft) !important;
+	border-color: rgba(255, 141, 133, 0.34) !important;
+	color: var(--ui-danger) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaigns-eyebrow,
+	.campaigns-tab-shell__eyebrow,
+	.template-library-selected-label,
+	.template-preview-meta-label,
+	.template-builder-section-step,
+	.campaign-step-badge,
+	.campaign-custom-audience-pill
+) {
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	h1,
+	h2,
+	h3,
+	h4,
+	strong,
+	.template-list-card-title strong,
+	.template-builder-section-head h4,
+	.campaign-step-head h4,
+	.campaign-custom-audience-intro h3,
+	.campaign-custom-audience-preview-title
+) {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	p,
+	small,
+	label,
+	span,
+	.campaigns-hero-lead,
+	.campaign-panel p,
+	.template-library-header p,
+	.template-builder-topbar p,
+	.template-list-card-title p,
+	.template-builder-section-head p,
+	.campaign-list-body,
+	.campaign-helper-text,
+	.campaign-helper-inline-text,
+	.campaign-custom-audience-preview-subtitle
+) {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	button *,
+	.button *,
+	.campaigns-tab-button *,
+	.campaign-source-switch__button *,
+	.campaign-schedule-audience-choice__button *
+) {
+	color: inherit !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaigns-eyebrow,
+	.campaigns-tab-shell__eyebrow,
+	.campaign-badge,
+	.campaign-chip,
+	.template-chip,
+	.template-library-selected-label,
+	.template-preview-meta-label,
+	.template-builder-section-step,
+	.campaign-step-badge,
+	.campaign-custom-audience-pill,
+	.campaign-schedule-status,
+	.campaign-inline-summary-item
+) {
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
 .dark .admin-shell .admin-content :where(
 	[class*="success"],
 	[class*="paid"],
