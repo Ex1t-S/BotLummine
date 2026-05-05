@@ -3,6 +3,7 @@ import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPlatformAdminUser } from '../lib/authz.js';
 import { PageHeader } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './AdminPage.css';
 
 const EMPTY_WORKSPACE_FORM = {
@@ -390,6 +391,8 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 }
 
 export default function AdminPage({ defaultTab = '' }) {
+	useInternalDarkOverrides();
+
 	const { user } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);
 	const visibleTabs = platformAdmin ? platformTabs : brandAdminTabs;

@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
 import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import MetricPanel from '../components/ui/MetricPanel.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './OperationsPage.css';
 
 function formatNumber(value) {
@@ -124,6 +125,8 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 }
 
 export default function OperationsPage() {
+	useInternalDarkOverrides();
+
 	const navigate = useNavigate();
 	const { user } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);

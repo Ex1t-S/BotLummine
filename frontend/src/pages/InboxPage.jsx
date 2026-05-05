@@ -23,6 +23,7 @@ import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 
 const QUEUES = [
 	{ key: 'ALL', label: 'Todos' },
@@ -525,6 +526,8 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 }
 
 export default function InboxPage() {
+	useInternalDarkOverrides();
+
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const { queueSlug } = useParams();

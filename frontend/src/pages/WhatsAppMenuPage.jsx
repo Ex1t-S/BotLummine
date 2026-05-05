@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Save } from 'lucide-react';
 import api from '../lib/api.js';
 import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import '../styles/WhatsAppMenuPage.css';
 
 const ACTION_TYPES = [
@@ -137,6 +138,8 @@ function applyDraftsToConfig(menuConfig, drafts) {
 }
 
 export default function WhatsAppMenuPage() {
+	useInternalDarkOverrides();
+
 	const [config, setConfig] = useState(null);
 	const [settingsName, setSettingsName] = useState('Configuración principal');
 	const [selectedMenuKey, setSelectedMenuKey] = useState('');

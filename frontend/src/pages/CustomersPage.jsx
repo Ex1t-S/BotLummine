@@ -4,6 +4,7 @@ import { RefreshCw, X } from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { ActionButton, PageHeader } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './CustomersPage.css';
 
 const DEFAULT_PAGE_SIZE = 24;
@@ -273,6 +274,8 @@ function EyeToggleIcon({ hidden = false }) {
 }
 
 export default function CustomersPage() {
+	useInternalDarkOverrides();
+
 	const queryClient = useQueryClient();
 	const [filters, setFilters] = useState(initialFilters);
 	const [errorMessage, setErrorMessage] = useState('');

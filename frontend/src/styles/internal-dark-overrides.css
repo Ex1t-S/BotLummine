@@ -1,0 +1,448 @@
+/* Internal dashboard dark mode hardening.
+   Imported last by internal lazy pages so route CSS cannot repaint white panels. */
+
+.dark .admin-shell {
+	--ui-bg: #0d1320;
+	--ui-surface: #141c2b;
+	--ui-surface-soft: #192234;
+	--ui-surface-muted: #202b3d;
+	--ui-border: #29354a;
+	--ui-border-strong: #3a4860;
+	--ui-text: #e8edf7;
+	--ui-heading: #f7f9ff;
+	--ui-muted: #a5b0c3;
+	--ui-subtle: #758298;
+	--ui-primary: #7c9cff;
+	--ui-primary-strong: #a6bbff;
+	--ui-primary-soft: #1d2b54;
+	--ui-primary-muted: #182549;
+	--ui-info: #8cb5ff;
+	--ui-info-soft: #182744;
+	--ui-success: #5bd8a0;
+	--ui-success-soft: #123426;
+	--ui-warning: #ffc46b;
+	--ui-warning-soft: #372712;
+	--ui-danger: #ff8d85;
+	--ui-danger-soft: #3b1d22;
+	--ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+	--ui-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32);
+	--ui-shadow-lg: 0 24px 58px rgba(0, 0, 0, 0.38);
+	--ui-focus: 0 0 0 3px rgba(124, 156, 255, 0.24);
+	background:
+		radial-gradient(circle at 50% -20%, rgba(124, 156, 255, 0.18), transparent 34%),
+		#0a0f1a !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-sidebar,
+.dark .admin-shell .admin-main,
+.dark .admin-shell .admin-topbar,
+.dark .admin-shell .admin-user-box,
+.dark .admin-shell .admin-topbar-user,
+.dark .admin-shell .admin-theme-toggle,
+.dark .admin-shell .logout-btn {
+	background: var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content {
+	background: var(--ui-bg) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-topbar {
+	background: rgba(20, 28, 43, 0.94) !important;
+}
+
+.dark .admin-shell .admin-brand {
+	background: transparent !important;
+	border-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-brand-mark--logo {
+	background: #ffffff !important;
+	border-color: var(--ui-border-strong) !important;
+}
+
+.dark .admin-shell .admin-brand-copy h1,
+.dark .admin-shell .admin-topbar h2,
+.dark .admin-shell .admin-user-box strong,
+.dark .admin-shell .admin-topbar-user strong {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-brand-copy p,
+.dark .admin-shell .admin-topbar p,
+.dark .admin-shell .admin-topbar span,
+.dark .admin-shell .admin-user-box span,
+.dark .admin-shell .admin-topbar-user span,
+.dark .admin-shell .admin-menu-group-label {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-menu-link {
+	background: transparent !important;
+	border-color: transparent !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-menu-link svg {
+	color: var(--ui-subtle) !important;
+}
+
+.dark .admin-shell .admin-menu-link:hover,
+.dark .admin-shell .admin-menu-link.active {
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-menu-link:hover svg,
+.dark .admin-shell .admin-menu-link.active svg,
+.dark .admin-shell .admin-theme-toggle {
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.page-card,
+	.internal-page-header,
+	.page-header,
+	[class*="card"],
+	[class*="panel"],
+	[class*="shell"],
+	[class*="box"],
+	[class*="tile"],
+	[class*="widget"],
+	[class*="metric"],
+	[class*="stat"],
+	[class*="summary"],
+	[class*="preview"],
+	[class*="composer"],
+	[class*="toolbar"],
+	[class*="topbar"],
+	[class*="hero"],
+	[class*="header"],
+	[class*="section"],
+	[class*="block"],
+	[class*="option"],
+	[class*="item"],
+	[class*="row"],
+	[class*="list"],
+	[class*="table"],
+	[class*="wrap"],
+	[class*="empty"],
+	[class*="state"],
+	[class*="modal"],
+	[class*="dialog"],
+	[class*="phone"],
+	[class*="bubble"],
+	[class*="filters"],
+	[class*="form"],
+	[class*="picker"],
+	[class*="multiselect"],
+	[class*="dropdown"],
+	[class*="popover"],
+	[class*="menu"]
+) {
+	background-color: var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: var(--ui-shadow-sm) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	[class*="meta"],
+	[class*="muted"],
+	[class*="subtle"],
+	[class*="note"],
+	[class*="hint"],
+	[class*="helper"],
+	[class*="description"],
+	[class*="subtitle"],
+	[class*="lead"],
+	[class*="body"],
+	[class*="content"],
+	[class*="scroll"],
+	[class*="grid"],
+	[class*="choice"],
+	[class*="filter"],
+	[class*="progress"],
+	[class*="track"],
+	[class*="thumb"],
+	[class*="screen"],
+	[class*="messages"],
+	[class*="products"],
+	[class*="stats"] > div,
+	[class*="meta"] > div
+) {
+	background-color: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.inbox-messages,
+	.inbox-chat-empty,
+	.chat-messages,
+	.wam-phone__screen,
+	.catalog-thumb,
+	.catalog-thumb-empty,
+	.workspace-card-chart
+) {
+	background:
+		linear-gradient(rgba(232, 237, 247, 0.035) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(232, 237, 247, 0.025) 1px, transparent 1px),
+		var(--ui-surface-soft) !important;
+	background-size: 34px 34px !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	h1,
+	h2,
+	h3,
+	h4,
+	strong,
+	b,
+	[class*="title"],
+	[class*="heading"],
+	[class*="name"],
+	[class*="label"],
+	[class*="value"]
+) {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	p,
+	small,
+	label,
+	span,
+	em,
+	[class*="muted"],
+	[class*="subtle"],
+	[class*="meta"],
+	[class*="helper"],
+	[class*="hint"],
+	[class*="note"],
+	[class*="subtitle"],
+	[class*="description"],
+	[class*="empty"],
+	[class*="time"]
+) {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	input,
+	select,
+	textarea,
+	[contenteditable="true"],
+	.inbox-textarea,
+	.customers-product-toggle,
+	.campaign-product-picker-trigger--field
+) {
+	background-color: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(input, textarea)::placeholder {
+	color: var(--ui-subtle) !important;
+	opacity: 1 !important;
+}
+
+.dark .admin-shell .admin-content :where(input, select, textarea, button, [tabindex]):focus,
+.dark .admin-shell .admin-content :where(input, select, textarea, button, [tabindex]):focus-visible {
+	border-color: var(--ui-primary) !important;
+	box-shadow: var(--ui-focus) !important;
+	outline: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	button,
+	.button,
+	[class*="btn"],
+	[class*="button"],
+	[class*="trigger"],
+	[class*="action"]
+) {
+	background-color: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.button.primary,
+	.primary-action-btn,
+	.customers-apply-btn,
+	.inbox-send-btn,
+	.wam-button--primary,
+	.ai-lab-primary-btn,
+	.internal-action-btn.is-primary,
+	.operations-header-actions button:not(.secondary),
+	.operations-issue button,
+	.catalog-search-form button,
+	.filters-form button,
+	.tenant-admin-grid button,
+	.tenant-admin-actions button,
+	.campaign-form-actions .button.primary,
+	.page-header button,
+	.pagination-page-btn.is-active
+) {
+	background-color: var(--ui-primary) !important;
+	border-color: var(--ui-primary) !important;
+	color: #08111f !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	button:hover:not(:disabled),
+	.button:hover:not(:disabled),
+	[class*="btn"]:hover:not(:disabled),
+	[class*="button"]:hover:not(:disabled),
+	[class*="trigger"]:hover:not(:disabled),
+	[class*="action"]:hover:not(:disabled)
+) {
+	background-color: var(--ui-surface-muted) !important;
+	border-color: var(--ui-border-strong) !important;
+	color: var(--ui-heading) !important;
+	transform: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.button.primary:hover:not(:disabled),
+	.primary-action-btn:hover:not(:disabled),
+	.customers-apply-btn:hover:not(:disabled),
+	.inbox-send-btn:hover:not(:disabled),
+	.wam-button--primary:hover:not(:disabled),
+	.internal-action-btn.is-primary:hover:not(:disabled),
+	.operations-header-actions button:not(.secondary):hover:not(:disabled),
+	.operations-issue button:hover:not(:disabled),
+	.catalog-search-form button:hover:not(:disabled),
+	.filters-form button:hover:not(:disabled),
+	.tenant-admin-grid button:hover:not(:disabled),
+	.tenant-admin-actions button:hover:not(:disabled),
+	.campaign-form-actions .button.primary:hover:not(:disabled),
+	.page-header button:hover:not(:disabled)
+) {
+	background-color: var(--ui-primary-strong) !important;
+	border-color: var(--ui-primary-strong) !important;
+	color: #07101d !important;
+}
+
+.dark .admin-shell .admin-content :where(button *, .button *, [class*="btn"] *, [class*="button"] *) {
+	color: inherit !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	[class*="badge"],
+	[class*="pill"],
+	[class*="chip"],
+	[class*="status"],
+	[class*="tag"],
+	[class*="eyebrow"],
+	[class*="kicker"],
+	[class*="avatar"]
+) {
+	background-color: var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	[class*="success"],
+	[class*="paid"],
+	.status-contacted,
+	.inbox-realtime-badge--live,
+	.campaign-schedule-status.is-active
+) {
+	background-color: var(--ui-success-soft) !important;
+	border-color: rgba(91, 216, 160, 0.32) !important;
+	color: var(--ui-success) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	[class*="warning"],
+	[class*="pending"],
+	.inbox-badge--human,
+	.inbox-realtime-badge--fallback
+) {
+	background-color: var(--ui-warning-soft) !important;
+	border-color: rgba(255, 196, 107, 0.34) !important;
+	color: var(--ui-warning) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	[class*="danger"],
+	[class*="error"],
+	[class*="refunded"],
+	[class*="delete"],
+	[class*="remove"]
+) {
+	background-color: var(--ui-danger-soft) !important;
+	border-color: rgba(255, 141, 133, 0.34) !important;
+	color: var(--ui-danger) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	[class*="info"],
+	[class*="authorized"],
+	.inbox-badge--ai,
+	.status-new
+) {
+	background-color: var(--ui-info-soft) !important;
+	border-color: rgba(140, 181, 255, 0.32) !important;
+	color: var(--ui-info) !important;
+}
+
+.dark .admin-shell .admin-content :where(table, thead, tbody, tr, th, td) {
+	background-color: transparent !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content :where(th) {
+	background-color: var(--ui-surface-soft) !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.inbox-message-bubble,
+	.chat-bubble,
+	.wam-phone__bubble
+) {
+	background:
+		linear-gradient(135deg, rgba(124, 156, 255, 0.08), transparent 42%),
+		var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.inbox-message-bubble--outbound,
+	.chat-message.outbound .chat-bubble
+) {
+	background:
+		linear-gradient(135deg, rgba(91, 216, 160, 0.12), transparent 42%),
+		#183528 !important;
+	border-color: rgba(91, 216, 160, 0.28) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.inbox-message-bubble::after,
+	.chat-bubble::after
+) {
+	background: inherit !important;
+	border-color: inherit !important;
+}
+
+.dark .admin-shell .admin-content :where(img, video, audio, canvas) {
+	border-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-content :where(::selection) {
+	background: rgba(124, 156, 255, 0.34) !important;
+	color: var(--ui-heading) !important;
+}

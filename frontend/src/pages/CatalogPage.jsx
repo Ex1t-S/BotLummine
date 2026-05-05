@@ -4,6 +4,7 @@ import { RefreshCw, Search } from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './CatalogPage.css';
 
 function useDebouncedValue(value, delay = 350) {
@@ -18,6 +19,8 @@ function useDebouncedValue(value, delay = 350) {
 }
 
 export default function CatalogPage() {
+	useInternalDarkOverrides();
+
 	const queryClient = useQueryClient();
 	const [query, setQuery] = useState('');
 	const [provider, setProvider] = useState('TIENDANUBE');

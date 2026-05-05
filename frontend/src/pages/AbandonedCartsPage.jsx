@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import api from '../lib/api.js';
 import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './AbandonedCartsPage.css';
 
 const initialFilters = {
@@ -59,6 +60,8 @@ function getVisiblePages(currentPage, totalPages) {
 }
 
 export default function AbandonedCartsPage() {
+	useInternalDarkOverrides();
+
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
 	const [filters, setFilters] = useState(initialFilters);
