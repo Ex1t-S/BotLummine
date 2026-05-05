@@ -1,51 +1,55 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
 import './LoginPage.css';
 
+const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
+
 const pricingPlans = [
 	{
-		name: 'Basico',
+		name: 'Básico',
 		price: 'A definir',
-		description: 'Para ordenar la atencion diaria y centralizar clientes desde WhatsApp.',
+		description: 'Para ordenar la atención diaria y centralizar clientes desde WhatsApp.',
 		features: [
 			'Inbox de WhatsApp',
 			'CRM de clientes',
 			'Respuestas asistidas',
-			'Catalogo conectado',
-			'Reportes basicos',
+			'Catálogo conectado',
+			'Reportes básicos',
 		],
 	},
 	{
 		name: 'Avanzado',
 		price: 'A definir',
-		description: 'Para crecer con automatizaciones, campañas y medicion comercial.',
+		description: 'Para crecer con automatizaciones, campañas y medición comercial.',
 		features: [
-			'Todo lo del plan Basico',
+			'Todo lo del plan Básico',
 			'Campañas por WhatsApp API',
-			'Segmentacion de audiencias',
-			'Recuperacion de carritos',
-			'Metricas avanzadas y atribucion',
+			'Segmentación de audiencias',
+			'Recuperación de carritos',
+			'Métricas avanzadas y atribución',
 			'Soporte prioritario',
 		],
 	},
 ];
 
-const featureCards = [
+const commandMetrics = [
 	{
-		title: 'Entende cada conversacion',
-		description: 'Centraliza inbox, clientes y contexto comercial para responder con mas precision.',
+		value: '24/7',
+		label: 'respuestas asistidas',
 	},
 	{
-		title: 'Activa campañas medibles',
-		description: 'Segmenta audiencias y lanza mensajes por WhatsApp API con seguimiento comercial.',
+		value: 'CRM',
+		label: 'clientes y seguimiento',
 	},
 	{
-		title: 'Opera con continuidad',
-		description: 'Combina asistencia 24/7, CRM y catalogo para que el equipo venda sin perder historial.',
+		value: 'API',
+		label: 'campañas automatizadas',
 	},
 ];
+
+const systemStates = ['IA lista', 'Canales listos', 'CRM listo'];
 
 function resolveRedirectPath(user, requestedPath = '') {
 	if (requestedPath && canAccessRoute(user?.role, requestedPath)) {
@@ -60,6 +64,7 @@ export default function LoginPage() {
 	const location = useLocation();
 	const { user, login, loading } = useAuth();
 	const publicPath = location.pathname;
+	const isHome = publicPath !== '/contacto' && publicPath !== '/precios';
 
 	const [form, setForm] = useState({
 		email: '',
@@ -88,17 +93,35 @@ export default function LoginPage() {
 			const nextPath = resolveRedirectPath(result?.user || null, requestedPath);
 			navigate(nextPath, { replace: true });
 		} catch (err) {
-			setError(err.response?.data?.error || 'No se pudo iniciar sesion');
+			setError(err.response?.data?.error || 'No se pudo iniciar sesión');
 		} finally {
 			setSubmitting(false);
 		}
 	}
 
+	function handlePointerMove(e) {
+		const bounds = e.currentTarget.getBoundingClientRect();
+		const x = ((e.clientX - bounds.left) / bounds.width) * 100;
+		const y = ((e.clientY - bounds.top) / bounds.height) * 100;
+
+		e.currentTarget.style.setProperty('--pointer-x', `${x.toFixed(2)}%`);
+		e.currentTarget.style.setProperty('--pointer-y', `${y.toFixed(2)}%`);
+	}
+
 	return (
-		<div className="login-page">
+		<div
+			id="inicio"
+			className={`login-page ${isHome ? 'login-page--home' : 'login-page--public'}`}
+			onPointerMove={handlePointerMove}
+		>
+			<Suspense fallback={null}>
+				<DottedSurface className="login-dotted-surface" />
+			</Suspense>
 			<div className="login-orb login-orb--one" aria-hidden="true" />
 			<div className="login-orb login-orb--two" aria-hidden="true" />
 			<div className="login-grid" aria-hidden="true" />
+			<div className="login-beam login-beam--one" aria-hidden="true" />
+			<div className="login-beam login-beam--two" aria-hidden="true" />
 			<div className="login-signal-field" aria-hidden="true">
 				<span />
 				<span />
@@ -110,31 +133,35 @@ export default function LoginPage() {
 				<span />
 			</div>
 
-			<header className="public-nav">
-				<Link className="public-nav__brand" to="/inicio" aria-label="Ir a inicio">
-					<span className="login-brand-chip__dot" />
-					Lummine Commerce AI
+			<header className="login-nav">
+				<Link className="login-nav__brand" to="/inicio" aria-label="Lummine Commerce AI">
+					<span className="login-nav__status" aria-hidden="true" />
+					<span className="login-nav__brand-text">LUMMINE COMMERCE AI</span>
 				</Link>
-				<nav className="public-nav__links" aria-label="Navegacion publica">
-					<Link className={publicPath === '/inicio' ? 'active' : ''} to="/inicio">
+				<nav className="login-nav__links" aria-label="Navegación pública">
+					<Link className={`login-nav__link ${publicPath === '/inicio' ? 'login-nav__link--active' : ''}`} to="/inicio">
 						Inicio
 					</Link>
-					<Link className={publicPath === '/contacto' ? 'active' : ''} to="/contacto">
+					<Link className={`login-nav__link ${publicPath === '/contacto' ? 'login-nav__link--active' : ''}`} to="/contacto">
 						Contacto
 					</Link>
-					<Link className={publicPath === '/precios' ? 'active' : ''} to="/precios">
+					<Link className={`login-nav__link ${publicPath === '/precios' ? 'login-nav__link--active' : ''}`} to="/precios">
 						Precios
 					</Link>
 				</nav>
+				<a className="login-nav__cta" href={isHome ? '#login' : '/inicio#login'}>
+					Acceder
+					<span className="login-nav__cta-arrow" aria-hidden="true">-&gt;</span>
+				</a>
 			</header>
 
 			<main className="login-shell">
 				{publicPath === '/contacto' ? (
 					<section className="public-section public-section--single" aria-labelledby="contact-title">
 						<p className="login-eyebrow">Contacto</p>
-						<h1 id="contact-title">Hablemos de tu operacion comercial.</h1>
+						<h1 id="contact-title">Hablemos de tu operación comercial.</h1>
 						<p className="login-lead">
-							Dejanos tus datos o escribinos por los canales principales para evaluar como conectar WhatsApp,
+							Dejanos tus datos o escribinos por los canales principales para evaluar cómo conectar WhatsApp,
 							ventas y campañas en tu marca.
 						</p>
 
@@ -144,7 +171,7 @@ export default function LoginPage() {
 								<strong>contacto@tumarca.com</strong>
 							</article>
 							<article className="contact-card">
-								<span>Telefono</span>
+								<span>Teléfono</span>
 								<strong>+54 9 11 0000-0000</strong>
 							</article>
 							<article className="contact-card">
@@ -160,11 +187,11 @@ export default function LoginPage() {
 						<p className="login-eyebrow">Precios</p>
 						<h1 id="pricing-title">Planes para operar y crecer con WhatsApp.</h1>
 						<p className="login-lead">
-							El plan Basico ordena la atencion y el CRM. El Avanzado suma campañas, automatizacion y
-							medicion para escalar ventas.
+							El plan Básico ordena la atención y el CRM. El Avanzado suma campañas, automatización y
+							medición para escalar ventas.
 						</p>
 
-						<div className="pricing-board" aria-label="Comparacion de planes">
+						<div className="pricing-board" aria-label="Comparación de planes">
 							{pricingPlans.map((plan) => (
 								<article className="pricing-plan" key={plan.name}>
 									<div>
@@ -183,60 +210,73 @@ export default function LoginPage() {
 					</section>
 				) : null}
 
-				{publicPath !== '/contacto' && publicPath !== '/precios' ? (
+				{isHome ? (
 					<>
 						<section className="login-story" aria-label="Resumen de la plataforma">
-							<div className="login-brand-chip">
-								<span className="login-brand-chip__dot" />
-								Lummine Commerce AI
+							<div className="login-hero-copy">
+								<p className="login-eyebrow">PANEL OPERATIVO</p>
+								<h1>Gestiona WhatsApp, ventas y campañas de marketing.</h1>
+								<p className="login-lead">
+									Centraliza WhatsApp, ventas, CRM y campañas en una consola operativa con IA para
+									responder, medir y automatizar sin perder contexto comercial.
+								</p>
 							</div>
 
-							<div>
-								<p className="login-eyebrow">Panel operativo</p>
-								<h1>Gestiona WhatsApp, ventas y campañas de marketing.</h1>
+							<div className="login-status-row" aria-label="Estado del sistema">
+								{systemStates.map((state) => (
+									<span key={state}>
+										{state}
+									</span>
+								))}
 							</div>
 
 							<div className="login-metrics" aria-label="Capacidades principales">
-								<div>
-									<strong>24/7</strong>
-									<span>asistencia IA</span>
-								</div>
-								<div>
-									<strong>CRM</strong>
-									<span>clientes y seguimiento</span>
-								</div>
-								<div>
-									<strong>API</strong>
-									<span>campañas por WhatsApp</span>
-								</div>
+								{commandMetrics.map((metric) => (
+									<article className="login-metric-card" key={metric.value}>
+										<strong>{metric.value}</strong>
+										<span>{metric.label}</span>
+									</article>
+								))}
 							</div>
 						</section>
 
-						<form className="login-card" onSubmit={handleSubmit}>
+						<form id="login" className="login-card" onSubmit={handleSubmit}>
+							<div className="login-card__beam" aria-hidden="true" />
 							<div className="login-card__header">
-								<h2>Entra a tu workspace</h2>
+								<div>
+									<p>Acceso</p>
+									<h2>Entra a tu workspace</h2>
+								</div>
+								<span className="login-card__status">
+									<i aria-hidden="true" />
+									Listo
+								</span>
 							</div>
 
 							<label className="login-field">
 								<span>Email</span>
-								<input
-									type="email"
-									autoComplete="email"
-									placeholder="usuario@empresa.com"
-									value={form.email}
-									onChange={(e) => setForm({ ...form, email: e.target.value })}
-									aria-invalid={Boolean(error)}
-									required
-								/>
+								<div className="login-input-shell">
+									<i aria-hidden="true">@</i>
+									<input
+										type="email"
+										autoComplete="email"
+										placeholder="usuario@empresa.com"
+										value={form.email}
+										onChange={(e) => setForm({ ...form, email: e.target.value })}
+										aria-invalid={Boolean(error)}
+										required
+									/>
+								</div>
 							</label>
 
 							<label className="login-field">
-								<span>Contrasena</span>
+								<span>Contraseña</span>
 								<div className="login-password-control">
+									<i aria-hidden="true">#</i>
 									<input
 										type={showPassword ? 'text' : 'password'}
 										autoComplete="current-password"
-										placeholder="Tu contrasena"
+										placeholder="Tu contraseña"
 										value={form.password}
 										onChange={(e) => setForm({ ...form, password: e.target.value })}
 										aria-invalid={Boolean(error)}
@@ -246,7 +286,7 @@ export default function LoginPage() {
 										type="button"
 										className="login-password-toggle"
 										onClick={() => setShowPassword((current) => !current)}
-										aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+										aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
 									>
 										{showPassword ? 'Ocultar' : 'Mostrar'}
 									</button>
@@ -260,71 +300,13 @@ export default function LoginPage() {
 							) : null}
 
 							<button className="login-submit" type="submit" disabled={submitting || !form.email || !form.password}>
-								<span>{submitting ? 'Validando acceso...' : 'Ingresar al panel'}</span>
-								<i aria-hidden="true">-&gt;</i>
+								<strong>Ingresar al panel</strong>
 							</button>
 						</form>
 					</>
 				) : null}
 			</main>
 
-			{publicPath !== '/contacto' && publicPath !== '/precios' ? (
-				<section className="product-showcase" aria-label="Vista previa de la plataforma">
-					<div className="product-window">
-						<div className="product-window__topbar">
-							<span />
-							<span />
-							<span />
-							<strong>Lummine workspace</strong>
-						</div>
-						<div className="product-window__body">
-							<aside className="product-sidebar" aria-hidden="true">
-								<span className="active" />
-								<span />
-								<span />
-								<span />
-							</aside>
-							<div className="product-panel product-panel--main">
-								<div className="product-panel__header">
-									<span>Inbox comercial</span>
-									<strong>Automatico</strong>
-								</div>
-								<div className="product-message product-message--inbound">
-									<p>Necesito ayuda para elegir talle y consultar envio.</p>
-								</div>
-								<div className="product-message product-message--outbound">
-									<p>Te ayudo. Tengo tu historial, catalogo y stock actualizados.</p>
-								</div>
-								<div className="product-composer">
-									<span>Respuesta sugerida por IA</span>
-									<button type="button">Enviar</button>
-								</div>
-							</div>
-							<div className="product-panel product-panel--side">
-								<span>CRM</span>
-								<strong>Cliente activo</strong>
-								<div className="product-chart" aria-hidden="true">
-									<i />
-								</div>
-								<ul>
-									<li>Campaña: recuperacion</li>
-									<li>Ultimo pedido: hace 12 dias</li>
-									<li>Canal: WhatsApp API</li>
-								</ul>
-							</div>
-						</div>
-					</div>
-
-					<div className="feature-strip">
-						{featureCards.map((feature) => (
-							<article className="feature-card" key={feature.title}>
-								<h2>{feature.title}</h2>
-								<p>{feature.description}</p>
-							</article>
-						))}
-					</div>
-				</section>
-			) : null}
 		</div>
 	);
 }
