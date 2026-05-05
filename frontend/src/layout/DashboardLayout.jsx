@@ -1,5 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import {
+	BarChart3,
+	Bot,
+	Boxes,
+	Building2,
+	ChevronRight,
+	Inbox,
+	LayoutDashboard,
+	LogOut,
+	MessageSquareText,
+	Settings,
+	ShoppingBag,
+	ShoppingCart,
+	Users,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import './DashboardLayout.css';
 import logoLummine from '../assets/lummine-logo.png';
@@ -76,6 +91,16 @@ function NavGroup({ label, children }) {
 			<span className="admin-menu-group-label">{label}</span>
 			<div className="admin-menu-group-links">{children}</div>
 		</div>
+	);
+}
+
+function NavItem({ to, icon: Icon, children, className }) {
+	return (
+		<NavLink to={to} className={className || navClass}>
+			<Icon size={17} strokeWidth={2.2} aria-hidden="true" />
+			<span>{children}</span>
+			<ChevronRight className="admin-menu-link-chevron" size={15} strokeWidth={2.2} aria-hidden="true" />
+		</NavLink>
 	);
 }
 
@@ -166,65 +191,51 @@ export default function DashboardLayout() {
 
 				<nav className="admin-menu" aria-label="Navegación principal">
 					<NavGroup label="Operación">
-						<NavLink to="/operations" className={navClass}>
-							Operación
-						</NavLink>
+						<NavItem to="/operations" icon={LayoutDashboard}>Operación</NavItem>
 
 						{!isPlatformAdmin ? (
-							<NavLink
+							<NavItem
 								to="/inbox/automatico"
+								icon={Inbox}
 								className={navClassWithPrefix(location, '/inbox')}
 							>
 								Inbox
-							</NavLink>
+							</NavItem>
 						) : null}
 					</NavGroup>
 
 					{isAdmin && !isPlatformAdmin ? (
 						<>
 							<NavGroup label="Ventas">
-								<NavLink to="/catalog" className={navClass}>
-									Catálogo
-								</NavLink>
-								<NavLink to="/abandoned-carts" className={navClass}>
-									Carritos
-								</NavLink>
-								<NavLink to="/customers" className={navClass}>
-									Clientes
-								</NavLink>
+								<NavItem to="/catalog" icon={Boxes}>Catálogo</NavItem>
+								<NavItem to="/abandoned-carts" icon={ShoppingCart}>Carritos</NavItem>
+								<NavItem to="/customers" icon={Users}>Clientes</NavItem>
 							</NavGroup>
 
 							<NavGroup label="Marketing">
-								<NavLink to="/campaigns" className={navClassWithPrefix(location, '/campaigns')}>
-									Campañas
-								</NavLink>
-								<NavLink to="/analytics" className={navClass}>
-									Estadísticas
-								</NavLink>
-								<NavLink to="/ai-lab" className={navClass}>
-									AI Lab
-								</NavLink>
+								<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')}>Campañas</NavItem>
+								<NavItem to="/analytics" icon={BarChart3}>Estadísticas</NavItem>
+								<NavItem to="/ai-lab" icon={Bot}>AI Lab</NavItem>
 							</NavGroup>
 						</>
 					) : null}
 
 					{isAdmin ? (
 						<NavGroup label="Configuración">
-							<NavLink to="/admin" className={navClass}>
+							<NavItem to="/admin" icon={isPlatformAdmin ? Building2 : Settings}>
 								{isPlatformAdmin ? 'Admin plataforma' : 'Configuración'}
-							</NavLink>
+							</NavItem>
 
 							{!isPlatformAdmin ? (
-								<NavLink to="/whatsapp-menu" className={navClass}>
-									Menú
-								</NavLink>
+								<NavItem to="/whatsapp-menu" icon={MessageSquareText}>Menú</NavItem>
 							) : null}
 						</NavGroup>
 					) : null}
 				</nav>
 
 				<button className="logout-btn" onClick={handleLogout} type="button">
-					Salir
+					<LogOut size={16} strokeWidth={2.2} aria-hidden="true" />
+					<span>Salir</span>
 				</button>
 			</aside>
 

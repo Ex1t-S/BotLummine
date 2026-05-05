@@ -2204,3 +2204,162 @@
 	background: var(--ui-warning-soft, #fff7ed);
 	color: var(--ui-warning, #b54708);
 }
+
+/* Full internal inbox redesign layer */
+
+.inbox-page {
+	grid-template-columns: minmax(300px, 356px) minmax(0, 1fr);
+	gap: 12px;
+}
+
+.inbox-sidebar,
+.inbox-chat-panel {
+	border-radius: 12px;
+	border-color: var(--ui-border, #d7dee5);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px rgba(16, 24, 40, 0.06);
+}
+
+.inbox-sidebar {
+	grid-template-rows: auto auto auto auto minmax(0, 1fr);
+	padding: 12px;
+}
+
+.inbox-sidebar-top {
+	align-items: flex-start;
+}
+
+.inbox-sidebar-top strong {
+	font-size: 18px;
+}
+
+.inbox-sidebar-refresh,
+.inbox-load-more,
+.inbox-load-older-messages {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+}
+
+.inbox-queue-tabs {
+	gap: 5px;
+	margin-bottom: 10px;
+}
+
+.inbox-queue-tabs .inbox-action-btn {
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr) auto;
+	gap: 8px;
+}
+
+.inbox-action-btn svg {
+	flex: 0 0 auto;
+	color: currentColor;
+}
+
+.inbox-section-header {
+	margin-bottom: 10px;
+}
+
+.inbox-contact-card {
+	border-radius: 11px;
+}
+
+.inbox-contact-card--selected {
+	background: #effaf7;
+}
+
+.inbox-chat-header {
+	padding: 12px 14px;
+}
+
+.inbox-chat-header-top {
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.inbox-back-to-list-btn {
+	align-items: center;
+	gap: 7px;
+	padding: 0 10px;
+}
+
+.inbox-actions {
+	align-items: flex-start;
+}
+
+.inbox-actions-primary {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.inbox-actions-danger {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.inbox-action-btn {
+	gap: 7px;
+	white-space: nowrap;
+}
+
+.inbox-messages {
+	background:
+		linear-gradient(rgba(13, 21, 27, 0.024) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(13, 21, 27, 0.018) 1px, transparent 1px),
+		#f7f9fa;
+	background-size: 34px 34px;
+}
+
+.inbox-composer {
+	align-items: center;
+}
+
+.inbox-emoji-trigger,
+.inbox-attach-trigger,
+.inbox-send-btn,
+.inbox-selected-file-remove {
+	display: grid;
+	place-items: center;
+}
+
+.inbox-send-btn {
+	width: 38px;
+	min-width: 38px;
+	height: 36px;
+	padding: 0;
+}
+
+@media (max-width: 900px) {
+	.inbox-page {
+		grid-template-columns: 1fr;
+	}
+
+	.inbox-sidebar {
+		max-height: 42dvh;
+	}
+
+	.inbox-chat-panel {
+		min-height: 64dvh;
+	}
+
+	.inbox-chat-header-top {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 640px) {
+	.inbox-actions-primary,
+	.inbox-actions-danger {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.inbox-action-btn {
+		white-space: normal;
+	}
+}

@@ -77,8 +77,8 @@ export default function CatalogPage() {
 			<div className="page-header">
 				<div>
 					<span className="catalog-header-kicker">Inventario conectado</span>
-					<h2>Catalogo comercial</h2>
-					<p><strong>{data.total}</strong> productos sincronizados para busqueda y campanas.</p>
+					<h2>Catálogo comercial</h2>
+					<p><strong>{data.total}</strong> productos sincronizados para búsqueda y campañas.</p>
 				</div>
 
 				<div className="catalog-sync-controls">
@@ -87,7 +87,7 @@ export default function CatalogPage() {
 						<option value="SHOPIFY">Shopify</option>
 					</select>
 					<button onClick={() => syncMutation.mutate()} disabled={syncing} type="button">
-						{syncing ? 'Sincronizando...' : 'Sincronizar catalogo'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar catálogo'}
 					</button>
 				</div>
 			</div>
@@ -107,15 +107,15 @@ export default function CatalogPage() {
 
 			{loading ? (
 				<div className="catalog-state">
-					<strong>Cargando catalogo</strong>
-					<span>Estamos trayendo productos, marcas e imagenes disponibles.</span>
+					<strong>Cargando catálogo</strong>
+					<span>Estamos trayendo productos, marcas e imágenes disponibles.</span>
 				</div>
 			) : null}
 
 			{catalogQuery.isError ? (
 				<div className="catalog-state catalog-state--error">
-					<strong>No pudimos cargar el catalogo</strong>
-					<span>Reintenta en unos segundos o verifica la integracion activa.</span>
+					<strong>No pudimos cargar el catálogo</strong>
+					<span>Reintenta en unos segundos o verificá la integración activa.</span>
 				</div>
 			) : null}
 
@@ -143,7 +143,7 @@ export default function CatalogPage() {
 			) : !loading && !catalogQuery.isError ? (
 				<div className="catalog-empty-state">
 					<strong>No encontramos productos</strong>
-					<span>Ajusta la busqueda o sincroniza el proveedor para actualizar el inventario.</span>
+					<span>Ajustá la búsqueda o sincronizá el proveedor para actualizar el inventario.</span>
 				</div>
 			) : null}
 
@@ -158,7 +158,7 @@ export default function CatalogPage() {
 						Anterior
 					</button>
 					<span>
-						Pagina {data.page} de {data.totalPages}
+						Página {data.page} de {data.totalPages}
 					</span>
 					<button
 						type="button"

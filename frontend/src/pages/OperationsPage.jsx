@@ -1,6 +1,17 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import {
+	AlertTriangle,
+	ArrowRight,
+	CheckCircle2,
+	MessageCircle,
+	RefreshCw,
+	Send,
+	ShieldCheck,
+	ShoppingCart,
+	WalletCards,
+} from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -12,8 +23,8 @@ function formatNumber(value) {
 }
 
 function getSeverityLabel(severity = '') {
-	if (severity === 'critical') return 'Critico';
-	if (severity === 'warning') return 'Atencion';
+	if (severity === 'critical') return 'Crítico';
+	if (severity === 'warning') return 'Atención';
 	return 'Info';
 }
 
@@ -21,13 +32,32 @@ function getWorkspaceName(item = {}) {
 	return item.workspace?.displayName || item.workspace?.name || item.workspace?.slug || 'Marca';
 }
 
-function MetricCard({ label, value, helper, tone = 'neutral', onClick }) {
+const METRIC_ICONS = {
+	Alertas: AlertTriangle,
+	'Conversaciones 30d': MessageCircle,
+	'Entrada 30d': MessageCircle,
+	'Salida 30d': Send,
+	Comprobantes: WalletCards,
+	'Chats sin leer': MessageCircle,
+	'Campañas activas': Send,
+	'Carritos nuevos': ShoppingCart,
+};
+
+function MetricCard({ label, value, helper, tone = 'neutral', onClick, icon: Icon }) {
+	const MetricIcon = Icon || METRIC_ICONS[label] || ShieldCheck;
 	const content = (
 		<>
+			<div className="operations-metric-icon">
+				<MetricIcon size={17} strokeWidth={2.2} aria-hidden="true" />
+			</div>
 			<span>{label}</span>
 			<strong>{formatNumber(value)}</strong>
 			<small>{helper}</small>
-			{onClick ? <em>Ver</em> : null}
+			{onClick ? (
+				<em>
+					Ver <ArrowRight size={13} strokeWidth={2.4} aria-hidden="true" />
+				</em>
+			) : null}
 		</>
 	);
 
@@ -46,8 +76,9 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 	if (!issues.length) {
 		return (
 			<div className="operations-empty compact">
+				<CheckCircle2 size={18} strokeWidth={2.2} aria-hidden="true" />
 				<strong>Sin alertas abiertas</strong>
-				<span>La marca no tiene tareas criticas para resolver ahora.</span>
+				<span>La marca no tiene tareas críticas para resolver ahora.</span>
 			</div>
 		);
 	}
@@ -64,7 +95,8 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 						type="button"
 						onClick={() => onNavigate(platformAdmin ? '/admin' : issue.href || '/operations')}
 					>
-						{platformAdmin ? 'Abrir admin' : issue.action || 'Revisar'}
+						<span>{platformAdmin ? 'Abrir admin' : issue.action || 'Revisar'}</span>
+						<ArrowRight size={14} strokeWidth={2.4} aria-hidden="true" />
 					</button>
 				</div>
 			))}
@@ -95,6 +127,7 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 					helper="Pagos pendientes de validar"
 					tone={metrics.paymentReview ? 'warning' : 'neutral'}
 					onClick={!platformAdmin ? () => onNavigate('/inbox/comprobantes') : null}
+					icon={WalletCards}
 				/>
 				<MetricCard
 					label="Chats sin leer"
@@ -102,6 +135,7 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 					helper={`${formatNumber(metrics.unreadMessages)} mensajes pendientes`}
 					tone={metrics.unreadConversations ? 'info' : 'neutral'}
 					onClick={!platformAdmin ? () => onNavigate('/inbox/todos?read=UNREAD') : null}
+					icon={MessageCircle}
 				/>
 			</div>
 
@@ -143,6 +177,7 @@ export default function OperationsPage() {
 				helper: 'Pagos para validar',
 				tone: totals.paymentReview ? 'warning' : 'neutral',
 				href: platformAdmin ? '/admin' : '/inbox/comprobantes',
+				icon: WalletCards,
 			},
 			{
 				label: 'Chats sin leer',
@@ -150,13 +185,15 @@ export default function OperationsPage() {
 				helper: `${formatNumber(totals.unreadMessages)} mensajes pendientes`,
 				tone: totals.unreadConversations ? 'info' : 'neutral',
 				href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD',
+				icon: MessageCircle,
 			},
 			{
 				label: 'Campañas activas',
 				value: totals.activeCampaigns,
-				helper: 'Envios activos o en cola',
+				helper: 'Envíos activos o en cola',
 				tone: totals.failedCampaigns ? 'warning' : 'neutral',
 				href: platformAdmin ? '/admin' : '/campaigns/tracking',
+				icon: Send,
 			},
 		];
 
@@ -167,6 +204,7 @@ export default function OperationsPage() {
 				helper: 'Oportunidades para recuperar',
 				tone: totals.abandonedCartsNew ? 'info' : 'neutral',
 				href: '/abandoned-carts',
+				icon: ShoppingCart,
 			});
 		}
 
@@ -181,6 +219,7 @@ export default function OperationsPage() {
 		return (
 			<section className="operations-page">
 				<div className="operations-empty operations-empty--status">
+					<RefreshCw size={20} strokeWidth={2.2} aria-hidden="true" />
 					<strong>Cargando prioridades operativas</strong>
 					<span>Estamos buscando conversaciones, comprobantes y alertas abiertas.</span>
 				</div>
@@ -192,8 +231,9 @@ export default function OperationsPage() {
 		return (
 			<section className="operations-page">
 				<div className="operations-empty error">
-					<strong>No pudimos cargar la operacion</strong>
-					<span>Reintenta en unos segundos. Si persiste, revisa la conexion del backend.</span>
+					<AlertTriangle size={20} strokeWidth={2.2} aria-hidden="true" />
+					<strong>No pudimos cargar la operación</strong>
+					<span>Reintenta en unos segundos. Si persiste, revisa la conexión del backend.</span>
 				</div>
 			</section>
 		);
@@ -204,32 +244,34 @@ export default function OperationsPage() {
 			<header className="operations-header">
 				<div>
 					<span className="operations-eyebrow">
-						{platformAdmin ? 'Operacion multi marca' : 'Operacion diaria'}
+						{platformAdmin ? 'Operación multi marca' : 'Operación diaria'}
 					</span>
 					<h2>{platformAdmin ? 'Prioridades de la plataforma' : getWorkspaceName(primaryWorkspace)}</h2>
 					<p>
 						{platformAdmin
 							? 'Control de marcas con alertas, conversaciones pendientes y salud operativa.'
-							: 'Prioriza comprobantes, chats y oportunidades que requieren accion hoy.'}
+							: 'Prioriza comprobantes, chats y oportunidades que requieren acción hoy.'}
 					</p>
 				</div>
 				<div className="operations-header-actions">
 					<button type="button" onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching}>
-						{summaryQuery.isFetching ? 'Actualizando...' : 'Actualizar'}
+						<RefreshCw size={15} strokeWidth={2.3} aria-hidden="true" />
+						<span>{summaryQuery.isFetching ? 'Actualizando...' : 'Actualizar'}</span>
 					</button>
 					{isAdmin ? (
 						<button type="button" className="secondary" onClick={() => goTo(platformAdmin ? '/admin' : '/campaigns/tracking')}>
-							{platformAdmin ? 'Admin plataforma' : 'Ver campañas'}
+							<span>{platformAdmin ? 'Admin plataforma' : 'Ver campañas'}</span>
+							<ArrowRight size={15} strokeWidth={2.3} aria-hidden="true" />
 						</button>
 					) : null}
 				</div>
 			</header>
 
 			<div className="operations-summary-strip">
-				<MetricCard label="Alertas" value={summary.openIssuesCount} helper="Problemas o tareas detectadas" tone={summary.openIssuesCount ? 'warning' : 'neutral'} />
-				<MetricCard label="Conversaciones 30d" value={totals.activeConversations30d} helper="Actividad reciente" />
-				<MetricCard label="Entrada 30d" value={totals.messages30dInbound} helper="Mensajes recibidos" />
-				<MetricCard label="Salida 30d" value={totals.messages30dOutbound} helper="Mensajes enviados" />
+				<MetricCard label="Alertas" value={summary.openIssuesCount} helper="Problemas o tareas detectadas" tone={summary.openIssuesCount ? 'warning' : 'neutral'} icon={AlertTriangle} />
+				<MetricCard label="Conversaciones 30d" value={totals.activeConversations30d} helper="Actividad reciente" icon={MessageCircle} />
+				<MetricCard label="Entrada 30d" value={totals.messages30dInbound} helper="Mensajes recibidos" icon={MessageCircle} />
+				<MetricCard label="Salida 30d" value={totals.messages30dOutbound} helper="Mensajes enviados" icon={Send} />
 			</div>
 
 			<div className="operations-quick-actions">
@@ -241,6 +283,7 @@ export default function OperationsPage() {
 						helper={action.helper}
 						tone={action.tone}
 						onClick={() => goTo(action.href)}
+						icon={action.icon}
 					/>
 				))}
 			</div>
@@ -259,7 +302,7 @@ export default function OperationsPage() {
 			{!workspaces.length ? (
 				<div className="operations-empty operations-empty--status">
 					<strong>No hay marcas para mostrar</strong>
-					<span>Cuando exista un workspace activo, sus prioridades apareceran aca.</span>
+					<span>Cuando exista un workspace activo, sus prioridades aparecerán acá.</span>
 				</div>
 			) : null}
 		</section>

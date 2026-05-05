@@ -1,6 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import {
+	ArchiveRestore,
+	ArrowLeft,
+	Bot,
+	CheckCheck,
+	Clock3,
+	Eraser,
+	EyeOff,
+	Inbox,
+	MessageCircle,
+	Paperclip,
+	RefreshCw,
+	RotateCcw,
+	Send,
+	Smile,
+	UserRound,
+} from 'lucide-react';
 import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
@@ -490,7 +507,7 @@ function MessageBubble({ message, conversation }) {
 	);
 }
 
-function ActionButton({ children, danger = false, active = false, disabled = false, onClick }) {
+function ActionButton({ children, danger = false, active = false, disabled = false, onClick, icon: Icon }) {
 	const className = [
 		'inbox-action-btn',
 		active ? 'inbox-action-btn--active' : '',
@@ -501,6 +518,7 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 
 	return (
 		<button type="button" onClick={onClick} disabled={disabled} className={className}>
+			{Icon ? <Icon size={15} strokeWidth={2.3} aria-hidden="true" /> : null}
 			{children}
 		</button>
 	);
@@ -1375,7 +1393,8 @@ export default function InboxPage() {
 						onClick={() => inboxQuery.refetch()}
 						disabled={inboxQuery.isFetching}
 					>
-						{inboxQuery.isFetching ? '...' : 'Actualizar'}
+						<RefreshCw size={14} strokeWidth={2.4} aria-hidden="true" />
+						<span>{inboxQuery.isFetching ? '...' : 'Actualizar'}</span>
 					</button>
 				</div>
 
@@ -1389,6 +1408,7 @@ export default function InboxPage() {
 								active={isActive}
 								disabled={inboxQuery.isFetching && isActive}
 								onClick={() => selectQueue(item.key)}
+								icon={item.key === 'PAYMENT_REVIEW' ? CheckCheck : item.key === 'HUMAN' ? UserRound : item.key === 'AUTO' ? Bot : Inbox}
 							>
 								<span>{getQueueLabel(item.key)}</span>
 								<strong>{counts[item.key] || 0}</strong>
@@ -1419,7 +1439,7 @@ export default function InboxPage() {
 					<input
 						type="text"
 						className="inbox-search-input"
-						placeholder="Buscar por nombre, telefono o mensaje..."
+						placeholder="Buscar por nombre, teléfono o mensaje..."
 						value={searchTerm}
 						onChange={(event) => setSearchTerm(event.target.value)}
 					/>
@@ -1457,10 +1477,10 @@ export default function InboxPage() {
 							<strong>No hay conversaciones para mostrar</strong>
 							<span>
 								{normalizedSearch
-									? 'Proba con otro nombre, telefono o mensaje.'
+									? 'Probá con otro nombre, teléfono o mensaje.'
 									: readFilter === 'UNREAD'
-										? 'No quedan chats no leidos en esta vista.'
-										: 'Cuando entren mensajes nuevos, apareceran aca.'}
+										? 'No quedan chats no leídos en esta vista.'
+										: 'Cuando entren mensajes nuevos, aparecerán acá.'}
 							</span>
 						</div>
 					) : null}
@@ -1550,10 +1570,10 @@ export default function InboxPage() {
 						>
 							{inboxQuery.isFetchingNextPage
 								? 'Cargando...'
-								: 'Cargar mas conversaciones'}
+								: 'Cargar más conversaciones'}
 						</button>
 					) : contacts.length > 0 ? (
-						<div className="inbox-list-end">No hay mas conversaciones.</div>
+						<div className="inbox-list-end">No hay más conversaciones.</div>
 					) : null}
 				</div>
 			</aside>
@@ -1563,11 +1583,11 @@ export default function InboxPage() {
 				{!selectedConversationId ? (
 					<div className="inbox-chat-empty">
 						{!showConversationSidebar ? (
-							<ActionButton onClick={() => setShowConversationSidebar(true)}>
+							<ActionButton onClick={() => setShowConversationSidebar(true)} icon={Inbox}>
 								Mostrar conversaciones
 							</ActionButton>
 						) : null}
-						Selecciona una conversacion
+						Seleccioná una conversación
 					</div>
 				) : (
 					<div className="inbox-chat-workspace">
@@ -1579,7 +1599,8 @@ export default function InboxPage() {
 									className="inbox-back-to-list-btn"
 									onClick={() => setShowConversationSidebar(true)}
 								>
-									Conversaciones
+									<ArrowLeft size={15} strokeWidth={2.4} aria-hidden="true" />
+									<span>Conversaciones</span>
 								</button>
 
 								<div className="inbox-chat-identity">
@@ -1591,7 +1612,7 @@ export default function InboxPage() {
 									<div className="inbox-chat-subtitle">
 										{conversation?.contact?.phone ||
 											activeContact?.phoneDisplay ||
-											'Sin telefono'}
+											'Sin teléfono'}
 									</div>
 								</div>
 
@@ -1617,6 +1638,7 @@ export default function InboxPage() {
 									<ActionButton
 										active={showConversationSidebar}
 										onClick={() => setShowConversationSidebar((prev) => !prev)}
+										icon={showConversationSidebar ? EyeOff : Inbox}
 									>
 										{showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones'}
 									</ActionButton>
@@ -1625,22 +1647,25 @@ export default function InboxPage() {
 										active={conversation?.queue === 'AUTO'}
 										disabled={moveQueueMutation.isPending}
 										onClick={() => handleMoveQueue('AUTO')}
+										icon={Bot}
 									>
-										Automatico
+										Automático
 									</ActionButton>
 
 									<ActionButton
 										active={conversation?.queue === 'HUMAN'}
 										disabled={moveQueueMutation.isPending}
 										onClick={() => handleMoveQueue('HUMAN')}
+										icon={UserRound}
 									>
-										Atencion humana
+										Atención humana
 									</ActionButton>
 
 									<ActionButton
 										active={conversation?.queue === 'PAYMENT_REVIEW'}
 										disabled={moveQueueMutation.isPending}
 										onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
+										icon={CheckCheck}
 									>
 										Comprobantes
 									</ActionButton>
@@ -1649,6 +1674,7 @@ export default function InboxPage() {
 										<ActionButton
 											disabled={moveQueueMutation.isPending}
 											onClick={handlePaymentVerified}
+											icon={ArchiveRestore}
 										>
 											Comprobante verificado
 										</ActionButton>
@@ -1661,8 +1687,9 @@ export default function InboxPage() {
 											!selectedConversationId
 										}
 										onClick={handleMarkUnread}
+										icon={Clock3}
 									>
-										Marcar no leido
+										Marcar no leído
 									</ActionButton>
 								</div>
 
@@ -1675,6 +1702,7 @@ export default function InboxPage() {
 												!selectedConversationId
 											}
 											onClick={() => resetContextMutation.mutate()}
+											icon={RotateCcw}
 										>
 											Reiniciar IA
 										</ActionButton>
@@ -1687,13 +1715,14 @@ export default function InboxPage() {
 											}
 											onClick={() => {
 												const confirmed = window.confirm(
-													'Esto va a borrar el historial y limpiar el contexto de esta conversacion. Continuar?'
+													'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
 												);
 
 												if (confirmed) {
 													clearHistoryMutation.mutate();
 												}
 											}}
+											icon={Eraser}
 										>
 											Borrar historial
 										</ActionButton>
@@ -1707,7 +1736,7 @@ export default function InboxPage() {
 										isBusyWithConversationAction ? 'inbox-action-feedback--busy' : ''
 									}`}
 								>
-									{isBusyWithConversationAction ? 'Procesando accion...' : actionFeedback}
+									{isBusyWithConversationAction ? 'Procesando acción...' : actionFeedback}
 								</div>
 							) : null}
 						</div>
@@ -1721,7 +1750,7 @@ export default function InboxPage() {
 								{conversationQuery.isLoading ? (
 									<div className="inbox-empty">
 										<strong>Cargando mensajes</strong>
-										<span>Preparando el historial de esta conversacion.</span>
+										<span>Preparando el historial de esta conversación.</span>
 									</div>
 								) : null}
 
@@ -1741,7 +1770,7 @@ export default function InboxPage() {
 								{!conversationQuery.isLoading &&
 								displayedMessages.length === 0 ? (
 									<div className="inbox-empty">
-										Esta conversacion todavia no tiene mensajes.
+										Esta conversación todavía no tiene mensajes.
 									</div>
 								) : null}
 
@@ -1765,7 +1794,9 @@ export default function InboxPage() {
 							{selectedFile ? (
 								<div className="inbox-selected-file">
 									<div className="inbox-selected-file-main">
-										<span className="inbox-selected-file-icon">+</span>
+										<span className="inbox-selected-file-icon">
+											<Paperclip size={13} strokeWidth={2.4} aria-hidden="true" />
+										</span>
 										<span className="inbox-selected-file-name">{selectedFile.name}</span>
 										<span className="inbox-selected-file-size">
 											{formatFileSize(selectedFile.size)}
@@ -1797,7 +1828,7 @@ export default function InboxPage() {
 
 									{showEmojiPicker ? (
 										<div className="inbox-emoji-picker">
-											<div className="inbox-emoji-title">Elegi un emoji</div>
+											<div className="inbox-emoji-title">Elegí un emoji</div>
 
 											<div className="inbox-emoji-grid">
 												{EXTENDED_QUICK_EMOJIS.map((emoji) => (
@@ -1831,7 +1862,7 @@ export default function InboxPage() {
 									disabled={sendMessageMutation.isPending}
 									title="Adjuntar archivo"
 								>
-									+
+									<Paperclip size={18} strokeWidth={2.3} aria-hidden="true" />
 								</button>
 
 								<textarea
@@ -1842,7 +1873,7 @@ export default function InboxPage() {
 										setMessageText(event.target.value);
 									}}
 									onKeyDown={handleComposerKeyDown}
-									placeholder="Escribe un mensaje"
+									placeholder="Escribí un mensaje"
 									rows={1}
 									className="inbox-textarea"
 								/>

@@ -489,3 +489,144 @@ button.operations-metric-card:hover {
 	font-size: 13px;
 	line-height: 1.4;
 }
+
+/* Strong internal dashboard redesign */
+
+.operations-page {
+	gap: 12px;
+}
+
+.operations-header {
+	align-items: center;
+	padding: 18px;
+	border-radius: 12px;
+	background:
+		linear-gradient(135deg, rgba(15, 118, 110, 0.08), transparent 42%),
+		#ffffff;
+}
+
+.operations-header h2 {
+	font-size: clamp(21px, 2vw, 28px);
+}
+
+.operations-header-actions button,
+.operations-issue button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 0 12px;
+}
+
+.operations-summary-strip {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.operations-quick-actions {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.operations-metric-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"label icon"
+		"value icon"
+		"helper action";
+	min-height: 112px;
+	gap: 6px 10px;
+	padding: 14px;
+	border-radius: 12px;
+}
+
+.operations-metric-icon {
+	grid-area: icon;
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 10px;
+	background: var(--ui-surface-muted, #eef3f5);
+	color: var(--ui-primary, #0f766e);
+}
+
+.operations-metric-card span {
+	grid-area: label;
+	align-self: end;
+}
+
+.operations-metric-card strong {
+	grid-area: value;
+	font-size: 30px;
+}
+
+.operations-metric-card small {
+	grid-area: helper;
+}
+
+.operations-metric-card em {
+	position: static;
+	grid-area: action;
+	justify-self: end;
+	display: inline-flex;
+	gap: 4px;
+}
+
+button.operations-metric-card {
+	padding-right: 14px;
+}
+
+.operations-metric-card.tone-warning .operations-metric-icon {
+	background: var(--ui-warning-soft, #fff7ed);
+	color: var(--ui-warning, #b54708);
+}
+
+.operations-metric-card.tone-info .operations-metric-icon {
+	background: var(--ui-info-soft, #e7f5f8);
+	color: var(--ui-info, #246b86);
+}
+
+.operations-workspace-card {
+	padding: 14px;
+	border-radius: 12px;
+}
+
+.operations-workspace-head {
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--ui-border, #d7dee5);
+}
+
+.operations-issue {
+	padding: 11px;
+}
+
+.operations-empty svg {
+	color: var(--ui-primary, #0f766e);
+}
+
+.operations-empty.error svg {
+	color: var(--ui-danger, #b42318);
+}
+
+@media (max-width: 1180px) {
+	.operations-summary-strip,
+	.operations-quick-actions {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 680px) {
+	.operations-header-actions {
+		width: 100%;
+	}
+
+	.operations-header-actions button {
+		flex: 1 1 160px;
+	}
+
+	.operations-summary-strip,
+	.operations-quick-actions,
+	.operations-workspace-metrics {
+		grid-template-columns: 1fr;
+	}
+}
