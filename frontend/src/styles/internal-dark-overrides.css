@@ -122,6 +122,7 @@
 	[class*="toolbar"],
 	[class*="topbar"],
 	[class*="hero"],
+	[class*="banner"],
 	[class*="header"],
 	[class*="section"],
 	[class*="block"],
@@ -290,6 +291,7 @@
 	.tenant-admin-actions button,
 	.campaign-form-actions .button.primary,
 	.page-header button,
+	.template-library-header-actions .button.primary,
 	.pagination-page-btn.is-active
 ) {
 	background-color: var(--ui-primary) !important;
@@ -325,6 +327,7 @@
 	.tenant-admin-grid button:hover:not(:disabled),
 	.tenant-admin-actions button:hover:not(:disabled),
 	.campaign-form-actions .button.primary:hover:not(:disabled),
+	.template-library-header-actions .button.primary:hover:not(:disabled),
 	.page-header button:hover:not(:disabled)
 ) {
 	background-color: var(--ui-primary-strong) !important;
@@ -348,6 +351,50 @@
 ) {
 	background-color: var(--ui-primary-muted) !important;
 	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.campaigns-tab-button.is-active,
+	.campaign-source-switch__button.is-active,
+	.campaign-schedule-audience-choice__button.is-active,
+	.campaign-product-picker-trigger--field.open,
+	.campaign-list-card.selected,
+	.template-list-card.selected,
+	.template-library-selected-banner
+) {
+	background:
+		linear-gradient(135deg, rgba(124, 156, 255, 0.12), transparent 48%),
+		var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.42) !important;
+	color: var(--ui-heading) !important;
+	box-shadow: inset 3px 0 0 var(--ui-primary) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-selected-banner strong,
+	.template-list-card.selected strong,
+	.campaign-list-card.selected strong
+) {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-selected-banner small,
+	.template-list-card.selected p,
+	.campaign-list-card.selected p
+) {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-selected-label,
+	.template-library-selected-status .campaign-badge,
+	.template-list-card.selected .campaign-badge,
+	.template-list-card.selected .template-chip
+) {
+	background-color: rgba(124, 156, 255, 0.18) !important;
+	border-color: rgba(124, 156, 255, 0.34) !important;
 	color: var(--ui-primary-strong) !important;
 }
 
