@@ -169,7 +169,7 @@ function ProductMultiSelect({
 			<input
 				type="text"
 				className="campaign-product-multiselect-search"
-				placeholder="Buscar productos del catálogo..."
+				placeholder="Buscar productos del catalogo..."
 				value={search}
 				onChange={(event) => onSearchChange(event.target.value)}
 			/>
@@ -192,7 +192,7 @@ function ProductMultiSelect({
 					})
 				) : (
 					<div className="campaign-product-option-empty">
-						No hay coincidencias en el catálogo.
+						No hay coincidencias en el catalogo.
 					</div>
 				)}
 			</div>
@@ -214,12 +214,12 @@ const VARIABLE_SOURCE_OPTIONS = [
 	{ value: 'first_name', label: 'Primer nombre' },
 	{ value: 'customer_name', label: 'Nombre cliente' },
 	{ value: 'customer_email', label: 'Email' },
-	{ value: 'phone', label: 'Teléfono' },
+	{ value: 'phone', label: 'Telefono' },
 	{ value: 'wa_id', label: 'WhatsApp ID' },
 	{ value: 'product_name', label: 'Producto principal' },
 	{ value: 'order_count', label: 'Cantidad de compras' },
-	{ value: 'last_order_id', label: 'Último pedido ID' },
-	{ value: 'last_order_number', label: 'Último pedido número' },
+	{ value: 'last_order_id', label: 'Ultimo pedido ID' },
+	{ value: 'last_order_number', label: 'Ultimo pedido numero' },
 	{ value: 'total_spent', label: 'Total gastado bruto' },
 	{ value: 'total_spent_label', label: 'Total gastado formateado' },
 	{ value: 'size', label: 'Talle' },
@@ -863,21 +863,21 @@ export default function CampaignComposerPanel({
 		() => [
 			{
 				id: 'template',
-				label: 'Template elegido',
+				label: 'Plantilla',
 				ok: Boolean(selectedTemplate?.id),
 				readyText: selectedTemplate?.name || 'Listo',
-				pendingText: 'Elegi un template',
+				pendingText: 'Elegi una plantilla',
 			},
 			{
 				id: 'image',
-				label: 'Header media',
+				label: 'Encabezado',
 				ok: !requiresHeaderMedia || !needsHeaderMediaUpload,
 				readyText: campaignOverridesTemplateMedia
-					? 'Se reemplaza para esta campaña'
+					? 'Se reemplaza para esta campana'
 					: hasTemplateResolvedHeaderMedia
 						? 'Resuelta en la plantilla'
 						: 'No aplica',
-				pendingText: 'Falta cargar el media',
+				pendingText: 'Falta cargar archivo',
 			},
 			{
 				id: 'variables',
@@ -1318,11 +1318,11 @@ export default function CampaignComposerPanel({
 			}
 
 			if (!config.source) {
-				return `Falta elegir de dónde sale {{${placeholder}}}.`;
+				return `Falta elegir de donde sale {{${placeholder}}}.`;
 			}
 
 			if (config.source === 'fixed' && !String(config.fixedValue || '').trim()) {
-				return `La variable {{${placeholder}}} está en "valor fijo", pero no tiene valor.`;
+				return `La variable {{${placeholder}}} esta en "valor fijo", pero no tiene valor.`;
 			}
 		}
 
@@ -1334,13 +1334,13 @@ export default function CampaignComposerPanel({
 		setSubmitError('');
 
 		if (!selectedTemplate?.id) {
-			setSubmitError('Elegí un template antes de crear la campaña.');
+			setSubmitError('Elegi una plantilla antes de crear la campana.');
 			return;
 		}
 
 		if (needsHeaderMediaUpload) {
 			setImageError(
-				`Esta plantilla requiere un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de crear la campaña.`
+				`Esta plantilla requiere un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de crear la campana.`
 			);
 			return;
 		}
@@ -1348,8 +1348,8 @@ export default function CampaignComposerPanel({
 		if (!recipients.length) {
 			setSubmitError(
 				form.audienceMode === 'customers'
-					? 'Seleccioná al menos un cliente.'
-					: 'Cargá al menos un destinatario manual.'
+					? 'Selecciona al menos un cliente.'
+					: 'Carga al menos un destinatario manual.'
 			);
 			return;
 		}
@@ -1429,16 +1429,16 @@ export default function CampaignComposerPanel({
 		<section className="campaign-panel campaign-panel--customers campaign-panel--composer-refresh">
 			<div className="campaign-panel-header campaign-panel-header--stacked">
 				<div>
-					<h3>Crear campaña</h3>
+					<h3>Crear campana</h3>
 					<p>
-						Definí variables, filtros y destinatarios antes de crear la campaña.
+						Arma el envio en pasos: plantilla, audiencia, variables y revision final.
 					</p>
 				</div>
 
 				<div className="campaign-builder-top-summary">
 					<div className="campaign-builder-top-summary-item">
-						<strong>{selectedTemplate?.name || 'Sin template'}</strong>
-						<span>mensaje elegido</span>
+						<strong>{selectedTemplate?.name || 'Sin plantilla'}</strong>
+						<span>plantilla elegida</span>
 					</div>
 					<div className="campaign-builder-top-summary-item">
 						<strong>{formatCompactNumber(recipients.length)}</strong>
@@ -1446,13 +1446,13 @@ export default function CampaignComposerPanel({
 					</div>
 					<div className="campaign-builder-top-summary-item">
 						<strong>USD {estimatedCost.toFixed(2)}</strong>
-						<span>{sanitizeCampaignCopy('estimado rapido')}</span>
+						<span>costo estimado</span>
 					</div>
 				</div>
 
 				<div className="campaign-helper-box">
 					<div className="campaign-helper-text">
-						Revisión rápida antes de crear la campaña. Si algo no está listo, aparece marcado acá.
+						Estado de preparacion. Completa los pendientes antes de crear o enviar.
 					</div>
 
 					<div className="campaign-review-grid">
@@ -1466,46 +1466,30 @@ export default function CampaignComposerPanel({
 
 					{campaignReadyToCreate ? (
 						<div className="campaign-inline-success">
-							La campaña ya tiene todo lo necesario para crearse.
+							La campana esta lista para crearse.
 						</div>
 					) : (
 						<div className="campaign-inline-warning">
-							Completá los puntos pendientes antes de crear o lanzar la campaña.
+							Completa los puntos pendientes antes de continuar.
 						</div>
 					)}
 				</div>
 
-				<div className="campaign-helper-box" style={{ display: 'none' }}>
-					<div className="campaign-helper-text">
-						Revision rapida antes de crear la campaña. Si algo no esta listo, aparece marcado aca y no recien al final.
-					</div>
-
-					<div className="campaign-review-grid">
-						{campaignChecklist.map((item) => (
-							<div key={item.id} className="campaign-review-card">
-								<strong>{item.label}</strong>
-								<span>{item.ok ? item.readyText : item.pendingText}</span>
-							</div>
-						))}
-					</div>
-
-					{campaignReadyToCreate ? (
-						<div className="campaign-inline-success">
-							La campaña ya tiene todo lo necesario para crearse.
-						</div>
-					) : (
-						<div className="campaign-inline-warning">
-							Completa los puntos pendientes antes de crear o lanzar la campaña.
-						</div>
-					)}
-				</div>
 			</div>
 
 			<form className="campaign-form campaign-form--spacious" onSubmit={handleSubmit}>
 				<div className="campaign-builder-section campaign-builder-section--hero">
+					<div className="campaign-step-head">
+						<div>
+							<span className="campaign-step-badge">1. Plantilla</span>
+							<h4>Define el mensaje y el objetivo</h4>
+							<p>Selecciona una plantilla aprobada y ponle un nombre claro al envio.</p>
+						</div>
+					</div>
+
 					<div className="campaign-builder-grid campaign-builder-grid--2">
 						<label className="field">
-							<span>Nombre de campaña</span>
+							<span>Nombre de campana</span>
 							<input
 								value={form.name}
 								onChange={(event) =>
@@ -1516,7 +1500,7 @@ export default function CampaignComposerPanel({
 						</label>
 
 						<label className="field">
-							<span>Mensaje</span>
+							<span>Plantilla</span>
 							<select
 								value={selectedTemplate?.id || ''}
 								onChange={(event) => {
@@ -1526,7 +1510,7 @@ export default function CampaignComposerPanel({
 							>
 								{templates.map((template) => (
 									<option key={template.id} value={template.id}>
-										{template.name} · {template.language}
+										{template.name} - {template.language}
 									</option>
 								))}
 							</select>
@@ -1540,7 +1524,7 @@ export default function CampaignComposerPanel({
 							onChange={(event) =>
 								setForm((current) => ({ ...current, description: event.target.value }))
 							}
-							placeholder="Opcional. Solo para que el equipo entienda mejor esta campaña"
+							placeholder="Opcional. Solo para que el equipo entienda mejor esta campana"
 						/>
 					</label>
 
@@ -1556,7 +1540,7 @@ export default function CampaignComposerPanel({
 									}}
 								>
 									<strong>Clientes</strong>
-									<span>Usá filtros y productos comprados</span>
+									<span>Usa filtros y productos comprados</span>
 								</button>
 							) : null}
 
@@ -1570,7 +1554,7 @@ export default function CampaignComposerPanel({
 									}}
 								>
 									<strong>Lista manual</strong>
-									<span>Un contacto por línea: telefono|nombre|producto|talle|color</span>
+									<span>Un contacto por linea: telefono|nombre|producto|talle|color</span>
 								</button>
 							) : null}
 						</div>
@@ -1582,8 +1566,8 @@ export default function CampaignComposerPanel({
 							<div className="campaign-helper-box">
 								<div className="campaign-helper-text">
 									{hasTemplateResolvedHeaderMedia
-										? `Este template ya tiene un ${getTemplateHeaderMediaLabel(selectedTemplate)} configurado. Solo subí otro si querés reemplazarlo para esta campaña.`
-										: `Este template usa header con ${getTemplateHeaderMediaLabel(selectedTemplate)} y todavía necesita que cargues uno para poder enviarse.`}
+										? `Esta plantilla ya tiene un ${getTemplateHeaderMediaLabel(selectedTemplate)} configurado. Subi otro solo si queres reemplazarlo.`
+										: `Esta plantilla necesita un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de enviarse.`}
 								</div>
 								<div className="campaign-inline-actions">
 									<label
@@ -1613,13 +1597,13 @@ export default function CampaignComposerPanel({
 
 								{hasTemplateResolvedHeaderMedia && !uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										{`La campaña va a usar el ${getTemplateHeaderMediaLabel(selectedTemplate)} ya guardado en la plantilla.`}
+										{`Se usara el ${getTemplateHeaderMediaLabel(selectedTemplate)} guardado en la plantilla.`}
 									</div>
 								) : null}
 
 								{uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										{`La campaña va a usar el nuevo ${getTemplateHeaderMediaLabel(selectedTemplate)} cargado.`}
+										{`Se usara el nuevo ${getTemplateHeaderMediaLabel(selectedTemplate)} cargado.`}
 									</div>
 								) : null}
 
@@ -1630,18 +1614,18 @@ export default function CampaignComposerPanel({
 				</div>
 
 				{templatePlaceholders.length ? (
-					<div className="campaign-builder-section">
+					<div className="campaign-builder-section campaign-builder-section--variables">
 						<div className="campaign-step-head">
 							<div>
-								<span className="campaign-step-badge">Variables</span>
-								<h4>Asigná cada placeholder</h4>
+								<span className="campaign-step-badge">3. Variables</span>
+								<h4>Asigna cada variable</h4>
 								<p>
-									Este template usa {templatePlaceholders.length} variable{templatePlaceholders.length > 1 ? 's' : ''}. Acá decidís de dónde sale cada una.
+									Esta plantilla usa {templatePlaceholders.length} variable{templatePlaceholders.length > 1 ? 's' : ''}. Define de donde sale cada valor.
 								</p>
 							</div>
 							<div className="campaign-customer-kpi campaign-customer-kpi--large">
 								<strong>{templatePlaceholders.length}</strong>
-								<span>placeholders</span>
+								<span>variables</span>
 							</div>
 						</div>
 
@@ -1655,7 +1639,7 @@ export default function CampaignComposerPanel({
 										<div className="campaign-variable-mapper-head">
 											<strong>{`{{${placeholder}}}`}</strong>
 											<span>
-												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Todavía sin ejemplo'}
+												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Sin ejemplo todavia'}
 											</span>
 										</div>
 
@@ -1697,14 +1681,13 @@ export default function CampaignComposerPanel({
 				) : null}
 
 				{form.audienceMode === 'customers' ? (
-					<div className="campaign-builder-section">
+					<div className="campaign-builder-section campaign-builder-section--audience">
 						<div className="campaign-step-head">
 							<div>
-								<span className="campaign-step-badge">Paso 1</span>
-								<h4>Elegí a quién querés escribirle</h4>
+								<span className="campaign-step-badge">2. Audiencia</span>
+								<h4>Elige a quien escribirle</h4>
 								<p>
-									La grilla de clientes quedó oculta para que la pantalla no sea infinita.
-									La selección masiva funciona en segundo plano.
+									Filtra clientes, revisa el alcance y selecciona los destinatarios de la campana.
 								</p>
 							</div>
 							<div className="campaign-customer-kpi campaign-customer-kpi--large">
@@ -1719,12 +1702,12 @@ export default function CampaignComposerPanel({
 								<input
 									value={customerFilters.q}
 									onChange={(event) => updateCustomerFilter('q', event.target.value)}
-									placeholder="Nombre, mail o teléfono"
+									placeholder="Nombre, mail o telefono"
 								/>
 							</label>
 
 							<label className="field">
-								<span>N° pedido</span>
+								<span>Nro. de pedido</span>
 								<input
 									value={customerFilters.orderNumber}
 									onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
@@ -1735,7 +1718,7 @@ export default function CampaignComposerPanel({
 
 						<div className="campaign-builder-grid campaign-builder-grid--filters">
 							<label className="field">
-								<span>Gasto mínimo</span>
+								<span>Gasto minimo</span>
 								<input
 									type="number"
 									min="0"
@@ -1858,7 +1841,7 @@ export default function CampaignComposerPanel({
 											title="Quitar producto"
 										>
 											<span>{productName}</span>
-											<strong>×</strong>
+											<strong>x</strong>
 										</button>
 									))}
 								</div>
@@ -1921,7 +1904,7 @@ export default function CampaignComposerPanel({
 								onClick={clearFilteredSelection}
 								disabled={!selectedCustomerCount}
 							>
-								Quitar selección masiva
+								Quitar seleccion masiva
 							</button>
 						</div>
 
@@ -1943,14 +1926,13 @@ export default function CampaignComposerPanel({
 
 							<div className="campaign-audience-summary-card">
 								<strong>{formatCompactNumber(excludedByTemplateCount)}</strong>
-								<span>ya recibieron template</span>
+								<span>ya recibieron plantilla</span>
 							</div>
 						</div>
 
 						<div className="campaign-helper-box">
 							<div className="campaign-helper-text">
-								No se muestran las tarjetas de clientes para que la página no se haga kilométrica.
-								La selección se hace en segundo plano según los filtros actuales.
+								La seleccion se hace segun los filtros actuales para mantener el flujo liviano.
 							</div>
 
 							{selectedProductFilters.length ? (
@@ -1965,16 +1947,16 @@ export default function CampaignComposerPanel({
 
 							{selectedProductFilters.length ? (
 								<div className="campaign-helper-inline-text">
-									Con los filtros actuales, la muestra contiene {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s) con teléfono.
+									Con los filtros actuales, la muestra contiene {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s) con telefono.
 								</div>
 							) : null}
 							{bulkSelectionInfo.count > 0 ? (
 								<div className="campaign-inline-success">
-									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) para esta campaña.
+									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) para esta campana.
 								</div>
 							) : (
 								<div className="campaign-inline-warning">
-									Todavía no seleccionaste destinatarios. Primero filtrá y después apretá el botón de seleccionar.
+									Todavia no seleccionaste destinatarios. Filtra y despues usa el boton de seleccion.
 								</div>
 							)}
 						</div>
@@ -1984,11 +1966,11 @@ export default function CampaignComposerPanel({
 						) : null}
 					</div>
 				) : (
-					<div className="campaign-builder-section">
+					<div className="campaign-builder-section campaign-builder-section--audience">
 						<div className="campaign-step-head">
 							<div>
-								<span className="campaign-step-badge">Manual</span>
-								<h4>Cargá destinatarios manuales</h4>
+								<span className="campaign-step-badge">2. Audiencia</span>
+								<h4>Carga destinatarios manuales</h4>
 								<p>Formato: telefono|nombre|producto|talle|color</p>
 							</div>
 						</div>
@@ -2001,7 +1983,7 @@ export default function CampaignComposerPanel({
 								onChange={(event) =>
 									setForm((current) => ({ ...current, audienceText: event.target.value }))
 								}
-								placeholder={`5492211111111|Juan|Body Reductor|M|Negro\n5492212222222|Ana|Calza Térmica|L|Azul`}
+								placeholder={`5492211111111|Juan|Body Reductor|M|Negro\n5492212222222|Ana|Calza Termica|L|Azul`}
 							/>
 						</label>
 					</div>
@@ -2010,16 +1992,16 @@ export default function CampaignComposerPanel({
 				<div className="campaign-builder-section campaign-builder-section--review">
 					<div className="campaign-step-head">
 						<div>
-							<span className="campaign-step-badge">Resumen</span>
-							<h4>Último chequeo</h4>
-							<p>Acá ves si la campaña ya está lista o si todavía le falta algo.</p>
+							<span className="campaign-step-badge">4. Revision</span>
+							<h4>Ultimo chequeo</h4>
+							<p>Confirma que la campana este lista antes de crearla o enviarla.</p>
 						</div>
 					</div>
 
 					<div className="campaign-review-grid">
 						<div className="campaign-review-card">
-							<strong>{selectedTemplate?.name || '—'}</strong>
-							<span>template</span>
+							<strong>{selectedTemplate?.name || '-'}</strong>
+							<span>plantilla</span>
 						</div>
 						<div className="campaign-review-card">
 							<strong>{formatCompactNumber(recipients.length)}</strong>
@@ -2043,10 +2025,10 @@ export default function CampaignComposerPanel({
 											: 'Falta media'
 									: 'No aplica'}
 							</strong>
-							<span>header media</span>
+							<span>encabezado</span>
 						</div>
 						<div className="campaign-review-card">
-							<strong>{form.sendNow ? 'Se lanza al crear' : 'Queda en borrador'}</strong>
+							<strong>{form.sendNow ? 'Crear y enviar' : 'Guardar borrador'}</strong>
 							<span>estado inicial</span>
 						</div>
 					</div>
@@ -2057,7 +2039,7 @@ export default function CampaignComposerPanel({
 							<div className="campaign-variable-list">
 								{templatePlaceholders.map((placeholder) => (
 									<span key={placeholder}>
-										{`{{${placeholder}}} -> ${sampleResolvedVariables?.[placeholder] || '—'}`}
+										{`{{${placeholder}}} -> ${sampleResolvedVariables?.[placeholder] || '-'}`}
 									</span>
 								))}
 							</div>
@@ -2070,7 +2052,7 @@ export default function CampaignComposerPanel({
 								<div>
 									<strong>Preview de destinatarios</strong>
 									<p>
-										Acá ves a quiénes se va a contactar. Podés sacar cualquiera antes de crear la campaña.
+										Revisa a quienes se va a contactar. Podes sacar cualquiera antes de crear la campana.
 									</p>
 								</div>
 								<span>{formatCompactNumber(selectedCustomerCount)} seleccionado(s)</span>
@@ -2083,7 +2065,7 @@ export default function CampaignComposerPanel({
 										type="text"
 										value={previewSearch}
 										onChange={(event) => setPreviewSearch(event.target.value)}
-										placeholder="Nombre, teléfono, mail o producto"
+										placeholder="Nombre, telefono, mail o producto"
 									/>
 								</label>
 							</div>
@@ -2091,9 +2073,9 @@ export default function CampaignComposerPanel({
 							<div className="campaign-recipient-preview-table">
 								<div className="campaign-recipient-preview-row campaign-recipient-preview-row--head">
 									<span>Destinatario</span>
-									<span>Teléfono</span>
+									<span>Telefono</span>
 									<span>Producto</span>
-									<span>Acción</span>
+									<span>Accion</span>
 								</div>
 
 								{previewCustomers.length ? (
@@ -2103,8 +2085,8 @@ export default function CampaignComposerPanel({
 											className="campaign-recipient-preview-row"
 										>
 											<span>{getRecipientDisplayName(customer)}</span>
-											<span>{normalizePhone(customer.phone || '') || '—'}</span>
-											<span>{getRecipientProductPreview(customer) || '—'}</span>
+											<span>{normalizePhone(customer.phone || '') || '-'}</span>
+											<span>{getRecipientProductPreview(customer) || '-'}</span>
 											<span>
 												<button
 													type="button"
@@ -2118,7 +2100,7 @@ export default function CampaignComposerPanel({
 									))
 								) : (
 									<div className="campaign-recipient-preview-empty">
-										No hay destinatarios que coincidan con la búsqueda.
+										No hay destinatarios que coincidan con la busqueda.
 									</div>
 								)}
 							</div>
@@ -2146,7 +2128,7 @@ export default function CampaignComposerPanel({
 									</button>
 
 									<span className="campaign-recipient-preview-page-indicator">
-										Página {previewPage} de {previewTotalPages}
+										Pagina {previewPage} de {previewTotalPages}
 									</span>
 
 									<button
@@ -2171,7 +2153,7 @@ export default function CampaignComposerPanel({
 								setForm((current) => ({ ...current, sendNow: event.target.checked }))
 							}
 						/>
-						<span>Lanzar campaña apenas se cree</span>
+						<span>{form.sendNow ? 'Crear y enviar ahora' : 'Crear como borrador'}</span>
 					</label>
 
 					{submitError ? <div className="campaign-inline-error">{submitError}</div> : null}
@@ -2182,7 +2164,7 @@ export default function CampaignComposerPanel({
 							type="submit"
 							disabled={creating || uploadingImage || !campaignReadyToCreate}
 						>
-							{creating ? 'Creando...' : 'Crear campaña'}
+							{creating ? 'Creando...' : form.sendNow ? 'Crear y enviar ahora' : 'Crear campana'}
 						</button>
 					</div>
 				</div>
