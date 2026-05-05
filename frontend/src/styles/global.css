@@ -818,6 +818,228 @@ body {
 	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
 
+/* Futuristic internal surface layer */
+
+:root {
+	--fx-grid: rgba(15, 118, 110, 0.055);
+	--fx-line: rgba(15, 118, 110, 0.18);
+	--fx-line-strong: rgba(45, 212, 191, 0.32);
+	--fx-glow: rgba(15, 118, 110, 0.12);
+	--fx-blue-glow: rgba(36, 107, 134, 0.1);
+}
+
+.page-card,
+.tenant-admin-panel,
+.customers-hero-card,
+.customers-sync-panel,
+.customers-filters-card,
+.customers-list-card,
+.customers-stat-card,
+.customer-card,
+.abandoned-card,
+.stat-box,
+.catalog-card,
+.campaign-shell-card,
+.campaigns-hero,
+.campaigns-tab-shell,
+.campaign-custom-audience-card,
+.campaign-schedule-card,
+.wam-card,
+.wam-hero,
+.ai-lab-sidebar-card,
+.ai-lab-chat-card,
+.ai-lab-debug-card,
+.ai-lab-card,
+.operations-header,
+.operations-workspace-card,
+.inbox-sidebar,
+.inbox-chat-panel {
+	position: relative;
+	overflow: hidden;
+	border-color: rgba(15, 118, 110, 0.16);
+	background:
+		linear-gradient(135deg, rgba(15, 118, 110, 0.065), transparent 38%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 251, 0.94));
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		0 1px 2px rgba(16, 24, 40, 0.05),
+		0 12px 30px rgba(16, 24, 40, 0.07);
+}
+
+.page-card::before,
+.tenant-admin-panel::before,
+.customers-hero-card::before,
+.customers-sync-panel::before,
+.customers-filters-card::before,
+.customers-list-card::before,
+.customers-stat-card::before,
+.customer-card::before,
+.abandoned-card::before,
+.stat-box::before,
+.catalog-card::before,
+.campaign-shell-card::before,
+.campaigns-hero::before,
+.campaigns-tab-shell::before,
+.campaign-custom-audience-card::before,
+.campaign-schedule-card::before,
+.wam-card::before,
+.wam-hero::before,
+.ai-lab-sidebar-card::before,
+.ai-lab-chat-card::before,
+.ai-lab-debug-card::before,
+.ai-lab-card::before,
+.operations-header::before,
+.operations-workspace-card::before,
+.inbox-sidebar::before,
+.inbox-chat-panel::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(var(--fx-grid) 1px, transparent 1px),
+		linear-gradient(90deg, var(--fx-grid) 1px, transparent 1px);
+	background-size: 30px 30px;
+	mask-image: linear-gradient(130deg, transparent, #000 14%, #000 68%, transparent);
+	opacity: 0.62;
+	pointer-events: none;
+}
+
+.page-card::after,
+.tenant-admin-panel::after,
+.customers-hero-card::after,
+.customers-sync-panel::after,
+.customers-filters-card::after,
+.customers-list-card::after,
+.customers-stat-card::after,
+.customer-card::after,
+.abandoned-card::after,
+.stat-box::after,
+.catalog-card::after,
+.campaign-shell-card::after,
+.campaigns-hero::after,
+.campaigns-tab-shell::after,
+.campaign-custom-audience-card::after,
+.campaign-schedule-card::after,
+.wam-card::after,
+.wam-hero::after,
+.ai-lab-sidebar-card::after,
+.ai-lab-chat-card::after,
+.ai-lab-debug-card::after,
+.ai-lab-card::after,
+.operations-header::after,
+.operations-workspace-card::after,
+.inbox-sidebar::after,
+.inbox-chat-panel::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	box-shadow:
+		inset 1px 0 0 var(--fx-line-strong),
+		inset 0 -1px 0 rgba(36, 107, 134, 0.14);
+	pointer-events: none;
+}
+
+.page-card > *,
+.tenant-admin-panel > *,
+.customers-hero-card > *,
+.customers-sync-panel > *,
+.customers-filters-card > *,
+.customers-list-card > *,
+.customers-stat-card > *,
+.customer-card > *,
+.abandoned-card > *,
+.stat-box > *,
+.catalog-card > *,
+.campaign-shell-card > *,
+.campaigns-hero > *,
+.campaigns-tab-shell > *,
+.campaign-custom-audience-card > *,
+.campaign-schedule-card > *,
+.wam-card > *,
+.wam-hero > *,
+.ai-lab-sidebar-card > *,
+.ai-lab-chat-card > *,
+.ai-lab-debug-card > *,
+.ai-lab-card > *,
+.operations-header > *,
+.operations-workspace-card > *,
+.inbox-sidebar > *,
+.inbox-chat-panel > * {
+	position: relative;
+	z-index: 1;
+}
+
+.page-header,
+.tenant-admin-header,
+.abandoned-carts-page .page-header,
+.operations-header,
+.wam-hero,
+.campaigns-hero {
+	background:
+		radial-gradient(circle at 94% 8%, rgba(45, 212, 191, 0.18), transparent 24%),
+		linear-gradient(135deg, rgba(15, 118, 110, 0.1), transparent 46%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 251, 0.94));
+}
+
+.page-header::before,
+.tenant-admin-header::before,
+.abandoned-carts-page .page-header::before,
+.operations-header::before,
+.wam-hero::before,
+.campaigns-hero::before {
+	opacity: 0.78;
+}
+
+.page-card:hover,
+.catalog-card:hover,
+.customers-stat-card:hover,
+.customer-card:hover,
+.abandoned-card:hover,
+.workspace-analytics-card:hover,
+.wam-card:hover,
+.ai-lab-debug-item:hover {
+	border-color: rgba(15, 118, 110, 0.38);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		0 18px 42px rgba(15, 118, 110, 0.12);
+}
+
+.stat-box,
+.customers-stat-card,
+.campaign-tracking-kpi,
+.workspace-card-stats > div,
+.abandoned-meta-grid > div {
+	background:
+		linear-gradient(135deg, rgba(15, 118, 110, 0.08), transparent 45%),
+		rgba(255, 255, 255, 0.86);
+	border-color: rgba(15, 118, 110, 0.16);
+}
+
+.tenant-admin-pill,
+.queue-pill,
+.campaign-badge,
+.campaign-schedule-status,
+.ai-lab-chip,
+.status-badge,
+.wam-chip,
+.wam-pill,
+.customer-payment-badge,
+.inbox-badge,
+.customers-active-filter-badge {
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(240, 253, 250, 0.72));
+	border-color: rgba(15, 118, 110, 0.18);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+input,
+select,
+textarea {
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 251, 0.94));
+}
+
 /* Internal app redesign foundation */
 
 :root {

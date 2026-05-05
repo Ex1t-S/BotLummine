@@ -115,7 +115,7 @@ export default function CatalogPage() {
 			{catalogQuery.isError ? (
 				<div className="catalog-state catalog-state--error">
 					<strong>No pudimos cargar el catálogo</strong>
-					<span>Reintenta en unos segundos o verificá la integración activa.</span>
+					<span>Probá nuevamente en unos segundos o verificá la integración activa.</span>
 				</div>
 			) : null}
 
@@ -143,7 +143,7 @@ export default function CatalogPage() {
 			) : !loading && !catalogQuery.isError ? (
 				<div className="catalog-empty-state">
 					<strong>No encontramos productos</strong>
-					<span>Ajustá la búsqueda o sincronizá el proveedor para actualizar el inventario.</span>
+					<span>Probá otra búsqueda o sincronizá el proveedor para actualizar el inventario.</span>
 				</div>
 			) : null}
 

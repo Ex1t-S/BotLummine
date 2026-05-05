@@ -151,8 +151,8 @@ function ProductMultiSelect({
 	onSearchChange,
 	onToggleValue,
 	onClear,
-	placeholder = 'Buscar productos del catalogo...',
-	emptyText = 'No hay coincidencias en el catalogo.',
+	placeholder = 'Buscar productos del catálogo...',
+	emptyText = 'No hay coincidencias en el catálogo.',
 	clearText = 'Limpiar productos',
 }) {
 	const filtered = useMemo(() => {
@@ -169,7 +169,7 @@ function ProductMultiSelect({
 			<input
 				type="text"
 				className="campaign-product-multiselect-search"
-				placeholder="Buscar productos del catalogo..."
+				placeholder="Buscar productos del catálogo..."
 				value={search}
 				onChange={(event) => onSearchChange(event.target.value)}
 			/>
@@ -192,7 +192,7 @@ function ProductMultiSelect({
 					})
 				) : (
 					<div className="campaign-product-option-empty">
-						No hay coincidencias en el catalogo.
+						No hay coincidencias en el catálogo.
 					</div>
 				)}
 			</div>
@@ -866,14 +866,14 @@ export default function CampaignComposerPanel({
 				label: 'Plantilla',
 				ok: Boolean(selectedTemplate?.id),
 				readyText: selectedTemplate?.name || 'Listo',
-				pendingText: 'Elegi una plantilla',
+				pendingText: 'Elegí una plantilla',
 			},
 			{
 				id: 'image',
 				label: 'Encabezado',
 				ok: !requiresHeaderMedia || !needsHeaderMediaUpload,
 				readyText: campaignOverridesTemplateMedia
-					? 'Se reemplaza para esta campana'
+					? 'Se reemplaza para esta campaña'
 					: hasTemplateResolvedHeaderMedia
 						? 'Resuelta en la plantilla'
 						: 'No aplica',
@@ -895,8 +895,8 @@ export default function CampaignComposerPanel({
 				readyText: `${formatCompactNumber(recipients.length)} destinatarios`,
 				pendingText:
 					form.audienceMode === 'customers'
-						? 'Selecciona clientes'
-						: 'Carga destinatarios',
+						? 'Seleccioná clientes'
+						: 'Cargá destinatarios',
 			},
 		],
 		[
@@ -1318,11 +1318,11 @@ export default function CampaignComposerPanel({
 			}
 
 			if (!config.source) {
-				return `Falta elegir de donde sale {{${placeholder}}}.`;
+				return `Elegí de dónde sale {{${placeholder}}}.`;
 			}
 
 			if (config.source === 'fixed' && !String(config.fixedValue || '').trim()) {
-				return `La variable {{${placeholder}}} esta en "valor fijo", pero no tiene valor.`;
+				return `Completá el valor fijo de {{${placeholder}}}.`;
 			}
 		}
 
@@ -1334,13 +1334,13 @@ export default function CampaignComposerPanel({
 		setSubmitError('');
 
 		if (!selectedTemplate?.id) {
-			setSubmitError('Elegi una plantilla antes de crear la campana.');
+			setSubmitError('Elegí una plantilla antes de crear la campaña.');
 			return;
 		}
 
 		if (needsHeaderMediaUpload) {
 			setImageError(
-				`Esta plantilla requiere un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de crear la campana.`
+				`Esta plantilla requiere un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de crear la campaña.`
 			);
 			return;
 		}
@@ -1348,8 +1348,8 @@ export default function CampaignComposerPanel({
 		if (!recipients.length) {
 			setSubmitError(
 				form.audienceMode === 'customers'
-					? 'Selecciona al menos un cliente.'
-					: 'Carga al menos un destinatario manual.'
+					? 'Seleccioná al menos un cliente.'
+					: 'Cargá al menos un destinatario manual.'
 			);
 			return;
 		}
@@ -1429,7 +1429,7 @@ export default function CampaignComposerPanel({
 		<section className="campaign-panel campaign-panel--customers campaign-panel--composer-refresh">
 			<div className="campaign-panel-header campaign-panel-header--stacked">
 				<div>
-					<h3>Crear campana</h3>
+					<h3>Crear campaña</h3>
 					<p>
 						Arma el envio en pasos: plantilla, audiencia, variables y revision final.
 					</p>
@@ -1466,7 +1466,7 @@ export default function CampaignComposerPanel({
 
 					{campaignReadyToCreate ? (
 						<div className="campaign-inline-success">
-							La campana esta lista para crearse.
+							La campaña está lista para crearse.
 						</div>
 					) : (
 						<div className="campaign-inline-warning">
@@ -1483,13 +1483,13 @@ export default function CampaignComposerPanel({
 						<div>
 							<span className="campaign-step-badge">1. Plantilla</span>
 							<h4>Define el mensaje y el objetivo</h4>
-							<p>Selecciona una plantilla aprobada y ponle un nombre claro al envio.</p>
+							<p>Elegí una plantilla aprobada y poné un nombre claro para el envío.</p>
 						</div>
 					</div>
 
 					<div className="campaign-builder-grid campaign-builder-grid--2">
 						<label className="field">
-							<span>Nombre de campana</span>
+							<span>Nombre de campaña</span>
 							<input
 								value={form.name}
 								onChange={(event) =>
@@ -1524,7 +1524,7 @@ export default function CampaignComposerPanel({
 							onChange={(event) =>
 								setForm((current) => ({ ...current, description: event.target.value }))
 							}
-							placeholder="Opcional. Solo para que el equipo entienda mejor esta campana"
+							placeholder="Opcional. Sirve para que el equipo entienda mejor esta campaña"
 						/>
 					</label>
 
@@ -1554,7 +1554,7 @@ export default function CampaignComposerPanel({
 									}}
 								>
 									<strong>Lista manual</strong>
-									<span>Un contacto por linea: telefono|nombre|producto|talle|color</span>
+									<span>Un contacto por línea: teléfono|nombre|producto|talle|color</span>
 								</button>
 							) : null}
 						</div>
@@ -1639,7 +1639,7 @@ export default function CampaignComposerPanel({
 										<div className="campaign-variable-mapper-head">
 											<strong>{`{{${placeholder}}}`}</strong>
 											<span>
-												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Sin ejemplo todavia'}
+												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Sin ejemplo todavía'}
 											</span>
 										</div>
 
@@ -1687,7 +1687,7 @@ export default function CampaignComposerPanel({
 								<span className="campaign-step-badge">2. Audiencia</span>
 								<h4>Elige a quien escribirle</h4>
 								<p>
-									Filtra clientes, revisa el alcance y selecciona los destinatarios de la campana.
+									Filtrá clientes, revisá el alcance y seleccioná los destinatarios de la campaña.
 								</p>
 							</div>
 							<div className="campaign-customer-kpi campaign-customer-kpi--large">
@@ -1702,7 +1702,7 @@ export default function CampaignComposerPanel({
 								<input
 									value={customerFilters.q}
 									onChange={(event) => updateCustomerFilter('q', event.target.value)}
-									placeholder="Nombre, mail o telefono"
+									placeholder="Nombre, mail o teléfono"
 								/>
 							</label>
 
@@ -1947,12 +1947,12 @@ export default function CampaignComposerPanel({
 
 							{selectedProductFilters.length ? (
 								<div className="campaign-helper-inline-text">
-									Con los filtros actuales, la muestra contiene {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s) con telefono.
+									Con los filtros actuales, la muestra contiene {formatCompactNumber(selectedVisibleProductMatchesCount)} cliente(s) con teléfono.
 								</div>
 							) : null}
 							{bulkSelectionInfo.count > 0 ? (
 								<div className="campaign-inline-success">
-									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) para esta campana.
+									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) para esta campaña.
 								</div>
 							) : (
 								<div className="campaign-inline-warning">
@@ -1970,8 +1970,8 @@ export default function CampaignComposerPanel({
 						<div className="campaign-step-head">
 							<div>
 								<span className="campaign-step-badge">2. Audiencia</span>
-								<h4>Carga destinatarios manuales</h4>
-								<p>Formato: telefono|nombre|producto|talle|color</p>
+								<h4>Cargá destinatarios manuales</h4>
+								<p>Formato: teléfono|nombre|producto|talle|color</p>
 							</div>
 						</div>
 
@@ -1994,7 +1994,7 @@ export default function CampaignComposerPanel({
 						<div>
 							<span className="campaign-step-badge">4. Revision</span>
 							<h4>Ultimo chequeo</h4>
-							<p>Confirma que la campana este lista antes de crearla o enviarla.</p>
+							<p>Confirmá que la campaña esté lista antes de crearla o enviarla.</p>
 						</div>
 					</div>
 
@@ -2052,7 +2052,7 @@ export default function CampaignComposerPanel({
 								<div>
 									<strong>Preview de destinatarios</strong>
 									<p>
-										Revisa a quienes se va a contactar. Podes sacar cualquiera antes de crear la campana.
+										Revisá a quiénes se va a contactar. Podés quitar destinatarios antes de crear la campaña.
 									</p>
 								</div>
 								<span>{formatCompactNumber(selectedCustomerCount)} seleccionado(s)</span>
@@ -2065,7 +2065,7 @@ export default function CampaignComposerPanel({
 										type="text"
 										value={previewSearch}
 										onChange={(event) => setPreviewSearch(event.target.value)}
-										placeholder="Nombre, telefono, mail o producto"
+										placeholder="Nombre, teléfono, mail o producto"
 									/>
 								</label>
 							</div>
@@ -2164,7 +2164,7 @@ export default function CampaignComposerPanel({
 							type="submit"
 							disabled={creating || uploadingImage || !campaignReadyToCreate}
 						>
-							{creating ? 'Creando...' : form.sendNow ? 'Crear y enviar ahora' : 'Crear campana'}
+							{creating ? 'Creando...' : form.sendNow ? 'Crear y enviar ahora' : 'Crear campaña'}
 						</button>
 					</div>
 				</div>

@@ -1,0 +1,167 @@
+.metric-panel {
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"label icon"
+		"value icon"
+		"helper action";
+	gap: 6px 10px;
+	min-height: 116px;
+	padding: 15px;
+	overflow: hidden;
+	border: 1px solid rgba(118, 237, 219, 0.2);
+	border-radius: 14px;
+	background:
+		linear-gradient(135deg, rgba(15, 118, 110, 0.11), transparent 42%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 251, 0.92));
+	color: var(--ui-text, #172027);
+	text-align: left;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.85),
+		0 1px 2px rgba(16, 24, 40, 0.05),
+		0 14px 34px rgba(15, 118, 110, 0.08);
+	isolation: isolate;
+}
+
+.metric-panel::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(rgba(15, 118, 110, 0.07) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(15, 118, 110, 0.055) 1px, transparent 1px);
+	background-size: 28px 28px;
+	mask-image: linear-gradient(120deg, transparent, #000 18%, #000 70%, transparent);
+	opacity: 0.65;
+	pointer-events: none;
+	z-index: -2;
+}
+
+.metric-panel::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	box-shadow:
+		inset 1px 0 0 rgba(45, 212, 191, 0.28),
+		inset 0 -1px 0 rgba(36, 107, 134, 0.16);
+	pointer-events: none;
+}
+
+button.metric-panel {
+	cursor: pointer;
+}
+
+button.metric-panel:hover {
+	border-color: rgba(15, 118, 110, 0.42);
+	transform: translateY(-1px);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		0 18px 42px rgba(15, 118, 110, 0.13);
+}
+
+.metric-panel__orb {
+	position: absolute;
+	right: -34px;
+	top: -42px;
+	width: 116px;
+	height: 116px;
+	border-radius: 999px;
+	background: radial-gradient(circle, rgba(45, 212, 191, 0.28), transparent 68%);
+	filter: blur(2px);
+	pointer-events: none;
+	z-index: -1;
+}
+
+.metric-panel__icon {
+	grid-area: icon;
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border: 1px solid rgba(15, 118, 110, 0.24);
+	border-radius: 12px;
+	background:
+		linear-gradient(180deg, rgba(240, 253, 250, 0.95), rgba(223, 247, 243, 0.88));
+	color: var(--ui-primary, #0f766e);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.metric-panel__label {
+	grid-area: label;
+	align-self: end;
+	color: var(--ui-muted, #66737d);
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+
+.metric-panel__value {
+	grid-area: value;
+	color: var(--ui-heading, #0d151b);
+	font-size: 31px;
+	font-weight: 820;
+	line-height: 1;
+	letter-spacing: 0;
+}
+
+.metric-panel__helper {
+	grid-area: helper;
+	color: var(--ui-muted, #66737d);
+	line-height: 1.35;
+}
+
+.metric-panel__action {
+	grid-area: action;
+	justify-self: end;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 24px;
+	padding: 0 8px;
+	border: 1px solid rgba(15, 118, 110, 0.14);
+	border-radius: 999px;
+	background: rgba(240, 253, 250, 0.9);
+	color: var(--ui-primary, #0f766e);
+	font-size: 12px;
+	font-style: normal;
+	font-weight: 800;
+}
+
+.metric-panel.tone-warning {
+	border-color: rgba(181, 71, 8, 0.22);
+	background:
+		linear-gradient(135deg, rgba(251, 146, 60, 0.13), transparent 44%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 244, 0.92));
+}
+
+.metric-panel.tone-warning .metric-panel__icon {
+	border-color: rgba(181, 71, 8, 0.24);
+	background: linear-gradient(180deg, rgba(255, 247, 237, 0.98), rgba(254, 215, 170, 0.55));
+	color: var(--ui-warning, #b54708);
+}
+
+.metric-panel.tone-info {
+	border-color: rgba(36, 107, 134, 0.22);
+	background:
+		linear-gradient(135deg, rgba(14, 165, 233, 0.13), transparent 44%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 251, 253, 0.92));
+}
+
+.metric-panel.tone-info .metric-panel__icon {
+	border-color: rgba(36, 107, 134, 0.24);
+	background: linear-gradient(180deg, rgba(231, 245, 248, 0.98), rgba(186, 230, 253, 0.42));
+	color: var(--ui-info, #246b86);
+}
+
+@media (max-width: 640px) {
+	.metric-panel {
+		min-height: 108px;
+	}
+
+	.metric-panel__value {
+		font-size: 28px;
+	}
+}

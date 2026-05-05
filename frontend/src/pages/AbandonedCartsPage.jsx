@@ -100,7 +100,7 @@ export default function AbandonedCartsPage() {
 			setErrorMessage(
 				error?.response?.data?.error ||
 				error?.response?.data?.message ||
-				'No pudimos cargar los carritos abandonados. Proba nuevamente.'
+				'No pudimos cargar los carritos abandonados. Probá nuevamente.'
 			);
 		} finally {
 			setLoading(false);
@@ -131,7 +131,7 @@ export default function AbandonedCartsPage() {
 			} catch (error) {
 				console.error(error);
 				if (!ignore) {
-					setTemplatesError('No pudimos cargar las plantillas aprobadas.');
+					setTemplatesError('No pudimos cargar las plantillas aprobadas. Probá nuevamente en unos segundos.');
 				}
 			} finally {
 				if (!ignore) {
@@ -225,7 +225,7 @@ export default function AbandonedCartsPage() {
 		const templateId = String(selectedTemplateIds[cart.id] || templates[0]?.id || '').trim();
 
 		if (!templateId) {
-			setErrorMessage('Elegi una plantilla aprobada antes de enviar.');
+			setErrorMessage('Elegí una plantilla aprobada antes de enviar.');
 			return;
 		}
 
@@ -243,7 +243,7 @@ export default function AbandonedCartsPage() {
 			setErrorMessage(
 				error?.response?.data?.error ||
 				error?.response?.data?.message ||
-				'No pudimos enviar la plantilla. Proba nuevamente.'
+				'No pudimos enviar la plantilla. Probá nuevamente.'
 			);
 		} finally {
 			setSendingCartId('');
@@ -289,7 +289,7 @@ export default function AbandonedCartsPage() {
 
 				<div className="inline-actions">
 					<button type="button" onClick={handleSync} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sincronizar 30 días'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar carritos'}
 					</button>
 				</div>
 			</section>
@@ -305,7 +305,7 @@ export default function AbandonedCartsPage() {
 			{syncSummary ? (
 				<div className="sync-summary-banner">
 					<strong>Última sync {syncSummary.daysBack} días</strong>
-					<span>{syncSummary.message || 'Sin resumen disponible.'}</span>
+					<span>{syncSummary.message || 'La sincronización terminó, pero el proveedor no envió un resumen.'}</span>
 					<small>
 						Guardados: {syncSummary.syncedCount} - Eliminados fuera de ventana: {syncSummary.deletedCount} - Vigentes: {syncSummary.remainingCount}
 					</small>
@@ -338,7 +338,7 @@ export default function AbandonedCartsPage() {
 
 			<form className="filters-form abandoned-filters-form" onSubmit={handleApplyFilters}>
 				<label>
-					<span>Buscar</span>
+					<span>Buscar carrito</span>
 					<input
 						type="text"
 						placeholder="Nombre, mail, teléfono, ciudad o checkout"
@@ -377,7 +377,7 @@ export default function AbandonedCartsPage() {
 					</select>
 				</label>
 
-				<button type="submit">Aplicar filtros</button>
+				<button type="submit">Filtrar carritos</button>
 				<button type="button" onClick={handleResetFilters}>
 					Limpiar filtros
 				</button>
@@ -386,12 +386,12 @@ export default function AbandonedCartsPage() {
 			{loading ? (
 				<div className="abandoned-empty-state">
 					<strong>Cargando carritos abandonados</strong>
-					<span>Estamos trayendo la lista actualizada.</span>
+					<span>Estamos actualizando la lista con los últimos carritos.</span>
 				</div>
 			) : carts.length === 0 ? (
 				<div className="abandoned-empty-state">
 					<strong>No hay carritos para mostrar</strong>
-					<span>Probá limpiar los filtros o sincronizar los últimos 30 días.</span>
+					<span>Probá limpiar los filtros o sincronizar carritos para traer oportunidades recientes.</span>
 				</div>
 			) : (
 				<div className="abandoned-carts-grid">
@@ -429,11 +429,11 @@ export default function AbandonedCartsPage() {
 											onClick={() => handleToggleMessageBox(cart)}
 											disabled={sendingCartId === cart.id}
 										>
-											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Preparar mensaje'}
+											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
 										</button>
 									) : (
 										<button type="button" className="primary-action-btn" disabled>
-											Sin teléfono
+											Falta teléfono
 										</button>
 									)}
 
@@ -448,7 +448,7 @@ export default function AbandonedCartsPage() {
 										</a>
 									) : (
 										<button type="button" className="secondary-link-btn" disabled>
-											Sin link
+											Falta link
 										</button>
 									)}
 								</div>
@@ -508,7 +508,7 @@ export default function AbandonedCartsPage() {
 									</label>
 
 									<div className="abandoned-template-note">
-										{templatesError || 'Se envia como template de WhatsApp aprobado por Meta con las variables del carrito.'}
+										{templatesError || 'Se envía una plantilla aprobada por Meta con los datos del carrito.'}
 									</div>
 
 									<div className="abandoned-message-actions">
@@ -526,7 +526,7 @@ export default function AbandonedCartsPage() {
 											onClick={() => handleSendMessage(cart)}
 											disabled={sendingCartId === cart.id || templatesLoading || !templates.length}
 										>
-											{sendingCartId === cart.id ? 'Enviando...' : 'Enviar plantilla'}
+											{sendingCartId === cart.id ? 'Enviando...' : 'Enviar WhatsApp'}
 										</button>
 									</div>
 								</div>

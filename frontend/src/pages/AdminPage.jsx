@@ -211,19 +211,19 @@ function getActivityItems(metrics = {}) {
 			key: 'inbound',
 			label: 'Entrada',
 			value: Number(metrics.messages30dInbound || 0),
-			help: 'Mensajes recibidos por WhatsApp en los ultimos 30 dias.',
+			help: 'Mensajes recibidos por WhatsApp en los últimos 30 días.',
 		},
 		{
 			key: 'outbound',
 			label: 'Salida',
 			value: Number(metrics.messages30dOutbound || 0),
-			help: 'Mensajes enviados por la marca en los ultimos 30 dias.',
+			help: 'Mensajes enviados por la marca en los últimos 30 días.',
 		},
 		{
 			key: 'read',
-			label: 'Leidos',
+			label: 'Leídos',
 			value: Number(metrics.readRecipientsCount || 0),
-			help: 'Destinatarios de campañas que llegaron a estado leido.',
+			help: 'Destinatarios de campañas que llegaron a estado leído.',
 		},
 		{
 			key: 'orders',
@@ -235,7 +235,7 @@ function getActivityItems(metrics = {}) {
 			key: 'conversions',
 			label: 'Conv.',
 			value: Number(metrics.conversionCount || 0),
-			help: 'Ventas o senales de compra atribuidas a mensajes o campañas.',
+			help: 'Ventas o señales de compra atribuidas a mensajes o campañas.',
 		},
 	];
 	const values = items.map((item) => item.value);
@@ -283,11 +283,11 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 
 			<div
 				className="workspace-card-hero metric-help"
-				data-help="Conversiones atribuidas dividido por mensajes enviados en campañas. Sirve para ver que tanto WhatsApp termina en venta o senal de compra."
+				data-help="Conversiones atribuidas divididas por mensajes enviados en campañas. Sirve para ver cuánto WhatsApp termina en venta o señal de compra."
 				title="Conversiones atribuidas / mensajes enviados en campañas."
 			>
 				<div>
-					<span>Conversion por WhatsApp</span>
+					<span>Conversión por WhatsApp</span>
 					<strong>{formatPercent(conversionRate)}</strong>
 					<small>{formatNumber(metrics.conversionCount)} conversiones atribuidas</small>
 				</div>
@@ -301,7 +301,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			<div className="workspace-card-progress">
 				<div
 					className="metric-help"
-					data-help="Porcentaje de mensajes de campaña que Meta marco como entregados sobre el total enviado."
+					data-help="Porcentaje de mensajes de campaña que Meta marcó como entregados sobre el total enviado."
 					title="Mensajes entregados / mensajes enviados."
 				>
 					<span>Entregados</span>
@@ -310,10 +310,10 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 				</div>
 				<div
 					className="metric-help"
-					data-help="Porcentaje de mensajes entregados que llegaron a estado leido."
-					title="Mensajes leidos / mensajes entregados."
+					data-help="Porcentaje de mensajes entregados que llegaron a estado leído."
+					title="Mensajes leídos / mensajes entregados."
 				>
-					<span>Leidos</span>
+					<span>Leídos</span>
 					<strong>{formatPercent(metrics.readRate)}</strong>
 					<i><b style={{ width: `${readWidth}%` }} /></i>
 				</div>
@@ -339,8 +339,8 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 				</div>
 				<div
 					className="workspace-card-chat metric-help"
-					data-help="Suma de mensajes entrantes y salientes de WhatsApp durante los ultimos 30 dias."
-					title="Mensajes WhatsApp de los ultimos 30 dias."
+					data-help="Suma de mensajes entrantes y salientes de WhatsApp durante los últimos 30 días."
+					title="Mensajes WhatsApp de los últimos 30 días."
 				>
 					<span>WhatsApp 30d</span>
 					<strong>{formatNumber(Number(metrics.messages30dInbound || 0) + Number(metrics.messages30dOutbound || 0))}</strong>
@@ -353,7 +353,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			<div className="workspace-card-stats">
 				<div
 					className="metric-help"
-					data-help="Monto de ventas asociado a conversiones detectadas despues de mensajes o campañas."
+					data-help="Monto de ventas asociado a conversiones detectadas después de mensajes o campañas."
 					title="Revenue atribuido a conversiones por WhatsApp."
 				>
 					<span>Ventas atribuidas</span>
@@ -369,7 +369,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 				</div>
 				<div
 					className="metric-help"
-					data-help="Costo estimado de mensajes facturables segun la variable WHATSAPP_ESTIMATED_MESSAGE_COST_USD."
+					data-help="Costo estimado de mensajes facturables según la variable WHATSAPP_ESTIMATED_MESSAGE_COST_USD."
 					title="Mensajes facturables por costo estimado configurado."
 				>
 					<span>Costo est.</span>
@@ -378,9 +378,9 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 				<div
 					className="metric-help"
 					data-help="Mensajes pendientes de lectura interna en conversaciones abiertas."
-					title="Suma de mensajes no leidos en el inbox."
+					title="Suma de mensajes no leídos en el inbox."
 				>
-					<span>No leidos</span>
+					<span>No leídos</span>
 					<strong>{formatNumber(metrics.unreadMessagesCount)}</strong>
 				</div>
 			</div>
@@ -989,11 +989,11 @@ export default function AdminPage({ defaultTab = '' }) {
 							<div>
 								<h3>{platformAdmin ? 'Estadisticas multi-marca' : 'Estadisticas de marca'}</h3>
 								<p>{platformAdmin
-									? 'Resumen visual por marca con actividad de WhatsApp, ventas, campañas y recuperacion.'
-									: 'Resumen visual de WhatsApp, ventas, campañas y recuperacion de esta marca.'}</p>
+									? 'Resumen por marca con actividad de WhatsApp, ventas, campañas y recuperación.'
+									: 'Resumen de WhatsApp, ventas, campañas y recuperación de esta marca.'}</p>
 							</div>
 							{analytics?.activityWindowDays ? (
-								<span>Ultimos {formatNumber(analytics.activityWindowDays)} dias</span>
+								<span>Últimos {formatNumber(analytics.activityWindowDays)} días</span>
 							) : null}
 						</div>
 						<div className="tenant-admin-metrics">
@@ -1021,7 +1021,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						{!analyticsLoading && !(analytics?.workspaces || []).length ? (
 							<div className="tenant-admin-empty">No hay marcas para mostrar.</div>
 						) : null}
-						{analyticsLoading ? <StatusPill>Cargando estadisticas...</StatusPill> : null}
+						{analyticsLoading ? <StatusPill>Cargando estadísticas...</StatusPill> : null}
 					</section>
 				) : null}
 
@@ -1037,7 +1037,7 @@ export default function AdminPage({ defaultTab = '' }) {
 											<strong>{campaign.name}</strong>
 											<span>{campaign.status} - {campaign.templateName}</span>
 											<small>
-												{formatNumber(campaign.sentRecipients)} enviados - {formatNumber(campaign.deliveredRecipients)} entregados - {formatNumber(campaign.readRecipients)} leidos - {formatUsd(campaign.estimatedCostUsd)}
+												{formatNumber(campaign.sentRecipients)} enviados - {formatNumber(campaign.deliveredRecipients)} entregados - {formatNumber(campaign.readRecipients)} leídos - {formatUsd(campaign.estimatedCostUsd)}
 											</small>
 										</div>
 									))}

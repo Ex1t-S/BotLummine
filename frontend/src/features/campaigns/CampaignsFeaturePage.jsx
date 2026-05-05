@@ -306,7 +306,7 @@ function CampaignSchedulesPanel({
 								value={form.templateId}
 								onChange={(event) => updateField('templateId', event.target.value)}
 							>
-								<option value="">Seleccionar template</option>
+								<option value="">Seleccionar plantilla</option>
 								{templates.map((template) => (
 									<option key={template.id} value={template.id}>
 										{template.name} - {template.language} - {template.status}
@@ -588,7 +588,7 @@ export default function CampaignsFeaturePage() {
 			type: 'template',
 			id: template.id,
 			title: 'Eliminar template',
-			message: `Vas a eliminar "${template.name}". Esta accion no se puede deshacer desde la biblioteca local.`,
+			message: `Vas a eliminar "${template.name}" de la biblioteca local. Esta acción no se puede deshacer.`,
 			confirmLabel: 'Eliminar template',
 		});
 	}
@@ -599,7 +599,7 @@ export default function CampaignsFeaturePage() {
 			type: 'campaign',
 			id: campaign.id,
 			title: 'Eliminar campaña',
-			message: `Vas a eliminar "${campaign.name}". Esta accion no se puede deshacer.`,
+			message: `Vas a eliminar "${campaign.name}". Esta acción no se puede deshacer.`,
 			confirmLabel: 'Eliminar campaña',
 		});
 	}
@@ -609,9 +609,9 @@ export default function CampaignsFeaturePage() {
 		setPendingConfirm({
 			type: 'schedule',
 			id: schedule.id,
-			title: 'Eliminar programacion',
-			message: `Vas a eliminar "${schedule.name}". La automatizacion dejara de ejecutarse.`,
-			confirmLabel: 'Eliminar programacion',
+			title: 'Eliminar programación',
+			message: `Vas a eliminar "${schedule.name}". La automatización dejará de ejecutarse.`,
+			confirmLabel: 'Eliminar programación',
 		});
 	}
 

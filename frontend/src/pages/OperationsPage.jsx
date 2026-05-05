@@ -8,7 +8,6 @@ import {
 	MessageCircle,
 	RefreshCw,
 	Send,
-	ShieldCheck,
 	ShoppingCart,
 	WalletCards,
 } from 'lucide-react';
@@ -16,6 +15,7 @@ import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
+import MetricPanel from '../components/ui/MetricPanel.jsx';
 import './OperationsPage.css';
 
 function formatNumber(value) {
@@ -32,44 +32,18 @@ function getWorkspaceName(item = {}) {
 	return item.workspace?.displayName || item.workspace?.name || item.workspace?.slug || 'Marca';
 }
 
-const METRIC_ICONS = {
-	Alertas: AlertTriangle,
-	'Conversaciones 30d': MessageCircle,
-	'Entrada 30d': MessageCircle,
-	'Salida 30d': Send,
-	Comprobantes: WalletCards,
-	'Chats sin leer': MessageCircle,
-	'Campañas activas': Send,
-	'Carritos nuevos': ShoppingCart,
-};
-
 function MetricCard({ label, value, helper, tone = 'neutral', onClick, icon: Icon }) {
-	const MetricIcon = Icon || METRIC_ICONS[label] || ShieldCheck;
-	const content = (
-		<>
-			<div className="operations-metric-icon">
-				<MetricIcon size={17} strokeWidth={2.2} aria-hidden="true" />
-			</div>
-			<span>{label}</span>
-			<strong>{formatNumber(value)}</strong>
-			<small>{helper}</small>
-			{onClick ? (
-				<em>
-					Ver <ArrowRight size={13} strokeWidth={2.4} aria-hidden="true" />
-				</em>
-			) : null}
-		</>
+	return (
+		<MetricPanel
+			label={label}
+			value={value}
+			helper={helper}
+			tone={tone}
+			onClick={onClick}
+			icon={Icon}
+			formatValue={formatNumber}
+		/>
 	);
-
-	if (onClick) {
-		return (
-			<button type="button" className={`operations-metric-card tone-${tone}`} onClick={onClick}>
-				{content}
-			</button>
-		);
-	}
-
-	return <div className={`operations-metric-card tone-${tone}`}>{content}</div>;
 }
 
 function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
@@ -78,7 +52,7 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 			<div className="operations-empty compact">
 				<CheckCircle2 size={18} strokeWidth={2.2} aria-hidden="true" />
 				<strong>Sin alertas abiertas</strong>
-				<span>La marca no tiene tareas críticas para resolver ahora.</span>
+				<span>No hay tareas críticas para resolver en este momento.</span>
 			</div>
 		);
 	}
@@ -221,7 +195,7 @@ export default function OperationsPage() {
 				<div className="operations-empty operations-empty--status">
 					<RefreshCw size={20} strokeWidth={2.2} aria-hidden="true" />
 					<strong>Cargando prioridades operativas</strong>
-					<span>Estamos buscando conversaciones, comprobantes y alertas abiertas.</span>
+					<span>Estamos revisando conversaciones, comprobantes y alertas abiertas.</span>
 				</div>
 			</section>
 		);
@@ -233,7 +207,7 @@ export default function OperationsPage() {
 				<div className="operations-empty error">
 					<AlertTriangle size={20} strokeWidth={2.2} aria-hidden="true" />
 					<strong>No pudimos cargar la operación</strong>
-					<span>Reintenta en unos segundos. Si persiste, revisa la conexión del backend.</span>
+					<span>Probá nuevamente en unos segundos. Si sigue pasando, revisá la conexión del backend.</span>
 				</div>
 			</section>
 		);
@@ -302,7 +276,7 @@ export default function OperationsPage() {
 			{!workspaces.length ? (
 				<div className="operations-empty operations-empty--status">
 					<strong>No hay marcas para mostrar</strong>
-					<span>Cuando exista un workspace activo, sus prioridades aparecerán acá.</span>
+					<span>Cuando haya una marca activa, sus prioridades van a aparecer acá.</span>
 				</div>
 			) : null}
 		</section>

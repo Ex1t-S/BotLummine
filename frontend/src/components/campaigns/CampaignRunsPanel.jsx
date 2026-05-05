@@ -105,7 +105,7 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				failedCount > 0
-					? 'La campaña tuvo fallidos. Podés reintentar solo esos destinatarios.'
+					? 'La campaña tuvo destinatarios fallidos. Podés reintentar solo esos envíos.'
 					: 'No hay destinatarios fallidos ni pendientes para volver a lanzar.',
 		};
 	}
@@ -562,7 +562,7 @@ export default function CampaignRunsPanel({
 											setSearch(event.target.value);
 											setPage(1);
 										}}
-										placeholder="Nombre, telefono o estado"
+										placeholder="Nombre, teléfono o estado"
 									/>
 								</div>
 

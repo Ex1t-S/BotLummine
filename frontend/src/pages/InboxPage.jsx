@@ -63,8 +63,8 @@ const QUICK_EMOJIS = [
 
 const READ_FILTERS = [
 	{ key: 'ALL', label: 'Todos' },
-	{ key: 'UNREAD', label: 'No leidos' },
-	{ key: 'READ', label: 'Leidos' },
+	{ key: 'UNREAD', label: 'No leídos' },
+	{ key: 'READ', label: 'Leídos' },
 ];
 
 const QUEUE_LABELS = {
@@ -113,7 +113,7 @@ function isCompactInboxViewport() {
 	return window.matchMedia('(max-width: 900px)').matches;
 }
 
-function getRequestErrorMessage(error, fallback = 'No se pudo completar la accion.') {
+function getRequestErrorMessage(error, fallback = 'No pudimos completar la acción. Probá nuevamente.') {
 	return (
 		error?.response?.data?.error ||
 		error?.response?.data?.message ||
@@ -1385,7 +1385,7 @@ export default function InboxPage() {
 				<div className="inbox-sidebar-top">
 					<div>
 						<strong>Inbox</strong>
-						<span>{counts.ALL || 0} conversaciones cargadas</span>
+						<span>{counts.ALL || 0} conversaciones en esta vista</span>
 					</div>
 					<button
 						type="button"
@@ -1468,19 +1468,19 @@ export default function InboxPage() {
 					{inboxQuery.isLoading ? (
 						<div className="inbox-empty">
 							<strong>Cargando conversaciones</strong>
-							<span>Estamos sincronizando la bandeja.</span>
+							<span>Estamos actualizando la bandeja con los últimos mensajes.</span>
 						</div>
 					) : null}
 
 					{!inboxQuery.isLoading && !visibleContacts.length ? (
 						<div className="inbox-empty">
-							<strong>No hay conversaciones para mostrar</strong>
+							<strong>No hay conversaciones en esta vista</strong>
 							<span>
 								{normalizedSearch
 									? 'Probá con otro nombre, teléfono o mensaje.'
 									: readFilter === 'UNREAD'
-										? 'No quedan chats no leídos en esta vista.'
-										: 'Cuando entren mensajes nuevos, aparecerán acá.'}
+										? 'No quedan chats sin leer. Cambiá el filtro para ver el resto.'
+										: 'Cuando entren mensajes nuevos, van a aparecer acá.'}
 							</span>
 						</div>
 					) : null}
@@ -1587,7 +1587,7 @@ export default function InboxPage() {
 								Mostrar conversaciones
 							</ActionButton>
 						) : null}
-						Seleccioná una conversación
+						Seleccioná una conversación para ver el historial y responder.
 					</div>
 				) : (
 					<div className="inbox-chat-workspace">
@@ -1715,7 +1715,7 @@ export default function InboxPage() {
 											}
 											onClick={() => {
 												const confirmed = window.confirm(
-													'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
+													'Borrar historial\n\nSe eliminarán los mensajes y el contexto de esta conversación. Esta acción no se puede deshacer.\n\n¿Querés borrar el historial?'
 												);
 
 												if (confirmed) {
@@ -1750,7 +1750,7 @@ export default function InboxPage() {
 								{conversationQuery.isLoading ? (
 									<div className="inbox-empty">
 										<strong>Cargando mensajes</strong>
-										<span>Preparando el historial de esta conversación.</span>
+										<span>Estamos preparando el historial de esta conversación.</span>
 									</div>
 								) : null}
 
@@ -1770,7 +1770,7 @@ export default function InboxPage() {
 								{!conversationQuery.isLoading &&
 								displayedMessages.length === 0 ? (
 									<div className="inbox-empty">
-										Esta conversación todavía no tiene mensajes.
+										Todavía no hay mensajes. Cuando el cliente escriba, el historial va a aparecer acá.
 									</div>
 								) : null}
 
