@@ -818,6 +818,63 @@ body {
 	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
 
+/* Final sidebar color correction */
+
+.admin-shell .admin-sidebar {
+	background: #ffffff !important;
+	color: #1d2433 !important;
+	border-color: #e6eaf2 !important;
+}
+
+.admin-shell .admin-brand {
+	border-bottom-color: #eef1f6 !important;
+}
+
+.admin-shell .admin-brand-copy h1,
+.admin-shell .admin-user-box strong {
+	color: #151b29 !important;
+}
+
+.admin-shell .admin-brand-copy p,
+.admin-shell .admin-user-box span,
+.admin-shell .admin-menu-group-label {
+	color: #7b8496 !important;
+}
+
+.admin-shell .admin-user-box {
+	background: #f7f9fc !important;
+	border-color: #edf1f6 !important;
+}
+
+.admin-shell .admin-menu-link {
+	color: #626d80 !important;
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.admin-shell .admin-menu-link svg {
+	color: #6673a7 !important;
+}
+
+.admin-shell .admin-menu-link:hover,
+.admin-shell .admin-menu-link.active {
+	color: #3157d5 !important;
+	background: #eef2ff !important;
+	border-color: #dfe6ff !important;
+}
+
+.admin-shell .admin-menu-link:hover svg,
+.admin-shell .admin-menu-link.active svg {
+	color: #3157d5 !important;
+}
+
+.admin-shell .logout-btn {
+	background: #ffffff !important;
+	border-color: #e7ebf2 !important;
+	color: #667085 !important;
+}
+
 /* =========================================================
    LIGHT BLUE INTERNAL APP LOCK
    - Reference-inspired final visual layer for the internal app.
