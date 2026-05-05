@@ -64,7 +64,10 @@ export default function AbandonedCartsPage() {
 	const [errorMessage, setErrorMessage] = useState('');
 	const [successMessage, setSuccessMessage] = useState('');
 	const [activeMessageCartId, setActiveMessageCartId] = useState('');
-	const [messageDrafts, setMessageDrafts] = useState({});
+	const [templates, setTemplates] = useState([]);
+	const [templatesLoading, setTemplatesLoading] = useState(true);
+	const [templatesError, setTemplatesError] = useState('');
+	const [selectedTemplateIds, setSelectedTemplateIds] = useState({});
 	const [sendingCartId, setSendingCartId] = useState('');
 	const [data, setData] = useState({
 		carts: [],
@@ -106,6 +109,42 @@ export default function AbandonedCartsPage() {
 
 	useEffect(() => {
 		loadAbandonedCarts(filters);
+	}, []);
+
+	useEffect(() => {
+		let ignore = false;
+
+		async function loadTemplates() {
+			setTemplatesLoading(true);
+			setTemplatesError('');
+
+			try {
+				const res = await api.get('/campaigns/templates');
+				const collection = res.data?.templates || res.data?.items || res.data?.data?.templates || [];
+				const approvedTemplates = collection.filter(
+					(template) => String(template?.status || '').toUpperCase() === 'APPROVED'
+				);
+
+				if (!ignore) {
+					setTemplates(approvedTemplates);
+				}
+			} catch (error) {
+				console.error(error);
+				if (!ignore) {
+					setTemplatesError('No pudimos cargar las plantillas aprobadas.');
+				}
+			} finally {
+				if (!ignore) {
+					setTemplatesLoading(false);
+				}
+			}
+		}
+
+		loadTemplates();
+
+		return () => {
+			ignore = true;
+		};
 	}, []);
 
 	function updateFilter(name, value) {
@@ -176,17 +215,17 @@ export default function AbandonedCartsPage() {
 		}
 
 		setActiveMessageCartId(cart.id);
-		setMessageDrafts((prev) => ({
+		setSelectedTemplateIds((prev) => ({
 			...prev,
-			[cart.id]: prev[cart.id] ?? cart.suggestedMessage ?? ''
+			[cart.id]: prev[cart.id] || templates[0]?.id || ''
 		}));
 	}
 
 	async function handleSendMessage(cart) {
-		const body = String(messageDrafts[cart.id] || '').trim();
+		const templateId = String(selectedTemplateIds[cart.id] || templates[0]?.id || '').trim();
 
-		if (!body) {
-			setErrorMessage('Escribí un mensaje antes de enviarlo.');
+		if (!templateId) {
+			setErrorMessage('Elegi una plantilla aprobada antes de enviar.');
 			return;
 		}
 
@@ -195,8 +234,8 @@ export default function AbandonedCartsPage() {
 		setSuccessMessage('');
 
 		try {
-			await api.post(`/dashboard/abandoned-carts/${cart.id}/message`, { body });
-			setSuccessMessage('Mensaje enviado por WhatsApp.');
+			await api.post(`/dashboard/abandoned-carts/${cart.id}/message`, { templateId });
+			setSuccessMessage('Plantilla enviada por WhatsApp.');
 			setActiveMessageCartId('');
 			await loadAbandonedCarts(filters);
 		} catch (error) {
@@ -204,7 +243,7 @@ export default function AbandonedCartsPage() {
 			setErrorMessage(
 				error?.response?.data?.error ||
 				error?.response?.data?.message ||
-				'No pudimos enviar el mensaje. Probá nuevamente.'
+				'No pudimos enviar la plantilla. Proba nuevamente.'
 			);
 		} finally {
 			setSendingCartId('');
@@ -446,17 +485,31 @@ export default function AbandonedCartsPage() {
 							{activeMessageCartId === cart.id ? (
 								<div className="abandoned-message-box">
 									<label>
-										<span>Mensaje para WhatsApp</span>
-										<textarea
-											value={messageDrafts[cart.id] || ''}
+										<span>Plantilla aprobada de Meta</span>
+										<select
+											value={selectedTemplateIds[cart.id] || templates[0]?.id || ''}
 											onChange={(e) =>
-												setMessageDrafts((prev) => ({
+												setSelectedTemplateIds((prev) => ({
 													...prev,
 													[cart.id]: e.target.value
 												}))
 											}
-										/>
+											disabled={templatesLoading || sendingCartId === cart.id}
+										>
+											<option value="">
+												{templatesLoading ? 'Cargando plantillas...' : 'Seleccionar plantilla'}
+											</option>
+											{templates.map((template) => (
+												<option key={template.id} value={template.id}>
+													{template.name} - {template.language || 'es_AR'}
+												</option>
+											))}
+										</select>
 									</label>
+
+									<div className="abandoned-template-note">
+										{templatesError || 'Se envia como template de WhatsApp aprobado por Meta con las variables del carrito.'}
+									</div>
 
 									<div className="abandoned-message-actions">
 										<button
@@ -471,9 +524,9 @@ export default function AbandonedCartsPage() {
 											type="button"
 											className="primary-action-btn"
 											onClick={() => handleSendMessage(cart)}
-											disabled={sendingCartId === cart.id}
+											disabled={sendingCartId === cart.id || templatesLoading || !templates.length}
 										>
-											{sendingCartId === cart.id ? 'Enviando...' : 'Enviar mensaje'}
+											{sendingCartId === cart.id ? 'Enviando...' : 'Enviar plantilla'}
 										</button>
 									</div>
 								</div>

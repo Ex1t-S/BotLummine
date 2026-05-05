@@ -1,9 +1,18 @@
 import { prisma } from '../lib/prisma.js';
 import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
 import { filterRecoverableAbandonedCarts } from '../services/campaigns/campaign-attribution.service.js';
+import {
+	buildAbandonedCartVariables,
+	buildSendComponentsFromTemplate,
+	ensureApprovedTemplate,
+} from '../services/campaigns/whatsapp-campaign.service.js';
 import { getOrCreateConversation } from '../services/conversation/chat.service.js';
-import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
+import { sendWhatsAppTemplate } from '../services/whatsapp/whatsapp.service.js';
+import {
+	getTemplateOrThrow,
+	renderTemplatePreviewFromComponents,
+} from '../services/whatsapp/whatsapp-template.service.js';
 import {
 	getWorkspaceRuntimeConfig,
 	requireRequestWorkspaceId,
@@ -244,7 +253,14 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 		const workspaceId = requireRequestWorkspaceId(req);
 
 		const { id } = req.params;
-		const { body } = req.body || {};
+		const { templateId } = req.body || {};
+
+		if (!templateId) {
+			return res.status(400).json({
+				ok: false,
+				error: 'ElegÃ­ una plantilla aprobada de Meta para enviar el carrito.'
+			});
+		}
 
 		const cart = await prisma.abandonedCart.findFirst({
 			where: { id, workspaceId }
@@ -265,8 +281,6 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 			});
 		}
 
-		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
-		const messageBody = String(body || '').trim() || buildSuggestedMessageForWorkspace(cart, workspaceConfig);
 		const waId = normalizeThreadPhone(cart.contactPhone);
 
 		if (!waId) {
@@ -276,6 +290,20 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 			});
 		}
 
+		const template = await getTemplateOrThrow(templateId, { workspaceId });
+		ensureApprovedTemplate(template);
+
+		const variables = buildAbandonedCartVariables(cart);
+		const rendered = renderTemplatePreviewFromComponents(
+			template?.rawPayload?.components || [],
+			variables
+		);
+		const componentsToSend = buildSendComponentsFromTemplate({
+			template,
+			renderedComponents: rendered.components,
+			variables
+		});
+
 		const conversation = await getOrCreateConversation({
 			workspaceId,
 			waId,
@@ -284,28 +312,44 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 			aiEnabled: false
 		});
 
-		const waResult = await sendAndPersistOutbound({
-			conversationId: conversation.id,
-			waId,
-			body: messageBody,
-			aiMeta: {
-				provider: 'manual',
-				model: null,
-				raw: {
-					source: 'abandoned-cart-recovery',
-					abandonedCartId: cart.id,
-					checkoutId: cart.checkoutId,
-					normalizedPhone: waId
-				}
-			}
+		const waResult = await sendWhatsAppTemplate({
+			workspaceId,
+			to: waId,
+			templateName: template.name,
+			languageCode: template.language || 'es_AR',
+			components: componentsToSend
 		});
 
 		if (!waResult?.ok) {
 			return res.status(400).json({
 				ok: false,
-				error: 'No se pudo enviar el mensaje'
+				error: waResult?.error?.message || 'No se pudo enviar la plantilla'
 			});
 		}
+
+		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
+		await prisma.message.create({
+			data: {
+				workspaceId,
+				conversationId: conversation.id,
+				metaMessageId: waResult?.rawPayload?.messages?.[0]?.id || null,
+				senderName: workspaceConfig.ai.businessName || 'Marca',
+				direction: 'OUTBOUND',
+				type: 'template',
+				body: rendered.previewText || `[Plantilla ${template.name}]`,
+				provider: 'whatsapp-cloud-api',
+				model: template.name,
+				rawPayload: {
+					...(waResult?.rawPayload || {}),
+					source: 'abandoned-cart-recovery',
+					abandonedCartId: cart.id,
+					checkoutId: cart.checkoutId,
+					templateId: template.id,
+					templateName: template.name,
+					templateLanguage: template.language || 'es_AR'
+				}
+			}
+		});
 
 		await prisma.abandonedCart.update({
 			where: { id },
@@ -328,7 +372,9 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 
 		return res.json({
 			ok: true,
-			conversationId: conversation.id
+			conversationId: conversation.id,
+			templateName: template.name,
+			templateLanguage: template.language || 'es_AR'
 		});
 	} catch (error) {
 		next(error);

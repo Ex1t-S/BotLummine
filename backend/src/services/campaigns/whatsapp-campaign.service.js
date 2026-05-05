@@ -105,7 +105,7 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 	);
 }
 
-function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder = null) {
+export function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder = null) {
 	const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 	const contactName = normalizeString(cart.contactName || contact?.name || '', normalizedPhone);
 	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
@@ -966,7 +966,7 @@ class CampaignDispatchFatalError extends Error {
 	}
 }
 
-function ensureApprovedTemplate(template) {
+export function ensureApprovedTemplate(template) {
 	if (!template) {
 		throw new Error('No se encontró la plantilla de la campaña.');
 	}
@@ -1147,7 +1147,7 @@ function buildButtonComponentsForSend(template = {}, variables = {}) {
 	});
 }
 
-function buildSendComponentsFromTemplate({
+export function buildSendComponentsFromTemplate({
 	template,
 	renderedComponents = [],
 	variables = {}

@@ -158,6 +158,7 @@
 .filters-form button,
 .secondary-link-btn,
 .primary-action-btn,
+.abandoned-message-box select,
 .abandoned-message-box textarea {
 	font: inherit;
 }
@@ -176,6 +177,7 @@
 
 .filters-form input:focus,
 .filters-form select:focus,
+.abandoned-message-box select:focus,
 .abandoned-message-box textarea:focus {
 	outline: none;
 	border-color: #94a3b8;
@@ -410,15 +412,30 @@
 	gap: 6px;
 }
 
+.abandoned-message-box select,
 .abandoned-message-box textarea {
 	width: 100%;
-	min-height: 100px;
-	resize: vertical;
+	min-height: 44px;
 	padding: 12px;
 	border-radius: 12px;
 	border: 1px solid #cbd5e1;
 	background: #ffffff;
 	color: #0f172a;
+}
+
+.abandoned-message-box textarea {
+	min-height: 100px;
+	resize: vertical;
+}
+
+.abandoned-template-note {
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.4;
 }
 
 .abandoned-message-actions {
@@ -1042,6 +1059,7 @@
 
 .filters-form input,
 .filters-form select,
+.abandoned-message-box select,
 .abandoned-message-box textarea {
 	border-color: var(--ui-border, #d7dee5);
 	background: #ffffff;
@@ -1050,6 +1068,7 @@
 
 .filters-form input:focus,
 .filters-form select:focus,
+.abandoned-message-box select:focus,
 .abandoned-message-box textarea:focus {
 	border-color: var(--ui-primary, #0f766e);
 	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
