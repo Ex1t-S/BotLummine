@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import api from '../lib/api.js';
+import api, { resolveApiUrl } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPlatformAdminUser } from '../lib/authz.js';
 import { PageHeader } from '../components/ui/InternalPage.jsx';
@@ -412,6 +412,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [catalogStatus, setCatalogStatus] = useState(null);
 	const [analytics, setAnalytics] = useState(null);
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
+	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [notice, setNotice] = useState('');
@@ -551,6 +552,10 @@ export default function AdminPage({ defaultTab = '' }) {
 	useEffect(() => {
 		if (workspace) selectCommerceConnection(workspace, commerceProvider);
 	}, [commerceProvider]);
+
+	useEffect(() => {
+		setBrandLogoFailed(false);
+	}, [workspaceForm.branding?.logoUrl]);
 
 	function showNotice(message) {
 		setNotice(message);
@@ -763,6 +768,10 @@ export default function AdminPage({ defaultTab = '' }) {
 		});
 	}
 
+	const brandName = workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca';
+	const brandStoreUrl = workspace?.storeInstallations?.[0]?.storeUrl || workspace?.commerceConnections?.[0]?.storeUrl || '';
+	const brandLogoUrl = resolveApiUrl(workspaceForm.branding?.logoUrl || '');
+
 	return (
 		<div className="tenant-admin-page">
 			<PageHeader
@@ -839,15 +848,18 @@ export default function AdminPage({ defaultTab = '' }) {
 						) : (
 							<div className="tenant-admin-brand-summary">
 								<div className="tenant-admin-brand-logo-box">
-									{workspaceForm.branding?.logoUrl ? (
-										<img src={workspaceForm.branding.logoUrl} alt={workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca'} />
+									{brandLogoUrl && !brandLogoFailed ? (
+										<img src={brandLogoUrl} alt={brandName} onError={() => setBrandLogoFailed(true)} />
 									) : (
-										<span>Sin logo</span>
+										<span>{getInitials(brandName)}</span>
 									)}
 								</div>
 								<div className="tenant-admin-brand-copy">
-									<strong>{workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca'}</strong>
-									<span>{workspace?.storeInstallations?.[0]?.storeUrl || workspace?.commerceConnections?.[0]?.storeUrl || 'Tienda Nube sin URL sincronizada'}</span>
+									<strong>{brandName}</strong>
+									<span>{brandStoreUrl || 'Tienda Nube sin URL sincronizada'}</span>
+									<button type="button" disabled={saving || loading} onClick={handleBrandingSync}>
+										{saving ? 'Importando...' : 'Importar logo Tienda Nube'}
+									</button>
 								</div>
 							</div>
 						)}

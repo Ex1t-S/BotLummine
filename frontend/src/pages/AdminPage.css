@@ -275,6 +275,13 @@
 	min-width: 0;
 }
 
+.tenant-admin-brand-copy button {
+	justify-self: start;
+	margin-top: 6px;
+	padding: 8px 10px;
+	font-size: 12px;
+}
+
 .tenant-admin-brand-copy strong,
 .tenant-admin-brand-copy span {
 	overflow: hidden;
