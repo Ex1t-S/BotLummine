@@ -1298,3 +1298,86 @@
 		scrollbar-gutter: auto;
 	}
 }
+
+/* Dark mode: admin, analytics and settings lazy CSS loads after global.css */
+.dark .admin-shell .admin-content .tenant-admin-header,
+.dark .admin-shell .admin-content .tenant-admin-panel,
+.dark .admin-shell .admin-content .tenant-admin-tabs,
+.dark .admin-shell .admin-content .tenant-admin-user-row,
+.dark .admin-shell .admin-content .tenant-admin-list-row,
+.dark .admin-shell .admin-content .tenant-admin-empty,
+.dark .admin-shell .admin-content .tenant-admin-table-wrap,
+.dark .admin-shell .admin-content .tenant-admin-brand-logo-box,
+.dark .admin-shell .admin-content .workspace-analytics-card,
+.dark .admin-shell .admin-content .workspace-card-hero,
+.dark .admin-shell .admin-content .workspace-card-progress > div,
+.dark .admin-shell .admin-content .workspace-card-stats > div,
+.dark .admin-shell .admin-content .workspace-card-chart,
+.dark .admin-shell .admin-content .workspace-card-chat {
+	background: var(--ui-surface, #141c2b) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-tabs,
+.dark .admin-shell .admin-content .workspace-card-hero,
+.dark .admin-shell .admin-content .workspace-card-progress > div,
+.dark .admin-shell .admin-content .workspace-card-stats > div,
+.dark .admin-shell .admin-content .workspace-card-chart {
+	background: var(--ui-surface-soft, #192234) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-header h2,
+.dark .admin-shell .admin-content .tenant-admin-panel h3,
+.dark .admin-shell .admin-content .workspace-card-brand strong,
+.dark .admin-shell .admin-content .workspace-card-hero strong,
+.dark .admin-shell .admin-content .workspace-card-stats strong,
+.dark .admin-shell .admin-content .tenant-admin-list-row strong,
+.dark .admin-shell .admin-content .tenant-admin-table td strong {
+	color: var(--ui-heading, #f7f9ff) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-header p,
+.dark .admin-shell .admin-content .tenant-admin-panel-heading p,
+.dark .admin-shell .admin-content .workspace-card-brand span,
+.dark .admin-shell .admin-content .workspace-card-hero small,
+.dark .admin-shell .admin-content .workspace-card-chat small,
+.dark .admin-shell .admin-content .tenant-admin-list-row span,
+.dark .admin-shell .admin-content .tenant-admin-table td span,
+.dark .admin-shell .admin-content .admin-field span {
+	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-tabs button,
+.dark .admin-shell .admin-content .tenant-admin-actions button,
+.dark .admin-shell .admin-content .tenant-admin-user-row button,
+.dark .admin-shell .admin-content .tenant-admin-grid button[type="button"] {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-tabs button.active,
+.dark .admin-shell .admin-content .tenant-admin-panel-heading > span,
+.dark .admin-shell .admin-content .tenant-admin-pill,
+.dark .admin-shell .admin-content .workspace-card-status {
+	background: var(--ui-primary-muted, #182549) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong, #a6bbff) !important;
+}
+
+.dark .admin-shell .admin-content .admin-field input,
+.dark .admin-shell .admin-content .admin-field select,
+.dark .admin-shell .admin-content .admin-field textarea {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-table th,
+.dark .admin-shell .admin-content .tenant-admin-table tbody tr:hover,
+.dark .admin-shell .admin-content .tenant-admin-table tbody tr.selected {
+	background: var(--ui-surface-soft, #192234) !important;
+	color: var(--ui-muted, #a5b0c3) !important;
+}

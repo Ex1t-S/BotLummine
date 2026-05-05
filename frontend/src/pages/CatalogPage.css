@@ -444,3 +444,57 @@
 	background: rgba(240, 253, 250, 0.88);
 	color: var(--ui-primary-strong, #0a5f59);
 }
+
+/* Dark mode: catalog lazy CSS loads after global.css */
+.dark .admin-shell .admin-content .catalog-search-form,
+.dark .admin-shell .admin-content .catalog-sync-controls,
+.dark .admin-shell .admin-content .catalog-card,
+.dark .admin-shell .admin-content .catalog-state,
+.dark .admin-shell .admin-content .catalog-empty-state {
+	background: var(--ui-surface, #141c2b) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.dark .admin-shell .admin-content .catalog-card {
+	background:
+		radial-gradient(circle at 88% 10%, rgba(124, 156, 255, 0.13), transparent 28%),
+		var(--ui-surface, #141c2b) !important;
+}
+
+.dark .admin-shell .admin-content .catalog-search-form input,
+.dark .admin-shell .admin-content .catalog-sync-controls select {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .catalog-card h3,
+.dark .admin-shell .admin-content .catalog-card > strong,
+.dark .admin-shell .admin-content .catalog-state strong,
+.dark .admin-shell .admin-content .catalog-empty-state strong {
+	color: var(--ui-heading, #f7f9ff) !important;
+}
+
+.dark .admin-shell .admin-content .catalog-card p,
+.dark .admin-shell .admin-content .catalog-state,
+.dark .admin-shell .admin-content .catalog-empty-state,
+.dark .admin-shell .admin-content .catalog-thumb-empty {
+	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+.dark .admin-shell .admin-content .catalog-thumb,
+.dark .admin-shell .admin-content .catalog-thumb-empty {
+	background:
+		linear-gradient(rgba(232, 237, 247, 0.035) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(232, 237, 247, 0.025) 1px, transparent 1px),
+		var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+}
+
+.dark .admin-shell .admin-content .catalog-card > strong {
+	background: var(--ui-primary-muted, #182549) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong, #a6bbff) !important;
+}

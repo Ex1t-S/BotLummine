@@ -1652,3 +1652,115 @@
 	background: var(--ui-primary, #0f766e);
 	color: #ffffff;
 }
+
+/* Dark mode: customers lazy CSS loads after global.css */
+.dark .admin-shell .admin-content .customers-hero-card,
+.dark .admin-shell .admin-content .customers-sync-panel,
+.dark .admin-shell .admin-content .customers-filters-card,
+.dark .admin-shell .admin-content .customers-list-card,
+.dark .admin-shell .admin-content .customers-stat-card,
+.dark .admin-shell .admin-content .customer-card,
+.dark .admin-shell .admin-content .customers-sync-stats > div,
+.dark .admin-shell .admin-content .customer-meta-chip,
+.dark .admin-shell .admin-content .customer-section-box,
+.dark .admin-shell .admin-content .customer-total-box,
+.dark .admin-shell .admin-content .product-multiselect,
+.dark .admin-shell .admin-content .customers-empty-state {
+	background: var(--ui-surface, #141c2b) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.dark .admin-shell .admin-content .customers-sync-stats > div,
+.dark .admin-shell .admin-content .customer-meta-chip,
+.dark .admin-shell .admin-content .customer-section-box,
+.dark .admin-shell .admin-content .customer-total-box,
+.dark .admin-shell .admin-content .product-multiselect,
+.dark .admin-shell .admin-content .product-option-empty {
+	background: var(--ui-surface-soft, #192234) !important;
+}
+
+.dark .admin-shell .admin-content .customers-hero-copy h1,
+.dark .admin-shell .admin-content .customers-list-topbar h3,
+.dark .admin-shell .admin-content .customers-sync-top h3,
+.dark .admin-shell .admin-content .customers-stat-card strong,
+.dark .admin-shell .admin-content .customer-identity-copy h4,
+.dark .admin-shell .admin-content .customer-total-box strong,
+.dark .admin-shell .admin-content .customer-meta-chip strong,
+.dark .admin-shell .admin-content .customer-footer-row strong {
+	color: var(--ui-heading, #f7f9ff) !important;
+}
+
+.dark .admin-shell .admin-content .customers-hero-copy p,
+.dark .admin-shell .admin-content .customers-list-topbar p,
+.dark .admin-shell .admin-content .customers-sync-top p,
+.dark .admin-shell .admin-content .customers-sync-window,
+.dark .admin-shell .admin-content .customer-identity-copy p,
+.dark .admin-shell .admin-content .customer-footer-row,
+.dark .admin-shell .admin-content .customer-products-empty,
+.dark .admin-shell .admin-content .customers-stat-label,
+.dark .admin-shell .admin-content .customers-filter-group label,
+.dark .admin-shell .admin-content .customer-total-box span,
+.dark .admin-shell .admin-content .customer-meta-chip span,
+.dark .admin-shell .admin-content .customer-order-badge span,
+.dark .admin-shell .admin-content .customer-payment-badge span {
+	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+.dark .admin-shell .admin-content .customers-filter-group input,
+.dark .admin-shell .admin-content .customers-filter-group select,
+.dark .admin-shell .admin-content .product-multiselect-search,
+.dark .admin-shell .admin-content .customers-product-toggle {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .secondary-link-btn,
+.dark .admin-shell .admin-content .customers-visibility-btn,
+.dark .admin-shell .admin-content .pagination-btn,
+.dark .admin-shell .admin-content .pagination-page-btn {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .customers-active-filter-badge,
+.dark .admin-shell .admin-content .customer-order-badge,
+.dark .admin-shell .admin-content .selected-product-chip {
+	background: var(--ui-primary-muted, #182549) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong, #a6bbff) !important;
+}
+
+.dark .admin-shell .admin-content .customer-payment-badge.is-paid {
+	background: var(--ui-success-soft, #123426) !important;
+	border-color: rgba(91, 216, 160, 0.32) !important;
+	color: var(--ui-success, #5bd8a0) !important;
+}
+
+.dark .admin-shell .admin-content .customer-payment-badge.is-authorized {
+	background: var(--ui-info-soft, #182744) !important;
+	border-color: rgba(140, 181, 255, 0.32) !important;
+	color: var(--ui-info, #8cb5ff) !important;
+}
+
+.dark .admin-shell .admin-content .customer-payment-badge.is-pending {
+	background: var(--ui-warning-soft, #372712) !important;
+	border-color: rgba(255, 196, 107, 0.34) !important;
+	color: var(--ui-warning, #ffc46b) !important;
+}
+
+.dark .admin-shell .admin-content .customer-payment-badge.is-refunded {
+	background: var(--ui-danger-soft, #3b1d22) !important;
+	border-color: rgba(255, 141, 133, 0.34) !important;
+	color: var(--ui-danger, #ff8d85) !important;
+}
+
+.dark .admin-shell .admin-content .customer-payment-badge.is-abandoned,
+.dark .admin-shell .admin-content .customer-payment-badge.is-neutral {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-muted, #a5b0c3) !important;
+}

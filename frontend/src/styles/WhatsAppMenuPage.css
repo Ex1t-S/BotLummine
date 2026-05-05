@@ -975,3 +975,98 @@
 		gap: 12px;
 	}
 }
+
+/* Dark mode: WhatsApp menu lazy CSS loads after global.css */
+.dark .admin-shell .admin-content .wam-page {
+	--wam-bg: var(--ui-bg, #0d1320);
+	--wam-card: var(--ui-surface, #141c2b);
+	--wam-card-soft: var(--ui-surface-soft, #192234);
+	--wam-border: var(--ui-border, #29354a);
+	--wam-border-strong: var(--ui-border-strong, #3a4860);
+	--wam-text: var(--ui-text, #e8edf7);
+	--wam-text-soft: var(--ui-muted, #a5b0c3);
+	--wam-title: var(--ui-heading, #f7f9ff);
+	--wam-accent: var(--ui-primary-strong, #a6bbff);
+	--wam-accent-soft: var(--ui-primary-muted, #182549);
+}
+
+.dark .admin-shell .admin-content .wam-empty,
+.dark .admin-shell .admin-content .wam-hero,
+.dark .admin-shell .admin-content .wam-card,
+.dark .admin-shell .admin-content .wam-alert,
+.dark .admin-shell .admin-content .wam-menu-item,
+.dark .admin-shell .admin-content .wam-option-card,
+.dark .admin-shell .admin-content .wam-advanced,
+.dark .admin-shell .admin-content .wam-phone,
+.dark .admin-shell .admin-content .wam-phone__bubble,
+.dark .admin-shell .admin-content .wam-phone__option,
+.dark .admin-shell .admin-content .wam-phone__button {
+	background: var(--ui-surface, #141c2b) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.dark .admin-shell .admin-content .wam-phone,
+.dark .admin-shell .admin-content .wam-phone__screen,
+.dark .admin-shell .admin-content .wam-menu-list,
+.dark .admin-shell .admin-content .wam-option-card__content {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .wam-hero h1,
+.dark .admin-shell .admin-content .wam-section-head h2,
+.dark .admin-shell .admin-content .wam-sidebar__header h2,
+.dark .admin-shell .admin-content .wam-editor__header h2,
+.dark .admin-shell .admin-content .wam-preview__header h2,
+.dark .admin-shell .admin-content .wam-menu-item strong,
+.dark .admin-shell .admin-content .wam-option-card__summary-main strong,
+.dark .admin-shell .admin-content .wam-block__header h3,
+.dark .admin-shell .admin-content .wam-advanced summary,
+.dark .admin-shell .admin-content .wam-phone__top strong,
+.dark .admin-shell .admin-content .wam-phone__option strong {
+	color: var(--ui-heading, #f7f9ff) !important;
+}
+
+.dark .admin-shell .admin-content .wam-hero p,
+.dark .admin-shell .admin-content .wam-section-head p,
+.dark .admin-shell .admin-content .wam-editor__header p,
+.dark .admin-shell .admin-content .wam-preview__header p,
+.dark .admin-shell .admin-content .wam-menu-item p,
+.dark .admin-shell .admin-content .wam-option-card__summary-main p,
+.dark .admin-shell .admin-content .wam-form-grid label > span,
+.dark .admin-shell .admin-content .wam-phone__top span,
+.dark .admin-shell .admin-content .wam-phone__bubble p,
+.dark .admin-shell .admin-content .wam-phone__bubble small,
+.dark .admin-shell .admin-content .wam-phone__option span {
+	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+.dark .admin-shell .admin-content .wam-form-grid input,
+.dark .admin-shell .admin-content .wam-form-grid select,
+.dark .admin-shell .admin-content .wam-form-grid textarea {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .wam-hero__eyebrow,
+.dark .admin-shell .admin-content .wam-section-label,
+.dark .admin-shell .admin-content .wam-menu-item__index,
+.dark .admin-shell .admin-content .wam-option-card__eyebrow,
+.dark .admin-shell .admin-content .wam-pill,
+.dark .admin-shell .admin-content .wam-chip,
+.dark .admin-shell .admin-content .wam-phone__avatar,
+.dark .admin-shell .admin-content .wam-phone__button {
+	background: var(--ui-primary-muted, #182549) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong, #a6bbff) !important;
+}
+
+.dark .admin-shell .admin-content .wam-button--secondary {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}

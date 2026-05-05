@@ -1118,3 +1118,71 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* Dark mode: abandoned carts lazy CSS loads after global.css */
+.dark .admin-shell .admin-content .abandoned-carts-page .page-header,
+.dark .admin-shell .admin-content .abandoned-carts-page .filters-form,
+.dark .admin-shell .admin-content .abandoned-carts-page .stat-box,
+.dark .admin-shell .admin-content .abandoned-card,
+.dark .admin-shell .admin-content .abandoned-meta-grid div,
+.dark .admin-shell .admin-content .abandoned-card-focus > div,
+.dark .admin-shell .admin-content .abandoned-products,
+.dark .admin-shell .admin-content .abandoned-contact-note,
+.dark .admin-shell .admin-content .abandoned-message-box,
+.dark .admin-shell .admin-content .abandoned-empty-state {
+	background: var(--ui-surface, #141c2b) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.dark .admin-shell .admin-content .abandoned-card-focus > div,
+.dark .admin-shell .admin-content .abandoned-products,
+.dark .admin-shell .admin-content .abandoned-meta-grid div {
+	background: var(--ui-surface-soft, #192234) !important;
+}
+
+.dark .admin-shell .admin-content .abandoned-carts-page .page-header h2,
+.dark .admin-shell .admin-content .stat-box strong,
+.dark .admin-shell .admin-content .abandoned-head-copy h3,
+.dark .admin-shell .admin-content .abandoned-card-focus strong,
+.dark .admin-shell .admin-content .abandoned-meta-grid strong,
+.dark .admin-shell .admin-content .abandoned-contact-note strong,
+.dark .admin-shell .admin-content .abandoned-empty-state strong {
+	color: var(--ui-heading, #f7f9ff) !important;
+}
+
+.dark .admin-shell .admin-content .abandoned-carts-page .page-header p,
+.dark .admin-shell .admin-content .stat-box span,
+.dark .admin-shell .admin-content .abandoned-head-copy p,
+.dark .admin-shell .admin-content .abandoned-card-focus span,
+.dark .admin-shell .admin-content .abandoned-meta-grid span,
+.dark .admin-shell .admin-content .abandoned-contact-note,
+.dark .admin-shell .admin-content .abandoned-empty-state,
+.dark .admin-shell .admin-content .pagination-ellipsis {
+	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+.dark .admin-shell .admin-content .abandoned-carts-page input,
+.dark .admin-shell .admin-content .abandoned-carts-page select,
+.dark .admin-shell .admin-content .abandoned-carts-page textarea {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .abandoned-carts-page .secondary-link-btn,
+.dark .admin-shell .admin-content .abandoned-carts-page .inline-actions button,
+.dark .admin-shell .admin-content .abandoned-carts-page .pagination-row button {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .abandoned-products span,
+.dark .admin-shell .admin-content .abandoned-avatar,
+.dark .admin-shell .admin-content .status-badge {
+	background: var(--ui-primary-muted, #182549) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong, #a6bbff) !important;
+}
