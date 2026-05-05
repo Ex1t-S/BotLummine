@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, Search } from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
+import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import './CatalogPage.css';
 
 function useDebouncedValue(value, delay = 350) {
@@ -74,23 +76,21 @@ export default function CatalogPage() {
 
 	return (
 		<section className="page-card">
-			<div className="page-header">
-				<div>
-					<span className="catalog-header-kicker">Inventario conectado</span>
-					<h2>Catálogo comercial</h2>
-					<p><strong>{data.total}</strong> productos sincronizados para búsqueda y campañas.</p>
-				</div>
-
+			<PageHeader
+				eyebrow="Inventario conectado"
+				title="Catálogo comercial"
+				description={`${data.total} productos sincronizados para búsqueda y campañas.`}
+			>
 				<div className="catalog-sync-controls">
 					<select value={provider} onChange={(event) => setProvider(event.target.value)}>
 						<option value="TIENDANUBE">Tiendanube</option>
 						<option value="SHOPIFY">Shopify</option>
 					</select>
-					<button onClick={() => syncMutation.mutate()} disabled={syncing} type="button">
-						{syncing ? 'Sincronizando...' : 'Sincronizar catálogo'}
-					</button>
+					<ActionButton onClick={() => syncMutation.mutate()} disabled={syncing} icon={RefreshCw}>
+						{syncing ? 'Sincronizando' : 'Sincronizar catálogo'}
+					</ActionButton>
 				</div>
-			</div>
+			</PageHeader>
 
 			<form onSubmit={handleSearch} className="catalog-search-form">
 				<input
@@ -102,21 +102,25 @@ export default function CatalogPage() {
 					}}
 					placeholder="Buscar producto, marca, SKU o etiqueta"
 				/>
-				<button type="submit">Buscar productos</button>
+				<ActionButton type="submit" icon={Search}>Buscar productos</ActionButton>
 			</form>
 
 			{loading ? (
-				<div className="catalog-state">
-					<strong>Cargando catálogo</strong>
-					<span>Estamos trayendo productos, marcas e imágenes disponibles.</span>
-				</div>
+				<EmptyState
+					tone="loading"
+					title="Cargando catálogo"
+					description="Estamos trayendo productos, marcas e imágenes disponibles."
+					className="catalog-state"
+				/>
 			) : null}
 
 			{catalogQuery.isError ? (
-				<div className="catalog-state catalog-state--error">
-					<strong>No pudimos cargar el catálogo</strong>
-					<span>Probá nuevamente en unos segundos o verificá la integración activa.</span>
-				</div>
+				<EmptyState
+					tone="error"
+					title="No pudimos cargar el catálogo"
+					description="Probá nuevamente en unos segundos o verificá la integración activa."
+					className="catalog-state catalog-state--error"
+				/>
 			) : null}
 
 			{hasItems ? (
@@ -141,10 +145,11 @@ export default function CatalogPage() {
 					))}
 				</div>
 			) : !loading && !catalogQuery.isError ? (
-				<div className="catalog-empty-state">
-					<strong>No encontramos productos</strong>
-					<span>Probá otra búsqueda o sincronizá el proveedor para actualizar el inventario.</span>
-				</div>
+				<EmptyState
+					title="No encontramos productos"
+					description="Probá otra búsqueda o sincronizá el proveedor para actualizar el inventario."
+					className="catalog-empty-state"
+				/>
 			) : null}
 
 			{data.totalPages > 1 ? (

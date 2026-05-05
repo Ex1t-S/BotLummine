@@ -818,6 +818,374 @@ body {
 	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
 
+/* =========================================================
+   INTERNAL MODERN LOCK
+   - Capa final del panel interno. No toca login.
+   - Neutraliza overrides decorativos previos y unifica cajas.
+========================================================= */
+
+.admin-shell {
+	--ui-bg: #f3f6f8;
+	--ui-surface: #ffffff;
+	--ui-surface-soft: #f8fafc;
+	--ui-surface-muted: #eef3f6;
+	--ui-border: #d8e0e8;
+	--ui-border-strong: #bdc8d4;
+	--ui-text: #172027;
+	--ui-heading: #0c141c;
+	--ui-muted: #637282;
+	--ui-subtle: #8c9aaa;
+	--ui-primary: #0f766e;
+	--ui-primary-strong: #0a5f59;
+	--ui-primary-muted: #eefbf8;
+	--ui-info: #21697f;
+	--ui-info-soft: #e9f6fa;
+	--ui-success: #067647;
+	--ui-success-soft: #edfdf4;
+	--ui-warning: #b54708;
+	--ui-warning-soft: #fff7ed;
+	--ui-danger: #b42318;
+	--ui-danger-soft: #fff4f2;
+	--ui-radius-xs: 6px;
+	--ui-radius-sm: 8px;
+	--ui-radius-md: 10px;
+	--ui-radius-lg: 12px;
+	--ui-radius-xl: 14px;
+	--ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+	--ui-shadow-md: 0 8px 18px rgba(16, 24, 40, 0.07);
+	--ui-shadow-lg: 0 16px 34px rgba(16, 24, 40, 0.09);
+	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
+	background: var(--ui-bg);
+	color: var(--ui-text);
+}
+
+.admin-content {
+	background:
+		linear-gradient(180deg, #f8fafc 0, var(--ui-bg) 260px),
+		var(--ui-bg);
+}
+
+.admin-content .page-card,
+.admin-content .internal-page-header,
+.admin-content .tenant-admin-header,
+.admin-content .tenant-admin-panel,
+.admin-content .customers-hero-card,
+.admin-content .customers-sync-panel,
+.admin-content .customers-filters-card,
+.admin-content .customers-list-card,
+.admin-content .customers-stat-card,
+.admin-content .customer-card,
+.admin-content .abandoned-card,
+.admin-content .stat-box,
+.admin-content .catalog-card,
+.admin-content .campaign-shell-card,
+.admin-content .campaigns-hero,
+.admin-content .campaigns-tab-shell,
+.admin-content .campaign-custom-audience-card,
+.admin-content .campaign-schedule-card,
+.admin-content .wam-card,
+.admin-content .wam-hero,
+.admin-content .ai-lab-sidebar-card,
+.admin-content .ai-lab-chat-card,
+.admin-content .ai-lab-debug-card,
+.admin-content .ai-lab-card,
+.admin-content .operations-header,
+.admin-content .operations-workspace-card,
+.admin-content .inbox-sidebar,
+.admin-content .inbox-chat-panel,
+.admin-content .inbox-contact-card,
+.admin-content .inbox-composer-shell,
+.admin-content .metric-panel {
+	position: relative;
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-lg);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
+	overflow: hidden;
+}
+
+.admin-content .page-card::before,
+.admin-content .page-card::after,
+.admin-content .tenant-admin-panel::before,
+.admin-content .tenant-admin-panel::after,
+.admin-content .customers-hero-card::before,
+.admin-content .customers-hero-card::after,
+.admin-content .customers-sync-panel::before,
+.admin-content .customers-sync-panel::after,
+.admin-content .customers-filters-card::before,
+.admin-content .customers-filters-card::after,
+.admin-content .customers-list-card::before,
+.admin-content .customers-list-card::after,
+.admin-content .customers-stat-card::before,
+.admin-content .customers-stat-card::after,
+.admin-content .customer-card::before,
+.admin-content .customer-card::after,
+.admin-content .abandoned-card::before,
+.admin-content .abandoned-card::after,
+.admin-content .stat-box::before,
+.admin-content .stat-box::after,
+.admin-content .catalog-card::before,
+.admin-content .catalog-card::after,
+.admin-content .campaign-shell-card::before,
+.admin-content .campaign-shell-card::after,
+.admin-content .campaigns-hero::before,
+.admin-content .campaigns-hero::after,
+.admin-content .campaigns-tab-shell::before,
+.admin-content .campaigns-tab-shell::after,
+.admin-content .wam-card::before,
+.admin-content .wam-card::after,
+.admin-content .wam-hero::before,
+.admin-content .wam-hero::after,
+.admin-content .ai-lab-sidebar-card::before,
+.admin-content .ai-lab-sidebar-card::after,
+.admin-content .ai-lab-chat-card::before,
+.admin-content .ai-lab-chat-card::after,
+.admin-content .ai-lab-debug-card::before,
+.admin-content .ai-lab-debug-card::after,
+.admin-content .operations-header::before,
+.admin-content .operations-header::after,
+.admin-content .operations-workspace-card::before,
+.admin-content .operations-workspace-card::after,
+.admin-content .inbox-sidebar::before,
+.admin-content .inbox-sidebar::after,
+.admin-content .inbox-chat-panel::before,
+.admin-content .inbox-chat-panel::after {
+	content: none;
+}
+
+.admin-content .page-card,
+.admin-content .tenant-admin-page,
+.admin-content .customers-page,
+.admin-content .abandoned-carts-page,
+.admin-content .catalog-page,
+.admin-content .operations-page,
+.admin-content .wam-page,
+.admin-content .ai-lab-page {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.admin-content .page-card {
+	padding: 16px;
+}
+
+.admin-content .page-header,
+.admin-content .tenant-admin-header,
+.admin-content .customers-hero-card,
+.admin-content .abandoned-carts-page .page-header,
+.admin-content .campaigns-hero,
+.admin-content .wam-hero,
+.admin-content .operations-header {
+	border-color: var(--ui-border);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.admin-content h1,
+.admin-content h2,
+.admin-content h3 {
+	color: var(--ui-heading);
+	letter-spacing: 0;
+}
+
+.admin-content p,
+.admin-content .muted-text,
+.admin-content .page-header p,
+.admin-content .internal-page-header p,
+.admin-content .tenant-admin-header p,
+.admin-content .customers-hero-card p,
+.admin-content .operations-header p,
+.admin-content .wam-hero p,
+.admin-content .ai-lab-sidebar-header p {
+	color: var(--ui-muted);
+	line-height: 1.5;
+}
+
+.admin-content button,
+.admin-content input,
+.admin-content select,
+.admin-content textarea {
+	letter-spacing: 0;
+}
+
+.admin-content input,
+.admin-content select,
+.admin-content textarea {
+	min-height: 40px;
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-sm);
+	background: #ffffff;
+	color: var(--ui-text);
+	box-shadow: none;
+}
+
+.admin-content input:focus,
+.admin-content select:focus,
+.admin-content textarea:focus {
+	border-color: var(--ui-primary);
+	box-shadow: var(--ui-focus);
+	outline: none;
+}
+
+.admin-content .inline-actions button,
+.admin-content .page-header button,
+.admin-content .catalog-search-form button,
+.admin-content .primary-action-btn,
+.admin-content .customers-apply-btn,
+.admin-content .tenant-admin-grid button,
+.admin-content .tenant-admin-actions button,
+.admin-content .filters-form button,
+.admin-content .button.primary,
+.admin-content .wam-button--primary,
+.admin-content .ai-lab-primary-btn,
+.admin-content .ai-lab-chat-form button,
+.admin-content .inbox-send-btn,
+.admin-content .operations-header-actions button,
+.admin-content .operations-issue button {
+	min-height: 40px;
+	border: 1px solid var(--ui-primary-strong);
+	border-radius: var(--ui-radius-sm);
+	background: var(--ui-primary);
+	color: #ffffff;
+	font-weight: 680;
+	box-shadow: none;
+	transform: none;
+}
+
+.admin-content .inline-actions button:hover:not(:disabled),
+.admin-content .page-header button:hover:not(:disabled),
+.admin-content .catalog-search-form button:hover:not(:disabled),
+.admin-content .primary-action-btn:hover:not(:disabled),
+.admin-content .customers-apply-btn:hover:not(:disabled),
+.admin-content .tenant-admin-grid button:hover:not(:disabled),
+.admin-content .tenant-admin-actions button:hover:not(:disabled),
+.admin-content .filters-form button:hover:not(:disabled),
+.admin-content .button.primary:hover:not(:disabled),
+.admin-content .wam-button--primary:hover:not(:disabled),
+.admin-content .ai-lab-primary-btn:hover:not(:disabled),
+.admin-content .ai-lab-chat-form button:hover:not(:disabled),
+.admin-content .inbox-send-btn:hover:not(:disabled),
+.admin-content .operations-header-actions button:hover:not(:disabled),
+.admin-content .operations-issue button:hover:not(:disabled) {
+	background: var(--ui-primary-strong);
+	border-color: var(--ui-primary-strong);
+	box-shadow: var(--ui-shadow-sm);
+	transform: none;
+}
+
+.admin-content .secondary-link-btn,
+.admin-content .tenant-admin-grid button[type="button"],
+.admin-content .toolbar-group button,
+.admin-content .pagination-btn,
+.admin-content .pagination-page-btn,
+.admin-content .button.ghost,
+.admin-content .button.secondary,
+.admin-content .wam-button--secondary,
+.admin-content .ai-lab-secondary-btn,
+.admin-content .inbox-action-btn,
+.admin-content .operations-header-actions button.secondary,
+.admin-content .internal-action-btn.is-secondary {
+	border: 1px solid var(--ui-border);
+	background: #ffffff;
+	color: var(--ui-text);
+	box-shadow: none;
+}
+
+.admin-content .secondary-link-btn:hover:not(:disabled),
+.admin-content .tenant-admin-grid button[type="button"]:hover:not(:disabled),
+.admin-content .toolbar-group button:hover:not(:disabled),
+.admin-content .pagination-btn:hover:not(:disabled),
+.admin-content .pagination-page-btn:hover:not(:disabled),
+.admin-content .button.ghost:hover:not(:disabled),
+.admin-content .button.secondary:hover:not(:disabled),
+.admin-content .wam-button--secondary:hover:not(:disabled),
+.admin-content .ai-lab-secondary-btn:hover:not(:disabled),
+.admin-content .inbox-action-btn:hover:not(:disabled),
+.admin-content .operations-header-actions button.secondary:hover:not(:disabled),
+.admin-content .internal-action-btn.is-secondary:hover:not(:disabled) {
+	border-color: var(--ui-border-strong);
+	background: var(--ui-surface-soft);
+	transform: none;
+}
+
+.admin-content .catalog-card,
+.admin-content .customer-card,
+.admin-content .abandoned-card,
+.admin-content .customers-stat-card,
+.admin-content .stat-box,
+.admin-content .workspace-analytics-card,
+.admin-content .wam-card,
+.admin-content .ai-lab-debug-item,
+.admin-content .metric-panel {
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.admin-content .catalog-card:hover,
+.admin-content .customer-card:hover,
+.admin-content .abandoned-card:hover,
+.admin-content .customers-stat-card:hover,
+.admin-content .stat-box:hover,
+.admin-content .workspace-analytics-card:hover,
+.admin-content .wam-card:hover,
+.admin-content .ai-lab-debug-item:hover,
+.admin-content .metric-panel:hover {
+	border-color: var(--ui-border-strong);
+	box-shadow: var(--ui-shadow-md);
+	transform: none;
+}
+
+.admin-content .catalog-thumb,
+.admin-content .catalog-thumb-empty {
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-md);
+	background: var(--ui-surface-muted);
+}
+
+.admin-content .tenant-admin-pill,
+.admin-content .queue-pill,
+.admin-content .campaign-badge,
+.admin-content .campaign-schedule-status,
+.admin-content .ai-lab-chip,
+.admin-content .status-badge,
+.admin-content .wam-chip,
+.admin-content .wam-pill,
+.admin-content .customer-payment-badge,
+.admin-content .inbox-badge,
+.admin-content .customers-active-filter-badge {
+	border: 1px solid var(--ui-border);
+	border-radius: 999px;
+	background: var(--ui-surface-soft);
+	color: var(--ui-text);
+	font-size: 11px;
+	font-weight: 720;
+	letter-spacing: 0;
+}
+
+.admin-content .empty-state,
+.admin-content .tenant-admin-empty,
+.admin-content .inbox-empty,
+.admin-content .abandoned-empty-state,
+.admin-content .campaign-custom-audience-empty,
+.admin-content .customers-empty-state,
+.admin-content .operations-empty,
+.admin-content .wam-empty {
+	border: 1px dashed var(--ui-border-strong);
+	border-radius: var(--ui-radius-lg);
+	background: rgba(255, 255, 255, 0.86);
+	color: var(--ui-muted);
+}
+
+@media (max-width: 720px) {
+	.admin-content {
+		padding: 10px;
+	}
+
+	.admin-content .page-card {
+		padding: 12px;
+	}
+}
+
 /* Futuristic internal surface layer */
 
 :root {

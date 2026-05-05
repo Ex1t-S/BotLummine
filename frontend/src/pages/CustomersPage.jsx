@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, X } from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
+import { ActionButton, PageHeader } from '../components/ui/InternalPage.jsx';
 import './CustomersPage.css';
 
 const DEFAULT_PAGE_SIZE = 24;
@@ -456,23 +458,19 @@ export default function CustomersPage() {
 
 	return (
 		<section className="customers-page">
-			<div className="customers-hero-card">
-				<div className="customers-hero-copy">
-					<span className="customers-kicker">VENTAS REALES</span>
-					<h1>Clientes y compras</h1>
-					<p>
-						Pedidos reales, clientes y productos comprados en una vista para buscar oportunidades
-						sin perder el estado de sincronización.
-					</p>
-				</div>
-
+			<PageHeader
+				className="customers-hero-card"
+				eyebrow="Ventas reales"
+				title="Clientes y compras"
+				description="Pedidos reales, clientes y productos comprados en una vista para buscar oportunidades sin perder el estado de sincronización."
+			>
 				<div className="customers-hero-actions">
-					<button type="button" className="primary-action-btn" onClick={handleSync} disabled={syncing}>
-						{syncing ? 'Sincronizando pedidos...' : 'Sincronizar pedidos'}
-					</button>
-					<button type="button" className="secondary-link-btn" onClick={handleResetFilters}>
+					<ActionButton className="primary-action-btn" onClick={handleSync} disabled={syncing} icon={RefreshCw}>
+						{syncing ? 'Sincronizando pedidos' : 'Sincronizar pedidos'}
+					</ActionButton>
+					<ActionButton variant="secondary" className="secondary-link-btn" onClick={handleResetFilters} icon={X}>
 						Limpiar filtros{activeFilterCount ? ` (${activeFilterCount})` : ''}
-					</button>
+					</ActionButton>
 					<button
 						type="button"
 						className="customers-visibility-btn"
@@ -484,7 +482,7 @@ export default function CustomersPage() {
 						<span>{billingVisible ? 'Ocultar montos' : 'Mostrar montos'}</span>
 					</button>
 				</div>
-			</div>
+			</PageHeader>
 
 			{errorMessage ? <div className="customers-feedback customers-feedback--error">{errorMessage}</div> : null}
 

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { RotateCcw, Save } from 'lucide-react';
 import api from '../lib/api.js';
+import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import '../styles/WhatsAppMenuPage.css';
 
 const ACTION_TYPES = [
@@ -356,7 +358,12 @@ export default function WhatsAppMenuPage() {
 	if (loading) {
 		return (
 			<div className="wam-page">
-				<div className="wam-empty">Cargando editor de menú...</div>
+				<EmptyState
+					tone="loading"
+					title="Cargando editor de menú"
+					description="Estamos trayendo la configuración activa de WhatsApp."
+					className="wam-empty"
+				/>
 			</div>
 		);
 	}
@@ -364,38 +371,39 @@ export default function WhatsAppMenuPage() {
 	if (!config) {
 		return (
 			<div className="wam-page">
-				<div className="wam-empty">No hay configuración para mostrar.</div>
+				<EmptyState
+					title="No hay configuración para mostrar"
+					description="Creá o restaurá una configuración para editar el menú inicial."
+					className="wam-empty"
+				/>
 			</div>
 		);
 	}
 
 	return (
 		<div className="wam-page">
-			<section className="wam-hero">
-				<div className="wam-hero__content">
-					<span className="wam-hero__eyebrow">Automatización · WhatsApp</span>
-					<h1>Editor de menú</h1>
-					<p>
-						Editá el menú principal, los submenús y el flujo de cada opción con una interfaz más simple y
-						clara.
-					</p>
-				</div>
-
+			<PageHeader
+				className="wam-hero"
+				eyebrow="Automatización · WhatsApp"
+				title="Editor de menú"
+				description="Editá el menú principal, los submenús y el flujo de cada opción con una interfaz clara."
+			>
 				<div className="wam-hero__actions">
-					<button
-						type="button"
+					<ActionButton
+						variant="secondary"
 						className="wam-button wam-button--secondary"
 						onClick={handleReset}
 						disabled={saving}
+						icon={RotateCcw}
 					>
 						Restaurar default
-					</button>
+					</ActionButton>
 
-					<button type="button" className="wam-button wam-button--primary" onClick={handleSave} disabled={saving}>
-						{saving ? 'Guardando...' : 'Guardar cambios'}
-					</button>
+					<ActionButton className="wam-button wam-button--primary" onClick={handleSave} disabled={saving} icon={Save}>
+						{saving ? 'Guardando' : 'Guardar cambios'}
+					</ActionButton>
 				</div>
-			</section>
+			</PageHeader>
 
 			<section className="wam-card wam-topbar">
 				<div className="wam-section-head">

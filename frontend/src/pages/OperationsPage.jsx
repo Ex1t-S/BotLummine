@@ -15,6 +15,7 @@ import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
+import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import MetricPanel from '../components/ui/MetricPanel.jsx';
 import './OperationsPage.css';
 
@@ -192,11 +193,12 @@ export default function OperationsPage() {
 	if (summaryQuery.isLoading) {
 		return (
 			<section className="operations-page">
-				<div className="operations-empty operations-empty--status">
-					<RefreshCw size={20} strokeWidth={2.2} aria-hidden="true" />
-					<strong>Cargando prioridades operativas</strong>
-					<span>Estamos revisando conversaciones, comprobantes y alertas abiertas.</span>
-				</div>
+				<EmptyState
+					tone="loading"
+					title="Cargando prioridades operativas"
+					description="Estamos revisando conversaciones, comprobantes y alertas abiertas."
+					className="operations-empty operations-empty--status"
+				/>
 			</section>
 		);
 	}
@@ -204,42 +206,44 @@ export default function OperationsPage() {
 	if (summaryQuery.isError) {
 		return (
 			<section className="operations-page">
-				<div className="operations-empty error">
-					<AlertTriangle size={20} strokeWidth={2.2} aria-hidden="true" />
-					<strong>No pudimos cargar la operación</strong>
-					<span>Probá nuevamente en unos segundos. Si sigue pasando, revisá la conexión del backend.</span>
-				</div>
+				<EmptyState
+					tone="error"
+					icon={AlertTriangle}
+					title="No pudimos cargar la operación"
+					description="Probá nuevamente en unos segundos. Si sigue pasando, revisá la conexión del backend."
+					className="operations-empty error"
+				/>
 			</section>
 		);
 	}
 
 	return (
 		<section className="operations-page">
-			<header className="operations-header">
-				<div>
-					<span className="operations-eyebrow">
-						{platformAdmin ? 'Operación multi marca' : 'Operación diaria'}
-					</span>
-					<h2>{platformAdmin ? 'Prioridades de la plataforma' : getWorkspaceName(primaryWorkspace)}</h2>
-					<p>
-						{platformAdmin
-							? 'Control de marcas con alertas, conversaciones pendientes y salud operativa.'
-							: 'Prioriza comprobantes, chats y oportunidades que requieren acción hoy.'}
-					</p>
-				</div>
+			<PageHeader
+				className="operations-header"
+				eyebrow={platformAdmin ? 'Operación multi marca' : 'Operación diaria'}
+				title={platformAdmin ? 'Prioridades de la plataforma' : getWorkspaceName(primaryWorkspace)}
+				description={
+					platformAdmin
+						? 'Control de marcas con alertas, conversaciones pendientes y salud operativa.'
+						: 'Priorizá comprobantes, chats y oportunidades que requieren acción hoy.'
+				}
+			>
 				<div className="operations-header-actions">
-					<button type="button" onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching}>
-						<RefreshCw size={15} strokeWidth={2.3} aria-hidden="true" />
-						<span>{summaryQuery.isFetching ? 'Actualizando...' : 'Actualizar'}</span>
-					</button>
+					<ActionButton onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching} icon={RefreshCw}>
+						{summaryQuery.isFetching ? 'Actualizando' : 'Actualizar'}
+					</ActionButton>
 					{isAdmin ? (
-						<button type="button" className="secondary" onClick={() => goTo(platformAdmin ? '/admin' : '/campaigns/tracking')}>
-							<span>{platformAdmin ? 'Admin plataforma' : 'Ver campañas'}</span>
-							<ArrowRight size={15} strokeWidth={2.3} aria-hidden="true" />
-						</button>
+						<ActionButton
+							variant="secondary"
+							onClick={() => goTo(platformAdmin ? '/admin' : '/campaigns/tracking')}
+							icon={ArrowRight}
+						>
+							{platformAdmin ? 'Abrir admin' : 'Ver campañas'}
+						</ActionButton>
 					) : null}
 				</div>
-			</header>
+			</PageHeader>
 
 			<div className="operations-summary-strip">
 				<MetricCard label="Alertas" value={summary.openIssuesCount} helper="Problemas o tareas detectadas" tone={summary.openIssuesCount ? 'warning' : 'neutral'} icon={AlertTriangle} />
@@ -274,10 +278,11 @@ export default function OperationsPage() {
 			</div>
 
 			{!workspaces.length ? (
-				<div className="operations-empty operations-empty--status">
-					<strong>No hay marcas para mostrar</strong>
-					<span>Cuando haya una marca activa, sus prioridades van a aparecer acá.</span>
-				</div>
+				<EmptyState
+					title="No hay marcas para mostrar"
+					description="Cuando haya una marca activa, sus prioridades van a aparecer acá."
+					className="operations-empty operations-empty--status"
+				/>
 			) : null}
 		</section>
 	);

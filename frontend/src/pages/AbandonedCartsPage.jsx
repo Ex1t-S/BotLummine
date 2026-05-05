@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import api from '../lib/api.js';
+import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
 import './AbandonedCartsPage.css';
 
 const initialFilters = {
@@ -279,20 +281,17 @@ export default function AbandonedCartsPage() {
 
 	return (
 		<div className="abandoned-carts-page">
-			<section className="page-header">
-				<div>
-					<h2>Carritos abandonados</h2>
-					<p>
-						<strong>{stats.total || 0}</strong> carritos en los últimos 30 días. Se conserva el estado de los ya contactados por campañas.
-					</p>
-				</div>
-
+			<PageHeader
+				className="page-header"
+				title="Carritos abandonados"
+				description={`${stats.total || 0} carritos en los últimos 30 días. Se conserva el estado de los ya contactados por campañas.`}
+			>
 				<div className="inline-actions">
-					<button type="button" onClick={handleSync} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sincronizar carritos'}
-					</button>
+					<ActionButton onClick={handleSync} disabled={syncing} icon={RefreshCw}>
+						{syncing ? 'Sincronizando' : 'Sincronizar carritos'}
+					</ActionButton>
 				</div>
-			</section>
+			</PageHeader>
 
 			{errorMessage ? (
 				<div className="abandoned-feedback abandoned-feedback--error">{errorMessage}</div>
@@ -384,15 +383,18 @@ export default function AbandonedCartsPage() {
 			</form>
 
 			{loading ? (
-				<div className="abandoned-empty-state">
-					<strong>Cargando carritos abandonados</strong>
-					<span>Estamos actualizando la lista con los últimos carritos.</span>
-				</div>
+				<EmptyState
+					tone="loading"
+					title="Cargando carritos abandonados"
+					description="Estamos actualizando la lista con los últimos carritos."
+					className="abandoned-empty-state"
+				/>
 			) : carts.length === 0 ? (
-				<div className="abandoned-empty-state">
-					<strong>No hay carritos para mostrar</strong>
-					<span>Probá limpiar los filtros o sincronizar carritos para traer oportunidades recientes.</span>
-				</div>
+				<EmptyState
+					title="No hay carritos para mostrar"
+					description="Probá limpiar los filtros o sincronizar carritos para traer oportunidades recientes."
+					className="abandoned-empty-state"
+				/>
 			) : (
 				<div className="abandoned-carts-grid">
 					{carts.map((cart) => (
@@ -406,13 +408,14 @@ export default function AbandonedCartsPage() {
 									{cart.contactEmail ? <p>{cart.contactEmail}</p> : null}
 								</div>
 
-								<span
+								<StatusBadge
+									tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
 									className={`status-badge ${
 										cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
 									}`}
 								>
 									{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
-								</span>
+								</StatusBadge>
 							</div>
 
 							<div className="abandoned-card-focus">

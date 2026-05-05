@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPlatformAdminUser } from '../lib/authz.js';
+import { PageHeader } from '../components/ui/InternalPage.jsx';
 import './AdminPage.css';
 
 const EMPTY_WORKSPACE_FORM = {
@@ -761,15 +762,15 @@ export default function AdminPage({ defaultTab = '' }) {
 
 	return (
 		<div className="tenant-admin-page">
-			<header className="tenant-admin-header">
-				<div>
-					<h2>{platformAdmin ? 'Admin plataforma' : 'Configuracion de marca'}</h2>
-					<p>
-						{platformAdmin
-							? (workspace?.name || 'Marcas, integraciones y auditoria')
-							: (workspace?.name || 'Branding, contenido y agentes de la marca')}
-					</p>
-				</div>
+			<PageHeader
+				className="tenant-admin-header"
+				title={platformAdmin ? 'Admin plataforma' : 'Configuración de marca'}
+				description={
+					platformAdmin
+						? (workspace?.name || 'Marcas, integraciones y auditoría')
+						: (workspace?.name || 'Branding, contenido y agentes de la marca')
+				}
+			>
 				{workspaceOptions.length ? (
 					<Select label="Workspace" value={selectedWorkspaceId} onChange={setSelectedWorkspaceId}>
 						{workspaceOptions.map((item) => (
@@ -779,7 +780,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						))}
 					</Select>
 				) : null}
-			</header>
+			</PageHeader>
 
 			{notice ? <div className="tenant-admin-alert success">{notice}</div> : null}
 			{error ? <div className="tenant-admin-alert error">{error}</div> : null}
