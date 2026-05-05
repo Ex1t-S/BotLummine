@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
 	BarChart3,
-	Bot,
 	Boxes,
 	Building2,
 	ChevronRight,
@@ -55,11 +54,6 @@ const PAGE_META = [
 		match: (pathname) => pathname.startsWith('/whatsapp-menu'),
 		title: 'Menú de WhatsApp',
 		description: 'Opciones guiadas y respuestas iniciales.',
-	},
-	{
-		match: (pathname) => pathname.startsWith('/ai-lab'),
-		title: 'AI Lab',
-		description: 'Pruebas de respuesta, tono y recomendaciones.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/admin'),
@@ -215,7 +209,6 @@ export default function DashboardLayout() {
 							<NavGroup label="Marketing">
 								<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')}>Campañas</NavItem>
 								<NavItem to="/analytics" icon={BarChart3}>Estadísticas</NavItem>
-								<NavItem to="/ai-lab" icon={Bot}>AI Lab</NavItem>
 							</NavGroup>
 						</>
 					) : null}

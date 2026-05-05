@@ -14,7 +14,6 @@ const CatalogPage = lazy(() => import('./pages/CatalogPage.jsx'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
 const AbandonedCartsPage = lazy(() => import('./pages/AbandonedCartsPage.jsx'));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx'));
-const AiLabPage = lazy(() => import('./pages/AiLabPage.jsx'));
 const WhatsAppMenuPage = lazy(() => import('./pages/WhatsAppMenuPage.jsx'));
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
 const OperationsPage = lazy(() => import('./pages/OperationsPage.jsx'));
@@ -146,13 +145,7 @@ export default function App() {
 				/>
 				<Route
 					path="ai-lab"
-					element={
-						<ProtectedRoute allowedRoles={['ADMIN']}>
-							<Suspense fallback={<PageLoader />}>
-								<AiLabPage />
-							</Suspense>
-						</ProtectedRoute>
-					}
+					element={<Navigate to="/operations" replace />}
 				/>
 			</Route>
 		</Routes>
