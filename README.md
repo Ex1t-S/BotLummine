@@ -141,6 +141,7 @@ Recomendado para producción:
 - Diagnostico operativo opcional: `npm run jobs:diagnose`, schedule `0 */6 * * *`
 - guia de workers/cron: `docs/railway-cron.md`
 - hardening env: `LOG_LEVEL=info`, `DEBUG_EXTERNAL_PAYLOADS=false`, `HEALTHCHECK_DB=false`
+- CORS del panel: configurar `FRONTEND_URL` o `FRONTEND_URL_PROD` con el dominio exacto del frontend. Para varios dominios, usar `CORS_ALLOWED_ORIGINS=https://panel.example.com,https://preview.example.com`
 - timeouts env: `META_GRAPH_TIMEOUT_MS`, `WHATSAPP_SEND_TIMEOUT_MS`, `TIENDANUBE_TIMEOUT_MS`, `ENBOX_TIMEOUT_MS`, `AI_PROVIDER_TIMEOUT_MS`
 - `WHATSAPP_DRY_RUN=false`
 - rotación de logs

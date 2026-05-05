@@ -23,16 +23,24 @@ dotenv.config();
 const app = express();
 app.set('trust proxy', 1);
 
+function parseOriginList(value) {
+	return String(value || '')
+		.split(',')
+		.map(normalizeOrigin)
+		.filter(Boolean);
+}
+
 const allowedOrigins = [
 	'http://localhost:5173',
 	'http://127.0.0.1:5173',
 	'http://localhost:3000',
 	'http://127.0.0.1:3000',
 	process.env.FRONTEND_URL,
-	process.env.FRONTEND_URL_PROD
+	process.env.FRONTEND_URL_PROD,
+	...parseOriginList(process.env.CORS_ALLOWED_ORIGINS)
 ]
 	.filter(Boolean)
-	.map((value) => value.replace(/\/+$/, ''));
+	.map(normalizeOrigin);
 
 function normalizeOrigin(origin) {
 	return String(origin || '').trim().replace(/\/+$/, '');
@@ -44,6 +52,13 @@ function isAllowedOrigin(origin) {
 	const normalizedOrigin = normalizeOrigin(origin);
 
 	if (allowedOrigins.includes(normalizedOrigin)) {
+		return true;
+	}
+
+	if (
+		process.env.NODE_ENV !== 'production' &&
+		/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)
+	) {
 		return true;
 	}
 
@@ -132,7 +147,8 @@ app.use('/api/whatsapp-menu', whatsappMenuRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use((err, req, res, _next) => {
-	const status = err.status || err.statusCode || 500;
+	const isCorsOriginError = err.message?.startsWith('Origen no permitido por CORS');
+	const status = isCorsOriginError ? 403 : err.status || err.statusCode || 500;
 	logger.error('http.unhandled_error', {
 		requestId: req.requestId || null,
 		method: req.method,
@@ -141,7 +157,7 @@ app.use((err, req, res, _next) => {
 		error: err,
 	});
 
-	if (err.message?.startsWith('Origen no permitido por CORS')) {
+	if (isCorsOriginError) {
 		return res.status(403).json({
 			ok: false,
 			error: 'Origen no permitido por CORS',
