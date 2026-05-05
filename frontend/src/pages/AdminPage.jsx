@@ -393,7 +393,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 export default function AdminPage({ defaultTab = '' }) {
 	useInternalDarkOverrides();
 
-	const { user } = useAuth();
+	const { user, refreshMe } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);
 	const visibleTabs = platformAdmin ? platformTabs : brandAdminTabs;
 	const [activeTab, setActiveTab] = useState(defaultTab || (platformAdmin ? 'workspaces' : 'brand'));
@@ -750,6 +750,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			const nextWorkspace = res.data.workspace || null;
 			setWorkspace(nextWorkspace);
 			setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
+			await refreshMe();
 			showNotice('Branding importado desde Tienda Nube.');
 		} catch (err) {
 			showError(err);

@@ -18,6 +18,7 @@ import {
 	Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { resolveApiUrl } from '../lib/api.js';
 import './DashboardLayout.css';
 import logoBladeIA from '../assets/bladeia-logo.svg';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
@@ -109,6 +110,7 @@ export default function DashboardLayout() {
 	const contentRef = useRef(null);
 	const lastScrollTopRef = useRef(0);
 	const [topbarHidden, setTopbarHidden] = useState(false);
+	const [logoFailed, setLogoFailed] = useState(false);
 	const darkMode = resolvedTheme === 'dark';
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
@@ -116,7 +118,7 @@ export default function DashboardLayout() {
 	const brandName = isPlatformAdmin
 		? 'Admin plataforma'
 		: (workspace?.aiConfig?.businessName || workspace?.name || 'Marca');
-	const logoUrl = workspace?.branding?.logoUrl || logoBladeIA;
+	const logoUrl = resolveApiUrl(workspace?.branding?.logoUrl || '') || logoBladeIA;
 	const basePageMeta = getPageMeta(location.pathname);
 	const pageMeta = isPlatformAdmin && location.pathname.startsWith('/admin')
 		? {
@@ -132,6 +134,10 @@ export default function DashboardLayout() {
 			contentRef.current.scrollTop = 0;
 		}
 	}, [location.pathname]);
+
+	useEffect(() => {
+		setLogoFailed(false);
+	}, [logoUrl]);
 
 	function updateTopbarForScroll(scrollTop) {
 		const previousScrollTop = lastScrollTopRef.current;
@@ -178,7 +184,12 @@ export default function DashboardLayout() {
 			<aside className="admin-sidebar">
 				<div className="admin-brand">
 					<div className="admin-brand-mark admin-brand-mark--logo">
-						<img src={logoUrl} alt={brandName} className="admin-brand-logo" />
+						<img
+							src={logoFailed ? logoBladeIA : logoUrl}
+							alt={brandName}
+							className="admin-brand-logo"
+							onError={() => setLogoFailed(true)}
+						/>
 					</div>
 
 					<div className="admin-brand-copy">
