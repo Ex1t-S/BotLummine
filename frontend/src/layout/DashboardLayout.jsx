@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useTheme } from 'next-themes';
 import {
 	BarChart3,
 	Boxes,
@@ -9,9 +10,11 @@ import {
 	LayoutDashboard,
 	LogOut,
 	MessageSquareText,
+	Moon,
 	Settings,
 	ShoppingBag,
 	ShoppingCart,
+	Sun,
 	Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -101,10 +104,12 @@ function NavItem({ to, icon: Icon, children, className }) {
 export default function DashboardLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
+	const { resolvedTheme, setTheme } = useTheme();
 	const { user, logout } = useAuth();
 	const contentRef = useRef(null);
 	const lastScrollTopRef = useRef(0);
 	const [topbarHidden, setTopbarHidden] = useState(false);
+	const darkMode = resolvedTheme === 'dark';
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
 	const workspace = user?.workspace || null;
@@ -162,6 +167,10 @@ export default function DashboardLayout() {
 		} catch (error) {
 			console.error(error);
 		}
+	}
+
+	function handleThemeToggle() {
+		setTheme(darkMode ? 'light' : 'dark');
 	}
 
 	return (
@@ -242,9 +251,24 @@ export default function DashboardLayout() {
 						<h2>{pageMeta.title}</h2>
 						<p>{pageMeta.description}</p>
 					</div>
-					<div className="admin-topbar-user" aria-label="Usuario actual">
-						<strong>{user?.name || user?.email || 'Usuario'}</strong>
-						<span>{isPlatformAdmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : 'AGENTE')}</span>
+					<div className="admin-topbar-actions">
+						<button
+							type="button"
+							className="admin-theme-toggle"
+							onClick={handleThemeToggle}
+							aria-label={darkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+							title={darkMode ? 'Modo claro' : 'Modo oscuro'}
+						>
+							{darkMode ? (
+								<Sun size={16} strokeWidth={2.2} aria-hidden="true" />
+							) : (
+								<Moon size={16} strokeWidth={2.2} aria-hidden="true" />
+							)}
+						</button>
+						<div className="admin-topbar-user" aria-label="Usuario actual">
+							<strong>{user?.name || user?.email || 'Usuario'}</strong>
+							<span>{isPlatformAdmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : 'AGENTE')}</span>
+						</div>
 					</div>
 				</header>
 

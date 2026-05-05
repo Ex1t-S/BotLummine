@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')).render(
 	<React.StrictMode>
-		<ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+		<ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
 			<QueryClientProvider client={queryClient}>
 				<BrowserRouter>
 					<AuthProvider>

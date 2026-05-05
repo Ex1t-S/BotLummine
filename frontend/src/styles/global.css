@@ -818,6 +818,298 @@ body {
 	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
 
+/* Dashboard dark mode */
+
+.dark .admin-shell {
+	--ui-bg: #0d1320;
+	--ui-surface: #141c2b;
+	--ui-surface-soft: #192234;
+	--ui-surface-muted: #202b3d;
+	--ui-border: #29354a;
+	--ui-border-strong: #3a4860;
+	--ui-text: #e8edf7;
+	--ui-heading: #f7f9ff;
+	--ui-muted: #a5b0c3;
+	--ui-subtle: #758298;
+	--ui-primary: #7c9cff;
+	--ui-primary-strong: #a6bbff;
+	--ui-primary-soft: #1d2b54;
+	--ui-primary-muted: #182549;
+	--ui-info: #8cb5ff;
+	--ui-info-soft: #182744;
+	--ui-success: #5bd8a0;
+	--ui-success-soft: #123426;
+	--ui-warning: #ffc46b;
+	--ui-warning-soft: #372712;
+	--ui-danger: #ff8d85;
+	--ui-danger-soft: #3b1d22;
+	--ui-shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.2);
+	--ui-shadow-md: 0 20px 48px rgba(0, 0, 0, 0.28);
+	--ui-shadow-lg: 0 30px 76px rgba(0, 0, 0, 0.34);
+	--ui-focus: 0 0 0 4px rgba(124, 156, 255, 0.18);
+	background:
+		radial-gradient(circle at 50% -20%, rgba(77, 103, 176, 0.2), transparent 36%),
+		#0a0f1a !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-sidebar,
+.dark .admin-shell .admin-main,
+.dark .admin-shell .admin-topbar,
+.dark .admin-shell .admin-content .page-card,
+.dark .admin-shell .admin-content .internal-page-header,
+.dark .admin-shell .admin-content .tenant-admin-header,
+.dark .admin-shell .admin-content .tenant-admin-panel,
+.dark .admin-shell .admin-content .customers-hero-card,
+.dark .admin-shell .admin-content .customers-sync-panel,
+.dark .admin-shell .admin-content .customers-filters-card,
+.dark .admin-shell .admin-content .customers-list-card,
+.dark .admin-shell .admin-content .customers-stat-card,
+.dark .admin-shell .admin-content .customer-card,
+.dark .admin-shell .admin-content .abandoned-card,
+.dark .admin-shell .admin-content .stat-box,
+.dark .admin-shell .admin-content .catalog-card,
+.dark .admin-shell .admin-content .campaign-shell-card,
+.dark .admin-shell .admin-content .campaigns-hero,
+.dark .admin-shell .admin-content .campaigns-tab-shell,
+.dark .admin-shell .admin-content .campaign-custom-audience-card,
+.dark .admin-shell .admin-content .campaign-schedule-card,
+.dark .admin-shell .admin-content .wam-card,
+.dark .admin-shell .admin-content .wam-hero,
+.dark .admin-shell .admin-content .operations-header,
+.dark .admin-shell .admin-content .operations-workspace-card,
+.dark .admin-shell .admin-content .inbox-sidebar,
+.dark .admin-shell .admin-content .inbox-chat-panel,
+.dark .admin-shell .admin-content .inbox-contact-card,
+.dark .admin-shell .admin-content .inbox-composer-shell,
+.dark .admin-shell .admin-content .metric-panel {
+	border-color: var(--ui-border) !important;
+	background: var(--ui-surface) !important;
+	color: var(--ui-text) !important;
+	box-shadow: var(--ui-shadow-sm) !important;
+}
+
+.dark .admin-shell .admin-sidebar {
+	border-right-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-main {
+	border-left-color: transparent !important;
+}
+
+.dark .admin-shell .admin-content {
+	background:
+		linear-gradient(180deg, #101827 0, #0d1320 270px),
+		#0d1320 !important;
+}
+
+.dark .admin-shell .admin-topbar {
+	background: rgba(20, 28, 43, 0.9) !important;
+	border-bottom-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-brand {
+	border-bottom-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-brand-mark--logo {
+	border-color: var(--ui-border) !important;
+	background: #ffffff !important;
+}
+
+.dark .admin-shell .admin-brand-copy h1,
+.dark .admin-shell .admin-user-box strong,
+.dark .admin-shell .admin-topbar-user strong,
+.dark .admin-shell .admin-topbar h2,
+.dark .admin-shell .admin-content h1,
+.dark .admin-shell .admin-content h2,
+.dark .admin-shell .admin-content h3,
+.dark .admin-shell .admin-content strong {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-brand-copy p,
+.dark .admin-shell .admin-user-box span,
+.dark .admin-shell .admin-menu-group-label,
+.dark .admin-shell .admin-topbar-user span,
+.dark .admin-shell .admin-topbar p,
+.dark .admin-shell .admin-content p,
+.dark .admin-shell .admin-content .muted-text,
+.dark .admin-shell .admin-content small {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-user-box,
+.dark .admin-shell .admin-topbar-user,
+.dark .admin-shell .admin-theme-toggle,
+.dark .admin-shell .logout-btn {
+	border-color: var(--ui-border) !important;
+	background: var(--ui-surface-soft) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-theme-toggle {
+	color: var(--ui-primary) !important;
+}
+
+.dark .admin-shell .admin-theme-toggle:hover,
+.dark .admin-shell .logout-btn:hover {
+	border-color: var(--ui-border-strong) !important;
+	background: var(--ui-primary-muted) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-menu-link {
+	color: #b7c2d5 !important;
+	background: transparent !important;
+	border-color: transparent !important;
+}
+
+.dark .admin-shell .admin-menu-link svg {
+	color: #8fa0bf !important;
+}
+
+.dark .admin-shell .admin-menu-link:hover,
+.dark .admin-shell .admin-menu-link.active {
+	color: #dbe5ff !important;
+	background: var(--ui-primary-muted) !important;
+	border-color: #2a3d73 !important;
+}
+
+.dark .admin-shell .admin-menu-link:hover svg,
+.dark .admin-shell .admin-menu-link.active svg {
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content input,
+.dark .admin-shell .admin-content select,
+.dark .admin-shell .admin-content textarea,
+.dark .admin-shell .admin-content .inbox-search-input {
+	border-color: var(--ui-border) !important;
+	background: #101827 !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content input::placeholder,
+.dark .admin-shell .admin-content textarea::placeholder {
+	color: var(--ui-subtle) !important;
+}
+
+.dark .admin-shell .admin-content input:focus,
+.dark .admin-shell .admin-content select:focus,
+.dark .admin-shell .admin-content textarea:focus {
+	border-color: var(--ui-primary) !important;
+	box-shadow: var(--ui-focus) !important;
+}
+
+.dark .admin-shell .admin-content .inline-actions button,
+.dark .admin-shell .admin-content .page-header button,
+.dark .admin-shell .admin-content .catalog-search-form button,
+.dark .admin-shell .admin-content .primary-action-btn,
+.dark .admin-shell .admin-content .customers-apply-btn,
+.dark .admin-shell .admin-content .tenant-admin-grid button,
+.dark .admin-shell .admin-content .tenant-admin-actions button,
+.dark .admin-shell .admin-content .filters-form button,
+.dark .admin-shell .admin-content .button.primary,
+.dark .admin-shell .admin-content .wam-button--primary,
+.dark .admin-shell .admin-content .inbox-send-btn,
+.dark .admin-shell .admin-content .operations-header-actions button,
+.dark .admin-shell .admin-content .operations-issue button,
+.dark .admin-shell .admin-content .internal-action-btn.is-primary {
+	border-color: #6f8dff !important;
+	background: #6f8dff !important;
+	color: #071020 !important;
+	box-shadow: 0 12px 28px rgba(111, 141, 255, 0.2) !important;
+}
+
+.dark .admin-shell .admin-content .secondary-link-btn,
+.dark .admin-shell .admin-content .tenant-admin-grid button[type="button"],
+.dark .admin-shell .admin-content .toolbar-group button,
+.dark .admin-shell .admin-content .pagination-btn,
+.dark .admin-shell .admin-content .pagination-page-btn,
+.dark .admin-shell .admin-content .button.ghost,
+.dark .admin-shell .admin-content .button.secondary,
+.dark .admin-shell .admin-content .wam-button--secondary,
+.dark .admin-shell .admin-content .inbox-action-btn,
+.dark .admin-shell .admin-content .operations-header-actions button.secondary,
+.dark .admin-shell .admin-content .internal-action-btn.is-secondary {
+	border-color: var(--ui-border) !important;
+	background: var(--ui-surface-soft) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-pill,
+.dark .admin-shell .admin-content .queue-pill,
+.dark .admin-shell .admin-content .campaign-badge,
+.dark .admin-shell .admin-content .campaign-schedule-status,
+.dark .admin-shell .admin-content .status-badge,
+.dark .admin-shell .admin-content .wam-chip,
+.dark .admin-shell .admin-content .wam-pill,
+.dark .admin-shell .admin-content .customer-payment-badge,
+.dark .admin-shell .admin-content .inbox-badge,
+.dark .admin-shell .admin-content .customers-active-filter-badge,
+.dark .admin-shell .admin-content .internal-status-badge,
+.dark .admin-shell .admin-content .metric-panel__action {
+	border-color: #2a3d73 !important;
+	background: var(--ui-primary-muted) !important;
+	color: #dbe5ff !important;
+}
+
+.dark .admin-shell .admin-content .metric-panel__icon {
+	border-color: #2a3d73 !important;
+	background: var(--ui-primary-muted) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content .empty-state,
+.dark .admin-shell .admin-content .tenant-admin-empty,
+.dark .admin-shell .admin-content .inbox-empty,
+.dark .admin-shell .admin-content .abandoned-empty-state,
+.dark .admin-shell .admin-content .campaign-custom-audience-empty,
+.dark .admin-shell .admin-content .customers-empty-state,
+.dark .admin-shell .admin-content .operations-empty,
+.dark .admin-shell .admin-content .wam-empty,
+.dark .admin-shell .admin-content .internal-empty-state {
+	border-color: var(--ui-border-strong) !important;
+	background: var(--ui-surface) !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-queue-tabs,
+.dark .admin-shell .admin-content .inbox-read-filters,
+.dark .admin-shell .admin-content .catalog-thumb,
+.dark .admin-shell .admin-content .catalog-thumb-empty {
+	border-color: var(--ui-border) !important;
+	background: var(--ui-surface-muted) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-read-filter-btn--active,
+.dark .admin-shell .admin-content .queue-pill.active,
+.dark .admin-shell .admin-content .inbox-contact-card.active {
+	border-color: #2a3d73 !important;
+	background: var(--ui-primary-muted) !important;
+	color: #dbe5ff !important;
+}
+
+.dark .admin-shell .admin-content .inbox-messages,
+.dark .admin-shell .admin-content .chat-messages {
+	background:
+		linear-gradient(180deg, #101827, #0d1320) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble,
+.dark .admin-shell .admin-content .chat-bubble {
+	border-color: var(--ui-border) !important;
+	background: var(--ui-surface) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-row.outbound .inbox-message-bubble,
+.dark .admin-shell .admin-content .chat-message.outbound .chat-bubble {
+	border-color: #2a3d73 !important;
+	background: var(--ui-primary-muted) !important;
+}
+
 /* Final sidebar color correction */
 
 .admin-shell .admin-sidebar {
