@@ -1029,39 +1029,6 @@ export default function AdminPage({ defaultTab = '' }) {
 					</section>
 				) : null}
 
-				{activeTab === 'analytics' && analytics?.detail ? (
-					<section className="tenant-admin-panel">
-						<h3>Detalle de marca</h3>
-						<div className="tenant-admin-analytics-grid">
-							<div>
-								<h4>Campañas recientes</h4>
-								<div className="tenant-admin-list">
-									{(analytics.detail.campaigns || []).map((campaign) => (
-										<div className="tenant-admin-list-row" key={campaign.id}>
-											<strong>{campaign.name}</strong>
-											<span>{campaign.status} - {campaign.templateName}</span>
-											<small>
-												{formatNumber(campaign.sentRecipients)} enviados - {formatNumber(campaign.deliveredRecipients)} entregados - {formatNumber(campaign.readRecipients)} leídos - {formatUsd(campaign.estimatedCostUsd)}
-											</small>
-										</div>
-									))}
-								</div>
-							</div>
-							<div>
-								<h4>Clientes y pedidos</h4>
-								<div className="tenant-admin-list">
-									{(analytics.detail.customers?.topCustomers || []).map((customer) => (
-										<div className="tenant-admin-list-row" key={customer.id}>
-											<strong>{customer.displayName || customer.email || customer.phone || 'Cliente'}</strong>
-											<span>{formatNumber(customer.orderCount)} pedidos</span>
-											<small>{formatCurrency(customer.totalSpent, analytics?.totals?.currency)}</small>
-										</div>
-									))}
-								</div>
-							</div>
-						</div>
-					</section>
-				) : null}
 
 				{platformAdmin && activeTab === 'operations' ? (
 					<section className="tenant-admin-panel">

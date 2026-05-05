@@ -1089,10 +1089,12 @@
 }
 
 .workspace-card-body {
-	gap: 10px;
+	gap: 12px;
 }
 
 .workspace-card-chart {
+	flex: 1 1 78%;
+	min-height: 168px;
 	background:
 		linear-gradient(180deg, transparent 31%, rgba(15, 23, 42, 0.08) 32%, transparent 33%),
 		linear-gradient(180deg, transparent 64%, rgba(15, 23, 42, 0.08) 65%, transparent 66%),
@@ -1100,6 +1102,7 @@
 }
 
 .workspace-card-chat {
+	width: 112px;
 	border: 1px solid #cce8df;
 	border-radius: 10px;
 	background: #effaf6;
