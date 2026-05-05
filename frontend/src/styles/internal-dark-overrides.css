@@ -398,6 +398,44 @@
 	color: var(--ui-primary-strong) !important;
 }
 
+.dark .admin-shell .admin-content .campaigns-hero-lead,
+.dark .admin-shell .admin-content .campaigns-hero-copy > p {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-tab-nav {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-tab-button {
+	background: var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	box-shadow: none !important;
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-tab-button:hover:not(:disabled) {
+	background: var(--ui-surface-muted) !important;
+	border-color: var(--ui-border-strong) !important;
+	box-shadow: none !important;
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-tab-button.is-active,
+.dark .admin-shell .admin-content .campaigns-tab-button.is-active:hover:not(:disabled) {
+	background:
+		linear-gradient(135deg, rgba(124, 156, 255, 0.16), transparent 48%),
+		var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.5) !important;
+	box-shadow: inset 0 0 0 1px rgba(124, 156, 255, 0.18) !important;
+	color: var(--ui-heading) !important;
+}
+
 .dark .admin-shell .admin-content :where(
 	[class*="success"],
 	[class*="paid"],
