@@ -3471,3 +3471,559 @@ textarea:focus,
 	--ui-shadow-lg: 0 18px 44px rgba(16, 24, 40, 0.12);
 	--ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.18);
 }
+
+/* =========================================================
+   FINAL DARK MODE OVERRIDES
+   - Last-resort internal dashboard contrast layer.
+   - Scoped to .admin-shell so login and public routes keep their CSS.
+========================================================= */
+
+.dark .admin-shell {
+	--ui-bg: #0d1320;
+	--ui-surface: #141c2b;
+	--ui-surface-soft: #192234;
+	--ui-surface-muted: #202b3d;
+	--ui-border: #29354a;
+	--ui-border-strong: #3a4860;
+	--ui-text: #e8edf7;
+	--ui-heading: #f7f9ff;
+	--ui-muted: #a5b0c3;
+	--ui-subtle: #758298;
+	--ui-primary: #7c9cff;
+	--ui-primary-strong: #a6bbff;
+	--ui-primary-soft: #1d2b54;
+	--ui-primary-muted: #182549;
+	--ui-info: #8cb5ff;
+	--ui-info-soft: #182744;
+	--ui-success: #5bd8a0;
+	--ui-success-soft: #123426;
+	--ui-warning: #ffc46b;
+	--ui-warning-soft: #372712;
+	--ui-danger: #ff8d85;
+	--ui-danger-soft: #3b1d22;
+	--ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+	--ui-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32);
+	--ui-shadow-lg: 0 24px 58px rgba(0, 0, 0, 0.38);
+	--ui-focus: 0 0 0 3px rgba(124, 156, 255, 0.24);
+	background:
+		radial-gradient(circle at 50% -20%, rgba(124, 156, 255, 0.18), transparent 34%),
+		#0a0f1a !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-sidebar,
+.dark .admin-shell .admin-main {
+	background: var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: var(--ui-shadow-md) !important;
+}
+
+.dark .admin-shell .admin-topbar,
+.dark .admin-shell .admin-content {
+	background: var(--ui-bg) !important;
+	color: var(--ui-text) !important;
+	border-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-topbar {
+	background: rgba(20, 28, 43, 0.92) !important;
+}
+
+.dark .admin-shell .admin-brand,
+.dark .admin-shell .admin-user-box,
+.dark .admin-shell .admin-topbar-user,
+.dark .admin-shell .admin-theme-toggle,
+.dark .admin-shell .logout-btn {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-brand {
+	background: transparent !important;
+}
+
+.dark .admin-shell .admin-brand-mark--logo {
+	background: #ffffff !important;
+	border-color: var(--ui-border-strong) !important;
+}
+
+.dark .admin-shell .admin-menu-link {
+	background: transparent !important;
+	border-color: transparent !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-menu-link svg {
+	color: var(--ui-subtle) !important;
+}
+
+.dark .admin-shell .admin-menu-link:hover,
+.dark .admin-shell .admin-menu-link.active {
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-menu-link:hover svg,
+.dark .admin-shell .admin-menu-link.active svg,
+.dark .admin-shell .admin-theme-toggle {
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content .page-card,
+.dark .admin-shell .admin-content .internal-page-header,
+.dark .admin-shell .admin-content .tenant-admin-header,
+.dark .admin-shell .admin-content .tenant-admin-panel,
+.dark .admin-shell .admin-content .tenant-admin-brand-summary,
+.dark .admin-shell .admin-content .tenant-admin-user-row,
+.dark .admin-shell .admin-content .tenant-admin-list,
+.dark .admin-shell .admin-content .tenant-admin-list-row,
+.dark .admin-shell .admin-content .workspace-analytics-card,
+.dark .admin-shell .admin-content .customers-hero-card,
+.dark .admin-shell .admin-content .customers-sync-panel,
+.dark .admin-shell .admin-content .customers-filters-card,
+.dark .admin-shell .admin-content .customers-list-card,
+.dark .admin-shell .admin-content .customers-stat-card,
+.dark .admin-shell .admin-content .customer-card,
+.dark .admin-shell .admin-content .customer-section-box,
+.dark .admin-shell .admin-content .customer-total-box,
+.dark .admin-shell .admin-content .customer-meta-chip,
+.dark .admin-shell .admin-content .product-multiselect,
+.dark .admin-shell .admin-content .abandoned-card,
+.dark .admin-shell .admin-content .abandoned-card-focus,
+.dark .admin-shell .admin-content .abandoned-message-box,
+.dark .admin-shell .admin-content .abandoned-template-note,
+.dark .admin-shell .admin-content .abandoned-contact-note,
+.dark .admin-shell .admin-content .stat-box,
+.dark .admin-shell .admin-content .catalog-card,
+.dark .admin-shell .admin-content .catalog-search-form,
+.dark .admin-shell .admin-content .catalog-state,
+.dark .admin-shell .admin-content .catalog-empty-state,
+.dark .admin-shell .admin-content .campaign-shell-card,
+.dark .admin-shell .admin-content .campaigns-hero,
+.dark .admin-shell .admin-content .campaigns-tab-shell,
+.dark .admin-shell .admin-content .campaign-panel,
+.dark .admin-shell .admin-content .campaign-list-card,
+.dark .admin-shell .admin-content .campaign-list,
+.dark .admin-shell .admin-content .campaign-inline-summary,
+.dark .admin-shell .admin-content .campaign-inline-summary-item,
+.dark .admin-shell .admin-content .campaign-filters-grid,
+.dark .admin-shell .admin-content .campaign-custom-audience-card,
+.dark .admin-shell .admin-content .campaign-custom-audience-recipient,
+.dark .admin-shell .admin-content .campaign-custom-audience-preview,
+.dark .admin-shell .admin-content .campaign-schedule-card,
+.dark .admin-shell .admin-content .campaign-schedule-form,
+.dark .admin-shell .admin-content .campaign-schedule-section,
+.dark .admin-shell .admin-content .campaign-toggle--card,
+.dark .admin-shell .admin-content .campaign-source-switch,
+.dark .admin-shell .admin-content .campaign-segment-summary-card,
+.dark .admin-shell .admin-content .template-library-shell,
+.dark .admin-shell .admin-content .template-library-selected-status,
+.dark .admin-shell .admin-content .wam-card,
+.dark .admin-shell .admin-content .wam-hero,
+.dark .admin-shell .admin-content .wam-block,
+.dark .admin-shell .admin-content .wam-option-card,
+.dark .admin-shell .admin-content .wam-option-card__summary,
+.dark .admin-shell .admin-content .wam-advanced,
+.dark .admin-shell .admin-content .wam-phone,
+.dark .admin-shell .admin-content .wam-phone__top,
+.dark .admin-shell .admin-content .wam-phone__screen,
+.dark .admin-shell .admin-content .wam-phone__bubble,
+.dark .admin-shell .admin-content .wam-phone__option,
+.dark .admin-shell .admin-content .operations-header,
+.dark .admin-shell .admin-content .operations-metric-card,
+.dark .admin-shell .admin-content .operations-workspace-card,
+.dark .admin-shell .admin-content .operations-issue,
+.dark .admin-shell .admin-content .inbox-sidebar,
+.dark .admin-shell .admin-content .inbox-chat-panel,
+.dark .admin-shell .admin-content .inbox-chat-header,
+.dark .admin-shell .admin-content .inbox-contact-card,
+.dark .admin-shell .admin-content .inbox-composer-shell,
+.dark .admin-shell .admin-content .inbox-composer,
+.dark .admin-shell .admin-content .inbox-selected-file,
+.dark .admin-shell .admin-content .inbox-emoji-picker,
+.dark .admin-shell .admin-content .metric-panel,
+.dark .admin-shell .admin-content .metric-panel__icon {
+	background: var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: var(--ui-shadow-sm) !important;
+}
+
+.dark .admin-shell .admin-content .customers-sync-stats > div,
+.dark .admin-shell .admin-content .product-option-empty,
+.dark .admin-shell .admin-content .abandoned-meta-grid > div,
+.dark .admin-shell .admin-content .abandoned-products,
+.dark .admin-shell .admin-content .catalog-thumb,
+.dark .admin-shell .admin-content .catalog-thumb-empty,
+.dark .admin-shell .admin-content .inbox-queue-tabs,
+.dark .admin-shell .admin-content .inbox-read-filters,
+.dark .admin-shell .admin-content .inbox-messages,
+.dark .admin-shell .admin-content .inbox-chat-empty,
+.dark .admin-shell .admin-content .chat-messages,
+.dark .admin-shell .admin-content .chat-form,
+.dark .admin-shell .admin-content .wam-topbar,
+.dark .admin-shell .admin-content .wam-menu-list,
+.dark .admin-shell .admin-content .wam-menu-item,
+.dark .admin-shell .admin-content .wam-option-card__content,
+.dark .admin-shell .admin-content .wam-preview,
+.dark .admin-shell .admin-content .campaign-recipient-preview-table,
+.dark .admin-shell .admin-content .tenant-admin-table-wrap,
+.dark .admin-shell .admin-content .customer-table-scroll {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-messages,
+.dark .admin-shell .admin-content .inbox-chat-empty,
+.dark .admin-shell .admin-content .chat-messages,
+.dark .admin-shell .admin-content .wam-phone__screen {
+	background:
+		linear-gradient(rgba(232, 237, 247, 0.035) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(232, 237, 247, 0.025) 1px, transparent 1px),
+		var(--ui-surface-soft) !important;
+	background-size: 34px 34px !important;
+}
+
+.dark .admin-shell .admin-content h1,
+.dark .admin-shell .admin-content h2,
+.dark .admin-shell .admin-content h3,
+.dark .admin-shell .admin-content h4,
+.dark .admin-shell .admin-content strong,
+.dark .admin-shell .admin-topbar h2,
+.dark .admin-shell .admin-user-box strong,
+.dark .admin-shell .admin-topbar-user strong,
+.dark .admin-shell .admin-brand-copy h1,
+.dark .admin-shell .admin-content .contact-name,
+.dark .admin-shell .admin-content .inbox-contact-name,
+.dark .admin-shell .admin-content .inbox-chat-title,
+.dark .admin-shell .admin-content .inbox-message-body,
+.dark .admin-shell .admin-content .chat-body,
+.dark .admin-shell .admin-content .customer-identity-copy h4,
+.dark .admin-shell .admin-content .customer-total-box strong,
+.dark .admin-shell .admin-content .customer-meta-chip strong,
+.dark .admin-shell .admin-content .customer-footer-row strong,
+.dark .admin-shell .admin-content .campaign-list-card-title,
+.dark .admin-shell .admin-content .campaign-custom-audience-preview-title,
+.dark .admin-shell .admin-content .wam-section-head h2,
+.dark .admin-shell .admin-content .wam-section-head h3,
+.dark .admin-shell .admin-content .wam-menu-item__top,
+.dark .admin-shell .admin-content .wam-option-card__summary-main {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content p,
+.dark .admin-shell .admin-content span,
+.dark .admin-shell .admin-content small,
+.dark .admin-shell .admin-content label,
+.dark .admin-shell .admin-content .muted-text,
+.dark .admin-shell .admin-content .soft-status,
+.dark .admin-shell .admin-content .contact-time,
+.dark .admin-shell .admin-content .contact-phone,
+.dark .admin-shell .admin-content .contact-preview,
+.dark .admin-shell .admin-content .inbox-sidebar-top span,
+.dark .admin-shell .admin-content .inbox-section-subtle,
+.dark .admin-shell .admin-content .inbox-contact-time,
+.dark .admin-shell .admin-content .inbox-contact-preview,
+.dark .admin-shell .admin-content .inbox-chat-subtitle,
+.dark .admin-shell .admin-content .inbox-message-meta,
+.dark .admin-shell .admin-content .inbox-list-end,
+.dark .admin-shell .admin-content .chat-meta,
+.dark .admin-shell .admin-content .customers-hero-copy p,
+.dark .admin-shell .admin-content .customers-list-topbar p,
+.dark .admin-shell .admin-content .customers-sync-top p,
+.dark .admin-shell .admin-content .customers-sync-window,
+.dark .admin-shell .admin-content .customer-identity-copy p,
+.dark .admin-shell .admin-content .customer-footer-row,
+.dark .admin-shell .admin-content .customer-products-empty,
+.dark .admin-shell .admin-content .abandoned-head-copy p,
+.dark .admin-shell .admin-content .abandoned-meta-grid span,
+.dark .admin-shell .admin-content .campaigns-hero-lead,
+.dark .admin-shell .admin-content .campaign-custom-audience-subtext,
+.dark .admin-shell .admin-content .campaign-custom-audience-preview-subtitle,
+.dark .admin-shell .admin-content .wam-hero p,
+.dark .admin-shell .admin-content .wam-menu-item__meta,
+.dark .admin-shell .admin-content .wam-phone__meta,
+.dark .admin-shell .admin-content .operations-header p,
+.dark .admin-shell .admin-brand-copy p,
+.dark .admin-shell .admin-user-box span,
+.dark .admin-shell .admin-topbar p,
+.dark .admin-shell .admin-topbar-user span,
+.dark .admin-shell .admin-menu-group-label {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content input,
+.dark .admin-shell .admin-content select,
+.dark .admin-shell .admin-content textarea,
+.dark .admin-shell .admin-content .inbox-search-input,
+.dark .admin-shell .admin-content .inbox-textarea,
+.dark .admin-shell .admin-content .product-multiselect-search,
+.dark .admin-shell .admin-content .customers-product-toggle,
+.dark .admin-shell .admin-content .wam-form-grid input,
+.dark .admin-shell .admin-content .wam-form-grid select,
+.dark .admin-shell .admin-content .wam-form-grid textarea,
+.dark .admin-shell .admin-content .field input,
+.dark .admin-shell .admin-content .field select,
+.dark .admin-shell .admin-content .field textarea {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content input::placeholder,
+.dark .admin-shell .admin-content textarea::placeholder {
+	color: var(--ui-subtle) !important;
+	opacity: 1 !important;
+}
+
+.dark .admin-shell .admin-content input:focus,
+.dark .admin-shell .admin-content select:focus,
+.dark .admin-shell .admin-content textarea:focus,
+.dark .admin-shell .admin-content .customers-product-toggle:focus-visible {
+	background: var(--ui-surface) !important;
+	border-color: var(--ui-primary) !important;
+	box-shadow: var(--ui-focus) !important;
+	outline: none !important;
+}
+
+.dark .admin-shell .admin-content button,
+.dark .admin-shell .admin-content .secondary-link-btn,
+.dark .admin-shell .admin-content .customers-visibility-btn,
+.dark .admin-shell .admin-content .pagination-btn,
+.dark .admin-shell .admin-content .pagination-page-btn,
+.dark .admin-shell .admin-content .toolbar-group button,
+.dark .admin-shell .admin-content .inbox-action-btn,
+.dark .admin-shell .admin-content .inbox-sidebar-refresh,
+.dark .admin-shell .admin-content .inbox-load-more,
+.dark .admin-shell .admin-content .inbox-load-older-messages,
+.dark .admin-shell .admin-content .inbox-emoji-trigger,
+.dark .admin-shell .admin-content .inbox-attach-trigger,
+.dark .admin-shell .admin-content .inbox-selected-file-remove,
+.dark .admin-shell .admin-content .wam-button--secondary,
+.dark .admin-shell .admin-content .button.secondary,
+.dark .admin-shell .admin-content .button.ghost {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content button:hover:not(:disabled),
+.dark .admin-shell .admin-content .secondary-link-btn:hover:not(:disabled),
+.dark .admin-shell .admin-content .customers-visibility-btn:hover:not(:disabled),
+.dark .admin-shell .admin-content .pagination-btn:hover:not(:disabled),
+.dark .admin-shell .admin-content .pagination-page-btn:hover:not(:disabled),
+.dark .admin-shell .admin-content .toolbar-group button:hover:not(:disabled),
+.dark .admin-shell .admin-content .inbox-action-btn:hover:not(:disabled),
+.dark .admin-shell .admin-content .wam-button--secondary:hover:not(:disabled),
+.dark .admin-shell .admin-content .button.secondary:hover:not(:disabled),
+.dark .admin-shell .admin-content .button.ghost:hover:not(:disabled) {
+	background: var(--ui-surface-muted) !important;
+	border-color: var(--ui-border-strong) !important;
+	color: var(--ui-heading) !important;
+	transform: none !important;
+}
+
+.dark .admin-shell .admin-content .inline-actions button,
+.dark .admin-shell .admin-content .catalog-search-form button,
+.dark .admin-shell .admin-content .page-header button,
+.dark .admin-shell .admin-content .primary-action-btn,
+.dark .admin-shell .admin-content .customers-apply-btn,
+.dark .admin-shell .admin-content .tenant-admin-grid button,
+.dark .admin-shell .admin-content .tenant-admin-actions button,
+.dark .admin-shell .admin-content .filters-form button,
+.dark .admin-shell .admin-content .button.primary,
+.dark .admin-shell .admin-content .wam-button--primary,
+.dark .admin-shell .admin-content .inbox-send-btn,
+.dark .admin-shell .admin-content .operations-header-actions button:not(.secondary),
+.dark .admin-shell .admin-content .operations-issue button,
+.dark .admin-shell .admin-content .internal-action-btn.is-primary,
+.dark .admin-shell .admin-content .pagination-page-btn.is-active,
+.dark .admin-shell .admin-content .inbox-action-btn--active,
+.dark .admin-shell .admin-content .inbox-queue-tabs .inbox-action-btn--active,
+.dark .admin-shell .admin-content .inbox-read-filter-btn--active {
+	background: var(--ui-primary) !important;
+	border-color: var(--ui-primary) !important;
+	color: #08111f !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .inbox-send-btn:disabled,
+.dark .admin-shell .admin-content button:disabled {
+	opacity: 0.56 !important;
+}
+
+.dark .admin-shell .admin-content .queue-pill,
+.dark .admin-shell .admin-content .tenant-admin-pill,
+.dark .admin-shell .admin-content .campaign-badge,
+.dark .admin-shell .admin-content .campaign-schedule-status,
+.dark .admin-shell .admin-content .status-badge,
+.dark .admin-shell .admin-content .wam-chip,
+.dark .admin-shell .admin-content .wam-pill,
+.dark .admin-shell .admin-content .customer-payment-badge,
+.dark .admin-shell .admin-content .inbox-badge,
+.dark .admin-shell .admin-content .customers-active-filter-badge,
+.dark .admin-shell .admin-content .selected-product-chip,
+.dark .admin-shell .admin-content .customer-order-badge,
+.dark .admin-shell .admin-content .metric-panel__action {
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-badge--human,
+.dark .admin-shell .admin-content .customer-payment-badge.is-pending,
+.dark .admin-shell .admin-content .customers-sync-note--warning,
+.dark .admin-shell .admin-content .inbox-realtime-badge--fallback {
+	background: var(--ui-warning-soft) !important;
+	border-color: rgba(255, 196, 107, 0.34) !important;
+	color: var(--ui-warning) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-alert.error,
+.dark .admin-shell .admin-content .customers-feedback--error,
+.dark .admin-shell .admin-content .customers-sync-note--error,
+.dark .admin-shell .admin-content .campaign-schedule-error,
+.dark .admin-shell .admin-content .inbox-composer-feedback--error,
+.dark .admin-shell .admin-content .inbox-action-btn--danger,
+.dark .admin-shell .admin-content .inbox-actions-danger .inbox-action-btn,
+.dark .admin-shell .admin-content .wam-button--danger,
+.dark .admin-shell .admin-content .wam-alert--error,
+.dark .admin-shell .admin-content .customer-payment-badge.is-refunded {
+	background: var(--ui-danger-soft) !important;
+	border-color: rgba(255, 141, 133, 0.34) !important;
+	color: var(--ui-danger) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-alert.success,
+.dark .admin-shell .admin-content .customers-feedback--success,
+.dark .admin-shell .admin-content .sync-summary-banner,
+.dark .admin-shell .admin-content .wam-alert--success,
+.dark .admin-shell .admin-content .inbox-action-feedback,
+.dark .admin-shell .admin-content .inbox-realtime-badge--live,
+.dark .admin-shell .admin-content .customer-payment-badge.is-paid {
+	background: var(--ui-success-soft) !important;
+	border-color: rgba(91, 216, 160, 0.32) !important;
+	color: var(--ui-success) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-badge--ai,
+.dark .admin-shell .admin-content .inbox-action-feedback--busy,
+.dark .admin-shell .admin-content .inbox-composer-feedback--sending,
+.dark .admin-shell .admin-content .customer-payment-badge.is-authorized {
+	background: var(--ui-info-soft) !important;
+	border-color: rgba(140, 181, 255, 0.32) !important;
+	color: var(--ui-info) !important;
+}
+
+.dark .admin-shell .admin-content .empty-state,
+.dark .admin-shell .admin-content .tenant-admin-empty,
+.dark .admin-shell .admin-content .inbox-empty,
+.dark .admin-shell .admin-content .abandoned-empty-state,
+.dark .admin-shell .admin-content .campaign-custom-audience-empty,
+.dark .admin-shell .admin-content .campaign-empty-state,
+.dark .admin-shell .admin-content .customers-empty-state,
+.dark .admin-shell .admin-content .operations-empty,
+.dark .admin-shell .admin-content .wam-empty,
+.dark .admin-shell .admin-content .internal-empty-state {
+	background: rgba(25, 34, 52, 0.82) !important;
+	border-color: var(--ui-border-strong) !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content table,
+.dark .admin-shell .admin-content thead,
+.dark .admin-shell .admin-content tbody,
+.dark .admin-shell .admin-content tr,
+.dark .admin-shell .admin-content th,
+.dark .admin-shell .admin-content td {
+	background: transparent !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content th,
+.dark .admin-shell .admin-content .customers-stat-label,
+.dark .admin-shell .admin-content .stat-box span,
+.dark .admin-shell .admin-content .workspace-card-hero span,
+.dark .admin-shell .admin-content .workspace-card-chat span,
+.dark .admin-shell .admin-content .workspace-card-stats span,
+.dark .admin-shell .admin-content .workspace-card-progress span,
+.dark .admin-shell .admin-content .admin-field span,
+.dark .admin-shell .admin-content .customer-meta-chip span,
+.dark .admin-shell .admin-content .customer-total-box span,
+.dark .admin-shell .admin-content .customer-order-badge span,
+.dark .admin-shell .admin-content .customer-payment-badge span {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble,
+.dark .admin-shell .admin-content .chat-bubble {
+	background: var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: var(--ui-shadow-sm) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--outbound,
+.dark .admin-shell .admin-content .chat-message.outbound .chat-bubble {
+	background:
+		linear-gradient(135deg, rgba(91, 216, 160, 0.12), transparent 42%),
+		#183528 !important;
+	border-color: rgba(91, 216, 160, 0.28) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--inbound,
+.dark .admin-shell .admin-content .chat-message.inbound .chat-bubble {
+	background:
+		linear-gradient(135deg, rgba(124, 156, 255, 0.08), transparent 42%),
+		var(--ui-surface) !important;
+	border-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble::after,
+.dark .admin-shell .admin-content .chat-bubble::after {
+	background: inherit !important;
+	border-color: inherit !important;
+}
+
+.dark .admin-shell .admin-content .catalog-thumb img,
+.dark .admin-shell .admin-content .inbox-attachment-media,
+.dark .admin-shell .admin-content .inbox-attachment-link-wrap {
+	background: var(--ui-surface-muted) !important;
+	border-color: var(--ui-border) !important;
+}
+
+.dark .admin-shell .admin-content .product-option-row,
+.dark .admin-shell .admin-content .campaign-source-option,
+.dark .admin-shell .admin-content .campaigns-tab-button,
+.dark .admin-shell .admin-content .wam-menu-item {
+	color: var(--ui-text) !important;
+}
+
+.dark .admin-shell .admin-content .product-option-row:hover,
+.dark .admin-shell .admin-content .campaign-source-option:hover,
+.dark .admin-shell .admin-content .campaigns-tab-button:hover,
+.dark .admin-shell .admin-content .wam-menu-item:hover {
+	background: var(--ui-surface-muted) !important;
+}
+
+.dark .admin-shell .admin-content button span,
+.dark .admin-shell .admin-content button strong,
+.dark .admin-shell .admin-content button svg,
+.dark .admin-shell .admin-content .button span,
+.dark .admin-shell .admin-content .button strong,
+.dark .admin-shell .admin-content .button svg,
+.dark .admin-shell .admin-content .wam-button span,
+.dark .admin-shell .admin-content .wam-button svg,
+.dark .admin-shell .admin-content .inbox-action-btn span,
+.dark .admin-shell .admin-content .inbox-action-btn strong,
+.dark .admin-shell .admin-content .inbox-action-btn svg {
+	color: inherit !important;
+}
+
