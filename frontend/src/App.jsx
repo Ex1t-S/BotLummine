@@ -6,6 +6,7 @@ import DashboardLayout from './layout/DashboardLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import BrandLoader from './components/ui/BrandLoader.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { getDefaultRouteForRole, isPlatformAdminUser } from './lib/authz.js';
 
@@ -24,7 +25,7 @@ function RoleHomeRedirect() {
 }
 
 function PageLoader() {
-	return <div className="page-card">Cargando modulo...</div>;
+	return <BrandLoader label="Cargando" />;
 }
 
 function BrandAnalyticsRoute() {
