@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
-import logoBladeIA from '../assets/bladeia-logo-new.svg';
+import logoBladeIA from '../assets/bladeia-logo.png';
 import './LoginPage.css';
 
 const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
@@ -324,27 +324,12 @@ export default function LoginPage() {
 							Escribinos por email o WhatsApp y coordinamos el mejor camino para conectar tu operación comercial.
 						</p>
 
-						<div className="contact-grid">
-							<article className="contact-card">
-								<span>Email</span>
-								<strong>
-									<a href="mailto:germanarroyo016@gmail.com">germanarroyo016@gmail.com</a>
-								</strong>
-							</article>
-							<article className="contact-card">
-								<span>Email</span>
-								<strong>
-									<a href="mailto:mendozatomas600@gmail.com">mendozatomas600@gmail.com</a>
-								</strong>
-							</article>
-							<article className="contact-card">
-								<span>Teléfono</span>
-								<strong>
-									<a href="https://wa.me/5492923562286" target="_blank" rel="noopener noreferrer">
-										+54 9 2923 562286
-									</a>
-								</strong>
-							</article>
+						<div className="contact-list" aria-label="Canales de contacto">
+							<a href="mailto:germanarroyo016@gmail.com">germanarroyo016@gmail.com</a>
+							<a href="mailto:mendozatomas600@gmail.com">mendozatomas600@gmail.com</a>
+							<a href="https://wa.me/5492923562286" target="_blank" rel="noopener noreferrer">
+								+54 9 2923 562286
+							</a>
 						</div>
 					</section>
 				) : null}
