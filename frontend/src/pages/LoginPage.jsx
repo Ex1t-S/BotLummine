@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
-import logoBladeIA from '../assets/bladeia-logo.svg';
+import logoBladeIA from '../assets/bladeia-logo-new.svg';
 import './LoginPage.css';
 
 const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
@@ -10,7 +10,7 @@ const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
 const pricingPlans = [
 	{
 		name: 'Básico',
-		price: 'A definir',
+		price: 'US$ 50',
 		description: 'Para ordenar la atención diaria y centralizar clientes desde WhatsApp.',
 		features: [
 			'Inbox de WhatsApp',
@@ -22,7 +22,7 @@ const pricingPlans = [
 	},
 	{
 		name: 'Avanzado',
-		price: 'A definir',
+		price: 'US$ 80',
 		description: 'Para crecer con automatizaciones, campañas y medición comercial.',
 		features: [
 			'Todo lo del plan Básico',
@@ -319,24 +319,31 @@ export default function LoginPage() {
 				{publicPath === '/contacto' ? (
 					<section className="public-section public-section--single" aria-labelledby="contact-title">
 						<p className="login-eyebrow">Contacto</p>
-						<h1 id="contact-title">Hablemos de tu operación comercial.</h1>
+						<h1 id="contact-title">Contactanos</h1>
 						<p className="login-lead">
-							Dejanos tus datos o escribinos por los canales principales para evaluar cómo conectar WhatsApp,
-							ventas y campañas en tu marca.
+							Escribinos por email o WhatsApp y coordinamos el mejor camino para conectar tu operación comercial.
 						</p>
 
 						<div className="contact-grid">
 							<article className="contact-card">
 								<span>Email</span>
-								<strong>contacto@tumarca.com</strong>
+								<strong>
+									<a href="mailto:germanarroyo016@gmail.com">germanarroyo016@gmail.com</a>
+								</strong>
+							</article>
+							<article className="contact-card">
+								<span>Email</span>
+								<strong>
+									<a href="mailto:mendozatomas600@gmail.com">mendozatomas600@gmail.com</a>
+								</strong>
 							</article>
 							<article className="contact-card">
 								<span>Teléfono</span>
-								<strong>+54 9 11 0000-0000</strong>
-							</article>
-							<article className="contact-card">
-								<span>WhatsApp</span>
-								<strong>+54 9 11 0000-0000</strong>
+								<strong>
+									<a href="https://wa.me/5492923562286" target="_blank" rel="noopener noreferrer">
+										+54 9 2923 562286
+									</a>
+								</strong>
 							</article>
 						</div>
 					</section>
