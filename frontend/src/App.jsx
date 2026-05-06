@@ -38,6 +38,12 @@ function BrandAnalyticsRoute() {
 }
 
 export default function App() {
+	const { loading } = useAuth();
+
+	if (loading) {
+		return <BrandLoader label="Cargando" />;
+	}
+
 	return (
 		<Routes>
 			<Route path="/inicio" element={<LoginPage />} />

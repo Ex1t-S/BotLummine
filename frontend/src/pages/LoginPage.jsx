@@ -162,12 +162,14 @@ export default function LoginPage() {
 
 	const requestedPath = location.state?.from?.pathname || '';
 	const redirectTo = resolveRedirectPath(user, requestedPath);
+	const accessPath = user ? redirectTo : '/login';
+	const accessLabel = user ? 'Dashboard' : 'Ingresar';
 
 	useEffect(() => {
-		if (!loading && user) {
+		if (isLogin && !loading && user) {
 			navigate(redirectTo, { replace: true });
 		}
-	}, [loading, user, navigate, redirectTo]);
+	}, [isLogin, loading, user, navigate, redirectTo]);
 
 	useEffect(() => {
 		function updateNavState() {
@@ -262,8 +264,8 @@ export default function LoginPage() {
 						</nav>
 
 						<div className="login-nav__actions">
-							<Link className="login-nav__login" to="/login">
-								Ingresar
+							<Link className="login-nav__login" to={accessPath}>
+								{accessLabel}
 							</Link>
 						</div>
 
@@ -307,8 +309,8 @@ export default function LoginPage() {
 						</div>
 
 						<div className="login-mobile-nav__actions">
-							<Link to="/login" tabIndex={mobileNavOpen ? 0 : -1}>
-								Ingresar
+							<Link to={accessPath} tabIndex={mobileNavOpen ? 0 : -1}>
+								{accessLabel}
 							</Link>
 						</div>
 					</nav>
