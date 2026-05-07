@@ -884,22 +884,22 @@ body {
 /* Dashboard dark mode */
 
 .dark .admin-shell {
-	--ui-bg: #0d1320;
-	--ui-surface: #141c2b;
-	--ui-surface-soft: #192234;
-	--ui-surface-muted: #202b3d;
-	--ui-border: #29354a;
-	--ui-border-strong: #3a4860;
-	--ui-text: #e8edf7;
-	--ui-heading: #f7f9ff;
-	--ui-muted: #a5b0c3;
-	--ui-subtle: #758298;
-	--ui-primary: #7c9cff;
-	--ui-primary-strong: #a6bbff;
-	--ui-primary-soft: #1d2b54;
-	--ui-primary-muted: #182549;
-	--ui-info: #8cb5ff;
-	--ui-info-soft: #182744;
+	--ui-bg: #05070b;
+	--ui-surface: #0d0f14;
+	--ui-surface-soft: #14171f;
+	--ui-surface-muted: #1b202a;
+	--ui-border: #292f3a;
+	--ui-border-strong: #3a4352;
+	--ui-text: #e7e7ea;
+	--ui-heading: #ffffff;
+	--ui-muted: #aaaab3;
+	--ui-subtle: #777985;
+	--ui-primary: #38bdf8;
+	--ui-primary-strong: #7dd3fc;
+	--ui-primary-soft: #082f49;
+	--ui-primary-muted: #0b2537;
+	--ui-info: #7dd3fc;
+	--ui-info-soft: #082b3f;
 	--ui-success: #5bd8a0;
 	--ui-success-soft: #123426;
 	--ui-warning: #ffc46b;
@@ -909,10 +909,10 @@ body {
 	--ui-shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.2);
 	--ui-shadow-md: 0 20px 48px rgba(0, 0, 0, 0.28);
 	--ui-shadow-lg: 0 30px 76px rgba(0, 0, 0, 0.34);
-	--ui-focus: 0 0 0 4px rgba(124, 156, 255, 0.18);
+	--ui-focus: 0 0 0 4px rgba(56, 189, 248, 0.22);
 	background:
-		radial-gradient(circle at 50% -20%, rgba(77, 103, 176, 0.2), transparent 36%),
-		#0a0f1a !important;
+		radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.12), transparent 34%),
+		linear-gradient(180deg, #000000 0%, #05070b 100%) !important;
 	color: var(--ui-text) !important;
 }
 
@@ -962,8 +962,9 @@ body {
 
 .dark .admin-shell .admin-content {
 	background:
-		linear-gradient(180deg, #101827 0, #0d1320 270px),
-		#0d1320 !important;
+		radial-gradient(circle at 50% -24%, rgba(255, 255, 255, 0.04), transparent 24rem),
+		linear-gradient(180deg, #000000 0, #05070b 280px),
+		#05070b !important;
 }
 
 .dark .admin-shell .admin-topbar {
@@ -1034,9 +1035,9 @@ body {
 
 .dark .admin-shell .admin-menu-link:hover,
 .dark .admin-shell .admin-menu-link.active {
-	color: #dbe5ff !important;
+	color: var(--ui-heading) !important;
 	background: var(--ui-primary-muted) !important;
-	border-color: #2a3d73 !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 }
 
 .dark .admin-shell .admin-menu-link:hover svg,
@@ -1049,7 +1050,7 @@ body {
 .dark .admin-shell .admin-content textarea,
 .dark .admin-shell .admin-content .inbox-search-input {
 	border-color: var(--ui-border) !important;
-	background: #101827 !important;
+	background: var(--ui-surface-soft) !important;
 	color: var(--ui-text) !important;
 }
 
@@ -1079,10 +1080,10 @@ body {
 .dark .admin-shell .admin-content .operations-header-actions button,
 .dark .admin-shell .admin-content .operations-issue button,
 .dark .admin-shell .admin-content .internal-action-btn.is-primary {
-	border-color: #6f8dff !important;
-	background: #6f8dff !important;
+	border-color: var(--ui-primary) !important;
+	background: var(--ui-primary) !important;
 	color: #071020 !important;
-	box-shadow: 0 12px 28px rgba(111, 141, 255, 0.2) !important;
+	box-shadow: 0 12px 28px rgba(56, 189, 248, 0.16) !important;
 }
 
 .dark .admin-shell .admin-content .secondary-link-btn,
@@ -1113,13 +1114,13 @@ body {
 .dark .admin-shell .admin-content .customers-active-filter-badge,
 .dark .admin-shell .admin-content .internal-status-badge,
 .dark .admin-shell .admin-content .metric-panel__action {
-	border-color: #2a3d73 !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	background: var(--ui-primary-muted) !important;
-	color: #dbe5ff !important;
+	color: var(--ui-primary-strong) !important;
 }
 
 .dark .admin-shell .admin-content .metric-panel__icon {
-	border-color: #2a3d73 !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	background: var(--ui-primary-muted) !important;
 	color: var(--ui-primary-strong) !important;
 }
@@ -1149,15 +1150,15 @@ body {
 .dark .admin-shell .admin-content .inbox-read-filter-btn--active,
 .dark .admin-shell .admin-content .queue-pill.active,
 .dark .admin-shell .admin-content .inbox-contact-card.active {
-	border-color: #2a3d73 !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	background: var(--ui-primary-muted) !important;
-	color: #dbe5ff !important;
+	color: var(--ui-primary-strong) !important;
 }
 
 .dark .admin-shell .admin-content .inbox-messages,
 .dark .admin-shell .admin-content .chat-messages {
 	background:
-		linear-gradient(180deg, #101827, #0d1320) !important;
+		linear-gradient(180deg, #080a0f, #05070b) !important;
 }
 
 .dark .admin-shell .admin-content .inbox-message-bubble,
@@ -1169,7 +1170,7 @@ body {
 
 .dark .admin-shell .admin-content .inbox-message-row.outbound .inbox-message-bubble,
 .dark .admin-shell .admin-content .chat-message.outbound .chat-bubble {
-	border-color: #2a3d73 !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	background: var(--ui-primary-muted) !important;
 }
 
@@ -3542,22 +3543,22 @@ textarea:focus,
 ========================================================= */
 
 .dark .admin-shell {
-	--ui-bg: #0d1320;
-	--ui-surface: #141c2b;
-	--ui-surface-soft: #192234;
-	--ui-surface-muted: #202b3d;
-	--ui-border: #29354a;
-	--ui-border-strong: #3a4860;
-	--ui-text: #e8edf7;
-	--ui-heading: #f7f9ff;
-	--ui-muted: #a5b0c3;
-	--ui-subtle: #758298;
-	--ui-primary: #7c9cff;
-	--ui-primary-strong: #a6bbff;
-	--ui-primary-soft: #1d2b54;
-	--ui-primary-muted: #182549;
-	--ui-info: #8cb5ff;
-	--ui-info-soft: #182744;
+	--ui-bg: #05070b;
+	--ui-surface: #0d0f14;
+	--ui-surface-soft: #14171f;
+	--ui-surface-muted: #1b202a;
+	--ui-border: #292f3a;
+	--ui-border-strong: #3a4352;
+	--ui-text: #e7e7ea;
+	--ui-heading: #ffffff;
+	--ui-muted: #aaaab3;
+	--ui-subtle: #777985;
+	--ui-primary: #38bdf8;
+	--ui-primary-strong: #7dd3fc;
+	--ui-primary-soft: #082f49;
+	--ui-primary-muted: #0b2537;
+	--ui-info: #7dd3fc;
+	--ui-info-soft: #082b3f;
 	--ui-success: #5bd8a0;
 	--ui-success-soft: #123426;
 	--ui-warning: #ffc46b;
@@ -3567,10 +3568,10 @@ textarea:focus,
 	--ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
 	--ui-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32);
 	--ui-shadow-lg: 0 24px 58px rgba(0, 0, 0, 0.38);
-	--ui-focus: 0 0 0 3px rgba(124, 156, 255, 0.24);
+	--ui-focus: 0 0 0 3px rgba(56, 189, 248, 0.24);
 	background:
-		radial-gradient(circle at 50% -20%, rgba(124, 156, 255, 0.18), transparent 34%),
-		#0a0f1a !important;
+		radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.12), transparent 34%),
+		linear-gradient(180deg, #000000 0%, #05070b 100%) !important;
 	color: var(--ui-text) !important;
 }
 
@@ -3625,7 +3626,7 @@ textarea:focus,
 .dark .admin-shell .admin-menu-link:hover,
 .dark .admin-shell .admin-menu-link.active {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.28) !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	color: var(--ui-heading) !important;
 }
 
@@ -3935,7 +3936,7 @@ textarea:focus,
 .dark .admin-shell .admin-content .customer-order-badge,
 .dark .admin-shell .admin-content .metric-panel__action {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.28) !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	color: var(--ui-primary-strong) !important;
 }
 
@@ -4044,7 +4045,7 @@ textarea:focus,
 .dark .admin-shell .admin-content .inbox-message-bubble--inbound,
 .dark .admin-shell .admin-content .chat-message.inbound .chat-bubble {
 	background:
-		linear-gradient(135deg, rgba(124, 156, 255, 0.08), transparent 42%),
+		linear-gradient(135deg, rgba(56, 189, 248, 0.08), transparent 42%),
 		var(--ui-surface) !important;
 	border-color: var(--ui-border) !important;
 }

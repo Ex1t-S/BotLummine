@@ -2,22 +2,22 @@
    Imported last by internal lazy pages so route CSS cannot repaint white panels. */
 
 .dark .admin-shell {
-	--ui-bg: #0d1320;
-	--ui-surface: #141c2b;
-	--ui-surface-soft: #192234;
-	--ui-surface-muted: #202b3d;
-	--ui-border: #29354a;
-	--ui-border-strong: #3a4860;
-	--ui-text: #e8edf7;
-	--ui-heading: #f7f9ff;
-	--ui-muted: #a5b0c3;
-	--ui-subtle: #758298;
-	--ui-primary: #7c9cff;
-	--ui-primary-strong: #a6bbff;
-	--ui-primary-soft: #1d2b54;
-	--ui-primary-muted: #182549;
-	--ui-info: #8cb5ff;
-	--ui-info-soft: #182744;
+	--ui-bg: #05070b;
+	--ui-surface: #0d0f14;
+	--ui-surface-soft: #14171f;
+	--ui-surface-muted: #1b202a;
+	--ui-border: #292f3a;
+	--ui-border-strong: #3a4352;
+	--ui-text: #e7e7ea;
+	--ui-heading: #ffffff;
+	--ui-muted: #aaaab3;
+	--ui-subtle: #777985;
+	--ui-primary: #38bdf8;
+	--ui-primary-strong: #7dd3fc;
+	--ui-primary-soft: #082f49;
+	--ui-primary-muted: #0b2537;
+	--ui-info: #7dd3fc;
+	--ui-info-soft: #082b3f;
 	--ui-success: #5bd8a0;
 	--ui-success-soft: #123426;
 	--ui-warning: #ffc46b;
@@ -27,10 +27,10 @@
 	--ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
 	--ui-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32);
 	--ui-shadow-lg: 0 24px 58px rgba(0, 0, 0, 0.38);
-	--ui-focus: 0 0 0 3px rgba(124, 156, 255, 0.24);
+	--ui-focus: 0 0 0 3px rgba(56, 189, 248, 0.24);
 	background:
-		radial-gradient(circle at 50% -20%, rgba(124, 156, 255, 0.18), transparent 34%),
-		#0a0f1a !important;
+		radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.12), transparent 34%),
+		linear-gradient(180deg, #000000 0%, #05070b 100%) !important;
 	color: var(--ui-text) !important;
 }
 
@@ -47,12 +47,15 @@
 }
 
 .dark .admin-shell .admin-content {
-	background: var(--ui-bg) !important;
+	background:
+		radial-gradient(circle at 50% -24%, rgba(255, 255, 255, 0.04), transparent 24rem),
+		linear-gradient(180deg, #000000 0, var(--ui-bg) 280px),
+		var(--ui-bg) !important;
 	color: var(--ui-text) !important;
 }
 
 .dark .admin-shell .admin-topbar {
-	background: rgba(20, 28, 43, 0.94) !important;
+	background: rgba(13, 15, 20, 0.94) !important;
 }
 
 .dark .admin-shell .admin-brand {
@@ -94,7 +97,7 @@
 .dark .admin-shell .admin-menu-link:hover,
 .dark .admin-shell .admin-menu-link.active {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.28) !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	color: var(--ui-heading) !important;
 }
 
@@ -146,7 +149,7 @@
 	[class*="popover"],
 	[class*="menu"]
 ) {
-	background-color: var(--ui-surface) !important;
+	background: var(--ui-surface) !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
 	box-shadow: var(--ui-shadow-sm) !important;
@@ -177,7 +180,7 @@
 	[class*="stats"] > div,
 	[class*="meta"] > div
 ) {
-	background-color: var(--ui-surface-soft) !important;
+	background: var(--ui-surface-soft) !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
 }
@@ -243,7 +246,7 @@
 	.customers-product-toggle,
 	.campaign-product-picker-trigger--field
 ) {
-	background-color: var(--ui-surface-soft) !important;
+	background: var(--ui-surface-soft) !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
 	box-shadow: none !important;
@@ -269,7 +272,7 @@
 	[class*="trigger"],
 	[class*="action"]
 ) {
-	background-color: var(--ui-surface-soft) !important;
+	background: var(--ui-surface-soft) !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
 	box-shadow: none !important;
@@ -294,7 +297,7 @@
 	.template-library-header-actions .button.primary,
 	.pagination-page-btn.is-active
 ) {
-	background-color: var(--ui-primary) !important;
+	background: var(--ui-primary) !important;
 	border-color: var(--ui-primary) !important;
 	color: #08111f !important;
 }
@@ -307,7 +310,7 @@
 	[class*="trigger"]:hover:not(:disabled),
 	[class*="action"]:hover:not(:disabled)
 ) {
-	background-color: var(--ui-surface-muted) !important;
+	background: var(--ui-surface-muted) !important;
 	border-color: var(--ui-border-strong) !important;
 	color: var(--ui-heading) !important;
 	transform: none !important;
@@ -330,7 +333,7 @@
 	.template-library-header-actions .button.primary:hover:not(:disabled),
 	.page-header button:hover:not(:disabled)
 ) {
-	background-color: var(--ui-primary-strong) !important;
+	background: var(--ui-primary-strong) !important;
 	border-color: var(--ui-primary-strong) !important;
 	color: #07101d !important;
 }
@@ -349,8 +352,8 @@
 	[class*="kicker"],
 	[class*="avatar"]
 ) {
-	background-color: var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.28) !important;
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	color: var(--ui-primary-strong) !important;
 }
 
@@ -364,9 +367,9 @@
 	.template-library-selected-banner
 ) {
 	background:
-		linear-gradient(135deg, rgba(124, 156, 255, 0.12), transparent 48%),
+		linear-gradient(135deg, rgba(56, 189, 248, 0.1), transparent 48%),
 		var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.42) !important;
+	border-color: rgba(56, 189, 248, 0.38) !important;
 	color: var(--ui-heading) !important;
 	box-shadow: inset 3px 0 0 var(--ui-primary) !important;
 }
@@ -393,8 +396,8 @@
 	.template-list-card.selected .campaign-badge,
 	.template-list-card.selected .template-chip
 ) {
-	background-color: rgba(124, 156, 255, 0.18) !important;
-	border-color: rgba(124, 156, 255, 0.34) !important;
+	background: rgba(56, 189, 248, 0.16) !important;
+	border-color: rgba(56, 189, 248, 0.34) !important;
 	color: var(--ui-primary-strong) !important;
 }
 
@@ -429,10 +432,10 @@
 .dark .admin-shell .admin-content .campaigns-tab-button.is-active,
 .dark .admin-shell .admin-content .campaigns-tab-button.is-active:hover:not(:disabled) {
 	background:
-		linear-gradient(135deg, rgba(124, 156, 255, 0.16), transparent 48%),
+		linear-gradient(135deg, rgba(56, 189, 248, 0.13), transparent 48%),
 		var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.5) !important;
-	box-shadow: inset 0 0 0 1px rgba(124, 156, 255, 0.18) !important;
+	border-color: rgba(56, 189, 248, 0.48) !important;
+	box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.16) !important;
 	color: var(--ui-heading) !important;
 }
 
@@ -502,7 +505,7 @@
 	.campaign-custom-audience-empty
 ) {
 	background:
-		linear-gradient(135deg, rgba(124, 156, 255, 0.035), transparent 46%),
+		linear-gradient(135deg, rgba(56, 189, 248, 0.035), transparent 46%),
 		var(--ui-surface) !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
@@ -550,9 +553,9 @@
 	.campaign-customer-card.selected
 ) {
 	background:
-		linear-gradient(135deg, rgba(124, 156, 255, 0.16), transparent 48%),
+		linear-gradient(135deg, rgba(56, 189, 248, 0.13), transparent 48%),
 		var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.5) !important;
+	border-color: rgba(56, 189, 248, 0.48) !important;
 	color: var(--ui-heading) !important;
 	box-shadow: inset 3px 0 0 var(--ui-primary) !important;
 }
@@ -654,7 +657,7 @@
 	.campaign-custom-audience-pill
 ) {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.28) !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	color: var(--ui-primary-strong) !important;
 }
 
@@ -717,7 +720,7 @@
 	.campaign-inline-summary-item
 ) {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(124, 156, 255, 0.28) !important;
+	border-color: rgba(56, 189, 248, 0.28) !important;
 	color: var(--ui-primary-strong) !important;
 }
 
@@ -728,7 +731,7 @@
 	.inbox-realtime-badge--live,
 	.campaign-schedule-status.is-active
 ) {
-	background-color: var(--ui-success-soft) !important;
+	background: var(--ui-success-soft) !important;
 	border-color: rgba(91, 216, 160, 0.32) !important;
 	color: var(--ui-success) !important;
 }
@@ -739,7 +742,7 @@
 	.inbox-badge--human,
 	.inbox-realtime-badge--fallback
 ) {
-	background-color: var(--ui-warning-soft) !important;
+	background: var(--ui-warning-soft) !important;
 	border-color: rgba(255, 196, 107, 0.34) !important;
 	color: var(--ui-warning) !important;
 }
@@ -751,7 +754,7 @@
 	[class*="delete"],
 	[class*="remove"]
 ) {
-	background-color: var(--ui-danger-soft) !important;
+	background: var(--ui-danger-soft) !important;
 	border-color: rgba(255, 141, 133, 0.34) !important;
 	color: var(--ui-danger) !important;
 }
@@ -762,19 +765,19 @@
 	.inbox-badge--ai,
 	.status-new
 ) {
-	background-color: var(--ui-info-soft) !important;
+	background: var(--ui-info-soft) !important;
 	border-color: rgba(140, 181, 255, 0.32) !important;
 	color: var(--ui-info) !important;
 }
 
 .dark .admin-shell .admin-content :where(table, thead, tbody, tr, th, td) {
-	background-color: transparent !important;
+	background: transparent !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
 }
 
 .dark .admin-shell .admin-content :where(th) {
-	background-color: var(--ui-surface-soft) !important;
+	background: var(--ui-surface-soft) !important;
 	color: var(--ui-muted) !important;
 }
 
@@ -784,7 +787,7 @@
 	.wam-phone__bubble
 ) {
 	background:
-		linear-gradient(135deg, rgba(124, 156, 255, 0.08), transparent 42%),
+		linear-gradient(135deg, rgba(56, 189, 248, 0.08), transparent 42%),
 		var(--ui-surface) !important;
 	border-color: var(--ui-border) !important;
 	color: var(--ui-text) !important;
@@ -813,6 +816,6 @@
 }
 
 .dark .admin-shell .admin-content :where(::selection) {
-	background: rgba(124, 156, 255, 0.34) !important;
+	background: rgba(56, 189, 248, 0.34) !important;
 	color: var(--ui-heading) !important;
 }
