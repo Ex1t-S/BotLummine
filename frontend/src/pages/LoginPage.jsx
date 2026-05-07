@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
-import logoBladeIA from '../assets/bladeia-logo.png';
+import logoBladeIA from '../assets/app-logo-mark.png';
 import './LoginPage.css';
 
 const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));

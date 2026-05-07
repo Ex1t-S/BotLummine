@@ -1,4 +1,4 @@
-import logoBladeIA from '../../assets/bladeia-logo.png';
+import logoBladeIA from '../../assets/app-logo-mark.png';
 
 export default function BrandLoader({ label = 'Cargando' }) {
 	return (
