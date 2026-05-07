@@ -819,3 +819,43 @@
 	background: rgba(56, 189, 248, 0.34) !important;
 	color: var(--ui-heading) !important;
 }
+
+/* Keep broad dark-mode container rules from painting text fragments as panels. */
+.dark .admin-shell .admin-content :where(
+	.inbox-message-row,
+	.inbox-message-bubble-inner,
+	.inbox-message-body,
+	.inbox-message-text-chunk,
+	.inbox-message-meta,
+	.inbox-message-sender-pill,
+	.inbox-message-status,
+	.inbox-contact-content,
+	.campaign-list-body,
+	.campaign-preview-body,
+	.campaigns-tab-shell__body,
+	.campaign-accordion-body,
+	.campaign-unified-segment__body,
+	.campaign-recipient-meta,
+	.campaign-schedule-meta,
+	.template-list-card-title,
+	.template-list-card-title p,
+	.template-list-card-title strong,
+	.wam-menu-item__meta,
+	.wam-option-card__content,
+	.wam-option-card__summary-main,
+	.customer-meta-row
+) {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.inbox-message-body,
+	.inbox-message-text-chunk,
+	.inbox-message-link,
+	.campaign-list-body,
+	.campaign-preview-body
+) {
+	color: var(--ui-text) !important;
+}
