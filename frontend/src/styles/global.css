@@ -4141,57 +4141,74 @@ textarea:focus,
 }
 
 .dark .admin-shell .admin-content :where(
-	[class$="-actions"],
-	[class*="-actions "],
-	[class*="-actions--"],
-	[class*="__actions"],
-	[class$="-top"],
-	[class*="-top "],
-	[class*="-top--"],
-	[class*="__top"],
-	[class$="-bottom"],
-	[class*="-bottom "],
-	[class*="-bottom--"],
-	[class*="__bottom"],
-	[class$="-title"],
-	[class*="-title "],
-	[class*="-title--"],
-	[class*="__title"],
-	[class$="-copy"],
-	[class*="-copy "],
-	[class*="-copy--"],
-	[class*="__copy"],
-	[class$="-content"],
-	[class*="-content "],
-	[class*="-content--"],
-	[class*="__content"],
-	[class$="-body"],
-	[class*="-body "],
-	[class*="-body--"],
-	[class*="__body"],
-	[class$="-meta"],
-	[class*="-meta "],
-	[class*="-meta--"],
-	[class*="__meta"],
-	[class$="-main"],
-	[class*="-main "],
-	[class*="-main--"],
-	[class*="__main"],
-	[class$="-inner"],
-	[class*="-inner "],
-	[class*="-inner--"],
-	[class*="__inner"],
-	[class$="-tags"],
-	[class*="-tags "],
-	[class*="-tags--"],
-	[class*="__tags"],
-	[class$="-footer"],
-	[class*="-footer "],
-	[class*="-footer--"],
-	[class*="__footer"]
+	.inbox-chat-header,
+	.inbox-chat-header-top,
+	.inbox-actions,
+	.inbox-actions-primary,
+	.inbox-actions-danger,
+	.inbox-badges,
+	.inbox-section-header,
+	.inbox-section-title,
+	.template-library-header,
+	.template-library-header > div,
+	.template-library-header-actions,
+	.template-library-selected-status,
+	.metric-panel__label,
+	.metric-panel__helper,
+	.metric-panel__value,
+	.campaigns-tab-shell__header,
+	.campaigns-tab-shell__body,
+	.campaign-filters-grid,
+	.campaign-filters-grid .field,
+	.campaign-filters-grid label,
+	.campaign-panel-header,
+	.campaign-panel-header--stacked,
+	.campaign-detail-header,
+	.campaign-inline-actions,
+	.campaign-inline-actions--wrap,
+	.campaign-detail-actions,
+	.campaign-detail-actions--spaced,
+	.campaign-form-actions,
+	.campaign-form-actions--end,
+	.wam-hero__actions,
+	.wam-option-card__actions,
+	.customers-hero-actions,
+	.customers-filter-actions,
+	.abandoned-card-actions,
+	.abandoned-message-actions,
+	.operations-header-actions
 ) {
 	background: transparent !important;
 	border-color: transparent !important;
 	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-shell,
+	.campaigns-tab-shell,
+	.campaign-panel--soft
+) {
+	background:
+		linear-gradient(180deg, rgba(13, 15, 20, 0.42), rgba(5, 7, 11, 0.52)),
+		var(--ui-bg) !important;
+	border-color: rgba(56, 189, 248, 0.12) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-selected-label,
+	.campaigns-tab-shell__eyebrow
+) {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: var(--ui-primary-strong) !important;
+	padding-inline: 0 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-source-switch__button.is-active::after {
+	background: transparent !important;
+	color: var(--ui-primary-strong) !important;
+	padding-inline: 0 !important;
 }
 

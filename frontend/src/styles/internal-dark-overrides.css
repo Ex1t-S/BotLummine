@@ -111,43 +111,91 @@
 	.page-card,
 	.internal-page-header,
 	.page-header,
-	[class*="card"],
-	[class*="panel"],
-	[class*="shell"],
-	[class*="box"],
-	[class*="tile"],
-	[class*="widget"],
-	[class*="metric"],
-	[class*="stat"],
-	[class*="summary"],
-	[class*="preview"],
-	[class*="composer"],
-	[class*="toolbar"],
-	[class*="topbar"],
-	[class*="hero"],
-	[class*="banner"],
-	[class*="header"],
-	[class*="section"],
-	[class*="block"],
-	[class*="option"],
-	[class*="item"],
-	[class*="row"],
-	[class*="list"],
-	[class*="table"],
-	[class*="wrap"],
-	[class*="empty"],
-	[class*="state"],
-	[class*="modal"],
-	[class*="dialog"],
-	[class*="phone"],
-	[class*="bubble"],
-	[class*="filters"],
-	[class*="form"],
-	[class*="picker"],
-	[class*="multiselect"],
-	[class*="dropdown"],
-	[class*="popover"],
-	[class*="menu"]
+	.tenant-admin-header,
+	.tenant-admin-panel,
+	.customers-hero-card,
+	.customers-sync-panel,
+	.customers-filters-card,
+	.customers-list-card,
+	.customers-stat-card,
+	.customer-card,
+	.customer-section-box,
+	.customer-total-box,
+	.customer-meta-chip,
+	.product-multiselect,
+	.abandoned-card,
+	.abandoned-card-focus,
+	.abandoned-message-box,
+	.abandoned-template-note,
+	.abandoned-contact-note,
+	.stat-box,
+	.catalog-card,
+	.catalog-search-form,
+	.catalog-state,
+	.catalog-empty-state,
+	.campaign-shell-card,
+	.campaigns-hero,
+	.campaigns-tab-shell,
+	.campaign-panel,
+	.campaign-list,
+	.campaign-list-card,
+	.campaign-inline-summary,
+	.campaign-inline-summary-item,
+	.campaign-filters-grid,
+	.campaign-custom-audience-card,
+	.campaign-custom-audience-recipient,
+	.campaign-custom-audience-preview,
+	.campaign-schedule-card,
+	.campaign-schedule-form,
+	.campaign-schedule-section,
+	.campaign-toggle--card,
+	.campaign-source-switch,
+	.campaign-segment-summary-card,
+	.template-builder-shell,
+	.template-builder-section,
+	.template-media-upload-box,
+	.template-media-preview-card,
+	.template-media-preview-meta,
+	.template-media-empty,
+	.template-soft-empty,
+	.template-button-card,
+	.template-review-card,
+	.template-preview-card-sticky,
+	.template-preview-tip,
+	.template-preview-image-wrap,
+	.template-preview-image-empty,
+	.template-list-card,
+	.template-library-selected-banner,
+	.campaign-choice-card,
+	.campaign-customer-filters,
+	.campaign-customer-results,
+	.campaign-customer-card,
+	.campaign-customer-product,
+	.campaign-custom-audience-recipient-product,
+	.campaign-custom-audience-recipient-preview,
+	.campaign-custom-audience-empty,
+	.wam-card,
+	.wam-hero,
+	.wam-block,
+	.wam-option-card,
+	.wam-option-card__summary,
+	.wam-advanced,
+	.wam-phone,
+	.wam-phone__top,
+	.wam-phone__option,
+	.operations-header,
+	.operations-metric-card,
+	.operations-workspace-card,
+	.operations-issue,
+	.inbox-sidebar,
+	.inbox-chat-panel,
+	.inbox-contact-card,
+	.inbox-composer-shell,
+	.inbox-composer,
+	.inbox-selected-file,
+	.inbox-emoji-picker,
+	.metric-panel,
+	.metric-panel__icon
 ) {
 	background: var(--ui-surface) !important;
 	border-color: var(--ui-border) !important;
@@ -156,29 +204,25 @@
 }
 
 .dark .admin-shell .admin-content :where(
-	[class*="meta"],
-	[class*="muted"],
-	[class*="subtle"],
-	[class*="note"],
-	[class*="hint"],
-	[class*="helper"],
-	[class*="description"],
-	[class*="subtitle"],
-	[class*="lead"],
-	[class*="body"],
-	[class*="content"],
-	[class*="scroll"],
-	[class*="grid"],
-	[class*="choice"],
-	[class*="filter"],
-	[class*="progress"],
-	[class*="track"],
-	[class*="thumb"],
-	[class*="screen"],
-	[class*="messages"],
-	[class*="products"],
-	[class*="stats"] > div,
-	[class*="meta"] > div
+	.customers-sync-stats > div,
+	.product-option-empty,
+	.abandoned-meta-grid > div,
+	.abandoned-products,
+	.catalog-thumb,
+	.catalog-thumb-empty,
+	.inbox-queue-tabs,
+	.inbox-read-filters,
+	.inbox-messages,
+	.inbox-chat-empty,
+	.chat-messages,
+	.chat-form,
+	.wam-topbar,
+	.wam-menu-list,
+	.wam-menu-item,
+	.wam-preview,
+	.campaign-recipient-preview-table,
+	.tenant-admin-table-wrap,
+	.customer-table-scroll
 ) {
 	background: var(--ui-surface-soft) !important;
 	border-color: var(--ui-border) !important;
@@ -208,11 +252,22 @@
 	h4,
 	strong,
 	b,
-	[class*="title"],
-	[class*="heading"],
-	[class*="name"],
-	[class*="label"],
-	[class*="value"]
+	.contact-name,
+	.inbox-contact-name,
+	.inbox-chat-title,
+	.inbox-message-body,
+	.chat-body,
+	.customer-identity-copy h4,
+	.customer-total-box strong,
+	.customer-meta-chip strong,
+	.customer-footer-row strong,
+	.campaign-list-card-title,
+	.campaign-custom-audience-preview-title,
+	.metric-panel__value,
+	.wam-section-head h2,
+	.wam-section-head h3,
+	.wam-menu-item__top,
+	.wam-option-card__summary-main
 ) {
 	color: var(--ui-heading) !important;
 }
@@ -223,16 +278,37 @@
 	label,
 	span,
 	em,
-	[class*="muted"],
-	[class*="subtle"],
-	[class*="meta"],
-	[class*="helper"],
-	[class*="hint"],
-	[class*="note"],
-	[class*="subtitle"],
-	[class*="description"],
-	[class*="empty"],
-	[class*="time"]
+	.muted-text,
+	.soft-status,
+	.contact-time,
+	.contact-phone,
+	.contact-preview,
+	.inbox-sidebar-top span,
+	.inbox-section-subtle,
+	.inbox-contact-time,
+	.inbox-contact-preview,
+	.inbox-chat-subtitle,
+	.inbox-message-meta,
+	.inbox-list-end,
+	.chat-meta,
+	.customers-hero-copy p,
+	.customers-list-topbar p,
+	.customers-sync-top p,
+	.customers-sync-window,
+	.customer-identity-copy p,
+	.customer-footer-row,
+	.customer-products-empty,
+	.abandoned-head-copy p,
+	.abandoned-meta-grid span,
+	.campaigns-hero-lead,
+	.campaign-custom-audience-subtext,
+	.campaign-custom-audience-preview-subtitle,
+	.metric-panel__label,
+	.metric-panel__helper,
+	.wam-hero p,
+	.wam-menu-item__meta,
+	.wam-phone__meta,
+	.operations-header p
 ) {
 	color: var(--ui-muted) !important;
 }
@@ -267,10 +343,25 @@
 .dark .admin-shell .admin-content :where(
 	button,
 	.button,
-	[class*="btn"],
-	[class*="button"],
-	[class*="trigger"],
-	[class*="action"]
+	.secondary-link-btn,
+	.customers-visibility-btn,
+	.pagination-btn,
+	.pagination-page-btn,
+	.toolbar-group button,
+	.inbox-action-btn,
+	.inbox-sidebar-refresh,
+	.inbox-load-more,
+	.inbox-load-older-messages,
+	.inbox-emoji-trigger,
+	.inbox-attach-trigger,
+	.inbox-selected-file-remove,
+	.wam-button,
+	.internal-action-btn,
+	.campaigns-tab-button,
+	.campaign-source-switch__button,
+	.campaign-schedule-audience-choice__button,
+	.campaign-product-picker-trigger--field,
+	.template-upload-button
 ) {
 	background: var(--ui-surface-soft) !important;
 	border-color: var(--ui-border) !important;
@@ -305,10 +396,19 @@
 .dark .admin-shell .admin-content :where(
 	button:hover:not(:disabled),
 	.button:hover:not(:disabled),
-	[class*="btn"]:hover:not(:disabled),
-	[class*="button"]:hover:not(:disabled),
-	[class*="trigger"]:hover:not(:disabled),
-	[class*="action"]:hover:not(:disabled)
+	.secondary-link-btn:hover:not(:disabled),
+	.customers-visibility-btn:hover:not(:disabled),
+	.pagination-btn:hover:not(:disabled),
+	.pagination-page-btn:hover:not(:disabled),
+	.toolbar-group button:hover:not(:disabled),
+	.inbox-action-btn:hover:not(:disabled),
+	.wam-button:hover:not(:disabled),
+	.internal-action-btn:hover:not(:disabled),
+	.campaigns-tab-button:hover:not(:disabled),
+	.campaign-source-switch__button:hover:not(:disabled),
+	.campaign-schedule-audience-choice__button:hover:not(:disabled),
+	.campaign-product-picker-trigger--field:hover:not(:disabled),
+	.template-upload-button:hover:not(:disabled)
 ) {
 	background: var(--ui-surface-muted) !important;
 	border-color: var(--ui-border-strong) !important;
@@ -338,19 +438,34 @@
 	color: #07101d !important;
 }
 
-.dark .admin-shell .admin-content :where(button *, .button *, [class*="btn"] *, [class*="button"] *) {
+.dark .admin-shell .admin-content :where(button *, .button *, .wam-button *, .inbox-action-btn *) {
 	color: inherit !important;
 }
 
 .dark .admin-shell .admin-content :where(
-	[class*="badge"],
-	[class*="pill"],
-	[class*="chip"],
-	[class*="status"],
-	[class*="tag"],
-	[class*="eyebrow"],
-	[class*="kicker"],
-	[class*="avatar"]
+	.queue-pill,
+	.tenant-admin-pill,
+	.campaign-badge,
+	.campaign-chip,
+	.campaign-schedule-status,
+	.status-badge,
+	.internal-status-badge,
+	.wam-chip,
+	.wam-pill,
+	.customer-payment-badge,
+	.inbox-badge,
+	.customers-active-filter-badge,
+	.selected-product-chip,
+	.customer-order-badge,
+	.metric-panel__action,
+	.template-chip,
+	.template-library-selected-label,
+	.template-preview-meta-label,
+	.template-builder-section-step,
+	.campaign-step-badge,
+	.campaign-custom-audience-pill,
+	.campaigns-eyebrow,
+	.campaigns-tab-shell__eyebrow
 ) {
 	background: var(--ui-primary-muted) !important;
 	border-color: rgba(56, 189, 248, 0.28) !important;
@@ -725,11 +840,15 @@
 }
 
 .dark .admin-shell .admin-content :where(
-	[class*="success"],
-	[class*="paid"],
+	.tenant-admin-alert.success,
+	.customers-feedback--success,
+	.sync-summary-banner,
+	.wam-alert--success,
+	.inbox-action-feedback,
 	.status-contacted,
 	.inbox-realtime-badge--live,
-	.campaign-schedule-status.is-active
+	.campaign-schedule-status.is-active,
+	.customer-payment-badge.is-paid
 ) {
 	background: var(--ui-success-soft) !important;
 	border-color: rgba(91, 216, 160, 0.32) !important;
@@ -737,10 +856,11 @@
 }
 
 .dark .admin-shell .admin-content :where(
-	[class*="warning"],
-	[class*="pending"],
+	.customers-sync-note--warning,
 	.inbox-badge--human,
-	.inbox-realtime-badge--fallback
+	.inbox-realtime-badge--fallback,
+	.customer-payment-badge.is-pending,
+	.template-chip--warning
 ) {
 	background: var(--ui-warning-soft) !important;
 	border-color: rgba(255, 196, 107, 0.34) !important;
@@ -748,11 +868,19 @@
 }
 
 .dark .admin-shell .admin-content :where(
-	[class*="danger"],
-	[class*="error"],
-	[class*="refunded"],
-	[class*="delete"],
-	[class*="remove"]
+	.tenant-admin-alert.error,
+	.customers-feedback--error,
+	.customers-sync-note--error,
+	.campaign-inline-error,
+	.campaign-feedback.error,
+	.campaign-schedule-error,
+	.inbox-composer-feedback--error,
+	.inbox-action-btn--danger,
+	.inbox-actions-danger .inbox-action-btn,
+	.wam-button--danger,
+	.wam-alert--error,
+	.customer-payment-badge.is-refunded,
+	.button.danger
 ) {
 	background: var(--ui-danger-soft) !important;
 	border-color: rgba(255, 141, 133, 0.34) !important;
@@ -760,9 +888,10 @@
 }
 
 .dark .admin-shell .admin-content :where(
-	[class*="info"],
-	[class*="authorized"],
 	.inbox-badge--ai,
+	.inbox-action-feedback--busy,
+	.inbox-composer-feedback--sending,
+	.customer-payment-badge.is-authorized,
 	.status-new
 ) {
 	background: var(--ui-info-soft) !important;
@@ -820,8 +949,8 @@
 	color: var(--ui-heading) !important;
 }
 
-/* Keep broad dark-mode container rules from painting text fragments as panels. */
-.dark .admin-shell .admin-content :where(
+/* Keep layout wrappers from being painted as panels. */
+.dark .admin-shell .admin-content :is(
 	.inbox-message-row,
 	.inbox-message-bubble-inner,
 	.inbox-message-body,
@@ -860,7 +989,7 @@
 	box-shadow: none !important;
 }
 
-.dark .admin-shell .admin-content :where(
+.dark .admin-shell .admin-content :is(
 	.inbox-message-body,
 	.inbox-message-text-chunk,
 	.inbox-message-link,
@@ -870,57 +999,79 @@
 	color: var(--ui-text) !important;
 }
 
-.dark .admin-shell .admin-content :where(
-	[class$="-actions"],
-	[class*="-actions "],
-	[class*="-actions--"],
-	[class*="__actions"],
-	[class$="-top"],
-	[class*="-top "],
-	[class*="-top--"],
-	[class*="__top"],
-	[class$="-bottom"],
-	[class*="-bottom "],
-	[class*="-bottom--"],
-	[class*="__bottom"],
-	[class$="-title"],
-	[class*="-title "],
-	[class*="-title--"],
-	[class*="__title"],
-	[class$="-copy"],
-	[class*="-copy "],
-	[class*="-copy--"],
-	[class*="__copy"],
-	[class$="-content"],
-	[class*="-content "],
-	[class*="-content--"],
-	[class*="__content"],
-	[class$="-body"],
-	[class*="-body "],
-	[class*="-body--"],
-	[class*="__body"],
-	[class$="-meta"],
-	[class*="-meta "],
-	[class*="-meta--"],
-	[class*="__meta"],
-	[class$="-main"],
-	[class*="-main "],
-	[class*="-main--"],
-	[class*="__main"],
-	[class$="-inner"],
-	[class*="-inner "],
-	[class*="-inner--"],
-	[class*="__inner"],
-	[class$="-tags"],
-	[class*="-tags "],
-	[class*="-tags--"],
-	[class*="__tags"],
-	[class$="-footer"],
-	[class*="-footer "],
-	[class*="-footer--"],
-	[class*="__footer"]
+.dark .admin-shell .admin-content :is(
+	.inbox-chat-header,
+	.inbox-chat-header-top,
+	.inbox-actions,
+	.inbox-actions-primary,
+	.inbox-actions-danger,
+	.inbox-badges,
+	.inbox-section-header,
+	.inbox-section-title,
+	.template-library-header,
+	.template-library-header > div,
+	.template-library-header-actions,
+	.template-library-selected-status,
+	.metric-panel__label,
+	.metric-panel__helper,
+	.metric-panel__value,
+	.campaigns-tab-shell__header,
+	.campaigns-tab-shell__body,
+	.campaign-filters-grid,
+	.campaign-filters-grid .field,
+	.campaign-filters-grid label,
+	.campaign-panel-header,
+	.campaign-panel-header--stacked,
+	.campaign-detail-header,
+	.campaign-inline-actions,
+	.campaign-inline-actions--wrap,
+	.campaign-detail-actions,
+	.campaign-detail-actions--spaced,
+	.campaign-form-actions,
+	.campaign-form-actions--end,
+	.wam-hero__actions,
+	.wam-option-card__actions,
+	.customers-hero-actions,
+	.customers-filter-actions,
+	.abandoned-card-actions,
+	.abandoned-message-actions,
+	.operations-header-actions
 ) {
 	background: transparent !important;
 	border-color: transparent !important;
 	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-shell,
+	.campaigns-tab-shell,
+	.campaign-panel--soft
+),
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.template-library-shell,
+	.campaigns-tab-shell,
+	.campaign-panel--soft
+) {
+	background:
+		linear-gradient(180deg, rgba(13, 15, 20, 0.42), rgba(5, 7, 11, 0.52)),
+		var(--ui-bg) !important;
+	border-color: rgba(56, 189, 248, 0.12) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.template-library-selected-label,
+	.campaigns-tab-shell__eyebrow
+) {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: var(--ui-primary-strong) !important;
+	padding-inline: 0 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-source-switch__button.is-active::after {
+	background: transparent !important;
+	color: var(--ui-primary-strong) !important;
+	padding-inline: 0 !important;
 }
