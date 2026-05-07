@@ -230,10 +230,6 @@
 }
 
 .dark .admin-shell .admin-content :where(
-	.inbox-messages,
-	.inbox-chat-empty,
-	.chat-messages,
-	.wam-phone__screen,
 	.catalog-thumb,
 	.catalog-thumb-empty,
 	.workspace-card-chart
@@ -243,6 +239,17 @@
 		linear-gradient(90deg, rgba(232, 237, 247, 0.025) 1px, transparent 1px),
 		var(--ui-surface-soft) !important;
 	background-size: 34px 34px !important;
+}
+
+.dark .admin-shell .admin-content :where(
+	.inbox-messages,
+	.inbox-chat-empty,
+	.chat-messages,
+	.wam-phone__screen
+) {
+	background: var(--ui-surface-soft) !important;
+	background-image: none !important;
+	background-size: auto !important;
 }
 
 .dark .admin-shell .admin-content :where(
@@ -1074,4 +1081,46 @@
 	background: transparent !important;
 	color: var(--ui-primary-strong) !important;
 	padding-inline: 0 !important;
+}
+
+.dark .admin-shell .admin-content .customers-filter-grid,
+.dark .admin-shell .admin-content .customers-filter-group,
+.dark .admin-shell .admin-content .customers-toggle-row,
+.dark .admin-shell .admin-content .customers-checkbox {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .customers-filter-group label {
+	align-self: flex-start !important;
+	width: fit-content !important;
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: var(--ui-muted) !important;
+	line-height: 1.2 !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page .template-library-summary {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page .template-library-summary .campaign-inline-summary-item {
+	background: var(--ui-primary-muted) !important;
+	border-color: rgba(56, 189, 248, 0.34) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page .template-library-selected-label {
+	display: inline-flex !important;
+	align-items: center !important;
+	width: fit-content !important;
+	max-width: max-content !important;
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	padding: 0 !important;
 }
