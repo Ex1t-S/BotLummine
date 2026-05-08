@@ -215,6 +215,19 @@ function toNumber(value) {
 	return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeLower(value = '') {
+	return normalizeString(value).toLowerCase();
+}
+
+function normalizePhone(value = '') {
+	return String(value || '').replace(/\D+/g, '');
+}
+
+function isPaidLikeStatus(value = '') {
+	const status = normalizeLower(value);
+	return ['paid', 'authorized', 'partially_paid', 'completed', 'fulfilled', 'closed'].includes(status);
+}
+
 function subtractDays(days = 0) {
 	return new Date(Date.now() - Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000);
 }
@@ -264,6 +277,105 @@ function applyEstimatedCost(metrics) {
 	metrics.deliveryRate = ratio(metrics.deliveredRecipientsCount, metrics.sentRecipientsCount);
 	metrics.readRate = ratio(metrics.readRecipientsCount, metrics.deliveredRecipientsCount || metrics.sentRecipientsCount);
 	return metrics;
+}
+
+async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
+	if (!workspaceIds.length) return new Map();
+
+	const [carts, orders] = await Promise.all([
+		prisma.abandonedCart.findMany({
+			where: { workspaceId: { in: workspaceIds } },
+			select: {
+				id: true,
+				workspaceId: true,
+				storeId: true,
+				checkoutId: true,
+				token: true,
+				contactEmail: true,
+				contactPhone: true,
+				status: true,
+				totalAmount: true,
+				checkoutCreatedAt: true,
+				createdAt: true,
+			},
+		}),
+		prisma.customerOrder.findMany({
+			where: { workspaceId: { in: workspaceIds } },
+			select: {
+				id: true,
+				workspaceId: true,
+				storeId: true,
+				orderId: true,
+				orderNumber: true,
+				token: true,
+				contactEmail: true,
+				normalizedEmail: true,
+				contactPhone: true,
+				normalizedPhone: true,
+				status: true,
+				paymentStatus: true,
+				orderCreatedAt: true,
+				createdAt: true,
+			},
+		}),
+	]);
+
+	const makeKey = (workspaceId, storeId, type, value) => {
+		const normalized = type === 'phone' ? normalizePhone(value) : normalizeLower(value);
+		if (!workspaceId || !normalized) return '';
+		return [workspaceId, storeId || '', type, normalized].join('::');
+	};
+	const indexes = {
+		checkout: new Map(),
+		token: new Map(),
+		email: new Map(),
+		phone: new Map(),
+	};
+	const addToIndex = (type, key, order) => {
+		if (!key) return;
+		if (!indexes[type].has(key)) indexes[type].set(key, []);
+		indexes[type].get(key).push(order);
+	};
+
+	for (const order of orders) {
+		if (!isPaidLikeStatus(order.paymentStatus) && !isPaidLikeStatus(order.status)) continue;
+		addToIndex('checkout', makeKey(order.workspaceId, order.storeId, 'checkout', order.orderId), order);
+		addToIndex('checkout', makeKey(order.workspaceId, order.storeId, 'checkout', order.orderNumber), order);
+		addToIndex('token', makeKey(order.workspaceId, order.storeId, 'token', order.token), order);
+		addToIndex('email', makeKey(order.workspaceId, order.storeId, 'email', order.normalizedEmail || order.contactEmail), order);
+		addToIndex('phone', makeKey(order.workspaceId, order.storeId, 'phone', order.normalizedPhone || order.contactPhone), order);
+	}
+
+	const result = new Map(workspaceIds.map((workspaceId) => [workspaceId, { count: 0, value: 0 }]));
+	const matchedCartIds = new Set();
+	const cartHasPaidOrder = (cart) => {
+		const cartAt = cart.checkoutCreatedAt || cart.createdAt || null;
+		const keys = [
+			['checkout', makeKey(cart.workspaceId, cart.storeId, 'checkout', cart.checkoutId)],
+			['token', makeKey(cart.workspaceId, cart.storeId, 'token', cart.token)],
+			['email', makeKey(cart.workspaceId, cart.storeId, 'email', cart.contactEmail)],
+			['phone', makeKey(cart.workspaceId, cart.storeId, 'phone', cart.contactPhone)],
+		];
+		for (const [type, key] of keys) {
+			const candidates = indexes[type].get(key) || [];
+			if (candidates.some((order) => !cartAt || (order.orderCreatedAt || order.createdAt || new Date(0)) >= cartAt)) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	for (const cart of carts) {
+		if (cart.status !== 'RECOVERED' && !cartHasPaidOrder(cart)) continue;
+		if (matchedCartIds.has(cart.id)) continue;
+		matchedCartIds.add(cart.id);
+		const metrics = result.get(cart.workspaceId) || { count: 0, value: 0 };
+		metrics.count += 1;
+		metrics.value += toNumber(cart.totalAmount);
+		result.set(cart.workspaceId, metrics);
+	}
+
+	return result;
 }
 
 async function buildWorkspaceAnalyticsDetail(workspaceId) {
@@ -660,6 +772,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			activeConversationRows30d,
 			unreadConversationRows,
 			campaignStatsRows,
+			recoveredCartMetrics,
 			abandonedCartRows,
 		] = await Promise.all([
 			prisma.campaign.groupBy({
@@ -711,6 +824,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 					stats: await getCampaignStats({ workspaceId }),
 				}))
 			),
+			getDetectedRecoveredCartsByWorkspace(workspaceIds),
 			prisma.abandonedCart.groupBy({
 				by: ['workspaceId', 'status'],
 				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
@@ -792,10 +906,13 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			const count = row._count?._all || 0;
 			metrics.abandonedCartsCount += count;
 			if (['CONTACTED', 'RECOVERED'].includes(row.status)) metrics.contactedCartsCount += count;
-			if (row.status === 'RECOVERED') {
-				metrics.recoveredCartsCount += count;
-				metrics.recoveredCartValue += toNumber(row._sum?.totalAmount);
-			}
+		}
+
+		for (const [workspaceId, recovered] of recoveredCartMetrics.entries()) {
+			const metrics = metricsByWorkspace.get(workspaceId);
+			if (!metrics) continue;
+			metrics.recoveredCartsCount = recovered.count || 0;
+			metrics.recoveredCartValue = recovered.value || 0;
 		}
 
 		const workspaceAnalytics = workspaces.map((workspace) => ({
