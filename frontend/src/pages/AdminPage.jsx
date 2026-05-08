@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import api, { resolveApiUrl } from '../lib/api.js';
+import api, { buildApiUrl, resolveApiUrl } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPlatformAdminUser } from '../lib/authz.js';
 import { PageHeader } from '../components/ui/InternalPage.jsx';
@@ -78,6 +78,7 @@ const platformTabs = [
 
 const brandAdminTabs = [
 	{ key: 'brand', label: 'Marca' },
+	{ key: 'integrations', label: 'Integraciones' },
 	{ key: 'content', label: 'Contenido' },
 	{ key: 'users', label: 'Usuarios' }
 ];
@@ -410,6 +411,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [commerceForm, setCommerceForm] = useState(EMPTY_COMMERCE_FORM);
 	const [logisticsForm, setLogisticsForm] = useState(EMPTY_LOGISTICS_FORM);
 	const [catalogStatus, setCatalogStatus] = useState(null);
+	const [tiendanubeStatus, setTiendanubeStatus] = useState(null);
 	const [analytics, setAnalytics] = useState(null);
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
 	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
@@ -458,10 +460,11 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function loadWorkspaceDetail(workspaceId) {
 		if (!workspaceId) return;
 
-		const [workspaceRes, usersRes, catalogRes] = await Promise.all([
+		const [workspaceRes, usersRes, catalogRes, tiendanubeStatusRes] = await Promise.all([
 			api.get(`/admin/workspaces/${workspaceId}`),
 			api.get(`/admin/workspaces/${workspaceId}/users`),
-			api.get(`/admin/workspaces/${workspaceId}/catalog/status`).catch(() => null)
+			api.get(`/admin/workspaces/${workspaceId}/catalog/status`).catch(() => null),
+			api.get('/tiendanube/status', { params: { workspaceId } }).catch(() => null)
 		]);
 
 		const nextWorkspace = workspaceRes.data.workspace || null;
@@ -470,6 +473,7 @@ export default function AdminPage({ defaultTab = '' }) {
 		setPaymentForm(mapPaymentForm(nextWorkspace));
 		setUsers(usersRes.data.users || []);
 		setCatalogStatus(catalogRes?.data?.catalog || null);
+		setTiendanubeStatus(tiendanubeStatusRes?.data || null);
 
 		const channel = nextWorkspace?.whatsappChannels?.[0] || null;
 		setChannelForm({
@@ -529,6 +533,45 @@ export default function AdminPage({ defaultTab = '' }) {
 			mounted = false;
 		};
 	}, [platformAdmin]);
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+
+		const params = new URLSearchParams(window.location.search);
+		const nextTab = params.get('tab');
+		const nextWorkspaceId = params.get('workspaceId');
+		const tiendanubeResult = params.get('tiendanube');
+		const connectedStoreId = params.get('storeId');
+
+		if (nextTab && visibleTabs.some((tab) => tab.key === nextTab)) {
+			setActiveTab(nextTab);
+		}
+
+		if (platformAdmin && nextWorkspaceId) {
+			setSelectedWorkspaceId(nextWorkspaceId);
+		}
+
+		if (tiendanubeResult === 'connected') {
+			showNotice(
+				connectedStoreId
+					? `Tienda Nube conectada. Store ID ${connectedStoreId}.`
+					: 'Tienda Nube conectada correctamente.'
+			);
+		}
+
+		if (tiendanubeResult === 'partial') {
+			setNotice('');
+			setError(
+				connectedStoreId
+					? `La tienda ${connectedStoreId} se conecto, pero quedo alguna sincronizacion pendiente.`
+					: 'La tienda se conecto, pero quedo alguna sincronizacion pendiente.'
+			);
+		}
+
+		if (nextTab || nextWorkspaceId || tiendanubeResult || connectedStoreId) {
+			window.history.replaceState({}, document.title, window.location.pathname);
+		}
+	}, [platformAdmin, visibleTabs]);
 
 	useEffect(() => {
 		const firstTab = platformAdmin ? 'workspaces' : 'brand';
@@ -733,8 +776,12 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function handleCatalogSync(provider) {
 		setSaving(true);
 		try {
-			const res = await api.post(`/admin/workspaces/${selectedWorkspaceId}/catalog/sync`, { provider });
-			setCatalogStatus(res.data.catalog || null);
+			const normalizedProvider = String(provider || '').toUpperCase();
+			const res = !platformAdmin && normalizedProvider === 'TIENDANUBE'
+				? await api.post('/tiendanube/catalog/sync', { workspaceId: selectedWorkspaceId })
+				: await api.post(`/admin/workspaces/${selectedWorkspaceId}/catalog/sync`, { provider });
+			setCatalogStatus(res.data.catalog || res.data || null);
+			await loadWorkspaceDetail(selectedWorkspaceId);
 			showNotice(`Sincronizacion ${provider} completada.`);
 		} catch (err) {
 			showError(err);
@@ -757,6 +804,11 @@ export default function AdminPage({ defaultTab = '' }) {
 		} finally {
 			setSaving(false);
 		}
+	}
+
+	function handleStartTiendanubeInstall() {
+		if (!selectedWorkspaceId) return;
+		window.location.href = buildApiUrl(`/tiendanube/install?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
 	}
 
 	function editUser(item) {
@@ -926,6 +978,31 @@ export default function AdminPage({ defaultTab = '' }) {
 					</section>
 				) : null}
 
+				{activeTab === 'integrations' ? (
+					<section className="tenant-admin-panel">
+						<h3>Conexion Tienda Nube</h3>
+						<div className="tenant-admin-metrics">
+							<StatusPill>Store ID: {tiendanubeStatus?.storeId || 'sin conectar'}</StatusPill>
+							<StatusPill>Source: {tiendanubeStatus?.activeSource || 'sin resolver'}</StatusPill>
+							<StatusPill>App secret: {tiendanubeStatus?.hasAppSecret ? 'ok' : 'falta revisar'}</StatusPill>
+							<StatusPill>Webhooks esperados: {(tiendanubeStatus?.orderWebhookEvents || []).length || 0}</StatusPill>
+						</div>
+						<div className="tenant-admin-actions">
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={handleStartTiendanubeInstall}>
+								Conectar Tiendanube
+							</button>
+							{platformAdmin ? (
+								<button type="button" disabled={saving} onClick={handleBrandingSync}>
+									Importar branding
+								</button>
+							) : null}
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync('TIENDANUBE')}>
+								Sincronizar catalogo
+							</button>
+						</div>
+					</section>
+				) : null}
+
 				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">
 						<h3>WhatsApp Cloud API</h3>
@@ -951,6 +1028,14 @@ export default function AdminPage({ defaultTab = '' }) {
 				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">
 						<h3>Ecommerce</h3>
+						{commerceProvider === 'TIENDANUBE' ? (
+							<div className="tenant-admin-metrics">
+								<StatusPill>OAuth: {tiendanubeStatus?.hasAppSecret ? 'listo' : 'revisar app secret'}</StatusPill>
+								<StatusPill>Instalada: {tiendanubeStatus?.storeId || 'sin tienda'}</StatusPill>
+								<StatusPill>Source: {tiendanubeStatus?.activeSource || 'sin resolver'}</StatusPill>
+								<StatusPill>Webhooks: {(tiendanubeStatus?.orderWebhookEvents || []).length || 0} eventos</StatusPill>
+							</div>
+						) : null}
 						<form className="tenant-admin-grid" onSubmit={handleSaveCommerce}>
 							<Select label="Proveedor" value={commerceProvider} onChange={(value) => {
 								setCommerceProvider(value);
@@ -974,6 +1059,11 @@ export default function AdminPage({ defaultTab = '' }) {
 								<option value="ERROR">ERROR</option>
 							</Select>
 							<button type="submit" disabled={saving}>Guardar ecommerce</button>
+							{commerceProvider === 'TIENDANUBE' ? (
+								<button type="button" disabled={saving || !selectedWorkspaceId} onClick={handleStartTiendanubeInstall}>
+									Conectar Tiendanube
+								</button>
+							) : null}
 						</form>
 					</section>
 				) : null}

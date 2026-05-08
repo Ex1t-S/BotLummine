@@ -78,8 +78,7 @@ function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
 		throw new Error('Faltan TIENDANUBE_APP_ID o TIENDANUBE_REDIRECT_URI en el .env');
 	}
 
-	const url = new URL('https://www.tiendanube.com/apps/authorize');
-	url.searchParams.set('client_id', appId);
+	const url = new URL(`https://www.tiendanube.com/apps/${appId}/authorize`);
 	url.searchParams.set('redirect_uri', redirectUri);
 	url.searchParams.set('response_type', 'code');
 	url.searchParams.set('state', workspaceId);
@@ -157,6 +156,37 @@ function buildOrdersWebhookUrl(req) {
 	return `${resolvePublicBackendBaseUrl(req)}/api/webhook/tiendanube/orders`;
 }
 
+function resolveFrontendAppBaseUrl() {
+	const candidates = [
+		process.env.FRONTEND_URL_PROD,
+		process.env.FRONTEND_URL,
+		process.env.PUBLIC_APP_URL,
+		process.env.APP_URL,
+	]
+		.map(normalizeUrl)
+		.filter(Boolean);
+
+	return candidates[0] || null;
+}
+
+function buildTiendanubeInstallResultUrl({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	status = 'connected',
+	storeId = '',
+}) {
+	const frontendBaseUrl = resolveFrontendAppBaseUrl();
+	if (!frontendBaseUrl) return null;
+
+	const url = new URL('/admin', `${frontendBaseUrl}/`);
+	url.searchParams.set('tab', 'integrations');
+	url.searchParams.set('workspaceId', workspaceId);
+	url.searchParams.set('tiendanube', status);
+	if (storeId) {
+		url.searchParams.set('storeId', storeId);
+	}
+	return url.toString();
+}
+
 async function listTiendanubeWebhooks({ storeId, accessToken }) {
 	const response = await axios.get(
 		`https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/webhooks`,
@@ -209,6 +239,39 @@ async function syncTiendanubeBranding({ workspaceId, storeId, accessToken }) {
 		data: {
 			storeName,
 			storeUrl
+		}
+	});
+
+	await prisma.commerceConnection.upsert({
+		where: {
+			workspaceId_provider: {
+				workspaceId,
+				provider: 'TIENDANUBE'
+			}
+		},
+		update: {
+			externalStoreId: String(storeId),
+			accessToken,
+			status: 'ACTIVE',
+			storeName,
+			storeUrl,
+			rawPayload: {
+				provider: 'TIENDANUBE',
+				store
+			}
+		},
+		create: {
+			workspaceId,
+			provider: 'TIENDANUBE',
+			externalStoreId: String(storeId),
+			accessToken,
+			status: 'ACTIVE',
+			storeName,
+			storeUrl,
+			rawPayload: {
+				provider: 'TIENDANUBE',
+				store
+			}
 		}
 	});
 
@@ -379,6 +442,37 @@ export async function handleTiendanubeCallback(req, res) {
 			}
 		});
 
+		await prisma.commerceConnection.upsert({
+			where: {
+				workspaceId_provider: {
+					workspaceId,
+					provider: 'TIENDANUBE'
+				}
+			},
+			update: {
+				externalStoreId: String(data.user_id),
+				accessToken: data.access_token,
+				scope: data.scope || null,
+				status: 'ACTIVE',
+				rawPayload: {
+					source: 'oauth-callback',
+					token: data
+				}
+			},
+			create: {
+				workspaceId,
+				provider: 'TIENDANUBE',
+				externalStoreId: String(data.user_id),
+				accessToken: data.access_token,
+				scope: data.scope || null,
+				status: 'ACTIVE',
+				rawPayload: {
+					source: 'oauth-callback',
+					token: data
+				}
+			}
+		});
+
 		let brandingResult = null;
 		try {
 			brandingResult = await syncTiendanubeBranding({
@@ -392,6 +486,8 @@ export async function handleTiendanubeCallback(req, res) {
 
 		let webhookResult = null;
 		let webhookError = null;
+		let catalogResult = null;
+		let catalogError = null;
 
 		try {
 			const webhookUrl = buildOrdersWebhookUrl(req);
@@ -405,6 +501,25 @@ export async function handleTiendanubeCallback(req, res) {
 				error?.message ||
 				'No se pudieron registrar webhooks automáticamente.';
 			console.error('[TIENDANUBE][CALLBACK][WEBHOOKS]', webhookError);
+		}
+
+		try {
+			catalogResult = await syncCatalogFromTiendanube({ workspaceId });
+		} catch (error) {
+			catalogError =
+				error?.message ||
+				'No se pudo sincronizar el catalogo automaticamente.';
+			console.error('[TIENDANUBE][CALLBACK][CATALOG]', catalogError);
+		}
+
+		const resultUrl = buildTiendanubeInstallResultUrl({
+			workspaceId,
+			status: webhookError || catalogError ? 'partial' : 'connected',
+			storeId: String(data.user_id)
+		});
+
+		if (resultUrl) {
+			return res.redirect(resultUrl);
 		}
 
 		return res.send(`
