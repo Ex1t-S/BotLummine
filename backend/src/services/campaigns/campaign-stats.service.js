@@ -1,10 +1,16 @@
 import { prisma } from '../../lib/prisma.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import {
+	ATTRIBUTION_WINDOW_HOURS,
+	messageSuggestsCompletedPurchase,
+} from './campaign-attribution.service.js';
 
 const ACTIVE_STATUSES = ['QUEUED', 'RUNNING'];
 const STATUS_BUCKETS = ['DRAFT', 'QUEUED', 'RUNNING', 'FINISHED', 'PARTIAL', 'FAILED', 'CANCELED'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
 const REAL_CONVERSION_SOURCES = new Set(['ABANDONED_CART', 'PENDING_PAYMENT', 'MARKETING']);
+const APP_CONVERSION_SOURCE = 'APP';
+const APP_CONVERSION_SOURCES = new Set([APP_CONVERSION_SOURCE, 'CHAT_CONFIRMATION']);
 
 function toNumber(value) {
 	if (value == null) return 0;
@@ -12,6 +18,103 @@ function toNumber(value) {
 	if (typeof value.toNumber === 'function') return value.toNumber();
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeConversionSource(source = '') {
+	const normalized = String(source || '').trim().toUpperCase();
+	return APP_CONVERSION_SOURCES.has(normalized) ? APP_CONVERSION_SOURCE : normalized;
+}
+
+function getRecipientDispatchAt(recipient = {}) {
+	return recipient.sentAt || recipient.deliveredAt || recipient.readAt || null;
+}
+
+function addHours(date, hours) {
+	return new Date(new Date(date).getTime() + hours * 60 * 60 * 1000);
+}
+
+async function getChatConfirmedPurchaseRecipients(workspaceId) {
+	const recipients = await prisma.campaignRecipient.findMany({
+		where: {
+			workspaceId,
+			conversationId: { not: null },
+			status: { in: ['SENT', 'DELIVERED', 'READ'] },
+			OR: [
+				{ sentAt: { not: null } },
+				{ deliveredAt: { not: null } },
+				{ readAt: { not: null } },
+			],
+		},
+		select: {
+			id: true,
+			conversationId: true,
+			sentAt: true,
+			deliveredAt: true,
+			readAt: true,
+		},
+	});
+
+	const dispatchedRecipients = recipients.filter((recipient) => Boolean(getRecipientDispatchAt(recipient)));
+	if (!dispatchedRecipients.length) return new Set();
+
+	const earliestDispatchAt = dispatchedRecipients.reduce((earliest, recipient) => {
+		const dispatchAt = getRecipientDispatchAt(recipient);
+		if (!earliest) return dispatchAt;
+		return new Date(dispatchAt).getTime() < new Date(earliest).getTime() ? dispatchAt : earliest;
+	}, null);
+
+	const latestWindowEnd = dispatchedRecipients.reduce((latest, recipient) => {
+		const windowEnd = addHours(getRecipientDispatchAt(recipient), ATTRIBUTION_WINDOW_HOURS);
+		if (!latest) return windowEnd;
+		return windowEnd.getTime() > new Date(latest).getTime() ? windowEnd : latest;
+	}, null);
+
+	const conversationIds = [...new Set(dispatchedRecipients.map((recipient) => recipient.conversationId).filter(Boolean))];
+	const messages = await prisma.message.findMany({
+		where: {
+			workspaceId,
+			conversationId: { in: conversationIds },
+			direction: 'INBOUND',
+			createdAt: {
+				gte: earliestDispatchAt,
+				lte: latestWindowEnd,
+			},
+		},
+		select: {
+			conversationId: true,
+			body: true,
+			createdAt: true,
+		},
+		orderBy: { createdAt: 'asc' },
+	});
+
+	const messagesByConversation = new Map();
+	for (const message of messages) {
+		if (!messagesByConversation.has(message.conversationId)) {
+			messagesByConversation.set(message.conversationId, []);
+		}
+		messagesByConversation.get(message.conversationId).push(message);
+	}
+
+	const chatRecipients = new Set();
+	for (const recipient of dispatchedRecipients) {
+		const dispatchAt = new Date(getRecipientDispatchAt(recipient));
+		const windowEnd = addHours(dispatchAt, ATTRIBUTION_WINDOW_HOURS);
+		const hasPurchaseMessage = (messagesByConversation.get(recipient.conversationId) || []).some((message) => {
+			const createdAt = new Date(message.createdAt);
+			return (
+				createdAt >= dispatchAt &&
+				createdAt <= windowEnd &&
+				messageSuggestsCompletedPurchase(message.body || '')
+			);
+		});
+
+		if (hasPurchaseMessage) {
+			chatRecipients.add(recipient.id);
+		}
+	}
+
+	return chatRecipients;
 }
 
 export async function getCampaignStats({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
@@ -27,6 +130,7 @@ export async function getCampaignStats({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 		billableRecipientsCount,
 		statusGroups,
 		conversions,
+		chatDetectedRecipients,
 	] = await Promise.all([
 		prisma.whatsAppTemplate.count({ where: { ...workspaceWhere, deletedAt: null } }),
 		prisma.whatsAppTemplate.count({ where: { ...workspaceWhere, deletedAt: null, status: 'APPROVED' } }),
@@ -54,6 +158,7 @@ export async function getCampaignStats({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 				currency: true,
 			},
 		}),
+		getChatConfirmedPurchaseRecipients(resolvedWorkspaceId),
 	]);
 
 	const statusBreakdown = STATUS_BUCKETS.reduce((acc, status) => {
@@ -70,24 +175,32 @@ export async function getCampaignStats({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 	);
 	const signalRecipients = new Set();
 	const realRecipients = new Set();
-	const chatRecipients = new Set();
+	const chatRecipients = new Set(chatDetectedRecipients);
 	const conversionsBySource = {};
 	let attributedRevenue = 0;
 	let attributedCurrency = 'ARS';
 
 	for (const conversion of conversions) {
-		conversionsBySource[conversion.source] = (conversionsBySource[conversion.source] || 0) + 1;
+		const normalizedSource = normalizeConversionSource(conversion.source);
+		conversionsBySource[normalizedSource] = (conversionsBySource[normalizedSource] || 0) + 1;
 		if (conversion.recipientId) signalRecipients.add(conversion.recipientId);
 		if (conversion.currency) attributedCurrency = conversion.currency;
 
-		if (conversion.source === 'CHAT_CONFIRMATION' && conversion.recipientId) {
+		if (APP_CONVERSION_SOURCES.has(normalizedSource) && conversion.recipientId) {
 			chatRecipients.add(conversion.recipientId);
 		}
 
-		if (REAL_CONVERSION_SOURCES.has(conversion.source)) {
+		if (REAL_CONVERSION_SOURCES.has(normalizedSource)) {
 			if (conversion.recipientId) realRecipients.add(conversion.recipientId);
 			attributedRevenue += toNumber(conversion.amount);
 		}
+	}
+	for (const recipientId of chatRecipients) {
+		signalRecipients.add(recipientId);
+	}
+	if (chatRecipients.size > 0) {
+		conversionsBySource.APP = Math.max(Number(conversionsBySource.APP || 0), chatRecipients.size);
+		delete conversionsBySource.CHAT_CONFIRMATION;
 	}
 	const conversionSignalRecipients = signalRecipients.size;
 	const purchasedRecipients = realRecipients.size;

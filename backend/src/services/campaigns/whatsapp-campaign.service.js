@@ -1501,6 +1501,16 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 	const finalPurchasedRecipients = Math.max(purchasedRecipients, persistedSummary.purchasedRecipients || 0);
 	const finalChatConfirmedRecipients = Math.max(chatConfirmedPurchaseRecipients, persistedSummary.chatConfirmedPurchaseRecipients || 0);
 	const finalConversionSignalRecipients = Math.max(conversionSignalRecipients, persistedSummary.conversionSignalRecipients || 0);
+	const finalConversionsBySource = {
+		...(persistedSummary.conversionsBySource || {}),
+	};
+	if (finalChatConfirmedRecipients > 0) {
+		finalConversionsBySource.APP = Math.max(
+			Number(finalConversionsBySource.APP || 0),
+			finalChatConfirmedRecipients
+		);
+		delete finalConversionsBySource.CHAT_CONFIRMATION;
+	}
 
 	for (const [recipientId, persisted] of persistedById.entries()) {
 		recipientsById.set(recipientId, {
@@ -1524,7 +1534,7 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 			conversionSignalRate: base > 0 ? finalConversionSignalRecipients / base : 0,
 			attributedRevenue: persistedSummary.attributedRevenue || 0,
 			attributedCurrency: persistedSummary.attributedCurrency || 'ARS',
-			conversionsBySource: persistedSummary.conversionsBySource || {},
+			conversionsBySource: finalConversionsBySource,
 			purchaseAttributionModel: 'prefer_same_abandoned_cart_token_paid_after_campaign_else_phone_order_after_campaign',
 		},
 		recipientsById,

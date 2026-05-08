@@ -8,6 +8,8 @@ export const ATTRIBUTION_WINDOW_HOURS = Math.max(
 );
 
 const REAL_CONVERSION_SOURCES = new Set(['ABANDONED_CART', 'PENDING_PAYMENT', 'MARKETING']);
+const APP_CONVERSION_SOURCE = 'APP';
+const APP_CONVERSION_SOURCES = new Set([APP_CONVERSION_SOURCE, 'CHAT_CONFIRMATION']);
 
 function normalizeString(value = '') {
 	return String(value ?? '').trim();
@@ -167,6 +169,11 @@ function buildConversionKey({ source, recipientId, orderId = '', orderNumber = '
 		recipientId || 'no-recipient',
 		orderId || orderNumber || checkoutId || messageId || 'no-resource',
 	].join(':');
+}
+
+function normalizeConversionSource(source = '') {
+	const normalized = normalizeString(source).toUpperCase();
+	return APP_CONVERSION_SOURCES.has(normalized) ? APP_CONVERSION_SOURCE : normalized;
 }
 
 async function upsertConversion(data = {}) {
@@ -636,11 +643,11 @@ export async function persistChatConfirmationConversions({
 			campaignId: recipient.campaignId,
 			recipientId: recipient.id,
 			conversionKey: buildConversionKey({
-				source: 'CHAT_CONFIRMATION',
+				source: APP_CONVERSION_SOURCE,
 				recipientId: recipient.id,
 				messageId: messageId || `${conversationId}:${new Date(createdAt).toISOString()}`,
 			}),
-			source: 'CHAT_CONFIRMATION',
+			source: APP_CONVERSION_SOURCE,
 			confidence: 'LOW',
 			contactName: contactName || recipient.contactName || null,
 			phone: normalizePhone(phone || recipient.phone || recipient.waId || ''),
@@ -690,27 +697,29 @@ export async function getPersistedConversionInsights({ workspaceId = DEFAULT_WOR
 	let attributedCurrency = 'ARS';
 
 	for (const conversion of conversions) {
-		conversionsBySource[conversion.source] = (conversionsBySource[conversion.source] || 0) + 1;
+		const normalizedSource = normalizeConversionSource(conversion.source);
+		conversionsBySource[normalizedSource] = (conversionsBySource[normalizedSource] || 0) + 1;
 		if (conversion.currency) attributedCurrency = conversion.currency;
 
 		if (conversion.recipientId) {
 			signalRecipients.add(conversion.recipientId);
-			if (conversion.source === 'CHAT_CONFIRMATION') {
+			if (APP_CONVERSION_SOURCES.has(normalizedSource) || APP_CONVERSION_SOURCES.has(conversion.source)) {
 				chatRecipients.add(conversion.recipientId);
 			}
-			if (REAL_CONVERSION_SOURCES.has(conversion.source)) {
+			if (REAL_CONVERSION_SOURCES.has(normalizedSource)) {
 				realRecipients.add(conversion.recipientId);
 				attributedRevenue += toNumber(conversion.amount) || 0;
 			}
 		}
 
 		const current = recipientsById.get(conversion.recipientId) || {};
-		const isReal = REAL_CONVERSION_SOURCES.has(conversion.source);
+		const isApp = APP_CONVERSION_SOURCES.has(normalizedSource) || APP_CONVERSION_SOURCES.has(conversion.source);
+		const isReal = REAL_CONVERSION_SOURCES.has(normalizedSource);
 		recipientsById.set(conversion.recipientId, {
 			...current,
 			conversionSignal: true,
 			purchaseDetected: current.purchaseDetected || isReal,
-			chatConfirmedPurchase: current.chatConfirmedPurchase || conversion.source === 'CHAT_CONFIRMATION',
+			chatConfirmedPurchase: current.chatConfirmedPurchase || isApp,
 			purchaseAt: isReal ? conversion.convertedAt : current.purchaseAt || null,
 			purchaseOrderId: isReal ? conversion.orderId : current.purchaseOrderId || null,
 			purchaseOrderNumber: isReal ? conversion.orderNumber : current.purchaseOrderNumber || null,
@@ -718,7 +727,7 @@ export async function getPersistedConversionInsights({ workspaceId = DEFAULT_WOR
 			purchaseTotalAmount: isReal ? conversion.amount : current.purchaseTotalAmount ?? null,
 			purchaseCurrency: conversion.currency || current.purchaseCurrency || 'ARS',
 			purchaseDetectionMode: isReal ? conversion.matchReason : current.purchaseDetectionMode || null,
-			chatConfirmedPurchaseAt: conversion.source === 'CHAT_CONFIRMATION' ? conversion.convertedAt : current.chatConfirmedPurchaseAt || null,
+			chatConfirmedPurchaseAt: isApp ? conversion.convertedAt : current.chatConfirmedPurchaseAt || null,
 		});
 	}
 

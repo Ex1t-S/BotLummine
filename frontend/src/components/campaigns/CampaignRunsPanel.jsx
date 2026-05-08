@@ -266,7 +266,7 @@ function formatConversionSource(source = '') {
 	if (normalized === 'ABANDONED_CART') return 'Carritos';
 	if (normalized === 'PENDING_PAYMENT') return 'Pagos pendientes';
 	if (normalized === 'MARKETING') return 'Marketing';
-	if (normalized === 'CHAT_CONFIRMATION') return 'Chat';
+	if (normalized === 'APP' || normalized === 'CHAT_CONFIRMATION') return 'App';
 	return source || 'Sin fuente';
 }
 

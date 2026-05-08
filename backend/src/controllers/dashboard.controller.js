@@ -772,9 +772,10 @@ async function fetchInboxData({
 				take: 1,
 			},
 		},
-		orderBy: {
-			lastMessageAt: 'desc',
-		},
+		orderBy: [
+			{ lastMessageAt: { sort: 'desc', nulls: 'last' } },
+			{ updatedAt: 'desc' },
+		],
 		skip: safeOffset,
 		take: safeLimit + 1,
 	});
