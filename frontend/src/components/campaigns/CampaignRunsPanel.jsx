@@ -324,8 +324,6 @@ export default function CampaignRunsPanel({
 	);
 	const analytics = selectedCampaign?.analytics || {};
 	const campaignCost = calculateCampaignCost(recipientMetrics.sent);
-	const attributedRevenue = Number(analytics.attributedRevenue || 0);
-	const attributedCurrency = analytics.attributedCurrency || 'ARS';
 	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
 
 	const filteredRecipients = useMemo(() => {
@@ -484,11 +482,6 @@ export default function CampaignRunsPanel({
 									<span>Señales de compra</span>
 									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
 									<small>{formatPercent(analytics.conversionSignalRate || 0)} con pedido o chat</small>
-								</div>
-								<div className="campaign-tracking-kpi campaign-tracking-kpi--featured">
-									<span>Facturación atribuida</span>
-									<strong>{formatMoney(attributedRevenue, attributedCurrency)}</strong>
-									<small>Solo pedidos reales atribuidos</small>
 								</div>
 								<div className="campaign-tracking-kpi">
 									<span>Total</span>

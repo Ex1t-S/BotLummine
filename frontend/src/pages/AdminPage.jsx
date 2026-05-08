@@ -295,13 +295,13 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 
 			<div
 				className="workspace-card-hero metric-help"
-				data-help="Conversiones atribuidas divididas por mensajes enviados en campañas. Sirve para ver cuánto WhatsApp termina en venta o señal de compra."
-				title="Conversiones atribuidas / mensajes enviados en campañas."
+				data-help="Señales de compra y compras por chat divididas por mensajes enviados en campañas. Sirve para ver cuánto WhatsApp termina en intención de compra."
+				title="Señales de compra / mensajes enviados en campañas."
 			>
 				<div>
 					<span>Conversión por WhatsApp</span>
 					<strong>{formatPercent(conversionRate)}</strong>
-					<small>{formatNumber(metrics.conversionCount)} conversiones atribuidas</small>
+					<small>{formatNumber(metrics.conversionCount)} señales de compra</small>
 				</div>
 				<div className="workspace-card-ring" aria-hidden="true">
 					<div style={{ '--progress': `${clampPercent(conversionRate)}%` }}>
@@ -363,14 +363,6 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			</div>
 
 			<div className="workspace-card-stats">
-				<div
-					className="metric-help"
-					data-help="Monto de ventas asociado a conversiones detectadas después de mensajes o campañas."
-					title="Revenue atribuido a conversiones por WhatsApp."
-				>
-					<span>Ventas atribuidas</span>
-					<strong>{formatCurrency(metrics.attributedRevenue, metrics.attributedCurrency || metrics.currency)}</strong>
-				</div>
 				<div
 					className="metric-help"
 					data-help="Carritos abandonados que luego terminaron como recuperados."
@@ -1201,7 +1193,6 @@ export default function AdminPage({ defaultTab = '' }) {
 							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
 							<StatusPill>Pedidos: {formatNumber(analytics?.totals?.ordersCount)}</StatusPill>
 							<StatusPill>Facturacion: {formatCurrency(analytics?.totals?.revenueTotal, analytics?.totals?.currency)}</StatusPill>
-							<StatusPill>Ventas atribuidas: {formatCurrency(analytics?.totals?.attributedRevenue, analytics?.totals?.attributedCurrency || analytics?.totals?.currency)}</StatusPill>
 							<StatusPill>Conversaciones 30d: {formatNumber(analytics?.totals?.activeConversations30d)}</StatusPill>
 							<StatusPill>Carritos recuperados: {formatNumber(analytics?.totals?.recoveredCartsCount)}</StatusPill>
 							<StatusPill>Costo estimado: {formatUsd(analytics?.totals?.estimatedCampaignCostUsd)}</StatusPill>

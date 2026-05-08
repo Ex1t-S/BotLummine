@@ -12,6 +12,7 @@ import {
 	getCatalogSummary,
 	syncCatalogFromProvider,
 } from '../services/catalog/catalog.service.js';
+import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -658,7 +659,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			messageRows30d,
 			activeConversationRows30d,
 			unreadConversationRows,
-			conversionRows,
+			campaignStatsRows,
 			abandonedCartRows,
 		] = await Promise.all([
 			prisma.campaign.groupBy({
@@ -704,12 +705,12 @@ export async function getWorkspaceAnalytics(req, res, next) {
 				_count: { _all: true },
 				_sum: { unreadCount: true },
 			}),
-			prisma.campaignConversion.groupBy({
-				by: ['workspaceId', 'source', 'currency'],
-				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
-				_count: { _all: true },
-				_sum: { amount: true },
-			}),
+			Promise.all(
+				workspaceIds.map(async (workspaceId) => ({
+					workspaceId,
+					stats: await getCampaignStats({ workspaceId }),
+				}))
+			),
 			prisma.abandonedCart.groupBy({
 				by: ['workspaceId', 'status'],
 				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
@@ -779,12 +780,10 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			metrics.unreadMessagesCount = row._sum?.unreadCount || 0;
 		}
 
-		for (const row of conversionRows) {
+		for (const row of campaignStatsRows) {
 			const metrics = metricsByWorkspace.get(row.workspaceId);
 			if (!metrics) continue;
-			metrics.conversionCount += row._count?._all || 0;
-			metrics.attributedRevenue += toNumber(row._sum?.amount);
-			if (row.currency) metrics.attributedCurrency = row.currency;
+			metrics.conversionCount = Number(row.stats?.conversionSignalRecipients || 0);
 		}
 
 		for (const row of abandonedCartRows) {
