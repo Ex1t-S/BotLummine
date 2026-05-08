@@ -26,6 +26,24 @@ function normalizeUrl(value = '') {
 	return String(value || '').trim().replace(/\/+$/, '');
 }
 
+function normalizeTiendanubeRedirectUri(value = '') {
+	const rawUrl = String(value || '').trim();
+	if (!rawUrl) return '';
+
+	try {
+		const url = new URL(rawUrl);
+		if (url.pathname === '/integrations/tiendanube/callback') {
+			url.pathname = '/api/tiendanube/callback';
+		}
+		return url.toString();
+	} catch {
+		return rawUrl.replace(
+			/\/integrations\/tiendanube\/callback\b/,
+			'/api/tiendanube/callback'
+		);
+	}
+}
+
 function pickLocalized(value) {
 	if (value == null) return null;
 	if (typeof value === 'string') return value;
@@ -72,7 +90,7 @@ function isAuthorizedAdminRequest(req) {
 
 function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const appId = process.env.TIENDANUBE_APP_ID;
-	const redirectUri = process.env.TIENDANUBE_REDIRECT_URI;
+	const redirectUri = normalizeTiendanubeRedirectUri(process.env.TIENDANUBE_REDIRECT_URI);
 
 	if (!appId || !redirectUri) {
 		throw new Error('Faltan TIENDANUBE_APP_ID o TIENDANUBE_REDIRECT_URI en el .env');
