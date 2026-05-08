@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, X } from 'lucide-react';
 import api from '../lib/api.js';
+import { queryKeys, queryPresets } from '../lib/queryClient.js';
+import { ActionButton, PageHeader } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './CustomersPage.css';
 
 const DEFAULT_PAGE_SIZE = 24;
@@ -34,6 +39,17 @@ const initialSyncStatus = {
 	finishedAt: null,
 	startedAt: null,
 };
+
+function useDebouncedValue(value, delay = 350) {
+	const [debounced, setDebounced] = useState(value);
+
+	useEffect(() => {
+		const timeout = window.setTimeout(() => setDebounced(value), delay);
+		return () => window.clearTimeout(timeout);
+	}, [value, delay]);
+
+	return debounced;
+}
 
 function formatCurrency(value, currency = 'ARS') {
 	const amount = Number(value || 0);
@@ -258,57 +274,29 @@ function EyeToggleIcon({ hidden = false }) {
 }
 
 export default function CustomersPage() {
+	useInternalDarkOverrides();
+
+	const queryClient = useQueryClient();
 	const [filters, setFilters] = useState(initialFilters);
-	const [data, setData] = useState({
-		customers: [],
-		stats: {},
-		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
-	});
-	const [loading, setLoading] = useState(true);
-	const [syncing, setSyncing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
-	const [syncStatus, setSyncStatus] = useState(initialSyncStatus);
-	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [selectedProducts, setSelectedProducts] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
 	const [showProductFilter, setShowProductFilter] = useState(false);
 	const [billingVisible, setBillingVisible] = useState(true);
-	const pollRef = useRef(null);
-
-	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
-	const currentPage = Number(data.pagination?.page || 1);
-	const totalPages = Number(data.pagination?.totalPages || 1);
-	const visiblePages = useMemo(
-		() => buildVisiblePages(currentPage, totalPages),
-		[currentPage, totalPages]
+	const debouncedFilters = useDebouncedValue(filters);
+	const requestFilters = useMemo(
+		() => normalizeRequestFilters(debouncedFilters),
+		[debouncedFilters]
 	);
-	const displayAvgTicketLabel = billingVisible ? normalizedStats.avgTicketLabel : '********';
-	const displayTotalSpentLabel = billingVisible ? normalizedStats.totalSpentLabel : '********';
 
-	async function loadCatalogOptions() {
-		try {
-			const response = await api.get('/dashboard/catalog', {
-				params: { page: 1, pageSize: 250 },
-			});
-			const rawItems =
-				response.data?.items ||
-				response.data?.products ||
-				response.data?.rows ||
-				[];
-			setCatalogOptions(buildCatalogProducts(rawItems));
-		} catch (error) {
-			console.error('[CUSTOMERS][CATALOG] error:', error);
-		}
-	}
-
-	async function loadOrders(nextFilters = filters, { silent = false } = {}) {
-		if (!silent) setLoading(true);
-
-		try {
+	const customersQuery = useQuery({
+		queryKey: queryKeys.customers(requestFilters),
+		queryFn: async () => {
 			const response = await api.get('/dashboard/customers', {
-				params: normalizeRequestFilters(nextFilters),
+				params: requestFilters,
 			});
-			setData({
+
+			return {
 				customers: Array.isArray(response.data?.customers) ? response.data.customers : [],
 				stats: response.data?.stats || {},
 				pagination: {
@@ -317,68 +305,93 @@ export default function CustomersPage() {
 					totalItems: Number(response.data?.pagination?.totalItems || 0),
 					pageSize: Number(response.data?.pagination?.pageSize || DEFAULT_PAGE_SIZE),
 				},
+			};
+		},
+		placeholderData: keepPreviousData,
+		...queryPresets.customers,
+	});
+
+	const catalogOptionsQuery = useQuery({
+		queryKey: queryKeys.catalog({ page: 1, pageSize: 250, purpose: 'customer-options' }),
+		queryFn: async () => {
+			const response = await api.get('/dashboard/catalog', {
+				params: { page: 1, pageSize: 250 },
 			});
+			const rawItems =
+				response.data?.items ||
+				response.data?.products ||
+				response.data?.rows ||
+				[];
+			return buildCatalogProducts(rawItems);
+		},
+		...queryPresets.catalog,
+	});
+
+	const syncStatusQuery = useQuery({
+		queryKey: queryKeys.customersSyncStatus,
+		queryFn: async () => {
+			const response = await api.get('/dashboard/customers/sync-status');
+			return response.data || initialSyncStatus;
+		},
+		refetchInterval: (query) => (query.state.data?.running ? POLL_MS : false),
+		refetchIntervalInBackground: true,
+		staleTime: 3 * 1000,
+		gcTime: 5 * 60 * 1000,
+	});
+
+	const syncMutation = useMutation({
+		mutationFn: async () => {
+			const response = await api.post('/dashboard/customers/sync', {});
+			return response.data || initialSyncStatus;
+		},
+		onSuccess: async () => {
 			setErrorMessage('');
-		} catch (error) {
+			await queryClient.invalidateQueries({ queryKey: queryKeys.customersSyncStatus });
+		},
+		onError: (error) => {
 			console.error(error);
 			setErrorMessage(
-				error?.response?.data?.message || 'No se pudieron cargar las compras.'
+				error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.'
 			);
-		} finally {
-			if (!silent) setLoading(false);
-		}
-	}
-
-	async function loadSyncStatus({ silentRefresh = true } = {}) {
-		try {
-			const response = await api.get('/dashboard/customers/sync-status');
-			const nextStatus = response.data || initialSyncStatus;
-			setSyncStatus(nextStatus);
-
-			if (nextStatus.running) {
-				setSyncing(true);
-				if (!silentRefresh) {
-					await loadOrders(filters, { silent: true });
-				}
-				return;
-			}
-
-			setSyncing(false);
-			if (pollRef.current) {
-				clearInterval(pollRef.current);
-				pollRef.current = null;
-			}
-			await loadOrders(filters, { silent: true });
-		} catch (error) {
-			console.error(error);
-		}
-	}
-
-	function startPolling() {
-		if (pollRef.current) return;
-		pollRef.current = setInterval(() => {
-			loadSyncStatus({ silentRefresh: false }).catch(() => {});
-		}, POLL_MS);
-	}
-
-	function stopPolling() {
-		if (pollRef.current) {
-			clearInterval(pollRef.current);
-			pollRef.current = null;
-		}
-	}
+		},
+	});
 
 	useEffect(() => {
-		loadOrders(initialFilters).catch(() => {});
-		loadSyncStatus().catch(() => {});
-		loadCatalogOptions().catch(() => {});
-		return () => stopPolling();
-	}, []);
+		if (!syncStatusQuery.data?.running) return;
+		queryClient.invalidateQueries({ queryKey: ['dashboard', 'customers'] });
+	}, [queryClient, syncStatusQuery.data?.ordersUpserted, syncStatusQuery.data?.running]);
 
 	useEffect(() => {
-		if (syncStatus.running) startPolling();
-		else stopPolling();
-	}, [syncStatus.running]);
+		if (!customersQuery.isError) return;
+		setErrorMessage(
+			customersQuery.error?.response?.data?.message || 'No se pudieron cargar las compras.'
+		);
+	}, [customersQuery.error, customersQuery.isError]);
+
+	const data = customersQuery.data || {
+		customers: [],
+		stats: {},
+		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
+	};
+	const loading = customersQuery.isLoading;
+	const syncStatus = syncStatusQuery.data || initialSyncStatus;
+	const syncing = syncMutation.isPending || Boolean(syncStatus.running);
+	const catalogOptions = catalogOptionsQuery.data || [];
+
+	const normalizedStats = useMemo(() => normalizeStats(data), [data]);
+	const currentPage = Number(data.pagination?.page || 1);
+	const totalPages = Number(data.pagination?.totalPages || 1);
+	const visiblePages = useMemo(
+		() => buildVisiblePages(currentPage, totalPages),
+		[currentPage, totalPages]
+	);
+	const activeFilterCount = useMemo(() => {
+		const keys = ['q', 'productQuery', 'orderNumber', 'dateFrom', 'dateTo', 'paymentStatus', 'minSpent'];
+		const filled = keys.filter((key) => String(filters[key] || '').trim()).length;
+		return filled + (filters.hasPhoneOnly ? 1 : 0);
+	}, [filters]);
+	const displayAvgTicketLabel = billingVisible ? normalizedStats.avgTicketLabel : '********';
+	const displayTotalSpentLabel = billingVisible ? normalizedStats.totalSpentLabel : '********';
 
 	function handleFilterChange(event) {
 		const { name, value, type, checked } = event.target;
@@ -419,65 +432,48 @@ export default function CustomersPage() {
 		}));
 	}
 
-	async function handleApplyFilters() {
+	function handleApplyFilters() {
 		const next = {
 			...filters,
 			page: 1,
 			productQuery: selectedProducts.join('||'),
 		};
 		setFilters(next);
-		await loadOrders(next);
 	}
 
-	async function handleResetFilters() {
+	function handleResetFilters() {
 		setFilters(initialFilters);
 		setSelectedProducts([]);
 		setProductSearch('');
-		await loadOrders(initialFilters);
+		setShowProductFilter(false);
 	}
 
-	async function handleSync() {
+	function handleSync() {
 		setErrorMessage('');
-		try {
-			const response = await api.post('/dashboard/customers/sync', {});
-			const nextStatus = response.data || initialSyncStatus;
-			setSyncStatus(nextStatus);
-			setSyncing(Boolean(nextStatus.running || nextStatus.started));
-			startPolling();
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(
-				error?.response?.data?.message || 'No se pudo iniciar la sincronización de pedidos.'
-			);
-		}
+		syncMutation.mutate();
 	}
 
-	async function handlePageChange(page) {
+	function handlePageChange(page) {
 		if (page < 1 || page > totalPages || page === currentPage) return;
 		const next = { ...filters, page };
 		setFilters(next);
-		await loadOrders(next);
 	}
 
 	return (
 		<section className="customers-page">
-			<div className="customers-hero-card">
-				<div className="customers-hero-copy">
-					<span className="customers-kicker">VENTAS REALES</span>
-					<h1>Clientes y compras</h1>
-					<p>
-						Vista comercial basada en pedidos reales. Vas viendo resultados mientras la sync avanza,
-						sin dejar la pantalla colgada ni depender de recargar manualmente.
-					</p>
-				</div>
-
+			<PageHeader
+				className="customers-hero-card"
+				eyebrow="Ventas reales"
+				title="Clientes y compras"
+				description="Pedidos reales, clientes y productos comprados en una vista para buscar oportunidades sin perder el estado de sincronización."
+			>
 				<div className="customers-hero-actions">
-					<button type="button" className="primary-action-btn" onClick={handleSync} disabled={syncing}>
-						{syncing ? 'Sincronizando pedidos...' : 'Sincronizar pedidos'}
-					</button>
-					<button type="button" className="secondary-link-btn" onClick={handleResetFilters}>
-						Limpiar filtros
-					</button>
+					<ActionButton className="primary-action-btn" onClick={handleSync} disabled={syncing} icon={RefreshCw}>
+						{syncing ? 'Sincronizando pedidos' : 'Sincronizar pedidos'}
+					</ActionButton>
+					<ActionButton variant="secondary" className="secondary-link-btn" onClick={handleResetFilters} icon={X}>
+						Limpiar filtros{activeFilterCount ? ` (${activeFilterCount})` : ''}
+					</ActionButton>
 					<button
 						type="button"
 						className="customers-visibility-btn"
@@ -489,7 +485,7 @@ export default function CustomersPage() {
 						<span>{billingVisible ? 'Ocultar montos' : 'Mostrar montos'}</span>
 					</button>
 				</div>
-			</div>
+			</PageHeader>
 
 			{errorMessage ? <div className="customers-feedback customers-feedback--error">{errorMessage}</div> : null}
 
@@ -500,7 +496,7 @@ export default function CustomersPage() {
 						<h3>{syncStatus.message || 'Todavía no corriste una sincronización.'}</h3>
 						<p>
 							{syncStatus.running
-								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} · páginas ${syncStatus.pagesFetched} · pedidos leídos ${syncStatus.ordersFetched} · pedidos guardados ${syncStatus.ordersUpserted}.`
+								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} - páginas ${syncStatus.pagesFetched} - pedidos leídos ${syncStatus.ordersFetched} - pedidos guardados ${syncStatus.ordersUpserted}.`
 								: syncStatus.finishedAt
 									? `Última finalización ${formatDateTime(syncStatus.finishedAt)}.`
 									: 'Cuando empiece la sync, acá vas a ver el progreso en vivo.'}
@@ -509,7 +505,7 @@ export default function CustomersPage() {
 					<div className="customers-sync-stats">
 						<div><span>Páginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
 						<div><span>Pedidos</span><strong>{syncStatus.ordersFetched || 0}</strong></div>
-						<div><span>Ítems</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
+						<div><span>Items</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
 					</div>
 				</div>
 
@@ -522,8 +518,8 @@ export default function CustomersPage() {
 
 				{syncStatus.activeWindow ? (
 					<p className="customers-sync-window">
-						Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> ·{' '}
-						{formatDateTime(syncStatus.activeWindow.from)} → {formatDateTime(syncStatus.activeWindow.to)}
+						Ventana activa: <strong>{syncStatus.activeWindow.label}</strong> -{' '}
+						{formatDateTime(syncStatus.activeWindow.from)} a {formatDateTime(syncStatus.activeWindow.to)}
 					</p>
 				) : null}
 
@@ -558,8 +554,8 @@ export default function CustomersPage() {
 				<div className="customers-stat-card"><span className="customers-stat-label">Pedidos</span><strong>{normalizedStats.totalOrders}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Clientes únicos</span><strong>{normalizedStats.totalCustomers}</strong></div>
 				<div className="customers-stat-card"><span className="customers-stat-label">Con teléfono</span><strong>{normalizedStats.withPhone}</strong></div>
-					<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{displayAvgTicketLabel}</strong></div>
-					<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{displayTotalSpentLabel}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Ticket promedio</span><strong>{displayAvgTicketLabel}</strong></div>
+				<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{displayTotalSpentLabel}</strong></div>
 			</div>
 
 			<div className="customers-filters-card">
@@ -568,6 +564,11 @@ export default function CustomersPage() {
 						<h3>Filtros comerciales</h3>
 						<p>Filtrá por cliente, pedido, monto y productos reales del catálogo.</p>
 					</div>
+					{activeFilterCount ? (
+						<span className="customers-active-filter-badge">
+							{activeFilterCount} filtros activos
+						</span>
+					) : null}
 				</div>
 
 				<div className="customers-filter-grid">
@@ -622,7 +623,7 @@ export default function CustomersPage() {
 					</div>
 
 					<div className="customers-filter-group">
-						<label>N° pedido</label>
+						<label>Nro. pedido</label>
 						<input
 							type="text"
 							name="orderNumber"
@@ -641,24 +642,24 @@ export default function CustomersPage() {
 						<label>Compra hasta</label>
 						<input type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
 					</div>
-            <div className="customers-filter-group">
-            <label>Pago</label>
-            <select
-              name="paymentStatus"
-              value={filters.paymentStatus}
-              onChange={handleFilterChange}
-            >
-              <option value="">Todos</option>
-              <option value="pending">Pendiente</option>
-              <option value="authorized">Autorizado</option>
-              <option value="paid">Pagado</option>
-              <option value="partially_paid">Pago parcial</option>
-              <option value="abandoned">Abandonado</option>
-              <option value="refunded">Reembolsado</option>
-              <option value="partially_refunded">Reembolso parcial</option>
-              <option value="voided">Anulado</option>
-            </select>
-          </div>
+					<div className="customers-filter-group">
+						<label>Pago</label>
+						<select
+							name="paymentStatus"
+							value={filters.paymentStatus}
+							onChange={handleFilterChange}
+						>
+							<option value="">Todos</option>
+							<option value="pending">Pendiente</option>
+							<option value="authorized">Autorizado</option>
+							<option value="paid">Pagado</option>
+							<option value="partially_paid">Pago parcial</option>
+							<option value="abandoned">Abandonado</option>
+							<option value="refunded">Reembolsado</option>
+							<option value="partially_refunded">Reembolso parcial</option>
+							<option value="voided">Anulado</option>
+						</select>
+					</div>
 					<div className="customers-filter-group">
 						<label>Total mínimo</label>
 						<input
@@ -742,11 +743,18 @@ export default function CustomersPage() {
 									</div>
 								</div>
 
-								<div className="customer-meta-row">
-									<div className="customer-meta-chip">
+								<div className="customer-card-focus">
+									<div className="customer-total-box">
 										<span>Total</span>
 										<strong>{billingVisible ? customer.totalSpentLabel || '$0' : '********'}</strong>
 									</div>
+									<div className={`customer-payment-badge ${getPaymentStatusTone(customer.paymentStatus)}`}>
+										<span>Pago</span>
+										<strong>{formatPaymentStatusLabel(customer.paymentStatus)}</strong>
+									</div>
+								</div>
+
+								<div className="customer-meta-row">
 									<div className="customer-meta-chip">
 										<span>Fecha</span>
 										<strong>{customer.lastOrderDateLabel || '-'}</strong>
@@ -754,13 +762,6 @@ export default function CustomersPage() {
 									<div className="customer-meta-chip">
 										<span>Unidades</span>
 										<strong>{customer.totalUnitsPurchased || 0}</strong>
-									</div>
-								</div>
-
-								<div className="customer-status-row">
-									<div className={`customer-payment-badge ${getPaymentStatusTone(customer.paymentStatus)}`}>
-										<span>Pago</span>
-										<strong>{formatPaymentStatusLabel(customer.paymentStatus)}</strong>
 									</div>
 								</div>
 
@@ -799,13 +800,13 @@ export default function CustomersPage() {
 							disabled={currentPage === 1}
 							onClick={() => handlePageChange(currentPage - 1)}
 						>
-							← Anterior
+							Anterior
 						</button>
 
 						<div className="pagination-pages">
 							{visiblePages.map((page) =>
 								String(page).includes('ellipsis') ? (
-									<span key={page} className="pagination-ellipsis">…</span>
+									<span key={page} className="pagination-ellipsis">...</span>
 								) : (
 									<button
 										key={page}
@@ -825,7 +826,7 @@ export default function CustomersPage() {
 							disabled={currentPage === totalPages}
 							onClick={() => handlePageChange(currentPage + 1)}
 						>
-							Siguiente →
+							Siguiente
 						</button>
 					</div>
 				) : null}

@@ -8,39 +8,153 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(AGENT)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
 model Workspace {
-  id        String          @id
+  id        String          @id @default(cuid())
   name      String
   slug      String          @unique
   status    WorkspaceStatus @default(ACTIVE)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  contacts           Contact[]
-  conversations      Conversation[]
-  messages           Message[]
-  abandonedCarts     AbandonedCart[]
-  customerProfiles   CustomerProfile[]
-  customerOrders     CustomerOrder[]
-  customerOrderItems CustomerOrderItem[]
-  customerSyncLogs   CustomerSyncLog[]
-  campaigns          Campaign[]
-  campaignRecipients CampaignRecipient[]
+  users               User[]
+  branding            WorkspaceBranding?
+  aiConfig            WorkspaceAiConfig?
+  commerceConnections CommerceConnection[]
+  logisticsConnections LogisticsConnection[]
+  whatsappChannels    WhatsAppChannel[]
+  contacts            Contact[]
+  conversations       Conversation[]
+  aiLabRuns           AiLabRun[]
+  menuSettings        WhatsAppMenuSetting[]
+  messages            Message[]
+  storeInstallations  StoreInstallation[]
+  catalogProducts     CatalogProduct[]
+  catalogSyncLogs     CatalogSyncLog[]
+  abandonedCarts      AbandonedCart[]
+  customerProfiles    CustomerProfile[]
+  customerOrders      CustomerOrder[]
+  customerOrderItems  CustomerOrderItem[]
+  customerSyncLogs    CustomerSyncLog[]
+  enboxShipments      EnboxShipment[]
+  enboxSyncLogs       EnboxSyncLog[]
+  whatsAppTemplates   WhatsAppTemplate[]
+  templateSyncLogs    TemplateSyncLog[]
+  campaigns           Campaign[]
+  campaignRecipients  CampaignRecipient[]
+  campaignConversions CampaignConversion[]
+  campaignSchedules   CampaignSchedule[]
+}
+
+model WorkspaceBranding {
+  id                  String    @id @default(cuid())
+  workspaceId         String    @unique
+  logoUrl             String?
+  primaryColor        String?
+  secondaryColor      String?
+  accentColor         String?
+  rawProviderBranding Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceAiConfig {
+  id              String   @id @default(cuid())
+  workspaceId     String   @unique
+  businessName    String
+  agentName       String   @default("Sofi")
+  tone            String   @default("humana, directa y comercial")
+  systemPrompt    String?
+  businessContext String?
+  paymentConfig   Json?
+  policyConfig    Json?
+  catalogConfig   Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model CommerceConnection {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  provider        CommerceProvider
+  externalStoreId String
+  shopDomain      String?
+  accessToken     String
+  refreshToken    String?
+  scope           String?
+  status          ConnectionStatus   @default(ACTIVE)
+  storeName       String?
+  storeUrl        String?
+  rawPayload      Json?
+  installedAt     DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@unique([provider, externalStoreId])
+  @@index([workspaceId, status])
+}
+
+model LogisticsConnection {
+  id          String             @id @default(cuid())
+  workspaceId String
+  provider    LogisticsProvider
+  username    String
+  password    String
+  status      ConnectionStatus   @default(ACTIVE)
+  config      Json?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@index([workspaceId, status])
+}
+
+model WhatsAppChannel {
+  id                 String           @id @default(cuid())
+  workspaceId        String
+  name               String           @default("Canal principal")
+  wabaId             String
+  phoneNumberId      String           @unique
+  displayPhoneNumber String?
+  accessToken        String
+  verifyToken        String?
+  graphVersion       String?
+  status             ConnectionStatus @default(ACTIVE)
+  rawPayload         Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([wabaId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("AGENT")
+  workspaceId  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, role])
 }
 
 model Contact {
   id                    String    @id @default(cuid())
-  workspaceId           String    @default("workspace_lummine")
+  workspaceId           String
   waId                  String
   phone                 String?
   name                  String?
@@ -50,7 +164,7 @@ model Contact {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversations Conversation[]
 
   @@unique([workspaceId, waId])
@@ -59,7 +173,7 @@ model Contact {
 
 model Conversation {
   id            String             @id @default(cuid())
-  workspaceId   String             @default("workspace_lummine")
+  workspaceId   String
   contactId     String
   status        ConversationStatus @default(OPEN)
   queue         ConversationQueue  @default(AUTO)
@@ -80,10 +194,6 @@ model Conversation {
   aiLabRuns AiLabRun[]
 
   @@unique([workspaceId, contactId])
-  @@index([lastMessageAt])
-  @@index([unreadCount, lastMessageAt])
-  @@index([archivedAt, lastMessageAt])
-  @@index([queue, aiEnabled, lastMessageAt])
   @@index([workspaceId, lastMessageAt])
   @@index([workspaceId, unreadCount, lastMessageAt])
   @@index([workspaceId, archivedAt, lastMessageAt])
@@ -92,6 +202,7 @@ model Conversation {
 
 model AiLabRun {
   id              String   @id @default(cuid())
+  workspaceId     String
   sessionId       String
   fixtureKey      String
   conversationId  String
@@ -105,11 +216,12 @@ model AiLabRun {
   tracePayload    Json?
   createdAt       DateTime @default(now())
 
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@index([sessionId, createdAt])
-  @@index([conversationId, createdAt])
-  @@index([fixtureKey, createdAt])
+  @@index([workspaceId, sessionId, createdAt])
+  @@index([workspaceId, conversationId, createdAt])
+  @@index([workspaceId, fixtureKey, createdAt])
 }
 
 model ConversationState {
@@ -159,17 +271,23 @@ model ConversationState {
 
 model WhatsAppMenuSetting {
   id        String   @id @default(cuid())
-  key       String   @unique
+  workspaceId String
+  key       String
   name      String   @default("Configuración principal")
   isActive  Boolean  @default(true)
   config    Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, isActive])
 }
 
 model Message {
   id                 String           @id @default(cuid())
-  workspaceId        String           @default("workspace_lummine")
+  workspaceId        String
   conversationId     String
   metaMessageId      String?
   senderName         String?
@@ -191,13 +309,14 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, metaMessageId])
-  @@index([conversationId, createdAt])
   @@index([workspaceId, conversationId, createdAt])
   @@index([workspaceId, createdAt])
 }
 
 model StoreInstallation {
   id          String   @id @default(cuid())
+  workspaceId String
+  provider    CommerceProvider @default(TIENDANUBE)
   storeId     String   @unique
   accessToken String
   scope       String?
@@ -205,10 +324,16 @@ model StoreInstallation {
   storeUrl    String?
   installedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, provider])
 }
 
 model CatalogProduct {
   id             String   @id @default(cuid())
+  workspaceId    String
+  provider       CommerceProvider @default(TIENDANUBE)
   storeId        String
   productId      String
   name           String
@@ -230,13 +355,17 @@ model CatalogProduct {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([storeId, productId])
-  @@index([storeId, published])
-  @@index([name])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, productId])
+  @@index([workspaceId, storeId, published])
+  @@index([workspaceId, name])
 }
 
 model CatalogSyncLog {
   id                String    @id @default(cuid())
+  workspaceId       String
+  provider          CommerceProvider @default(TIENDANUBE)
   storeId           String?
   status            String
   startedAt         DateTime  @default(now())
@@ -244,14 +373,18 @@ model CatalogSyncLog {
   productsProcessed Int       @default(0)
   message           String?
   createdAt         DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, provider, startedAt])
 }
 
 model AbandonedCart {
   id                   String    @id @default(cuid())
-  workspaceId          String    @default("workspace_lummine")
+  workspaceId          String
   provider             CommerceProvider @default(TIENDANUBE)
   storeId              String?
-  checkoutId           String    @unique
+  checkoutId           String
   token                String?
   contactName          String?
   contactEmail         String?
@@ -279,16 +412,16 @@ model AbandonedCart {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@index([status, updatedAt])
-  @@index([contactPhone])
+  @@unique([workspaceId, provider, checkoutId])
   @@index([workspaceId, status, updatedAt])
-  @@index([storeId, checkoutCreatedAt])
-  @@index([storeId, updatedAt])
+  @@index([workspaceId, contactPhone])
+  @@index([workspaceId, storeId, checkoutCreatedAt])
+  @@index([workspaceId, storeId, updatedAt])
 }
 
 model CustomerProfile {
   id                        String    @id @default(cuid())
-  workspaceId               String    @default("workspace_lummine")
+  workspaceId               String
   provider                  CommerceProvider @default(TIENDANUBE)
   storeId                   String
   externalCustomerId        String?
@@ -333,24 +466,24 @@ model CustomerProfile {
 
   orders     CustomerOrder[]
   orderItems CustomerOrderItem[]
-  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([storeId, externalCustomerId])
-  @@unique([storeId, normalizedEmail])
-  @@unique([storeId, normalizedPhone])
-  @@index([workspaceId, storeId])
-  @@index([storeId, lastOrderAt])
-  @@index([storeId, firstOrderAt])
-  @@index([storeId, totalSpent])
-  @@index([storeId, lastOrderNumber])
-  @@index([storeId, orderCount])
-  @@index([storeId, normalizedPhone])
-  @@index([storeId, normalizedEmail])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, externalCustomerId])
+  @@unique([workspaceId, normalizedEmail])
+  @@unique([workspaceId, normalizedPhone])
+  @@index([workspaceId, storeId, lastOrderAt])
+  @@index([workspaceId, storeId, firstOrderAt])
+  @@index([workspaceId, storeId, totalSpent])
+  @@index([workspaceId, storeId, lastOrderNumber])
+  @@index([workspaceId, storeId, orderCount])
+  @@index([workspaceId, storeId, normalizedPhone])
+  @@index([workspaceId, storeId, normalizedEmail])
 }
 
 model CustomerOrder {
   id                    String    @id @default(cuid())
-  workspaceId           String    @default("workspace_lummine")
+  workspaceId           String
   provider              CommerceProvider @default(TIENDANUBE)
   customerProfileId     String
   storeId               String
@@ -380,24 +513,23 @@ model CustomerOrder {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   customerProfile CustomerProfile     @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
   items           CustomerOrderItem[]
-  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([storeId, orderId])
-  @@index([workspaceId, storeId, orderCreatedAt])
+  @@unique([workspaceId, provider, orderId])
   @@index([customerProfileId, orderCreatedAt])
-  @@index([storeId, orderCreatedAt])
-  @@index([normalizedEmail])
-  @@index([normalizedPhone])
-  @@index([storeId, orderNumber])
-  @@index([storeId, paymentStatus, orderCreatedAt])
-  @@index([storeId, shippingStatus, orderCreatedAt])
+  @@index([workspaceId, storeId, orderCreatedAt])
+  @@index([workspaceId, normalizedEmail])
+  @@index([workspaceId, normalizedPhone])
+  @@index([workspaceId, storeId, orderNumber])
+  @@index([workspaceId, storeId, paymentStatus, orderCreatedAt])
+  @@index([workspaceId, storeId, shippingStatus, orderCreatedAt])
 }
 
 model CustomerOrderItem {
   id                String    @id @default(cuid())
-  workspaceId       String    @default("workspace_lummine")
+  workspaceId       String
   provider          CommerceProvider @default(TIENDANUBE)
   customerOrderId   String
   customerProfileId String
@@ -421,21 +553,20 @@ model CustomerOrderItem {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   customerOrder   CustomerOrder   @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
   customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
-  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([customerProfileId, orderCreatedAt])
   @@index([workspaceId, storeId, normalizedName])
-  @@index([storeId, normalizedName])
-  @@index([storeId, productId])
-  @@index([storeId, orderNumber])
-  @@index([orderId])
+  @@index([workspaceId, storeId, productId])
+  @@index([workspaceId, storeId, orderNumber])
+  @@index([workspaceId, orderId])
 }
 
 model CustomerSyncLog {
   id               String    @id @default(cuid())
-  workspaceId      String    @default("workspace_lummine")
+  workspaceId      String
   provider         CommerceProvider @default(TIENDANUBE)
   storeId          String?
   status           String
@@ -451,13 +582,13 @@ model CustomerSyncLog {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  @@index([storeId, status, startedAt])
   @@index([workspaceId, storeId, status, startedAt])
 }
 
 model EnboxShipment {
   id                 String   @id @default(cuid())
-  didEnvio           String   @unique
+  workspaceId        String
+  didEnvio           String
   didCliente         String?
   storeId            String?
   orderId            String?
@@ -483,16 +614,20 @@ model EnboxShipment {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  @@index([orderNumber])
-  @@index([shipmentNumber])
-  @@index([packId])
-  @@index([trackingNumber])
-  @@index([storeId, orderNumber])
-  @@index([lastSyncedAt])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, didEnvio])
+  @@index([workspaceId, orderNumber])
+  @@index([workspaceId, shipmentNumber])
+  @@index([workspaceId, packId])
+  @@index([workspaceId, trackingNumber])
+  @@index([workspaceId, storeId, orderNumber])
+  @@index([workspaceId, lastSyncedAt])
 }
 
 model EnboxSyncLog {
   id               String   @id @default(cuid())
+  workspaceId      String
   status           String
   mode             String
   startedAt        DateTime @default(now())
@@ -504,13 +639,16 @@ model EnboxSyncLog {
   message          String?
   createdAt        DateTime @default(now())
 
-  @@index([status, startedAt])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, startedAt])
 }
 
 model WhatsAppTemplate {
   id              String    @id @default(cuid())
+  workspaceId     String
   wabaId          String
-  metaTemplateId  String?   @unique
+  metaTemplateId  String?
   name            String
   language        String
   category        String
@@ -527,15 +665,18 @@ model WhatsAppTemplate {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@unique([wabaId, name, language])
-  @@index([name])
-  @@index([status])
-  @@index([category])
-  @@index([metaTemplateId])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, wabaId, name, language])
+  @@unique([workspaceId, metaTemplateId])
+  @@index([workspaceId, name])
+  @@index([workspaceId, status])
+  @@index([workspaceId, category])
 }
 
 model TemplateSyncLog {
   id            String    @id @default(cuid())
+  workspaceId   String
   status        String
   startedAt     DateTime  @default(now())
   finishedAt    DateTime?
@@ -545,11 +686,15 @@ model TemplateSyncLog {
   message       String?
   rawPayload    Json?
   createdAt     DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startedAt])
 }
 
 model Campaign {
   id                  String         @id @default(cuid())
-  workspaceId         String         @default("workspace_lummine")
+  workspaceId         String
   name                String
   templateLocalId     String?
   templateMetaId      String?
@@ -580,15 +725,15 @@ model Campaign {
 
   workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recipients CampaignRecipient[]
+  conversions CampaignConversion[]
 
   @@index([workspaceId, status, createdAt])
-  @@index([status, createdAt])
-  @@index([dispatchLockedAt])
+  @@index([workspaceId, dispatchLockedAt])
 }
 
 model CampaignRecipient {
   id                   String                  @id @default(cuid())
-  workspaceId          String                  @default("workspace_lummine")
+  workspaceId          String
   campaignId           String
   phone                String
   waId                 String?
@@ -600,7 +745,7 @@ model CampaignRecipient {
   renderedComponents   Json?
   renderedPreviewText  String?
   status               CampaignRecipientStatus @default(PENDING)
-  waMessageId          String?                 @unique
+  waMessageId          String?
   errorCode            String?
   errorSubcode         String?
   errorMessage         String?
@@ -617,16 +762,100 @@ model CampaignRecipient {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  conversions CampaignConversion[]
 
+  @@unique([workspaceId, waMessageId])
   @@index([workspaceId, campaignId, status])
-  @@index([campaignId, status])
-  @@index([phone])
-  @@index([waMessageId])
+  @@index([workspaceId, phone])
 }
 
-enum UserRole {
-  ADMIN
-  AGENT
+model CampaignConversion {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  campaignId             String
+  recipientId            String?
+  conversionKey          String
+  source                 String
+  confidence             String
+  orderId                String?
+  orderNumber            String?
+  checkoutId             String?
+  cartId                 String?
+  contactName            String?
+  phone                  String?
+  email                  String?
+  amount                 Decimal? @db.Decimal(12, 2)
+  currency               String?
+  paymentStatus          String?
+  sentAt                 DateTime?
+  convertedAt            DateTime
+  attributionWindowHours Int      @default(168)
+  matchReason            String?
+  rawPayload             Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient CampaignRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, conversionKey])
+  @@index([workspaceId, campaignId, source])
+  @@index([workspaceId, recipientId])
+  @@index([workspaceId, orderId])
+  @@index([workspaceId, checkoutId])
+  @@index([workspaceId, convertedAt])
+}
+
+model CampaignSchedule {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  templateLocalId   String?
+  templateName      String
+  templateLanguage  String    @default("es_AR")
+  audienceSource    String    @default("abandoned_carts")
+  audienceFilters   Json?
+  defaultComponents Json?
+  notes             String?
+  status            String    @default("ACTIVE")
+  timeOfDay         String    @default("22:00")
+  timezone          String    @default("America/Argentina/Buenos_Aires")
+  nextRunAt         DateTime?
+  lastRunAt         DateTime?
+  lastRunKey        String?
+  lastCampaignId    String?
+  lastError         String?
+  runCount          Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, nextRunAt])
+  @@index([workspaceId, createdAt])
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum CommerceProvider {
+  TIENDANUBE
+  SHOPIFY
+}
+
+enum LogisticsProvider {
+  ENBOX
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+  PENDING
 }
 
 enum ConversationStatus {
@@ -663,16 +892,4 @@ enum CampaignRecipientStatus {
   READ
   FAILED
   SKIPPED
-}
-
-enum WorkspaceStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum CommerceProvider {
-  TIENDANUBE
-  SHOPIFY
-  WOOCOMMERCE
-  MANUAL
 }

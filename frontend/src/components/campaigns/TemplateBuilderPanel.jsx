@@ -580,19 +580,18 @@ export default function TemplateBuilderPanel({
 				<div>
 					<h3>{isEditingSelectedTemplate ? 'Editar template' : 'Crear template nuevo'}</h3>
 					<p>
-						Ahora el builder soporta variables posicionales y nombradas. Header y footer
-						siguen siendo opcionales.
+						Definí el mensaje, las variables y los botones antes de usarlo en campañas.
 					</p>
 				</div>
 
 				<div className="template-builder-header-actions">
 					<button type="button" className="button ghost" onClick={onBackToLibrary}>
-						← Volver a biblioteca
+						Volver a biblioteca
 					</button>
 
 					{!forcedCreateMode ? (
 						<button type="button" className="button secondary" onClick={startCreateMode}>
-							+ Nuevo template
+							Nuevo template
 						</button>
 					) : null}
 
@@ -843,7 +842,7 @@ export default function TemplateBuilderPanel({
 						<input
 							value={form.footerText}
 							onChange={(event) => updateForm('footerText', event.target.value)}
-							placeholder="Lummine · Atención por WhatsApp"
+							placeholder="Atención por WhatsApp"
 						/>
 					</label>
 

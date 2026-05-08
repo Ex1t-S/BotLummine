@@ -1,0 +1,128 @@
+.metric-panel {
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"label icon"
+		"value icon"
+		"helper action";
+	gap: 6px 10px;
+	min-height: 114px;
+	padding: 16px;
+	overflow: hidden;
+	border: 1px solid var(--ui-border, #d7dee5);
+	border-radius: 22px;
+	background: var(--ui-surface, #ffffff);
+	color: var(--ui-text, #172027);
+	text-align: left;
+	box-shadow: var(--ui-shadow-sm, 0 8px 22px rgba(25, 35, 58, 0.06));
+	isolation: isolate;
+}
+
+.metric-panel::before {
+	content: none;
+}
+
+.metric-panel::after {
+	content: none;
+}
+
+button.metric-panel {
+	cursor: pointer;
+}
+
+button.metric-panel:hover {
+	border-color: var(--ui-border-strong, #d5dce8);
+	background: var(--ui-surface-soft, #f7f9fd);
+	box-shadow: var(--ui-shadow-md, 0 18px 42px rgba(25, 35, 58, 0.1));
+}
+
+.metric-panel__orb {
+	display: none;
+}
+
+.metric-panel__icon {
+	grid-area: icon;
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border: 1px solid #dfe6ff;
+	border-radius: 15px;
+	background: var(--ui-primary-muted, #f2f5ff);
+	color: var(--ui-primary, #3157d5);
+}
+
+.metric-panel__label {
+	grid-area: label;
+	align-self: end;
+	color: var(--ui-muted, #66737d);
+	font-size: 11px;
+	font-weight: 780;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.metric-panel__value {
+	grid-area: value;
+	color: var(--ui-heading, #0d151b);
+	font-size: 30px;
+	font-weight: 800;
+	line-height: 1;
+	letter-spacing: 0;
+}
+
+.metric-panel__helper {
+	grid-area: helper;
+	color: var(--ui-muted, #66737d);
+	line-height: 1.35;
+}
+
+.metric-panel__action {
+	grid-area: action;
+	justify-self: end;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 24px;
+	padding: 0 8px;
+	border: 1px solid #dfe6ff;
+	border-radius: 999px;
+	background: var(--ui-primary-muted, #f2f5ff);
+	color: var(--ui-primary, #3157d5);
+	font-size: 12px;
+	font-style: normal;
+	font-weight: 800;
+}
+
+.metric-panel.tone-warning {
+	border-color: #f2d2a6;
+	background: var(--ui-warning-soft, #fff7ed);
+}
+
+.metric-panel.tone-warning .metric-panel__icon {
+	border-color: #f2d2a6;
+	background: #ffffff;
+	color: var(--ui-warning, #b54708);
+}
+
+.metric-panel.tone-info {
+	border-color: #dfe6ff;
+	background: var(--ui-info-soft, #eef2ff);
+}
+
+.metric-panel.tone-info .metric-panel__icon {
+	border-color: #dfe6ff;
+	background: #ffffff;
+	color: var(--ui-info, #3157d5);
+}
+
+@media (max-width: 640px) {
+	.metric-panel {
+		min-height: 108px;
+	}
+
+	.metric-panel__value {
+		font-size: 28px;
+	}
+}

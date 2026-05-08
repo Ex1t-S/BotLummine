@@ -6,6 +6,10 @@ import {
 	getCatalogSummary,
 	getCatalogPage
 } from '../services/catalog/catalog.service.js';
+import {
+	DEFAULT_WORKSPACE_ID,
+	requireRequestWorkspaceId,
+} from '../services/workspaces/workspace-context.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const ORDER_WEBHOOK_EVENTS = [
@@ -20,6 +24,22 @@ const ORDER_WEBHOOK_EVENTS = [
 
 function normalizeUrl(value = '') {
 	return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function pickLocalized(value) {
+	if (value == null) return null;
+	if (typeof value === 'string') return value;
+	if (typeof value === 'object') {
+		return value.es || value['es_AR'] || value['es-AR'] || value.en || value.pt || Object.values(value).find((item) => typeof item === 'string') || null;
+	}
+	return null;
+}
+
+function normalizeAssetUrl(value = '') {
+	const normalized = String(value || '').trim();
+	if (!normalized) return null;
+	if (normalized.startsWith('//')) return `https:${normalized}`;
+	return normalized;
 }
 
 function getRegisterSecret() {
@@ -50,7 +70,7 @@ function isAuthorizedAdminRequest(req) {
 	return Boolean(provided) && provided === expected;
 }
 
-function buildInstallUrl() {
+function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const appId = process.env.TIENDANUBE_APP_ID;
 	const redirectUri = process.env.TIENDANUBE_REDIRECT_URI;
 
@@ -58,10 +78,10 @@ function buildInstallUrl() {
 		throw new Error('Faltan TIENDANUBE_APP_ID o TIENDANUBE_REDIRECT_URI en el .env');
 	}
 
-	const url = new URL('https://www.tiendanube.com/apps/authorize');
-	url.searchParams.set('client_id', appId);
+	const url = new URL(`https://www.tiendanube.com/apps/${appId}/authorize`);
 	url.searchParams.set('redirect_uri', redirectUri);
 	url.searchParams.set('response_type', 'code');
+	url.searchParams.set('state', workspaceId);
 	url.searchParams.set(
 		'scope',
 		process.env.TIENDANUBE_APP_SCOPES || 'read_orders read_products'
@@ -95,7 +115,7 @@ function buildTiendanubeHeaders(accessToken) {
 		'Content-Type': 'application/json',
 		'User-Agent':
 			process.env.TIENDANUBE_USER_AGENT ||
-			'Lummine IA Assistant (soporte@lummine.com)'
+			'Multi Brand IA Assistant'
 	};
 }
 
@@ -136,6 +156,37 @@ function buildOrdersWebhookUrl(req) {
 	return `${resolvePublicBackendBaseUrl(req)}/api/webhook/tiendanube/orders`;
 }
 
+function resolveFrontendAppBaseUrl() {
+	const candidates = [
+		process.env.FRONTEND_URL_PROD,
+		process.env.FRONTEND_URL,
+		process.env.PUBLIC_APP_URL,
+		process.env.APP_URL,
+	]
+		.map(normalizeUrl)
+		.filter(Boolean);
+
+	return candidates[0] || null;
+}
+
+function buildTiendanubeInstallResultUrl({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	status = 'connected',
+	storeId = '',
+}) {
+	const frontendBaseUrl = resolveFrontendAppBaseUrl();
+	if (!frontendBaseUrl) return null;
+
+	const url = new URL('/admin', `${frontendBaseUrl}/`);
+	url.searchParams.set('tab', 'integrations');
+	url.searchParams.set('workspaceId', workspaceId);
+	url.searchParams.set('tiendanube', status);
+	if (storeId) {
+		url.searchParams.set('storeId', storeId);
+	}
+	return url.toString();
+}
+
 async function listTiendanubeWebhooks({ storeId, accessToken }) {
 	const response = await axios.get(
 		`https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/webhooks`,
@@ -159,6 +210,104 @@ async function createTiendanubeWebhook({ storeId, accessToken, event, url }) {
 	);
 
 	return response.data;
+}
+
+async function fetchTiendanubeStore({ storeId, accessToken }) {
+	const response = await axios.get(
+		`https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/store`,
+		{
+			headers: buildTiendanubeHeaders(accessToken),
+			timeout: 15000
+		}
+	);
+
+	return response.data || null;
+}
+
+async function syncTiendanubeBranding({ workspaceId, storeId, accessToken }) {
+	const store = await fetchTiendanubeStore({ storeId, accessToken });
+	if (!store) return null;
+
+	const storeName = pickLocalized(store.name) || store.business_name || null;
+	const storeUrl =
+		(Array.isArray(store.domains) && store.domains[0] ? `https://${store.domains[0]}` : null) ||
+		(store.original_domain ? `https://${store.original_domain}` : null);
+	const logoUrl = normalizeAssetUrl(store.logo);
+
+	await prisma.storeInstallation.update({
+		where: { storeId: String(storeId) },
+		data: {
+			storeName,
+			storeUrl
+		}
+	});
+
+	await prisma.commerceConnection.upsert({
+		where: {
+			workspaceId_provider: {
+				workspaceId,
+				provider: 'TIENDANUBE'
+			}
+		},
+		update: {
+			externalStoreId: String(storeId),
+			accessToken,
+			status: 'ACTIVE',
+			storeName,
+			storeUrl,
+			rawPayload: {
+				provider: 'TIENDANUBE',
+				store
+			}
+		},
+		create: {
+			workspaceId,
+			provider: 'TIENDANUBE',
+			externalStoreId: String(storeId),
+			accessToken,
+			status: 'ACTIVE',
+			storeName,
+			storeUrl,
+			rawPayload: {
+				provider: 'TIENDANUBE',
+				store
+			}
+		}
+	});
+
+	await prisma.workspaceBranding.upsert({
+		where: { workspaceId },
+		update: {
+			logoUrl,
+			rawProviderBranding: {
+				provider: 'TIENDANUBE',
+				store
+			}
+		},
+		create: {
+			workspaceId,
+			logoUrl,
+			rawProviderBranding: {
+				provider: 'TIENDANUBE',
+				store
+			}
+		}
+	});
+
+	if (storeName) {
+		await prisma.workspaceAiConfig.upsert({
+			where: { workspaceId },
+			update: { businessName: storeName },
+			create: {
+				workspaceId,
+				businessName: storeName,
+				agentName: 'Sofi',
+				tone: 'humana, directa y comercial'
+			}
+		});
+	}
+
+	return { storeName, storeUrl, logoUrl };
 }
 
 async function ensureTiendanubeOrderWebhooks({ storeId, accessToken, webhookUrl }) {
@@ -197,18 +346,19 @@ async function ensureTiendanubeOrderWebhooks({ storeId, accessToken, webhookUrl 
 	};
 }
 
-async function resolveInstallationForWebhook(requestedStoreId = null) {
+async function resolveInstallationForWebhook(requestedStoreId = null, workspaceId = DEFAULT_WORKSPACE_ID) {
 	const requested = requestedStoreId ? String(requestedStoreId).trim() : null;
 
 	if (requested) {
-		const byStore = await prisma.storeInstallation.findUnique({
-			where: { storeId: requested }
+		const byStore = await prisma.storeInstallation.findFirst({
+			where: { storeId: requested, workspaceId }
 		});
 
 		if (byStore?.storeId && byStore?.accessToken) {
 			return {
 				storeId: String(byStore.storeId),
 				accessToken: String(byStore.accessToken),
+				workspaceId: byStore.workspaceId,
 				scope: byStore.scope || null,
 				source: 'database:requested'
 			};
@@ -216,6 +366,7 @@ async function resolveInstallationForWebhook(requestedStoreId = null) {
 	}
 
 	const latestInstallation = await prisma.storeInstallation.findFirst({
+		where: { workspaceId, provider: 'TIENDANUBE' },
 		orderBy: { installedAt: 'desc' }
 	});
 
@@ -223,6 +374,7 @@ async function resolveInstallationForWebhook(requestedStoreId = null) {
 		return {
 			storeId: String(latestInstallation.storeId),
 			accessToken: String(latestInstallation.accessToken),
+			workspaceId: latestInstallation.workspaceId,
 			scope: latestInstallation.scope || null,
 			source: 'database:latest'
 		};
@@ -237,10 +389,11 @@ async function resolveInstallationForWebhook(requestedStoreId = null) {
 		);
 	}
 
-	if (envStoreId && envAccessToken) {
+	if (workspaceId === DEFAULT_WORKSPACE_ID && envStoreId && envAccessToken) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
+			workspaceId,
 			scope: null,
 			source: 'env'
 		};
@@ -251,9 +404,10 @@ async function resolveInstallationForWebhook(requestedStoreId = null) {
 	);
 }
 
-export async function startTiendanubeInstall(_req, res) {
+export async function startTiendanubeInstall(req, res) {
 	try {
-		return res.redirect(buildInstallUrl());
+		const workspaceId = requireRequestWorkspaceId(req);
+		return res.redirect(buildInstallUrl(workspaceId));
 	} catch (error) {
 		console.error('Error iniciando instalación Tiendanube:', error.message);
 		return res.status(500).json({ ok: false, error: error.message });
@@ -263,6 +417,7 @@ export async function startTiendanubeInstall(_req, res) {
 export async function handleTiendanubeCallback(req, res) {
 	try {
 		const { code } = req.query;
+		const workspaceId = String(req.query?.state || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
 
 		if (!code) {
 			return res.status(400).send('Falta code');
@@ -273,18 +428,66 @@ export async function handleTiendanubeCallback(req, res) {
 		await prisma.storeInstallation.upsert({
 			where: { storeId: String(data.user_id) },
 			update: {
+				workspaceId,
+				provider: 'TIENDANUBE',
 				accessToken: data.access_token,
 				scope: data.scope || null
 			},
 			create: {
+				workspaceId,
+				provider: 'TIENDANUBE',
 				storeId: String(data.user_id),
 				accessToken: data.access_token,
 				scope: data.scope || null
 			}
 		});
 
+		await prisma.commerceConnection.upsert({
+			where: {
+				workspaceId_provider: {
+					workspaceId,
+					provider: 'TIENDANUBE'
+				}
+			},
+			update: {
+				externalStoreId: String(data.user_id),
+				accessToken: data.access_token,
+				scope: data.scope || null,
+				status: 'ACTIVE',
+				rawPayload: {
+					source: 'oauth-callback',
+					token: data
+				}
+			},
+			create: {
+				workspaceId,
+				provider: 'TIENDANUBE',
+				externalStoreId: String(data.user_id),
+				accessToken: data.access_token,
+				scope: data.scope || null,
+				status: 'ACTIVE',
+				rawPayload: {
+					source: 'oauth-callback',
+					token: data
+				}
+			}
+		});
+
+		let brandingResult = null;
+		try {
+			brandingResult = await syncTiendanubeBranding({
+				workspaceId,
+				storeId: String(data.user_id),
+				accessToken: data.access_token
+			});
+		} catch (error) {
+			console.error('[TIENDANUBE][CALLBACK][BRANDING]', error?.message || error);
+		}
+
 		let webhookResult = null;
 		let webhookError = null;
+		let catalogResult = null;
+		let catalogError = null;
 
 		try {
 			const webhookUrl = buildOrdersWebhookUrl(req);
@@ -298,6 +501,25 @@ export async function handleTiendanubeCallback(req, res) {
 				error?.message ||
 				'No se pudieron registrar webhooks automáticamente.';
 			console.error('[TIENDANUBE][CALLBACK][WEBHOOKS]', webhookError);
+		}
+
+		try {
+			catalogResult = await syncCatalogFromTiendanube({ workspaceId });
+		} catch (error) {
+			catalogError =
+				error?.message ||
+				'No se pudo sincronizar el catalogo automaticamente.';
+			console.error('[TIENDANUBE][CALLBACK][CATALOG]', catalogError);
+		}
+
+		const resultUrl = buildTiendanubeInstallResultUrl({
+			workspaceId,
+			status: webhookError || catalogError ? 'partial' : 'connected',
+			storeId: String(data.user_id)
+		});
+
+		if (resultUrl) {
+			return res.redirect(resultUrl);
 		}
 
 		return res.send(`
@@ -332,8 +554,10 @@ export async function registerTiendanubeWebhooks(req, res) {
 			});
 		}
 
+		const workspaceId = req.user ? requireRequestWorkspaceId(req) : String(req.body?.workspaceId || req.query?.workspaceId || DEFAULT_WORKSPACE_ID);
 		const installation = await resolveInstallationForWebhook(
-			req.body?.storeId || req.query?.storeId
+			req.body?.storeId || req.query?.storeId,
+			workspaceId
 		);
 
 		const webhookUrl = buildOrdersWebhookUrl(req);
@@ -370,9 +594,11 @@ export async function runTiendanubeCatalogSync(req, res) {
 			});
 		}
 
-		await resolveInstallationForWebhook(req.body?.storeId || req.query?.storeId);
+		const workspaceId = req.user ? requireRequestWorkspaceId(req) : String(req.body?.workspaceId || req.query?.workspaceId || DEFAULT_WORKSPACE_ID);
+		await resolveInstallationForWebhook(req.body?.storeId || req.query?.storeId, workspaceId);
 
 		const result = await syncCatalogFromTiendanube({
+			workspaceId,
 			pageSize: Number(req.body?.pageSize || req.query?.pageSize) || 100,
 			delayMs: Number(req.body?.delayMs || req.query?.delayMs) || 250,
 			markMissingAsUnpublished:
@@ -395,7 +621,8 @@ export async function getTiendanubeCatalogStatus(req, res) {
 			});
 		}
 
-		const summary = await getCatalogSummary();
+		const workspaceId = req.user ? requireRequestWorkspaceId(req) : String(req.query?.workspaceId || DEFAULT_WORKSPACE_ID);
+		const summary = await getCatalogSummary({ workspaceId });
 		return res.json({ ok: true, ...summary });
 	} catch (error) {
 		console.error('[TIENDANUBE][CATALOG STATUS]', error.message);
@@ -413,6 +640,7 @@ export async function getTiendanubeCatalogProducts(req, res) {
 		}
 
 		const result = await getCatalogPage({
+			workspaceId: req.user ? requireRequestWorkspaceId(req) : String(req.query?.workspaceId || DEFAULT_WORKSPACE_ID),
 			q: req.query?.q || '',
 			page: req.query?.page,
 			pageSize: req.query?.pageSize,
@@ -429,20 +657,22 @@ export async function getTiendanubeCatalogProducts(req, res) {
 	}
 }
 
-export async function getTiendanubeStatus(_req, res) {
+export async function getTiendanubeStatus(req, res) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		const installation = await prisma.storeInstallation.findFirst({
+			where: { workspaceId, provider: 'TIENDANUBE' },
 			orderBy: { installedAt: 'desc' }
 		});
 
 		let activeConfig = null;
 		try {
-			activeConfig = await getTiendanubeConfig();
+			activeConfig = await getTiendanubeConfig({ workspaceId });
 		} catch {
 			activeConfig = null;
 		}
 
-		const catalogSummary = await getCatalogSummary().catch(() => null);
+		const catalogSummary = await getCatalogSummary({ workspaceId }).catch(() => null);
 
 		return res.json({
 			ok: true,

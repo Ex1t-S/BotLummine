@@ -2,7 +2,7 @@ import {
 	handleOrderStatusIntent,
 	buildFixedOrderReply,
 } from '../intents/order-status.service.js';
-import { STORE_LINKS } from '../../data/lummine-business.js';
+import { STORE_LINKS } from '../../data/store-business.js';
 import { handlePaymentIntent } from '../intents/payment.service.js';
 import { handleShippingIntent } from '../intents/shipping.service.js';
 import { handleSizeHelpIntent } from '../intents/size-help.service.js';
@@ -22,7 +22,11 @@ export function summarizeText(value = '', max = 160) {
 }
 
 function buildGeneralCatalogReply() {
-	return `Te paso el catalogo general para que veas todo: ${STORE_LINKS.indumentaria} Decime que producto o promo puntual necesitas y te ayudo por aca.`;
+	if (STORE_LINKS.catalog) {
+		return `Te paso el catálogo general para que veas todo: ${STORE_LINKS.catalog} Decime qué producto o promo puntual necesitás y te ayudo por acá.`;
+	}
+
+	return 'Puedo ayudarte por acá con productos, stock, talles, pagos o envíos. Decime qué estás buscando y lo revisamos.';
 }
 
 export function createResetConversationState() {
@@ -417,7 +421,7 @@ export function stripRepeatedGreeting(text = '', recentMessages = [], contactNam
 	const name = String(contactName || '').trim();
 	const escapedName = name ? name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
 	const patterns = [
-		/^(?:¡)?(?:hola|buenas|buen dia|buen día|buenas tardes|buenas noches)(?:[,!\s-]+(?:soy\s+sofi\s+de\s+lummine|sofi\s+de\s+lummine))?[,:!\s-]*/i,
+		/^(?:¡)?(?:hola|buenas|buen dia|buen día|buenas tardes|buenas noches)(?:[,!\s-]+(?:soy\s+[^,!.]+|[^,!.]+\s+de\s+[^,!.]+))?[,:!\s-]*/i,
 		escapedName
 			? new RegExp(
 					`^(?:¡)?(?:hola|buenas|buen dia|buen día|buenas tardes|buenas noches)[,\\s-]+${escapedName}[,:!?\\s-]*`,
@@ -425,7 +429,7 @@ export function stripRepeatedGreeting(text = '', recentMessages = [], contactNam
 			  )
 			: null,
 		escapedName ? new RegExp(`^${escapedName}[,:!?\\s-]*`, 'i') : null,
-		/^soy\s+sofi\s+de\s+lummine[,:!\s-]*/i,
+		/^soy\s+[^,!.]+\s+de\s+[^,!.]+[,:!\s-]*/i,
 	].filter(Boolean);
 
 	let changed = true;
@@ -444,7 +448,7 @@ export function stripRepeatedGreeting(text = '', recentMessages = [], contactNam
 	return next || text;
 }
 
-function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '', agentName = 'Sofi', businessName = 'Lummine', preserveGreeting = false) {
+function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '', agentName = 'Sofi', businessName = 'la marca', preserveGreeting = false) {
 	if (preserveGreeting) return text;
 
 	const assistantCount = recentMessages.filter((msg) => msg.role === 'assistant').length;
@@ -453,7 +457,7 @@ function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '',
 	let next = String(text || '').trim();
 	const safeContactName = String(contactName || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	const safeAgentName = String(agentName || 'Sofi').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const safeBusinessName = String(businessName || 'Lummine').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const safeBusinessName = String(businessName || 'la marca').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 	const identityPatterns = [
 		safeContactName ? new RegExp(`^${safeContactName}[,:!?\\s-]+`, 'i') : null,
@@ -478,7 +482,7 @@ function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '',
 	return next || text;
 }
 
-function ensureGeneralPresentation(text = '', { preserveGreeting = false, businessName = 'Lummine', agentName = 'Sofi' } = {}) {
+function ensureGeneralPresentation(text = '', { preserveGreeting = false, businessName = 'la marca', agentName = 'Sofi' } = {}) {
 	if (!preserveGreeting) return text;
 
 	const normalized = normalizeText(text);
@@ -486,7 +490,9 @@ function ensureGeneralPresentation(text = '', { preserveGreeting = false, busine
 		return `Hola, soy ${agentName} de ${businessName}.`;
 	}
 
-	if (/soy\s+sofi\s+de\s+lummine/i.test(normalized)) return normalized;
+	const safeAgentName = String(agentName || 'Sofi').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const safeBusinessName = String(businessName || 'la marca').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	if (new RegExp(`soy\\s+${safeAgentName}\\s+de\\s+${safeBusinessName}`, 'i').test(normalized)) return normalized;
 
 	const withoutLeadingGreeting = normalized.replace(
 		/^(?:¡)?(?:hola|buenas|buen dia|buen día|buenas tardes|buenas noches)[,!.\s-]*/i,
@@ -512,51 +518,6 @@ export function stripBotOpenings(text = '') {
 	}
 
 	return next || text;
-}
-
-function lastUserText(recentMessages = []) {
-	return [...recentMessages].reverse().find((message) => message?.role === 'user')?.text || '';
-}
-
-function cleanCampaignFollowupTone(text = '', recentMessages = []) {
-	let next = String(text || '').trim();
-	const lastUser = normalizeText(lastUserText(recentMessages));
-	const userAlreadyBought =
-		/(ya compre|ya hice la compra|ya hice el pedido|hoy las compre|ayer compre|ya lo compre|ya esta pago|ya pague)/.test(
-			lastUser
-		);
-
-	const replacements = [
-		[/^¡?hola!?\s*/i, ''],
-		[/^soy\s+sofi\s+de\s+lummine[,.!\s]*/i, ''],
-		[/^¡?sofi\s+de\s+lummine\s+ac[aá][,.!\s]*/i, ''],
-		[/^sofi\s+de\s+lummine\s+a\s+tu\s+servicio[,.!\s]*/i, ''],
-		[/^¡?sofi\s+de\s+lummine\s+a\s+tu\s+servicio!?[,.!\s]*/i, ''],
-		[/^¡?sofi\s+de\s+lummine[,.!\s]*/i, ''],
-		[/\bsofi\s+de\s+lummine\s+a\s+tu\s+servicio\b[,.!\s]*/gi, ''],
-		[/\ba\s+tu\s+servicio\b[,.!\s]*/gi, ''],
-		[/\bme llamo\s+sofi,?\s+de\s+lummine\b[,.!\s]*/gi, ''],
-		[/\bme alegra mucho\b/gi, 'gracias por avisarnos'],
-		[/\bme alegra\b/gi, 'gracias por avisarnos'],
-		[/¡?qué bueno que\b/gi, 'Gracias por avisarnos que'],
-		[/¡?es una excelente elección!?/gi, ''],
-		[/¡?felicidades por tu elección!?/gi, ''],
-	];
-
-	for (const [pattern, replacement] of replacements) {
-		next = next.replace(pattern, replacement).trim();
-	}
-
-	next = next.replace(/^[\s.!,¡]+/, '').trim();
-
-	if (
-		userAlreadyBought &&
-		/(promo|oferta|aprovechar|te puedo contar mas|te puedo contar m[aá]s|si te interesan|comprar|link)/i.test(next)
-	) {
-		return 'Gracias por avisarnos. Si necesitás ayuda con el comprobante, el pedido o el seguimiento, escribime por acá.';
-	}
-
-	return normalizeText(next) || text;
 }
 
 function responseMentionsHumanHandoff(text = '') {
@@ -601,7 +562,7 @@ export function auditAssistantReply({
 	commercialPlan,
 	recentMessages = [],
 	contactName = '',
-	businessName = 'Lummine',
+	businessName = 'la marca',
 	agentName = 'Sofi',
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
@@ -610,32 +571,6 @@ export function auditAssistantReply({
 	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName, preserveGreeting);
 	cleaned = stripRepeatedIdentity(cleaned, recentMessages, contactName, agentName, businessName, preserveGreeting);
 	cleaned = stripBotOpenings(cleaned);
-	cleaned = cleaned.replace(/\bsofi\s+de\s+lummine\s+a\s+tu\s+servicio\b[,.!\s]*/gi, '').trim();
-	cleaned = cleaned.replace(/\ba\s+tu\s+servicio\b[,.!\s]*/gi, '').trim();
-	if (commercialPlan?.campaignFollowup) {
-		cleaned = cleanCampaignFollowupTone(cleaned, recentMessages);
-		cleaned = cleaned.replace(/\bCliente\b[,:!.\s]*/g, '').trim();
-		const campaignLastUser = normalizeText(lastUserText(recentMessages)).toLowerCase();
-		const campaignCleaned = normalizeText(cleaned).toLowerCase();
-		const campaignAlreadyBought =
-			/(ya compre|ya hice la compra|ya hice el pedido|hoy las compre|ayer compre|ya lo compre|ya esta pago|ya pague|ya compre gracias|ya las compre)/.test(
-				campaignLastUser
-			);
-
-		if (campaignAlreadyBought) {
-			cleaned = 'Gracias por avisarnos. Si necesitas ayuda con el comprobante, el pedido o el seguimiento, escribime por aca.';
-		} else if (
-			/(tarjeta|pago|pagar|no me toma|no me deja)/.test(campaignLastUser) &&
-			/(promo|promocion|promoción|oferta)/.test(campaignCleaned)
-		) {
-			cleaned = 'Entiendo. Si la tarjeta no pasa, revisa los datos ingresados e intenta nuevamente. Si el error sigue, mandanos captura del aviso para revisarlo.';
-		} else if (/recibimos tu consulta|tu consulta sobre/.test(campaignCleaned)) {
-			cleaned = cleaned.replace(/recibimos tu consulta sobre/gi, 'te escribimos para compartirte info sobre');
-			cleaned = cleaned.replace(/recibimos tu consulta/gi, 'te escribimos para compartirte la promo');
-		}
-	}
-	cleaned = cleaned.replace(/¡?excelente elecci[oó]n!?/gi, '').trim();
-	cleaned = cleaned.replace(/\bfuror\b/gi, 'muy elegidas').trim();
 	cleaned = normalizeText(cleaned);
 
 	if (!cleaned) {
@@ -688,17 +623,18 @@ export function auditAssistantReply({
 }
 
 export async function resolveIntentAction({
+	workspaceId,
 	intent,
 	messageBody,
 	explicitOrderNumber,
 	currentState,
 }) {
 	if (intent === 'order_status') {
-		return handleOrderStatusIntent({ explicitOrderNumber, currentState });
+		return handleOrderStatusIntent({ explicitOrderNumber, currentState, workspaceId });
 	}
 
 	if (intent === 'payment') {
-		return handlePaymentIntent({ currentState });
+		return handlePaymentIntent({ currentState, workspaceId });
 	}
 
 	if (intent === 'shipping') {

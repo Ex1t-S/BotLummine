@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger, maskPhone } from '../../lib/logger.js';
 import { runAssistantReply } from '../ai/index.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
@@ -25,7 +26,6 @@ import {
 	buildPaymentReviewAck,
 	resolveConversationQueue
 } from './inbox-routing.service.js';
-import { analyzePaymentProofImage } from './payment-proof-vision.service.js';
 import {
 	normalizeText,
 	buildConversationSummary,
@@ -42,6 +42,12 @@ import {
 } from './menu-flow.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
 import { buildMenuAssistantContext } from '../whatsapp/whatsapp-menu.service.js';
+import {
+	DEFAULT_WORKSPACE_ID,
+	getWorkspaceRuntimeConfig,
+	normalizeWorkspaceId,
+} from '../workspaces/workspace-context.service.js';
+import { persistChatConfirmationConversions } from '../campaigns/campaign-attribution.service.js';
 
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	const baseText = String(text || '').trim();
@@ -72,67 +78,12 @@ function findLastOutboundBeforeCurrentInbound(messages = []) {
 	return null;
 }
 
-function isOutboundCampaignTemplateMessage(message = null) {
+function isAbandonedCartCampaignMessage(message = null) {
 	return (
 		message?.direction === 'OUTBOUND' &&
 		message?.provider === 'whatsapp-cloud-api' &&
-		message?.type === 'template' &&
-		Boolean(message?.model)
+		message?.model === 'carrito_abandonated_v2'
 	);
-}
-
-function isAbandonedCartCampaignMessage(message = null) {
-	const rawPayload = message?.rawPayload || {};
-	const model = String(message?.model || rawPayload.campaignTemplateName || '').toLowerCase();
-	const audienceSource = String(rawPayload.campaignAudienceSource || '').toLowerCase();
-
-	return (
-		isOutboundCampaignTemplateMessage(message) &&
-		(audienceSource === 'abandoned_carts' || model === 'carrito_abandonated_v2')
-	);
-}
-
-function isCampaignFollowupState(currentState = {}) {
-	const goal = String(currentState?.lastUserGoal || '').toLowerCase();
-	const summary = normalizeText(currentState?.commercialSummary || '');
-
-	return (
-		goal.includes('campana') ||
-		goal.includes('carrito') ||
-		goal.includes('pago_pendiente') ||
-		summary.includes('campana')
-	);
-}
-
-function buildCampaignReplyHints({ currentState = {}, lastOutbound = null } = {}) {
-	if (!isOutboundCampaignTemplateMessage(lastOutbound) && !isCampaignFollowupState(currentState)) {
-		return [];
-	}
-
-	const goal = String(currentState?.lastUserGoal || '').toLowerCase();
-	const hints = [
-		'La clienta esta respondiendo una campana reciente: no abras el menu principal.',
-		'Usa el resumen comercial y el mensaje de plantilla como contexto principal.',
-		'Si solo saluda o dice gracias, responde breve retomando el motivo de la campana.',
-		'No uses "Cliente" como nombre propio; si no hay nombre real, omitilo.',
-		'No suenes celebratoria ni ceremonial: evita felicitaciones largas y frases como "me alegra mucho".',
-	];
-
-	if (goal.includes('pago_pendiente')) {
-		hints.push('Si viene por pago pendiente, ayuda a completar el pago o confirmar comprobante sin vender otra promo.');
-		hints.push('Si envia o confirma comprobante, agradece y deja la conversacion en revision de pago.');
-		hints.push('Si solo saluda, contesta que le escribias por el pago pendiente y ofrece ayudar a finalizar o revisar comprobante.');
-	} else if (goal.includes('carrito')) {
-		hints.push('Si viene por carrito abandonado, resolvi la objecion concreta para que pueda finalizar la compra.');
-		hints.push('Si pregunta por talle, envio o cuotas, contesta eso y conserva el link pendiente cuando exista.');
-		hints.push('Si tiene miedo por el talle, pedile una referencia concreta de talle/medidas y tranquiliza sin derivar.');
-	} else if (goal.includes('promocion')) {
-		hints.push('Si viene por promo, explica por que se envio y ofrece ayuda sobre producto, talle, stock o compra.');
-		hints.push('No digas que recibiste una consulta si la charla empezo por campana: deci que le escribimos para compartir la promo.');
-		hints.push('Si dice que ya compro, agradece breve y ofrece revisar comprobante, pedido o seguimiento si lo necesita.');
-	}
-
-	return hints;
 }
 
 function looksLikeThirdPartyAutoReply(text = '') {
@@ -209,7 +160,7 @@ function looksLikePaymentClarifierConfirmation({ text = '', lastOutbound = null 
 	);
 }
 
-async function maybeHandleCampaignReply({
+async function maybeHandleAbandonedCartReply({
 	conversation,
 	currentState,
 	contactName,
@@ -219,14 +170,18 @@ async function maybeHandleCampaignReply({
 	transportMode,
 }) {
 	const lastOutbound = findLastOutboundBeforeCurrentInbound(conversation?.messages || []);
-	if (!isOutboundCampaignTemplateMessage(lastOutbound) && !isCampaignFollowupState(currentState)) {
+	if (!isAbandonedCartCampaignMessage(lastOutbound)) {
 		return { handled: false };
 	}
 
 	const normalizedBody = normalizeText(messageBody);
 	const normalizedMessageType = String(messageType || '').toLowerCase();
 
-	if (normalizedMessageType === 'reaction' || looksLikeThirdPartyAutoReply(normalizedBody)) {
+	if (['image', 'document'].includes(normalizedMessageType)) {
+		return { handled: false };
+	}
+
+	if (looksLikeThirdPartyAutoReply(normalizedBody)) {
 		return {
 			handled: true,
 			traceModel: 'campaign-autoreply-ignore',
@@ -234,41 +189,76 @@ async function maybeHandleCampaignReply({
 		};
 	}
 
+	if (
+		messageType !== 'text' ||
+		looksLikeCampaignPaymentIssue(normalizedBody) ||
+		looksLikeSimplePurchaseCompletion(normalizedBody) ||
+		looksLikeGenericCampaignReply(normalizedBody) ||
+		normalizedBody
+	) {
+		await syncHumanHandoff({
+			conversationId: conversation.id,
+			reason: 'campaign_reply_pending_human',
+		});
+
+		await sendAndPersistOutbound({
+			conversationId: conversation.id,
+			body: buildHandoffReply({
+				contactName: contactName || conversation.contact?.name || conversation.contact?.waId || '',
+				reason: 'default',
+			}),
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'campaign-human-handoff',
+				raw: {
+					source: 'abandoned_cart_reply',
+				},
+			},
+		});
+
+		return {
+			handled: true,
+			traceModel: 'campaign-human-handoff',
+			suppressReply: false,
+		};
+	}
+
 	return { handled: false };
 }
 
 export async function getOrCreateConversation({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	waId,
 	contactName,
 	queue = 'HUMAN',
 	aiEnabled = false,
 	forceRouting = false
 }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedWaId = normalizeThreadPhone(waId);
 
-	const existingContact = await prisma.contact.findFirst({
-		where: { waId: normalizedWaId },
-		orderBy: { updatedAt: 'desc' }
+	const contact = await prisma.contact.upsert({
+		where: {
+			workspaceId_waId: {
+				workspaceId: resolvedWorkspaceId,
+				waId: normalizedWaId,
+			},
+		},
+		update: {
+			name: contactName || undefined,
+			phone: normalizedWaId
+		},
+		create: {
+			workspaceId: resolvedWorkspaceId,
+			waId: normalizedWaId,
+			phone: normalizedWaId,
+			name: contactName || normalizedWaId
+		}
 	});
 
-	const contact = existingContact
-		? await prisma.contact.update({
-			where: { id: existingContact.id },
-			data: {
-				name: contactName || undefined,
-				phone: normalizedWaId
-			}
-		})
-		: await prisma.contact.create({
-			data: {
-				waId: normalizedWaId,
-				phone: normalizedWaId,
-				name: contactName || normalizedWaId
-			}
-		});
-
 	let conversation = await prisma.conversation.findFirst({
-		where: { contactId: contact.id },
+		where: { workspaceId: resolvedWorkspaceId, contactId: contact.id },
 		include: { contact: true, state: true }
 	});
 
@@ -276,6 +266,7 @@ export async function getOrCreateConversation({
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
+				workspaceId: resolvedWorkspaceId,
 				queue,
 				aiEnabled,
 				lastMessageAt: new Date(),
@@ -330,6 +321,7 @@ export async function getOrCreateConversation({
 }
 
 export async function processInboundMessage({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	waId,
 	contactName,
 	messageBody,
@@ -339,16 +331,21 @@ export async function processInboundMessage({
 	metaMessageId = null,
 	transportMode = 'live'
 }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedWaId = normalizeThreadPhone(waId);
 
 	const conversation = await getOrCreateConversation({
+		workspaceId: resolvedWorkspaceId,
 		waId: normalizedWaId,
 		contactName
 	});
 
 	if (metaMessageId) {
 		const existingMessage = await prisma.message.findFirst({
-			where: { metaMessageId }
+			where: {
+				workspaceId: resolvedWorkspaceId,
+				metaMessageId
+			}
 		});
 
 		if (existingMessage) {
@@ -358,9 +355,10 @@ export async function processInboundMessage({
 
 	const createdInboundAt = new Date();
 
-	await prisma.message.create({
+	const inboundMessage = await prisma.message.create({
 		data: {
 			conversationId: conversation.id,
+			workspaceId: resolvedWorkspaceId,
 			metaMessageId,
 			senderName: contactName || normalizedWaId,
 			direction: 'INBOUND',
@@ -372,6 +370,17 @@ export async function processInboundMessage({
 			rawPayload,
 			createdAt: createdInboundAt,
 		}
+	});
+	await persistChatConfirmationConversions({
+		workspaceId: resolvedWorkspaceId,
+		conversationId: conversation.id,
+		messageId: inboundMessage.id,
+		messageBody,
+		contactName,
+		phone: normalizedWaId,
+		createdAt: createdInboundAt,
+	}).catch((error) => {
+		console.error('[CAMPAIGN ATTRIBUTION][CHAT]', error?.message || error);
 	});
 
 	await prisma.conversation.update({
@@ -386,6 +395,7 @@ export async function processInboundMessage({
 	});
 
 	publishInboxEvent({
+		workspaceId: resolvedWorkspaceId,
 		scope: 'message',
 		action: 'inbound-created',
 		conversationId: conversation.id,
@@ -425,12 +435,11 @@ export async function processInboundMessage({
 		model: null,
 		aiGuidance: null,
 		liveOrderContext: null,
-		paymentProofAnalysis: null,
 		shouldReply: false,
 		menuAssistantContext: null,
 	};
 
-	const campaignReplyDecision = await maybeHandleCampaignReply({
+	const abandonedCartDecision = await maybeHandleAbandonedCartReply({
 		conversation: freshConversation,
 		currentState,
 		contactName,
@@ -440,14 +449,14 @@ export async function processInboundMessage({
 		transportMode,
 	});
 
-	if (campaignReplyDecision?.handled) {
+	if (abandonedCartDecision?.handled) {
 		trace = {
 			...trace,
 			intent: 'campaign_reply',
 			assistantMessage: null,
 			provider: 'system',
-			model: campaignReplyDecision.traceModel || 'campaign-reply-router',
-			shouldReply: !campaignReplyDecision.suppressReply,
+			model: abandonedCartDecision.traceModel || 'campaign-reply-router',
+			shouldReply: !abandonedCartDecision.suppressReply,
 		};
 		return { conversation: freshConversation, trace };
 	}
@@ -460,7 +469,7 @@ export async function processInboundMessage({
 		messageType,
 		rawPayload,
 		transportMode,
-		skipMenu: isOutboundCampaignTemplateMessage(lastOutbound) || isCampaignFollowupState(currentState),
+		skipMenu: isAbandonedCartCampaignMessage(lastOutbound),
 	});
 
 	if (menuDecision?.handled) {
@@ -513,12 +522,6 @@ export async function processInboundMessage({
 		memoryPatch.handoffReason = 'requested_human';
 	}
 
-	const paymentProofAnalysis = await analyzePaymentProofImage({
-		messageType,
-		attachmentMeta,
-		rawPayload,
-	});
-
 	const detectedPaymentProof = isPaymentProofMessage({
 		messageType,
 		body: effectiveMessageBody,
@@ -528,13 +531,7 @@ export async function processInboundMessage({
 	}) || looksLikePaymentClarifierConfirmation({
 		text: effectiveMessageBody,
 		lastOutbound,
-	}) || paymentProofAnalysis.isPaymentProof;
-
-	if (detectedPaymentProof) {
-		memoryPatch.needsHuman = true;
-		memoryPatch.handoffReason = 'payment_proof_review';
-		memoryPatch.paymentPreference = memoryPatch.paymentPreference || currentState?.paymentPreference || 'transferencia';
-	}
+	});
 
 	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
 		messageType,
@@ -551,26 +548,12 @@ export async function processInboundMessage({
 		aiDeclaredHandoff: false
 	});
 
-	const shouldUnlockCampaignHumanLock =
-		!detectedPaymentProof &&
-		(isOutboundCampaignTemplateMessage(lastOutbound) || isCampaignFollowupState(currentState)) &&
-		freshConversation.queue === 'HUMAN' &&
-		currentState?.handoffReason === 'campaign_reply_pending_human';
-
-	if (shouldUnlockCampaignHumanLock) {
-		queueDecision = {
-			queue: 'AUTO',
-			aiEnabled: true,
-		};
-		memoryPatch.needsHuman = false;
-		memoryPatch.handoffReason = null;
-	}
-
 	if (menuDecision?.queueDecisionOverride && !detectedPaymentProof) {
 		queueDecision = menuDecision.queueDecisionOverride;
 	}
 
 	const intentResult = await resolveIntentAction({
+		workspaceId: resolvedWorkspaceId,
 		intent,
 		messageBody: effectiveMessageBody,
 		explicitOrderNumber,
@@ -587,7 +570,6 @@ export async function processInboundMessage({
 		queueDecision,
 		aiGuidance,
 		liveOrderContext,
-		paymentProofAnalysis: paymentProofAnalysis.analyzed ? paymentProofAnalysis : null,
 	};
 
 	const nextStatePayload = buildStatePayload({
@@ -679,10 +661,7 @@ export async function processInboundMessage({
 			aiMeta: {
 				provider: 'system',
 				model: 'payment-proof-router',
-				raw: {
-					detectedPaymentProof: true,
-					paymentProofAnalysis: paymentProofAnalysis.analyzed ? paymentProofAnalysis : null,
-				}
+				raw: { detectedPaymentProof: true }
 			}
 		});
 
@@ -753,11 +732,16 @@ export async function processInboundMessage({
 		queueDecision.aiEnabled &&
 		queueDecision.queue === 'AUTO';
 
-	console.log('[AI DEBUG] isAiEnabledGlobal:', isAiEnabledGlobal);
-	console.log('[AI DEBUG] queueDecision:', queueDecision);
-	console.log('[AI DEBUG] shouldReply:', shouldReply);
-	console.log('[AI DEBUG] intent:', intent);
-	console.log('[AI DEBUG] waId:', freshConversation.contact.waId);
+	logger.debug('ai.autoreply_decision', {
+		workspaceId: resolvedWorkspaceId,
+		conversationId: freshConversation.id,
+		isAiEnabledGlobal,
+		queue: queueDecision.queue,
+		queueAiEnabled: queueDecision.aiEnabled,
+		shouldReply,
+		intent: intent?.name || intent?.type || intent || null,
+		waId: maskPhone(freshConversation.contact.waId),
+	});
 
 	if (!shouldReply) {
 		trace = {
@@ -786,15 +770,18 @@ export async function processInboundMessage({
 	let commercialHints = [];
 	let commercialPlan = null;
 	let menuAssistantContext = null;
+	const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
+	const aiBrand = workspaceConfig.ai;
 
 	try {
 		catalogProducts = await searchCatalogProducts({
 			query: effectiveMessageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
-			limit: 5
+			limit: 5,
+			workspaceId: resolvedWorkspaceId
 		});
 
-		const catalogStatus = await getCatalogLookupStatus();
+		const catalogStatus = await getCatalogLookupStatus({ workspaceId: resolvedWorkspaceId });
 
 		commercialPlan = {
 			...resolveCommercialBrainV2({
@@ -842,22 +829,6 @@ export async function processInboundMessage({
 		} else {
 			catalogContext = buildCatalogContext(catalogProducts);
 			commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
-		}
-
-		const campaignHints = buildCampaignReplyHints({
-			currentState: enrichedState,
-			lastOutbound,
-		});
-
-		if (campaignHints.length) {
-			commercialHints = [
-				...campaignHints,
-				...commercialHints.filter((hint) => !/solo un saludo inicial|no ofrezcas productos/i.test(hint)),
-			];
-			commercialPlan = {
-				...commercialPlan,
-				campaignFollowup: true,
-			};
 		}
 
 		if (aiGuidance?.type === 'payment') {
@@ -970,6 +941,7 @@ export async function processInboundMessage({
 
 	try {
 		menuAssistantContext = await buildMenuAssistantContext({
+			workspaceId: resolvedWorkspaceId,
 			intent,
 			currentState: enrichedState,
 			responsePolicy,
@@ -1010,7 +982,8 @@ export async function processInboundMessage({
 	if (!finalReply) {
 		try {
 			prompt = buildPrompt({
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				businessName: aiBrand.businessName,
+				workspaceConfig,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				recentMessages: fullRecentMessages,
 				conversationSummary: freshConversation.lastSummary || '',
@@ -1029,7 +1002,8 @@ export async function processInboundMessage({
 			});
 
 			const aiResult = await runAssistantReply({
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
+				businessName: aiBrand.businessName,
+				workspaceConfig,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				recentMessages: fullRecentMessages,
 				conversationSummary: freshConversation.lastSummary || '',
@@ -1063,8 +1037,8 @@ export async function processInboundMessage({
 				commercialPlan,
 				recentMessages: fullRecentMessages,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
-				businessName: process.env.BUSINESS_NAME || 'Lummine',
-				agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi'
+				businessName: aiBrand.businessName,
+				agentName: aiBrand.agentName
 			});
 
 			finalReply = appendMenuHintIfNeeded(

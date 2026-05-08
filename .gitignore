@@ -5,4 +5,5 @@ dist
 coverage
 prisma/dev.db
 *.log
-backend/scripts/debug-output/
+*.tsbuildinfo
+docs/community-manager-brief.md

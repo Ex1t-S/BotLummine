@@ -46,6 +46,10 @@ function formatUsdCost(value = 0) {
 	}
 }
 
+function formatCompactNumber(value) {
+	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
+}
+
 function badgeClass(value = '') {
 	return `campaign-badge ${String(value).toLowerCase()}`;
 }
@@ -86,9 +90,9 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryLabel: 'En curso',
 			primaryDisabled: true,
 			primaryAction: null,
-			secondaryLabel: 'Cancelar campana',
+			secondaryLabel: 'Cancelar campaña',
 			secondaryAction: 'pause',
-			helperText: 'La campana ya esta en ejecucion o en cola. Solo podes cancelarla.',
+			helperText: 'La campaña ya está en ejecución o en cola. Solo podés cancelarla.',
 		};
 	}
 
@@ -101,7 +105,7 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				failedCount > 0
-					? 'La campana tuvo fallidos. Podes reintentar solo esos destinatarios.'
+					? 'La campaña tuvo destinatarios fallidos. Podés reintentar solo esos envíos.'
 					: 'No hay destinatarios fallidos ni pendientes para volver a lanzar.',
 		};
 	}
@@ -115,8 +119,8 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryAction: null,
 			helperText:
 				pendingCount > 0 || failedCount > 0
-					? 'La campana fue cancelada, pero todavia podes volver a intentar los pendientes.'
-					: 'La campana fue cancelada y ya no tiene destinatarios para relanzar.',
+					? 'La campaña fue cancelada, pero todavía podés volver a intentar los pendientes.'
+					: 'La campaña fue cancelada y ya no tiene destinatarios para relanzar.',
 		};
 	}
 
@@ -127,17 +131,17 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryAction: null,
 			secondaryLabel: null,
 			secondaryAction: null,
-			helperText: 'La campana ya termino. Si queres repetirla, conviene crear una nueva a partir de este mismo template.',
+			helperText: 'La campaña ya terminó. Si querés repetirla, conviene crear una nueva a partir de este mismo template.',
 		};
 	}
 
 	return {
-		primaryLabel: 'Lanzar campana',
+		primaryLabel: 'Lanzar campaña',
 		primaryDisabled: false,
 		primaryAction: 'dispatch',
 		secondaryLabel: null,
 		secondaryAction: null,
-		helperText: 'Esta campana todavia esta en borrador. Cuando la lances, empieza el despacho.',
+		helperText: 'Esta campaña todavía está en borrador. Cuando la lances, empieza el despacho.',
 	};
 }
 
@@ -235,6 +239,47 @@ function recipientMatchesSearch(recipient = {}, search = '') {
 	return haystack.includes(normalizedSearch);
 }
 
+function recipientMatchesPurchaseFilter(recipient = {}, filter = 'ALL') {
+	const normalizedFilter = String(filter || 'ALL').toUpperCase();
+
+	if (normalizedFilter === 'WITH_SIGNAL') return Boolean(recipient.conversionSignal);
+	if (normalizedFilter === 'REAL_PURCHASE') return Boolean(recipient.purchaseDetected);
+	if (normalizedFilter === 'CHAT_ONLY') {
+		return Boolean(recipient.chatConfirmedPurchase) && !recipient.purchaseDetected;
+	}
+	if (normalizedFilter === 'NO_PURCHASE') return !recipient.conversionSignal;
+
+	return true;
+}
+
+function formatPurchaseFilter(filter = 'ALL') {
+	const normalized = String(filter || 'ALL').toUpperCase();
+	if (normalized === 'WITH_SIGNAL') return 'con señal';
+	if (normalized === 'REAL_PURCHASE') return 'compra real';
+	if (normalized === 'CHAT_ONLY') return 'solo chat';
+	if (normalized === 'NO_PURCHASE') return 'sin compra';
+	return 'todas';
+}
+
+function formatConversionSource(source = '') {
+	const normalized = String(source || '').toUpperCase();
+	if (normalized === 'ABANDONED_CART') return 'Carritos';
+	if (normalized === 'PENDING_PAYMENT') return 'Pagos pendientes';
+	if (normalized === 'MARKETING') return 'Marketing';
+	if (normalized === 'CHAT_CONFIRMATION') return 'Chat';
+	return source || 'Sin fuente';
+}
+
+function buildConversionSourceItems(conversionsBySource = {}) {
+	return Object.entries(conversionsBySource)
+		.filter(([, count]) => Number(count || 0) > 0)
+		.map(([source, count]) => ({
+			source,
+			label: formatConversionSource(source),
+			count: Number(count || 0),
+		}));
+}
+
 export default function CampaignRunsPanel({
 	campaigns = [],
 	selectedCampaign,
@@ -258,6 +303,8 @@ export default function CampaignRunsPanel({
 	const {
 		statusFilter = 'ALL',
 		setStatusFilter = () => {},
+		purchaseFilter = 'ALL',
+		setPurchaseFilter = () => {},
 		search = '',
 		setSearch = () => {},
 		page = 1,
@@ -277,6 +324,9 @@ export default function CampaignRunsPanel({
 	);
 	const analytics = selectedCampaign?.analytics || {};
 	const campaignCost = calculateCampaignCost(recipientMetrics.sent);
+	const attributedRevenue = Number(analytics.attributedRevenue || 0);
+	const attributedCurrency = analytics.attributedCurrency || 'ARS';
+	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
 
 	const filteredRecipients = useMemo(() => {
 		return allRecipients.filter((recipient) => {
@@ -286,9 +336,13 @@ export default function CampaignRunsPanel({
 					? true
 					: normalizedStatus === String(statusFilter).toUpperCase();
 
-			return passesStatus && recipientMatchesSearch(recipient, search);
+			return (
+				passesStatus &&
+				recipientMatchesPurchaseFilter(recipient, purchaseFilter) &&
+				recipientMatchesSearch(recipient, search)
+			);
 		});
-	}, [allRecipients, statusFilter, search]);
+	}, [allRecipients, statusFilter, purchaseFilter, search]);
 
 	const totalPages = Math.max(1, Math.ceil(filteredRecipients.length / pageSize));
 	const safePage = Math.min(page, totalPages);
@@ -302,10 +356,10 @@ export default function CampaignRunsPanel({
 		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Historial y tracking de campanas</h3>
+					<h3>Historial y tracking de campañas</h3>
 					<p>
-						Segui borradores, campanas activas y resultados desde una vista mas clara,
-						con tracking real de envios, entregas y lecturas.
+						Seguí borradores, campañas activas y resultados desde una vista más clara,
+						con tracking real de envíos, entregas y lecturas.
 					</p>
 				</div>
 			</div>
@@ -315,15 +369,15 @@ export default function CampaignRunsPanel({
 					<div className="campaign-detail-header">
 						<div>
 								<h4>Campañas cargadas</h4>
-								<p>Elegi una campana para revisar su tracking y sus destinatarios.</p>
+								<p>Elegí una campaña para revisar su tracking y sus destinatarios.</p>
 						</div>
 					</div>
 
 					<div className="campaign-list compact campaign-list--airy campaign-list--tracking">
 						{campaigns.length === 0 ? (
 							<div className="campaign-empty-state">
-								<strong>Todavia no hay campanas.</strong>
-								<p>Crea una y te va a aparecer aca con sus metricas.</p>
+								<strong>Todavía no hay campañas.</strong>
+								<p>Creá una y va a aparecer acá con sus métricas.</p>
 							</div>
 						) : (
 							campaigns.map((campaign) => {
@@ -334,18 +388,13 @@ export default function CampaignRunsPanel({
 								const listCost = calculateCampaignCost(listSentRecipients);
 
 								return (
-									<article
+									<button
+										type="button"
 										key={campaign.id}
 										className={`campaign-list-card campaign-list-card--run${isSelected ? ' selected' : ''}`}
 										onClick={() => onSelectCampaign(campaign)}
-										role="button"
-										tabIndex={0}
-										onKeyDown={(event) => {
-											if (event.key === 'Enter' || event.key === ' ') {
-												event.preventDefault();
-												onSelectCampaign(campaign);
-											}
-										}}
+										aria-pressed={isSelected}
+										aria-label={`Ver tracking de ${campaign.name}`}
 									>
 										<div className="campaign-list-card-top">
 											<div>
@@ -366,10 +415,10 @@ export default function CampaignRunsPanel({
 										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile campaign-inline-stats--analytics">
 											<span>Respondieron {Number(campaignAnalytics.repliedRecipients || 0)}</span>
 											<span>Lectura efectiva {Number(campaignAnalytics.effectiveReadRecipients || 0)}</span>
-											<span>Compraron {Number(campaignAnalytics.conversionSignalRecipients || campaignAnalytics.purchasedRecipients || 0)}</span>
+											<span>Señales {Number(campaignAnalytics.conversionSignalRecipients || campaignAnalytics.purchasedRecipients || 0)}</span>
 											<span>Costo {formatUsdCost(listCost)}</span>
 										</div>
-									</article>
+									</button>
 								);
 							})
 						)}
@@ -422,8 +471,8 @@ export default function CampaignRunsPanel({
 									disabled={!canDelete || deleteBusy}
 									title={
 										canDelete
-											? 'Eliminar campana'
-											: 'No se puede eliminar una campana en cola o en ejecucion'
+											? 'Eliminar campaña'
+											: 'No se puede eliminar una campaña en cola o en ejecución'
 									}
 								>
 									{deleteBusy ? 'Eliminando...' : 'Eliminar'}
@@ -431,6 +480,16 @@ export default function CampaignRunsPanel({
 							</div>
 
 							<div className="campaign-tracking-kpis">
+								<div className="campaign-tracking-kpi campaign-tracking-kpi--featured">
+									<span>Señales de compra</span>
+									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
+									<small>{formatPercent(analytics.conversionSignalRate || 0)} con pedido o chat</small>
+								</div>
+								<div className="campaign-tracking-kpi campaign-tracking-kpi--featured">
+									<span>Facturación atribuida</span>
+									<strong>{formatMoney(attributedRevenue, attributedCurrency)}</strong>
+									<small>Solo pedidos reales atribuidos</small>
+								</div>
 								<div className="campaign-tracking-kpi">
 									<span>Total</span>
 									<strong>{recipientMetrics.total}</strong>
@@ -476,16 +535,22 @@ export default function CampaignRunsPanel({
 									<small>{formatPercent(analytics.chatConfirmedPurchaseRate || 0)}</small>
 								</div>
 								<div className="campaign-tracking-kpi">
-									<span>Conversion total</span>
-									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
-									<small>{formatPercent(analytics.conversionSignalRate || 0)}</small>
-								</div>
-								<div className="campaign-tracking-kpi">
 									<span>Costo</span>
 									<strong>{formatUsdCost(campaignCost)}</strong>
 									<small>{recipientMetrics.sent} enviados x USD 0.06</small>
 								</div>
 							</div>
+
+							{conversionSourceItems.length ? (
+								<div className="campaign-conversion-source-strip" aria-label="Conversiones por fuente">
+									{conversionSourceItems.map((item) => (
+										<span key={item.source}>
+											<strong>{item.count}</strong>
+											{item.label}
+										</span>
+									))}
+								</div>
+							) : null}
 
 							<div className="campaign-tracking-toolbar">
 								<div className="field">
@@ -497,7 +562,7 @@ export default function CampaignRunsPanel({
 											setSearch(event.target.value);
 											setPage(1);
 										}}
-										placeholder="Nombre, telefono o estado"
+										placeholder="Nombre, teléfono o estado"
 									/>
 								</div>
 
@@ -518,16 +583,43 @@ export default function CampaignRunsPanel({
 										<option value="FAILED">Fallidos</option>
 									</select>
 								</div>
+
+								<div className="field campaign-tracking-toolbar-select">
+									<span>Filtrar por compra</span>
+									<select
+										value={purchaseFilter}
+										onChange={(event) => {
+											setPurchaseFilter(event.target.value);
+											setPage(1);
+										}}
+									>
+										<option value="ALL">Todas</option>
+										<option value="WITH_SIGNAL">Con señal</option>
+										<option value="REAL_PURCHASE">Compra real</option>
+										<option value="CHAT_ONLY">Solo chat</option>
+										<option value="NO_PURCHASE">Sin compra</option>
+									</select>
+								</div>
+							</div>
+
+							<div className="campaign-results-summary" aria-live="polite">
+								<strong>{formatCompactNumber(filteredRecipients.length)}</strong>
+								<span>
+									destinatario{filteredRecipients.length === 1 ? '' : 's'} en la vista actual
+									{statusFilter !== 'ALL' ? ` · filtro ${statusFilter}` : ''}
+									{purchaseFilter !== 'ALL' ? ` · ${formatPurchaseFilter(purchaseFilter)}` : ''}
+									{search ? ' · búsqueda aplicada' : ''}
+								</span>
 							</div>
 
 							<div className="campaign-recipient-table-wrapper campaign-recipient-table-wrapper--tracking">
-								<table className="campaign-table">
+								<table className="campaign-table" aria-label="Destinatarios y resultados de la campaña">
 									<thead>
 										<tr>
 											<th>Destinatario</th>
 											<th>Telefono</th>
 											<th>Estado</th>
-											<th>Interaccion</th>
+											<th>Interacción</th>
 											<th>Compra detectada</th>
 											<th>Ultima actualizacion</th>
 										</tr>
@@ -536,14 +628,14 @@ export default function CampaignRunsPanel({
 										{paginatedRecipients.length ? (
 											paginatedRecipients.map((recipient) => (
 												<tr key={recipient.id || recipient.phone}>
-													<td>{recipient.contactName || recipient.name || 'Sin nombre'}</td>
-													<td>{recipient.phone || recipient.contactPhone || '--'}</td>
-													<td>
+													<td data-label="Destinatario">{recipient.contactName || recipient.name || 'Sin nombre'}</td>
+													<td data-label="Teléfono">{recipient.phone || recipient.contactPhone || '--'}</td>
+													<td data-label="Estado">
 														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
 															{normalizeRecipientStatus(recipient.status)}
 														</span>
 													</td>
-													<td>
+													<td data-label="Interacción">
 														<div className="campaign-recipient-meta">
 															<span
 																className={badgeClass(
@@ -569,14 +661,18 @@ export default function CampaignRunsPanel({
 															</small>
 														</div>
 													</td>
-													<td>
+													<td data-label="Compra detectada">
 														<div className="campaign-recipient-meta">
 															<span
 																className={badgeClass(
 																	recipient.conversionSignal ? 'approved' : 'pending'
 																)}
 															>
-																{recipient.conversionSignal ? 'Compro / confirmo' : 'Sin compra'}
+																{recipient.purchaseDetected
+																	? 'Compra real'
+																	: recipient.chatConfirmedPurchase
+																		? 'Confirmo por chat'
+																		: 'Sin compra'}
 															</span>
 															<small>
 																{recipient.purchaseDetected
@@ -590,7 +686,7 @@ export default function CampaignRunsPanel({
 															</small>
 														</div>
 													</td>
-													<td>
+													<td data-label="Última actualización">
 														{formatDate(
 															recipient.readAt ||
 															recipient.deliveredAt ||
@@ -643,8 +739,8 @@ export default function CampaignRunsPanel({
 						</>
 					) : (
 						<div className="campaign-empty-state">
-							<strong>Elegi una campana.</strong>
-							<p>Aca vas a ver el detalle, los estados y las acciones disponibles.</p>
+							<strong>Elegí una campaña.</strong>
+							<p>Acá vas a ver el detalle, los estados y las acciones disponibles.</p>
 						</div>
 					)}
 				</div>

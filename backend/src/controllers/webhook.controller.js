@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
+import { logger, maskPhone } from '../lib/logger.js';
 import { processInboundMessage } from '../services/conversation/chat.service.js';
 import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
 import { applyCampaignMessageStatusWebhook } from '../services/campaigns/whatsapp-campaign.service.js';
@@ -14,6 +15,11 @@ import {
 	upsertTiendanubeOrder,
 	resolveStoreCredentials
 } from '../services/customers/customer.service.js';
+import { attributeOrderConversions } from '../services/campaigns/campaign-attribution.service.js';
+import {
+	DEFAULT_WORKSPACE_ID,
+	resolveWorkspaceIdFromPhoneNumberId
+} from '../services/workspaces/workspace-context.service.js';
 
 function extractInboundBody(message = {}) {
 	if (message.type === 'text') return message.text?.body || '';
@@ -63,13 +69,14 @@ function extractAttachmentMeta(message = {}) {
 	return {};
 }
 
-async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}) {
+async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, workspaceId = null) {
 	if (!attachmentMeta?.attachmentId) {
 		return attachmentMeta;
 	}
 
 	try {
 		const savedMedia = await saveInboundWhatsAppMedia({
+			workspaceId,
 			attachmentId: attachmentMeta.attachmentId,
 			attachmentMimeType: attachmentMeta.attachmentMimeType || '',
 			attachmentName: attachmentMeta.attachmentName || '',
@@ -92,9 +99,9 @@ async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}) {
 			attachmentSha256: attachmentMeta.attachmentSha256 || savedMedia.attachmentSha256 || null
 		};
 	} catch (error) {
-		console.error('[WEBHOOK][MEDIA][DOWNLOAD ERROR]', {
+		logger.warn('webhook.media_download_failed', {
 			messageId: message.id || null,
-			from: message.from || null,
+			from: maskPhone(message.from || ''),
 			attachmentId: attachmentMeta?.attachmentId || null,
 			error: error?.message || error
 		});
@@ -109,13 +116,30 @@ async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}) {
 async function processInboundMessages(req, value = {}) {
 	const messages = Array.isArray(value.messages) ? value.messages : [];
 	const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
+	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
+
+	if (!workspaceId) {
+		if (messages.length) {
+			logger.warn('webhook.whatsapp_unresolved_channel', {
+				requestId: req.requestId || null,
+				eventType: 'messages',
+				reason: phoneNumberId ? 'unknown_or_inactive_phone_number_id' : 'missing_phone_number_id',
+				phoneNumberId: phoneNumberId || null,
+				messages: messages.length,
+				statuses: 0,
+			});
+		}
+		return;
+	}
 
 	for (const message of messages) {
 		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
 		const baseAttachmentMeta = extractAttachmentMeta(message);
-		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta);
+		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta, workspaceId);
 
 		await processInboundMessage({
+			workspaceId,
 			waId: message.from,
 			contactName: contactInfo?.profile?.name || message.from,
 			messageBody: extractInboundBody(message),
@@ -140,11 +164,27 @@ async function processInboundMessages(req, value = {}) {
 	}
 }
 
-async function processOutboundStatuses(value = {}) {
+async function processOutboundStatuses(req, value = {}) {
 	const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
+	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
+
+	if (!workspaceId) {
+		if (statuses.length) {
+			logger.warn('webhook.whatsapp_unresolved_channel', {
+				requestId: req.requestId || null,
+				eventType: 'statuses',
+				reason: phoneNumberId ? 'unknown_or_inactive_phone_number_id' : 'missing_phone_number_id',
+				phoneNumberId: phoneNumberId || null,
+				messages: 0,
+				statuses: statuses.length,
+			});
+		}
+		return;
+	}
 
 	for (const status of statuses) {
-		await applyCampaignMessageStatusWebhook(status);
+		await applyCampaignMessageStatusWebhook(status, { workspaceId });
 	}
 }
 
@@ -213,13 +253,14 @@ async function resolveWebhookStoreCredentials(storeId) {
 	const installation = await prisma.storeInstallation.findFirst({
 		where: { storeId: normalizedStoreId },
 		orderBy: { updatedAt: 'desc' },
-		select: { storeId: true, accessToken: true }
+		select: { storeId: true, accessToken: true, workspaceId: true },
 	});
 
 	if (installation?.storeId && installation?.accessToken) {
 		return {
 			storeId: installation.storeId,
 			accessToken: installation.accessToken,
+			workspaceId: installation.workspaceId,
 			source: 'storeInstallation'
 		};
 	}
@@ -231,6 +272,7 @@ async function resolveWebhookStoreCredentials(storeId) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
+			workspaceId: DEFAULT_WORKSPACE_ID,
 			source: 'env'
 		};
 	}
@@ -243,7 +285,8 @@ export function verifyWhatsappWebhook(req, res) {
 	const token = req.query['hub.verify_token'];
 	const challenge = req.query['hub.challenge'];
 
-	console.log('[WEBHOOK DEBUG] verify request', {
+	logger.info('webhook.whatsapp_verify', {
+		requestId: req.requestId || null,
 		mode,
 		hasChallenge: Boolean(challenge),
 		tokenMatches: token === process.env.WHATSAPP_VERIFY_TOKEN
@@ -258,12 +301,16 @@ export function verifyWhatsappWebhook(req, res) {
 
 export async function receiveWhatsappWebhook(req, res) {
 	try {
-		console.log('[WEBHOOK DEBUG] POST /api/webhook/whatsapp hit');
-		console.log('[WEBHOOK DEBUG] body:', JSON.stringify(req.body, null, 2));
-
 		res.sendStatus(200);
 
 		const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+		const changesCount = entries.reduce((total, entry) => total + (entry.changes?.length || 0), 0);
+
+		logger.info('webhook.whatsapp_received', {
+			requestId: req.requestId || null,
+			entries: entries.length,
+			changes: changesCount,
+		});
 
 		for (const entry of entries) {
 			for (const change of entry.changes || []) {
@@ -271,15 +318,22 @@ export async function receiveWhatsappWebhook(req, res) {
 
 				if (change.field === 'messages') {
 					await processInboundMessages(req, value);
-					await processOutboundStatuses(value);
+					await processOutboundStatuses(req, value);
 					continue;
+				}
+
+				if (Array.isArray(value.statuses) && value.statuses.length) {
+					await processOutboundStatuses(req, value);
 				}
 
 				await processTemplateWebhook(change);
 			}
 		}
 	} catch (error) {
-		console.error('Error webhook WhatsApp:', error);
+		logger.error('webhook.whatsapp_failed', {
+			requestId: req.requestId || null,
+			error,
+		});
 	}
 }
 
@@ -351,7 +405,22 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			orderId: resourceId
 		});
 
-		const saved = await upsertTiendanubeOrder(order, credentials.storeId);
+		const saved = await upsertTiendanubeOrder(order, credentials.storeId, {
+			workspaceId: credentials.workspaceId,
+		});
+		const attribution = await attributeOrderConversions({
+			workspaceId: credentials.workspaceId,
+			storeId: credentials.storeId,
+			orderId: resourceId
+		}).catch((error) => {
+			logger.warn('webhook.tiendanube_attribution_failed', {
+				requestId: req.requestId || null,
+				storeId: credentials.storeId,
+				orderId: resourceId,
+				error,
+			});
+			return { conversions: 0, recoveredCarts: 0 };
+		});
 
 		return res.status(200).json({
 			ok: true,
@@ -360,13 +429,21 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			orderId: resourceId,
 			source: credentials.source,
 			ordersUpserted: saved.ordersUpserted,
-			itemsUpserted: saved.itemsUpserted
+			itemsUpserted: saved.itemsUpserted,
+			conversionsAttributed: attribution.conversions || 0,
+			recoveredCarts: attribution.recoveredCarts || 0
 		});
 	} catch (error) {
-		console.error('[TIENDANUBE][WEBHOOK][ERROR]', error);
+		logger.error('webhook.tiendanube_failed', {
+			requestId: req.requestId || null,
+			error,
+		});
 		return res.status(500).json({
 			ok: false,
-			error: error?.message || 'No se pudo procesar el webhook de Tiendanube.'
+			error: process.env.NODE_ENV === 'production'
+				? 'No se pudo procesar el webhook de Tiendanube.'
+				: error?.message || 'No se pudo procesar el webhook de Tiendanube.',
+			requestId: req.requestId || null,
 		});
 	}
 }

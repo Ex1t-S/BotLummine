@@ -1,7 +1,15 @@
-import { PAYMENT_TRANSFER_DETAILS } from '../../data/lummine-business.js';
+import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
 
-export async function handlePaymentIntent({ currentState = {} } = {}) {
-	const { alias, cbu, holder, cuil, bank, extraInstructions } = PAYMENT_TRANSFER_DETAILS;
+export async function handlePaymentIntent({ currentState = {}, workspaceId } = {}) {
+	const workspaceConfig = workspaceId
+		? await getWorkspaceRuntimeConfig(workspaceId).catch(() => null)
+		: null;
+	const transferConfig = workspaceConfig?.ai?.paymentConfig?.transfer || {};
+	const alias = transferConfig.alias || process.env.TRANSFER_ALIAS;
+	const cbu = transferConfig.cbu || process.env.TRANSFER_CBU;
+	const holder = transferConfig.holder || process.env.TRANSFER_HOLDER;
+	const bank = transferConfig.bank || process.env.TRANSFER_BANK;
+	const extra = transferConfig.extra || transferConfig.extraInstructions || process.env.TRANSFER_EXTRA;
 
 	const missing = [];
 
@@ -31,9 +39,8 @@ export async function handlePaymentIntent({ currentState = {} } = {}) {
 				alias: alias || null,
 				cbu: cbu || null,
 				holder: holder || null,
-				cuil: cuil || null,
 				bank: bank || null,
-				extra: extraInstructions || null
+				extra: extra || null
 			}
 		}
 	};

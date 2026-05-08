@@ -1,8 +1,22 @@
 import { prisma } from '../lib/prisma.js';
 import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
+import { filterRecoverableAbandonedCarts } from '../services/campaigns/campaign-attribution.service.js';
+import {
+	buildAbandonedCartVariables,
+	buildSendComponentsFromTemplate,
+	ensureApprovedTemplate,
+} from '../services/campaigns/whatsapp-campaign.service.js';
 import { getOrCreateConversation } from '../services/conversation/chat.service.js';
-import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
+import { sendWhatsAppTemplate } from '../services/whatsapp/whatsapp.service.js';
+import {
+	getTemplateOrThrow,
+	renderTemplatePreviewFromComponents,
+} from '../services/whatsapp/whatsapp-template.service.js';
+import {
+	getWorkspaceRuntimeConfig,
+	requireRequestWorkspaceId,
+} from '../services/workspaces/workspace-context.service.js';
 
 const FIXED_SYNC_WINDOW_DAYS = 30;
 
@@ -35,12 +49,24 @@ function formatDateTime(value) {
 	}
 }
 
-function buildSuggestedMessage(cart) {
+function buildLegacySuggestedMessage(cart) {
 	return [
-		`Hola ${cart.contactName || '¿cómo estás?'}, soy Sofi de Lummine 😊`,
+		`Hola ${cart.contactName || '¿cómo estás?'}, soy el equipo de la marca.`,
 		'Vimos que te quedó una compra pendiente y quería ayudarte a terminarla.',
 		`Podés retomarlo desde acá: ${cart.abandonedCheckoutUrl || ''}`,
 		'Si querés, también te asesoro por acá con talle, envío o pago.'
+	].join('\n\n');
+}
+
+function buildSuggestedMessageForWorkspace(cart, workspaceConfig = null) {
+	const businessName = workspaceConfig?.ai?.businessName || 'la marca';
+	const agentName = workspaceConfig?.ai?.agentName || 'el equipo';
+
+	return [
+		`Hola ${cart.contactName || 'como estas?'}, soy ${agentName} de ${businessName}.`,
+		'Vimos que te quedo una compra pendiente y queria ayudarte a terminarla.',
+		`Podes retomarlo desde aca: ${cart.abandonedCheckoutUrl || ''}`,
+		'Si queres, tambien te asesoro por aca con talle, envio o pago.'
 	].join('\n\n');
 }
 
@@ -98,7 +124,7 @@ function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '', 
 	return where;
 }
 
-function mapCartForView(cart) {
+function mapCartForView(cart, workspaceConfig = null) {
 	const rawProducts = Array.isArray(cart.products) ? cart.products : [];
 
 	const productsList = rawProducts.map((product) => ({
@@ -123,7 +149,7 @@ function mapCartForView(cart) {
 		displayCreatedAt: formatDateTime(cart.checkoutCreatedAt || cart.createdAt),
 		displayUpdatedAt: formatDateTime(cart.updatedAt),
 		lastMessageSentLabel: cart.lastMessageSentAt ? formatDateTime(cart.lastMessageSentAt) : 'Nunca',
-		suggestedMessage: buildSuggestedMessage(cart),
+		suggestedMessage: buildSuggestedMessageForWorkspace(cart, workspaceConfig),
 		productsList,
 		productsPreview: productsList.map((p) => p.name).slice(0, 3),
 		canOpenCart: !!cart.abandonedCheckoutUrl,
@@ -134,6 +160,7 @@ function mapCartForView(cart) {
 export async function getAbandonedCarts(req, res, next) {
 	try {
 		ensureAbandonedCartModel();
+		const workspaceId = requireRequestWorkspaceId(req);
 
 		const page = Math.max(1, Number(req.query.page || 1) || 1);
 		const pageSize = 12;
@@ -144,6 +171,7 @@ export async function getAbandonedCarts(req, res, next) {
 		const syncWindow = FIXED_SYNC_WINDOW_DAYS;
 
 		const where = buildWhereClause({ q, status, dateFrom, dateTo, syncWindow });
+		where.workspaceId = workspaceId;
 		const statsBaseWhere = buildWhereClause({
 			q,
 			status: 'ALL',
@@ -151,9 +179,10 @@ export async function getAbandonedCarts(req, res, next) {
 			dateTo,
 			syncWindow
 		});
+		statsBaseWhere.workspaceId = workspaceId;
 		const skip = (page - 1) * pageSize;
 
-		const [items, total, totalNew, totalContacted] = await Promise.all([
+		const [items, total, totalNew, totalContacted, workspaceConfig] = await Promise.all([
 			prisma.abandonedCart.findMany({
 				where,
 				orderBy: [{ checkoutCreatedAt: 'desc' }, { updatedAt: 'desc' }],
@@ -162,10 +191,11 @@ export async function getAbandonedCarts(req, res, next) {
 			}),
 			prisma.abandonedCart.count({ where }),
 			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'NEW' } }),
-			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'CONTACTED' } })
+			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'CONTACTED' } }),
+			getWorkspaceRuntimeConfig(workspaceId)
 		]);
 
-		const carts = items.map(mapCartForView);
+		const carts = items.map((cart) => mapCartForView(cart, workspaceConfig));
 		const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
 		return res.json({
@@ -198,7 +228,8 @@ export async function postSyncAbandonedCarts(req, res) {
 
 		const daysBack = FIXED_SYNC_WINDOW_DAYS;
 
-		const result = await syncAbandonedCarts(daysBack);
+		const workspaceId = requireRequestWorkspaceId(req);
+		const result = await syncAbandonedCarts(daysBack, { workspaceId });
 
 		return res.json({
 			ok: true,
@@ -219,12 +250,20 @@ export async function postSyncAbandonedCarts(req, res) {
 export async function postSendAbandonedCartMessage(req, res, next) {
 	try {
 		ensureAbandonedCartModel();
+		const workspaceId = requireRequestWorkspaceId(req);
 
 		const { id } = req.params;
-		const { body } = req.body || {};
+		const { templateId } = req.body || {};
 
-		const cart = await prisma.abandonedCart.findUnique({
-			where: { id }
+		if (!templateId) {
+			return res.status(400).json({
+				ok: false,
+				error: 'ElegÃ­ una plantilla aprobada de Meta para enviar el carrito.'
+			});
+		}
+
+		const cart = await prisma.abandonedCart.findFirst({
+			where: { id, workspaceId }
 		});
 
 		if (!cart || !cart.contactPhone) {
@@ -234,7 +273,14 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 			});
 		}
 
-		const messageBody = String(body || '').trim() || buildSuggestedMessage(cart);
+		const [recoverableCart] = await filterRecoverableAbandonedCarts([cart], workspaceId);
+		if (!recoverableCart) {
+			return res.status(409).json({
+				ok: false,
+				error: 'Este carrito ya tiene una compra pagada o completada asociada.'
+			});
+		}
+
 		const waId = normalizeThreadPhone(cart.contactPhone);
 
 		if (!waId) {
@@ -244,35 +290,66 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 			});
 		}
 
+		const template = await getTemplateOrThrow(templateId, { workspaceId });
+		ensureApprovedTemplate(template);
+
+		const variables = buildAbandonedCartVariables(cart);
+		const rendered = renderTemplatePreviewFromComponents(
+			template?.rawPayload?.components || [],
+			variables
+		);
+		const componentsToSend = buildSendComponentsFromTemplate({
+			template,
+			renderedComponents: rendered.components,
+			variables
+		});
+
 		const conversation = await getOrCreateConversation({
+			workspaceId,
 			waId,
 			contactName: cart.contactName || waId,
 			queue: 'HUMAN',
 			aiEnabled: false
 		});
 
-		const waResult = await sendAndPersistOutbound({
-			conversationId: conversation.id,
-			waId,
-			body: messageBody,
-			aiMeta: {
-				provider: 'manual',
-				model: null,
-				raw: {
-					source: 'abandoned-cart-recovery',
-					abandonedCartId: cart.id,
-					checkoutId: cart.checkoutId,
-					normalizedPhone: waId
-				}
-			}
+		const waResult = await sendWhatsAppTemplate({
+			workspaceId,
+			to: waId,
+			templateName: template.name,
+			languageCode: template.language || 'es_AR',
+			components: componentsToSend
 		});
 
 		if (!waResult?.ok) {
 			return res.status(400).json({
 				ok: false,
-				error: 'No se pudo enviar el mensaje'
+				error: waResult?.error?.message || 'No se pudo enviar la plantilla'
 			});
 		}
+
+		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
+		await prisma.message.create({
+			data: {
+				workspaceId,
+				conversationId: conversation.id,
+				metaMessageId: waResult?.rawPayload?.messages?.[0]?.id || null,
+				senderName: workspaceConfig.ai.businessName || 'Marca',
+				direction: 'OUTBOUND',
+				type: 'template',
+				body: rendered.previewText || `[Plantilla ${template.name}]`,
+				provider: 'whatsapp-cloud-api',
+				model: template.name,
+				rawPayload: {
+					...(waResult?.rawPayload || {}),
+					source: 'abandoned-cart-recovery',
+					abandonedCartId: cart.id,
+					checkoutId: cart.checkoutId,
+					templateId: template.id,
+					templateName: template.name,
+					templateLanguage: template.language || 'es_AR'
+				}
+			}
+		});
 
 		await prisma.abandonedCart.update({
 			where: { id },
@@ -295,7 +372,9 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 
 		return res.json({
 			ok: true,
-			conversationId: conversation.id
+			conversationId: conversation.id,
+			templateName: template.name,
+			templateLanguage: template.language || 'es_AR'
 		});
 	} catch (error) {
 		next(error);

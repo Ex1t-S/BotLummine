@@ -22,6 +22,7 @@ function buildProviderChain() {
 
 export async function runAssistantReply({
 	businessName,
+	workspaceConfig = null,
 	contactName,
 	recentMessages,
 	conversationSummary = '',
@@ -37,6 +38,7 @@ export async function runAssistantReply({
 }) {
 	const prompt = buildPrompt({
 		businessName,
+		workspaceConfig,
 		contactName,
 		recentMessages,
 		conversationSummary,

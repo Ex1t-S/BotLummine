@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "start:prod": "node src/server.js",
+    "jobs:enbox-sync": "node src/jobs/enbox-sync.job.js",
+    "jobs:campaign-dispatch": "node src/jobs/campaign-dispatch.job.js",
+    "jobs:diagnose": "node src/jobs/diagnose.job.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
@@ -27,10 +31,10 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
-    "openai": "^5.12.2"
+    "openai": "^5.12.2",
+    "prisma": "^6.16.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10",
-    "prisma": "^6.16.2"
+    "nodemon": "^3.1.10"
   }
 }

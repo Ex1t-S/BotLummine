@@ -3,6 +3,7 @@ import {
 	getCustomerSyncStatus as getCustomerSyncStatusService,
 	syncCustomers as syncCustomersService,
 } from '../services/customers/customer.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -45,120 +46,6 @@ function getInitials(name = '') {
 
 	if (!words.length) return '?';
 	return words.map((word) => word[0]?.toUpperCase() || '').join('');
-}
-
-function normalizeMarketingPhone(value = '') {
-	return String(value || '').replace(/\D/g, '').trim();
-}
-
-function isDispatchedCampaignRecipient(recipient = {}) {
-	const status = String(recipient.status || '').toUpperCase();
-	return ['SENT', 'DELIVERED', 'READ'].includes(status) || Boolean(recipient.sentAt || recipient.deliveredAt || recipient.readAt);
-}
-
-async function buildMarketingHistoryByPhone({
-	phones = [],
-	templateId = '',
-	templateName = '',
-} = {}) {
-	const normalizedPhones = [...new Set(
-		phones.map(normalizeMarketingPhone).filter(Boolean)
-	)];
-	const cleanTemplateId = String(templateId || '').trim();
-	const cleanTemplateName = String(templateName || '').trim();
-
-	if (!normalizedPhones.length || (!cleanTemplateId && !cleanTemplateName)) {
-		return new Map();
-	}
-	const phoneChunks = [];
-	for (let index = 0; index < normalizedPhones.length; index += 4000) {
-		phoneChunks.push(normalizedPhones.slice(index, index + 4000));
-	}
-
-	const campaignClauses = [];
-	if (cleanTemplateId) {
-		campaignClauses.push({ templateLocalId: cleanTemplateId });
-	}
-	if (cleanTemplateName) {
-		campaignClauses.push({ templateName: cleanTemplateName });
-	}
-
-	const historyByPhone = new Map();
-
-	for (const phoneChunk of phoneChunks) {
-		const rows = await prisma.campaignRecipient.findMany({
-			where: {
-				AND: [
-					{
-						OR: [
-							{ phone: { in: phoneChunk } },
-							{ waId: { in: phoneChunk } },
-						],
-					},
-					{
-						OR: [
-							{ status: { in: ['SENT', 'DELIVERED', 'READ'] } },
-							{ sentAt: { not: null } },
-							{ deliveredAt: { not: null } },
-							{ readAt: { not: null } },
-						],
-					},
-					{
-						campaign: {
-							is: campaignClauses.length === 1
-								? campaignClauses[0]
-								: { OR: campaignClauses },
-						},
-					},
-				],
-			},
-			orderBy: [
-				{ sentAt: 'desc' },
-				{ createdAt: 'desc' },
-			],
-			select: {
-				phone: true,
-				waId: true,
-				status: true,
-				sentAt: true,
-				deliveredAt: true,
-				readAt: true,
-				createdAt: true,
-				campaign: {
-					select: {
-						id: true,
-						name: true,
-						templateLocalId: true,
-						templateName: true,
-					},
-				},
-			},
-		});
-
-		for (const row of rows) {
-			if (!isDispatchedCampaignRecipient(row)) continue;
-
-			const keys = [
-				normalizeMarketingPhone(row.phone || ''),
-				normalizeMarketingPhone(row.waId || ''),
-			].filter(Boolean);
-
-			for (const key of keys) {
-				if (historyByPhone.has(key)) continue;
-
-				historyByPhone.set(key, {
-					sentForTemplate: true,
-					lastCampaignId: row.campaign?.id || null,
-					lastCampaignName: row.campaign?.name || '',
-					templateName: row.campaign?.templateName || cleanTemplateName,
-					status: row.status || '',
-					lastSentAt: row.readAt || row.deliveredAt || row.sentAt || row.createdAt || null,
-				});
-			}
-		}
-	}
-
-	return historyByPhone;
 }
 
 function buildProductTerms(productQuery = '') {
@@ -208,6 +95,7 @@ function getPaymentStatusMeta(paymentStatus = '') {
 }
 
 function buildCustomersWhere({
+	workspaceId,
 	q,
 	productQuery,
 	orderNumber,
@@ -216,8 +104,9 @@ function buildCustomersWhere({
 	paymentStatus,
 	minSpent,
 	hasPhoneOnly,
+	excludedPhones = [],
 }) {
-	const and = [];
+	const and = [{ workspaceId }];
 
 	const search = String(q || '').trim();
 	if (search) {
@@ -318,7 +207,117 @@ function buildCustomersWhere({
 		});
 	}
 
+	if (excludedPhones.length > 0) {
+		and.push({
+			OR: [
+				{ normalizedPhone: null },
+				{ normalizedPhone: '' },
+				{
+					normalizedPhone: {
+						notIn: excludedPhones,
+					},
+				},
+			],
+		});
+	}
+
 	return and.length ? { AND: and } : {};
+}
+
+function normalizePhone(value = '') {
+	return String(value || '').replace(/\D/g, '').trim();
+}
+
+function buildPhoneLookupVariants(value = '') {
+	const digits = normalizePhone(value);
+	const variants = new Set();
+
+	if (!digits) return [];
+
+	variants.add(digits);
+
+	if (digits.startsWith('549') && digits.length > 3) {
+		const national = digits.slice(3);
+		variants.add(national);
+		variants.add(`54${national}`);
+	}
+
+	if (digits.startsWith('54') && digits.length > 2) {
+		const national = digits.slice(2);
+		variants.add(national);
+		if (!national.startsWith('9')) {
+			variants.add(`549${national}`);
+		}
+	}
+
+	if (!digits.startsWith('54')) {
+		variants.add(`54${digits}`);
+		variants.add(`549${digits}`);
+	}
+
+	return Array.from(variants).filter(Boolean);
+}
+
+async function getPhonesWithSentTemplate({
+	workspaceId,
+	templateName,
+	templateNames,
+	excludeSentTemplate,
+}) {
+	const normalizedTemplateNames = Array.from(
+		new Set(
+			[
+				...String(templateNames || '')
+					.split('||')
+					.map((item) => item.trim()),
+				String(templateName || '').trim(),
+			].filter(Boolean)
+		)
+	);
+	const shouldExclude =
+		excludeSentTemplate === '1' ||
+		excludeSentTemplate === 'true' ||
+		excludeSentTemplate === true;
+
+	if (!shouldExclude || !normalizedTemplateNames.length) {
+		return [];
+	}
+
+	const recipients = await prisma.campaignRecipient.findMany({
+		where: {
+			workspaceId,
+			phone: {
+				not: '',
+			},
+			OR: [
+				{ sentAt: { not: null } },
+				{ deliveredAt: { not: null } },
+				{ readAt: { not: null } },
+				{ status: { in: ['SENT', 'DELIVERED', 'READ'] } },
+			],
+			campaign: {
+				OR: normalizedTemplateNames.map((name) => ({
+					templateName: {
+						equals: name,
+						mode: 'insensitive',
+					},
+				})),
+			},
+		},
+		select: {
+			phone: true,
+			waId: true,
+		},
+	});
+
+	return Array.from(
+		new Set(
+			recipients
+				.flatMap((recipient) => [recipient.phone, recipient.waId])
+				.flatMap(buildPhoneLookupVariants)
+				.filter(Boolean)
+		)
+	);
 }
 
 function buildOrderBy(sort = 'purchase_desc') {
@@ -405,8 +404,9 @@ export async function getCustomers(req, res) {
 			paymentStatus = '',
 			minSpent = '',
 			hasPhoneOnly = '',
-			marketingTemplateId = '',
-			marketingTemplateName = '',
+			excludeSentTemplate = '',
+			sentTemplateName = '',
+			sentTemplateNames = '',
 			sort = 'purchase_desc',
 			page = '1',
 			pageSize = '24',
@@ -415,8 +415,16 @@ export async function getCustomers(req, res) {
 		const parsedPage = Math.max(1, Number(page) || 1);
 		const parsedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 24));
 		const skip = (parsedPage - 1) * parsedPageSize;
+		const workspaceId = requireRequestWorkspaceId(req);
+		const excludedPhones = await getPhonesWithSentTemplate({
+			workspaceId,
+			templateName: sentTemplateName,
+			templateNames: sentTemplateNames,
+			excludeSentTemplate,
+		});
 
 		const where = buildCustomersWhere({
+			workspaceId,
 			q,
 			productQuery,
 			orderNumber,
@@ -425,6 +433,7 @@ export async function getCustomers(req, res) {
 			paymentStatus,
 			minSpent,
 			hasPhoneOnly,
+			excludedPhones,
 		});
 
 		const orderBy = buildOrderBy(sort);
@@ -453,6 +462,8 @@ export async function getCustomers(req, res) {
 			}),
 		]);
 
+		const customers = orders.map(mapOrderToCard);
+
 		const uniquePhones = new Set();
 		const uniqueFallback = new Set();
 
@@ -475,34 +486,9 @@ export async function getCustomers(req, res) {
 			(acc, row) => acc + Number(row.totalAmount || 0),
 			0
 		);
-		const marketingHistoryByPhone = await buildMarketingHistoryByPhone({
-			phones: metricsBase.map((row) => row.contactPhone || ''),
-			templateId: marketingTemplateId,
-			templateName: marketingTemplateName,
-		});
-		const customers = orders.map((order) => {
-			const card = mapOrderToCard(order);
-			const phoneKey = normalizeMarketingPhone(card.phone || '');
-			const marketing = marketingHistoryByPhone.get(phoneKey) || null;
-
-			return {
-				...card,
-				marketing: marketing || {
-					sentForTemplate: false,
-					lastCampaignId: null,
-					lastCampaignName: '',
-					templateName: marketingTemplateName || '',
-					status: '',
-					lastSentAt: null,
-				},
-			};
-		});
 
 		const showingFrom = totalItems > 0 ? skip + 1 : 0;
 		const showingTo = Math.min(skip + parsedPageSize, totalItems);
-		const advertisedPhonesCount = [...uniquePhones].filter((phone) =>
-			marketingHistoryByPhone.has(normalizeMarketingPhone(phone))
-		).length;
 
 		return res.json({
 			ok: true,
@@ -511,17 +497,12 @@ export async function getCustomers(req, res) {
 				totalOrders: totalItems,
 				totalCustomers: uniquePhones.size + uniqueFallback.size,
 				withPhone: metricsBase.filter((row) => String(row.contactPhone || '').trim()).length,
+				excludedByTemplate: excludedPhones.length,
 				totalSpent,
 				avgTicket: totalItems > 0 ? totalSpent / totalItems : 0,
 				currency: 'ARS',
 				showingFrom,
 				showingTo,
-				marketing: {
-					templateId: marketingTemplateId || null,
-					templateName: marketingTemplateName || null,
-					advertisedCustomers: advertisedPhonesCount,
-					notAdvertisedCustomers: Math.max(0, uniquePhones.size - advertisedPhonesCount),
-				},
 			},
 			pagination: {
 				page: parsedPage,
@@ -543,6 +524,7 @@ export async function getCustomers(req, res) {
 export async function postSyncCustomers(req, res) {
 	try {
 		const result = await syncCustomersService({
+			workspaceId: requireRequestWorkspaceId(req),
 			force: req.body?.force === true,
 		});
 

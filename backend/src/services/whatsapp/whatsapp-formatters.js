@@ -1,15 +1,16 @@
 import { normalizeWhatsAppDeliveryPhone } from '../../lib/phone-normalization.js';
+import { isDebugPayloadLoggingEnabled, logger, sanitizeLogData } from '../../lib/logger.js';
 
 export function normalizeWhatsAppNumber(value = '') {
 	return normalizeWhatsAppDeliveryPhone(value);
 }
 
 export function debugWhatsAppRecipient(label, data = {}) {
-	try {
-		console.log(`[WA DEBUG] ${label}`, JSON.stringify(data, null, 2));
-	} catch {
-		console.log(`[WA DEBUG] ${label}`, data);
-	}
+	if (!isDebugPayloadLoggingEnabled()) return;
+	logger.debug('whatsapp.debug', {
+		label,
+		data: sanitizeLogData(data),
+	});
 }
 
 export function buildTextPayload(body) {

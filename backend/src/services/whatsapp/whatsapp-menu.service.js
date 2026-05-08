@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 export const DEFAULT_MENU_PATHS = {
 	MAIN: 'MAIN_MENU',
@@ -11,10 +12,7 @@ export const DEFAULT_MAIN_MENU_KEY = DEFAULT_MENU_PATHS.MAIN;
 const SETTINGS_KEY = 'default';
 const CACHE_TTL_MS = 15000;
 
-let runtimeCache = {
-	expiresAt: 0,
-	value: null
-};
+const runtimeCacheByWorkspace = new Map();
 
 function clone(value) {
 	return JSON.parse(JSON.stringify(value));
@@ -143,7 +141,7 @@ export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 		{
 			key: DEFAULT_MENU_PATHS.MAIN,
 			title: 'Menú principal',
-			headerText: 'Lummine',
+			headerText: 'Marca',
 			body: 'Elegí una opción para ayudarte más rápido:',
 			buttonText: 'Abrir menú',
 			footerText: 'Escribí 0 o menú para volver al inicio.',
@@ -461,14 +459,21 @@ function buildRuntimePayload(settings) {
 	};
 }
 
-export async function getOrCreateWhatsAppMenuSettings() {
+export async function getOrCreateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	let settings = await prisma.whatsAppMenuSetting.findUnique({
-		where: { key: SETTINGS_KEY }
+		where: {
+			workspaceId_key: {
+				workspaceId: resolvedWorkspaceId,
+				key: SETTINGS_KEY
+			}
+		}
 	});
 
 	if (!settings) {
 		settings = await prisma.whatsAppMenuSetting.create({
 			data: {
+				workspaceId: resolvedWorkspaceId,
 				key: SETTINGS_KEY,
 				name: 'Configuración principal',
 				isActive: true,
@@ -480,26 +485,33 @@ export async function getOrCreateWhatsAppMenuSettings() {
 	return settings;
 }
 
-export async function getWhatsAppMenuSettings() {
-	const settings = await getOrCreateWhatsAppMenuSettings();
+export async function getWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const settings = await getOrCreateWhatsAppMenuSettings({ workspaceId });
 	return {
 		...settings,
 		config: normalizeWhatsAppMenuConfig(settings.config)
 	};
 }
 
-export async function updateWhatsAppMenuSettings({ config, name }) {
+export async function updateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID, config, name }) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedConfig = normalizeWhatsAppMenuConfig(config || {});
 	const normalizedName = normalizeText(name || 'Configuración principal') || 'Configuración principal';
 
 	const settings = await prisma.whatsAppMenuSetting.upsert({
-		where: { key: SETTINGS_KEY },
+		where: {
+			workspaceId_key: {
+				workspaceId: resolvedWorkspaceId,
+				key: SETTINGS_KEY
+			}
+		},
 		update: {
 			name: normalizedName,
 			isActive: true,
 			config: normalizedConfig
 		},
 		create: {
+			workspaceId: resolvedWorkspaceId,
 			key: SETTINGS_KEY,
 			name: normalizedName,
 			isActive: true,
@@ -507,7 +519,7 @@ export async function updateWhatsAppMenuSettings({ config, name }) {
 		}
 	});
 
-	runtimeCache = { expiresAt: 0, value: null };
+	runtimeCacheByWorkspace.delete(resolvedWorkspaceId);
 
 	return {
 		...settings,
@@ -515,15 +527,22 @@ export async function updateWhatsAppMenuSettings({ config, name }) {
 	};
 }
 
-export async function resetWhatsAppMenuSettings() {
+export async function resetWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const settings = await prisma.whatsAppMenuSetting.upsert({
-		where: { key: SETTINGS_KEY },
+		where: {
+			workspaceId_key: {
+				workspaceId: resolvedWorkspaceId,
+				key: SETTINGS_KEY
+			}
+		},
 		update: {
 			name: 'Configuración principal',
 			isActive: true,
 			config: DEFAULT_WHATSAPP_MENU_CONFIG
 		},
 		create: {
+			workspaceId: resolvedWorkspaceId,
 			key: SETTINGS_KEY,
 			name: 'Configuración principal',
 			isActive: true,
@@ -531,7 +550,7 @@ export async function resetWhatsAppMenuSettings() {
 		}
 	});
 
-	runtimeCache = { expiresAt: 0, value: null };
+	runtimeCacheByWorkspace.delete(resolvedWorkspaceId);
 
 	return {
 		...settings,
@@ -539,18 +558,20 @@ export async function resetWhatsAppMenuSettings() {
 	};
 }
 
-export async function getWhatsAppMenuRuntimeConfig({ forceRefresh = false } = {}) {
-	if (!forceRefresh && runtimeCache.value && runtimeCache.expiresAt > Date.now()) {
+export async function getWhatsAppMenuRuntimeConfig({ workspaceId = DEFAULT_WORKSPACE_ID, forceRefresh = false } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const runtimeCache = runtimeCacheByWorkspace.get(resolvedWorkspaceId);
+	if (!forceRefresh && runtimeCache?.value && runtimeCache.expiresAt > Date.now()) {
 		return runtimeCache.value;
 	}
 
 	try {
-		const settings = await getOrCreateWhatsAppMenuSettings();
+		const settings = await getOrCreateWhatsAppMenuSettings({ workspaceId: resolvedWorkspaceId });
 		const runtimePayload = buildRuntimePayload(settings);
-		runtimeCache = {
+		runtimeCacheByWorkspace.set(resolvedWorkspaceId, {
 			expiresAt: Date.now() + CACHE_TTL_MS,
 			value: runtimePayload
-		};
+		});
 		return runtimePayload;
 	} catch (error) {
 		console.error('[WHATSAPP MENU] No se pudo cargar la configuración desde la base. Se usa fallback.', error);
@@ -559,10 +580,10 @@ export async function getWhatsAppMenuRuntimeConfig({ forceRefresh = false } = {}
 			name: 'Fallback local',
 			config: DEFAULT_WHATSAPP_MENU_CONFIG
 		});
-		runtimeCache = {
+		runtimeCacheByWorkspace.set(resolvedWorkspaceId, {
 			expiresAt: Date.now() + CACHE_TTL_MS,
 			value: runtimePayload
-		};
+		});
 		return runtimePayload;
 	}
 }
@@ -616,13 +637,14 @@ function resolveRelevantMenuKeys(intent = '', currentState = {}) {
 }
 
 export async function buildMenuAssistantContext({
+	workspaceId = DEFAULT_WORKSPACE_ID,
 	intent = '',
 	currentState = {},
 	responsePolicy = {},
 	commercialPlan = null,
 	queueDecision = null,
 } = {}) {
-	const runtime = await getWhatsAppMenuRuntimeConfig();
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
 	const relevantKeys = resolveRelevantMenuKeys(intent, currentState);
 	const collectedOptions = [];
 

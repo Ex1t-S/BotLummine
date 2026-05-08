@@ -20,6 +20,10 @@ import {
 	retryFailedCampaignRecipientsController,
 	dispatchTickController,
 	getCampaignStatsController,
+	listCampaignSchedulesController,
+	createCampaignScheduleController,
+	updateCampaignScheduleController,
+	deleteCampaignScheduleController,
 } from '../controllers/campaign.controller.js';
 
 const router = Router();
@@ -39,6 +43,10 @@ router.post('/abandoned-carts/preview', previewAbandonedCartAudienceController);
 
 router.post('/dispatch/tick', dispatchTickController);
 router.get('/stats', getCampaignStatsController);
+router.get('/schedules', listCampaignSchedulesController);
+router.post('/schedules', createCampaignScheduleController);
+router.patch('/schedules/:scheduleId', updateCampaignScheduleController);
+router.delete('/schedules/:scheduleId', deleteCampaignScheduleController);
 
 router.get('/', listCampaignsController);
 router.post('/', createCampaignController);

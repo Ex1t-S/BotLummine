@@ -59,7 +59,7 @@ export function buildFixedOrderReply(order) {
 	return parts.join(' ');
 }
 
-export async function handleOrderStatusIntent({ explicitOrderNumber, currentState = {} }) {
+export async function handleOrderStatusIntent({ explicitOrderNumber, currentState = {}, workspaceId }) {
 	const orderNumber =
 		String(explicitOrderNumber || currentState?.lastOrderNumber || '').trim() || null;
 
@@ -75,7 +75,7 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 		};
 	}
 
-	const liveOrderContext = await getOrderByNumber(orderNumber).catch((err) => {
+	const liveOrderContext = await getOrderByNumber(orderNumber, { workspaceId }).catch((err) => {
 		console.error('Error consultando pedido en Tiendanube:', err);
 		return null;
 	});
@@ -98,7 +98,7 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 		String(liveOrderContext.shippingCarrier || '').toLowerCase().includes('enbox')
 	) {
 		try {
-			const cachedShipment = await findCachedEnboxShipment(orderNumber);
+			const cachedShipment = await findCachedEnboxShipment(orderNumber, { workspaceId });
 			if (cachedShipment?.trackingUrl || cachedShipment?.trackingNumber) {
 				liveOrderContext.trackingUrl = cachedShipment.trackingUrl || liveOrderContext.trackingUrl;
 				liveOrderContext.trackingNumber = cachedShipment.trackingNumber || liveOrderContext.trackingNumber;
@@ -125,7 +125,7 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 		}
 
 		try {
-			const enboxTracking = await resolveEnboxTracking(liveOrderContext);
+			const enboxTracking = await resolveEnboxTracking(liveOrderContext, { workspaceId });
 			if (enboxTracking?.trackingUrl || enboxTracking?.trackingNumber) {
 				liveOrderContext.trackingUrl =
 					enboxTracking.trackingUrl || liveOrderContext.trackingUrl;

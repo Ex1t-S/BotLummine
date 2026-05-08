@@ -1,16 +1,60 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import {
+	ArchiveRestore,
+	ArrowLeft,
+	Bot,
+	CheckCheck,
+	Clock3,
+	Eraser,
+	EyeOff,
+	Inbox,
+	MessageCircle,
+	Paperclip,
+	RefreshCw,
+	RotateCcw,
+	Send,
+	Smile,
+	UserRound,
+} from 'lucide-react';
 import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import './InboxPage.css';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 
 const QUEUES = [
-	{ key: 'AUTO', label: 'Automático' },
-	{ key: 'HUMAN', label: 'Atención humana' },
+	{ key: 'ALL', label: 'Todos' },
+	{ key: 'AUTO', label: 'Automatico' },
+	{ key: 'HUMAN', label: 'Atencion humana' },
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
+
+const QUEUE_ROUTES = {
+	ALL: 'todos',
+	AUTO: 'automatico',
+	HUMAN: 'atencion-humana',
+	PAYMENT_REVIEW: 'comprobantes',
+};
+
+const QUEUE_BY_ROUTE = Object.fromEntries(
+	Object.entries(QUEUE_ROUTES).map(([queueKey, slug]) => [slug, queueKey])
+);
+
+function resolveQueueFromSlug(slug = '') {
+	return QUEUE_BY_ROUTE[String(slug || '').trim().toLowerCase()] || 'AUTO';
+}
+
+function buildInboxPath(queueKey = 'AUTO', conversationId = '', readFilter = 'ALL') {
+	const slug = QUEUE_ROUTES[queueKey] || QUEUE_ROUTES.AUTO;
+	const params = new URLSearchParams();
+	if (conversationId) params.set('conversation', conversationId);
+	if (readFilter && readFilter !== 'ALL') params.set('read', readFilter);
+	const query = params.toString() ? `?${params.toString()}` : '';
+	return `/inbox/${slug}${query}`;
+}
 
 const QUICK_EMOJIS = [
 	'😊', '😂', '😍', '😉', '👍', '🙏',
@@ -20,14 +64,36 @@ const QUICK_EMOJIS = [
 
 const READ_FILTERS = [
 	{ key: 'ALL', label: 'Todos' },
-	{ key: 'UNREAD', label: 'No leidos' },
-	{ key: 'READ', label: 'Leidos' },
+	{ key: 'UNREAD', label: 'No leídos' },
+	{ key: 'READ', label: 'Leídos' },
 ];
 
-const MAX_COMPOSER_FILES = 5;
-const MAX_COMPOSER_FILE_SIZE = 25 * 1024 * 1024;
-const ATTACHMENT_ACCEPT =
-	'image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt';
+const QUEUE_LABELS = {
+	ALL: 'Todos',
+	AUTO: 'Automatico',
+	HUMAN: 'Atencion humana',
+	PAYMENT_REVIEW: 'Comprobantes',
+};
+
+function getQueueLabel(queueKey = '') {
+	return QUEUE_LABELS[queueKey] || queueKey || 'Bandeja';
+}
+
+function resolveReadFilter(value = '') {
+	const normalized = String(value || '').trim().toUpperCase();
+	return READ_FILTERS.some((item) => item.key === normalized) ? normalized : 'ALL';
+}
+
+const EXTENDED_QUICK_EMOJIS = [
+	'\u{1F600}', '\u{1F603}', '\u{1F604}', '\u{1F601}', '\u{1F606}', '\u{1F605}', '\u{1F602}', '\u{1F923}',
+	'\u{1F60A}', '\u{1F607}', '\u{1F642}', '\u{1F609}', '\u{1F60D}', '\u{1F970}', '\u{1F618}', '\u{1F617}',
+	'\u{1F61C}', '\u{1F61D}', '\u{1F911}', '\u{1F917}', '\u{1F914}', '\u{1F92D}', '\u{1F92B}', '\u{1F928}',
+	'\u{1F610}', '\u{1F62E}', '\u{1F632}', '\u{1F97A}', '\u{1F622}', '\u{1F62D}', '\u{1F621}', '\u{1F624}',
+	'\u{1F44B}', '\u{1F91A}', '\u{1F44C}', '\u{1F44D}', '\u{1F44E}', '\u{1F64C}', '\u{1F64F}', '\u{1F91D}',
+	'\u{1F44F}', '\u{1F4AA}', '\u{1F525}', '\u{2728}', '\u{2B50}', '\u{1F389}', '\u{1F381}', '\u{1F48C}',
+	'\u{2764}\u{FE0F}', '\u{1F9E1}', '\u{1F49B}', '\u{1F49A}', '\u{1F499}', '\u{1F49C}', '\u{1F90D}', '\u{1F5A4}',
+	'\u{1F4AC}', '\u{1F4A1}', '\u{1F4E6}', '\u{1F6CD}\u{FE0F}', '\u{1F457}', '\u{1F460}', '\u{1F48E}', '\u{2705}',
+];
 
 const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Audio recibido]',
@@ -36,9 +102,25 @@ const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Sticker recibido]',
 ]);
 
+const INBOX_PAGE_SIZE = 60;
+
 function isDocumentVisible() {
 	if (typeof document === 'undefined') return true;
 	return !document.hidden;
+}
+
+function isCompactInboxViewport() {
+	if (typeof window === 'undefined') return false;
+	return window.matchMedia('(max-width: 900px)').matches;
+}
+
+function getRequestErrorMessage(error, fallback = 'No pudimos completar la acción. Probá nuevamente.') {
+	return (
+		error?.response?.data?.error ||
+		error?.response?.data?.message ||
+		error?.message ||
+		fallback
+	);
 }
 
 function toTimestamp(value) {
@@ -73,31 +155,20 @@ function formatArgentinaDateTime(value) {
 	}
 }
 
-function formatFileSize(bytes = 0) {
-	const size = Number(bytes || 0);
-	if (!Number.isFinite(size) || size <= 0) return '';
-	if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`;
-	return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
-}
-
-function createComposerAttachment(file) {
-	return {
-		id: `${file.name || 'file'}-${file.size || 0}-${file.lastModified || Date.now()}-${Math.random()
-			.toString(36)
-			.slice(2, 8)}`,
-		file,
-		name: file.name || 'Archivo adjunto',
-		sizeLabel: formatFileSize(file.size),
-		type: file.type || '',
-	};
-}
-
 function cleanPreviewText(value = '') {
 	return String(value || '')
 		.replace(/^🖼️\s*/u, '')
 		.replace(/^🎧\s*/u, '')
 		.replace(/^📄\s*/u, '')
 		.trim();
+}
+
+function formatFileSize(bytes = 0) {
+	const size = Number(bytes || 0);
+	if (!Number.isFinite(size) || size <= 0) return '';
+	if (size < 1024) return `${size} B`;
+	if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+	return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getMediaKind(message = {}) {
@@ -108,7 +179,7 @@ function getMediaKind(message = {}) {
 	if (type === 'image' || mime.startsWith('image/')) return 'image';
 	if (type === 'video' || mime.startsWith('video/')) return 'video';
 	if (type === 'document') return 'document';
-	if (type === 'sticker') return mime.startsWith('image/') ? 'image' : 'file';
+	if (type === 'sticker') return 'image';
 	if (mime === 'application/pdf') return 'document';
 	if (message.attachmentUrl) return 'file';
 
@@ -300,7 +371,11 @@ function AttachmentPreview({ message }) {
 						src={attachmentUrl}
 						alt={attachmentName || 'Imagen recibida'}
 						loading="lazy"
-						className="inbox-attachment-media inbox-attachment-image"
+						className={`inbox-attachment-media inbox-attachment-image ${
+							String(message.type || '').toLowerCase() === 'sticker'
+								? 'inbox-attachment-sticker'
+								: ''
+						}`}
 					/>
 				</a>
 			</div>
@@ -365,8 +440,6 @@ function MessageBubble({ message, conversation }) {
 	const hasPromoButton = Boolean(promo.actionLabel);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
 	const readState = resolveMessageReadState(message, conversation);
-	const messageTime = formatArgentinaTime(message.createdAt) || message.createdAtLabel || '';
-	const messageDateTime = formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || '';
 
 	return (
 		<div
@@ -410,9 +483,11 @@ function MessageBubble({ message, conversation }) {
 					) : null}
 
 					<div className="inbox-message-meta">
-						<span className="inbox-message-time" title={messageDateTime}>
-							{messageTime}
+						<span className="inbox-message-sender-pill">
+							{message.senderName || (isOutbound ? 'Marca' : 'Cliente')}
 						</span>
+
+						<span>{formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || ''}</span>
 						{isOutbound ? (
 							<span
 								className={`inbox-message-status ${
@@ -433,7 +508,7 @@ function MessageBubble({ message, conversation }) {
 	);
 }
 
-function ActionButton({ children, danger = false, active = false, disabled = false, onClick }) {
+function ActionButton({ children, danger = false, active = false, disabled = false, onClick, icon: Icon }) {
 	const className = [
 		'inbox-action-btn',
 		active ? 'inbox-action-btn--active' : '',
@@ -444,44 +519,109 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 
 	return (
 		<button type="button" onClick={onClick} disabled={disabled} className={className}>
+			{Icon ? <Icon size={15} strokeWidth={2.3} aria-hidden="true" /> : null}
 			{children}
 		</button>
 	);
 }
 
 export default function InboxPage() {
+	useInternalDarkOverrides();
+
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const { queueSlug } = useParams();
+	const [searchParams] = useSearchParams();
 	const { user } = useAuth();
 	const isAdmin = isAdminUser(user);
+	const contactsContainerRef = useRef(null);
 	const messagesContainerRef = useRef(null);
 	const emojiPickerRef = useRef(null);
-	const textareaRef = useRef(null);
 	const fileInputRef = useRef(null);
+	const textareaRef = useRef(null);
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
 	const lastReadRequestRef = useRef('');
+	const manuallyUnreadConversationIdRef = useRef(null);
 
-	const [queue, setQueue] = useState('AUTO');
+	const routeQueue = resolveQueueFromSlug(queueSlug);
+	const routeConversationId = searchParams.get('conversation') || null;
+	const routeReadFilter = resolveReadFilter(searchParams.get('read') || '');
+
+	const [queue, setQueue] = useState(routeQueue);
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-	const [selectedConversationId, setSelectedConversationId] = useState(null);
+	const [selectedConversationId, setSelectedConversationId] = useState(routeConversationId);
 	const [messageText, setMessageText] = useState('');
-	const [pendingAttachments, setPendingAttachments] = useState([]);
-	const [attachmentError, setAttachmentError] = useState('');
+	const [selectedFile, setSelectedFile] = useState(null);
 	const [searchTerm, setSearchTerm] = useState('');
-	const [readFilter, setReadFilter] = useState('ALL');
+	const [readFilter, setReadFilter] = useState(routeReadFilter);
+	const [olderMessages, setOlderMessages] = useState([]);
+	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
+	const [composerError, setComposerError] = useState('');
+	const [actionFeedback, setActionFeedback] = useState('');
+	const normalizedSearch = searchTerm.trim().toLowerCase();
 
-	const inboxQuery = useQuery({
-		queryKey: queryKeys.inbox(queue),
-		queryFn: async () => {
+	useEffect(() => {
+		const expectedPath = buildInboxPath(routeQueue, routeConversationId || '', routeReadFilter);
+
+		if (!queueSlug || !QUEUE_BY_ROUTE[String(queueSlug || '').trim().toLowerCase()]) {
+			navigate(expectedPath, { replace: true });
+			return;
+		}
+
+		setQueue((current) => (current === routeQueue ? current : routeQueue));
+		setSelectedConversationId((current) => (
+			current === routeConversationId ? current : routeConversationId
+		));
+		setReadFilter((current) => (current === routeReadFilter ? current : routeReadFilter));
+	}, [navigate, queueSlug, routeQueue, routeConversationId, routeReadFilter]);
+
+	function selectQueue(nextQueue) {
+		if (nextQueue === queue) return;
+		setQueue(nextQueue);
+		setSelectedConversationId(null);
+		navigate(buildInboxPath(nextQueue, '', readFilter), { replace: false });
+	}
+
+	function selectConversation(conversationId) {
+		setSelectedConversationId(conversationId);
+		navigate(buildInboxPath(queue, conversationId, readFilter), { replace: false });
+		if (isCompactInboxViewport()) {
+			setShowConversationSidebar(false);
+		}
+	}
+
+	function clearSelectedConversation() {
+		setSelectedConversationId(null);
+		setShowConversationSidebar(true);
+		navigate(buildInboxPath(queue, '', readFilter), { replace: true });
+	}
+
+	function selectReadFilter(nextFilter) {
+		setReadFilter(nextFilter);
+		setSelectedConversationId(null);
+		navigate(buildInboxPath(queue, '', nextFilter), { replace: false });
+	}
+
+	const inboxQuery = useInfiniteQuery({
+		queryKey: queryKeys.inbox(queue, normalizedSearch, readFilter),
+		queryFn: async ({ pageParam = 0 }) => {
 			const res = await api.get('/dashboard/inbox', {
 				params: {
 					queue,
+					limit: INBOX_PAGE_SIZE,
+					offset: pageParam,
+					q: normalizedSearch || undefined,
+					read: readFilter,
 				},
 			});
 
 			return res.data;
 		},
+		initialPageParam: 0,
+		getNextPageParam: (lastPage) => lastPage?.nextOffset ?? undefined,
 		placeholderData: (previousData) => previousData,
 		refetchInterval: false,
 		refetchIntervalInBackground: false,
@@ -489,14 +629,15 @@ export default function InboxPage() {
 		...queryPresets.inbox,
 	});
 
-	const contacts = inboxQuery.data?.contacts || [];
-	const counts = inboxQuery.data?.counts || {
+	const inboxPages = inboxQuery.data?.pages || [];
+	const contacts = inboxPages.flatMap((page) => page?.contacts || []);
+	const firstInboxPage = inboxPages[0] || null;
+	const counts = firstInboxPage?.counts || {
+		ALL: 0,
 		AUTO: 0,
 		HUMAN: 0,
 		PAYMENT_REVIEW: 0,
 	};
-
-	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	const filteredContacts = useMemo(() => {
 		const normalizedContacts = contacts.map((contact) => ({
@@ -559,32 +700,18 @@ export default function InboxPage() {
 	}, [selectedConversationId]);
 
 	useEffect(() => {
-		setPendingAttachments([]);
-		setAttachmentError('');
-
-		if (fileInputRef.current) {
-			fileInputRef.current.value = '';
-		}
-	}, [selectedConversationId]);
-
-	useEffect(() => {
 		if (readFilter === 'UNREAD' && !selectedConversationId) {
-			setSelectedConversationId(null);
 			return;
 		}
+
+		if (selectedConversationId) return;
+		if (inboxQuery.isPlaceholderData) return;
 
 		if (!visibleContacts.length) {
-			setSelectedConversationId(null);
 			return;
 		}
 
-		const stillExists = visibleContacts.some(
-			(contact) => contact.conversationId === selectedConversationId
-		);
-
-		if (stillExists) return;
-
-		const preferredSelectedId = inboxQuery.data?.selectedContact?.conversationId;
+		const preferredSelectedId = firstInboxPage?.selectedContact?.conversationId;
 		const preferredExists = visibleContacts.some(
 			(contact) => contact.conversationId === preferredSelectedId
 		);
@@ -595,7 +722,18 @@ export default function InboxPage() {
 			null;
 
 		setSelectedConversationId(preferredId);
-	}, [visibleContacts, selectedConversationId, inboxQuery.data, readFilter]);
+		if (preferredId) {
+			navigate(buildInboxPath(queue, preferredId, readFilter), { replace: true });
+		}
+	}, [
+		visibleContacts,
+		selectedConversationId,
+		firstInboxPage,
+		readFilter,
+		navigate,
+		queue,
+		inboxQuery.isPlaceholderData,
+	]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return undefined;
@@ -614,7 +752,7 @@ export default function InboxPage() {
 			if (!isDocumentVisible()) return;
 
 			queryClient.invalidateQueries({
-				queryKey: queryKeys.inbox(queue),
+				queryKey: ['dashboard', 'inbox'],
 			});
 
 			const activeConversationId = selectedConversationIdRef.current;
@@ -646,9 +784,55 @@ export default function InboxPage() {
 			const activeConversationId = selectedConversationIdRef.current;
 			const eventConversationId = payload?.conversationId || null;
 
+			if (payload?.action === 'read' && eventConversationId) {
+				updateInboxContactCache(eventConversationId, {
+					unreadCount: 0,
+					hasUnread: false,
+					lastReadAt: payload.lastReadAt || new Date().toISOString(),
+				});
+
+				queryClient.setQueryData(queryKeys.conversation(eventConversationId), (current) => {
+					if (!current?.conversation) return current;
+
+					return {
+						...current,
+						conversation: {
+							...current.conversation,
+							unreadCount: 0,
+							hasUnread: false,
+							lastReadAt: payload.lastReadAt || new Date().toISOString(),
+						},
+					};
+				});
+				return;
+			}
+
+			if (payload?.action === 'unread' && eventConversationId) {
+				updateInboxContactCache(eventConversationId, {
+					unreadCount: payload.unreadCount || 1,
+					hasUnread: true,
+					lastReadAt: null,
+				});
+
+				queryClient.setQueryData(queryKeys.conversation(eventConversationId), (current) => {
+					if (!current?.conversation) return current;
+
+					return {
+						...current,
+						conversation: {
+							...current.conversation,
+							unreadCount: payload.unreadCount || 1,
+							hasUnread: true,
+							lastReadAt: null,
+						},
+					};
+				});
+				return;
+			}
+
 			if (!eventQueue || eventQueue === queue || eventConversationId === activeConversationId) {
 				queryClient.invalidateQueries({
-					queryKey: queryKeys.inbox(queue),
+					queryKey: ['dashboard', 'inbox'],
 				});
 			}
 
@@ -670,7 +854,7 @@ export default function InboxPage() {
 			stopFallbackPolling();
 
 			queryClient.invalidateQueries({
-				queryKey: queryKeys.inbox(queue),
+				queryKey: ['dashboard', 'inbox'],
 			});
 		};
 
@@ -705,6 +889,16 @@ export default function InboxPage() {
 	});
 
 	const conversation = conversationQuery.data?.conversation || null;
+	const conversationMessages = conversation?.messages || [];
+	const displayedMessages = useMemo(() => {
+		const seen = new Set();
+		return [...olderMessages, ...conversationMessages].filter((message) => {
+			if (!message?.id || seen.has(message.id)) return false;
+			seen.add(message.id);
+			return true;
+		});
+	}, [olderMessages, conversationMessages]);
+	const hasOlderMessages = Boolean(conversation?.messagesPage?.hasMore);
 
 	const activeContact = useMemo(() => {
 		return (
@@ -718,6 +912,29 @@ export default function InboxPage() {
 		);
 	}, [filteredContacts, contacts, selectedConversationId]);
 
+	function updateInboxContactCache(conversationId, patch) {
+		if (!conversationId) return;
+
+		queryClient.setQueriesData({ queryKey: ['dashboard', 'inbox'] }, (current) => {
+			if (!current?.pages) return current;
+
+			return {
+				...current,
+				pages: current.pages.map((page) => ({
+					...page,
+					contacts: (page.contacts || []).map((contact) =>
+						contact.conversationId === conversationId
+							? {
+									...contact,
+									...(typeof patch === 'function' ? patch(contact) : patch),
+							  }
+							: contact
+					),
+				})),
+			};
+		});
+	}
+
 	const markConversationReadMutation = useMutation({
 		mutationFn: async (conversationId) => {
 			if (!conversationId) return null;
@@ -728,22 +945,10 @@ export default function InboxPage() {
 		onSuccess: async (result) => {
 			if (!result?.conversationId) return;
 
-			queryClient.setQueryData(queryKeys.inbox(queue), (current) => {
-				if (!current) return current;
-
-				return {
-					...current,
-					contacts: (current.contacts || []).map((contact) =>
-						contact.conversationId === result.conversationId
-							? {
-									...contact,
-									unreadCount: 0,
-									hasUnread: false,
-									lastReadAt: result.data?.lastReadAt || new Date().toISOString(),
-							  }
-							: contact
-					),
-				};
+			updateInboxContactCache(result.conversationId, {
+				unreadCount: 0,
+				hasUnread: false,
+				lastReadAt: result.data?.lastReadAt || new Date().toISOString(),
 			});
 
 			queryClient.setQueryData(queryKeys.conversation(result.conversationId), (current) => {
@@ -760,7 +965,44 @@ export default function InboxPage() {
 				};
 			});
 
-			await invalidateInboxAndConversation(result.conversationId);
+		},
+		onError: (error) => {
+			console.error(error);
+		},
+	});
+
+	const markConversationUnreadMutation = useMutation({
+		mutationFn: async (conversationId) => {
+			if (!conversationId) return null;
+
+			const res = await api.patch(`/dashboard/conversations/${conversationId}/unread`);
+			return { conversationId, data: res.data };
+		},
+		onSuccess: async (result) => {
+			if (!result?.conversationId) return;
+
+			manuallyUnreadConversationIdRef.current = result.conversationId;
+			lastReadRequestRef.current = `${result.conversationId}:manual-unread`;
+
+			updateInboxContactCache(result.conversationId, {
+				unreadCount: result.data?.unreadCount || 1,
+				hasUnread: true,
+				lastReadAt: null,
+			});
+
+			queryClient.setQueryData(queryKeys.conversation(result.conversationId), (current) => {
+				if (!current?.conversation) return current;
+
+				return {
+					...current,
+					conversation: {
+						...current.conversation,
+						unreadCount: result.data?.unreadCount || 1,
+						hasUnread: true,
+						lastReadAt: null,
+					},
+				};
+			});
 		},
 		onError: (error) => {
 			console.error(error);
@@ -777,6 +1019,13 @@ export default function InboxPage() {
 
 		if (unreadCount < 1) {
 			lastReadRequestRef.current = '';
+			if (manuallyUnreadConversationIdRef.current === selectedConversationId) {
+				manuallyUnreadConversationIdRef.current = null;
+			}
+			return;
+		}
+
+		if (manuallyUnreadConversationIdRef.current === selectedConversationId) {
 			return;
 		}
 
@@ -814,6 +1063,13 @@ export default function InboxPage() {
 	}, [selectedConversationId]);
 
 	useEffect(() => {
+		setOlderMessages([]);
+		setIsLoadingOlderMessages(false);
+		setComposerError('');
+		setActionFeedback('');
+	}, [selectedConversationId]);
+
+	useEffect(() => {
 		const el = messagesContainerRef.current;
 		if (!el) return;
 
@@ -845,6 +1101,16 @@ export default function InboxPage() {
 		el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
 	}, [messageText]);
 
+	useEffect(() => {
+		if (!actionFeedback) return undefined;
+
+		const timeout = window.setTimeout(() => {
+			setActionFeedback('');
+		}, 3200);
+
+		return () => window.clearTimeout(timeout);
+	}, [actionFeedback]);
+
 	const invalidateInboxAndConversation = async (
 		conversationId = selectedConversationId
 	) => {
@@ -860,45 +1126,45 @@ export default function InboxPage() {
 	};
 
 	const sendMessageMutation = useMutation({
-		mutationFn: async () => {
-			const body = messageText.trim();
-			const files = pendingAttachments.map((item) => item.file).filter(Boolean);
+		mutationFn: async ({ conversationId, body, file }) => {
+			if (!conversationId || (!body && !file)) return null;
 
-			if (!selectedConversationId || (!body && !files.length)) return;
-
-			if (files.length) {
+			if (file) {
 				const formData = new FormData();
 				formData.append('body', body);
-				files.forEach((file) => formData.append('files', file));
+				formData.append('file', file);
 
 				await api.post(
-					`/dashboard/conversations/${selectedConversationId}/messages`,
+					`/dashboard/conversations/${conversationId}/messages`,
 					formData
 				);
-				return;
+				return { conversationId, body, fileName: file.name || '' };
 			}
 
-			await api.post(`/dashboard/conversations/${selectedConversationId}/messages`, {
-				body,
-			});
+			await api.post(
+				`/dashboard/conversations/${conversationId}/messages`,
+				{ body }
+			);
+			return { conversationId, body, fileName: '' };
 		},
-		onSuccess: async () => {
-			setMessageText('');
-			setPendingAttachments([]);
-			setAttachmentError('');
-			setShowEmojiPicker(false);
-			if (fileInputRef.current) {
-				fileInputRef.current.value = '';
+		onSuccess: async (result) => {
+			if (result?.conversationId === selectedConversationId) {
+				setMessageText((current) => (
+					current.trim() === result.body ? '' : current
+				));
+				setSelectedFile((current) => (
+					!current || current.name === result.fileName ? null : current
+				));
+				if (fileInputRef.current) fileInputRef.current.value = '';
 			}
+			setComposerError('');
+			setShowEmojiPicker(false);
 			shouldStickToBottomRef.current = true;
-			await invalidateInboxAndConversation();
+			await invalidateInboxAndConversation(result?.conversationId || selectedConversationId);
 		},
 		onError: (error) => {
 			console.error(error);
-			setAttachmentError(
-				error?.response?.data?.error ||
-					'No se pudo enviar el mensaje. Revisa el adjunto e intenta de nuevo.'
-			);
+			setComposerError(getRequestErrorMessage(error, 'No se pudo enviar el mensaje. Revisa la conexion e intenta de nuevo.'));
 		},
 	});
 
@@ -915,6 +1181,7 @@ export default function InboxPage() {
 		},
 		onSuccess: async (result) => {
 			if (!result) return;
+			setActionFeedback('Bandeja actualizada.');
 
 			await queryClient.invalidateQueries({
 				queryKey: ['dashboard', 'inbox'],
@@ -925,11 +1192,12 @@ export default function InboxPage() {
 			});
 
 			if (result.nextQueue !== queue) {
-				setSelectedConversationId(null);
+				clearSelectedConversation();
 			}
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedback(getRequestErrorMessage(error, 'No se pudo cambiar la bandeja.'));
 		},
 	});
 
@@ -941,10 +1209,12 @@ export default function InboxPage() {
 			);
 		},
 		onSuccess: async () => {
+			setActionFeedback('Contexto de IA reiniciado.');
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedback(getRequestErrorMessage(error, 'No se pudo reiniciar la IA.'));
 		},
 	});
 
@@ -954,10 +1224,12 @@ export default function InboxPage() {
 			await api.delete(`/dashboard/conversations/${selectedConversationId}/history`);
 		},
 		onSuccess: async () => {
+			setActionFeedback('Historial borrado.');
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedback(getRequestErrorMessage(error, 'No se pudo borrar el historial.'));
 		},
 	});
 
@@ -969,90 +1241,166 @@ export default function InboxPage() {
 		shouldStickToBottomRef.current = distanceFromBottom < 120;
 	}
 
+	async function handleLoadOlderMessages() {
+		if (
+			!selectedConversationId ||
+			!conversation?.messagesPage?.nextBefore ||
+			isLoadingOlderMessages
+		) {
+			return;
+		}
+
+		const el = messagesContainerRef.current;
+		const previousScrollHeight = el?.scrollHeight || 0;
+		const previousScrollTop = el?.scrollTop || 0;
+
+		try {
+			setIsLoadingOlderMessages(true);
+			const res = await api.get(`/dashboard/conversations/${selectedConversationId}/messages`, {
+				params: {
+					limit: 80,
+					before: conversation.messagesPage.nextBefore,
+				},
+			});
+
+			const olderPage = res.data?.conversation?.messages || [];
+			setOlderMessages((current) => {
+				const seen = new Set(current.map((message) => message.id));
+				const nextMessages = olderPage.filter((message) => !seen.has(message.id));
+				return [...nextMessages, ...current];
+			});
+
+			queryClient.setQueryData(queryKeys.conversation(selectedConversationId), (current) => {
+				if (!current?.conversation) return current;
+
+				return {
+					...current,
+					conversation: {
+						...current.conversation,
+						messagesPage: res.data?.conversation?.messagesPage || {
+							limit: 80,
+							hasMore: false,
+							nextBefore: null,
+						},
+					},
+				};
+			});
+
+			requestAnimationFrame(() => {
+				const nextEl = messagesContainerRef.current;
+				if (!nextEl) return;
+				nextEl.scrollTop = nextEl.scrollHeight - previousScrollHeight + previousScrollTop;
+			});
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setIsLoadingOlderMessages(false);
+		}
+	}
+
+	function handleContactsScroll() {
+		const el = contactsContainerRef.current;
+		if (!el || !inboxQuery.hasNextPage || inboxQuery.isFetchingNextPage) return;
+
+		const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		if (distanceFromBottom < 260) {
+			inboxQuery.fetchNextPage();
+		}
+	}
+
 	function handleSubmit(event) {
 		event.preventDefault();
-		if (!messageText.trim() && !pendingAttachments.length) return;
-		sendMessageMutation.mutate();
+		const body = messageText.trim();
+		if (!selectedConversationId || (!body && !selectedFile)) return;
+		setComposerError('');
+		sendMessageMutation.mutate({
+			conversationId: selectedConversationId,
+			body,
+			file: selectedFile,
+		});
+	}
+
+	function handleSelectFile(event) {
+		const file = event.target.files?.[0] || null;
+		setComposerError('');
+		setSelectedFile(file);
+	}
+
+	function handleClearSelectedFile() {
+		setSelectedFile(null);
+		if (fileInputRef.current) fileInputRef.current.value = '';
 	}
 
 	function handleMoveQueue(nextQueue) {
 		moveQueueMutation.mutate(nextQueue);
 	}
 
+	function handlePaymentVerified() {
+		if (!selectedConversationId || moveQueueMutation.isPending) return;
+		moveQueueMutation.mutate('HUMAN');
+	}
+
+	function handleMarkUnread() {
+		if (!selectedConversationId || markConversationUnreadMutation.isPending) return;
+		markConversationUnreadMutation.mutate(selectedConversationId);
+	}
+
 	function insertEmoji(emoji) {
 		setMessageText((prev) => `${prev}${emoji}`);
+		setShowEmojiPicker(false);
 		textareaRef.current?.focus();
-	}
-
-	function addComposerFiles(fileList) {
-		const incomingFiles = Array.from(fileList || []);
-		if (!incomingFiles.length) return;
-
-		setPendingAttachments((current) => {
-			const availableSlots = Math.max(0, MAX_COMPOSER_FILES - current.length);
-			const acceptedFiles = [];
-			let nextError = '';
-
-			if (!availableSlots) {
-				setAttachmentError(`Podes adjuntar hasta ${MAX_COMPOSER_FILES} archivos por mensaje.`);
-				return current;
-			}
-
-			for (const file of incomingFiles.slice(0, availableSlots)) {
-				if (file.size > MAX_COMPOSER_FILE_SIZE) {
-					nextError = `El archivo "${file.name}" supera el maximo de 25 MB.`;
-					continue;
-				}
-
-				acceptedFiles.push(createComposerAttachment(file));
-			}
-
-			if (incomingFiles.length > availableSlots && !nextError) {
-				nextError = `Solo se agregaron ${availableSlots} archivos. El maximo es ${MAX_COMPOSER_FILES}.`;
-			}
-
-			setAttachmentError(nextError);
-			return acceptedFiles.length ? [...current, ...acceptedFiles] : current;
-		});
-	}
-
-	function handleAttachmentInputChange(event) {
-		addComposerFiles(event.target.files);
-		event.target.value = '';
-		textareaRef.current?.focus();
-	}
-
-	function handleComposerPaste(event) {
-		const files = Array.from(event.clipboardData?.files || []);
-		if (!files.length) return;
-
-		event.preventDefault();
-		addComposerFiles(files);
-	}
-
-	function removePendingAttachment(attachmentId) {
-		setPendingAttachments((current) =>
-			current.filter((attachment) => attachment.id !== attachmentId)
-		);
-		setAttachmentError('');
 	}
 
 	function handleComposerKeyDown(event) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 
-			if (
-				(messageText.trim() || pendingAttachments.length) &&
-				!sendMessageMutation.isPending
-			) {
-				sendMessageMutation.mutate();
+			const body = messageText.trim();
+			if (selectedConversationId && (body || selectedFile) && !sendMessageMutation.isPending) {
+				setComposerError('');
+				sendMessageMutation.mutate({
+					conversationId: selectedConversationId,
+					body,
+					file: selectedFile,
+				});
 			}
 		}
 	}
 
+	const inboxPageClassName = [
+		'inbox-page',
+		!showConversationSidebar ? 'inbox-page--contacts-hidden' : '',
+	]
+		.filter(Boolean)
+		.join(' ');
+	const currentQueue = conversation?.queue || activeContact?.queue || queue;
+	const currentQueueLabel = getQueueLabel(currentQueue);
+	const isBusyWithConversationAction =
+		moveQueueMutation.isPending ||
+		resetContextMutation.isPending ||
+		clearHistoryMutation.isPending ||
+		markConversationUnreadMutation.isPending;
+
 	return (
-		<div className="inbox-page">
+		<div className={inboxPageClassName}>
+			{showConversationSidebar ? (
 			<aside className="inbox-sidebar">
+				<div className="inbox-sidebar-top">
+					<div>
+						<strong>Inbox</strong>
+						<span>{counts.ALL || 0} conversaciones en esta vista</span>
+					</div>
+					<button
+						type="button"
+						className="inbox-sidebar-refresh"
+						onClick={() => inboxQuery.refetch()}
+						disabled={inboxQuery.isFetching}
+					>
+						<RefreshCw size={14} strokeWidth={2.4} aria-hidden="true" />
+						<span>{inboxQuery.isFetching ? '...' : 'Actualizar'}</span>
+					</button>
+				</div>
+
 				<div className="inbox-queue-tabs">
 					{QUEUES.map((item) => {
 						const isActive = queue === item.key;
@@ -1062,12 +1410,11 @@ export default function InboxPage() {
 								key={item.key}
 								active={isActive}
 								disabled={inboxQuery.isFetching && isActive}
-								onClick={() => {
-									setQueue(item.key);
-									setSelectedConversationId(null);
-								}}
+								onClick={() => selectQueue(item.key)}
+								icon={item.key === 'PAYMENT_REVIEW' ? CheckCheck : item.key === 'HUMAN' ? UserRound : item.key === 'AUTO' ? Bot : Inbox}
 							>
-								{item.label} · {counts[item.key] || 0}
+								<span>{getQueueLabel(item.key)}</span>
+								<strong>{counts[item.key] || 0}</strong>
 							</ActionButton>
 						);
 					})}
@@ -1106,7 +1453,7 @@ export default function InboxPage() {
 						<button
 							key={item.key}
 							type="button"
-							onClick={() => setReadFilter(item.key)}
+							onClick={() => selectReadFilter(item.key)}
 							className={`inbox-read-filter-btn ${
 								readFilter === item.key ? 'inbox-read-filter-btn--active' : ''
 							}`}
@@ -1116,14 +1463,28 @@ export default function InboxPage() {
 					))}
 				</div>
 
-				<div className="inbox-contacts-scroll">
+				<div
+					ref={contactsContainerRef}
+					className="inbox-contacts-scroll"
+					onScroll={handleContactsScroll}
+				>
 					{inboxQuery.isLoading ? (
-						<div className="inbox-empty">Cargando conversaciones...</div>
+						<div className="inbox-empty">
+							<strong>Cargando conversaciones</strong>
+							<span>Estamos actualizando la bandeja con los últimos mensajes.</span>
+						</div>
 					) : null}
 
 					{!inboxQuery.isLoading && !visibleContacts.length ? (
 						<div className="inbox-empty">
-							No hay conversaciones en esta bandeja.
+							<strong>No hay conversaciones en esta vista</strong>
+							<span>
+								{normalizedSearch
+									? 'Probá con otro nombre, teléfono o mensaje.'
+									: readFilter === 'UNREAD'
+										? 'No quedan chats sin leer. Cambiá el filtro para ver el resto.'
+										: 'Cuando entren mensajes nuevos, van a aparecer acá.'}
+							</span>
 						</div>
 					) : null}
 
@@ -1136,7 +1497,7 @@ export default function InboxPage() {
 							<button
 								key={contact.conversationId}
 								type="button"
-								onClick={() => setSelectedConversationId(contact.conversationId)}
+								onClick={() => selectConversation(contact.conversationId)}
 								className={`inbox-contact-card ${
 									isSelected ? 'inbox-contact-card--selected' : ''
 								} ${hasUnread ? 'inbox-contact-card--unread' : ''}`}
@@ -1180,10 +1541,6 @@ export default function InboxPage() {
 											</div>
 										</div>
 
-										<div className="inbox-contact-phone">
-											{contact.phoneDisplay || 'Sin teléfono'}
-										</div>
-
 										<div className="inbox-contact-preview-row">
 											{contact.lastMessageDirection ? (
 												<span
@@ -1206,19 +1563,50 @@ export default function InboxPage() {
 							</button>
 						);
 					})}
+
+					{inboxQuery.hasNextPage ? (
+						<button
+							type="button"
+							className="inbox-load-more"
+							disabled={inboxQuery.isFetchingNextPage}
+							onClick={() => inboxQuery.fetchNextPage()}
+						>
+							{inboxQuery.isFetchingNextPage
+								? 'Cargando...'
+								: 'Cargar más conversaciones'}
+						</button>
+					) : contacts.length > 0 ? (
+						<div className="inbox-list-end">No hay más conversaciones.</div>
+					) : null}
 				</div>
 			</aside>
+			) : null}
 
 			<section className="inbox-chat-panel">
 				{!selectedConversationId ? (
 					<div className="inbox-chat-empty">
-						Seleccioná una conversación
+						{!showConversationSidebar ? (
+							<ActionButton onClick={() => setShowConversationSidebar(true)} icon={Inbox}>
+								Mostrar conversaciones
+							</ActionButton>
+						) : null}
+						Seleccioná una conversación para ver el historial y responder.
 					</div>
 				) : (
-					<>
+					<div className="inbox-chat-workspace">
+						<div className="inbox-chat-main">
 						<div className="inbox-chat-header">
 							<div className="inbox-chat-header-top">
-								<div className="inbox-chat-heading">
+								<button
+									type="button"
+									className="inbox-back-to-list-btn"
+									onClick={() => setShowConversationSidebar(true)}
+								>
+									<ArrowLeft size={15} strokeWidth={2.4} aria-hidden="true" />
+									<span>Conversaciones</span>
+								</button>
+
+								<div className="inbox-chat-identity">
 									<div className="inbox-chat-title">
 										{conversation?.contact?.name ||
 											activeContact?.displayName ||
@@ -1233,7 +1621,7 @@ export default function InboxPage() {
 
 								<div className="inbox-badges">
 									<span className="inbox-badge inbox-badge--neutral">
-										{conversation?.queue || activeContact?.queue || queue}
+										{currentQueueLabel}
 									</span>
 
 									<span
@@ -1249,34 +1637,67 @@ export default function InboxPage() {
 							</div>
 
 							<div className="inbox-actions">
-								<ActionButton
-									active={conversation?.queue === 'AUTO'}
-									disabled={moveQueueMutation.isPending}
-									onClick={() => handleMoveQueue('AUTO')}
-								>
-									Automático
-								</ActionButton>
+								<div className="inbox-actions-primary">
+									<ActionButton
+										active={showConversationSidebar}
+										onClick={() => setShowConversationSidebar((prev) => !prev)}
+										icon={showConversationSidebar ? EyeOff : Inbox}
+									>
+										{showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones'}
+									</ActionButton>
 
-								<ActionButton
-									active={conversation?.queue === 'HUMAN'}
-									disabled={moveQueueMutation.isPending}
-									onClick={() => handleMoveQueue('HUMAN')}
-								>
-									Atención humana
-								</ActionButton>
+									<ActionButton
+										active={conversation?.queue === 'AUTO'}
+										disabled={moveQueueMutation.isPending}
+										onClick={() => handleMoveQueue('AUTO')}
+										icon={Bot}
+									>
+										Automático
+									</ActionButton>
 
-								<ActionButton
-									active={conversation?.queue === 'PAYMENT_REVIEW'}
-									disabled={moveQueueMutation.isPending}
-									onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
-								>
-									Comprobantes
-								</ActionButton>
+									<ActionButton
+										active={conversation?.queue === 'HUMAN'}
+										disabled={moveQueueMutation.isPending}
+										onClick={() => handleMoveQueue('HUMAN')}
+										icon={UserRound}
+									>
+										Atención humana
+									</ActionButton>
 
-								<div className="inbox-actions-spacer" />
+									<ActionButton
+										active={conversation?.queue === 'PAYMENT_REVIEW'}
+										disabled={moveQueueMutation.isPending}
+										onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
+										icon={CheckCheck}
+									>
+										Comprobantes
+									</ActionButton>
+
+									{conversation?.queue === 'PAYMENT_REVIEW' ? (
+										<ActionButton
+											disabled={moveQueueMutation.isPending}
+											onClick={handlePaymentVerified}
+											icon={ArchiveRestore}
+										>
+											Comprobante verificado
+										</ActionButton>
+									) : null}
+
+									<ActionButton
+										active={Boolean(activeContact?.hasUnread || conversation?.hasUnread)}
+										disabled={
+											markConversationUnreadMutation.isPending ||
+											!selectedConversationId
+										}
+										onClick={handleMarkUnread}
+										icon={Clock3}
+									>
+										Marcar no leído
+									</ActionButton>
+								</div>
 
 								{isAdmin ? (
-									<>
+									<div className="inbox-actions-danger">
 										<ActionButton
 											danger
 											disabled={
@@ -1284,6 +1705,7 @@ export default function InboxPage() {
 												!selectedConversationId
 											}
 											onClick={() => resetContextMutation.mutate()}
+											icon={RotateCcw}
 										>
 											Reiniciar IA
 										</ActionButton>
@@ -1296,19 +1718,30 @@ export default function InboxPage() {
 											}
 											onClick={() => {
 												const confirmed = window.confirm(
-													'Esto va a borrar el historial y limpiar el contexto de esta conversación. ¿Continuar?'
+													'Borrar historial\n\nSe eliminarán los mensajes y el contexto de esta conversación. Esta acción no se puede deshacer.\n\n¿Querés borrar el historial?'
 												);
 
 												if (confirmed) {
 													clearHistoryMutation.mutate();
 												}
 											}}
+											icon={Eraser}
 										>
 											Borrar historial
 										</ActionButton>
-									</>
+									</div>
 								) : null}
 							</div>
+
+							{actionFeedback || isBusyWithConversationAction ? (
+								<div
+									className={`inbox-action-feedback ${
+										isBusyWithConversationAction ? 'inbox-action-feedback--busy' : ''
+									}`}
+								>
+									{isBusyWithConversationAction ? 'Procesando acción...' : actionFeedback}
+								</div>
+							) : null}
 						</div>
 
 						<div
@@ -1318,76 +1751,74 @@ export default function InboxPage() {
 						>
 							<div className="inbox-messages-list">
 								{conversationQuery.isLoading ? (
-									<div className="inbox-empty">Cargando mensajes...</div>
-								) : null}
-
-								{!conversationQuery.isLoading &&
-								(conversation?.messages || []).length === 0 ? (
 									<div className="inbox-empty">
-										Esta conversación todavía no tiene mensajes.
+										<strong>Cargando mensajes</strong>
+										<span>Estamos preparando el historial de esta conversación.</span>
 									</div>
 								) : null}
 
-								{(conversation?.messages || []).map((msg) => (
+								{hasOlderMessages ? (
+									<button
+										type="button"
+										className="inbox-load-older-messages"
+										disabled={isLoadingOlderMessages}
+										onClick={handleLoadOlderMessages}
+									>
+										{isLoadingOlderMessages
+											? 'Cargando mensajes...'
+											: 'Cargar mensajes anteriores'}
+									</button>
+								) : null}
+
+								{!conversationQuery.isLoading &&
+								displayedMessages.length === 0 ? (
+									<div className="inbox-empty">
+										Todavía no hay mensajes. Cuando el cliente escriba, el historial va a aparecer acá.
+									</div>
+								) : null}
+
+								{displayedMessages.map((msg) => (
 									<MessageBubble key={msg.id} message={msg} conversation={conversation} />
 								))}
 							</div>
 						</div>
 
 						<div className="inbox-composer-shell">
-							{pendingAttachments.length || attachmentError ? (
-								<div className="inbox-attachment-tray">
-									{pendingAttachments.map((attachment) => (
-										<div key={attachment.id} className="inbox-pending-attachment">
-											<div className="inbox-pending-attachment-main">
-												<span className="inbox-pending-attachment-icon">+</span>
-												<span className="inbox-pending-attachment-name">
-													{attachment.name}
-												</span>
-												{attachment.sizeLabel ? (
-													<span className="inbox-pending-attachment-size">
-														{attachment.sizeLabel}
-													</span>
-												) : null}
-											</div>
+							{composerError ? (
+								<div className="inbox-composer-feedback inbox-composer-feedback--error">
+									{composerError}
+								</div>
+							) : sendMessageMutation.isPending ? (
+								<div className="inbox-composer-feedback inbox-composer-feedback--sending">
+									Enviando mensaje...
+								</div>
+							) : null}
 
-											<button
-												type="button"
-												className="inbox-pending-attachment-remove"
-												onClick={() => removePendingAttachment(attachment.id)}
-												title="Quitar adjunto"
-											>
-												x
-											</button>
-										</div>
-									))}
+							{selectedFile ? (
+								<div className="inbox-selected-file">
+									<div className="inbox-selected-file-main">
+										<span className="inbox-selected-file-icon">
+											<Paperclip size={13} strokeWidth={2.4} aria-hidden="true" />
+										</span>
+										<span className="inbox-selected-file-name">{selectedFile.name}</span>
+										<span className="inbox-selected-file-size">
+											{formatFileSize(selectedFile.size)}
+										</span>
+									</div>
 
-									{attachmentError ? (
-										<div className="inbox-attachment-error">{attachmentError}</div>
-									) : null}
+									<button
+										type="button"
+										className="inbox-selected-file-remove"
+										onClick={handleClearSelectedFile}
+										disabled={sendMessageMutation.isPending}
+										title="Quitar archivo"
+									>
+										x
+									</button>
 								</div>
 							) : null}
 
 							<form onSubmit={handleSubmit} className="inbox-composer">
-								<input
-									ref={fileInputRef}
-									type="file"
-									multiple
-									accept={ATTACHMENT_ACCEPT}
-									onChange={handleAttachmentInputChange}
-									className="inbox-file-input"
-								/>
-
-								<button
-									type="button"
-									className="inbox-attach-trigger"
-									onClick={() => fileInputRef.current?.click()}
-									disabled={sendMessageMutation.isPending}
-									title="Adjuntar archivo"
-								>
-									+
-								</button>
-
 								<div className="inbox-composer-leading" ref={emojiPickerRef}>
 									<button
 										type="button"
@@ -1400,10 +1831,10 @@ export default function InboxPage() {
 
 									{showEmojiPicker ? (
 										<div className="inbox-emoji-picker">
-											<div className="inbox-emoji-title">Elegi un emoji</div>
+											<div className="inbox-emoji-title">Elegí un emoji</div>
 
 											<div className="inbox-emoji-grid">
-												{QUICK_EMOJIS.map((emoji) => (
+												{EXTENDED_QUICK_EMOJIS.map((emoji) => (
 													<button
 														key={emoji}
 														type="button"
@@ -1418,23 +1849,42 @@ export default function InboxPage() {
 									) : null}
 								</div>
 
+								<input
+									ref={fileInputRef}
+									type="file"
+									className="inbox-file-input"
+									accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv"
+									onChange={handleSelectFile}
+									disabled={sendMessageMutation.isPending}
+								/>
+
+								<button
+									type="button"
+									className="inbox-attach-trigger"
+									onClick={() => fileInputRef.current?.click()}
+									disabled={sendMessageMutation.isPending}
+									title="Adjuntar archivo"
+								>
+									<Paperclip size={18} strokeWidth={2.3} aria-hidden="true" />
+								</button>
+
 								<textarea
 									ref={textareaRef}
 									value={messageText}
-									onChange={(event) => setMessageText(event.target.value)}
+									onChange={(event) => {
+										setComposerError('');
+										setMessageText(event.target.value);
+									}}
 									onKeyDown={handleComposerKeyDown}
-									onPaste={handleComposerPaste}
-									placeholder="Escribe un mensaje"
+									placeholder="Escribí un mensaje"
 									rows={1}
-									disabled={sendMessageMutation.isPending}
 									className="inbox-textarea"
 								/>
 
 								<button
 									type="submit"
 									disabled={
-										sendMessageMutation.isPending ||
-										(!messageText.trim() && !pendingAttachments.length)
+										sendMessageMutation.isPending || (!messageText.trim() && !selectedFile)
 									}
 									title="Enviar"
 									className="inbox-send-btn"
@@ -1443,7 +1893,9 @@ export default function InboxPage() {
 								</button>
 							</form>
 						</div>
-					</>
+						</div>
+
+					</div>
 				)}
 			</section>
 		</div>

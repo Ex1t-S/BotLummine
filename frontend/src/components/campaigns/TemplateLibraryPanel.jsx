@@ -109,10 +109,10 @@ export default function TemplateLibraryPanel({
 			<div className="template-library-header">
 				<div>
 					<span className="campaigns-eyebrow">Biblioteca</span>
-					<h3>Elegi una base antes de editar</h3>
+					<h3>Elegí el template para tu próxima campaña</h3>
 					<p>
-						Busca, filtra y selecciona el template correcto. La idea es que no tengas que
-						andar pescandolo con red y snorkel.
+						Buscá por nombre, estado o contenido y seleccioná la plantilla que vas a usar,
+						editar o programar.
 					</p>
 				</div>
 
@@ -122,7 +122,7 @@ export default function TemplateLibraryPanel({
 					</button>
 
 					<button className="button secondary" onClick={onSync} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sincronizar con Meta'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar templates'}
 					</button>
 
 					<button
@@ -139,7 +139,7 @@ export default function TemplateLibraryPanel({
 			<div className="campaign-inline-summary template-library-summary">
 				<div className="campaign-inline-summary-item">
 					<strong>{templates.length}</strong>
-					<span>totales</span>
+					<span>templates</span>
 				</div>
 				<div className="campaign-inline-summary-item">
 					<strong>{approvedCount}</strong>
@@ -147,7 +147,7 @@ export default function TemplateLibraryPanel({
 				</div>
 				<div className="campaign-inline-summary-item">
 					<strong>{filteredTemplates.length}</strong>
-					<span>visibles</span>
+					<span>resultados</span>
 				</div>
 			</div>
 
@@ -157,7 +157,7 @@ export default function TemplateLibraryPanel({
 					<input
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
-						placeholder="carrito, body, invierno..."
+						placeholder="carrito, promo, invierno..."
 					/>
 				</label>
 
@@ -186,8 +186,8 @@ export default function TemplateLibraryPanel({
 				<label className="field">
 					<span>Orden</span>
 					<select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-						<option value="updated_desc">Mas recientes</option>
-						<option value="updated_asc">Mas viejos</option>
+						<option value="updated_desc">Más recientes</option>
+						<option value="updated_asc">Más viejos</option>
 						<option value="name_asc">Nombre A-Z</option>
 						<option value="name_desc">Nombre Z-A</option>
 					</select>
@@ -216,7 +216,7 @@ export default function TemplateLibraryPanel({
 				{filteredTemplates.length === 0 ? (
 					<div className="campaign-empty-state">
 						<strong>No hay templates que coincidan.</strong>
-						<p>Proba otro filtro o sincroniza de nuevo.</p>
+						<p>Probá otro filtro o sincronizá los templates de Meta.</p>
 					</div>
 				) : (
 					filteredTemplates.map((template) => {

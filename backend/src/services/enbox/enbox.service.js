@@ -1,8 +1,13 @@
+import { prisma } from '../../lib/prisma.js';
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+
 const DEFAULT_PANEL_BASE_URL = 'https://enbox.lightdata.com.ar';
 const DEFAULT_PUBLIC_BASE_URL = 'https://enbox.lightdata.com.ar';
 const DEFAULT_PUBLIC_TRACKING_SALT = 'd54df4s8a';
 const BROWSER_USER_AGENT =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
+const ENBOX_TIMEOUT_MS = getHttpTimeoutMs('ENBOX_TIMEOUT_MS', 20000);
 
 const LIST_COLUMNS = [
 	{ id: 161, CDB: 'nombre_fantasia' },
@@ -38,13 +43,51 @@ function firstNonEmpty(...values) {
 	return '';
 }
 
-export function getEnboxConfig() {
+function getEnvEnboxConfig() {
 	return {
+		source: 'env',
 		panelBaseUrl: String(process.env.ENBOX_PANEL_BASE_URL || DEFAULT_PANEL_BASE_URL).replace(/\/+$/, ''),
 		publicBaseUrl: String(process.env.ENBOX_PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL).replace(/\/+$/, ''),
 		publicTrackingSalt: String(process.env.ENBOX_PUBLIC_TRACKING_SALT || DEFAULT_PUBLIC_TRACKING_SALT).trim(),
 		username: String(process.env.ENBOX_USERNAME || '').trim(),
 		password: String(process.env.ENBOX_PASSWORD || '').trim(),
+	};
+}
+
+export async function getEnboxConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const connection = await prisma.logisticsConnection.findFirst({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'ENBOX',
+			status: 'ACTIVE'
+		},
+		orderBy: { updatedAt: 'desc' }
+	});
+
+	if (connection?.username && connection?.password) {
+		const config = connection.config && typeof connection.config === 'object' ? connection.config : {};
+		return {
+			source: 'database',
+			panelBaseUrl: String(config.panelBaseUrl || DEFAULT_PANEL_BASE_URL).replace(/\/+$/, ''),
+			publicBaseUrl: String(config.publicBaseUrl || DEFAULT_PUBLIC_BASE_URL).replace(/\/+$/, ''),
+			publicTrackingSalt: String(config.publicTrackingSalt || DEFAULT_PUBLIC_TRACKING_SALT).trim(),
+			username: String(connection.username || '').trim(),
+			password: String(connection.password || '').trim(),
+		};
+	}
+
+	if (resolvedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+		return getEnvEnboxConfig();
+	}
+
+	return {
+		source: 'empty',
+		panelBaseUrl: DEFAULT_PANEL_BASE_URL,
+		publicBaseUrl: DEFAULT_PUBLIC_BASE_URL,
+		publicTrackingSalt: DEFAULT_PUBLIC_TRACKING_SALT,
+		username: '',
+		password: '',
 	};
 }
 
@@ -86,7 +129,7 @@ async function loginToEnbox(config = {}) {
 	body.set('pos', ',');
 	body.set('mantener', '1');
 
-	const response = await fetch(buildPanelUrl(config, '/system_user/process_login.php'), {
+	const response = await fetchWithTimeout(buildPanelUrl(config, '/system_user/process_login.php'), {
 		method: 'POST',
 		headers: buildBrowserHeaders(config, null, {
 			'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -94,7 +137,7 @@ async function loginToEnbox(config = {}) {
 			'x-requested-with': 'XMLHttpRequest',
 		}),
 		body: body.toString(),
-	});
+	}, ENBOX_TIMEOUT_MS);
 
 	const raw = await response.text();
 	let parsed = null;
@@ -117,11 +160,11 @@ async function warmUpPanelSession(sessionCookie, config = {}) {
 	if (!sessionCookie) return;
 
 	try {
-		await fetch(buildPanelUrl(config, '/index.php'), {
+		await fetchWithTimeout(buildPanelUrl(config, '/index.php'), {
 			headers: buildBrowserHeaders(config, sessionCookie, {
 				accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			}),
-		});
+		}, ENBOX_TIMEOUT_MS);
 	} catch {
 		// The tracking flow can still work without this warmup.
 	}
@@ -192,14 +235,14 @@ async function fetchShipmentRows(sessionCookie, filters = {}, config = {}) {
 		}))
 	);
 
-	const response = await fetch(buildPanelUrl(config, '/modules/envios/listado/procesar_listado.php'), {
+	const response = await fetchWithTimeout(buildPanelUrl(config, '/modules/envios/listado/procesar_listado.php'), {
 		method: 'POST',
 		headers: buildBrowserHeaders(config, sessionCookie, {
 			'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
 			'x-requested-with': 'XMLHttpRequest',
 		}),
 		body: params.toString(),
-	});
+	}, ENBOX_TIMEOUT_MS);
 
 	const raw = await response.text();
 	if (!response.ok || !raw) return [];
@@ -221,14 +264,14 @@ async function fetchShipmentDetail(sessionCookie, did, config = {}) {
 	params.set('operador', 'get');
 	params.set('did', String(did));
 
-	const response = await fetch(buildPanelUrl(config, '/modules/envios/alta/controlador.php'), {
+	const response = await fetchWithTimeout(buildPanelUrl(config, '/modules/envios/alta/controlador.php'), {
 		method: 'POST',
 		headers: buildBrowserHeaders(config, sessionCookie, {
 			'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
 			'x-requested-with': 'XMLHttpRequest',
 		}),
 		body: params.toString(),
-	});
+	}, ENBOX_TIMEOUT_MS);
 
 	const raw = await response.text();
 	if (!response.ok || !raw) return null;
@@ -240,8 +283,8 @@ async function fetchShipmentDetail(sessionCookie, did, config = {}) {
 	}
 }
 
-export async function fetchEnboxShipmentDetailByDid(didEnvio) {
-	const config = getEnboxConfig();
+export async function fetchEnboxShipmentDetailByDid(didEnvio, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const config = await getEnboxConfig({ workspaceId });
 	if (!hasEnboxCredentials(config)) return null;
 
 	const normalizedDid = Number(didEnvio || 0);
@@ -382,8 +425,8 @@ async function findBestShipmentMatch(order = {}, sessionCookie, config = {}) {
 	return candidates.sort((a, b) => b._score - a._score)[0] || null;
 }
 
-export async function resolveEnboxTracking(order = {}) {
-	const config = getEnboxConfig();
+export async function resolveEnboxTracking(order = {}, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const config = await getEnboxConfig({ workspaceId });
 	if (!hasEnboxCredentials(config)) return null;
 
 	const sessionCookie = await loginToEnbox(config);

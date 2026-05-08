@@ -27,6 +27,7 @@ const initialCustomerFilters = {
 	pageSize: 24,
 	minSpent: '',
 	hasPhoneOnly: true,
+	excludeSentTemplate: true,
 };
 const PAYMENT_STATUS_OPTIONS = [
 	{ value: '', label: 'Todos' },
@@ -40,90 +41,64 @@ const PAYMENT_STATUS_OPTIONS = [
 	{ value: 'voided', label: 'Anulado' },
 ];
 
-const CUSTOMER_SORT_OPTIONS = [
-	{ value: 'purchase_desc', label: 'Compra mas reciente' },
-	{ value: 'purchase_asc', label: 'Compra mas antigua' },
-	{ value: 'spent_desc', label: 'Mayor gasto' },
-	{ value: 'spent_asc', label: 'Menor gasto' },
-	{ value: 'name_asc', label: 'Nombre A-Z' },
-];
+function TemplateMultiSelect({
+	options,
+	selectedValues,
+	search,
+	onSearchChange,
+	onToggleValue,
+	onClear,
+}) {
+	const filtered = useMemo(() => {
+		const term = String(search || '').trim().toLowerCase();
+		if (!term) return options.slice(0, 80);
 
-function formatDateForInput(date) {
-	return date.toISOString().slice(0, 10);
+		return options
+			.filter((option) => option.label.toLowerCase().includes(term))
+			.slice(0, 80);
+	}, [options, search]);
+
+	return (
+		<div className="campaign-product-multiselect">
+			<input
+				type="text"
+				className="campaign-product-multiselect-search"
+				placeholder="Buscar plantillas..."
+				value={search}
+				onChange={(event) => onSearchChange(event.target.value)}
+			/>
+
+			<div className="campaign-product-multiselect-list">
+				{filtered.length ? (
+					filtered.map((option) => {
+						const checked = selectedValues.includes(option.label);
+
+						return (
+							<label key={option.id} className="campaign-product-option-row">
+								<input
+									type="checkbox"
+									checked={checked}
+									onChange={() => onToggleValue(option.label)}
+								/>
+								<span>{option.label}</span>
+							</label>
+						);
+					})
+				) : (
+					<div className="campaign-product-option-empty">
+						No hay coincidencias de plantillas.
+					</div>
+				)}
+			</div>
+
+			<div className="campaign-product-multiselect-footer">
+				<button type="button" className="button ghost" onClick={onClear}>
+					Limpiar plantillas
+				</button>
+			</div>
+		</div>
+	);
 }
-
-function dateDaysAgo(days) {
-	const date = new Date();
-	date.setDate(date.getDate() - Number(days || 0));
-	return formatDateForInput(date);
-}
-
-const CUSTOMER_SEGMENT_PRESETS = [
-	{
-		id: 'recent_paid',
-		label: 'Compraron hace poco',
-		description: 'Pagos completos de los ultimos 30 dias.',
-		getFilters: () => ({
-			dateFrom: dateDaysAgo(30),
-			dateTo: '',
-			paymentStatus: 'paid',
-			minSpent: '',
-			sort: 'purchase_desc',
-			q: '',
-			orderNumber: '',
-			page: 1,
-		}),
-		limit: '100',
-	},
-	{
-		id: 'pending_payment',
-		label: 'Pagos pendientes',
-		description: 'Personas que iniciaron compra y falta cerrar pago.',
-		getFilters: () => ({
-			dateFrom: dateDaysAgo(30),
-			dateTo: '',
-			paymentStatus: 'pending',
-			minSpent: '',
-			sort: 'purchase_desc',
-			q: '',
-			orderNumber: '',
-			page: 1,
-		}),
-		limit: '80',
-	},
-	{
-		id: 'vip',
-		label: 'Clientes de mayor valor',
-		description: 'Ordena por gasto para elegir primero los compradores fuertes.',
-		getFilters: () => ({
-			dateFrom: '',
-			dateTo: '',
-			paymentStatus: 'paid',
-			minSpent: '',
-			sort: 'spent_desc',
-			q: '',
-			orderNumber: '',
-			page: 1,
-		}),
-		limit: '100',
-	},
-	{
-		id: 'reactivation',
-		label: 'Reactivacion',
-		description: 'Compraron hace mas tiempo y conviene volver a activar.',
-		getFilters: () => ({
-			dateFrom: '',
-			dateTo: dateDaysAgo(60),
-			paymentStatus: 'paid',
-			minSpent: '',
-			sort: 'purchase_desc',
-			q: '',
-			orderNumber: '',
-			page: 1,
-		}),
-		limit: '150',
-	},
-];
 
 function buildCatalogProducts(rawCatalog = []) {
 	const seen = new Set();
@@ -151,6 +126,24 @@ function buildCatalogProducts(rawCatalog = []) {
 	return options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
 }
 
+function buildTemplateFilterOptions(templates = []) {
+	const seen = new Set();
+	const options = [];
+
+	for (const template of templates) {
+		const name = String(template?.name || '').trim();
+		if (!name || seen.has(name.toLowerCase())) continue;
+
+		seen.add(name.toLowerCase());
+		options.push({
+			id: template?.id || name,
+			label: name,
+		});
+	}
+
+	return options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
+}
+
 function ProductMultiSelect({
 	options,
 	selectedValues,
@@ -158,6 +151,9 @@ function ProductMultiSelect({
 	onSearchChange,
 	onToggleValue,
 	onClear,
+	placeholder = 'Buscar productos del catálogo...',
+	emptyText = 'No hay coincidencias en el catálogo.',
+	clearText = 'Limpiar productos',
 }) {
 	const filtered = useMemo(() => {
 		const term = String(search || '').trim().toLowerCase();
@@ -218,12 +214,12 @@ const VARIABLE_SOURCE_OPTIONS = [
 	{ value: 'first_name', label: 'Primer nombre' },
 	{ value: 'customer_name', label: 'Nombre cliente' },
 	{ value: 'customer_email', label: 'Email' },
-	{ value: 'phone', label: 'Teléfono' },
+	{ value: 'phone', label: 'Telefono' },
 	{ value: 'wa_id', label: 'WhatsApp ID' },
 	{ value: 'product_name', label: 'Producto principal' },
 	{ value: 'order_count', label: 'Cantidad de compras' },
-	{ value: 'last_order_id', label: 'Último pedido ID' },
-	{ value: 'last_order_number', label: 'Último pedido número' },
+	{ value: 'last_order_id', label: 'Ultimo pedido ID' },
+	{ value: 'last_order_number', label: 'Ultimo pedido numero' },
 	{ value: 'total_spent', label: 'Total gastado bruto' },
 	{ value: 'total_spent_label', label: 'Total gastado formateado' },
 	{ value: 'size', label: 'Talle' },
@@ -249,15 +245,7 @@ function normalizeText(value = '') {
 }
 
 function sanitizeCampaignCopy(value = '') {
-	return String(value || '')
-		.replace(/ÃƒÂ¡|Ã¡/g, 'a')
-		.replace(/ÃƒÂ©|Ã©/g, 'e')
-		.replace(/ÃƒÂ­|Ã­/g, 'i')
-		.replace(/ÃƒÂ³|Ã³/g, 'o')
-		.replace(/ÃƒÂº|Ãº/g, 'u')
-		.replace(/ÃƒÂ±|Ã±/g, 'n')
-		.replace(/â€¦/g, '...')
-		.replace(/Â·/g, '-');
+	return String(value || '');
 }
 
 function getTemplateComponents(template) {
@@ -673,11 +661,12 @@ export default function CampaignComposerPanel({
 	const [imageError, setImageError] = useState('');
 	const [submitError, setSubmitError] = useState('');
 	const [showProductPicker, setShowProductPicker] = useState(false);
+	const [showTemplateExclusionPicker, setShowTemplateExclusionPicker] = useState(false);
 	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
+	const [templateExclusionSearch, setTemplateExclusionSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
-	const [selectedPresetId, setSelectedPresetId] = useState('');
-	const [onlyUnadvertised, setOnlyUnadvertised] = useState(false);
+	const [selectedSentTemplateFilters, setSelectedSentTemplateFilters] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
 	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
 	const [contactLimit, setContactLimit] = useState('');
@@ -723,11 +712,16 @@ export default function CampaignComposerPanel({
 		setUploadedMediaId('');
 		setUploadedFileName('');
 		setImageError('');
+		clearFilteredSelection();
 	}, [selectedTemplate?.id]);
 
 	const templatePlaceholders = useMemo(
 		() => extractTemplatePlaceholders(selectedTemplate),
 		[selectedTemplate]
+	);
+	const templateFilterOptions = useMemo(
+		() => buildTemplateFilterOptions(templates),
+		[templates]
 	);
 
 	useEffect(() => {
@@ -744,6 +738,13 @@ export default function CampaignComposerPanel({
 	}, [templatePlaceholders]);
 
 	useEffect(() => {
+		const templateName = String(selectedTemplate?.name || '').trim();
+		if (!templateName) return;
+
+		setSelectedSentTemplateFilters((current) => (current.length ? current : [templateName]));
+	}, [selectedTemplate?.name]);
+
+	useEffect(() => {
 		if (
 			form.audienceMode === 'customers' &&
 			!customerAudience.loading &&
@@ -757,15 +758,6 @@ export default function CampaignComposerPanel({
 	useEffect(() => {
 		void loadCatalogOptions();
 	}, []);
-
-	useEffect(() => {
-		if (form.audienceMode !== 'customers') return;
-		if (!selectedTemplate?.id || !customerAudience.customers.length) return;
-
-		resetSelectedAudience();
-		void loadCustomers(customerFilters);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedTemplate?.id]);
 	const requiresHeaderMedia = useMemo(
 		() => templateRequiresHeaderMedia(selectedTemplate),
 		[selectedTemplate]
@@ -871,21 +863,21 @@ export default function CampaignComposerPanel({
 		() => [
 			{
 				id: 'template',
-				label: 'Template elegido',
+				label: 'Plantilla',
 				ok: Boolean(selectedTemplate?.id),
 				readyText: selectedTemplate?.name || 'Listo',
-				pendingText: 'ElegÃ­ un template',
+				pendingText: 'Elegí una plantilla',
 			},
 			{
 				id: 'image',
-				label: 'Header media',
+				label: 'Encabezado',
 				ok: !requiresHeaderMedia || !needsHeaderMediaUpload,
 				readyText: campaignOverridesTemplateMedia
-					? 'Se reemplaza para esta campaÃ±a'
+					? 'Se reemplaza para esta campaña'
 					: hasTemplateResolvedHeaderMedia
 						? 'Resuelta en la plantilla'
 						: 'No aplica',
-				pendingText: 'Falta cargar el media',
+				pendingText: 'Falta cargar archivo',
 			},
 			{
 				id: 'variables',
@@ -903,8 +895,8 @@ export default function CampaignComposerPanel({
 				readyText: `${formatCompactNumber(recipients.length)} destinatarios`,
 				pendingText:
 					form.audienceMode === 'customers'
-						? 'SeleccionÃ¡ clientes'
-						: 'CargÃ¡ destinatarios',
+						? 'Seleccioná clientes'
+						: 'Cargá destinatarios',
 			},
 		],
 		[
@@ -923,70 +915,12 @@ export default function CampaignComposerPanel({
 	const campaignReadyToCreate = campaignChecklist.every((item) => item.ok);
 
 	const selectedCustomerCount = selectedCustomers.length;
-	const selectedAdvertisedCount = useMemo(() => {
-		return selectedCustomers.filter((customer) => customer?.marketing?.sentForTemplate).length;
-	}, [selectedCustomers]);
 
 	const totalFoundCount = Number(
 		customerAudience?.pagination?.totalItems ||
 		customerAudience?.stats?.totalCustomers ||
 		0
 	);
-	const marketingStats = customerAudience?.stats?.marketing || {};
-	const notAdvertisedCount = Number(marketingStats.notAdvertisedCustomers || 0);
-	const activeFilterChips = useMemo(() => {
-		const chips = [];
-
-		if (customerFilters.q) {
-			chips.push({ id: 'q', label: `Busqueda: ${customerFilters.q}` });
-		}
-
-		if (customerFilters.orderNumber) {
-			chips.push({ id: 'orderNumber', label: `Pedido: ${customerFilters.orderNumber}` });
-		}
-
-		if (customerFilters.minSpent) {
-			chips.push({ id: 'minSpent', label: `Minimo: $${customerFilters.minSpent}` });
-		}
-
-		if (customerFilters.dateFrom) {
-			chips.push({ id: 'dateFrom', label: `Desde: ${customerFilters.dateFrom}` });
-		}
-
-		if (customerFilters.dateTo) {
-			chips.push({ id: 'dateTo', label: `Hasta: ${customerFilters.dateTo}` });
-		}
-
-		if (customerFilters.paymentStatus) {
-			const statusLabel =
-				PAYMENT_STATUS_OPTIONS.find((option) => option.value === customerFilters.paymentStatus)?.label ||
-				customerFilters.paymentStatus;
-			chips.push({ id: 'paymentStatus', label: `Pago: ${statusLabel}` });
-		}
-
-		if (selectedProductFilters.length) {
-			chips.push({
-				id: 'products',
-				label: `Productos: ${selectedProductFilters.length}`,
-			});
-		}
-
-		if (onlyUnadvertised) {
-			chips.push({
-				id: 'onlyUnadvertised',
-				label: 'Sin publicidad previa',
-			});
-		}
-
-		if (customerFilters.sort && customerFilters.sort !== initialCustomerFilters.sort) {
-			const sortLabel =
-				CUSTOMER_SORT_OPTIONS.find((option) => option.value === customerFilters.sort)?.label ||
-				customerFilters.sort;
-			chips.push({ id: 'sort', label: `Orden: ${sortLabel}` });
-		}
-
-		return chips;
-	}, [customerFilters, onlyUnadvertised, selectedProductFilters.length]);
 	const contactLimitNumber = useMemo(() => {
 		const parsed = Number(contactLimit);
 		if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -1041,17 +975,12 @@ export default function CampaignComposerPanel({
 		if (!contactLimitNumber) return totalFoundCount;
 		return Math.min(totalFoundCount, contactLimitNumber);
 	}, [totalFoundCount, contactLimitNumber]);
+	const excludedByTemplateCount = Number(customerAudience?.stats?.excludedByTemplate || 0);
+	const sentTemplateFilterNames = selectedSentTemplateFilters.filter(Boolean);
+	const sentTemplateFilterKey = sentTemplateFilterNames.join('||');
 
 	const selectionButtonLabel = useMemo(() => {
-		if (customerAudience.loadingAll) return 'Seleccionando…';
-
-		if (onlyUnadvertised) {
-			const target = contactLimitNumber
-				? Math.min(notAdvertisedCount || totalFoundCount, contactLimitNumber)
-				: notAdvertisedCount || totalFoundCount;
-
-			return `Seleccionar sin publicidad (${formatCompactNumber(target)})`;
-		}
+		if (customerAudience.loadingAll) return 'Seleccionando...';
 
 		if (contactLimitNumber) {
 			return `Seleccionar primeros ${formatCompactNumber(effectiveSelectionCount)} filtrados`;
@@ -1066,8 +995,6 @@ export default function CampaignComposerPanel({
 		customerAudience.loadingAll,
 		contactLimitNumber,
 		effectiveSelectionCount,
-		notAdvertisedCount,
-		onlyUnadvertised,
 		selectedProductFilters.length,
 		totalFoundCount,
 	]);
@@ -1086,15 +1013,34 @@ export default function CampaignComposerPanel({
 			sort: nextFilters.sort || 'purchase_desc',
 			page: nextFilters.page || 1,
 			pageSize: nextFilters.pageSize || 24,
-			marketingTemplateId: selectedTemplate?.id || '',
-			marketingTemplateName: selectedTemplate?.name || '',
 			minSpent:
 				nextFilters.minSpent === '' || nextFilters.minSpent === null
 					? undefined
 					: Number(nextFilters.minSpent),
 			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
+			excludeSentTemplate:
+				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length ? 'true' : 'false',
+			sentTemplateName:
+				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length
+					? sentTemplateFilterNames[0]
+					: '',
+			sentTemplateNames:
+				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length
+					? sentTemplateFilterKey
+					: '',
 		};
 	}
+
+	useEffect(() => {
+		if (
+			form.audienceMode === 'customers' &&
+			customerFilters.excludeSentTemplate &&
+			sentTemplateFilterNames.length
+		) {
+			void loadCustomers({ ...customerFilters, page: 1 });
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [sentTemplateFilterKey]);
 
 	async function fetchAllFilteredCustomers(nextFilters = customerFilters) {
 		const firstPage = await fetchCampaignCustomers({
@@ -1184,81 +1130,10 @@ export default function CampaignComposerPanel({
 			[field]: value,
 			page: field === 'page' ? value : 1,
 		}));
-		setSelectedPresetId('');
-		resetSelectedAudience();
-	}
 
-	function resetSelectedAudience() {
-		setSelectedCustomersMap({});
-		setBulkSelectionInfo({
-			count: 0,
-			customerIds: [],
-			mode: '',
-		});
-		setShowAudiencePreview(false);
-	}
-
-	function applyCustomerPreset(preset) {
-		if (!preset) return;
-
-		const nextFilters = {
-			...customerFilters,
-			...preset.getFilters(),
-			hasPhoneOnly: true,
-		};
-
-		setSelectedPresetId(preset.id);
-		setSelectedProductFilters([]);
-		setProductSearch('');
-		setOnlyUnadvertised(false);
-		setContactLimit(preset.limit || '');
-		setCustomerFilters(nextFilters);
-		resetSelectedAudience();
-		void loadCustomers(nextFilters);
-	}
-
-	function removeCustomerFilter(filterId) {
-		if (filterId === 'products') {
-			clearSelectedProducts();
-			return;
+		if (field !== 'page') {
+			clearFilteredSelection();
 		}
-
-		if (filterId === 'onlyUnadvertised') {
-			setOnlyUnadvertised(false);
-			resetSelectedAudience();
-			return;
-		}
-
-		const nextFilters = {
-			...customerFilters,
-			[filterId]: initialCustomerFilters[filterId] ?? '',
-			page: 1,
-		};
-
-		setSelectedPresetId('');
-		setCustomerFilters(nextFilters);
-		resetSelectedAudience();
-	}
-
-	function clearCustomerSegmentation() {
-		const nextFilters = {
-			...initialCustomerFilters,
-			page: 1,
-		};
-
-		setSelectedPresetId('');
-		setSelectedProductFilters([]);
-		setProductSearch('');
-		setOnlyUnadvertised(false);
-		setContactLimit('');
-		setCustomerFilters(nextFilters);
-		resetSelectedAudience();
-		void loadCustomers(nextFilters);
-	}
-
-	function toggleOnlyUnadvertised(value) {
-		setOnlyUnadvertised(Boolean(value));
-		resetSelectedAudience();
 	}
 
 	function updateVariableMapping(key, patch) {
@@ -1282,7 +1157,7 @@ export default function CampaignComposerPanel({
 				page: 1,
 				productQuery: next.join('||'),
 			}));
-			resetSelectedAudience();
+			clearFilteredSelection();
 
 			return next;
 		});
@@ -1296,8 +1171,33 @@ export default function CampaignComposerPanel({
 			page: 1,
 			productQuery: '',
 		}));
-		setSelectedPresetId('');
-		resetSelectedAudience();
+		clearFilteredSelection();
+	}
+
+	function toggleSentTemplateFilter(templateName) {
+		setSelectedSentTemplateFilters((current) => {
+			const next = current.includes(templateName)
+				? current.filter((item) => item !== templateName)
+				: [...current, templateName];
+
+			clearFilteredSelection();
+			setCustomerFilters((prev) => ({
+				...prev,
+				page: 1,
+			}));
+
+			return next;
+		});
+	}
+
+	function clearSentTemplateFilters() {
+		setSelectedSentTemplateFilters([]);
+		setTemplateExclusionSearch('');
+		clearFilteredSelection();
+		setCustomerFilters((prev) => ({
+			...prev,
+			page: 1,
+		}));
 	}
 
 		async function handleSelectAllFilteredCustomers() {
@@ -1310,11 +1210,9 @@ export default function CampaignComposerPanel({
 		try {
 			const allCustomers = await fetchAllFilteredCustomers(customerFilters);
 
-			const selectableCustomers = allCustomers.filter((customer) => {
-				if (!normalizePhone(customer.phone || '')) return false;
-				if (onlyUnadvertised && customer?.marketing?.sentForTemplate) return false;
-				return true;
-			});
+			const selectableCustomers = allCustomers.filter((customer) =>
+				Boolean(normalizePhone(customer.phone || ''))
+			);
 
 			const limitedCustomers = contactLimitNumber
 				? selectableCustomers.slice(0, contactLimitNumber)
@@ -1325,11 +1223,7 @@ export default function CampaignComposerPanel({
 			setBulkSelectionInfo({
 				count: limitedCustomers.length,
 				customerIds: limitedCustomers.map((customer) => customer.id).filter(Boolean),
-				mode: onlyUnadvertised
-					? 'unadvertised'
-					: selectedProductFilters.length
-						? 'products'
-						: 'all',
+				mode: selectedProductFilters.length ? 'products' : 'all',
 			});
 
 			setShowAudiencePreview(true);
@@ -1353,7 +1247,13 @@ export default function CampaignComposerPanel({
 	}
 
 	function clearFilteredSelection() {
-		resetSelectedAudience();
+		setSelectedCustomersMap({});
+		setBulkSelectionInfo({
+			count: 0,
+			customerIds: [],
+			mode: '',
+		});
+		setShowAudiencePreview(false);
 	}
 	function removeSelectedCustomer(customerId) {
 		if (!customerId) return;
@@ -1418,11 +1318,11 @@ export default function CampaignComposerPanel({
 			}
 
 			if (!config.source) {
-				return `Falta elegir de dónde sale {{${placeholder}}}.`;
+				return `Elegí de dónde sale {{${placeholder}}}.`;
 			}
 
 			if (config.source === 'fixed' && !String(config.fixedValue || '').trim()) {
-				return `La variable {{${placeholder}}} está en "valor fijo", pero no tiene valor.`;
+				return `Completá el valor fijo de {{${placeholder}}}.`;
 			}
 		}
 
@@ -1434,7 +1334,7 @@ export default function CampaignComposerPanel({
 		setSubmitError('');
 
 		if (!selectedTemplate?.id) {
-			setSubmitError('Elegí un template antes de crear la campaña.');
+			setSubmitError('Elegí una plantilla antes de crear la campaña.');
 			return;
 		}
 
@@ -1479,6 +1379,9 @@ export default function CampaignComposerPanel({
 						hasPhoneOnly: Boolean(customerFilters.hasPhoneOnly),
 						hasOrders: Boolean(customerFilters.hasOrders),
 						productQuery: customerFilters.productQuery || '',
+						excludeSentTemplate: Boolean(customerFilters.excludeSentTemplate),
+						sentTemplateName: sentTemplateFilterNames[0] || '',
+						sentTemplateNames: sentTemplateFilterNames,
 						selectedProducts: selectedProductFilters,
 						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
 						selectedCount: selectedCustomers.length,
@@ -1528,14 +1431,14 @@ export default function CampaignComposerPanel({
 				<div>
 					<h3>Crear campaña</h3>
 					<p>
-						Ahora la campaña no adivina las variables: vos le decís exactamente de dónde sale cada una.
+						Arma el envio en pasos: plantilla, audiencia, variables y revision final.
 					</p>
 				</div>
 
 				<div className="campaign-builder-top-summary">
 					<div className="campaign-builder-top-summary-item">
-						<strong>{selectedTemplate?.name || 'Sin template'}</strong>
-						<span>mensaje elegido</span>
+						<strong>{selectedTemplate?.name || 'Sin plantilla'}</strong>
+						<span>plantilla elegida</span>
 					</div>
 					<div className="campaign-builder-top-summary-item">
 						<strong>{formatCompactNumber(recipients.length)}</strong>
@@ -1543,13 +1446,13 @@ export default function CampaignComposerPanel({
 					</div>
 					<div className="campaign-builder-top-summary-item">
 						<strong>USD {estimatedCost.toFixed(2)}</strong>
-						<span>{sanitizeCampaignCopy('estimado rÃ¡pido')}</span>
+						<span>costo estimado</span>
 					</div>
 				</div>
 
 				<div className="campaign-helper-box">
 					<div className="campaign-helper-text">
-						Revision rapida antes de crear la campana. Si algo no esta listo, aparece marcado aca y no recien al final.
+						Estado de preparacion. Completa los pendientes antes de crear o enviar.
 					</div>
 
 					<div className="campaign-review-grid">
@@ -1563,43 +1466,27 @@ export default function CampaignComposerPanel({
 
 					{campaignReadyToCreate ? (
 						<div className="campaign-inline-success">
-							La campana ya tiene todo lo necesario para crearse.
+							La campaña está lista para crearse.
 						</div>
 					) : (
 						<div className="campaign-inline-warning">
-							Completa los puntos pendientes antes de crear o lanzar la campana.
+							Completa los puntos pendientes antes de continuar.
 						</div>
 					)}
 				</div>
 
-				<div className="campaign-helper-box" style={{ display: 'none' }}>
-					<div className="campaign-helper-text">
-						RevisiÃ³n rÃ¡pida antes de crear la campaÃ±a. Si algo no estÃ¡ listo, aparece marcado acÃ¡ y no reciÃ©n al final.
-					</div>
-
-					<div className="campaign-review-grid">
-						{campaignChecklist.map((item) => (
-							<div key={item.id} className="campaign-review-card">
-								<strong>{item.label}</strong>
-								<span>{item.ok ? item.readyText : item.pendingText}</span>
-							</div>
-						))}
-					</div>
-
-					{campaignReadyToCreate ? (
-						<div className="campaign-inline-success">
-							La campaÃ±a ya tiene todo lo necesario para crearse.
-						</div>
-					) : (
-						<div className="campaign-inline-warning">
-							CompletÃ¡ los puntos pendientes antes de crear o lanzar la campaÃ±a.
-						</div>
-					)}
-				</div>
 			</div>
 
 			<form className="campaign-form campaign-form--spacious" onSubmit={handleSubmit}>
 				<div className="campaign-builder-section campaign-builder-section--hero">
+					<div className="campaign-step-head">
+						<div>
+							<span className="campaign-step-badge">1. Plantilla</span>
+							<h4>Define el mensaje y el objetivo</h4>
+							<p>Elegí una plantilla aprobada y poné un nombre claro para el envío.</p>
+						</div>
+					</div>
+
 					<div className="campaign-builder-grid campaign-builder-grid--2">
 						<label className="field">
 							<span>Nombre de campaña</span>
@@ -1613,7 +1500,7 @@ export default function CampaignComposerPanel({
 						</label>
 
 						<label className="field">
-							<span>Mensaje</span>
+							<span>Plantilla</span>
 							<select
 								value={selectedTemplate?.id || ''}
 								onChange={(event) => {
@@ -1623,7 +1510,7 @@ export default function CampaignComposerPanel({
 							>
 								{templates.map((template) => (
 									<option key={template.id} value={template.id}>
-										{template.name} · {template.language}
+										{template.name} - {template.language}
 									</option>
 								))}
 							</select>
@@ -1637,7 +1524,7 @@ export default function CampaignComposerPanel({
 							onChange={(event) =>
 								setForm((current) => ({ ...current, description: event.target.value }))
 							}
-							placeholder="Opcional. Solo para que el equipo entienda mejor esta campaña"
+							placeholder="Opcional. Sirve para que el equipo entienda mejor esta campaña"
 						/>
 					</label>
 
@@ -1653,7 +1540,7 @@ export default function CampaignComposerPanel({
 									}}
 								>
 									<strong>Clientes</strong>
-									<span>Usá filtros y productos comprados</span>
+									<span>Usa filtros y productos comprados</span>
 								</button>
 							) : null}
 
@@ -1667,7 +1554,7 @@ export default function CampaignComposerPanel({
 									}}
 								>
 									<strong>Lista manual</strong>
-									<span>Un contacto por línea: telefono|nombre|producto|talle|color</span>
+									<span>Un contacto por línea: teléfono|nombre|producto|talle|color</span>
 								</button>
 							) : null}
 						</div>
@@ -1679,8 +1566,8 @@ export default function CampaignComposerPanel({
 							<div className="campaign-helper-box">
 								<div className="campaign-helper-text">
 									{hasTemplateResolvedHeaderMedia
-										? `Este template ya tiene un ${getTemplateHeaderMediaLabel(selectedTemplate)} configurado. Solo subí otro si querés reemplazarlo para esta campaña.`
-										: `Este template usa header con ${getTemplateHeaderMediaLabel(selectedTemplate)} y todavía necesita que cargues uno para poder enviarse.`}
+										? `Esta plantilla ya tiene un ${getTemplateHeaderMediaLabel(selectedTemplate)} configurado. Subi otro solo si queres reemplazarlo.`
+										: `Esta plantilla necesita un ${getTemplateHeaderMediaLabel(selectedTemplate)} de encabezado antes de enviarse.`}
 								</div>
 								<div className="campaign-inline-actions">
 									<label
@@ -1688,7 +1575,7 @@ export default function CampaignComposerPanel({
 										style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer' }}
 									>
 										{uploadingImage
-											? 'Subiendo…'
+											? 'Subiendo...'
 											: uploadedMediaId
 												? `Cambiar ${getTemplateHeaderMediaLabel(selectedTemplate)}`
 												: hasTemplateResolvedHeaderMedia
@@ -1710,13 +1597,13 @@ export default function CampaignComposerPanel({
 
 								{hasTemplateResolvedHeaderMedia && !uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										{`La campaña va a usar el ${getTemplateHeaderMediaLabel(selectedTemplate)} ya guardado en la plantilla.`}
+										{`Se usara el ${getTemplateHeaderMediaLabel(selectedTemplate)} guardado en la plantilla.`}
 									</div>
 								) : null}
 
 								{uploadedMediaId ? (
 									<div className="campaign-inline-success">
-										{`La campaña va a usar el nuevo ${getTemplateHeaderMediaLabel(selectedTemplate)} cargado.`}
+										{`Se usara el nuevo ${getTemplateHeaderMediaLabel(selectedTemplate)} cargado.`}
 									</div>
 								) : null}
 
@@ -1727,18 +1614,18 @@ export default function CampaignComposerPanel({
 				</div>
 
 				{templatePlaceholders.length ? (
-					<div className="campaign-builder-section">
+					<div className="campaign-builder-section campaign-builder-section--variables">
 						<div className="campaign-step-head">
 							<div>
-								<span className="campaign-step-badge">Variables</span>
-								<h4>Asigná cada placeholder</h4>
+								<span className="campaign-step-badge">3. Variables</span>
+								<h4>Asigna cada variable</h4>
 								<p>
-									Este template usa {templatePlaceholders.length} variable{templatePlaceholders.length > 1 ? 's' : ''}. Acá decidís de dónde sale cada una.
+									Esta plantilla usa {templatePlaceholders.length} variable{templatePlaceholders.length > 1 ? 's' : ''}. Define de donde sale cada valor.
 								</p>
 							</div>
 							<div className="campaign-customer-kpi campaign-customer-kpi--large">
 								<strong>{templatePlaceholders.length}</strong>
-								<span>placeholders</span>
+								<span>variables</span>
 							</div>
 						</div>
 
@@ -1752,7 +1639,7 @@ export default function CampaignComposerPanel({
 										<div className="campaign-variable-mapper-head">
 											<strong>{`{{${placeholder}}}`}</strong>
 											<span>
-												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Todavía sin ejemplo'}
+												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Sin ejemplo todavía'}
 											</span>
 										</div>
 
@@ -1794,70 +1681,19 @@ export default function CampaignComposerPanel({
 				) : null}
 
 				{form.audienceMode === 'customers' ? (
-					<div className="campaign-builder-section">
+					<div className="campaign-builder-section campaign-builder-section--audience">
 						<div className="campaign-step-head">
 							<div>
-								<span className="campaign-step-badge">Paso 1</span>
-								<h4>Elegí a quién querés escribirle</h4>
+								<span className="campaign-step-badge">2. Audiencia</span>
+								<h4>Elige a quien escribirle</h4>
 								<p>
-									La grilla de clientes quedó oculta para que la pantalla no sea infinita.
-									La selección masiva funciona en segundo plano.
+									Filtrá clientes, revisá el alcance y seleccioná los destinatarios de la campaña.
 								</p>
 							</div>
 							<div className="campaign-customer-kpi campaign-customer-kpi--large">
 								<strong>{formatCompactNumber(totalFoundCount)}</strong>
 								<span>clientes encontrados</span>
 							</div>
-						</div>
-
-						<div className="campaign-segment-presets">
-							<div className="campaign-segment-presets__head">
-								<div>
-									<strong>Atajos de segmentacion</strong>
-									<span>Elegilos como punto de partida y despues ajusta los filtros.</span>
-								</div>
-								<button
-									type="button"
-									className="button ghost"
-									onClick={clearCustomerSegmentation}
-								>
-									Limpiar filtros
-								</button>
-							</div>
-
-							<div className="campaign-segment-preset-grid">
-								{CUSTOMER_SEGMENT_PRESETS.map((preset) => (
-									<button
-										key={preset.id}
-										type="button"
-										className={`campaign-segment-preset-card ${
-											selectedPresetId === preset.id ? 'is-active' : ''
-										}`.trim()}
-										onClick={() => applyCustomerPreset(preset)}
-									>
-										<strong>{preset.label}</strong>
-										<span>{preset.description}</span>
-									</button>
-								))}
-							</div>
-
-							{activeFilterChips.length ? (
-								<div className="campaign-active-filter-row">
-									<span>Filtros activos</span>
-									{activeFilterChips.map((chip) => (
-										<button
-											key={chip.id}
-											type="button"
-											className="campaign-active-filter-chip"
-											onClick={() => removeCustomerFilter(chip.id)}
-											title="Quitar filtro"
-										>
-											{chip.label}
-											<strong>x</strong>
-										</button>
-									))}
-								</div>
-							) : null}
 						</div>
 
 						<div className="campaign-builder-grid campaign-builder-grid--2">
@@ -1871,7 +1707,7 @@ export default function CampaignComposerPanel({
 							</label>
 
 							<label className="field">
-								<span>N° pedido</span>
+								<span>Nro. de pedido</span>
 								<input
 									value={customerFilters.orderNumber}
 									onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
@@ -1882,7 +1718,7 @@ export default function CampaignComposerPanel({
 
 						<div className="campaign-builder-grid campaign-builder-grid--filters">
 							<label className="field">
-								<span>Gasto mínimo</span>
+								<span>Gasto minimo</span>
 								<input
 									type="number"
 									min="0"
@@ -1923,32 +1759,64 @@ export default function CampaignComposerPanel({
 									))}
 								</select>
 							</label>
-
-							<label className="field">
-								<span>Ordenar por</span>
-								<select
-									value={customerFilters.sort}
-									onChange={(event) => updateCustomerFilter('sort', event.target.value)}
-								>
-									{CUSTOMER_SORT_OPTIONS.map((option) => (
-										<option key={option.value} value={option.value}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</label>
-
-							<label className="campaign-toggle campaign-toggle--field">
-								<input
-									type="checkbox"
-									checked={Boolean(customerFilters.hasPhoneOnly)}
-									onChange={(event) => updateCustomerFilter('hasPhoneOnly', event.target.checked)}
-								/>
-								<span>Solo clientes con telefono</span>
-							</label>
 						</div>
 
 						<div className="campaign-product-filter-group">
+							<label className="campaign-toggle">
+								<input
+									type="checkbox"
+									checked={Boolean(customerFilters.excludeSentTemplate)}
+									onChange={(event) =>
+										updateCustomerFilter('excludeSentTemplate', event.target.checked)
+									}
+									disabled={!sentTemplateFilterNames.length}
+								/>
+								<span>
+									Excluir clientes que ya recibieron alguna plantilla seleccionada
+								</span>
+							</label>
+
+							<label className="field">
+								<span>Plantillas ya enviadas</span>
+								<button
+									type="button"
+									className={`campaign-product-filter-toggle ${showTemplateExclusionPicker ? 'open' : ''}`}
+									onClick={() => setShowTemplateExclusionPicker((current) => !current)}
+								>
+									{sentTemplateFilterNames.length
+										? `Selector de plantillas (${sentTemplateFilterNames.length})`
+										: 'Selector de plantillas'}
+								</button>
+							</label>
+
+							{sentTemplateFilterNames.length ? (
+								<div className="campaign-selected-products-row campaign-selected-products-row--interactive">
+									{sentTemplateFilterNames.map((templateName) => (
+										<button
+											key={templateName}
+											type="button"
+											className="campaign-selected-product-chip"
+											onClick={() => toggleSentTemplateFilter(templateName)}
+											title="Quitar plantilla"
+										>
+											<span>{templateName}</span>
+											<strong>x</strong>
+										</button>
+									))}
+								</div>
+							) : null}
+
+							{showTemplateExclusionPicker ? (
+								<TemplateMultiSelect
+									options={templateFilterOptions}
+									selectedValues={sentTemplateFilterNames}
+									search={templateExclusionSearch}
+									onSearchChange={setTemplateExclusionSearch}
+									onToggleValue={toggleSentTemplateFilter}
+									onClear={clearSentTemplateFilters}
+								/>
+							) : null}
+
 							<label className="field">
 								<span>Producto comprado</span>
 								<button
@@ -1973,7 +1841,7 @@ export default function CampaignComposerPanel({
 											title="Quitar producto"
 										>
 											<span>{productName}</span>
-											<strong>×</strong>
+											<strong>x</strong>
 										</button>
 									))}
 								</div>
@@ -1989,44 +1857,16 @@ export default function CampaignComposerPanel({
 									onClear={clearSelectedProducts}
 								/>
 							) : null}
-
-							<div className="campaign-marketing-history-box">
-								<div>
-									<strong>
-										{formatCompactNumber(notAdvertisedCount || 0)}
-									</strong>
-									<span>clientes sin esta plantilla</span>
-								</div>
-								<div>
-									<strong>
-										{formatCompactNumber(Number(marketingStats.advertisedCustomers || 0))}
-									</strong>
-									<span>ya recibieron esta plantilla</span>
-								</div>
-								<label className="campaign-toggle campaign-toggle--compact">
-									<input
-										type="checkbox"
-										checked={onlyUnadvertised}
-										onChange={(event) => toggleOnlyUnadvertised(event.target.checked)}
-									/>
-									<span>Seleccionar solo contactos sin publicidad previa</span>
-								</label>
-							</div>
 						</div>
 
-						<div className="campaign-inline-actions campaign-inline-actions--wrap campaign-segment-action-bar">
-							<div className="campaign-segment-action-summary">
-								<strong>{formatCompactNumber(totalFoundCount)}</strong>
-								<span>encontrados con estos filtros</span>
-							</div>
-
+						<div className="campaign-inline-actions campaign-inline-actions--wrap">
 							<button
 								type="button"
 								className="button primary"
 								onClick={() => loadCustomers(customerFilters)}
 								disabled={customerAudience.loading}
 							>
-								{customerAudience.loading ? 'Buscando…' : 'Actualizar audiencia'}
+								{customerAudience.loading ? 'Buscando...' : 'Actualizar audiencia'}
 							</button>
 
 							<label className="field campaign-contact-limit-field">
@@ -2064,7 +1904,7 @@ export default function CampaignComposerPanel({
 								onClick={clearFilteredSelection}
 								disabled={!selectedCustomerCount}
 							>
-								Quitar selección masiva
+								Quitar seleccion masiva
 							</button>
 						</div>
 
@@ -2085,15 +1925,14 @@ export default function CampaignComposerPanel({
 							</div>
 
 							<div className="campaign-audience-summary-card">
-								<strong>{formatCompactNumber(selectedAdvertisedCount)}</strong>
-								<span>seleccionados ya impactados</span>
+								<strong>{formatCompactNumber(excludedByTemplateCount)}</strong>
+								<span>ya recibieron plantilla</span>
 							</div>
 						</div>
 
 						<div className="campaign-helper-box">
 							<div className="campaign-helper-text">
-								No se muestran las tarjetas de clientes para que la página no se haga kilométrica.
-								La selección se hace en segundo plano según los filtros actuales.
+								La seleccion se hace segun los filtros actuales para mantener el flujo liviano.
 							</div>
 
 							{selectedProductFilters.length ? (
@@ -2117,15 +1956,9 @@ export default function CampaignComposerPanel({
 								</div>
 							) : (
 								<div className="campaign-inline-warning">
-									Todavía no seleccionaste destinatarios. Primero filtrá y después apretá el botón de seleccionar.
+									Todavia no seleccionaste destinatarios. Filtra y despues usa el boton de seleccion.
 								</div>
 							)}
-
-							{selectedAdvertisedCount > 0 ? (
-								<div className="campaign-inline-warning">
-									Hay {formatCompactNumber(selectedAdvertisedCount)} seleccionado(s) que ya recibieron esta plantilla.
-								</div>
-							) : null}
 						</div>
 
 						{customerAudience.error ? (
@@ -2133,12 +1966,12 @@ export default function CampaignComposerPanel({
 						) : null}
 					</div>
 				) : (
-					<div className="campaign-builder-section">
+					<div className="campaign-builder-section campaign-builder-section--audience">
 						<div className="campaign-step-head">
 							<div>
-								<span className="campaign-step-badge">Manual</span>
+								<span className="campaign-step-badge">2. Audiencia</span>
 								<h4>Cargá destinatarios manuales</h4>
-								<p>Formato: telefono|nombre|producto|talle|color</p>
+								<p>Formato: teléfono|nombre|producto|talle|color</p>
 							</div>
 						</div>
 
@@ -2150,7 +1983,7 @@ export default function CampaignComposerPanel({
 								onChange={(event) =>
 									setForm((current) => ({ ...current, audienceText: event.target.value }))
 								}
-								placeholder={`5492211111111|Juan|Body Reductor|M|Negro\n5492212222222|Ana|Calza Térmica|L|Azul`}
+								placeholder={`5492211111111|Juan|Body Reductor|M|Negro\n5492212222222|Ana|Calza Termica|L|Azul`}
 							/>
 						</label>
 					</div>
@@ -2159,16 +1992,16 @@ export default function CampaignComposerPanel({
 				<div className="campaign-builder-section campaign-builder-section--review">
 					<div className="campaign-step-head">
 						<div>
-							<span className="campaign-step-badge">Resumen</span>
-							<h4>Último chequeo</h4>
-							<p>Acá ves si la campaña ya está lista o si todavía le falta algo.</p>
+							<span className="campaign-step-badge">4. Revision</span>
+							<h4>Ultimo chequeo</h4>
+							<p>Confirmá que la campaña esté lista antes de crearla o enviarla.</p>
 						</div>
 					</div>
 
 					<div className="campaign-review-grid">
 						<div className="campaign-review-card">
-							<strong>{selectedTemplate?.name || '—'}</strong>
-							<span>template</span>
+							<strong>{selectedTemplate?.name || '-'}</strong>
+							<span>plantilla</span>
 						</div>
 						<div className="campaign-review-card">
 							<strong>{formatCompactNumber(recipients.length)}</strong>
@@ -2192,10 +2025,10 @@ export default function CampaignComposerPanel({
 											: 'Falta media'
 									: 'No aplica'}
 							</strong>
-							<span>header media</span>
+							<span>encabezado</span>
 						</div>
 						<div className="campaign-review-card">
-							<strong>{form.sendNow ? 'Se lanza al crear' : 'Queda en borrador'}</strong>
+							<strong>{form.sendNow ? 'Crear y enviar' : 'Guardar borrador'}</strong>
 							<span>estado inicial</span>
 						</div>
 					</div>
@@ -2206,7 +2039,7 @@ export default function CampaignComposerPanel({
 							<div className="campaign-variable-list">
 								{templatePlaceholders.map((placeholder) => (
 									<span key={placeholder}>
-										{`{{${placeholder}}} → ${sampleResolvedVariables?.[placeholder] || '—'}`}
+										{`{{${placeholder}}} -> ${sampleResolvedVariables?.[placeholder] || '-'}`}
 									</span>
 								))}
 							</div>
@@ -2219,7 +2052,7 @@ export default function CampaignComposerPanel({
 								<div>
 									<strong>Preview de destinatarios</strong>
 									<p>
-										Acá ves a quiénes se va a contactar. Podés sacar cualquiera antes de crear la campaña.
+										Revisá a quiénes se va a contactar. Podés quitar destinatarios antes de crear la campaña.
 									</p>
 								</div>
 								<span>{formatCompactNumber(selectedCustomerCount)} seleccionado(s)</span>
@@ -2240,10 +2073,9 @@ export default function CampaignComposerPanel({
 							<div className="campaign-recipient-preview-table">
 								<div className="campaign-recipient-preview-row campaign-recipient-preview-row--head">
 									<span>Destinatario</span>
-									<span>Teléfono</span>
+									<span>Telefono</span>
 									<span>Producto</span>
-									<span>Publicidad</span>
-									<span>Acción</span>
+									<span>Accion</span>
 								</div>
 
 								{previewCustomers.length ? (
@@ -2253,20 +2085,8 @@ export default function CampaignComposerPanel({
 											className="campaign-recipient-preview-row"
 										>
 											<span>{getRecipientDisplayName(customer)}</span>
-											<span>{normalizePhone(customer.phone || '') || '—'}</span>
-											<span>{getRecipientProductPreview(customer) || '—'}</span>
-											<span>
-												<span
-													className={`campaign-marketing-status ${
-														customer?.marketing?.sentForTemplate
-															? 'campaign-marketing-status--sent'
-															: 'campaign-marketing-status--new'
-													}`}
-													title={customer?.marketing?.lastCampaignName || ''}
-												>
-													{customer?.marketing?.sentForTemplate ? 'Ya recibio' : 'Nuevo'}
-												</span>
-											</span>
+											<span>{normalizePhone(customer.phone || '') || '-'}</span>
+											<span>{getRecipientProductPreview(customer) || '-'}</span>
 											<span>
 												<button
 													type="button"
@@ -2280,7 +2100,7 @@ export default function CampaignComposerPanel({
 									))
 								) : (
 									<div className="campaign-recipient-preview-empty">
-										No hay destinatarios que coincidan con la búsqueda.
+										No hay destinatarios que coincidan con la busqueda.
 									</div>
 								)}
 							</div>
@@ -2289,7 +2109,7 @@ export default function CampaignComposerPanel({
 								<span>
 									Mostrando{' '}
 									{previewFilteredCustomers.length
-										? `${(previewPage - 1) * PREVIEW_PAGE_SIZE + 1}–${Math.min(
+										? `${(previewPage - 1) * PREVIEW_PAGE_SIZE + 1}-${Math.min(
 												previewPage * PREVIEW_PAGE_SIZE,
 												previewFilteredCustomers.length
 										)}`
@@ -2308,7 +2128,7 @@ export default function CampaignComposerPanel({
 									</button>
 
 									<span className="campaign-recipient-preview-page-indicator">
-										Página {previewPage} de {previewTotalPages}
+										Pagina {previewPage} de {previewTotalPages}
 									</span>
 
 									<button
@@ -2333,7 +2153,7 @@ export default function CampaignComposerPanel({
 								setForm((current) => ({ ...current, sendNow: event.target.checked }))
 							}
 						/>
-						<span>Lanzar campaña apenas se cree</span>
+						<span>{form.sendNow ? 'Crear y enviar ahora' : 'Crear como borrador'}</span>
 					</label>
 
 					{submitError ? <div className="campaign-inline-error">{submitError}</div> : null}
@@ -2344,7 +2164,7 @@ export default function CampaignComposerPanel({
 							type="submit"
 							disabled={creating || uploadingImage || !campaignReadyToCreate}
 						>
-							{creating ? 'Creando…' : 'Crear campaña'}
+							{creating ? 'Creando...' : form.sendNow ? 'Crear y enviar ahora' : 'Crear campaña'}
 						</button>
 					</div>
 				</div>

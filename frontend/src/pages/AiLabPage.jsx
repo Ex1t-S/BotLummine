@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { MessageSquarePlus, RotateCcw } from 'lucide-react';
 import api from '../lib/api.js';
+import { ActionButton } from '../components/ui/InternalPage.jsx';
 import './AiLabPage.css';
 
 function JsonBlock({ value }) {
@@ -147,7 +149,7 @@ export default function AiLabPage() {
 				<div className="ai-lab-sidebar-header">
 					<div>
 						<h1>AI Lab</h1>
-						<p>Probá la IA sin WhatsApp. Elegís escenario, reiniciás rápido y ves por qué respondió eso.</p>
+						<p>Probá respuestas, escenarios y trazas sin usar WhatsApp real.</p>
 					</div>
 				</div>
 
@@ -170,21 +172,12 @@ export default function AiLabPage() {
 				</label>
 
 				<div className="ai-lab-actions-row">
-					<button type="button" className="ai-lab-primary-btn" onClick={() => createSessionMutation.mutate(fixtureKey)} disabled={isBusy || !fixtures.length}>
-						Nueva sesión
-					</button>
-					<button type="button" className="ai-lab-secondary-btn" onClick={() => resetSessionMutation.mutate()} disabled={!session?.id || isBusy}>
+					<ActionButton className="ai-lab-primary-btn" onClick={() => createSessionMutation.mutate(fixtureKey)} disabled={isBusy || !fixtures.length} icon={MessageSquarePlus}>
+						Crear sesión
+					</ActionButton>
+					<ActionButton variant="secondary" className="ai-lab-secondary-btn" onClick={() => resetSessionMutation.mutate()} disabled={!session?.id || isBusy} icon={RotateCcw}>
 						Reiniciar charla
-					</button>
-				</div>
-
-				<div className="ai-lab-meta-box compact">
-					<h3>Cómo usarlo</h3>
-					<ul>
-						<li><strong>Nueva sesión</strong>: crea una charla nueva con el escenario elegido.</li>
-						<li><strong>Reiniciar charla</strong>: vuelve a cargar el mismo escenario sobre la charla actual.</li>
-						<li>Si cambiás el selector, el chat no cambia hasta tocar uno de esos botones.</li>
-					</ul>
+					</ActionButton>
 				</div>
 
 				<div className="ai-lab-fixture-list">
@@ -201,12 +194,12 @@ export default function AiLabPage() {
 				</div>
 
 				<div className="ai-lab-meta-box">
-					<h3>Qué deberías mirar</h3>
+					<h3>Expectativas del escenario</h3>
 					<ul>
 						{activeFixture?.expected?.length ? (
 							activeFixture.expected.map((item) => <li key={item}>{item}</li>)
 						) : (
-							<li>Elegí un escenario para cargar expectativas rápidas.</li>
+							<li>Seleccioná un escenario para cargar sus expectativas.</li>
 						)}
 					</ul>
 				</div>

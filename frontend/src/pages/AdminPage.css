@@ -1,0 +1,1492 @@
+.tenant-admin-page {
+	height: 100%;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	color: #172033;
+}
+
+.tenant-admin-header {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 16px 18px;
+	background: #ffffff;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+}
+
+.tenant-admin-header h2,
+.tenant-admin-header p,
+.tenant-admin-panel h3 {
+	margin: 0;
+}
+
+.tenant-admin-header h2 {
+	font-size: 22px;
+	line-height: 1.1;
+}
+
+.tenant-admin-header p {
+	margin-top: 4px;
+	color: #64748b;
+	font-size: 14px;
+}
+
+.tenant-admin-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	display: grid;
+	grid-auto-rows: max-content;
+	align-content: start;
+	gap: 12px;
+	padding-bottom: 10px;
+}
+
+.tenant-admin-tabs {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	min-height: 42px;
+	padding: 4px 2px 8px;
+	scrollbar-gutter: stable;
+}
+
+.tenant-admin-tabs button,
+.tenant-admin-actions button,
+.tenant-admin-user-row button {
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #172033;
+	font-weight: 800;
+	padding: 9px 12px;
+	cursor: pointer;
+	white-space: nowrap;
+	line-height: 1;
+	min-height: 34px;
+	flex: 0 0 auto;
+}
+
+.tenant-admin-tabs button.active,
+.tenant-admin-actions button {
+	background: #0f766e;
+	border-color: #0f766e;
+	color: #ffffff;
+}
+
+.tenant-admin-tabs button:disabled,
+.tenant-admin-actions button:disabled,
+.tenant-admin-user-row button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.tenant-admin-panel {
+	background: #ffffff;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	padding: 16px;
+	display: grid;
+	align-content: start;
+	gap: 14px;
+}
+
+.tenant-admin-panel--compact {
+	padding: 12px 16px;
+}
+
+.tenant-admin-panel h3 {
+	font-size: 16px;
+}
+
+.tenant-admin-section-copy {
+	display: grid;
+	gap: 4px;
+}
+
+.tenant-admin-section-copy h3,
+.tenant-admin-section-copy p {
+	margin: 0;
+}
+
+.tenant-admin-section-copy p {
+	color: #64748b;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.tenant-admin-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 12px;
+	align-items: end;
+}
+
+.admin-field {
+	display: grid;
+	align-content: start;
+	gap: 6px;
+	min-width: 0;
+}
+
+.admin-field--wide {
+	grid-column: 1 / -1;
+}
+
+.admin-field span {
+	font-size: 12px;
+	font-weight: 800;
+	text-transform: uppercase;
+	color: #475569;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+	width: 100%;
+	min-width: 0;
+	min-height: 42px;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	padding: 10px 11px;
+	background: #ffffff;
+	color: #172033;
+	font: inherit;
+}
+
+.admin-field textarea {
+	resize: vertical;
+	min-height: 96px;
+}
+
+.tenant-admin-grid button {
+	align-self: end;
+	border: none;
+	border-radius: 8px;
+	background: #0f766e;
+	color: #ffffff;
+	font-weight: 800;
+	padding: 11px 14px;
+	min-height: 42px;
+	cursor: pointer;
+}
+
+.tenant-admin-grid button[type="button"] {
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #172033;
+}
+
+.tenant-admin-grid button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.tenant-admin-alert {
+	border-radius: 8px;
+	padding: 10px 12px;
+	font-weight: 700;
+}
+
+.tenant-admin-alert.success {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.tenant-admin-alert.error {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.tenant-admin-users {
+	display: grid;
+	gap: 8px;
+}
+
+.tenant-admin-user-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto;
+	gap: 12px;
+	align-items: center;
+	padding: 9px 10px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+
+.tenant-admin-user-row strong,
+.tenant-admin-user-row span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-user-row small {
+	font-weight: 800;
+	color: #0f766e;
+}
+
+.tenant-admin-metrics,
+.tenant-admin-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.tenant-admin-actions button {
+	min-height: 42px;
+	padding: 11px 14px;
+}
+
+.tenant-admin-pill {
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #f8fafc;
+	color: #334155;
+	font-size: 13px;
+	font-weight: 800;
+	padding: 9px 11px;
+}
+
+.tenant-admin-brand-summary {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	min-width: 0;
+}
+
+.tenant-admin-selected-brand {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.tenant-admin-selected-brand button,
+.tenant-admin-workspace-card {
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #172033;
+	font: inherit;
+}
+
+.tenant-admin-selected-brand button {
+	min-height: 38px;
+	padding: 9px 12px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.tenant-admin-workspace-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 12px;
+}
+
+.tenant-admin-workspace-card {
+	width: 100%;
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.tenant-admin-workspace-card:hover,
+.tenant-admin-workspace-card.is-selected {
+	border-color: #0f766e;
+	box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+	transform: translateY(-1px);
+}
+
+.tenant-admin-workspace-card__top {
+	display: flex;
+	align-items: start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.tenant-admin-workspace-card__top strong,
+.tenant-admin-workspace-card__top span,
+.tenant-admin-workspace-card__meta small {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-workspace-card__top strong {
+	font-size: 15px;
+}
+
+.tenant-admin-workspace-card__top span {
+	margin-top: 4px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.tenant-admin-workspace-card__meta {
+	display: grid;
+	gap: 4px;
+	color: #475569;
+}
+
+.tenant-admin-brand-logo-box {
+	width: 72px;
+	height: 72px;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #f8fafc;
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+	flex: 0 0 auto;
+}
+
+.tenant-admin-brand-logo-box img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	padding: 8px;
+}
+
+.tenant-admin-brand-logo-box span {
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.tenant-admin-brand-copy {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.tenant-admin-brand-copy button {
+	justify-self: start;
+	margin-top: 6px;
+	padding: 8px 10px;
+	font-size: 12px;
+}
+
+.tenant-admin-brand-copy strong,
+.tenant-admin-brand-copy span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-brand-copy strong {
+	font-size: 16px;
+}
+
+.tenant-admin-brand-copy span {
+	color: #64748b;
+	font-size: 13px;
+}
+
+.tenant-admin-table-wrap {
+	overflow: auto;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+}
+
+.tenant-admin-table {
+	width: 100%;
+	min-width: 980px;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.tenant-admin-table th,
+.tenant-admin-table td {
+	padding: 10px 11px;
+	border-bottom: 1px solid #e2e8f0;
+	text-align: left;
+	vertical-align: top;
+}
+
+.tenant-admin-table th {
+	background: #f8fafc;
+	color: #475569;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0;
+}
+
+.tenant-admin-table tbody tr {
+	cursor: pointer;
+}
+
+.tenant-admin-table tbody tr:hover,
+.tenant-admin-table tbody tr.selected {
+	background: #ecfdf5;
+}
+
+.tenant-admin-table td strong,
+.tenant-admin-table td span {
+	display: block;
+	max-width: 220px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-table td span {
+	margin-top: 3px;
+	color: #64748b;
+	font-size: 12px;
+}
+
+.tenant-admin-analytics-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.tenant-admin-analytics-grid h4 {
+	margin: 0 0 8px;
+	font-size: 14px;
+}
+
+.tenant-admin-list {
+	display: grid;
+	gap: 8px;
+}
+
+.tenant-admin-list-row {
+	display: grid;
+	gap: 3px;
+	padding: 10px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+
+.tenant-admin-list-row strong,
+.tenant-admin-list-row span,
+.tenant-admin-list-row small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-list-row span {
+	color: #475569;
+	font-size: 13px;
+}
+
+.tenant-admin-list-row small {
+	color: #0f766e;
+	font-weight: 800;
+}
+
+.tenant-admin-panel--analytics {
+	gap: 16px;
+	background: #f8fafc;
+}
+
+.tenant-admin-panel-heading {
+	display: flex;
+	align-items: start;
+	justify-content: space-between;
+	gap: 14px;
+}
+
+.tenant-admin-panel-heading p {
+	margin: 5px 0 0;
+	color: #64748b;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.tenant-admin-panel-heading > span {
+	flex: 0 0 auto;
+	border: 1px solid #dbeafe;
+	border-radius: 999px;
+	background: #eff6ff;
+	color: #1d4ed8;
+	font-size: 12px;
+	font-weight: 900;
+	padding: 7px 10px;
+}
+
+.tenant-admin-empty {
+	border: 1px dashed #cbd5e1;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #64748b;
+	font-weight: 800;
+	padding: 18px;
+	text-align: center;
+}
+
+.workspace-analytics-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+	gap: 14px;
+	align-items: stretch;
+}
+
+.workspace-analytics-card {
+	--brand-color: #0f766e;
+	width: 100%;
+	min-width: 0;
+	display: grid;
+	gap: 14px;
+	padding: 16px;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background-color: #ffffff;
+	background:
+		linear-gradient(135deg, rgba(239, 246, 255, 0.95), #ffffff 42%),
+		#ffffff;
+	box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
+	color: #172033;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.workspace-analytics-card:hover,
+.workspace-analytics-card.is-selected {
+	transform: translateY(-1px);
+	border-color: var(--brand-color);
+	box-shadow: 0 24px 54px rgba(15, 23, 42, 0.12);
+}
+
+.workspace-analytics-card:focus-visible {
+	outline: 3px solid rgba(14, 165, 233, 0.28);
+	outline-offset: 2px;
+}
+
+.workspace-card-head,
+.workspace-card-brand,
+.workspace-card-hero,
+.workspace-card-body {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.workspace-card-head {
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.workspace-card-brand {
+	gap: 10px;
+}
+
+.workspace-card-logo {
+	width: 44px;
+	height: 44px;
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #ffffff;
+	color: var(--brand-color);
+	font-size: 13px;
+	font-weight: 950;
+}
+
+.workspace-card-logo img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	padding: 5px;
+}
+
+.workspace-card-brand strong,
+.workspace-card-brand span {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-card-brand strong {
+	max-width: 190px;
+	font-size: 15px;
+	line-height: 1.15;
+}
+
+.workspace-card-brand span {
+	max-width: 190px;
+	margin-top: 3px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.workspace-card-status {
+	flex: 0 0 auto;
+	border-radius: 999px;
+	background: #ecfdf5;
+	color: #065f46;
+	font-size: 11px;
+	font-weight: 950;
+	padding: 6px 8px;
+}
+
+.workspace-card-hero {
+	justify-content: space-between;
+	gap: 14px;
+	padding: 14px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.74);
+}
+
+.workspace-card-hero span,
+.workspace-card-chat span,
+.workspace-card-stats span,
+.workspace-card-progress span {
+	display: block;
+	color: #64748b;
+	font-size: 11px;
+	font-weight: 900;
+	text-transform: uppercase;
+}
+
+.workspace-card-hero strong {
+	display: block;
+	margin-top: 5px;
+	font-size: 30px;
+	line-height: 1;
+	color: #0f172a;
+}
+
+.workspace-card-hero small,
+.workspace-card-chat small {
+	display: block;
+	margin-top: 5px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.workspace-card-ring {
+	width: 82px;
+	height: 82px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: conic-gradient(var(--brand-color) var(--progress), #e5e7eb 0);
+	padding: 9px;
+}
+
+.workspace-card-ring > div {
+	width: 100%;
+	height: 100%;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: #ffffff;
+}
+
+.workspace-card-ring span {
+	color: #0f172a;
+	font-size: 14px;
+	font-weight: 950;
+	text-transform: none;
+}
+
+.workspace-card-progress {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.workspace-card-progress > div {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	padding: 10px;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+
+.workspace-card-progress strong {
+	font-size: 18px;
+	line-height: 1;
+}
+
+.workspace-card-progress i {
+	display: block;
+	height: 7px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: #e2e8f0;
+}
+
+.workspace-card-progress b {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--brand-color);
+}
+
+.workspace-card-body {
+	align-items: stretch;
+	gap: 12px;
+}
+
+.workspace-card-chart {
+	flex: 1 1 auto;
+	min-height: 118px;
+	display: grid;
+	grid-template-columns: repeat(5, minmax(16px, 1fr));
+	grid-template-rows: minmax(76px, 1fr) auto;
+	align-items: end;
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background:
+		linear-gradient(180deg, transparent 31%, rgba(148, 163, 184, 0.14) 32%, transparent 33%),
+		linear-gradient(180deg, transparent 64%, rgba(148, 163, 184, 0.14) 65%, transparent 66%),
+		#ffffff;
+}
+
+.workspace-card-chart span {
+	align-self: end;
+	width: 100%;
+	min-height: 12px;
+	border-radius: 7px 7px 3px 3px;
+	background: var(--brand-color);
+}
+
+.workspace-card-chart span:nth-child(1),
+.workspace-card-chart span:nth-child(3) {
+	background: #bfdbfe;
+}
+
+.workspace-card-chart span:nth-child(5) {
+	background: #0f172a;
+}
+
+.workspace-card-chart-labels {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 8px;
+	padding-top: 2px;
+}
+
+.workspace-card-chart-labels small {
+	overflow: hidden;
+	color: #64748b;
+	font-size: 10px;
+	font-weight: 900;
+	line-height: 1.1;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-card-chat {
+	width: 128px;
+	flex: 0 0 auto;
+	display: grid;
+	align-content: center;
+	padding: 12px;
+	border-radius: 8px;
+	background: #ecfdf5;
+	color: #064e3b;
+}
+
+.workspace-card-chat strong {
+	margin-top: 5px;
+	font-size: 24px;
+	line-height: 1;
+	color: #065f46;
+}
+
+.workspace-card-stats {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.workspace-card-stats > div {
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #ffffff;
+}
+
+.workspace-card-stats strong {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-top: 4px;
+	font-size: 15px;
+	line-height: 1.1;
+	color: #0f172a;
+}
+
+.metric-help {
+	position: relative;
+}
+
+.metric-help::after {
+	content: attr(data-help);
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 10px);
+	z-index: 20;
+	width: min(260px, 78vw);
+	padding: 9px 10px;
+	border-radius: 8px;
+	background: #0f172a;
+	color: #ffffff;
+	box-shadow: 0 16px 36px rgba(15, 23, 42, 0.24);
+	font-size: 12px;
+	font-weight: 800;
+	line-height: 1.35;
+	text-transform: none;
+	white-space: normal;
+	opacity: 0;
+	pointer-events: none;
+	transform: translate(-50%, 4px);
+	transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.metric-help::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 4px);
+	z-index: 21;
+	width: 10px;
+	height: 10px;
+	background: #0f172a;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateX(-50%) rotate(45deg);
+	transition: opacity 0.14s ease;
+}
+
+.metric-help:hover::after,
+.metric-help:hover::before {
+	opacity: 1;
+	transform: translate(-50%, 0);
+}
+
+.metric-help:hover::before {
+	transform: translateX(-50%) rotate(45deg);
+}
+
+@media (max-width: 980px) {
+	.tenant-admin-header {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.tenant-admin-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.admin-field--wide {
+		grid-column: 1 / -1;
+	}
+
+	.tenant-admin-user-row {
+		grid-template-columns: 1fr;
+		gap: 4px;
+	}
+
+	.tenant-admin-analytics-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.tenant-admin-panel-heading {
+		flex-direction: column;
+	}
+}
+
+@media (max-width: 640px) {
+	.workspace-analytics-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.workspace-analytics-card {
+		padding: 14px;
+	}
+
+	.workspace-card-hero,
+	.workspace-card-body {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.workspace-card-ring {
+		align-self: start;
+	}
+
+	.workspace-card-chat {
+		width: 100%;
+	}
+
+	.workspace-card-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+/* Visual refresh */
+
+.tenant-admin-page {
+	gap: 14px;
+	color: var(--ui-text, #101828);
+}
+
+.tenant-admin-header {
+	align-items: center;
+	padding: 18px 20px;
+	border-radius: 16px;
+	border-color: var(--ui-border, #dbe4ef);
+	background:
+		linear-gradient(135deg, rgba(15, 118, 110, 0.06), transparent 42%),
+		#ffffff;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.tenant-admin-header h2 {
+	font-size: clamp(20px, 2vw, 26px);
+	font-weight: 900;
+}
+
+.tenant-admin-tabs {
+	gap: 6px;
+	min-height: 48px;
+	padding: 5px;
+	border: 1px solid var(--ui-border, #dbe4ef);
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.72);
+}
+
+.tenant-admin-tabs button {
+	min-height: 36px;
+	border-radius: 10px;
+	border-color: transparent;
+	background: transparent;
+	color: #475569;
+}
+
+.tenant-admin-tabs button:hover {
+	background: #f1f5f9;
+}
+
+.tenant-admin-tabs button.active {
+	background: #0f766e;
+	border-color: #0f766e;
+	color: #ffffff;
+	box-shadow: 0 10px 20px rgba(15, 118, 110, 0.18);
+}
+
+.tenant-admin-panel {
+	border-radius: 16px;
+	border-color: var(--ui-border, #dbe4ef);
+	padding: 18px;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.tenant-admin-panel h3 {
+	font-size: 17px;
+	font-weight: 900;
+}
+
+.admin-field span {
+	color: #475467;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+	min-height: 44px;
+	border-radius: 12px;
+}
+
+.tenant-admin-user-row,
+.tenant-admin-list-row {
+	border-radius: 12px;
+	border-color: var(--ui-border, #dbe4ef);
+	background: #ffffff;
+}
+
+.tenant-admin-table th {
+	background: #f8fafc;
+	color: #667085;
+}
+
+.tenant-admin-table tbody tr:hover,
+.tenant-admin-table tbody tr.selected {
+	background: #f0fdfa;
+}
+
+.workspace-analytics-card {
+	border-radius: 16px;
+}
+
+@media (max-width: 720px) {
+	.tenant-admin-header {
+		align-items: stretch;
+		padding: 16px;
+	}
+
+	.tenant-admin-panel {
+		padding: 14px;
+	}
+
+	.tenant-admin-metrics {
+		display: grid;
+		grid-template-columns: 1fr;
+	}
+
+	.tenant-admin-pill {
+		width: 100%;
+	}
+}
+
+/* Professional polish */
+
+.tenant-admin-page {
+	gap: 12px;
+	color: var(--ui-text, #111827);
+}
+
+.tenant-admin-header {
+	padding: 16px 18px;
+	border-radius: 12px;
+	background: #ffffff;
+}
+
+.tenant-admin-header h2 {
+	font-size: clamp(20px, 1.8vw, 25px);
+	font-weight: 760;
+}
+
+.tenant-admin-tabs {
+	min-height: 44px;
+	padding: 4px;
+	border-radius: 10px;
+	background: #eef2f6;
+}
+
+.tenant-admin-tabs button {
+	min-height: 34px;
+	border-radius: 8px;
+	font-weight: 650;
+}
+
+.tenant-admin-tabs button.active {
+	background: #ffffff;
+	border-color: var(--ui-border, #d8dee8);
+	color: var(--ui-primary, #0d6b64);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+.tenant-admin-panel {
+	border-radius: 12px;
+	padding: 16px;
+	box-shadow: none;
+}
+
+.tenant-admin-panel--analytics {
+	background: #ffffff;
+}
+
+.tenant-admin-panel h3 {
+	font-size: 16px;
+	font-weight: 740;
+}
+
+.tenant-admin-grid {
+	gap: 12px;
+}
+
+.admin-field span {
+	color: var(--ui-muted, #5f6b7a);
+	font-weight: 700;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+	min-height: 40px;
+	border-radius: 8px;
+}
+
+.tenant-admin-user-row,
+.tenant-admin-list-row,
+.workspace-card-hero,
+.workspace-card-progress > div,
+.workspace-card-stats > div,
+.workspace-card-chart {
+	border-color: var(--ui-border, #d8dee8);
+	border-radius: 10px;
+	background: #ffffff;
+}
+
+.workspace-analytics-grid {
+	gap: 12px;
+}
+
+.workspace-analytics-card {
+	gap: 12px;
+	padding: 14px;
+	border-radius: 12px;
+	background: #ffffff;
+	box-shadow: none;
+}
+
+.workspace-analytics-card:hover,
+.workspace-analytics-card.is-selected {
+	transform: none;
+	box-shadow: 0 0 0 2px rgba(13, 107, 100, 0.18);
+}
+
+.workspace-card-logo {
+	width: 40px;
+	height: 40px;
+	border-radius: 8px;
+}
+
+.workspace-card-status {
+	background: var(--ui-primary-soft, #e6f5f2);
+	color: var(--ui-primary, #0d6b64);
+	font-weight: 700;
+}
+
+.workspace-card-hero {
+	padding: 12px;
+	background: #fbfcfe;
+}
+
+.workspace-card-hero strong {
+	font-size: 26px;
+	font-weight: 760;
+}
+
+.workspace-card-ring {
+	width: 72px;
+	height: 72px;
+	padding: 7px;
+}
+
+.workspace-card-body {
+	gap: 12px;
+}
+
+.workspace-card-chart {
+	flex: 1 1 78%;
+	min-height: 168px;
+	background:
+		linear-gradient(180deg, transparent 31%, rgba(15, 23, 42, 0.08) 32%, transparent 33%),
+		linear-gradient(180deg, transparent 64%, rgba(15, 23, 42, 0.08) 65%, transparent 66%),
+		#ffffff;
+}
+
+.workspace-card-chat {
+	width: 112px;
+	border: 1px solid #cce8df;
+	border-radius: 10px;
+	background: #effaf6;
+}
+
+.workspace-card-stats {
+	gap: 8px;
+}
+
+.workspace-card-stats strong {
+	font-size: 14px;
+	font-weight: 740;
+}
+
+.metric-help::after {
+	border-radius: 8px;
+	font-weight: 600;
+}
+
+/* Final professional system pass */
+
+.tenant-admin-page {
+	gap: 10px;
+}
+
+.tenant-admin-header,
+.tenant-admin-panel,
+.tenant-admin-tabs,
+.tenant-admin-user-row,
+.tenant-admin-list-row,
+.tenant-admin-empty,
+.tenant-admin-table-wrap,
+.tenant-admin-brand-logo-box,
+.workspace-analytics-card,
+.workspace-card-hero,
+.workspace-card-progress > div,
+.workspace-card-stats > div,
+.workspace-card-chart,
+.workspace-card-chat {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-lg, 12px);
+	background: var(--ui-surface, #ffffff);
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.tenant-admin-header {
+	align-items: center;
+	padding: 14px 16px;
+}
+
+.tenant-admin-header h2,
+.tenant-admin-panel h3,
+.workspace-card-brand strong,
+.workspace-card-hero strong,
+.workspace-card-stats strong,
+.tenant-admin-list-row strong,
+.tenant-admin-table td strong {
+	color: var(--ui-heading, #0d151b);
+}
+
+.tenant-admin-header p,
+.tenant-admin-panel-heading p,
+.workspace-card-brand span,
+.workspace-card-hero small,
+.workspace-card-chat small,
+.tenant-admin-list-row span,
+.tenant-admin-table td span {
+	color: var(--ui-muted, #66737d);
+}
+
+.tenant-admin-tabs {
+	padding: 4px;
+	background: var(--ui-surface-muted, #eef3f5);
+}
+
+.tenant-admin-tabs button,
+.tenant-admin-actions button,
+.tenant-admin-user-row button,
+.tenant-admin-grid button[type="button"] {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-text, #172027);
+	box-shadow: none;
+}
+
+.tenant-admin-tabs button:hover,
+.tenant-admin-user-row button:hover:not(:disabled),
+.tenant-admin-grid button[type="button"]:hover:not(:disabled) {
+	border-color: var(--ui-border-strong, #b8c4cc);
+	background: var(--ui-surface-soft, #f8fafb);
+}
+
+.tenant-admin-tabs button.active {
+	border-color: rgba(15, 118, 110, 0.28);
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+	box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08);
+}
+
+.tenant-admin-grid button,
+.tenant-admin-actions button {
+	border: 1px solid var(--ui-primary-strong, #0a5f59);
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+}
+
+.tenant-admin-grid button:hover:not(:disabled),
+.tenant-admin-actions button:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+}
+
+.tenant-admin-panel-heading > span,
+.tenant-admin-pill,
+.workspace-card-status {
+	border: 1px solid rgba(15, 118, 110, 0.2);
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+	border-color: var(--ui-border, #d7dee5);
+	color: var(--ui-text, #172027);
+	background: #ffffff;
+}
+
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus {
+	border-color: var(--ui-primary, #0f766e);
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+	outline: none;
+}
+
+.tenant-admin-table th {
+	background: var(--ui-surface-soft, #f8fafb);
+	color: var(--ui-muted, #66737d);
+}
+
+.tenant-admin-table tbody tr:hover,
+.tenant-admin-table tbody tr.selected {
+	background: var(--ui-primary-muted, #f0fdfa);
+}
+
+.workspace-analytics-card {
+	border-color: var(--ui-border, #d7dee5);
+	background: #ffffff;
+}
+
+.workspace-analytics-card:hover,
+.workspace-analytics-card.is-selected {
+	border-color: rgba(15, 118, 110, 0.42);
+	box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.14);
+}
+
+.workspace-card-ring {
+	background: conic-gradient(var(--ui-primary, #0f766e) var(--progress), var(--ui-surface-muted, #eef3f5) 0);
+}
+
+.workspace-card-chart span,
+.workspace-card-progress b {
+	background: var(--ui-primary, #0f766e);
+}
+
+.workspace-card-chart span:nth-child(1),
+.workspace-card-chart span:nth-child(3) {
+	background: #b8d6df;
+}
+
+.workspace-card-chart span:nth-child(5) {
+	background: #23313a;
+}
+
+.workspace-card-chat {
+	border-color: #b7e4c7;
+	background: var(--ui-success-soft, #ecfdf3);
+	color: var(--ui-success, #067647);
+}
+
+.workspace-card-chat strong {
+	color: var(--ui-success, #067647);
+}
+
+.metric-help::after,
+.metric-help::before {
+	background: #172027;
+}
+
+@media (max-width: 720px) {
+	.tenant-admin-header {
+		align-items: stretch;
+	}
+
+	.tenant-admin-tabs {
+		scrollbar-gutter: auto;
+	}
+}
+
+/* Dark mode: admin, analytics and settings lazy CSS loads after global.css */
+.dark .admin-shell .admin-content .tenant-admin-header,
+.dark .admin-shell .admin-content .tenant-admin-panel,
+.dark .admin-shell .admin-content .tenant-admin-tabs,
+.dark .admin-shell .admin-content .tenant-admin-user-row,
+.dark .admin-shell .admin-content .tenant-admin-list-row,
+.dark .admin-shell .admin-content .tenant-admin-empty,
+.dark .admin-shell .admin-content .tenant-admin-table-wrap,
+.dark .admin-shell .admin-content .tenant-admin-brand-logo-box,
+.dark .admin-shell .admin-content .workspace-analytics-card,
+.dark .admin-shell .admin-content .workspace-card-hero,
+.dark .admin-shell .admin-content .workspace-card-progress > div,
+.dark .admin-shell .admin-content .workspace-card-stats > div,
+.dark .admin-shell .admin-content .workspace-card-chart,
+.dark .admin-shell .admin-content .workspace-card-chat {
+	background: var(--ui-surface, #141c2b) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.28)) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-tabs,
+.dark .admin-shell .admin-content .workspace-card-hero,
+.dark .admin-shell .admin-content .workspace-card-progress > div,
+.dark .admin-shell .admin-content .workspace-card-stats > div,
+.dark .admin-shell .admin-content .workspace-card-chart {
+	background: var(--ui-surface-soft, #192234) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-header h2,
+.dark .admin-shell .admin-content .tenant-admin-panel h3,
+.dark .admin-shell .admin-content .workspace-card-brand strong,
+.dark .admin-shell .admin-content .workspace-card-hero strong,
+.dark .admin-shell .admin-content .workspace-card-stats strong,
+.dark .admin-shell .admin-content .tenant-admin-list-row strong,
+.dark .admin-shell .admin-content .tenant-admin-table td strong {
+	color: var(--ui-heading, #f7f9ff) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-header p,
+.dark .admin-shell .admin-content .tenant-admin-panel-heading p,
+.dark .admin-shell .admin-content .workspace-card-brand span,
+.dark .admin-shell .admin-content .workspace-card-hero small,
+.dark .admin-shell .admin-content .workspace-card-chat small,
+.dark .admin-shell .admin-content .tenant-admin-list-row span,
+.dark .admin-shell .admin-content .tenant-admin-table td span,
+.dark .admin-shell .admin-content .admin-field span {
+	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-tabs button,
+.dark .admin-shell .admin-content .tenant-admin-actions button,
+.dark .admin-shell .admin-content .tenant-admin-user-row button,
+.dark .admin-shell .admin-content .tenant-admin-grid button[type="button"] {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-tabs button.active,
+.dark .admin-shell .admin-content .tenant-admin-panel-heading > span,
+.dark .admin-shell .admin-content .tenant-admin-pill,
+.dark .admin-shell .admin-content .workspace-card-status {
+	background: var(--ui-primary-muted, #182549) !important;
+	border-color: rgba(124, 156, 255, 0.28) !important;
+	color: var(--ui-primary-strong, #a6bbff) !important;
+}
+
+.dark .admin-shell .admin-content .admin-field input,
+.dark .admin-shell .admin-content .admin-field select,
+.dark .admin-shell .admin-content .admin-field textarea {
+	background: var(--ui-surface-soft, #192234) !important;
+	border-color: var(--ui-border, #29354a) !important;
+	color: var(--ui-text, #e8edf7) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-table th,
+.dark .admin-shell .admin-content .tenant-admin-table tbody tr:hover,
+.dark .admin-shell .admin-content .tenant-admin-table tbody tr.selected {
+	background: var(--ui-surface-soft, #192234) !important;
+	color: var(--ui-muted, #a5b0c3) !important;
+}

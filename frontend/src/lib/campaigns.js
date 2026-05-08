@@ -79,6 +79,26 @@ export async function previewAbandonedCartAudience(payload) {
 	return unwrap(response);
 }
 
+export async function fetchCampaignSchedules() {
+	const response = await api.get('/campaigns/schedules');
+	return unwrap(response);
+}
+
+export async function createCampaignSchedule(payload) {
+	const response = await api.post('/campaigns/schedules', payload);
+	return unwrap(response);
+}
+
+export async function updateCampaignSchedule(scheduleId, payload) {
+	const response = await api.patch(`/campaigns/schedules/${scheduleId}`, payload);
+	return unwrap(response);
+}
+
+export async function deleteCampaignSchedule(scheduleId) {
+	const response = await api.delete(`/campaigns/schedules/${scheduleId}`);
+	return unwrap(response);
+}
+
 export async function uploadCampaignHeaderMedia(
 	file,
 	{ fieldName = 'file', purpose = null } = {}

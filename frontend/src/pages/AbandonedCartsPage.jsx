@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import api from '../lib/api.js';
+import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './AbandonedCartsPage.css';
 
 const initialFilters = {
@@ -57,10 +60,20 @@ function getVisiblePages(currentPage, totalPages) {
 }
 
 export default function AbandonedCartsPage() {
+	useInternalDarkOverrides();
+
 	const [loading, setLoading] = useState(true);
 	const [syncing, setSyncing] = useState(false);
 	const [filters, setFilters] = useState(initialFilters);
 	const [syncSummary, setSyncSummary] = useState(null);
+	const [errorMessage, setErrorMessage] = useState('');
+	const [successMessage, setSuccessMessage] = useState('');
+	const [activeMessageCartId, setActiveMessageCartId] = useState('');
+	const [templates, setTemplates] = useState([]);
+	const [templatesLoading, setTemplatesLoading] = useState(true);
+	const [templatesError, setTemplatesError] = useState('');
+	const [selectedTemplateIds, setSelectedTemplateIds] = useState({});
+	const [sendingCartId, setSendingCartId] = useState('');
 	const [data, setData] = useState({
 		carts: [],
 		stats: {
@@ -78,6 +91,7 @@ export default function AbandonedCartsPage() {
 
 	async function loadAbandonedCarts(nextFilters = filters) {
 		setLoading(true);
+		setErrorMessage('');
 
 		try {
 			const res = await api.get('/dashboard/abandoned-carts', {
@@ -88,6 +102,11 @@ export default function AbandonedCartsPage() {
 
 		} catch (error) {
 			console.error(error);
+			setErrorMessage(
+				error?.response?.data?.error ||
+				error?.response?.data?.message ||
+				'No pudimos cargar los carritos abandonados. Probá nuevamente.'
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -95,6 +114,42 @@ export default function AbandonedCartsPage() {
 
 	useEffect(() => {
 		loadAbandonedCarts(filters);
+	}, []);
+
+	useEffect(() => {
+		let ignore = false;
+
+		async function loadTemplates() {
+			setTemplatesLoading(true);
+			setTemplatesError('');
+
+			try {
+				const res = await api.get('/campaigns/templates');
+				const collection = res.data?.templates || res.data?.items || res.data?.data?.templates || [];
+				const approvedTemplates = collection.filter(
+					(template) => String(template?.status || '').toUpperCase() === 'APPROVED'
+				);
+
+				if (!ignore) {
+					setTemplates(approvedTemplates);
+				}
+			} catch (error) {
+				console.error(error);
+				if (!ignore) {
+					setTemplatesError('No pudimos cargar las plantillas aprobadas. Probá nuevamente en unos segundos.');
+				}
+			} finally {
+				if (!ignore) {
+					setTemplatesLoading(false);
+				}
+			}
+		}
+
+		loadTemplates();
+
+		return () => {
+			ignore = true;
+		};
 	}, []);
 
 	function updateFilter(name, value) {
@@ -106,18 +161,22 @@ export default function AbandonedCartsPage() {
 
 	async function handleApplyFilters(e) {
 		e.preventDefault();
+		setSuccessMessage('');
 		const next = { ...filters, page: 1 };
 		setFilters(next);
 		await loadAbandonedCarts(next);
 	}
 
 	async function handleResetFilters() {
+		setSuccessMessage('');
 		setFilters(initialFilters);
 		await loadAbandonedCarts(initialFilters);
 	}
 
 	async function handleSync() {
 		setSyncing(true);
+		setErrorMessage('');
+		setSuccessMessage('');
 
 		try {
 			const res = await api.post('/dashboard/abandoned-carts/sync', {});
@@ -138,15 +197,61 @@ export default function AbandonedCartsPage() {
 
 			setFilters(next);
 			await loadAbandonedCarts(next);
+			setSuccessMessage('Sincronización completada.');
 		} catch (error) {
 			console.error(error);
-			alert(
+			setErrorMessage(
 				error?.response?.data?.error ||
 				error?.response?.data?.message ||
-				'No se pudo sincronizar carritos abandonados.'
+				'No pudimos sincronizar los carritos abandonados. Probá nuevamente.'
 			);
 		} finally {
 			setSyncing(false);
+		}
+	}
+
+	function handleToggleMessageBox(cart) {
+		setErrorMessage('');
+		setSuccessMessage('');
+
+		if (activeMessageCartId === cart.id) {
+			setActiveMessageCartId('');
+			return;
+		}
+
+		setActiveMessageCartId(cart.id);
+		setSelectedTemplateIds((prev) => ({
+			...prev,
+			[cart.id]: prev[cart.id] || templates[0]?.id || ''
+		}));
+	}
+
+	async function handleSendMessage(cart) {
+		const templateId = String(selectedTemplateIds[cart.id] || templates[0]?.id || '').trim();
+
+		if (!templateId) {
+			setErrorMessage('Elegí una plantilla aprobada antes de enviar.');
+			return;
+		}
+
+		setSendingCartId(cart.id);
+		setErrorMessage('');
+		setSuccessMessage('');
+
+		try {
+			await api.post(`/dashboard/abandoned-carts/${cart.id}/message`, { templateId });
+			setSuccessMessage('Plantilla enviada por WhatsApp.');
+			setActiveMessageCartId('');
+			await loadAbandonedCarts(filters);
+		} catch (error) {
+			console.error(error);
+			setErrorMessage(
+				error?.response?.data?.error ||
+				error?.response?.data?.message ||
+				'No pudimos enviar la plantilla. Probá nuevamente.'
+			);
+		} finally {
+			setSendingCartId('');
 		}
 	}
 
@@ -179,29 +284,32 @@ export default function AbandonedCartsPage() {
 
 	return (
 		<div className="abandoned-carts-page">
-			<section className="page-header">
-				<div>
-					<h2>Carritos abandonados</h2>
-					<p>
-						Total: <strong>{stats.total || 0}</strong>
-						<br />
-						La sync toma siempre los últimos 30 días y conserva el estado de los carritos ya contactados por campañas.
-					</p>
-				</div>
-
+			<PageHeader
+				className="page-header"
+				title="Carritos abandonados"
+				description={`${stats.total || 0} carritos en los últimos 30 días. Se conserva el estado de los ya contactados por campañas.`}
+			>
 				<div className="inline-actions">
-					<button type="button" onClick={handleSync} disabled={syncing}>
-						{syncing ? 'Sincronizando últimos 30 días...' : 'Sincronizar últimos 30 días'}
-					</button>
+					<ActionButton onClick={handleSync} disabled={syncing} icon={RefreshCw}>
+						{syncing ? 'Sincronizando' : 'Sincronizar carritos'}
+					</ActionButton>
 				</div>
-			</section>
+			</PageHeader>
+
+			{errorMessage ? (
+				<div className="abandoned-feedback abandoned-feedback--error">{errorMessage}</div>
+			) : null}
+
+			{successMessage ? (
+				<div className="abandoned-feedback abandoned-feedback--success">{successMessage}</div>
+			) : null}
 
 			{syncSummary ? (
 				<div className="sync-summary-banner">
 					<strong>Última sync {syncSummary.daysBack} días</strong>
-					<span>{syncSummary.message || 'Sin resumen disponible.'}</span>
+					<span>{syncSummary.message || 'La sincronización terminó, pero el proveedor no envió un resumen.'}</span>
 					<small>
-						Guardados: {syncSummary.syncedCount} · Eliminados fuera de ventana: {syncSummary.deletedCount} · Vigentes: {syncSummary.remainingCount}
+						Guardados: {syncSummary.syncedCount} - Eliminados fuera de ventana: {syncSummary.deletedCount} - Vigentes: {syncSummary.remainingCount}
 					</small>
 				</div>
 			) : null}
@@ -230,47 +338,66 @@ export default function AbandonedCartsPage() {
 				</div>
 			</div>
 
-			<form className="filters-form" onSubmit={handleApplyFilters}>
-				<input
-					type="text"
-					placeholder="Buscar por nombre, mail, teléfono, ciudad, provincia o checkout"
-					value={filters.q}
-					onChange={(e) => updateFilter('q', e.target.value)}
-				/>
+			<form className="filters-form abandoned-filters-form" onSubmit={handleApplyFilters}>
+				<label>
+					<span>Buscar carrito</span>
+					<input
+						type="text"
+						placeholder="Nombre, mail, teléfono, ciudad o checkout"
+						value={filters.q}
+						onChange={(e) => updateFilter('q', e.target.value)}
+					/>
+				</label>
 
-				<input
-					type="date"
-					value={filters.dateFrom}
-					onChange={(e) => updateFilter('dateFrom', e.target.value)}
-				/>
+				<label>
+					<span>Desde</span>
+					<input
+						type="date"
+						value={filters.dateFrom}
+						onChange={(e) => updateFilter('dateFrom', e.target.value)}
+					/>
+				</label>
 
-				<input
-					type="date"
-					value={filters.dateTo}
-					onChange={(e) => updateFilter('dateTo', e.target.value)}
-				/>
+				<label>
+					<span>Hasta</span>
+					<input
+						type="date"
+						value={filters.dateTo}
+						onChange={(e) => updateFilter('dateTo', e.target.value)}
+					/>
+				</label>
 
-				<select
-					value={filters.status}
-					onChange={(e) => updateFilter('status', e.target.value)}
-				>
-					<option value="ALL">Todos</option>
-					<option value="NEW">Nuevo</option>
-					<option value="CONTACTED">Contactado</option>
-				</select>
+				<label>
+					<span>Estado</span>
+					<select
+						value={filters.status}
+						onChange={(e) => updateFilter('status', e.target.value)}
+					>
+						<option value="ALL">Todos</option>
+						<option value="NEW">Nuevo</option>
+						<option value="CONTACTED">Contactado</option>
+					</select>
+				</label>
 
-				<button type="submit">Aplicar</button>
+				<button type="submit">Filtrar carritos</button>
 				<button type="button" onClick={handleResetFilters}>
-					Limpiar
+					Limpiar filtros
 				</button>
 			</form>
 
 			{loading ? (
-				<div className="abandoned-empty-state">Cargando carritos abandonados...</div>
+				<EmptyState
+					tone="loading"
+					title="Cargando carritos abandonados"
+					description="Estamos actualizando la lista con los últimos carritos."
+					className="abandoned-empty-state"
+				/>
 			) : carts.length === 0 ? (
-				<div className="abandoned-empty-state">
-					No encontramos carritos abandonados con esos filtros.
-				</div>
+				<EmptyState
+					title="No hay carritos para mostrar"
+					description="Probá limpiar los filtros o sincronizar carritos para traer oportunidades recientes."
+					className="abandoned-empty-state"
+				/>
 			) : (
 				<div className="abandoned-carts-grid">
 					{carts.map((cart) => (
@@ -284,34 +411,64 @@ export default function AbandonedCartsPage() {
 									{cart.contactEmail ? <p>{cart.contactEmail}</p> : null}
 								</div>
 
-								<span
+								<StatusBadge
+									tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
 									className={`status-badge ${
 										cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
 									}`}
 								>
 									{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
-								</span>
+								</StatusBadge>
 							</div>
 
-							<div className="abandoned-meta-grid">
+							<div className="abandoned-card-focus">
 								<div>
-									<span>Total</span>
+									<span>Monto</span>
 									<strong>{cart.totalLabel}</strong>
 								</div>
 
+								<div className="abandoned-card-actions">
+									{cart.canMessage ? (
+										<button
+											type="button"
+											className="primary-action-btn"
+											onClick={() => handleToggleMessageBox(cart)}
+											disabled={sendingCartId === cart.id}
+										>
+											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
+										</button>
+									) : (
+										<button type="button" className="primary-action-btn" disabled>
+											Falta teléfono
+										</button>
+									)}
+
+									{cart.canOpenCart ? (
+										<a
+											href={cart.abandonedCheckoutUrl}
+											target="_blank"
+											rel="noreferrer"
+											className="secondary-link-btn"
+										>
+											Abrir carrito
+										</a>
+									) : (
+										<button type="button" className="secondary-link-btn" disabled>
+											Falta link
+										</button>
+									)}
+								</div>
+							</div>
+
+							<div className="abandoned-meta-grid">
 								<div>
 									<span>Fecha</span>
 									<strong>{cart.displayCreatedAt || '-'}</strong>
 								</div>
 
 								<div>
-									<span>Ciudad</span>
-									<strong>{cart.shippingCity || '-'}</strong>
-								</div>
-
-								<div>
-									<span>Provincia</span>
-									<strong>{cart.shippingProvince || '-'}</strong>
+									<span>Ubicación</span>
+									<strong>{[cart.shippingCity, cart.shippingProvince].filter(Boolean).join(', ') || '-'}</strong>
 								</div>
 							</div>
 
@@ -331,23 +488,55 @@ export default function AbandonedCartsPage() {
 								</div>
 							) : null}
 
-							<div className="abandoned-card-actions">
-								{cart.canOpenCart ? (
-									<a
-										href={cart.abandonedCheckoutUrl}
-										target="_blank"
-										rel="noreferrer"
-										className="secondary-link-btn"
-									>
-										Abrir carrito
-									</a>
-								) : (
-									<button type="button" className="secondary-link-btn" disabled>
-										Sin link
-									</button>
-								)}
+							{activeMessageCartId === cart.id ? (
+								<div className="abandoned-message-box">
+									<label>
+										<span>Plantilla aprobada de Meta</span>
+										<select
+											value={selectedTemplateIds[cart.id] || templates[0]?.id || ''}
+											onChange={(e) =>
+												setSelectedTemplateIds((prev) => ({
+													...prev,
+													[cart.id]: e.target.value
+												}))
+											}
+											disabled={templatesLoading || sendingCartId === cart.id}
+										>
+											<option value="">
+												{templatesLoading ? 'Cargando plantillas...' : 'Seleccionar plantilla'}
+											</option>
+											{templates.map((template) => (
+												<option key={template.id} value={template.id}>
+													{template.name} - {template.language || 'es_AR'}
+												</option>
+											))}
+										</select>
+									</label>
 
-							</div>
+									<div className="abandoned-template-note">
+										{templatesError || 'Se envía una plantilla aprobada por Meta con los datos del carrito.'}
+									</div>
+
+									<div className="abandoned-message-actions">
+										<button
+											type="button"
+											className="secondary-link-btn"
+											onClick={() => setActiveMessageCartId('')}
+											disabled={sendingCartId === cart.id}
+										>
+											Cancelar
+										</button>
+										<button
+											type="button"
+											className="primary-action-btn"
+											onClick={() => handleSendMessage(cart)}
+											disabled={sendingCartId === cart.id || templatesLoading || !templates.length}
+										>
+											{sendingCartId === cart.id ? 'Enviando...' : 'Enviar WhatsApp'}
+										</button>
+									</div>
+								</div>
+							) : null}
 						</article>
 					))}
 				</div>
@@ -360,7 +549,7 @@ export default function AbandonedCartsPage() {
 						onClick={() => handlePageChange((pagination.page || 1) - 1)}
 						disabled={(pagination.page || 1) <= 1}
 					>
-						←
+						Anterior
 					</button>
 
 					{visiblePages.map((page) =>
@@ -375,7 +564,7 @@ export default function AbandonedCartsPage() {
 							</button>
 						) : (
 							<span key={page} className="pagination-ellipsis">
-								…
+								...
 							</span>
 						)
 					)}
@@ -385,7 +574,7 @@ export default function AbandonedCartsPage() {
 						onClick={() => handlePageChange((pagination.page || 1) + 1)}
 						disabled={(pagination.page || 1) >= (pagination.totalPages || 1)}
 					>
-						→
+						Siguiente
 					</button>
 				</div>
 			) : null}

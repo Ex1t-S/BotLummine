@@ -7,18 +7,21 @@ import {
 	getWhatsAppMediaMetadata,
 	downloadWhatsAppMediaBuffer
 } from '../services/whatsapp/whatsapp-media.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
-async function tryRestoreMissingInboxMedia(fileName) {
+async function findInboxMediaMessage(fileName, workspaceId) {
 	const safeFileName = String(fileName || '').trim();
-	if (!safeFileName) return false;
+	if (!safeFileName || !workspaceId) return null;
 
-	const message = await prisma.message.findFirst({
+	return prisma.message.findFirst({
 		where: {
+			workspaceId,
 			attachmentUrl: {
 				contains: safeFileName
 			}
 		},
 		select: {
+			workspaceId: true,
 			attachmentMimeType: true,
 			attachmentName: true,
 			rawPayload: true
@@ -27,6 +30,13 @@ async function tryRestoreMissingInboxMedia(fileName) {
 			createdAt: 'desc'
 		}
 	});
+}
+
+async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
+	const safeFileName = String(fileName || '').trim();
+	if (!safeFileName) return false;
+
+	const message = await findInboxMediaMessage(safeFileName, workspaceId);
 
 	if (!message) return false;
 
@@ -37,11 +47,12 @@ async function tryRestoreMissingInboxMedia(fileName) {
 	if (!attachmentId) return false;
 
 	const metadata = await getWhatsAppMediaMetadata({
+		workspaceId: message.workspaceId,
 		attachmentId,
 		mimeType: message.attachmentMimeType || ''
 	});
 
-	const buffer = await downloadWhatsAppMediaBuffer(metadata.url);
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, { workspaceId: message.workspaceId });
 	const absolutePath = resolveInboxMediaAbsolutePath(safeFileName);
 
 	await fs.mkdir(path.dirname(absolutePath), { recursive: true });
@@ -61,11 +72,21 @@ export async function serveInboxMediaController(req, res) {
 	}
 
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		const message = await findInboxMediaMessage(fileName, workspaceId);
+
+		if (!message) {
+			return res.status(404).json({
+				ok: false,
+				error: 'Archivo no encontrado para este workspace.'
+			});
+		}
+
 		const absolutePath = resolveInboxMediaAbsolutePath(fileName);
 		let stats = await fs.stat(absolutePath).catch(() => null);
 
 		if (!stats || !stats.isFile()) {
-			const restored = await tryRestoreMissingInboxMedia(fileName).catch((error) => {
+			const restored = await tryRestoreMissingInboxMedia(fileName, workspaceId).catch((error) => {
 				console.error('[MEDIA][RESTORE ERROR]', fileName, error?.message || error);
 				return false;
 			});
@@ -82,7 +103,14 @@ export async function serveInboxMediaController(req, res) {
 			});
 		}
 
+		const inferredMimeType =
+			message.attachmentMimeType ||
+			(message?.rawPayload?.attachment?.type === 'sticker' ? 'image/webp' : '');
+
 		res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+		if (inferredMimeType) {
+			res.type(inferredMimeType);
+		}
 		return res.sendFile(absolutePath);
 	} catch (error) {
 		return res.status(400).json({
@@ -97,7 +125,6 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 	const purpose = String(req.body?.purpose || '').trim().toLowerCase();
 	const generateHeaderHandle = purpose === 'template_header';
 
-	console.log('[MEDIA][UPLOAD] cookie header:', req.headers.cookie);
 	console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
 
 	if (!req.user) {
@@ -110,6 +137,7 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 
 	try {
 		const result = await uploadWhatsAppMedia({
+			workspaceId: requireRequestWorkspaceId(req),
 			filePath: file.path,
 			fileName: file.originalname || file.filename || 'header-image',
 			mimeType: file.mimetype,

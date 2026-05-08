@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
-import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -10,6 +12,7 @@ const UPDATE_BATCH_SIZE = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_UPDAT
 const ITEM_BATCH_SIZE = Math.max(50, Number(process.env.TIENDANUBE_ORDER_ITEMS_BATCH_SIZE || 500));
 const MAX_MONTH_WINDOWS_PER_SYNC = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_MAX_MONTH_WINDOWS || 120));
 const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES_PER_WINDOW || 120));
+const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const ORDER_FIELDS = [
 	'id',
 	'number',
@@ -61,39 +64,14 @@ function cleanString(value) {
 	return text || null;
 }
 
-let cachedWorkspaceId = null;
-
-async function resolveWorkspaceId() {
-	const configuredWorkspaceId = cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID);
-	if (configuredWorkspaceId) return configuredWorkspaceId;
-	if (cachedWorkspaceId) return cachedWorkspaceId;
-
-	try {
-		const rows = await prisma.$queryRaw`
-			SELECT "id"
-			FROM "Workspace"
-			ORDER BY "createdAt" ASC NULLS LAST, "id" ASC
-			LIMIT 1
-		`;
-		const workspaceId = cleanString(rows?.[0]?.id);
-		if (workspaceId) {
-			cachedWorkspaceId = workspaceId;
-			return workspaceId;
-		}
-	} catch {
-		// Older single-tenant schemas do not have Workspace.
-	}
-
-	return 'default';
-}
-
 function normalizeEmail(value) {
 	const text = cleanString(value);
 	return text ? text.toLowerCase() : null;
 }
 
 function normalizePhone(value) {
-	return normalizeWhatsAppIdentityPhone(value) || null;
+	const digits = String(value ?? '').replace(/\D/g, '');
+	return digits || null;
 }
 
 function normalizeText(value) {
@@ -192,23 +170,27 @@ function pushError(message) {
 	syncState.message = message;
 }
 
-export async function resolveStoreCredentials() {
+export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const envStoreId = cleanString(process.env.TIENDANUBE_STORE_ID);
 	const envAccessToken = cleanString(process.env.TIENDANUBE_ACCESS_TOKEN);
-	const workspaceId = await resolveWorkspaceId();
 
-	if (envStoreId && envAccessToken) {
+	if (resolvedWorkspaceId === DEFAULT_WORKSPACE_ID && envStoreId && envAccessToken) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
+			workspaceId: resolvedWorkspaceId,
 			source: 'env',
-			workspaceId,
 		};
 	}
 
 	const installation = await prisma.storeInstallation.findFirst({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'TIENDANUBE',
+		},
 		orderBy: { updatedAt: 'desc' },
-		select: { storeId: true, accessToken: true },
+		select: { storeId: true, accessToken: true, workspaceId: true },
 	});
 
 	if (!installation?.storeId || !installation?.accessToken) {
@@ -218,25 +200,25 @@ export async function resolveStoreCredentials() {
 	return {
 		storeId: installation.storeId,
 		accessToken: installation.accessToken,
+		workspaceId: installation.workspaceId,
 		source: 'storeInstallation',
-		workspaceId,
 	};
 }
 
 async function fetchJson(url, accessToken, resourceLabel) {
-	const userAgent = process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant';
+	const userAgent = process.env.TIENDANUBE_USER_AGENT || 'Multi Brand IA Assistant';
 
 	let lastError = null;
 	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
 		try {
-			const response = await fetch(url, {
+			const response = await fetchWithTimeout(url, {
 				method: 'GET',
 				headers: {
 					Authentication: `bearer ${accessToken}`,
 					'User-Agent': userAgent,
 					'Content-Type': 'application/json',
 				},
-			});
+			}, TIENDANUBE_TIMEOUT_MS);
 
 			if (!response.ok) {
 				const text = await response.text();
@@ -311,14 +293,14 @@ async function fetchOrdersPage({
 
 async function getLocalOrderBounds(storeId, workspaceId) {
 	const [count, earliest, latest] = await Promise.all([
-		prisma.customerOrder.count({ where: { storeId, workspaceId } }),
+		prisma.customerOrder.count({ where: { workspaceId, storeId } }),
 		prisma.customerOrder.findFirst({
-			where: { storeId, workspaceId },
+			where: { workspaceId, storeId },
 			orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
 			select: { orderCreatedAt: true },
 		}),
 		prisma.customerOrder.findFirst({
-			where: { storeId, workspaceId },
+			where: { workspaceId, storeId },
 			orderBy: [{ orderUpdatedAt: 'desc' }, { orderCreatedAt: 'desc' }, { createdAt: 'desc' }],
 			select: { orderCreatedAt: true, orderUpdatedAt: true },
 		}),
@@ -366,8 +348,8 @@ async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 
 	const existingProfiles = await prisma.customerProfile.findMany({
 		where: {
-			storeId,
 			workspaceId,
+			storeId,
 			OR: [
 				externalIds.length ? { externalCustomerId: { in: externalIds } } : null,
 				emails.length ? { normalizedEmail: { in: emails } } : null,
@@ -396,8 +378,9 @@ async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 	if (missing.length) {
 		await prisma.customerProfile.createMany({
 			data: missing.map((item) => ({
-				storeId,
 				workspaceId,
+				provider: 'TIENDANUBE',
+				storeId,
 				externalCustomerId: item.externalCustomerId,
 				displayName: item.displayName,
 				email: item.email,
@@ -413,8 +396,8 @@ async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 
 	const reloadedProfiles = await prisma.customerProfile.findMany({
 		where: {
-			storeId,
 			workspaceId,
+			storeId,
 			OR: [
 				externalIds.length ? { externalCustomerId: { in: externalIds } } : null,
 				emails.length ? { normalizedEmail: { in: emails } } : null,
@@ -449,10 +432,11 @@ async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 	return orderToProfileId;
 }
 
-function mapOrderPayload(order, storeId, workspaceId, customerProfileId) {
+function mapOrderPayload(order, storeId, customerProfileId, workspaceId) {
 	return {
-		customerProfileId,
 		workspaceId,
+		provider: 'TIENDANUBE',
+		customerProfileId,
 		storeId,
 		orderId: String(order?.id),
 		orderNumber: cleanString(order?.number),
@@ -462,17 +446,10 @@ function mapOrderPayload(order, storeId, workspaceId, customerProfileId) {
 		normalizedEmail: normalizeEmail(order?.contact_email),
 		contactPhone: cleanString(order?.contact_phone),
 		normalizedPhone: normalizePhone(order?.contact_phone),
-		contactIdentification: cleanString(order?.contact_identification),
-		status: normalizeOrderStatus(order?.status),
 		paymentStatus: normalizeOrderStatus(order?.payment_status),
 		shippingStatus: normalizeOrderStatus(order?.shipping_status),
-		subtotal: toDecimalOrNull(order?.subtotal),
 		totalAmount: toDecimalOrNull(order?.total),
 		currency: cleanString(order?.currency) || 'ARS',
-		gateway: cleanString(order?.gateway),
-		gatewayId: cleanString(order?.gateway_id),
-		gatewayName: cleanString(order?.gateway_name),
-		gatewayLink: cleanString(order?.gateway_link),
 		products: Array.isArray(order?.products) ? order.products : [],
 		rawPayload: order,
 		orderCreatedAt: parseDateOrNull(order?.created_at),
@@ -480,7 +457,7 @@ function mapOrderPayload(order, storeId, workspaceId, customerProfileId) {
 	};
 }
 
-function buildOrderItems(order, storeId, workspaceId, customerOrderId, customerProfileId) {
+function buildOrderItems(order, storeId, customerOrderId, customerProfileId, workspaceId) {
 	const orderId = String(order?.id);
 	const orderNumber = cleanString(order?.number);
 	const orderCreatedAt = parseDateOrNull(order?.created_at);
@@ -495,9 +472,10 @@ function buildOrderItems(order, storeId, workspaceId, customerOrderId, customerP
 		const variantName = variantValues.length ? variantValues.join(' / ') : null;
 
 		return {
+			workspaceId,
+			provider: 'TIENDANUBE',
 			customerOrderId,
 			customerProfileId,
-			workspaceId,
 			storeId,
 			orderId,
 			orderNumber,
@@ -518,15 +496,15 @@ function buildOrderItems(order, storeId, workspaceId, customerOrderId, customerP
 	});
 }
 
-async function upsertOrdersAndItems(orders, storeId, workspaceId = null) {
+async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKSPACE_ID) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	if (!orders.length) return { ordersUpserted: 0, itemsUpserted: 0 };
-	const resolvedWorkspaceId = workspaceId || await resolveWorkspaceId();
 
 	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, resolvedWorkspaceId);
 	const orderIds = orders.map((order) => String(order.id));
 
 	const existingOrders = await prisma.customerOrder.findMany({
-		where: { storeId, workspaceId: resolvedWorkspaceId, orderId: { in: orderIds } },
+		where: { workspaceId: resolvedWorkspaceId, storeId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const existingMap = new Map(existingOrders.map((item) => [item.orderId, item.id]));
@@ -538,7 +516,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = null) {
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerProfileId) continue;
 
-		const payload = mapOrderPayload(order, storeId, resolvedWorkspaceId, customerProfileId);
+		const payload = mapOrderPayload(order, storeId, customerProfileId, resolvedWorkspaceId);
 		if (existingMap.has(orderId)) {
 			updates.push({ id: existingMap.get(orderId), data: payload });
 		} else {
@@ -568,7 +546,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = null) {
 	}
 
 	const savedOrders = await prisma.customerOrder.findMany({
-		where: { storeId, workspaceId: resolvedWorkspaceId, orderId: { in: orderIds } },
+		where: { workspaceId: resolvedWorkspaceId, storeId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const savedOrderMap = new Map(savedOrders.map((item) => [item.orderId, item.id]));
@@ -585,7 +563,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = null) {
 		const customerOrderId = savedOrderMap.get(orderId);
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerOrderId || !customerProfileId) continue;
-		items.push(...buildOrderItems(order, storeId, resolvedWorkspaceId, customerOrderId, customerProfileId));
+		items.push(...buildOrderItems(order, storeId, customerOrderId, customerProfileId, resolvedWorkspaceId));
 	}
 
 	for (let index = 0; index < items.length; index += ITEM_BATCH_SIZE) {
@@ -595,7 +573,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = null) {
 		}
 	}
 
-	return { ordersUpserted: orders.length, itemsUpserted: items.length };
+	return { ordersUpserted: orders.length, itemsUpserted: items.length, orderIds };
 }
 
 
@@ -614,15 +592,15 @@ export async function fetchTiendanubeOrderById({ storeId, accessToken, orderId }
 	return payload;
 }
 
-export async function upsertTiendanubeOrder(order, storeId) {
+export async function upsertTiendanubeOrder(order, storeId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	if (!order || !order.id) {
 		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([order], storeId);
+	return upsertOrdersAndItems([order], storeId, workspaceId);
 }
 
-async function processWindow({ storeId, workspaceId, accessToken, from, to, label }) {
+async function processWindow({ storeId, accessToken, workspaceId, from, to, label }) {
 	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
 	syncState.activeWindow = { from, to, label };
 	syncState.message = `Sincronizando ${label === 'recent' ? 'recientes' : 'histórico'} ${label}.`;
@@ -654,12 +632,19 @@ async function processWindow({ storeId, workspaceId, accessToken, from, to, labe
 		windowOrders += orders.length;
 
 		const saved = await upsertOrdersAndItems(orders, storeId, workspaceId);
+		await attributeOrdersByIds({
+			workspaceId,
+			storeId,
+			orderIds: saved.orderIds || orders.map((order) => String(order.id)),
+		}).catch((error) => {
+			pushWarning(`No se pudo atribuir conversiones de campaÃ±a: ${error?.message || error}`);
+		});
 		syncState.ordersUpserted += saved.ordersUpserted;
 		syncState.itemsUpserted += saved.itemsUpserted;
 		windowUpserted += saved.ordersUpserted;
 		windowItems += saved.itemsUpserted;
 
-		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { storeId, workspaceId } });
+		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { workspaceId, storeId } });
 		syncState.message = `Ventana ${label}: página ${page} · pedidos ${syncState.ordersFetched} · guardados ${syncState.ordersUpserted}.`;
 
 		if (orders.length < ORDERS_PER_PAGE) break;
@@ -681,7 +666,8 @@ async function processWindow({ storeId, workspaceId, accessToken, from, to, labe
 
 function safeSyncLogData(data) {
 	return {
-		workspaceId: data.workspaceId || 'default',
+		workspaceId: data.workspaceId,
+		provider: data.provider || 'TIENDANUBE',
 		storeId: data.storeId || null,
 		status: data.status,
 		fullSync: Boolean(data.fullSync),
@@ -695,23 +681,18 @@ function safeSyncLogData(data) {
 	};
 }
 
-async function runSyncJob() {
+async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const startedAt = Date.now();
 	let syncLog = null;
-	let storeId = null;
-	let workspaceId = null;
 
 	try {
-		const credentials = await resolveStoreCredentials();
-		storeId = credentials.storeId;
-		workspaceId = credentials.workspaceId;
-		const { accessToken } = credentials;
-
+		const { storeId, accessToken } = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId });
 		try {
 			syncLog = await prisma.customerSyncLog.create({
 				data: safeSyncLogData({
+					workspaceId: resolvedWorkspaceId,
 					storeId,
-					workspaceId,
 					status: 'RUNNING',
 					fullSync: false,
 					startedAt: new Date(),
@@ -722,7 +703,7 @@ async function runSyncJob() {
 			pushWarning(`No se pudo crear customerSyncLog: ${logError?.message || 'error desconocido'}`);
 		}
 
-		const boundsBefore = await getLocalOrderBounds(storeId, workspaceId);
+		const boundsBefore = await getLocalOrderBounds(storeId, resolvedWorkspaceId);
 		syncState.localOrdersBefore = boundsBefore.count;
 		syncState.localOrdersAfter = boundsBefore.count;
 
@@ -733,8 +714,8 @@ async function runSyncJob() {
 		runs.push(
 			await processWindow({
 				storeId,
-				workspaceId,
 				accessToken,
+				workspaceId: resolvedWorkspaceId,
 				from: recentFrom,
 				to: new Date(),
 				label: 'recent',
@@ -755,8 +736,8 @@ async function runSyncJob() {
 
 			const result = await processWindow({
 				storeId,
-				workspaceId,
 				accessToken,
+				workspaceId: resolvedWorkspaceId,
 				from: monthStart,
 				to: monthEnd,
 				label,
@@ -794,8 +775,8 @@ async function runSyncJob() {
 				where: { id: syncLog.id },
 				data: safeSyncLogData({
 					status: 'SUCCESS',
+					workspaceId: resolvedWorkspaceId,
 					storeId,
-					workspaceId,
 					finishedAt: new Date(),
 					pagesFetched: syncState.pagesFetched,
 					ordersFetched: syncState.ordersFetched,
@@ -821,8 +802,8 @@ async function runSyncJob() {
 					where: { id: syncLog.id },
 					data: safeSyncLogData({
 						status: 'ERROR',
-						storeId,
-						workspaceId,
+						workspaceId: resolvedWorkspaceId,
+						storeId: syncLog.storeId,
 						finishedAt: new Date(),
 						pagesFetched: syncState.pagesFetched,
 						ordersFetched: syncState.ordersFetched,
@@ -841,7 +822,8 @@ async function runSyncJob() {
 	}
 }
 
-export async function syncCustomers() {
+export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	if (syncState.running) {
 		return {
 			ok: true,
@@ -858,7 +840,7 @@ export async function syncCustomers() {
 	syncState.message = 'Preparando sincronización de pedidos...';
 
 	setTimeout(() => {
-		runSyncJob().catch((error) => {
+		runSyncJob({ workspaceId: resolvedWorkspaceId }).catch((error) => {
 			pushError(error?.message || 'Error sincronizando pedidos.');
 			syncState.running = false;
 			syncState.phase = 'error';

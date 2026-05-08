@@ -9,3 +9,80 @@
 @import '../features/campaigns/styles/10-segmentation-customers.css';
 @import '../features/campaigns/styles/11-segmentation-preview.css';
 @import '../features/campaigns/styles/12-template-library-flow.css';
+
+/* Professional polish loaded after legacy campaign styles */
+
+.campaigns-page {
+	gap: 14px;
+}
+
+.campaigns-hero,
+.campaigns-tab-shell,
+.campaign-shell-card,
+.campaign-schedule-section,
+.campaign-schedule-card,
+.campaign-schedule-meta,
+.campaign-schedule-audience-choice__button,
+.template-button-card,
+.campaign-review-card,
+.campaign-custom-audience-preview,
+.campaign-recipient-preview-box {
+	border-radius: 12px;
+	border-color: var(--ui-border, #d8dee8);
+	box-shadow: none;
+	background: #ffffff;
+}
+
+.campaigns-hero {
+	padding: 18px;
+}
+
+.campaigns-hero h2 {
+	font-size: clamp(22px, 2.1vw, 30px);
+	font-weight: 760;
+}
+
+.campaigns-tab-nav {
+	border-radius: 10px;
+	background: #eef2f6;
+}
+
+.campaigns-tab-button {
+	border-radius: 8px;
+	font-weight: 650;
+}
+
+.campaigns-tab-button:hover {
+	transform: none;
+	background: #ffffff;
+}
+
+.campaigns-tab-button.is-active {
+	background: #ffffff;
+	border-color: var(--ui-border, #d8dee8);
+	color: var(--ui-primary, #0d6b64);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+.campaign-schedule-section,
+.campaign-schedule-card {
+	background: #fbfcfe;
+}
+
+.campaign-schedule-audience-choice__button:hover,
+.campaign-schedule-audience-choice__button.is-active {
+	border-color: var(--ui-primary, #0d6b64);
+	background: #f4fbf9;
+	box-shadow: none;
+}
+
+.button:hover:not(:disabled),
+.campaign-source-switch__button:hover {
+	transform: none;
+}
+
+.field input,
+.field select,
+.field textarea {
+	border-radius: 8px;
+}

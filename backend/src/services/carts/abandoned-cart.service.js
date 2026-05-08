@@ -1,4 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CHECKOUTS_PER_PAGE = Math.min(
@@ -21,6 +23,7 @@ const DELETE_CHUNK_SIZE = Math.max(
 	25,
 	Number(process.env.TIENDANUBE_ABANDONED_DELETE_CHUNK_SIZE || 250)
 );
+const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const DEFAULT_DAYS_BACK = 30;
 const ALLOWED_WINDOWS = new Set([30]);
 
@@ -37,37 +40,11 @@ function cleanString(value = '') {
 	return normalized || null;
 }
 
-let cachedWorkspaceId = null;
-
-async function resolveWorkspaceId() {
-	const configuredWorkspaceId = cleanString(process.env.WORKSPACE_ID) || cleanString(process.env.DEFAULT_WORKSPACE_ID);
-	if (configuredWorkspaceId) return configuredWorkspaceId;
-	if (cachedWorkspaceId) return cachedWorkspaceId;
-
-	try {
-		const rows = await prisma.$queryRaw`
-			SELECT "id"
-			FROM "Workspace"
-			ORDER BY "createdAt" ASC NULLS LAST, "id" ASC
-			LIMIT 1
-		`;
-		const workspaceId = cleanString(rows?.[0]?.id);
-		if (workspaceId) {
-			cachedWorkspaceId = workspaceId;
-			return workspaceId;
-		}
-	} catch {
-		// Older single-tenant schemas do not have Workspace.
-	}
-
-	return 'default';
-}
-
 function buildHeaders(accessToken) {
 	return {
 		Authentication: `bearer ${accessToken}`,
 		'Content-Type': 'application/json; charset=utf-8',
-		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Lummine IA Assistant',
+		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Multi Brand IA Assistant',
 	};
 }
 
@@ -119,13 +96,19 @@ function isLastPageResponse(status, bodyText = '') {
 	}
 }
 
-async function resolveStoreCredentials() {
+async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const installation = await prisma.storeInstallation.findFirst({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			provider: 'TIENDANUBE',
+		},
 		orderBy: { installedAt: 'desc' }
 	});
 
-	const storeId = installation?.storeId || process.env.TIENDANUBE_STORE_ID || null;
-	const accessToken = installation?.accessToken || process.env.TIENDANUBE_ACCESS_TOKEN || null;
+	const useEnv = resolvedWorkspaceId === DEFAULT_WORKSPACE_ID;
+	const storeId = installation?.storeId || (useEnv ? process.env.TIENDANUBE_STORE_ID : null) || null;
+	const accessToken = installation?.accessToken || (useEnv ? process.env.TIENDANUBE_ACCESS_TOKEN : null) || null;
 
 	if (!storeId || !accessToken) {
 		throw new Error(
@@ -133,8 +116,7 @@ async function resolveStoreCredentials() {
 		);
 	}
 
-	const normalizedStoreId = String(storeId);
-	return { storeId: normalizedStoreId, accessToken, workspaceId: await resolveWorkspaceId() };
+	return { workspaceId: resolvedWorkspaceId, storeId: String(storeId), accessToken };
 }
 
 async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKOUTS_PER_PAGE }) {
@@ -149,10 +131,10 @@ async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKO
 
 	for (let attempt = 1; attempt <= FETCH_RETRIES; attempt += 1) {
 		try {
-			const response = await fetch(url, {
+			const response = await fetchWithTimeout(url, {
 				method: 'GET',
 				headers: buildHeaders(accessToken)
-			});
+			}, TIENDANUBE_TIMEOUT_MS);
 
 			const text = await response.text();
 
@@ -247,6 +229,7 @@ function buildCartPayload(cart, storeId, workspaceId) {
 
 	return {
 		workspaceId,
+		provider: 'TIENDANUBE',
 		storeId: String(cart?.store_id || storeId),
 		token: cleanString(cart?.token),
 		contactName: cleanString(cart?.contact_name || cart?.shipping_name),
@@ -290,10 +273,13 @@ async function replaceCartBatch(carts, storeId, workspaceId) {
 		for (const row of chunk) {
 			await prisma.abandonedCart.upsert({
 				where: {
-					checkoutId: row.checkoutId
+					workspaceId_provider_checkoutId: {
+						workspaceId,
+						provider: 'TIENDANUBE',
+						checkoutId: row.checkoutId
+					}
 				},
 				update: {
-					workspaceId: row.workspaceId,
 					storeId: row.storeId,
 					token: row.token,
 					contactName: row.contactName,
@@ -325,13 +311,14 @@ async function replaceCartBatch(carts, storeId, workspaceId) {
 	return rows.length;
 }
 
-async function deleteCartIdsInChunks(ids = []) {
+async function deleteCartIdsInChunks(ids = [], workspaceId = DEFAULT_WORKSPACE_ID) {
 	let deletedCount = 0;
 
 	for (const chunk of chunkArray(ids, DELETE_CHUNK_SIZE)) {
 		if (!chunk.length) continue;
 		const removed = await prisma.abandonedCart.deleteMany({
 			where: {
+				workspaceId,
 				id: { in: chunk }
 			}
 		});
@@ -341,12 +328,13 @@ async function deleteCartIdsInChunks(ids = []) {
 	return deletedCount;
 }
 
-export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
+export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedDaysBack = ALLOWED_WINDOWS.has(Number(daysBack))
 		? Number(daysBack)
 		: DEFAULT_DAYS_BACK;
 
-	const { storeId, workspaceId, accessToken } = await resolveStoreCredentials();
+	const { storeId, accessToken } = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId });
 
 	const startedAt = new Date();
 	const cutoff = new Date(startedAt);
@@ -394,7 +382,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 		}
 
 		if (validCarts.length) {
-			syncedCount += await replaceCartBatch(validCarts, storeId, workspaceId);
+			syncedCount += await replaceCartBatch(validCarts, storeId, resolvedWorkspaceId);
 		}
 
 		if (pageResult.reachedEnd) {
@@ -404,8 +392,8 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 
 	const oldNewCarts = await prisma.abandonedCart.findMany({
 		where: {
-			workspaceId,
 			storeId,
+			workspaceId: resolvedWorkspaceId,
 			status: 'NEW',
 			checkoutCreatedAt: { lt: cutoff }
 		},
@@ -414,8 +402,8 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK) {
 
 	const idsToDelete = oldNewCarts.map((item) => item.id);
 	const uniqueIdsToDelete = [...new Set(idsToDelete)];
-	const deletedCount = await deleteCartIdsInChunks(uniqueIdsToDelete);
-	const remainingCount = await prisma.abandonedCart.count({ where: { workspaceId, storeId } });
+	const deletedCount = await deleteCartIdsInChunks(uniqueIdsToDelete, resolvedWorkspaceId);
+	const remainingCount = await prisma.abandonedCart.count({ where: { workspaceId: resolvedWorkspaceId, storeId } });
 
 	return {
 		ok: true,

@@ -5,6 +5,7 @@ import {
 	resetAiLabSession,
 	sendAiLabMessage
 } from '../services/ai/ai-lab.service.js';
+import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 
 export async function getAiLabFixtures(_req, res, next) {
@@ -17,7 +18,10 @@ export async function getAiLabFixtures(_req, res, next) {
 
 export async function postAiLabSession(req, res, next) {
 	try {
-		const session = await createAiLabSession({ fixtureKey: req.body?.fixtureKey || 'blank' });
+		const session = await createAiLabSession({
+			workspaceId: requireRequestWorkspaceId(req),
+			fixtureKey: req.body?.fixtureKey || 'blank',
+		});
 		return res.status(201).json({ ok: true, session });
 	} catch (error) {
 		next(error);
@@ -26,7 +30,9 @@ export async function postAiLabSession(req, res, next) {
 
 export async function getAiLabSessionById(req, res, next) {
 	try {
-		const session = await getAiLabSession(req.params.sessionId);
+		const session = await getAiLabSession(req.params.sessionId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		if (!session) {
 			return res.status(404).json({ ok: false, error: 'Sesión no encontrada' });
 		}
@@ -39,6 +45,7 @@ export async function getAiLabSessionById(req, res, next) {
 export async function postAiLabSessionReset(req, res, next) {
 	try {
 		const session = await resetAiLabSession(req.params.sessionId, {
+			workspaceId: requireRequestWorkspaceId(req),
 			fixtureKey: req.body?.fixtureKey || null
 		});
 		return res.json({ ok: true, session });
@@ -50,6 +57,7 @@ export async function postAiLabSessionReset(req, res, next) {
 export async function postAiLabSessionMessage(req, res, next) {
 	try {
 		const session = await sendAiLabMessage(req.params.sessionId, {
+			workspaceId: requireRequestWorkspaceId(req),
 			body: req.body?.body || '',
 			selectionId: req.body?.selectionId || '',
 			action: req.body?.action || ''

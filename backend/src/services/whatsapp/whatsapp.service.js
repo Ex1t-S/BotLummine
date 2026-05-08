@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import axios from 'axios';
+import { getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { logger, maskPhone } from '../../lib/logger.js';
 import {
 	normalizeWhatsAppNumber,
 	debugWhatsAppRecipient,
@@ -12,6 +14,9 @@ import {
 	getWhatsAppAccessToken,
 	getWhatsAppPhoneNumberId,
 } from './meta-graph.service.js';
+import { getWhatsAppChannelForWorkspace } from '../workspaces/workspace-context.service.js';
+
+const WHATSAPP_TIMEOUT_MS = getHttpTimeoutMs('WHATSAPP_SEND_TIMEOUT_MS', 15000);
 
 function buildTokenDebugFingerprint(token = '') {
 	const normalized = String(token || '').trim();
@@ -39,12 +44,13 @@ function buildTokenDebugFingerprint(token = '') {
 	};
 }
 
-async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
+async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel = 'REQUEST' }) {
 	const rawTo = to;
 	const finalTo = normalizeWhatsAppNumber(rawTo);
-	const graphVersion = getGraphVersion();
-	const phoneNumberId = getWhatsAppPhoneNumberId();
-	const accessToken = getWhatsAppAccessToken();
+	const channel = workspaceId ? await getWhatsAppChannelForWorkspace(workspaceId) : null;
+	const graphVersion = channel?.graphVersion || getGraphVersion();
+	const phoneNumberId = channel?.phoneNumberId || getWhatsAppPhoneNumberId();
+	const accessToken = channel?.accessToken || getWhatsAppAccessToken();
 	const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
 	const tokenDebug = buildTokenDebugFingerprint(accessToken);
 
@@ -53,6 +59,8 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 		finalTo,
 		graphVersion,
 		phoneNumberId,
+		workspaceId: channel?.workspaceId || workspaceId || null,
+		channelSource: channel?.source || 'env',
 		...tokenDebug,
 		payloadType: payload?.type || null,
 	});
@@ -80,6 +88,7 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 				Authorization: `Bearer ${accessToken}`,
 				'Content-Type': 'application/json',
 			},
+			timeout: WHATSAPP_TIMEOUT_MS,
 		});
 
 		debugWhatsAppRecipient(`${debugLabel} RESPONSE`, response.data);
@@ -91,27 +100,19 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 			rawPayload: response.data,
 		};
 	} catch (error) {
-		console.error(`[WA DEBUG] ${debugLabel} ERROR MESSAGE`, error.message);
-		console.error(`[WA DEBUG] ${debugLabel} ERROR STATUS`, error.response?.status);
-		console.error(
-			`[WA DEBUG] ${debugLabel} ERROR CONTEXT`,
-			JSON.stringify(
-				{
-					rawTo,
-					finalTo,
-					graphVersion,
-					phoneNumberId,
-					...tokenDebug,
-					payloadType: payload?.type || null,
-				},
-				null,
-				2
-			)
-		);
-		console.error(
-			`[WA DEBUG] ${debugLabel} ERROR DATA`,
-			JSON.stringify(error.response?.data || {}, null, 2)
-		);
+		logger.warn('whatsapp.send_failed', {
+			label: debugLabel,
+			status: error.response?.status || null,
+			message: error.message,
+			to: maskPhone(finalTo || rawTo || ''),
+			graphVersion,
+			phoneNumberId,
+			tokenFingerprint: tokenDebug.tokenFingerprint,
+			payloadType: payload?.type || null,
+			providerCode: error.response?.data?.error?.code || null,
+			providerSubcode: error.response?.data?.error?.error_subcode || null,
+			providerMessage: error.response?.data?.error?.message || null,
+		});
 
 		return {
 			ok: false,
@@ -124,7 +125,7 @@ async function sendWhatsAppRequest({ to, payload, debugLabel = 'REQUEST' }) {
 
 export { normalizeWhatsAppNumber } from './whatsapp-formatters.js';
 
-export async function sendWhatsAppText({ to, body }) {
+export async function sendWhatsAppText({ workspaceId = null, to, body }) {
 	const cleanBody = String(body || '').trim();
 
 	if (!cleanBody) {
@@ -142,6 +143,7 @@ export async function sendWhatsAppText({ to, body }) {
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
 		debugLabel: 'TEXT',
 		payload: {
@@ -152,26 +154,25 @@ export async function sendWhatsAppText({ to, body }) {
 }
 
 export async function sendWhatsAppMedia({
+	workspaceId = null,
 	to,
+	mediaType,
 	mediaId,
-	mediaType = 'document',
 	caption = '',
 	fileName = '',
 }) {
+	const cleanMediaType = String(mediaType || '').trim().toLowerCase();
 	const cleanMediaId = String(mediaId || '').trim();
-	const cleanType = String(mediaType || '').trim().toLowerCase();
-	const finalType = ['image', 'video', 'audio', 'document'].includes(cleanType)
-		? cleanType
-		: 'document';
 	const cleanCaption = String(caption || '').trim();
 	const cleanFileName = String(fileName || '').trim();
+	const supportedTypes = new Set(['image', 'video', 'audio', 'document']);
 
-	if (!cleanMediaId) {
+	if (!supportedTypes.has(cleanMediaType) || !cleanMediaId) {
 		return {
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
-			error: { message: 'Falta mediaId para enviar por WhatsApp.' },
+			error: { message: 'Falta media valido para enviar por WhatsApp.' },
 		};
 	}
 
@@ -179,26 +180,27 @@ export async function sendWhatsAppMedia({
 		id: cleanMediaId,
 	};
 
-	if (cleanCaption && ['image', 'video', 'document'].includes(finalType)) {
-		mediaPayload.caption = cleanCaption.slice(0, 1024);
+	if (cleanCaption && ['image', 'video', 'document'].includes(cleanMediaType)) {
+		mediaPayload.caption = cleanCaption;
 	}
 
-	if (finalType === 'document' && cleanFileName) {
-		mediaPayload.filename = cleanFileName.slice(0, 240);
+	if (cleanMediaType === 'document' && cleanFileName) {
+		mediaPayload.filename = cleanFileName;
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
-		debugLabel: `MEDIA_${finalType.toUpperCase()}`,
+		debugLabel: 'MEDIA',
 		payload: {
-			messaging_product: 'whatsapp',
-			type: finalType,
-			[finalType]: mediaPayload,
+			type: cleanMediaType,
+			[cleanMediaType]: mediaPayload,
 		},
 	});
 }
 
 export async function sendWhatsAppInteractiveList({
+	workspaceId = null,
 	to,
 	body,
 	headerText = null,
@@ -248,6 +250,7 @@ export async function sendWhatsAppInteractiveList({
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
 		debugLabel: 'INTERACTIVE_LIST',
 		payload: {
@@ -258,6 +261,7 @@ export async function sendWhatsAppInteractiveList({
 }
 
 export async function sendWhatsAppTemplate({
+	workspaceId = null,
 	to,
 	templateName,
 	languageCode = 'es_AR',
@@ -275,6 +279,7 @@ export async function sendWhatsAppTemplate({
 	}
 
 	return sendWhatsAppRequest({
+		workspaceId,
 		to,
 		debugLabel: 'TEMPLATE',
 		payload: buildTemplatePayload({

@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api.js';
 import {
 	createCampaign,
+	createCampaignSchedule,
 	createTemplate,
 	deleteCampaign,
+	deleteCampaignSchedule,
 	deleteTemplate,
 	dispatchCampaign,
 	fetchCampaignOverview,
+	fetchCampaignSchedules,
 	fetchCampaigns,
 	fetchTemplates,
 	pauseCampaign,
@@ -15,6 +18,7 @@ import {
 	purgeDeletedTemplates,
 	resumeCampaign,
 	syncTemplates,
+	updateCampaignSchedule,
 	updateTemplate,
 } from '../../../lib/campaigns.js';
 import { queryKeys } from '../../../lib/queryClient.js';
@@ -41,9 +45,55 @@ const initialAbandonedCartForm = {
 const CAMPAIGN_RECIPIENT_FETCH_SIZE = 500;
 const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
 const CAMPAIGN_POLL_INTERVAL_MS = 5000;
+const CAMPAIGN_STATUS_POLL_WINDOW_MS = 60 * 60 * 1000;
 
 function isLiveCampaignStatus(status = '') {
 	return ['QUEUED', 'RUNNING'].includes(String(status || '').trim().toUpperCase());
+}
+
+function readCampaignCount(campaign = {}, keys = []) {
+	for (const key of keys) {
+		const value = Number(campaign?.[key]);
+		if (Number.isFinite(value) && value > 0) return value;
+	}
+
+	return 0;
+}
+
+function getCampaignStatusUpdatedAt(campaign = {}) {
+	const candidates = [
+		campaign?.finishedAt,
+		campaign?.startedAt,
+		campaign?.updatedAt,
+		campaign?.createdAt,
+	].filter(Boolean);
+
+	for (const value of candidates) {
+		const timestamp = new Date(value).getTime();
+		if (Number.isFinite(timestamp)) return timestamp;
+	}
+
+	return 0;
+}
+
+function shouldPollCampaignStatusUpdates(campaign = {}) {
+	if (isLiveCampaignStatus(campaign?.status)) return true;
+
+	const status = String(campaign?.status || '').trim().toUpperCase();
+	if (!['FINISHED', 'PARTIAL'].includes(status)) return false;
+
+	const lastUpdateAt = getCampaignStatusUpdatedAt(campaign);
+	if (!lastUpdateAt || Date.now() - lastUpdateAt > CAMPAIGN_STATUS_POLL_WINDOW_MS) {
+		return false;
+	}
+
+	const sent = readCampaignCount(campaign, ['sentCount', 'sentRecipients']);
+	const delivered = readCampaignCount(campaign, ['deliveredCount', 'deliveredRecipients']);
+	const read = readCampaignCount(campaign, ['readCount', 'readRecipients']);
+	const failed = readCampaignCount(campaign, ['failedCount', 'failedRecipients']);
+	const terminal = Math.max(delivered, read) + failed;
+
+	return sent > terminal || delivered > read;
 }
 
 function normalizeRecipientStatus(status = '') {
@@ -138,6 +188,7 @@ export function useCampaignsDashboard() {
 	});
 
 	const [campaignTrackingStatus, setCampaignTrackingStatus] = useState('ALL');
+	const [campaignTrackingPurchase, setCampaignTrackingPurchase] = useState('ALL');
 	const [campaignTrackingSearch, setCampaignTrackingSearch] = useState('');
 	const [campaignTrackingPage, setCampaignTrackingPage] = useState(1);
 
@@ -158,11 +209,16 @@ export function useCampaignsDashboard() {
 			const payload = query.state.data;
 			const runs =
 				Array.isArray(payload?.campaigns) ? payload.campaigns : Array.isArray(payload) ? payload : [];
-			return runs.some((campaign) => isLiveCampaignStatus(campaign?.status))
+			return runs.some((campaign) => shouldPollCampaignStatusUpdates(campaign))
 				? CAMPAIGN_POLL_INTERVAL_MS
 				: false;
 		},
 		refetchIntervalInBackground: true,
+	});
+
+	const schedulesQuery = useQuery({
+		queryKey: queryKeys.campaigns.schedules,
+		queryFn: fetchCampaignSchedules,
 	});
 
 	const campaignDetailQuery = useQuery({
@@ -183,13 +239,18 @@ export function useCampaignsDashboard() {
 		refetchInterval: (query) => {
 			const payload = extractDetailResponsePayload(query.state.data);
 			const campaign = payload?.campaign || payload?.item || payload?.run || null;
-			return isLiveCampaignStatus(campaign?.status) ? CAMPAIGN_POLL_INTERVAL_MS : false;
+			return shouldPollCampaignStatusUpdates(campaign) ? CAMPAIGN_POLL_INTERVAL_MS : false;
 		},
 		refetchIntervalInBackground: true,
 	});
 
 	const templates = useMemo(() => getTemplateCollection(templatesQuery.data), [templatesQuery.data]);
 	const campaigns = useMemo(() => getCampaignCollection(campaignsQuery.data), [campaignsQuery.data]);
+	const schedules = useMemo(() => {
+		const data = schedulesQuery.data;
+		if (Array.isArray(data)) return data;
+		return data?.schedules || data?.items || [];
+	}, [schedulesQuery.data]);
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
 
 	const selectedCampaign = useMemo(() => {
@@ -249,12 +310,14 @@ export function useCampaignsDashboard() {
 		setCampaignTrackingPage(1);
 		setCampaignTrackingSearch('');
 		setCampaignTrackingStatus('ALL');
+		setCampaignTrackingPurchase('ALL');
 	}, [selectedCampaignId]);
 
 	function invalidateAll(nextCampaignId = selectedCampaignId) {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.overview });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
 
 		if (nextCampaignId) {
 			queryClient.invalidateQueries({
@@ -437,6 +500,33 @@ export function useCampaignsDashboard() {
 		},
 	});
 
+	const createScheduleMutation = useMutation({
+		mutationFn: createCampaignSchedule,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Programación creada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la programación.'),
+	});
+
+	const updateScheduleMutation = useMutation({
+		mutationFn: ({ scheduleId, payload }) => updateCampaignSchedule(scheduleId, payload),
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Programación actualizada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar la programación.'),
+	});
+
+	const deleteScheduleMutation = useMutation({
+		mutationFn: deleteCampaignSchedule,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Programación eliminada.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la programación.'),
+	});
+
 	const actionMutation = useMutation({
 		mutationFn: async ({ type, campaignId }) => {
 			if (type === 'dispatch') return dispatchCampaign(campaignId);
@@ -480,6 +570,7 @@ export function useCampaignsDashboard() {
 		overview,
 		templates,
 		campaigns,
+		schedules,
 		selectedTemplate,
 		setSelectedTemplate,
 		selectedCampaign,
@@ -489,6 +580,7 @@ export function useCampaignsDashboard() {
 			templates: templatesQuery,
 			campaigns: campaignsQuery,
 			campaignDetail: campaignDetailQuery,
+			schedules: schedulesQuery,
 		},
 		mutations: {
 			sync: syncMutation,
@@ -501,10 +593,15 @@ export function useCampaignsDashboard() {
 			action: actionMutation,
 			abandonedPreview: abandonedCartPreviewMutation,
 			createAbandonedCampaign: createAbandonedCartCampaignMutation,
+			createSchedule: createScheduleMutation,
+			updateSchedule: updateScheduleMutation,
+			deleteSchedule: deleteScheduleMutation,
 		},
 		tracking: {
 			statusFilter: campaignTrackingStatus,
 			setStatusFilter: setCampaignTrackingStatus,
+			purchaseFilter: campaignTrackingPurchase,
+			setPurchaseFilter: setCampaignTrackingPurchase,
 			search: campaignTrackingSearch,
 			setSearch: setCampaignTrackingSearch,
 			page: campaignTrackingPage,

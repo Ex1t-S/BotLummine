@@ -3,26 +3,26 @@ export const AI_LAB_FIXTURES = [
 		key: 'blank',
 		name: 'En blanco',
 		description: 'Arranca desde cero, sin historial ni estado previo.',
-		expected: ['La IA debería sonar como en WhatsApp real', 'Útil para validar saludos, tono y cierre']
+		expected: ['La IA deberia sonar como en WhatsApp real', 'Util para validar saludos, tono y cierre']
 	},
 	{
 		key: 'body-discovery',
-		name: 'Body modelador desde cero',
+		name: 'Producto desde cero',
 		description: 'Deja solo el saludo inicial para probar descubrimiento de producto.',
 		seedMessages: [
 			{
 				direction: 'OUTBOUND',
-				body: '¡Hola! Soy Sofi de Lummine. ¿En qué puedo ayudarte hoy?'
+				body: 'Hola, soy la asistente de la marca. En que puedo ayudarte hoy?'
 			}
 		],
 		expected: [
-			'No debería volver a saludar en el segundo turno',
-			'No debería fijar un producto puntual demasiado temprano'
+			'No deberia volver a saludar en el segundo turno',
+			'No deberia fijar un producto puntual demasiado temprano'
 		]
 	},
 	{
 		key: 'body-black-xl',
-		name: 'Body negro XL',
+		name: 'Producto con talle/color',
 		description: 'Parte con color y talle ya definidos para probar foco y link.',
 		stateOverrides: {
 			customerName: 'German',
@@ -34,7 +34,7 @@ export const AI_LAB_FIXTURES = [
 		seedMessages: [
 			{
 				direction: 'OUTBOUND',
-				body: '¡Hola! Soy Sofi de Lummine. ¿En qué puedo ayudarte hoy?'
+				body: 'Hola, soy la asistente de la marca. En que puedo ayudarte hoy?'
 			},
 			{
 				direction: 'INBOUND',
@@ -42,8 +42,8 @@ export const AI_LAB_FIXTURES = [
 			}
 		],
 		expected: [
-			'Si pide link, debería mandar uno coherente',
-			'No debería mezclar promos si ya quedó claro el foco'
+			'Si pide link, deberia mandar uno coherente',
+			'No deberia mezclar promos si ya quedo claro el foco'
 		]
 	},
 	{
@@ -60,28 +60,28 @@ export const AI_LAB_FIXTURES = [
 		seedMessages: [
 			{
 				direction: 'OUTBOUND',
-				body: 'Te paso el link del body modelador y, si querés, después te ayudo con el pago.'
+				body: 'Te paso el link del producto y, si queres, despues te ayudo con el pago.'
 			}
 		],
 		expected: [
-			'Debería responder igual que WhatsApp cuando preguntan por transferencia',
-			'No debería volver al saludo inicial'
+			'Deberia responder igual que WhatsApp cuando preguntan por transferencia',
+			'No deberia volver al saludo inicial'
 		]
 	},
 	{
 		key: 'soft-menu-discovery',
-		name: 'Descubrimiento con menú blando',
-		description: 'Sirve para ver si la IA guía sin clavar el menú interactivo al primer turno.',
+		name: 'Descubrimiento con menu blando',
+		description: 'Sirve para ver si la IA guia sin clavar el menu interactivo al primer turno.',
 		seedMessages: [
 			{
 				direction: 'OUTBOUND',
-				body: '¡Hola! Soy Sofi de Lummine. ¿En qué puedo ayudarte hoy?'
+				body: 'Hola, soy la asistente de la marca. En que puedo ayudarte hoy?'
 			}
 		],
 		expected: [
-			'No debería forzar menú interactivo automáticamente',
+			'No deberia forzar menu interactivo automaticamente',
 			'Puede sugerir opciones de ayuda dentro de la respuesta si suma claridad',
-			'El trace debería mostrar menuAssistantContext'
+			'El trace deberia mostrar menuAssistantContext'
 		]
 	},
 	{
@@ -94,7 +94,7 @@ export const AI_LAB_FIXTURES = [
 		seedMessages: [
 			{
 				direction: 'OUTBOUND',
-				body: 'Hola, soy Sofi de Lummine. Te ayudo por aca.'
+				body: 'Hola, soy la asistente de la marca. Te ayudo por aca.'
 			}
 		],
 		expected: [
