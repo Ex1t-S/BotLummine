@@ -354,6 +354,14 @@ function shouldLetFreeTextBypassMenu(messageBody = '') {
 	return /(body|bodys|calza|calzas|pedido|pago|comprobante|envio|envios|talle|talles|catalogo|promo|precio|link|comprar|asesora|humano)/i.test(normalized);
 }
 
+function shouldDisableAutoMenuForConsoleChat(rawPayload = null) {
+	return (
+		rawPayload?.source === 'test-ai-workspace-flow' &&
+		rawPayload?.mode === 'chat' &&
+		rawPayload?.disableAutoMenu === true
+	);
+}
+
 async function handleMenuSelection({
 	selectionId,
 	conversation,
@@ -503,6 +511,7 @@ export async function maybeHandleMenuFlow({
 	const interactiveReplyId = getInteractiveReplyId(rawPayload);
 	const hardHumanLock = isHardHumanLock(currentState);
 	const isStaleConversation = isConversationStaleForMenu(conversation?.messages);
+	const autoMenuDisabledForConsole = shouldDisableAutoMenuForConsoleChat(rawPayload);
 
 	if (!hardHumanLock && interactiveReplyId) {
 		const resolvedSelection = await detectMenuSelectionAcrossMenus({
@@ -527,6 +536,7 @@ export async function maybeHandleMenuFlow({
 	}
 
 	const shouldOfferMenu =
+		!autoMenuDisabledForConsole &&
 		!hardHumanLock &&
 		(
 			isStaleConversation ||

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requirePlatformAdmin, requireAdmin } from '../middleware/auth.js';
 import {
 	createWorkspace,
+	deleteWorkspace,
 	createWorkspaceUser,
 	getPlatformDiagnostics,
 	getWorkspaceAnalytics,
@@ -26,6 +27,7 @@ router.get('/diagnostics', requirePlatformAdmin, getPlatformDiagnostics);
 router.get('/analytics/workspaces', requireAdmin, getWorkspaceAnalytics);
 router.get('/workspaces', requirePlatformAdmin, listWorkspaces);
 router.post('/workspaces', requirePlatformAdmin, createWorkspace);
+router.delete('/workspaces/:workspaceId', requirePlatformAdmin, deleteWorkspace);
 router.get('/workspaces/:workspaceId', requireAdmin, getWorkspace);
 router.patch('/workspaces/:workspaceId', requireAdmin, updateWorkspace);
 router.get('/workspaces/:workspaceId/users', requireAdmin, listWorkspaceUsers);

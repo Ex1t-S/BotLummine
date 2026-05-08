@@ -7,6 +7,10 @@ import {
 } from '../whatsapp/whatsapp.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
 
+function isOutboundDebugEnabled() {
+	return String(process.env.OUTBOUND_DEBUG || '').trim().toLowerCase() === 'true';
+}
+
 export async function sendAndPersistOutbound({
 	conversationId,
 	workspaceId: expectedWorkspaceId = null,
@@ -55,14 +59,16 @@ export async function sendAndPersistOutbound({
 	const workspaceId = conversation.workspaceId;
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 
-	console.log('[OUTBOUND DEBUG] sendAndPersistOutbound', {
-		conversationId,
-		waId,
-		contactName: conversation.contact?.name || null,
-		messageType,
-		bodyPreview: cleanBody.slice(0, 160),
-		replyMessageId,
-	});
+	if (isOutboundDebugEnabled()) {
+		console.log('[OUTBOUND DEBUG] sendAndPersistOutbound', {
+			conversationId,
+			waId,
+			contactName: conversation.contact?.name || null,
+			messageType,
+			bodyPreview: cleanBody.slice(0, 160),
+			replyMessageId,
+		});
+	}
 
 	if (!waId) {
 		throw new Error('La conversación no tiene un waId válido para enviar el mensaje.');
@@ -121,7 +127,9 @@ export async function sendAndPersistOutbound({
 		});
 	}
 
-	console.log('[OUTBOUND DEBUG] send result', sendResult);
+	if (isOutboundDebugEnabled()) {
+		console.log('[OUTBOUND DEBUG] send result', sendResult);
+	}
 
 	if (!sendResult?.ok) {
 		throw new Error(

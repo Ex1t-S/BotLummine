@@ -299,7 +299,6 @@
 	gap: 12px;
 	padding: 14px;
 	text-align: left;
-	cursor: pointer;
 	transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
@@ -308,6 +307,17 @@
 	border-color: #0f766e;
 	box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
 	transform: translateY(-1px);
+}
+
+.tenant-admin-workspace-card__select {
+	border: none;
+	background: transparent;
+	padding: 0;
+	margin: 0;
+	text-align: left;
+	cursor: pointer;
+	display: grid;
+	gap: 12px;
 }
 
 .tenant-admin-workspace-card__top {
@@ -341,6 +351,29 @@
 	display: grid;
 	gap: 4px;
 	color: #475569;
+}
+
+.tenant-admin-workspace-card__actions {
+	display: flex;
+	gap: 8px;
+}
+
+.tenant-admin-workspace-card__actions button {
+	min-height: 36px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #172033;
+	font: inherit;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.tenant-admin-workspace-card__actions .tenant-admin-workspace-card__delete {
+	border-color: #fecaca;
+	background: #fff1f2;
+	color: #b91c1c;
 }
 
 .tenant-admin-brand-logo-box {

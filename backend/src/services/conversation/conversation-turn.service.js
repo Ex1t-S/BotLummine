@@ -29,12 +29,14 @@ import {
 	createResetConversationState,
 	buildConversationSummary,
 	buildAiFailureFallback,
+	buildCatalogSafetyFallback,
 	buildResponsePolicy,
 	auditAssistantReply,
 	resolveIntentAction,
 	buildStatePayload,
 	normalizeRecentMessage,
 	buildFallbackOrderAwareReply,
+	shouldForceCatalogSafetyFallback,
 } from './conversation-helpers.service.js';
 
 export async function runConversationTurn({
@@ -463,6 +465,31 @@ export async function runConversationTurn({
 				commercialPlan,
 			});
 		}
+	}
+
+	if (
+		!finalReply &&
+		shouldForceCatalogSafetyFallback({
+			intent,
+			messageBody,
+			enrichedState,
+			catalogProducts,
+			commercialPlan,
+		})
+	) {
+		finalReply = buildCatalogSafetyFallback({
+			intent,
+			messageBody,
+			enrichedState,
+			commercialPlan,
+		});
+		aiMeta = {
+			provider: 'fallback',
+			model: 'catalog-safety-fallback',
+			raw: {
+				reason: 'no_confirmed_catalog_match',
+			},
+		};
 	}
 
 	if (!finalReply) {

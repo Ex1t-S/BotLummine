@@ -285,6 +285,72 @@ export function buildAiFailureFallback({
 	return 'Contame un poco más y te ayudo por acá.';
 }
 
+function messageLooksLikeSpecificCatalogCheck(messageBody = '') {
+	const text = normalizeText(messageBody).toLowerCase();
+	if (!text) return false;
+
+	return (
+		/(tenes|tienen|venden|hay|queda|viene|vienen|trabajan)/i.test(text) &&
+		/(talle|talles|color|colores|stock|disponible|xl|xxl|xxxl|s\/m|m\/l|l\/xl|negro|blanco|beige|celeste|azul|verde|rosa|gris)/i.test(text)
+	);
+}
+
+export function shouldForceCatalogSafetyFallback({
+	intent,
+	messageBody = '',
+	enrichedState = {},
+	catalogProducts = [],
+	commercialPlan = null,
+} = {}) {
+	const hasCatalogMatch = Array.isArray(catalogProducts) && catalogProducts.length > 0;
+	if (hasCatalogMatch) return false;
+
+	if (commercialPlan?.catalogAvailable === false) return true;
+
+	if (intent === 'size_help' || intent === 'stock_check') return true;
+
+	if (intent === 'product' && !commercialPlan?.bestOffer) return true;
+
+	if (
+		intent === 'general' &&
+		messageLooksLikeSpecificCatalogCheck(messageBody) &&
+		!enrichedState?.currentProductFocus &&
+		!enrichedState?.currentProductFamily
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+export function buildCatalogSafetyFallback({
+	intent,
+	messageBody = '',
+	enrichedState = {},
+	commercialPlan = null,
+} = {}) {
+	const familyLabel =
+		commercialPlan?.productFamilyLabel ||
+		commercialPlan?.productFamily ||
+		enrichedState?.currentProductFocus ||
+		enrichedState?.currentProductFamily ||
+		'ese producto';
+
+	if (intent === 'size_help' || intent === 'stock_check') {
+		return `No te lo quiero confirmar mal: ahora no tengo una coincidencia clara en catálogo para ${familyLabel}. Si querés, decime el nombre exacto del producto y te lo reviso puntual.`;
+	}
+
+	if (intent === 'product') {
+		return `No te quiero decir que sí y pifiarle. Ahora no estoy viendo una coincidencia confirmada para ${familyLabel}. Si querés, pasame el nombre exacto o el link del producto y lo reviso bien.`;
+	}
+
+	if (intent === 'general' && messageLooksLikeSpecificCatalogCheck(messageBody)) {
+		return 'No te lo quiero confirmar mal. Si me decís el nombre exacto del producto, color o talle que buscás, te lo reviso puntual.';
+	}
+
+	return 'No te lo quiero confirmar mal. Si me pasás el nombre exacto del producto, te lo reviso bien.';
+}
+
 export function buildResponsePolicy({
 	intent,
 	enrichedState,

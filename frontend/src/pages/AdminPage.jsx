@@ -431,13 +431,14 @@ export default function AdminPage({ defaultTab = '' }) {
 			const currentWorkspace = user?.workspace || null;
 			setWorkspaces(currentWorkspace ? [currentWorkspace] : []);
 			setSelectedWorkspaceId(currentWorkspace?.id || user?.workspaceId || '');
-			return;
+			return currentWorkspace ? [currentWorkspace] : [];
 		}
 
 		const res = await api.get('/admin/workspaces');
 		const items = res.data.workspaces || [];
 		setWorkspaces(items);
 		setSelectedWorkspaceId((current) => current || items[0]?.id || '');
+		return items;
 	}
 
 	function selectCommerceConnection(nextWorkspace, provider = commerceProvider) {
@@ -807,6 +808,39 @@ export default function AdminPage({ defaultTab = '' }) {
 		}
 	}
 
+	async function handleDeleteWorkspace(targetWorkspace = null) {
+		const workspaceToDelete = targetWorkspace || workspace;
+		const workspaceId = workspaceToDelete?.id || selectedWorkspaceId;
+		if (!platformAdmin || !workspaceId || !workspaceToDelete) return;
+
+		const confirmed = window.confirm(
+			`Vas a borrar la marca ${getWorkspaceName(workspaceToDelete)}. También se eliminarán sus usuarios, catálogo, conversaciones e integraciones.`
+		);
+
+		if (!confirmed) return;
+
+		setSaving(true);
+		try {
+			const res = await api.delete(`/admin/workspaces/${workspaceId}`);
+			const deletedName = res.data?.deletedWorkspace?.name || getWorkspaceName(workspaceToDelete);
+			const items = await loadWorkspaces();
+			const nextWorkspaceId = items[0]?.id || '';
+			setSelectedWorkspaceId(nextWorkspaceId);
+			if (!nextWorkspaceId) {
+				setWorkspace(null);
+				setWorkspaceForm(mapWorkspaceForm(null));
+				setUsers([]);
+				setCatalogStatus(null);
+				setTiendanubeStatus(null);
+			}
+			showNotice(`Marca eliminada: ${deletedName}.`);
+		} catch (err) {
+			showError(err);
+		} finally {
+			setSaving(false);
+		}
+	}
+
 	function handleStartTiendanubeInstall() {
 		if (!selectedWorkspaceId) return;
 		window.location.href = buildApiUrl(`/tiendanube/install?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
@@ -908,24 +942,45 @@ export default function AdminPage({ defaultTab = '' }) {
 									const selected = item.id === selectedWorkspaceId;
 									const itemName = getWorkspaceName(item);
 									return (
-										<button
-											type="button"
+										<div
 											key={item.id}
 											className={`tenant-admin-workspace-card ${selected ? 'is-selected' : ''}`.trim()}
-											onClick={() => setSelectedWorkspaceId(item.id)}
 										>
-											<div className="tenant-admin-workspace-card__top">
-												<div>
-													<strong>{itemName}</strong>
-													<span>{item.name || item.slug || item.id}</span>
+											<button
+												type="button"
+												className="tenant-admin-workspace-card__select"
+												onClick={() => setSelectedWorkspaceId(item.id)}
+											>
+												<div className="tenant-admin-workspace-card__top">
+													<div>
+														<strong>{itemName}</strong>
+														<span>{item.name || item.slug || item.id}</span>
+													</div>
+													<StatusPill>{item.status || 'ACTIVE'}</StatusPill>
 												</div>
-												<StatusPill>{item.status || 'ACTIVE'}</StatusPill>
+												<div className="tenant-admin-workspace-card__meta">
+													<small>Slug: {item.slug || 'sin definir'}</small>
+													<small>Asesora IA: {item.aiConfig?.agentName || 'sin definir'}</small>
+												</div>
+											</button>
+											<div className="tenant-admin-workspace-card__actions">
+												<button
+													type="button"
+													disabled={saving}
+													onClick={() => setSelectedWorkspaceId(item.id)}
+												>
+													Editar
+												</button>
+												<button
+													type="button"
+													className="tenant-admin-workspace-card__delete"
+													disabled={saving}
+													onClick={() => handleDeleteWorkspace(item)}
+												>
+													Borrar
+												</button>
 											</div>
-											<div className="tenant-admin-workspace-card__meta">
-												<small>Slug: {item.slug || 'sin definir'}</small>
-												<small>Asesora IA: {item.aiConfig?.agentName || 'sin definir'}</small>
-											</div>
-										</button>
+										</div>
 									);
 								})}
 							</div>
@@ -970,6 +1025,7 @@ export default function AdminPage({ defaultTab = '' }) {
 										<Textarea label="Contexto comercial" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
 										<Textarea label="Instrucciones extra del sistema" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
 										<button type="submit" disabled={saving || loading}>Guardar marca</button>
+										<button type="button" disabled={saving || loading} onClick={handleDeleteWorkspace}>Borrar marca</button>
 									</form>
 								</>
 							) : (

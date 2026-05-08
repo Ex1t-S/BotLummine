@@ -1023,6 +1023,68 @@ export async function createWorkspace(req, res, next) {
 	}
 }
 
+export async function deleteWorkspace(req, res, next) {
+	try {
+		assertPlatformAdmin(req);
+
+		const workspaceId = requireRequestWorkspaceId(req, {
+			allowDefaultForPlatformAdmin: Boolean(req.params?.workspaceId),
+		});
+
+		const workspace = await prisma.workspace.findUnique({
+			where: { id: workspaceId },
+			select: {
+				id: true,
+				name: true,
+				slug: true,
+				users: {
+					select: {
+						id: true,
+						role: true,
+					},
+				},
+			},
+		});
+
+		if (!workspace) {
+			return res.status(404).json({
+				ok: false,
+				error: 'Workspace no encontrado.',
+			});
+		}
+
+		const workspaceUserIds = (workspace.users || [])
+			.filter((user) => user.role !== 'PLATFORM_ADMIN')
+			.map((user) => user.id);
+
+		await prisma.$transaction(async (tx) => {
+			if (workspaceUserIds.length) {
+				await tx.user.deleteMany({
+					where: {
+						id: { in: workspaceUserIds },
+					},
+				});
+			}
+
+			await tx.workspace.delete({
+				where: { id: workspaceId },
+			});
+		});
+
+		return res.json({
+			ok: true,
+			deletedWorkspace: {
+				id: workspace.id,
+				name: workspace.name,
+				slug: workspace.slug,
+				deletedUsersCount: workspaceUserIds.length,
+			},
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
 export async function getWorkspace(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req, {

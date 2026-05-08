@@ -11,6 +11,8 @@
     "jobs:enbox-sync": "node src/jobs/enbox-sync.job.js",
     "jobs:campaign-dispatch": "node src/jobs/campaign-dispatch.job.js",
     "jobs:diagnose": "node src/jobs/diagnose.job.js",
+    "ai:test:no-context": "node scripts/test-ai-no-context.mjs",
+    "ai:test:workspace-flow": "node scripts/test-ai-workspace-flow.mjs",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",

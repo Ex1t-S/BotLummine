@@ -30,9 +30,11 @@ import {
 	normalizeText,
 	buildConversationSummary,
 	buildAiFailureFallback,
+	buildCatalogSafetyFallback,
 	buildResponsePolicy,
 	auditAssistantReply,
 	resolveIntentAction,
+	shouldForceCatalogSafetyFallback,
 	buildStatePayload,
 	buildFallbackOrderAwareReply,
 } from './conversation-helpers.service.js';
@@ -977,6 +979,31 @@ export async function processInboundMessage({
 				commercialPlan
 			});
 		}
+	}
+
+	if (
+		!finalReply &&
+		shouldForceCatalogSafetyFallback({
+			intent,
+			messageBody: effectiveMessageBody,
+			enrichedState,
+			catalogProducts,
+			commercialPlan,
+		})
+	) {
+		finalReply = buildCatalogSafetyFallback({
+			intent,
+			messageBody: effectiveMessageBody,
+			enrichedState,
+			commercialPlan,
+		});
+		aiMeta = {
+			provider: 'fallback',
+			model: 'catalog-safety-fallback',
+			raw: {
+				reason: 'no_confirmed_catalog_match',
+			},
+		};
 	}
 
 	if (!finalReply) {

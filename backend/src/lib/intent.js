@@ -83,7 +83,7 @@ function isShortFollowUp(q = '') {
 }
 
 function hasTrackingKeywords(q = '') {
-	return /(seguimiento|estado de mi pedido|estado del pedido|quiero seguir mi pedido|donde esta mi pedido|donde esta mi compra|no llego mi pedido|no me llego|no me llegó|despachado|tracking|codigo de seguimiento|código de seguimiento)/.test(
+	return /(seguimiento|estado de mi pedido|estado del pedido|quiero seguir mi pedido|donde esta mi pedido|donde esta mi compra|como viene mi pedido|como va mi pedido|como viene la compra|como va la compra|no llego mi pedido|no me llego|no me llegó|despachado|tracking|codigo de seguimiento|código de seguimiento)/.test(
 		q
 	);
 }
