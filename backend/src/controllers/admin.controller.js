@@ -913,6 +913,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			if (!metrics) continue;
 			metrics.recoveredCartsCount = recovered.count || 0;
 			metrics.recoveredCartValue = recovered.value || 0;
+			metrics.conversionCount += recovered.count || 0;
 		}
 
 		const workspaceAnalytics = workspaces.map((workspace) => ({
