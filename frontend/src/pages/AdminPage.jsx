@@ -159,6 +159,15 @@ function StatusPill({ children }) {
 	return <span className="tenant-admin-pill">{children || 'Sin datos'}</span>;
 }
 
+function SectionIntro({ title, description }) {
+	return (
+		<div className="tenant-admin-section-copy">
+			<h3>{title}</h3>
+			{description ? <p>{description}</p> : null}
+		</div>
+	);
+}
+
 function formatNumber(value) {
 	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
 }
@@ -660,7 +669,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			setWorkspaceCreateForm(EMPTY_WORKSPACE_FORM);
 			await loadWorkspaces();
 			setSelectedWorkspaceId(created?.id || '');
-			showNotice('Marca creada.');
+			showNotice('Marca creada. Ya podes seguir con su configuración.');
 		} catch (err) {
 			showError(err);
 		} finally {
@@ -829,15 +838,15 @@ export default function AdminPage({ defaultTab = '' }) {
 		<div className="tenant-admin-page">
 			<PageHeader
 				className="tenant-admin-header"
-				title={platformAdmin ? 'Admin plataforma' : 'Configuración de marca'}
+				title={platformAdmin ? 'Admin de plataforma' : 'Configuración de marca'}
 				description={
 					platformAdmin
-						? (workspace?.name || 'Marcas, integraciones y auditoría')
+						? 'Creá nuevas marcas, elegí cuál editar y administrá sus integraciones.'
 						: (workspace?.name || 'Branding, contenido y agentes de la marca')
 				}
 			>
-				{workspaceOptions.length ? (
-					<Select label="Workspace" value={selectedWorkspaceId} onChange={setSelectedWorkspaceId}>
+				{!platformAdmin && workspaceOptions.length ? (
+					<Select label="Marca actual" value={selectedWorkspaceId} onChange={setSelectedWorkspaceId}>
 						{workspaceOptions.map((item) => (
 							<option key={item.id} value={item.id}>
 								{item.name || item.slug || item.id}
@@ -866,38 +875,114 @@ export default function AdminPage({ defaultTab = '' }) {
 			) : null}
 
 			<div className="tenant-admin-scroll">
+				{platformAdmin && activeTab !== 'workspaces' ? (
+					<section className="tenant-admin-panel tenant-admin-panel--compact">
+						<div className="tenant-admin-selected-brand">
+							<StatusPill>Marca seleccionada: {workspace ? getWorkspaceName(workspace) : 'sin seleccionar'}</StatusPill>
+							<StatusPill>Slug: {workspace?.slug || 'sin slug'}</StatusPill>
+							<button type="button" disabled={saving} onClick={() => setActiveTab('workspaces')}>
+								Cambiar marca
+							</button>
+						</div>
+					</section>
+				) : null}
+
 				{platformAdmin && activeTab === 'workspaces' ? (
 					<section className="tenant-admin-panel">
-						<h3>Nueva marca</h3>
+						<SectionIntro
+							title="Crear nueva marca"
+							description="Este bloque siempre queda disponible para dar de alta otra marca, aunque ya tengas una seleccionada para editar."
+						/>
 						<form className="tenant-admin-grid" onSubmit={handleCreateWorkspace}>
-							<Input label="Nombre" value={workspaceCreateForm.name} required onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, name: value }))} />
-							<Input label="Slug" value={workspaceCreateForm.slug} required onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, slug: value }))} />
-							<Input label="Nombre IA" value={workspaceCreateForm.businessName} onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, businessName: value }))} />
-							<Input label="Agente" value={workspaceCreateForm.agentName} onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, agentName: value }))} />
-							<Textarea label="Tono" value={workspaceCreateForm.tone} onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, tone: value }))} />
+							<Input label="Nombre interno" value={workspaceCreateForm.name} required onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, name: value }))} />
+							<Input label="Identificador interno (slug)" value={workspaceCreateForm.slug} required onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, slug: value }))} />
+							<Input label="Nombre comercial" value={workspaceCreateForm.businessName} onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, businessName: value }))} />
+							<Input label="Nombre de la asesora IA" value={workspaceCreateForm.agentName} onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, agentName: value }))} />
+							<Textarea label="Tono base de la asesora" value={workspaceCreateForm.tone} onChange={(value) => setWorkspaceCreateForm((cur) => ({ ...cur, tone: value }))} />
 							<button type="submit" disabled={saving}>Crear marca</button>
 						</form>
 					</section>
 				) : null}
 
+				{platformAdmin && activeTab === 'workspaces' ? (
+					<section className="tenant-admin-panel">
+						<SectionIntro
+							title="Marcas creadas"
+							description="Elegí una marca para editarla. La selección solo afecta a los bloques de edición y configuración."
+						/>
+						{workspaces.length ? (
+							<div className="tenant-admin-workspace-grid">
+								{workspaces.map((item) => {
+									const selected = item.id === selectedWorkspaceId;
+									const itemName = getWorkspaceName(item);
+									return (
+										<button
+											type="button"
+											key={item.id}
+											className={`tenant-admin-workspace-card ${selected ? 'is-selected' : ''}`.trim()}
+											onClick={() => setSelectedWorkspaceId(item.id)}
+										>
+											<div className="tenant-admin-workspace-card__top">
+												<div>
+													<strong>{itemName}</strong>
+													<span>{item.name || item.slug || item.id}</span>
+												</div>
+												<StatusPill>{item.status || 'ACTIVE'}</StatusPill>
+											</div>
+											<div className="tenant-admin-workspace-card__meta">
+												<small>Slug: {item.slug || 'sin definir'}</small>
+												<small>Asesora IA: {item.aiConfig?.agentName || 'sin definir'}</small>
+											</div>
+										</button>
+									);
+								})}
+							</div>
+						) : (
+							<div className="tenant-admin-empty">Todavía no hay marcas creadas.</div>
+						)}
+					</section>
+				) : null}
+
 				{activeTab === 'workspaces' || activeTab === 'brand' ? (
 					<section className="tenant-admin-panel">
-						<h3>{platformAdmin ? 'Datos de plataforma y branding' : 'Marca conectada'}</h3>
 						{platformAdmin ? (
-							<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
-								<Input label="Nombre" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
-								<Input label="Slug" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
-								<Select label="Estado" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
-									<option value="ACTIVE">ACTIVE</option>
-									<option value="SUSPENDED">SUSPENDED</option>
-									<option value="ARCHIVED">ARCHIVED</option>
-								</Select>
-								<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
-								<Input label="Logo URL" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
-								<Textarea label="Contexto de negocio" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
-								<Textarea label="System prompt extra" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
-								<button type="submit" disabled={saving || loading}>Guardar marca</button>
-							</form>
+							<SectionIntro
+								title="Editar marca seleccionada"
+								description={
+									workspace
+										? `Estás editando ${getWorkspaceName(workspace)}. Acá definís su identidad, contexto comercial y estado dentro de la plataforma.`
+										: 'Seleccioná una marca de la lista anterior para editarla.'
+								}
+							/>
+						) : (
+							<h3>Marca conectada</h3>
+						)}
+						{platformAdmin ? (
+							workspace ? (
+								<>
+									<div className="tenant-admin-selected-brand">
+										<StatusPill>Marca interna: {workspaceForm.name || 'sin nombre'}</StatusPill>
+										<StatusPill>Slug: {workspaceForm.slug || 'sin slug'}</StatusPill>
+										<StatusPill>Estado: {workspaceForm.status || 'ACTIVE'}</StatusPill>
+									</div>
+									<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
+										<Input label="Nombre interno" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
+										<Input label="Identificador interno (slug)" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
+										<Select label="Estado de la marca" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
+											<option value="ACTIVE">ACTIVE</option>
+											<option value="SUSPENDED">SUSPENDED</option>
+											<option value="ARCHIVED">ARCHIVED</option>
+										</Select>
+										<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
+										<Input label="Logo de la marca (URL)" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
+										<Textarea label="Contexto comercial" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
+										<Textarea label="Instrucciones extra del sistema" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
+										<button type="submit" disabled={saving || loading}>Guardar marca</button>
+									</form>
+								</>
+							) : (
+								<div className="tenant-admin-empty">Seleccioná una marca para editarla.</div>
+							)
 						) : (
 							<div className="tenant-admin-brand-summary">
 								<div className="tenant-admin-brand-logo-box">
@@ -921,24 +1006,30 @@ export default function AdminPage({ defaultTab = '' }) {
 
 				{activeTab === 'content' ? (
 					<section className="tenant-admin-panel">
-						<h3>Contenido operativo e IA</h3>
+						<SectionIntro
+							title="Asesora IA"
+							description="Definí cómo se llama la asesora virtual de la marca y cuál es su tono al responder."
+						/>
 						<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
-							<Input label="Agente IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
-							<Textarea label="Tono" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
-							<button type="submit" disabled={saving || loading}>Guardar contenido IA</button>
+							<Input label="Nombre de la asesora IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
+							<Textarea label="Tono de la asesora" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
+							<button type="submit" disabled={saving || loading}>Guardar asesora IA</button>
 						</form>
 					</section>
 				) : null}
 
 				{activeTab === 'content' ? (
 					<section className="tenant-admin-panel">
-						<h3>Datos de pago</h3>
+						<SectionIntro
+							title="Datos de pago"
+							description="Estos datos son los que la asesora puede compartir cuando el cliente necesita pagar por transferencia."
+						/>
 						<form className="tenant-admin-grid" onSubmit={handleSavePayment}>
-							<Input label="Banco transferencia" value={paymentForm.transferBank} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferBank: value }))} />
-							<Input label="Titular" value={paymentForm.transferHolder} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferHolder: value }))} />
+							<Input label="Banco para transferencias" value={paymentForm.transferBank} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferBank: value }))} />
+							<Input label="Titular de la cuenta" value={paymentForm.transferHolder} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferHolder: value }))} />
 							<Input label="Alias" value={paymentForm.transferAlias} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferAlias: value }))} />
-							<Input label="CBU/CVU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
-							<Textarea label="Texto transferencia" value={paymentForm.transferExtra} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferExtra: value }))} />
+							<Input label="CBU / CVU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
+							<Textarea label="Texto extra para transferencia" value={paymentForm.transferExtra} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferExtra: value }))} />
 							<button type="submit" disabled={saving}>Guardar datos de pago</button>
 						</form>
 					</section>
