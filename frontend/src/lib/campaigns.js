@@ -89,6 +89,16 @@ export async function createCampaignSchedule(payload) {
 	return unwrap(response);
 }
 
+export async function previewCampaignSchedule(payload) {
+	const response = await api.post('/campaigns/schedules/preview', payload);
+	return unwrap(response);
+}
+
+export async function runCampaignScheduleNow(scheduleId) {
+	const response = await api.post(`/campaigns/schedules/${scheduleId}/run-now`);
+	return unwrap(response);
+}
+
 export async function updateCampaignSchedule(scheduleId, payload) {
 	const response = await api.patch(`/campaigns/schedules/${scheduleId}`, payload);
 	return unwrap(response);

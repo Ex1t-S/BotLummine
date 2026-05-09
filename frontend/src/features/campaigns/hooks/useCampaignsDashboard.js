@@ -17,8 +17,10 @@ import {
 	fetchTemplates,
 	pauseCampaign,
 	previewAbandonedCartAudience,
+	previewCampaignSchedule,
 	purgeDeletedTemplates,
 	resumeCampaign,
+	runCampaignScheduleNow,
 	runCampaignDispatchTick,
 	sendShipmentNotifications,
 	syncTemplates,
@@ -292,6 +294,7 @@ export function useCampaignsDashboard() {
 		candidates: Array.isArray(shipmentCandidatesQuery.data?.candidates)
 			? shipmentCandidatesQuery.data.candidates
 			: [],
+		summary: shipmentCandidatesQuery.data?.summary || {},
 	}), [shipmentSettingsQuery.data, shipmentCandidatesQuery.data, shipmentRange]);
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
 
@@ -570,6 +573,20 @@ export function useCampaignsDashboard() {
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la programación.'),
 	});
 
+	const previewScheduleMutation = useMutation({
+		mutationFn: previewCampaignSchedule,
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo previsualizar la audiencia.'),
+	});
+
+	const runScheduleNowMutation = useMutation({
+		mutationFn: runCampaignScheduleNow,
+		onSuccess: (result) => {
+			invalidateAll(result?.campaignId || null);
+			showFeedback('success', `Programacion ejecutada para ${Number(result?.selectedCount || 0)} destinatario(s).`);
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar la programacion.'),
+	});
+
 	const dispatchTickMutation = useMutation({
 		mutationFn: runCampaignDispatchTick,
 		onSuccess: (result) => {
@@ -679,6 +696,8 @@ export function useCampaignsDashboard() {
 			createSchedule: createScheduleMutation,
 			updateSchedule: updateScheduleMutation,
 			deleteSchedule: deleteScheduleMutation,
+			previewSchedule: previewScheduleMutation,
+			runScheduleNow: runScheduleNowMutation,
 			dispatchTick: dispatchTickMutation,
 			updateShipmentSettings: updateShipmentSettingsMutation,
 			sendShipmentNotifications: sendShipmentNotificationsMutation,

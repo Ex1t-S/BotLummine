@@ -7,6 +7,7 @@ import {
 	getCampaignDetail,
 	retryFailedCampaignRecipients,
 	previewAbandonedCartAudience,
+	runCampaignDispatchTick,
 } from '../services/campaigns/whatsapp-campaign.service.js';
 import { executeCampaignDispatcherTick } from '../services/campaigns/campaign-dispatcher.service.js';
 import {
@@ -24,6 +25,8 @@ import {
 	createCampaignSchedule,
 	deleteCampaignSchedule,
 	listCampaignSchedules,
+	previewCampaignSchedule,
+	runCampaignScheduleNow,
 	updateCampaignSchedule,
 } from '../services/campaigns/campaign-schedule.service.js';
 import {
@@ -302,6 +305,20 @@ export async function createCampaignScheduleController(req, res) {
 	}
 }
 
+export async function previewCampaignScheduleController(req, res) {
+	try {
+		const preview = await previewCampaignSchedule({
+			workspaceId: requireRequestWorkspaceId(req),
+			templateId: req.body?.templateId,
+			audienceSource: req.body?.audienceSource,
+			audienceFilters: req.body?.audienceFilters || req.body?.filters || {},
+		});
+		return res.json({ ok: true, preview });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
 export async function updateCampaignScheduleController(req, res) {
 	try {
 		const schedule = await updateCampaignSchedule(req.params.scheduleId, {
@@ -319,6 +336,19 @@ export async function updateCampaignScheduleController(req, res) {
 			notes: req.body?.notes,
 		});
 		return res.json({ ok: true, schedule });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function runCampaignScheduleNowController(req, res) {
+	try {
+		const result = await runCampaignScheduleNow(req.params.scheduleId, {
+			workspaceId: requireRequestWorkspaceId(req),
+			launchedByUserId: req.user?.id || null,
+		});
+		void runCampaignDispatchTick();
+		return res.status(201).json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}

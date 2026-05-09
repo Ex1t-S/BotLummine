@@ -702,6 +702,67 @@ export async function previewAbandonedCartAudience({
 	};
 }
 
+export async function previewCampaignAudience({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	templateId = null,
+	audienceSource = 'abandoned_carts',
+	audienceFilters = {}
+} = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || 'abandoned_carts');
+	const recipients = await resolveCampaignRecipients({
+		workspaceId: resolvedWorkspaceId,
+		audienceSource: normalizedAudienceSource,
+		audienceFilters
+	});
+
+	let template = null;
+	let baseComponents = [];
+
+	if (templateId) {
+		template = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
+		baseComponents = safeArray(template?.rawPayload?.components);
+	}
+
+	const previewRecipients = recipients.map((recipient) => {
+		const variables = buildRecipientVariables(recipient);
+		const personalized = baseComponents.length
+			? renderTemplatePreviewFromComponents(baseComponents, variables)
+			: { previewText: '', components: [] };
+
+		return {
+			phone: recipient.phone,
+			contactName: recipient.contactName,
+			externalKey: recipient.externalKey,
+			reason: normalizedAudienceSource === 'pending_payment' ? 'Pago pendiente' : 'Carrito abandonado',
+			variables,
+			renderedPreviewText: personalized.previewText || '',
+			primaryProductName:
+				variables?.product_name ||
+				variables?.first_product_name ||
+				'',
+			checkoutUrl:
+				variables?.checkout_url ||
+				variables?.abandoned_checkout_url ||
+				'',
+			totalAmount: variables?.total_amount || '',
+			isOptedOut: Boolean(recipient.isOptedOut)
+		};
+	});
+
+	const usable = previewRecipients.filter((recipient) => !recipient.isOptedOut);
+
+	return {
+		template,
+		audienceSource: normalizedAudienceSource,
+		filters: audienceFilters || {},
+		total: previewRecipients.length,
+		usableTotal: usable.length,
+		optedOutTotal: previewRecipients.length - usable.length,
+		recipients: previewRecipients.slice(0, 25)
+	};
+}
+
 async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, phone, contactId = null, contactName = null }) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedPhone = normalizeCampaignPhone(phone);

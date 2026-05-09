@@ -22,6 +22,8 @@ import {
 	getCampaignStatsController,
 	listCampaignSchedulesController,
 	createCampaignScheduleController,
+	previewCampaignScheduleController,
+	runCampaignScheduleNowController,
 	updateCampaignScheduleController,
 	deleteCampaignScheduleController,
 	getShipmentNotificationSettingsController,
@@ -48,7 +50,9 @@ router.post('/abandoned-carts/preview', previewAbandonedCartAudienceController);
 router.post('/dispatch/tick', dispatchTickController);
 router.get('/stats', getCampaignStatsController);
 router.get('/schedules', listCampaignSchedulesController);
+router.post('/schedules/preview', previewCampaignScheduleController);
 router.post('/schedules', createCampaignScheduleController);
+router.post('/schedules/:scheduleId/run-now', runCampaignScheduleNowController);
 router.patch('/schedules/:scheduleId', updateCampaignScheduleController);
 router.delete('/schedules/:scheduleId', deleteCampaignScheduleController);
 router.get('/shipment-notifications/settings', getShipmentNotificationSettingsController);

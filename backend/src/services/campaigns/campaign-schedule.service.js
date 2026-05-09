@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
-import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { createCampaignDraft, launchCampaign, previewCampaignAudience } from './whatsapp-campaign.service.js';
 
 const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires';
 const DEFAULT_TIME_OF_DAY = '22:00';
@@ -142,6 +142,26 @@ function serializeSchedule(schedule) {
 	};
 }
 
+function serializeSchedulePreview(preview = {}) {
+	return {
+		audienceSource: preview.audienceSource || 'abandoned_carts',
+		filters: preview.filters || {},
+		total: Number(preview.total || 0),
+		usableTotal: Number(preview.usableTotal ?? preview.total ?? 0),
+		optedOutTotal: Number(preview.optedOutTotal || 0),
+		recipients: safeArray(preview.recipients).map((recipient) => ({
+			phone: recipient.phone || '',
+			contactName: recipient.contactName || '',
+			externalKey: recipient.externalKey || '',
+			reason: recipient.reason || '',
+			primaryProductName: recipient.primaryProductName || '',
+			totalAmount: recipient.totalAmount || '',
+			renderedPreviewText: recipient.renderedPreviewText || '',
+			isOptedOut: Boolean(recipient.isOptedOut),
+		})),
+	};
+}
+
 async function resolveTemplate(workspaceId, templateId) {
 	const template = await prisma.whatsAppTemplate.findFirst({
 		where: {
@@ -214,6 +234,24 @@ export async function createCampaignSchedule({
 	return serializeSchedule(schedule);
 }
 
+export async function previewCampaignSchedule({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	templateId,
+	audienceSource = 'abandoned_carts',
+	audienceFilters = {},
+} = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const template = await resolveTemplate(resolvedWorkspaceId, templateId);
+	const preview = await previewCampaignAudience({
+		workspaceId: resolvedWorkspaceId,
+		templateId: template.id,
+		audienceSource: normalizeAudienceSource(audienceSource),
+		audienceFilters: normalizeFilters(audienceFilters || {}),
+	});
+
+	return serializeSchedulePreview(preview);
+}
+
 export async function updateCampaignSchedule(scheduleId, {
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	templateId = null,
@@ -266,6 +304,68 @@ export async function deleteCampaignSchedule(scheduleId, { workspaceId = DEFAULT
 
 	await prisma.campaignSchedule.delete({ where: { id: scheduleId } });
 	return { deleted: true };
+}
+
+export async function runCampaignScheduleNow(scheduleId, {
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	launchedByUserId = null,
+} = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const schedule = await prisma.campaignSchedule.findFirst({
+		where: { id: scheduleId, workspaceId: resolvedWorkspaceId },
+	});
+
+	if (!schedule) {
+		throw new Error('No se encontro la programacion.');
+	}
+
+	const runKey = `${getLocalRunKey(new Date(), schedule.timezone || DEFAULT_TIMEZONE)}-manual-${Date.now()}`;
+
+	try {
+		const created = await createCampaignDraft({
+			workspaceId: schedule.workspaceId,
+			name: `${schedule.name} manual ${runKey}`,
+			templateId: schedule.templateLocalId,
+			languageCode: schedule.templateLanguage,
+			sendComponents: safeArray(schedule.defaultComponents),
+			audienceSource: schedule.audienceSource || 'abandoned_carts',
+			audienceFilters: schedule.audienceFilters || {},
+			notes: schedule.notes || null,
+			launchedByUserId,
+		});
+		const campaignId = created?.campaign?.id;
+
+		if (campaignId) {
+			await launchCampaign(campaignId, { workspaceId: schedule.workspaceId });
+		}
+
+		await prisma.campaignSchedule.update({
+			where: { id: schedule.id },
+			data: {
+				lastRunAt: new Date(),
+				lastRunKey: runKey,
+				lastCampaignId: campaignId || null,
+				lastError: null,
+				runCount: { increment: 1 },
+			},
+		});
+
+		return {
+			ok: true,
+			scheduleId: schedule.id,
+			campaignId,
+			selectedCount: Number(created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
+		};
+	} catch (error) {
+		await prisma.campaignSchedule.update({
+			where: { id: schedule.id },
+			data: {
+				lastRunAt: new Date(),
+				lastError: error.message || 'Error ejecutando la programacion.',
+			},
+		});
+		throw error;
+	}
 }
 
 export async function processDueCampaignSchedules({ limit = 5 } = {}) {

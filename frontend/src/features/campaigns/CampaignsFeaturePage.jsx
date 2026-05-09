@@ -375,6 +375,28 @@ function CampaignSchedulesPanel({
 		mutations.createSchedule.mutate(payload, { onSuccess: resetForm });
 	}
 
+	const previewPayload = useMemo(() => buildSchedulePayload(form), [form]);
+	const previewKey = JSON.stringify({
+		templateId: previewPayload.templateId,
+		audienceSource: previewPayload.audienceSource,
+		audienceFilters: previewPayload.audienceFilters,
+	});
+	const schedulePreview = mutations.previewSchedule?.data?.preview || null;
+	const previewLoading = mutations.previewSchedule?.isPending || false;
+	const previewScheduleMutation = mutations.previewSchedule;
+
+	useEffect(() => {
+		if (!previewPayload.templateId) return;
+		const timeout = window.setTimeout(() => {
+			previewScheduleMutation?.mutate({
+				templateId: previewPayload.templateId,
+				audienceSource: previewPayload.audienceSource,
+				audienceFilters: previewPayload.audienceFilters,
+			});
+		}, 450);
+		return () => window.clearTimeout(timeout);
+	}, [previewKey]);
+
 	function toggleSchedule(schedule) {
 		const nextStatus = schedule.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
 		mutations.updateSchedule.mutate({
@@ -533,6 +555,34 @@ function CampaignSchedulesPanel({
 					</div>
 				</div>
 
+				<div className="campaign-schedule-section">
+					<div className="campaign-schedule-section__title">
+						<strong>Preview de audiencia</strong>
+						<span>{previewLoading ? 'Calculando destinatarios...' : `${Number(schedulePreview?.usableTotal || 0)} usable(s) de ${Number(schedulePreview?.total || 0)} encontrado(s).`}</span>
+					</div>
+					{schedulePreview?.recipients?.length ? (
+						<div className="campaign-schedule-preview-list">
+							{schedulePreview.recipients.slice(0, 5).map((recipient) => (
+								<div className="campaign-schedule-preview-row" key={recipient.externalKey || recipient.phone}>
+									<span>
+										<strong>{recipient.contactName || recipient.phone}</strong>
+										<small>{recipient.reason || 'Audiencia programada'} - {recipient.primaryProductName || 'Sin producto'}</small>
+									</span>
+									<span>
+										<strong>{recipient.totalAmount || '-'}</strong>
+										<small>{recipient.isOptedOut ? 'No contactable' : 'Listo'}</small>
+									</span>
+								</div>
+							))}
+						</div>
+					) : (
+						<div className="campaign-custom-audience-empty">
+							<strong>{previewLoading ? 'Calculando audiencia' : 'Sin destinatarios para estos filtros'}</strong>
+							<span>El preview se actualiza al cambiar plantilla, audiencia o reglas.</span>
+						</div>
+					)}
+				</div>
+
 				<label className="field">
 					<span>Notas internas</span>
 					<textarea
@@ -655,6 +705,14 @@ function CampaignSchedulesPanel({
 							</button>
 							<button
 								type="button"
+								className="button secondary"
+								onClick={() => mutations.runScheduleNow?.mutate(schedule.id)}
+								disabled={mutations.runScheduleNow?.isPending}
+							>
+								Ejecutar ahora
+							</button>
+							<button
+								type="button"
 								className="button danger"
 								onClick={() => onDeleteSchedule?.(schedule)}
 								disabled={mutations.deleteSchedule.isPending}
@@ -688,6 +746,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 	const settings = shipmentNotifications?.settings || {};
 	const range = shipmentNotifications?.range || {};
 	const candidates = shipmentNotifications?.candidates || [];
+	const summary = shipmentNotifications?.summary || {};
 	const [templateId, setTemplateId] = useState('');
 	const [enabled, setEnabled] = useState(false);
 	const [selectedKeys, setSelectedKeys] = useState([]);
@@ -851,7 +910,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 			<div className="campaign-schedule-section">
 				<div className="campaign-schedule-section__title">
 					<strong>Despachos recientes</strong>
-					<span>{selectableCandidates.length} pendiente(s) de {candidates.length} encontrado(s) en el rango.</span>
+					<span>{Number(summary.ready ?? selectableCandidates.length)} listo(s), {Number(summary.alreadyNotified || 0)} ya notificado(s), {Number(summary.withoutPhone || 0)} sin telefono.</span>
 				</div>
 				<div className="campaign-form-grid two-columns campaign-shipment-range">
 					<label className="field">
@@ -926,8 +985,10 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 								<small>{candidate.trackingNumber || candidate.trackingUrl || 'Sin tracking'}</small>
 							</span>
 							<span>
-								<strong>{candidate.alreadyNotified ? 'Notificado' : 'Pendiente'}</strong>
-								<small>{formatShipmentDate(candidate.updatedAt)}</small>
+								<strong className={`campaign-shipment-status ${candidate.alreadyNotified ? 'is-notified' : 'is-ready'}`}>
+									{candidate.alreadyNotified ? 'Ya notificado' : 'Listo'}
+								</strong>
+								<small>{candidate.reason || candidate.statusLabel || formatShipmentDate(candidate.updatedAt)}</small>
 							</span>
 						</label>
 					))}

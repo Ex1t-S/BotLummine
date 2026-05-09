@@ -332,6 +332,61 @@
 	overflow-wrap: anywhere;
 }
 
+.campaign-schedule-preview-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.campaign-schedule-preview-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: center;
+	padding: 10px 12px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 10px;
+	background: #ffffff;
+}
+
+.campaign-schedule-preview-row span {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.campaign-schedule-preview-row strong,
+.campaign-schedule-preview-row small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.campaign-schedule-preview-row small {
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.campaign-shipment-status {
+	display: inline-flex;
+	width: fit-content;
+	padding: 3px 7px;
+	border-radius: 999px;
+	font-size: 11px;
+}
+
+.campaign-shipment-status.is-ready {
+	background: #ecfdf3;
+	color: #067647;
+}
+
+.campaign-shipment-status.is-notified {
+	background: #f1f5f9;
+	color: #64748b;
+}
+
 .campaign-confirm-backdrop {
 	position: fixed;
 	inset: 0;
@@ -388,6 +443,10 @@
 
 	.campaign-shipment-row {
 		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.campaign-schedule-preview-row {
+		grid-template-columns: 1fr;
 	}
 
 	.campaign-shipment-variable-grid,

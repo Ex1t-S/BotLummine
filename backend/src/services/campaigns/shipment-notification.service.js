@@ -100,28 +100,8 @@ function buildRecentDateWhere(fields = [], { from, to }) {
 	return fields.map((field) => ({ [field]: { gte: from, lte: to } }));
 }
 
-function normalizeStatusText(value = '') {
-	return normalizeString(value)
-		.toLowerCase()
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '');
-}
-
 function isDispatchedStatus(value = '') {
 	return isDispatchedShippingStatus(value, { includeDelivered: false });
-	const normalized = normalizeStatusText(value);
-	return [
-		'despach',
-		'en camino',
-		'en transito',
-		'en tránsito',
-		'shipped',
-		'dispatched',
-		'in_transit',
-		'in transit',
-		'on the way',
-		'envio en curso',
-	].some((needle) => normalized.includes(normalizeStatusText(needle)));
 }
 
 function getPrimaryProductName(products = []) {
@@ -308,11 +288,16 @@ function shipmentToCandidate(shipment = {}, order = null, notifiedKeys = new Set
 	const orderProducts = getOrderProductSummary(order || {});
 	const notificationKey = `shipment:${shipment.didEnvio}`;
 	const shippingMeta = getShippingStatusMeta(shipment.shippingStatus || order?.shippingStatus || '');
+	const alreadyNotified = notifiedKeys.has(notificationKey);
 
 	return {
 		notificationKey,
 		source: 'enbox',
-		alreadyNotified: notifiedKeys.has(notificationKey),
+		alreadyNotified,
+		statusCategory: shippingMeta.category,
+		statusLabel: shippingMeta.label,
+		reason: alreadyNotified ? 'Ya notificado' : 'Despacho detectado en Enbox',
+		blockedReason: '',
 		shipmentId: shipment.didEnvio,
 		orderId: shipment.orderId || order?.orderId || '',
 		orderNumber: shipment.orderNumber || order?.orderNumber || '',
@@ -341,11 +326,16 @@ function orderToCandidate(order = {}, notifiedKeys = new Set()) {
 	const orderProducts = getOrderProductSummary(order);
 	const shippingSignals = extractOrderShippingSignals(order.rawPayload || {});
 	const shippingMeta = getShippingStatusMeta(order.shippingStatus || '');
+	const alreadyNotified = notifiedKeys.has(notificationKey);
 
 	return {
 		notificationKey,
 		source: 'tiendanube',
-		alreadyNotified: notifiedKeys.has(notificationKey),
+		alreadyNotified,
+		statusCategory: shippingMeta.category,
+		statusLabel: shippingMeta.label,
+		reason: alreadyNotified ? 'Ya notificado' : 'Despacho detectado en TiendaNube',
+		blockedReason: '',
 		shipmentId: '',
 		orderId: order.orderId || '',
 		orderNumber: order.orderNumber || '',
@@ -436,6 +426,15 @@ export async function listShipmentNotificationCandidates({
 		daysBack: normalizeDaysBack(daysBack),
 		dateFrom: range.from.toISOString().slice(0, 10),
 		dateTo: range.to.toISOString().slice(0, 10),
+		summary: {
+			ready: candidates.filter((candidate) => !candidate.alreadyNotified).length,
+			alreadyNotified: candidates.filter((candidate) => candidate.alreadyNotified).length,
+			withoutPhone:
+				dispatchedShipments.filter((shipment) =>
+					!normalizePhone(shipment.recipientPhone || ordersByNumber.get(shipment.orderNumber)?.normalizedPhone || ordersByNumber.get(shipment.orderNumber)?.contactPhone || '')
+				).length +
+				dispatchedFallbackOrders.filter((order) => !normalizePhone(order.normalizedPhone || order.contactPhone || '')).length,
+		},
 		candidates,
 	};
 }
