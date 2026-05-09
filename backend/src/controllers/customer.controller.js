@@ -75,6 +75,35 @@ function buildPaymentStatusVariants(paymentStatus = '') {
 	return map[raw] || [raw];
 }
 
+function buildDispatchedStatusVariants() {
+	return [
+		'despach',
+		'despachado',
+		'en camino',
+		'en transito',
+		'en tránsito',
+		'shipped',
+		'dispatched',
+		'in_transit',
+		'in transit',
+		'on the way',
+		'envio en curso',
+		'envío en curso',
+	];
+}
+
+function buildShippingStatusVariants(shippingStatus = '') {
+	const raw = String(shippingStatus || '').trim().toLowerCase();
+	if (!raw || raw === 'all') return [];
+	if (raw === 'dispatched' || raw === 'despachado') return buildDispatchedStatusVariants();
+	return [raw];
+}
+
+function isDispatchedShippingFilter(shippingStatus = '') {
+	const raw = String(shippingStatus || '').trim().toLowerCase();
+	return raw === 'dispatched' || raw === 'despachado';
+}
+
 function getPaymentStatusMeta(paymentStatus = '') {
 	const raw = String(paymentStatus || '').trim().toLowerCase();
 
@@ -94,6 +123,38 @@ function getPaymentStatusMeta(paymentStatus = '') {
 	return map[raw] || { label: raw ? raw.replace(/_/g, ' ') : 'Sin dato', tone: 'neutral' };
 }
 
+function getShippingStatusMeta(shippingStatus = '') {
+	const raw = String(shippingStatus || '').trim().toLowerCase();
+	if (!raw) return { label: 'Sin dato', tone: 'neutral' };
+	if (buildDispatchedStatusVariants().some((value) => raw.includes(value))) {
+		return { label: 'Despachado', tone: 'success' };
+	}
+	return { label: raw.replace(/_/g, ' '), tone: 'neutral' };
+}
+
+async function getDispatchedOrderRefs(workspaceId) {
+	const variants = buildDispatchedStatusVariants();
+	const shipments = await prisma.enboxShipment.findMany({
+		where: {
+			workspaceId,
+			OR: variants.flatMap((value) => [
+				{ shippingStatus: { contains: value, mode: 'insensitive' } },
+				{ shippingStatusCode: { contains: value, mode: 'insensitive' } },
+			]),
+		},
+		select: {
+			orderId: true,
+			orderNumber: true,
+		},
+		take: 5000,
+	});
+
+	return {
+		orderIds: [...new Set(shipments.map((shipment) => String(shipment.orderId || '').trim()).filter(Boolean))],
+		orderNumbers: [...new Set(shipments.map((shipment) => String(shipment.orderNumber || '').trim()).filter(Boolean))],
+	};
+}
+
 function buildCustomersWhere({
 	workspaceId,
 	q,
@@ -102,8 +163,10 @@ function buildCustomersWhere({
 	dateFrom,
 	dateTo,
 	paymentStatus,
+	shippingStatus,
 	minSpent,
 	hasPhoneOnly,
+	dispatchedOrderRefs = null,
 	excludedPhones = [],
 }) {
 	const and = [{ workspaceId }];
@@ -182,6 +245,25 @@ function buildCustomersWhere({
 			OR: paymentStatusVariants.map((value) => ({
 				paymentStatus: { equals: value, mode: 'insensitive' },
 			})),
+		});
+	}
+
+	const shippingStatusVariants = buildShippingStatusVariants(shippingStatus);
+	if (shippingStatusVariants.length > 0) {
+		const orderRefFilters = [];
+		if (dispatchedOrderRefs?.orderIds?.length) {
+			orderRefFilters.push({ orderId: { in: dispatchedOrderRefs.orderIds } });
+		}
+		if (dispatchedOrderRefs?.orderNumbers?.length) {
+			orderRefFilters.push({ orderNumber: { in: dispatchedOrderRefs.orderNumbers } });
+		}
+		and.push({
+			OR: [
+				...shippingStatusVariants.map((value) => ({
+					shippingStatus: { contains: value, mode: 'insensitive' },
+				})),
+				...orderRefFilters,
+			],
 		});
 	}
 
@@ -346,7 +428,7 @@ function buildOrderBy(sort = 'purchase_desc') {
 	}
 }
 
-function mapOrderToCard(order) {
+function mapOrderToCard(order, enboxShipment = null) {
 	const items = Array.isArray(order.items) ? order.items : [];
 	const totalUnitsPurchased = items.reduce(
 		(acc, item) => acc + Number(item.quantity || 0),
@@ -366,6 +448,8 @@ function mapOrderToCard(order) {
 	}
 
 	const paymentMeta = getPaymentStatusMeta(order.paymentStatus);
+	const shippingStatus = enboxShipment?.shippingStatus || order.shippingStatus || '';
+	const shippingMeta = getShippingStatusMeta(shippingStatus);
 
 	return {
 		id: order.id,
@@ -386,6 +470,9 @@ function mapOrderToCard(order) {
 		paymentStatus: order.paymentStatus || '',
 		paymentStatusLabel: paymentMeta.label,
 		paymentStatusTone: paymentMeta.tone,
+		shippingStatus,
+		shippingStatusLabel: shippingMeta.label,
+		shippingStatusTone: shippingMeta.tone,
 		orderNumber: order.orderNumber || '',
 		rawTotal: Number(order.totalAmount || 0),
 		rawDate: order.orderCreatedAt || null,
@@ -402,6 +489,7 @@ export async function getCustomers(req, res) {
 			dateFrom = '',
 			dateTo = '',
 			paymentStatus = '',
+			shippingStatus = '',
 			minSpent = '',
 			hasPhoneOnly = '',
 			excludeSentTemplate = '',
@@ -422,6 +510,9 @@ export async function getCustomers(req, res) {
 			templateNames: sentTemplateNames,
 			excludeSentTemplate,
 		});
+		const dispatchedOrderRefs = isDispatchedShippingFilter(shippingStatus)
+			? await getDispatchedOrderRefs(workspaceId)
+			: null;
 
 		const where = buildCustomersWhere({
 			workspaceId,
@@ -431,8 +522,10 @@ export async function getCustomers(req, res) {
 			dateFrom,
 			dateTo,
 			paymentStatus,
+			shippingStatus,
 			minSpent,
 			hasPhoneOnly,
+			dispatchedOrderRefs,
 			excludedPhones,
 		});
 
@@ -462,7 +555,41 @@ export async function getCustomers(req, res) {
 			}),
 		]);
 
-		const customers = orders.map(mapOrderToCard);
+		const visibleOrderNumbers = [...new Set(orders.map((order) => order.orderNumber).filter(Boolean))];
+		const visibleOrderIds = [...new Set(orders.map((order) => order.orderId).filter(Boolean))];
+		const visibleShipments = visibleOrderNumbers.length || visibleOrderIds.length
+			? await prisma.enboxShipment.findMany({
+				where: {
+					workspaceId,
+					OR: [
+						...(visibleOrderNumbers.length ? [{ orderNumber: { in: visibleOrderNumbers } }] : []),
+						...(visibleOrderIds.length ? [{ orderId: { in: visibleOrderIds } }] : []),
+					],
+				},
+				orderBy: [{ lastSyncedAt: 'desc' }, { updatedAt: 'desc' }],
+				select: {
+					orderId: true,
+					orderNumber: true,
+					shippingStatus: true,
+				},
+			})
+			: [];
+		const shipmentsByOrderRef = new Map();
+		for (const shipment of visibleShipments) {
+			if (shipment.orderNumber && !shipmentsByOrderRef.has(`number:${shipment.orderNumber}`)) {
+				shipmentsByOrderRef.set(`number:${shipment.orderNumber}`, shipment);
+			}
+			if (shipment.orderId && !shipmentsByOrderRef.has(`id:${shipment.orderId}`)) {
+				shipmentsByOrderRef.set(`id:${shipment.orderId}`, shipment);
+			}
+		}
+
+		const customers = orders.map((order) =>
+			mapOrderToCard(
+				order,
+				shipmentsByOrderRef.get(`number:${order.orderNumber}`) || shipmentsByOrderRef.get(`id:${order.orderId}`) || null
+			)
+		);
 
 		const uniquePhones = new Set();
 		const uniqueFallback = new Set();

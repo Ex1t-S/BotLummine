@@ -17,6 +17,7 @@ const initialFilters = {
 	dateFrom: '',
 	dateTo: '',
 	paymentStatus: '',
+	shippingStatus: '',
 	minSpent: '',
 	hasPhoneOnly: false,
 	sort: 'purchase_desc',
@@ -104,6 +105,43 @@ function getPaymentStatusTone(value) {
 	return 'is-neutral';
 }
 
+function formatShippingStatusLabel(value) {
+	const key = String(value || '').trim().toLowerCase();
+	if (!key) return 'Sin dato';
+	if (
+		key.includes('despach') ||
+		key.includes('en camino') ||
+		key.includes('en transito') ||
+		key.includes('en tránsito') ||
+		key.includes('shipped') ||
+		key.includes('dispatched') ||
+		key.includes('in_transit') ||
+		key.includes('in transit') ||
+		key.includes('on the way')
+	) {
+		return 'Despachado';
+	}
+	return String(value).replace(/_/g, ' ');
+}
+
+function getShippingStatusTone(value) {
+	const key = String(value || '').trim().toLowerCase();
+	if (
+		key.includes('despach') ||
+		key.includes('en camino') ||
+		key.includes('en transito') ||
+		key.includes('en tránsito') ||
+		key.includes('shipped') ||
+		key.includes('dispatched') ||
+		key.includes('in_transit') ||
+		key.includes('in transit') ||
+		key.includes('on the way')
+	) {
+		return 'is-paid';
+	}
+	return 'is-neutral';
+}
+
 function normalizeStats(payload = {}) {
 	const stats = payload.stats || {};
 	return {
@@ -137,6 +175,7 @@ function normalizeRequestFilters(filters) {
 		dateFrom: filters.dateFrom || '',
 		dateTo: filters.dateTo || '',
 		paymentStatus: filters.paymentStatus || '',
+		shippingStatus: filters.shippingStatus || '',
 		minSpent: filters.minSpent || '',
 		hasPhoneOnly: filters.hasPhoneOnly ? '1' : '',
 		sort: filters.sort || 'purchase_desc',
@@ -386,7 +425,7 @@ export default function CustomersPage() {
 		[currentPage, totalPages]
 	);
 	const activeFilterCount = useMemo(() => {
-		const keys = ['q', 'productQuery', 'orderNumber', 'dateFrom', 'dateTo', 'paymentStatus', 'minSpent'];
+		const keys = ['q', 'productQuery', 'orderNumber', 'dateFrom', 'dateTo', 'paymentStatus', 'shippingStatus', 'minSpent'];
 		const filled = keys.filter((key) => String(filters[key] || '').trim()).length;
 		return filled + (filters.hasPhoneOnly ? 1 : 0);
 	}, [filters]);
@@ -661,6 +700,17 @@ export default function CustomersPage() {
 						</select>
 					</div>
 					<div className="customers-filter-group">
+						<label>Envío</label>
+						<select
+							name="shippingStatus"
+							value={filters.shippingStatus}
+							onChange={handleFilterChange}
+						>
+							<option value="">Todos</option>
+							<option value="dispatched">Despachado</option>
+						</select>
+					</div>
+					<div className="customers-filter-group">
 						<label>Total mínimo</label>
 						<input
 							type="number"
@@ -751,6 +801,10 @@ export default function CustomersPage() {
 									<div className={`customer-payment-badge ${getPaymentStatusTone(customer.paymentStatus)}`}>
 										<span>Pago</span>
 										<strong>{formatPaymentStatusLabel(customer.paymentStatus)}</strong>
+									</div>
+									<div className={`customer-payment-badge ${getShippingStatusTone(customer.shippingStatus)}`}>
+										<span>Envío</span>
+										<strong>{customer.shippingStatusLabel || formatShippingStatusLabel(customer.shippingStatus)}</strong>
 									</div>
 								</div>
 
