@@ -191,7 +191,7 @@ function getScheduleHealth(schedule = {}) {
 		return {
 			label: 'Vencida',
 			className: 'is-overdue',
-			message: 'La hora programada ya paso. Si no sube ejecuciones, revisa el cron de Railway.',
+			message: 'La hora programada ya paso. El dispatcher interno revisa cada minuto; si sigue igual, usa Ejecutar ahora y revisa logs.',
 		};
 	}
 
@@ -488,7 +488,7 @@ function CampaignSchedulesPanel({
 				<div className="campaign-schedule-ops">
 					<div>
 						<strong>Estado operativo</strong>
-						<span>El cron externo ejecuta el dispatcher cada 5 minutos. Usa este control para probarlo ahora.</span>
+						<span>El backend revisa programaciones cada minuto. Usa este control para dispararlo ahora.</span>
 					</div>
 					<button
 						type="button"

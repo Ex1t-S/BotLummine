@@ -1,8 +1,8 @@
 import { logger } from '../lib/logger.js';
 import { executeCampaignDispatcherTick } from '../services/campaigns/campaign-dispatcher.service.js';
 
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
-const DEFAULT_START_DELAY_MS = 30 * 1000;
+const DEFAULT_INTERVAL_MS = 60 * 1000;
+const DEFAULT_START_DELAY_MS = 5 * 1000;
 const MIN_INTERVAL_MS = 60 * 1000;
 
 let timer = null;
