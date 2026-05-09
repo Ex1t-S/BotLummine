@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 import DashboardLayout from './layout/DashboardLayout.jsx';
@@ -9,15 +9,16 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BrandLoader from './components/ui/BrandLoader.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { getDefaultRouteForRole, isPlatformAdminUser } from './lib/authz.js';
+import { lazyWithRetry } from './lib/lazyWithRetry.js';
 
-const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
-const CatalogPage = lazy(() => import('./pages/CatalogPage.jsx'));
-const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
-const AbandonedCartsPage = lazy(() => import('./pages/AbandonedCartsPage.jsx'));
-const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx'));
-const WhatsAppMenuPage = lazy(() => import('./pages/WhatsAppMenuPage.jsx'));
-const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
-const OperationsPage = lazy(() => import('./pages/OperationsPage.jsx'));
+const InboxPage = lazyWithRetry(() => import('./pages/InboxPage.jsx'), 'InboxPage');
+const CatalogPage = lazyWithRetry(() => import('./pages/CatalogPage.jsx'), 'CatalogPage');
+const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage.jsx'), 'CampaignsPage');
+const AbandonedCartsPage = lazyWithRetry(() => import('./pages/AbandonedCartsPage.jsx'), 'AbandonedCartsPage');
+const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage.jsx'), 'CustomersPage');
+const WhatsAppMenuPage = lazyWithRetry(() => import('./pages/WhatsAppMenuPage.jsx'), 'WhatsAppMenuPage');
+const AdminPage = lazyWithRetry(() => import('./pages/AdminPage.jsx'), 'AdminPage');
+const OperationsPage = lazyWithRetry(() => import('./pages/OperationsPage.jsx'), 'OperationsPage');
 
 function RoleHomeRedirect() {
 	const { user } = useAuth();
@@ -25,7 +26,12 @@ function RoleHomeRedirect() {
 }
 
 function PageLoader() {
-	return <BrandLoader label="Cargando" />;
+	return (
+		<div className="route-loader" role="status" aria-live="polite">
+			<span className="route-loader__bar" aria-hidden="true" />
+			<strong>Cargando sección</strong>
+		</div>
+	);
 }
 
 function BrandAnalyticsRoute() {

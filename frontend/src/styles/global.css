@@ -66,11 +66,10 @@ body {
 }
 
 .brand-loader__label {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
+	color: #dbeafe;
+	font-size: 13px;
+	font-weight: 800;
+	letter-spacing: 0;
 	white-space: nowrap;
 }
 
@@ -85,6 +84,108 @@ body {
 		opacity: 1;
 		transform: scaleX(1);
 	}
+}
+
+.route-loader {
+	min-height: min(320px, 70dvh);
+	display: grid;
+	place-items: center;
+	align-content: center;
+	gap: 12px;
+	padding: 32px;
+	color: #0f172a;
+}
+
+.route-loader__bar {
+	width: 42px;
+	height: 3px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, transparent, #0284c7, transparent);
+	animation: brand-loader-pulse 1s ease-in-out infinite;
+}
+
+.route-loader strong {
+	font-size: 14px;
+	font-weight: 850;
+}
+
+.app-error-boundary {
+	min-height: 100dvh;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+	background: #f4f7fb;
+	color: #0f172a;
+}
+
+.app-error-boundary__panel {
+	width: min(620px, 100%);
+	padding: 24px;
+	border: 1px solid #d8dee8;
+	border-radius: 14px;
+	background: #ffffff;
+	box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+}
+
+.app-error-boundary__eyebrow {
+	display: inline-flex;
+	margin-bottom: 10px;
+	color: #b42318;
+	font-size: 12px;
+	font-weight: 850;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.app-error-boundary h1 {
+	margin: 0;
+	font-size: 24px;
+	line-height: 1.1;
+}
+
+.app-error-boundary p {
+	margin: 10px 0 0;
+	color: #475467;
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+.app-error-boundary__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 18px;
+}
+
+.app-error-boundary button {
+	min-height: 40px;
+	padding: 9px 14px;
+	border: 1px solid #0f172a;
+	border-radius: 8px;
+	background: #0f172a;
+	color: #ffffff;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.app-error-boundary button.secondary {
+	background: #ffffff;
+	color: #0f172a;
+}
+
+.app-error-boundary__details {
+	max-height: 240px;
+	overflow: auto;
+	margin: 18px 0 0;
+	padding: 12px;
+	border-radius: 8px;
+	background: #101828;
+	color: #e5e7eb;
+	font-size: 12px;
+	line-height: 1.45;
+	white-space: pre-wrap;
 }
 
 
