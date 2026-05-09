@@ -28,6 +28,7 @@ Railway schedules cron jobs in UTC. Keep the web service as the persistent API p
 - Cron services must finish and exit. The current job entrypoints disconnect Prisma in `finally`, so Railway can schedule the next run.
 - If a previous run is still active, Railway skips the next scheduled execution. Treat skipped runs as a signal to reduce batch size, increase spacing, or move to a persistent worker.
 - Campaign dispatch already uses database locks to avoid duplicate sends across overlapping executions.
+- The web service also starts a lightweight internal campaign dispatcher every 5 minutes by default. This keeps scheduled campaigns moving if the external cron service is missing or delayed. Set `CAMPAIGN_DISPATCHER_ENABLED=false` to disable it, or `CAMPAIGN_DISPATCHER_INTERVAL_MS` to tune the interval.
 - Use `CAMPAIGN_DISPATCH_BATCH_SIZE`, `CAMPAIGN_SEND_DELAY_MS`, and `CAMPAIGN_DISPATCH_LOCK_MS` to tune throughput before adding Redis or BullMQ.
 
 ## When to upgrade
