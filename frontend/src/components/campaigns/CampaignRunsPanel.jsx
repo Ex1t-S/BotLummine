@@ -29,18 +29,6 @@ function formatMoney(value, currency = 'ARS') {
 	}
 }
 
-function formatRecipientError(recipient = {}) {
-	const message = String(recipient.errorMessage || '').trim();
-	const code = String(recipient.errorCode || '').trim();
-	const subcode = String(recipient.errorSubcode || '').trim();
-	const codeLabel = [code, subcode].filter(Boolean).join('/');
-
-	if (message && codeLabel) return `${message} (${codeLabel})`;
-	if (message) return message;
-	if (codeLabel) return `Error Meta ${codeLabel}`;
-	return '';
-}
-
 function calculateCampaignCost(sentCount = 0) {
 	return Number(sentCount || 0) * 0.06;
 }
@@ -452,13 +440,6 @@ export default function CampaignRunsPanel({
 								<div className="campaign-helper-text">{actionModel.helperText}</div>
 							</div>
 
-							{selectedCampaign.lastError ? (
-								<div className="campaign-inline-error campaign-tracking-error">
-									<strong>Error de campaÃ±a</strong>
-									<span>{selectedCampaign.lastError}</span>
-								</div>
-							) : null}
-
 							<div className="campaign-detail-actions campaign-detail-actions--spaced">
 								<button
 									className="button primary"
@@ -643,16 +624,9 @@ export default function CampaignRunsPanel({
 													<td data-label="Destinatario">{recipient.contactName || recipient.name || 'Sin nombre'}</td>
 													<td data-label="Teléfono">{recipient.phone || recipient.contactPhone || '--'}</td>
 													<td data-label="Estado">
-														<div className="campaign-recipient-meta">
-															<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
-																{normalizeRecipientStatus(recipient.status)}
-															</span>
-															{formatRecipientError(recipient) ? (
-																<small className="campaign-recipient-error">
-																	{formatRecipientError(recipient)}
-																</small>
-															) : null}
-														</div>
+														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
+															{normalizeRecipientStatus(recipient.status)}
+														</span>
 													</td>
 													<td data-label="Interacción">
 														<div className="campaign-recipient-meta">
