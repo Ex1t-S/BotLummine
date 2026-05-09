@@ -143,7 +143,7 @@ const TAB_DEFINITIONS = [
 		eyebrow: 'Automatizaciones',
 		title: 'Avisos de despacho',
 		description:
-			'Selecciona pedidos despachados de los ultimos 3 dias, elegi una plantilla y activa o envia los avisos.',
+			'Selecciona pedidos despachados por rango de fechas, elegi una plantilla y activa o envia los avisos.',
 	},
 ];
 
@@ -686,6 +686,7 @@ function formatShipmentDate(value) {
 
 function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, queries, mutations }) {
 	const settings = shipmentNotifications?.settings || {};
+	const range = shipmentNotifications?.range || {};
 	const candidates = shipmentNotifications?.candidates || [];
 	const [templateId, setTemplateId] = useState('');
 	const [enabled, setEnabled] = useState(false);
@@ -743,6 +744,8 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 			templateId,
 			candidateKeys: selectedKeys,
 			variableMapping: effectiveVariableMapping,
+			dateFrom: range.dateFrom,
+			dateTo: range.dateTo,
 		});
 	}
 
@@ -758,7 +761,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 			<div className="campaign-schedule-ops">
 				<div>
 					<strong>Avisos de pedido despachado</strong>
-					<span>Empieza desactivado. Al activarlo, notifica pendientes no enviados de los ultimos 3 dias.</span>
+					<span>Empieza desactivado. En manual podés elegir de qué día a qué día se despacharon.</span>
 				</div>
 				<label className="campaign-toggle">
 					<input
@@ -848,7 +851,35 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 			<div className="campaign-schedule-section">
 				<div className="campaign-schedule-section__title">
 					<strong>Despachos recientes</strong>
-					<span>{selectableCandidates.length} pendiente(s) de {candidates.length} encontrado(s).</span>
+					<span>{selectableCandidates.length} pendiente(s) de {candidates.length} encontrado(s) en el rango.</span>
+				</div>
+				<div className="campaign-form-grid two-columns campaign-shipment-range">
+					<label className="field">
+						<span>Despachados desde</span>
+						<input
+							type="date"
+							value={range.dateFrom || ''}
+							onChange={(event) =>
+								shipmentNotifications?.setRange?.((current) => ({
+									...(current || {}),
+									dateFrom: event.target.value,
+								}))
+							}
+						/>
+					</label>
+					<label className="field">
+						<span>Despachados hasta</span>
+						<input
+							type="date"
+							value={range.dateTo || ''}
+							onChange={(event) =>
+								shipmentNotifications?.setRange?.((current) => ({
+									...(current || {}),
+									dateTo: event.target.value,
+								}))
+							}
+						/>
+					</label>
 				</div>
 				<div className="campaign-inline-actions campaign-inline-actions--wrap">
 					<button
@@ -903,7 +934,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 					{!queries.shipmentCandidates.isLoading && !candidates.length ? (
 						<div className="campaign-custom-audience-empty">
 							<strong>No hay despachos recientes</strong>
-							<span>Sin pedidos despachados detectados en los ultimos 3 dias.</span>
+							<span>Sin pedidos despachados detectados entre las fechas elegidas.</span>
 						</div>
 					) : null}
 				</div>

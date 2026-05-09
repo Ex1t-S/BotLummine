@@ -366,6 +366,8 @@ export async function listShipmentNotificationCandidatesController(req, res) {
 		const result = await listShipmentNotificationCandidates({
 			workspaceId: requireRequestWorkspaceId(req),
 			daysBack: req.query?.daysBack || 3,
+			dateFrom: req.query?.dateFrom || null,
+			dateTo: req.query?.dateTo || null,
 			includeNotified: normalizeBoolean(req.query?.includeNotified ?? 'true'),
 		});
 		return res.json({ ok: true, ...result });
@@ -381,6 +383,8 @@ export async function sendShipmentNotificationsController(req, res) {
 			templateId: req.body?.templateId || null,
 			candidateKeys: Array.isArray(req.body?.candidateKeys) ? req.body.candidateKeys : [],
 			variableMapping: req.body?.variableMapping || null,
+			dateFrom: req.body?.dateFrom || null,
+			dateTo: req.body?.dateTo || null,
 			launchedByUserId: req.user?.id || null,
 		});
 		void executeCampaignDispatcherTick();

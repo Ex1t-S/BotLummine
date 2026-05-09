@@ -52,6 +52,20 @@ const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
 const CAMPAIGN_POLL_INTERVAL_MS = 5000;
 const CAMPAIGN_STATUS_POLL_WINDOW_MS = 60 * 60 * 1000;
 
+function formatDateInput(date) {
+	return date.toISOString().slice(0, 10);
+}
+
+function buildDefaultShipmentRange() {
+	const to = new Date();
+	const from = new Date();
+	from.setDate(to.getDate() - 2);
+	return {
+		dateFrom: formatDateInput(from),
+		dateTo: formatDateInput(to),
+	};
+}
+
 function isLiveCampaignStatus(status = '') {
 	return ['QUEUED', 'RUNNING'].includes(String(status || '').trim().toUpperCase());
 }
@@ -196,6 +210,7 @@ export function useCampaignsDashboard() {
 	const [campaignTrackingPurchase, setCampaignTrackingPurchase] = useState('ALL');
 	const [campaignTrackingSearch, setCampaignTrackingSearch] = useState('');
 	const [campaignTrackingPage, setCampaignTrackingPage] = useState(1);
+	const [shipmentRange, setShipmentRange] = useState(buildDefaultShipmentRange);
 
 	const overviewQuery = useQuery({
 		queryKey: queryKeys.campaigns.overview,
@@ -232,8 +247,12 @@ export function useCampaignsDashboard() {
 	});
 
 	const shipmentCandidatesQuery = useQuery({
-		queryKey: ['campaigns', 'shipment-notifications', 'candidates'],
-		queryFn: () => fetchShipmentNotificationCandidates({ daysBack: 3, includeNotified: true }),
+		queryKey: ['campaigns', 'shipment-notifications', 'candidates', shipmentRange],
+		queryFn: () => fetchShipmentNotificationCandidates({
+			dateFrom: shipmentRange.dateFrom,
+			dateTo: shipmentRange.dateTo,
+			includeNotified: true,
+		}),
 	});
 
 	const campaignDetailQuery = useQuery({
@@ -268,10 +287,12 @@ export function useCampaignsDashboard() {
 	}, [schedulesQuery.data]);
 	const shipmentNotifications = useMemo(() => ({
 		settings: shipmentSettingsQuery.data?.settings || null,
+		range: shipmentRange,
+		setRange: setShipmentRange,
 		candidates: Array.isArray(shipmentCandidatesQuery.data?.candidates)
 			? shipmentCandidatesQuery.data.candidates
 			: [],
-	}), [shipmentSettingsQuery.data, shipmentCandidatesQuery.data]);
+	}), [shipmentSettingsQuery.data, shipmentCandidatesQuery.data, shipmentRange]);
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
 
 	const selectedCampaign = useMemo(() => {

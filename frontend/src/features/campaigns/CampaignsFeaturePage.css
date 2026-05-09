@@ -246,6 +246,10 @@
 	gap: 10px;
 }
 
+.campaign-shipment-range {
+	margin-bottom: 12px;
+}
+
 .campaign-shipment-variable-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));

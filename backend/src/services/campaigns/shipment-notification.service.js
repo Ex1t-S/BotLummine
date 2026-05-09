@@ -73,6 +73,28 @@ function subtractDays(days) {
 	return new Date(Date.now() - normalizeDaysBack(days) * 24 * 60 * 60 * 1000);
 }
 
+function parseDateStart(value = null) {
+	if (!value) return null;
+	const date = new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseDateEnd(value = null) {
+	if (!value) return null;
+	const date = new Date(`${String(value).slice(0, 10)}T23:59:59.999Z`);
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveDateRange({ daysBack = DEFAULT_DAYS_BACK, dateFrom = null, dateTo = null } = {}) {
+	const from = parseDateStart(dateFrom) || subtractDays(daysBack);
+	const to = parseDateEnd(dateTo) || new Date();
+	return from <= to ? { from, to } : { from: to, to: from };
+}
+
+function buildRecentDateWhere(fields = [], { from, to }) {
+	return fields.map((field) => ({ [field]: { gte: from, lte: to } }));
+}
+
 function normalizeStatusText(value = '') {
 	return normalizeString(value)
 		.toLowerCase()
@@ -352,19 +374,18 @@ async function getNotifiedKeys(workspaceId, keys = []) {
 export async function listShipmentNotificationCandidates({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	daysBack = DEFAULT_DAYS_BACK,
+	dateFrom = null,
+	dateTo = null,
 	includeNotified = true,
 	limit = 250,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const since = subtractDays(daysBack);
+	const range = resolveDateRange({ daysBack, dateFrom, dateTo });
 
 	const shipments = await prisma.enboxShipment.findMany({
 		where: {
 			workspaceId: resolvedWorkspaceId,
-			OR: [
-				{ lastSyncedAt: { gte: since } },
-				{ updatedAt: { gte: since } },
-			],
+			OR: buildRecentDateWhere(['lastSyncedAt', 'updatedAt'], range),
 		},
 		orderBy: [{ lastSyncedAt: 'desc' }, { updatedAt: 'desc' }],
 		take: Math.min(Number(limit) || 250, 500),
@@ -380,10 +401,7 @@ export async function listShipmentNotificationCandidates({
 		where: {
 			workspaceId: resolvedWorkspaceId,
 			normalizedPhone: { not: null },
-			OR: [
-				{ orderUpdatedAt: { gte: since } },
-				{ updatedAt: { gte: since } },
-			],
+			OR: buildRecentDateWhere(['orderUpdatedAt', 'updatedAt'], range),
 		},
 		orderBy: [{ orderUpdatedAt: 'desc' }, { updatedAt: 'desc' }],
 		take: Math.min(Number(limit) || 250, 500),
@@ -407,6 +425,8 @@ export async function listShipmentNotificationCandidates({
 
 	return {
 		daysBack: normalizeDaysBack(daysBack),
+		dateFrom: range.from.toISOString().slice(0, 10),
+		dateTo: range.to.toISOString().slice(0, 10),
 		candidates,
 	};
 }
@@ -485,6 +505,8 @@ export async function sendShipmentNotifications({
 	templateId,
 	candidateKeys = [],
 	variableMapping = null,
+	dateFrom = null,
+	dateTo = null,
 	launchedByUserId = null,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
@@ -493,6 +515,8 @@ export async function sendShipmentNotifications({
 	const candidatesResult = await listShipmentNotificationCandidates({
 		workspaceId: resolvedWorkspaceId,
 		daysBack: settings.daysBack || DEFAULT_DAYS_BACK,
+		dateFrom,
+		dateTo,
 		includeNotified: true,
 	});
 	const keys = new Set(safeArray(candidateKeys));
