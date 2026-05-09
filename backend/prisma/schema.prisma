@@ -845,6 +845,7 @@ model ShipmentNotificationSetting {
   templateLocalId String?
   templateName   String?
   templateLanguage String  @default("es_AR")
+  variableMapping Json?
   daysBack       Int       @default(3)
   lastRunAt      DateTime?
   lastCampaignId String?

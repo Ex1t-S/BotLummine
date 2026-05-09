@@ -13,6 +13,82 @@ function cleanCampaignCopy(value = '') {
 	return String(value || '');
 }
 
+const SHIPMENT_DATA_OPTIONS = [
+	{ key: 'first_name', label: 'Nombre', description: 'Primer nombre del destinatario' },
+	{ key: 'contact_name', label: 'Nombre completo', description: 'Nombre completo del destinatario' },
+	{ key: 'phone', label: 'Telefono', description: 'Telefono normalizado' },
+	{ key: 'order_number', label: 'Numero de orden', description: 'Numero visible del pedido' },
+	{ key: 'order_id', label: 'ID de orden', description: 'Identificador interno del pedido' },
+	{ key: 'shipment_id', label: 'ID de despacho', description: 'Identificador del envio en Enbox' },
+	{ key: 'tracking_number', label: 'Numero de seguimiento', description: 'Codigo de tracking' },
+	{ key: 'tracking_url', label: 'Link de seguimiento', description: 'URL para seguir el envio' },
+	{ key: 'shipping_status', label: 'Estado de envio', description: 'Estado detectado del despacho' },
+	{ key: 'shipping_method', label: 'Metodo de envio', description: 'Metodo o transportista' },
+	{ key: 'product_name', label: 'Producto', description: 'Primer producto del pedido' },
+	{ key: 'source', label: 'Origen', description: 'Enbox o TiendaNube' },
+	{ key: 'updated_at', label: 'Fecha de actualizacion', description: 'Fecha del despacho detectado' },
+];
+
+const SHIPMENT_DEFAULT_MAPPING = {
+	'1': 'first_name',
+	'2': 'order_number',
+	'3': 'tracking_url',
+	'4': 'tracking_number',
+	'5': 'product_name',
+	contact_name: 'contact_name',
+	first_name: 'first_name',
+	phone: 'phone',
+	wa_id: 'phone',
+	order_number: 'order_number',
+	order_id: 'order_id',
+	shipment_id: 'shipment_id',
+	tracking_number: 'tracking_number',
+	tracking_url: 'tracking_url',
+	shipping_status: 'shipping_status',
+	shipping_method: 'shipping_method',
+	product_name: 'product_name',
+	first_product_name: 'product_name',
+};
+
+function collectTemplateText(value, texts = []) {
+	if (typeof value === 'string') {
+		texts.push(value);
+		return texts;
+	}
+	if (Array.isArray(value)) {
+		value.forEach((item) => collectTemplateText(item, texts));
+		return texts;
+	}
+	if (value && typeof value === 'object') {
+		Object.values(value).forEach((item) => collectTemplateText(item, texts));
+	}
+	return texts;
+}
+
+function extractTemplateVariableKeys(template = null) {
+	const components = Array.isArray(template?.rawPayload?.components) ? template.rawPayload.components : [];
+	const keys = new Set();
+	collectTemplateText(components).forEach((text) => {
+		String(text).replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawKey) => {
+			const key = String(rawKey || '').trim();
+			if (key) keys.add(key);
+			return _match;
+		});
+	});
+	return [...keys].sort((a, b) => {
+		const aNumber = Number(a);
+		const bNumber = Number(b);
+		if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+		if (Number.isFinite(aNumber)) return -1;
+		if (Number.isFinite(bNumber)) return 1;
+		return a.localeCompare(b);
+	});
+}
+
+function getDefaultShipmentSource(variableKey = '') {
+	return SHIPMENT_DEFAULT_MAPPING[variableKey] || SHIPMENT_DEFAULT_MAPPING[String(variableKey).toLowerCase()] || 'contact_name';
+}
+
 const TAB_DEFINITIONS = [
 	{
 		id: 'library',
@@ -614,13 +690,28 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 	const [templateId, setTemplateId] = useState('');
 	const [enabled, setEnabled] = useState(false);
 	const [selectedKeys, setSelectedKeys] = useState([]);
+	const [variableMapping, setVariableMapping] = useState({});
 	const saving = mutations.updateShipmentSettings.isPending;
 	const sending = mutations.sendShipmentNotifications.isPending;
+	const selectedTemplate = useMemo(
+		() => templates.find((template) => template.id === templateId) || null,
+		[templates, templateId]
+	);
+	const templateVariableKeys = useMemo(() => extractTemplateVariableKeys(selectedTemplate), [selectedTemplate]);
+	const dataOptions = settings.availableVariables?.length ? settings.availableVariables : SHIPMENT_DATA_OPTIONS;
+	const effectiveVariableMapping = useMemo(() => {
+		const mapping = {};
+		templateVariableKeys.forEach((key) => {
+			mapping[key] = variableMapping[key] || getDefaultShipmentSource(key);
+		});
+		return mapping;
+	}, [templateVariableKeys, variableMapping]);
 
 	useEffect(() => {
 		setTemplateId(settings.templateId || '');
 		setEnabled(Boolean(settings.enabled));
-	}, [settings.templateId, settings.enabled]);
+		setVariableMapping(settings.variableMapping || {});
+	}, [settings.templateId, settings.enabled, settings.variableMapping]);
 
 	useEffect(() => {
 		setSelectedKeys(candidates.filter((candidate) => !candidate.alreadyNotified).map((candidate) => candidate.notificationKey));
@@ -642,6 +733,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 		mutations.updateShipmentSettings.mutate({
 			enabled: nextEnabled,
 			templateId,
+			variableMapping: effectiveVariableMapping,
 			daysBack: 3,
 		});
 	}
@@ -650,7 +742,15 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 		mutations.sendShipmentNotifications.mutate({
 			templateId,
 			candidateKeys: selectedKeys,
+			variableMapping: effectiveVariableMapping,
 		});
+	}
+
+	function updateVariableMapping(variableKey, sourceKey) {
+		setVariableMapping((current) => ({
+			...current,
+			[variableKey]: sourceKey,
+		}));
 	}
 
 	return (
@@ -680,7 +780,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 			<div className="campaign-schedule-section">
 				<div className="campaign-schedule-section__title">
 					<strong>Plantilla</strong>
-					<span>Usa variables como first_name, order_number, tracking_url y product_name.</span>
+					<span>Elegí qué dato de despacho va en cada variable de la plantilla.</span>
 				</div>
 				<div className="campaign-form-grid two-columns">
 					<label className="field">
@@ -701,6 +801,48 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 					</div>
 				</div>
 				{settings.lastError ? <div className="campaign-schedule-error">{settings.lastError}</div> : null}
+			</div>
+
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
+					<strong>Variables del despacho</strong>
+					<span>
+						{templateVariableKeys.length
+							? `${templateVariableKeys.length} variable(s) detectada(s) en el template.`
+							: 'Seleccioná una plantilla con variables para mapear los datos.'}
+					</span>
+				</div>
+				<div className="campaign-shipment-variable-grid">
+					{templateVariableKeys.map((variableKey) => (
+						<label className="field" key={variableKey}>
+							<span>{`Variable {{${variableKey}}}`}</span>
+							<select
+								value={effectiveVariableMapping[variableKey] || ''}
+								onChange={(event) => updateVariableMapping(variableKey, event.target.value)}
+							>
+								{dataOptions.map((option) => (
+									<option key={option.key} value={option.key}>
+										{option.label}
+									</option>
+								))}
+							</select>
+						</label>
+					))}
+					{!templateVariableKeys.length ? (
+						<div className="campaign-custom-audience-empty">
+							<strong>Sin variables detectadas</strong>
+							<span>La plantilla seleccionada no tiene campos tipo {'{{1}}'} o {'{{order_number}}'}.</span>
+						</div>
+					) : null}
+				</div>
+				<div className="campaign-shipment-data-options">
+					{dataOptions.map((option) => (
+						<span key={option.key}>
+							<strong>{option.label}</strong>
+							<small>{option.description}</small>
+						</span>
+					))}
+				</div>
 			</div>
 
 			<div className="campaign-schedule-section">

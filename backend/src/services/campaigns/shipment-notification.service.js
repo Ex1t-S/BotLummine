@@ -6,6 +6,42 @@ import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service
 
 const DEFAULT_DAYS_BACK = 3;
 const AUTO_LIMIT = 100;
+const DEFAULT_VARIABLE_MAPPING = {
+	'1': 'first_name',
+	'2': 'order_number',
+	'3': 'tracking_url',
+	'4': 'tracking_number',
+	'5': 'product_name',
+	contact_name: 'contact_name',
+	first_name: 'first_name',
+	phone: 'phone',
+	wa_id: 'wa_id',
+	order_number: 'order_number',
+	order_id: 'order_id',
+	shipment_id: 'shipment_id',
+	tracking_number: 'tracking_number',
+	tracking_url: 'tracking_url',
+	shipping_status: 'shipping_status',
+	shipping_method: 'shipping_method',
+	product_name: 'product_name',
+	first_product_name: 'product_name',
+};
+
+const SHIPMENT_VARIABLE_OPTIONS = [
+	{ key: 'first_name', label: 'Nombre', description: 'Primer nombre del destinatario' },
+	{ key: 'contact_name', label: 'Nombre completo', description: 'Nombre completo del destinatario' },
+	{ key: 'phone', label: 'Telefono', description: 'Telefono normalizado del destinatario' },
+	{ key: 'order_number', label: 'Numero de orden', description: 'Numero visible del pedido' },
+	{ key: 'order_id', label: 'ID de orden', description: 'Identificador interno del pedido' },
+	{ key: 'shipment_id', label: 'ID de despacho', description: 'Identificador del envio en Enbox' },
+	{ key: 'tracking_number', label: 'Numero de seguimiento', description: 'Codigo de tracking' },
+	{ key: 'tracking_url', label: 'Link de seguimiento', description: 'URL para seguir el envio' },
+	{ key: 'shipping_status', label: 'Estado de envio', description: 'Estado del despacho' },
+	{ key: 'shipping_method', label: 'Metodo de envio', description: 'Metodo o transportista' },
+	{ key: 'product_name', label: 'Producto', description: 'Primer producto del pedido' },
+	{ key: 'source', label: 'Origen', description: 'Enbox o TiendaNube' },
+	{ key: 'updated_at', label: 'Fecha de actualizacion', description: 'Fecha detectada del despacho' },
+];
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -22,6 +58,15 @@ function normalizePhone(value = '') {
 
 function normalizeDaysBack(value) {
 	return Math.max(1, Math.min(Number(value || DEFAULT_DAYS_BACK) || DEFAULT_DAYS_BACK, 14));
+}
+
+function normalizeMapping(value = {}) {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value)
+			.map(([key, source]) => [normalizeString(key), normalizeString(source)])
+			.filter(([key, source]) => key && source)
+	);
 }
 
 function subtractDays(days) {
@@ -71,11 +116,33 @@ function getOrderProductSummary(order = {}) {
 	};
 }
 
-function buildCandidateVariables(candidate = {}) {
+function getCandidateSourceValue(candidate = {}, key = '') {
 	const contactName = normalizeString(candidate.contactName || '', candidate.phone);
 	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
+	const values = {
+		first_name: firstName,
+		contact_name: contactName,
+		phone: candidate.phone || '',
+		wa_id: candidate.phone || '',
+		order_number: candidate.orderNumber || '',
+		order_id: candidate.orderId || '',
+		shipment_id: candidate.shipmentId || '',
+		tracking_number: candidate.trackingNumber || '',
+		tracking_url: candidate.trackingUrl || '',
+		shipping_status: candidate.shippingStatus || '',
+		shipping_method: candidate.shippingMethod || '',
+		product_name: candidate.productName || '',
+		first_product_name: candidate.productName || '',
+		source: candidate.source || '',
+		updated_at: candidate.updatedAt ? new Date(candidate.updatedAt).toISOString() : '',
+	};
+	return values[key] ?? '';
+}
 
-	return {
+function buildCandidateVariables(candidate = {}, variableMapping = {}) {
+	const contactName = normalizeString(candidate.contactName || '', candidate.phone);
+	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
+	const baseVariables = {
 		'1': firstName,
 		'2': candidate.orderNumber || candidate.orderId || '',
 		'3': candidate.trackingUrl || '',
@@ -87,6 +154,7 @@ function buildCandidateVariables(candidate = {}) {
 		wa_id: candidate.phone || '',
 		order_number: candidate.orderNumber || '',
 		order_id: candidate.orderId || '',
+		shipment_id: candidate.shipmentId || '',
 		tracking_number: candidate.trackingNumber || '',
 		tracking_url: candidate.trackingUrl || '',
 		shipping_status: candidate.shippingStatus || '',
@@ -94,6 +162,13 @@ function buildCandidateVariables(candidate = {}) {
 		product_name: candidate.productName || '',
 		first_product_name: candidate.productName || '',
 	};
+	const mapping = { ...DEFAULT_VARIABLE_MAPPING, ...normalizeMapping(variableMapping) };
+
+	for (const [templateKey, sourceKey] of Object.entries(mapping)) {
+		baseVariables[templateKey] = getCandidateSourceValue(candidate, sourceKey);
+	}
+
+	return baseVariables;
 }
 
 function serializeSetting(setting = null) {
@@ -102,6 +177,8 @@ function serializeSetting(setting = null) {
 		templateId: setting?.templateLocalId || '',
 		templateName: setting?.templateName || '',
 		templateLanguage: setting?.templateLanguage || 'es_AR',
+		variableMapping: normalizeMapping(setting?.variableMapping || {}),
+		availableVariables: SHIPMENT_VARIABLE_OPTIONS,
 		daysBack: normalizeDaysBack(setting?.daysBack || DEFAULT_DAYS_BACK),
 		lastRunAt: setting?.lastRunAt || null,
 		lastCampaignId: setting?.lastCampaignId || null,
@@ -135,6 +212,7 @@ export async function updateShipmentNotificationSettings({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	enabled = false,
 	templateId = null,
+	variableMapping = {},
 	daysBack = DEFAULT_DAYS_BACK,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
@@ -156,6 +234,7 @@ export async function updateShipmentNotificationSettings({
 			templateLocalId: template?.id || null,
 			templateName: template?.name || null,
 			templateLanguage: template?.language || 'es_AR',
+			variableMapping: normalizeMapping(variableMapping),
 			daysBack: normalizeDaysBack(daysBack),
 		},
 		update: {
@@ -163,6 +242,7 @@ export async function updateShipmentNotificationSettings({
 			templateLocalId: template?.id || null,
 			templateName: template?.name || null,
 			templateLanguage: template?.language || 'es_AR',
+			variableMapping: normalizeMapping(variableMapping),
 			daysBack: normalizeDaysBack(daysBack),
 			lastError: null,
 		},
@@ -331,13 +411,13 @@ export async function listShipmentNotificationCandidates({
 	};
 }
 
-function candidatesToRecipients(candidates = []) {
+function candidatesToRecipients(candidates = [], variableMapping = {}) {
 	return safeArray(candidates).map((candidate) => ({
 		contactName: candidate.contactName,
 		phone: candidate.phone,
 		waId: candidate.phone,
 		externalKey: candidate.notificationKey,
-		variables: buildCandidateVariables(candidate),
+		variables: buildCandidateVariables(candidate, variableMapping),
 	}));
 }
 
@@ -345,6 +425,7 @@ async function createAndLaunchShipmentCampaign({
 	workspaceId,
 	templateId,
 	candidates,
+	variableMapping = {},
 	name = null,
 	launchedByUserId = null,
 } = {}) {
@@ -362,11 +443,12 @@ async function createAndLaunchShipmentCampaign({
 		templateId: template.id,
 		languageCode: template.language || 'es_AR',
 		sendComponents: safeArray(template?.rawPayload?.components),
-		recipients: candidatesToRecipients(usableCandidates),
+		recipients: candidatesToRecipients(usableCandidates, variableMapping),
 		audienceSource: 'shipment_dispatch',
 		audienceFilters: {
 			source: 'shipment_dispatch',
 			candidateKeys: usableCandidates.map((candidate) => candidate.notificationKey),
+			variableMapping: normalizeMapping(variableMapping),
 		},
 		notes: 'Aviso de pedido despachado.',
 		launchedByUserId,
@@ -402,6 +484,7 @@ export async function sendShipmentNotifications({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	templateId,
 	candidateKeys = [],
+	variableMapping = null,
 	launchedByUserId = null,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
@@ -419,6 +502,7 @@ export async function sendShipmentNotifications({
 		workspaceId: resolvedWorkspaceId,
 		templateId: resolvedTemplateId,
 		candidates: selected,
+		variableMapping: variableMapping ? normalizeMapping(variableMapping) : normalizeMapping(settings.variableMapping || {}),
 		name: `Aviso despacho ${new Date().toISOString().slice(0, 10)}`,
 		launchedByUserId,
 	});
@@ -454,6 +538,7 @@ export async function processAutomaticShipmentNotifications({ workspaceId = null
 				workspaceId: setting.workspaceId,
 				templateId: setting.templateLocalId,
 				candidates: candidatesResult.candidates,
+				variableMapping: normalizeMapping(setting.variableMapping || {}),
 				name: `Avisos despacho ${new Date().toISOString().slice(0, 10)}`,
 				launchedByUserId: null,
 			});

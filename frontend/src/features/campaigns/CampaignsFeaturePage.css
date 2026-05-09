@@ -246,6 +246,48 @@
 	gap: 10px;
 }
 
+.campaign-shipment-variable-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.campaign-shipment-data-options {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.campaign-shipment-data-options span {
+	display: block;
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 10px;
+	background: #f8fafc;
+}
+
+.campaign-shipment-data-options strong,
+.campaign-shipment-data-options small {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.campaign-shipment-data-options strong {
+	color: #0f172a;
+	font-size: 12px;
+	font-weight: 900;
+}
+
+.campaign-shipment-data-options small {
+	margin-top: 3px;
+	color: #64748b;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.35;
+}
+
 .campaign-shipment-row {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr);
@@ -342,6 +384,11 @@
 
 	.campaign-shipment-row {
 		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.campaign-shipment-variable-grid,
+	.campaign-shipment-data-options {
+		grid-template-columns: 1fr;
 	}
 }
 

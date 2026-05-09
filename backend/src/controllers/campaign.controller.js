@@ -352,6 +352,7 @@ export async function updateShipmentNotificationSettingsController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 			enabled: normalizeBoolean(req.body?.enabled),
 			templateId: req.body?.templateId || null,
+			variableMapping: req.body?.variableMapping || {},
 			daysBack: req.body?.daysBack || 3,
 		});
 		return res.json({ ok: true, settings });
@@ -379,6 +380,7 @@ export async function sendShipmentNotificationsController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 			templateId: req.body?.templateId || null,
 			candidateKeys: Array.isArray(req.body?.candidateKeys) ? req.body.candidateKeys : [],
+			variableMapping: req.body?.variableMapping || null,
 			launchedByUserId: req.user?.id || null,
 		});
 		void executeCampaignDispatcherTick();
