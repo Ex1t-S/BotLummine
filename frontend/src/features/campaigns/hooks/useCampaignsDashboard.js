@@ -17,6 +17,7 @@ import {
 	previewAbandonedCartAudience,
 	purgeDeletedTemplates,
 	resumeCampaign,
+	runCampaignDispatchTick,
 	syncTemplates,
 	updateCampaignSchedule,
 	updateTemplate,
@@ -527,6 +528,23 @@ export function useCampaignsDashboard() {
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la programación.'),
 	});
 
+	const dispatchTickMutation = useMutation({
+		mutationFn: runCampaignDispatchTick,
+		onSuccess: (result) => {
+			invalidateAll();
+			const processedSchedules = Number(result?.schedules?.processed || 0);
+			const processedCampaign = Boolean(result?.campaigns?.processed);
+			showFeedback(
+				'success',
+				processedSchedules || processedCampaign
+					? `Dispatcher ejecutado: ${processedSchedules} programacion(es) procesada(s).`
+					: 'Dispatcher ejecutado. No habia programaciones o campanas pendientes.'
+			);
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar el dispatcher.'),
+	});
+
 	const actionMutation = useMutation({
 		mutationFn: async ({ type, campaignId }) => {
 			if (type === 'dispatch') return dispatchCampaign(campaignId);
@@ -596,6 +614,7 @@ export function useCampaignsDashboard() {
 			createSchedule: createScheduleMutation,
 			updateSchedule: updateScheduleMutation,
 			deleteSchedule: deleteScheduleMutation,
+			dispatchTick: dispatchTickMutation,
 		},
 		tracking: {
 			statusFilter: campaignTrackingStatus,

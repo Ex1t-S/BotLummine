@@ -99,6 +99,11 @@ export async function deleteCampaignSchedule(scheduleId) {
 	return unwrap(response);
 }
 
+export async function runCampaignDispatchTick() {
+	const response = await api.post('/campaigns/dispatch/tick');
+	return unwrap(response);
+}
+
 export async function uploadCampaignHeaderMedia(
 	file,
 	{ fieldName = 'file', purpose = null } = {}

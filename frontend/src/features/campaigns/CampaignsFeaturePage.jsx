@@ -168,6 +168,40 @@ function formatScheduleDate(value) {
 	}
 }
 
+function getScheduleTimestamp(value) {
+	const timestamp = new Date(value || '').getTime();
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getScheduleHealth(schedule = {}) {
+	const status = String(schedule.status || '').toUpperCase();
+	const nextRunAt = getScheduleTimestamp(schedule.nextRunAt);
+	const isActive = status === 'ACTIVE';
+	const isDue = isActive && nextRunAt > 0 && nextRunAt <= Date.now();
+
+	if (!isActive) {
+		return {
+			label: 'Pausada',
+			className: '',
+			message: 'La automatizacion esta pausada.',
+		};
+	}
+
+	if (isDue) {
+		return {
+			label: 'Vencida',
+			className: 'is-overdue',
+			message: 'La hora programada ya paso. Si no sube ejecuciones, revisa el cron de Railway.',
+		};
+	}
+
+	return {
+		label: 'Activa',
+		className: 'is-active',
+		message: '',
+	};
+}
+
 function scheduleToForm(schedule = {}) {
 	const filters = schedule.audienceFilters || {};
 
@@ -216,6 +250,7 @@ function CampaignSchedulesPanel({
 	const [form, setForm] = useState(initialScheduleForm);
 	const isEditing = Boolean(form.id);
 	const saving = mutations.createSchedule.isPending || mutations.updateSchedule.isPending;
+	const runningDispatcher = mutations.dispatchTick?.isPending || false;
 
 	function updateField(field, value) {
 		setForm((prev) => ({ ...prev, [field]: value }));
@@ -450,6 +485,20 @@ function CampaignSchedulesPanel({
 			</form>
 
 			<div className="campaign-schedule-list">
+				<div className="campaign-schedule-ops">
+					<div>
+						<strong>Estado operativo</strong>
+						<span>El cron externo ejecuta el dispatcher cada 5 minutos. Usa este control para probarlo ahora.</span>
+					</div>
+					<button
+						type="button"
+						className="button secondary"
+						onClick={() => mutations.dispatchTick?.mutate()}
+						disabled={runningDispatcher}
+					>
+						{runningDispatcher ? 'Ejecutando...' : 'Ejecutar ahora'}
+					</button>
+				</div>
 				{loading ? <div className="campaign-custom-audience-empty">Cargando programaciones...</div> : null}
 				{!loading && !schedules.length ? (
 					<div className="campaign-custom-audience-empty">
@@ -458,12 +507,15 @@ function CampaignSchedulesPanel({
 					</div>
 				) : null}
 
-				{schedules.map((schedule) => (
-					<div className="campaign-schedule-card" key={schedule.id}>
+				{schedules.map((schedule) => {
+					const health = getScheduleHealth(schedule);
+
+					return (
+						<div className="campaign-schedule-card" key={schedule.id}>
 						<div className="campaign-schedule-card__main">
 							<div>
-								<span className={`campaign-schedule-status ${schedule.status === 'ACTIVE' ? 'is-active' : ''}`}>
-									{schedule.status === 'ACTIVE' ? 'Activa' : 'Pausada'}
+								<span className={`campaign-schedule-status ${health.className}`.trim()}>
+									{health.label}
 								</span>
 								<h4>{schedule.name}</h4>
 								<p>
@@ -475,10 +527,26 @@ function CampaignSchedulesPanel({
 								<strong>{formatScheduleDate(schedule.nextRunAt)}</strong>
 							</div>
 							<div className="campaign-schedule-meta">
+								<span>Ultima</span>
+								<strong>{formatScheduleDate(schedule.lastRunAt)}</strong>
+							</div>
+							<div className="campaign-schedule-meta">
 								<span>Ejecuciones</span>
 								<strong>{schedule.runCount || 0}</strong>
 							</div>
 						</div>
+
+						{health.message ? (
+							<div className={`campaign-schedule-warning ${health.className}`.trim()}>
+								{health.message}
+							</div>
+						) : null}
+
+						{schedule.lastCampaignId ? (
+							<div className="campaign-schedule-link">
+								Ultima campana creada: <code>{schedule.lastCampaignId}</code>
+							</div>
+						) : null}
 
 						{schedule.lastError ? (
 							<div className="campaign-schedule-error">{schedule.lastError}</div>
@@ -509,8 +577,9 @@ function CampaignSchedulesPanel({
 								Eliminar
 							</button>
 						</div>
-					</div>
-				))}
+						</div>
+					);
+				})}
 			</div>
 		</div>
 	);
