@@ -81,26 +81,15 @@ function buildPaymentStatusVariants(paymentStatus = '') {
 
 function buildDispatchedStatusVariants() {
 	return getShippingStatusSearchTerms(['dispatched', 'delivered']);
-	return [
-		'despach',
-		'despachado',
-		'en camino',
-		'en transito',
-		'en tránsito',
-		'shipped',
-		'dispatched',
-		'in_transit',
-		'in transit',
-		'on the way',
-		'envio en curso',
-		'envío en curso',
-	];
 }
 
 function buildShippingStatusVariants(shippingStatus = '') {
 	const raw = String(shippingStatus || '').trim().toLowerCase();
 	if (!raw || raw === 'all') return [];
 	if (raw === 'dispatched' || raw === 'despachado') return buildDispatchedStatusVariants();
+	if (raw === 'preparing' || raw === 'en preparacion' || raw === 'en preparación') {
+		return getShippingStatusSearchTerms(['preparing']);
+	}
 	return [raw];
 }
 
@@ -139,12 +128,6 @@ function getShippingStatusMeta(shippingStatus = '') {
 		unknown: 'neutral',
 	};
 	return { ...meta, tone: tones[meta.category] || 'neutral' };
-	const raw = String(shippingStatus || '').trim().toLowerCase();
-	if (!raw) return { label: 'Sin dato', tone: 'neutral' };
-	if (buildDispatchedStatusVariants().some((value) => raw.includes(value))) {
-		return { label: 'Despachado', tone: 'success' };
-	}
-	return { label: raw.replace(/_/g, ' '), tone: 'neutral' };
 }
 
 async function getDispatchedOrderRefs(workspaceId) {

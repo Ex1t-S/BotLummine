@@ -720,6 +720,7 @@ export default function CustomersPage() {
 							onChange={handleFilterChange}
 						>
 							<option value="">Todos</option>
+							<option value="preparing">En preparación</option>
 							<option value="dispatched">Despachado</option>
 						</select>
 					</div>

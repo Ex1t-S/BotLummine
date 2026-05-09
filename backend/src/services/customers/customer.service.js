@@ -14,7 +14,7 @@ const ITEM_BATCH_SIZE = Math.max(50, Number(process.env.TIENDANUBE_ORDER_ITEMS_B
 const MAX_MONTH_WINDOWS_PER_SYNC = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_MAX_MONTH_WINDOWS || 120));
 const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES_PER_WINDOW || 120));
 const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
-const ORDER_FIELDS = [
+const CUSTOMER_ORDER_LIST_FIELDS = [
 	'id',
 	'number',
 	'token',
@@ -34,16 +34,7 @@ const ORDER_FIELDS = [
 	'gateway_id',
 	'gateway_name',
 	'gateway_link',
-	'products',
-	'shipping_tracking_number',
-	'shipping_tracking_url',
-	'tracking_number',
-	'tracking_url',
-	'shipping_option',
-	'shipping_carrier',
-	'shipping',
-	'fulfillments',
-	'fulfillment_orders'
+	'products'
 ].join(',');
 
 const syncState = {
@@ -104,6 +95,10 @@ function parseDateOrNull(value) {
 	return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function isInvalidFieldsError(error) {
+	const text = String(error?.body || error?.message || '').toLowerCase();
+	return error?.status === 404 && text.includes('some chosen field do not exist');
+}
 
 function normalizeOrderStatus(value) {
 	const normalized = cleanString(value);
@@ -263,7 +258,7 @@ async function fetchOrdersPage({
 	const params = new URLSearchParams({
 		page: String(page),
 		per_page: String(perPage),
-		fields: ORDER_FIELDS,
+		fields: CUSTOMER_ORDER_LIST_FIELDS,
 	});
 
 	if (createdAtMin) params.set('created_at_min', createdAtMin.toISOString());
@@ -593,9 +588,16 @@ export async function fetchTiendanubeOrderById({ storeId, accessToken, orderId }
 		throw new Error('fetchTiendanubeOrderById requiere storeId, accessToken y orderId.');
 	}
 
-	const params = new URLSearchParams({ fields: ORDER_FIELDS });
-	const url = `https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/orders/${normalizedOrderId}?${params.toString()}`;
-	const payload = await fetchJson(url, accessToken, `pedido ${normalizedOrderId}`);
+	const params = new URLSearchParams({ fields: CUSTOMER_ORDER_LIST_FIELDS });
+	const baseUrl = `https://api.tiendanube.com/${TIENDANUBE_API_VERSION}/${storeId}/orders/${normalizedOrderId}`;
+	const url = `${baseUrl}?${params.toString()}`;
+	let payload;
+	try {
+		payload = await fetchJson(url, accessToken, `pedido ${normalizedOrderId}`);
+	} catch (error) {
+		if (!isInvalidFieldsError(error)) throw error;
+		payload = await fetchJson(baseUrl, accessToken, `pedido ${normalizedOrderId} sin fields`);
+	}
 	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
 		throw new Error(`La respuesta de Tiendanube para el pedido ${normalizedOrderId} no fue un objeto válido.`);
 	}
