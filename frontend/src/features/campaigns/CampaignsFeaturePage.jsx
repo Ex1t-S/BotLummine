@@ -60,6 +60,15 @@ const TAB_DEFINITIONS = [
 		description:
 			'Creá envíos recurrentes separados para carritos abandonados o pagos pendientes, con pausa, edición y eliminación.',
 	},
+	{
+		id: 'shipments',
+		path: 'shipments',
+		label: 'Avisos de despacho',
+		eyebrow: 'Automatizaciones',
+		title: 'Avisos de despacho',
+		description:
+			'Selecciona pedidos despachados de los ultimos 3 dias, elegi una plantilla y activa o envia los avisos.',
+	},
 ];
 
 function DashboardTabButton({ tab, isActive, onClick }) {
@@ -585,6 +594,182 @@ function CampaignSchedulesPanel({
 	);
 }
 
+function formatShipmentDate(value) {
+	if (!value) return 'Sin fecha';
+	try {
+		return new Date(value).toLocaleString('es-AR', {
+			day: '2-digit',
+			month: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
+	} catch {
+		return 'Sin fecha';
+	}
+}
+
+function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, queries, mutations }) {
+	const settings = shipmentNotifications?.settings || {};
+	const candidates = shipmentNotifications?.candidates || [];
+	const [templateId, setTemplateId] = useState('');
+	const [enabled, setEnabled] = useState(false);
+	const [selectedKeys, setSelectedKeys] = useState([]);
+	const saving = mutations.updateShipmentSettings.isPending;
+	const sending = mutations.sendShipmentNotifications.isPending;
+
+	useEffect(() => {
+		setTemplateId(settings.templateId || '');
+		setEnabled(Boolean(settings.enabled));
+	}, [settings.templateId, settings.enabled]);
+
+	useEffect(() => {
+		setSelectedKeys(candidates.filter((candidate) => !candidate.alreadyNotified).map((candidate) => candidate.notificationKey));
+	}, [candidates]);
+
+	const selectableCandidates = candidates.filter((candidate) => !candidate.alreadyNotified);
+	const selectedSet = new Set(selectedKeys);
+
+	function toggleCandidate(candidate) {
+		if (candidate.alreadyNotified) return;
+		setSelectedKeys((current) =>
+			current.includes(candidate.notificationKey)
+				? current.filter((key) => key !== candidate.notificationKey)
+				: [...current, candidate.notificationKey]
+		);
+	}
+
+	function saveSettings(nextEnabled = enabled) {
+		mutations.updateShipmentSettings.mutate({
+			enabled: nextEnabled,
+			templateId,
+			daysBack: 3,
+		});
+	}
+
+	function sendSelected() {
+		mutations.sendShipmentNotifications.mutate({
+			templateId,
+			candidateKeys: selectedKeys,
+		});
+	}
+
+	return (
+		<div className="campaign-shipment-notifications">
+			<div className="campaign-schedule-ops">
+				<div>
+					<strong>Avisos de pedido despachado</strong>
+					<span>Empieza desactivado. Al activarlo, notifica pendientes no enviados de los ultimos 3 dias.</span>
+				</div>
+				<label className="campaign-toggle">
+					<input
+						type="checkbox"
+						checked={enabled}
+						onChange={(event) => {
+							const nextEnabled = event.target.checked;
+							setEnabled(nextEnabled);
+							saveSettings(nextEnabled);
+						}}
+						disabled={saving || !templateId}
+					/>
+					<span>
+						<strong>{enabled ? 'Automatizacion activa' : 'Automatizacion desactivada'}</strong>
+					</span>
+				</label>
+			</div>
+
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
+					<strong>Plantilla</strong>
+					<span>Usa variables como first_name, order_number, tracking_url y product_name.</span>
+				</div>
+				<div className="campaign-form-grid two-columns">
+					<label className="field">
+						<span>Template para despacho</span>
+						<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+							<option value="">Seleccionar plantilla</option>
+							{templates.map((template) => (
+								<option key={template.id} value={template.id}>
+									{template.name} - {template.language} - {template.status}
+								</option>
+							))}
+						</select>
+					</label>
+					<div className="campaign-form-actions campaign-form-actions--end">
+						<button type="button" className="button primary" onClick={() => saveSettings()} disabled={saving || !templateId}>
+							{saving ? 'Guardando...' : 'Guardar configuracion'}
+						</button>
+					</div>
+				</div>
+				{settings.lastError ? <div className="campaign-schedule-error">{settings.lastError}</div> : null}
+			</div>
+
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
+					<strong>Despachos recientes</strong>
+					<span>{selectableCandidates.length} pendiente(s) de {candidates.length} encontrado(s).</span>
+				</div>
+				<div className="campaign-inline-actions campaign-inline-actions--wrap">
+					<button
+						type="button"
+						className="button ghost"
+						onClick={() => setSelectedKeys(selectableCandidates.map((candidate) => candidate.notificationKey))}
+					>
+						Seleccionar pendientes
+					</button>
+					<button
+						type="button"
+						className="button primary"
+						onClick={sendSelected}
+						disabled={sending || !templateId || !selectedKeys.length}
+					>
+						{sending ? 'Enviando...' : `Enviar seleccionados (${selectedKeys.length})`}
+					</button>
+				</div>
+
+				{queries.shipmentCandidates.isLoading ? (
+					<div className="campaign-custom-audience-empty">Cargando despachos...</div>
+				) : null}
+
+				<div className="campaign-shipment-list">
+					{candidates.map((candidate) => (
+						<label
+							key={candidate.notificationKey}
+							className={`campaign-shipment-row ${candidate.alreadyNotified ? 'is-disabled' : ''}`.trim()}
+						>
+							<input
+								type="checkbox"
+								checked={selectedSet.has(candidate.notificationKey)}
+								disabled={candidate.alreadyNotified}
+								onChange={() => toggleCandidate(candidate)}
+							/>
+							<span>
+								<strong>{candidate.contactName || candidate.phone}</strong>
+								<small>
+									{candidate.orderNumber || candidate.orderId || 'Sin pedido'} - {candidate.productName || 'Producto'} - {candidate.shippingStatus || 'Despachado'}
+								</small>
+							</span>
+							<span>
+								<strong>{candidate.source === 'enbox' ? 'Enbox' : 'TiendaNube'}</strong>
+								<small>{candidate.trackingNumber || candidate.trackingUrl || 'Sin tracking'}</small>
+							</span>
+							<span>
+								<strong>{candidate.alreadyNotified ? 'Notificado' : 'Pendiente'}</strong>
+								<small>{formatShipmentDate(candidate.updatedAt)}</small>
+							</span>
+						</label>
+					))}
+					{!queries.shipmentCandidates.isLoading && !candidates.length ? (
+						<div className="campaign-custom-audience-empty">
+							<strong>No hay despachos recientes</strong>
+							<span>Sin pedidos despachados detectados en los ultimos 3 dias.</span>
+						</div>
+					) : null}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export default function CampaignsFeaturePage() {
 	const location = useLocation();
 	const navigate = useNavigate();
@@ -593,6 +778,7 @@ export default function CampaignsFeaturePage() {
 		templates,
 		campaigns,
 		schedules,
+		shipmentNotifications,
 		selectedTemplate,
 		setSelectedTemplate,
 		selectedCampaign,
@@ -806,6 +992,23 @@ export default function CampaignsFeaturePage() {
 							loading={queries.schedules.isLoading}
 							mutations={mutations}
 							onDeleteSchedule={requestDeleteSchedule}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'shipments':
+				return (
+					<CampaignSectionShell
+						tabId={currentTab.id}
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
+						description={currentTab.description}
+					>
+						<ShipmentNotificationsPanel
+							templates={templates}
+							shipmentNotifications={shipmentNotifications}
+							queries={queries}
+							mutations={mutations}
 						/>
 					</CampaignSectionShell>
 				);

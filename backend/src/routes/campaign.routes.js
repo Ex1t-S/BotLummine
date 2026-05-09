@@ -24,6 +24,10 @@ import {
 	createCampaignScheduleController,
 	updateCampaignScheduleController,
 	deleteCampaignScheduleController,
+	getShipmentNotificationSettingsController,
+	updateShipmentNotificationSettingsController,
+	listShipmentNotificationCandidatesController,
+	sendShipmentNotificationsController,
 } from '../controllers/campaign.controller.js';
 
 const router = Router();
@@ -47,6 +51,10 @@ router.get('/schedules', listCampaignSchedulesController);
 router.post('/schedules', createCampaignScheduleController);
 router.patch('/schedules/:scheduleId', updateCampaignScheduleController);
 router.delete('/schedules/:scheduleId', deleteCampaignScheduleController);
+router.get('/shipment-notifications/settings', getShipmentNotificationSettingsController);
+router.patch('/shipment-notifications/settings', updateShipmentNotificationSettingsController);
+router.get('/shipment-notifications/candidates', listShipmentNotificationCandidatesController);
+router.post('/shipment-notifications/send', sendShipmentNotificationsController);
 
 router.get('/', listCampaignsController);
 router.post('/', createCampaignController);

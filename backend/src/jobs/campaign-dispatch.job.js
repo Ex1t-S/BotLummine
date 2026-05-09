@@ -14,6 +14,7 @@ async function main() {
 		ok: result.ok,
 		skipped: result.skipped || false,
 		schedules: result.schedules || null,
+		shipmentNotifications: result.shipmentNotifications || null,
 		campaigns: result.campaigns || null,
 		message: result.message || null,
 	});

@@ -1,5 +1,6 @@
 import { runCampaignDispatchTick } from './whatsapp-campaign.service.js';
 import { processDueCampaignSchedules } from './campaign-schedule.service.js';
+import { processAutomaticShipmentNotifications } from './shipment-notification.service.js';
 
 let dispatcherBusy = false;
 
@@ -16,11 +17,13 @@ export async function executeCampaignDispatcherTick() {
 
 	try {
 		const schedules = await processDueCampaignSchedules();
+		const shipmentNotifications = await processAutomaticShipmentNotifications();
 		const campaigns = await runCampaignDispatchTick();
 
 		return {
 			ok: true,
 			schedules,
+			shipmentNotifications,
 			campaigns,
 		};
 	} finally {

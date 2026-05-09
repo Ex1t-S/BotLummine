@@ -104,6 +104,26 @@ export async function runCampaignDispatchTick() {
 	return unwrap(response);
 }
 
+export async function fetchShipmentNotificationSettings() {
+	const response = await api.get('/campaigns/shipment-notifications/settings');
+	return unwrap(response);
+}
+
+export async function updateShipmentNotificationSettings(payload) {
+	const response = await api.patch('/campaigns/shipment-notifications/settings', payload);
+	return unwrap(response);
+}
+
+export async function fetchShipmentNotificationCandidates(params = {}) {
+	const response = await api.get('/campaigns/shipment-notifications/candidates', { params });
+	return unwrap(response);
+}
+
+export async function sendShipmentNotifications(payload) {
+	const response = await api.post('/campaigns/shipment-notifications/send', payload);
+	return unwrap(response);
+}
+
 export async function uploadCampaignHeaderMedia(
 	file,
 	{ fieldName = 'file', purpose = null } = {}

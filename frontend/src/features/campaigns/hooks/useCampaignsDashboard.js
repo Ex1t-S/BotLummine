@@ -12,14 +12,18 @@ import {
 	fetchCampaignOverview,
 	fetchCampaignSchedules,
 	fetchCampaigns,
+	fetchShipmentNotificationCandidates,
+	fetchShipmentNotificationSettings,
 	fetchTemplates,
 	pauseCampaign,
 	previewAbandonedCartAudience,
 	purgeDeletedTemplates,
 	resumeCampaign,
 	runCampaignDispatchTick,
+	sendShipmentNotifications,
 	syncTemplates,
 	updateCampaignSchedule,
+	updateShipmentNotificationSettings,
 	updateTemplate,
 } from '../../../lib/campaigns.js';
 import { queryKeys } from '../../../lib/queryClient.js';
@@ -222,6 +226,16 @@ export function useCampaignsDashboard() {
 		queryFn: fetchCampaignSchedules,
 	});
 
+	const shipmentSettingsQuery = useQuery({
+		queryKey: ['campaigns', 'shipment-notifications', 'settings'],
+		queryFn: fetchShipmentNotificationSettings,
+	});
+
+	const shipmentCandidatesQuery = useQuery({
+		queryKey: ['campaigns', 'shipment-notifications', 'candidates'],
+		queryFn: () => fetchShipmentNotificationCandidates({ daysBack: 3, includeNotified: true }),
+	});
+
 	const campaignDetailQuery = useQuery({
 		queryKey: [
 			...queryKeys.campaigns.detail(selectedCampaignId),
@@ -252,6 +266,12 @@ export function useCampaignsDashboard() {
 		if (Array.isArray(data)) return data;
 		return data?.schedules || data?.items || [];
 	}, [schedulesQuery.data]);
+	const shipmentNotifications = useMemo(() => ({
+		settings: shipmentSettingsQuery.data?.settings || null,
+		candidates: Array.isArray(shipmentCandidatesQuery.data?.candidates)
+			? shipmentCandidatesQuery.data.candidates
+			: [],
+	}), [shipmentSettingsQuery.data, shipmentCandidatesQuery.data]);
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
 
 	const selectedCampaign = useMemo(() => {
@@ -319,6 +339,7 @@ export function useCampaignsDashboard() {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
+		queryClient.invalidateQueries({ queryKey: ['campaigns', 'shipment-notifications'] });
 
 		if (nextCampaignId) {
 			queryClient.invalidateQueries({
@@ -545,6 +566,26 @@ export function useCampaignsDashboard() {
 			showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar el dispatcher.'),
 	});
 
+	const updateShipmentSettingsMutation = useMutation({
+		mutationFn: updateShipmentNotificationSettings,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Avisos de despacho actualizados.');
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar avisos de despacho.'),
+	});
+
+	const sendShipmentNotificationsMutation = useMutation({
+		mutationFn: sendShipmentNotifications,
+		onSuccess: (result) => {
+			invalidateAll(result?.campaignId || null);
+			showFeedback('success', `Avisos de despacho creados para ${Number(result?.selectedCount || 0)} destinatario(s).`);
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudieron enviar los avisos de despacho.'),
+	});
+
 	const actionMutation = useMutation({
 		mutationFn: async ({ type, campaignId }) => {
 			if (type === 'dispatch') return dispatchCampaign(campaignId);
@@ -589,6 +630,7 @@ export function useCampaignsDashboard() {
 		templates,
 		campaigns,
 		schedules,
+		shipmentNotifications,
 		selectedTemplate,
 		setSelectedTemplate,
 		selectedCampaign,
@@ -599,6 +641,8 @@ export function useCampaignsDashboard() {
 			campaigns: campaignsQuery,
 			campaignDetail: campaignDetailQuery,
 			schedules: schedulesQuery,
+			shipmentSettings: shipmentSettingsQuery,
+			shipmentCandidates: shipmentCandidatesQuery,
 		},
 		mutations: {
 			sync: syncMutation,
@@ -615,6 +659,8 @@ export function useCampaignsDashboard() {
 			updateSchedule: updateScheduleMutation,
 			deleteSchedule: deleteScheduleMutation,
 			dispatchTick: dispatchTickMutation,
+			updateShipmentSettings: updateShipmentSettingsMutation,
+			sendShipmentNotifications: sendShipmentNotificationsMutation,
 		},
 		tracking: {
 			statusFilter: campaignTrackingStatus,

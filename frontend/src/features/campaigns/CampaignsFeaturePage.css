@@ -236,6 +236,56 @@
 	overflow-wrap: anywhere;
 }
 
+.campaign-shipment-notifications {
+	display: grid;
+	gap: 14px;
+}
+
+.campaign-shipment-list {
+	display: grid;
+	gap: 10px;
+}
+
+.campaign-shipment-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr);
+	gap: 12px;
+	align-items: center;
+	padding: 12px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 12px;
+	background: #ffffff;
+	cursor: pointer;
+}
+
+.campaign-shipment-row.is-disabled {
+	opacity: 0.62;
+	cursor: not-allowed;
+}
+
+.campaign-shipment-row span,
+.campaign-shipment-row strong,
+.campaign-shipment-row small {
+	display: block;
+	min-width: 0;
+}
+
+.campaign-shipment-row strong {
+	color: #0f172a;
+	font-size: 13px;
+	font-weight: 900;
+	overflow-wrap: anywhere;
+}
+
+.campaign-shipment-row small {
+	margin-top: 3px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
 .campaign-confirm-backdrop {
 	position: fixed;
 	inset: 0;
@@ -288,6 +338,10 @@
 	.campaign-schedule-ops {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.campaign-shipment-row {
+		grid-template-columns: auto minmax(0, 1fr);
 	}
 }
 

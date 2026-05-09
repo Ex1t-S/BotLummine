@@ -32,6 +32,7 @@ async function runScheduledTick() {
 			ok: result?.ok !== false,
 			skipped: Boolean(result?.skipped),
 			schedulesProcessed: Number(result?.schedules?.processed || 0),
+			shipmentNotificationsProcessed: Number(result?.shipmentNotifications?.processed || 0),
 			campaignProcessed: Boolean(result?.campaigns?.processed),
 			message: result?.message || result?.campaigns?.message || null,
 		});

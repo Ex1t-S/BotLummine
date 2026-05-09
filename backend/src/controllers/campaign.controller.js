@@ -26,6 +26,12 @@ import {
 	listCampaignSchedules,
 	updateCampaignSchedule,
 } from '../services/campaigns/campaign-schedule.service.js';
+import {
+	getShipmentNotificationSettings,
+	listShipmentNotificationCandidates,
+	sendShipmentNotifications,
+	updateShipmentNotificationSettings,
+} from '../services/campaigns/shipment-notification.service.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
 	normalizeBoolean,
@@ -324,6 +330,59 @@ export async function deleteCampaignScheduleController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 		});
 		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function getShipmentNotificationSettingsController(req, res) {
+	try {
+		const settings = await getShipmentNotificationSettings({
+			workspaceId: requireRequestWorkspaceId(req),
+		});
+		return res.json({ ok: true, settings });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function updateShipmentNotificationSettingsController(req, res) {
+	try {
+		const settings = await updateShipmentNotificationSettings({
+			workspaceId: requireRequestWorkspaceId(req),
+			enabled: normalizeBoolean(req.body?.enabled),
+			templateId: req.body?.templateId || null,
+			daysBack: req.body?.daysBack || 3,
+		});
+		return res.json({ ok: true, settings });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function listShipmentNotificationCandidatesController(req, res) {
+	try {
+		const result = await listShipmentNotificationCandidates({
+			workspaceId: requireRequestWorkspaceId(req),
+			daysBack: req.query?.daysBack || 3,
+			includeNotified: normalizeBoolean(req.query?.includeNotified ?? 'true'),
+		});
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function sendShipmentNotificationsController(req, res) {
+	try {
+		const result = await sendShipmentNotifications({
+			workspaceId: requireRequestWorkspaceId(req),
+			templateId: req.body?.templateId || null,
+			candidateKeys: Array.isArray(req.body?.candidateKeys) ? req.body.candidateKeys : [],
+			launchedByUserId: req.user?.id || null,
+		});
+		void executeCampaignDispatcherTick();
+		return res.status(201).json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}

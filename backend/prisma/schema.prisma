@@ -43,6 +43,8 @@ model Workspace {
   campaignRecipients  CampaignRecipient[]
   campaignConversions CampaignConversion[]
   campaignSchedules   CampaignSchedule[]
+  shipmentNotificationSetting ShipmentNotificationSetting?
+  shipmentNotificationLogs    ShipmentNotificationLog[]
 }
 
 model WorkspaceBranding {
@@ -834,6 +836,45 @@ model CampaignSchedule {
 
   @@index([workspaceId, status, nextRunAt])
   @@index([workspaceId, createdAt])
+}
+
+model ShipmentNotificationSetting {
+  id             String    @id @default(cuid())
+  workspaceId    String    @unique
+  enabled        Boolean   @default(false)
+  templateLocalId String?
+  templateName   String?
+  templateLanguage String  @default("es_AR")
+  daysBack       Int       @default(3)
+  lastRunAt      DateTime?
+  lastCampaignId String?
+  lastError      String?
+  runCount       Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ShipmentNotificationLog {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  notificationKey String
+  source          String
+  orderId         String?
+  orderNumber     String?
+  shipmentId      String?
+  campaignId      String?
+  recipientPhone  String?
+  sentAt          DateTime @default(now())
+  rawPayload      Json?
+  createdAt       DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, notificationKey])
+  @@index([workspaceId, sentAt])
+  @@index([workspaceId, campaignId])
 }
 
 enum WorkspaceStatus {
