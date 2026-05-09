@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { getTiendanubeClient } from './client.js';
+import { deriveShippingStatus, extractOrderShippingSignals, getShippingStatusMeta } from '../common/shipping-status.js';
 
 function humanizePaymentStatus(status) {
 	switch (status) {
@@ -25,6 +26,9 @@ function humanizePaymentStatus(status) {
 }
 
 function humanizeShippingStatus(status) {
+	const meta = getShippingStatusMeta(status);
+	if (meta.category !== 'unknown') return meta.label;
+
 	switch (String(status || '').toLowerCase()) {
 		case 'unpacked':
 			return 'Estamos preparando tu pedido';
@@ -186,7 +190,11 @@ function matchesOrder(order, wanted) {
 }
 
 export function normalizeOrderContext(order) {
-	const tracking = extractTracking(order);
+	const tracking = {
+		...extractTracking(order),
+		...extractOrderShippingSignals(order),
+	};
+	const shippingStatus = deriveShippingStatus(order);
 
 	return {
 		orderId: order.id,
@@ -197,7 +205,7 @@ export function normalizeOrderContext(order) {
 		total: order.total,
 		currency: order.currency,
 		paymentStatus: humanizePaymentStatus(order.payment_status),
-		shippingStatus: humanizeShippingStatus(order.shipping_status),
+		shippingStatus: humanizeShippingStatus(shippingStatus),
 		orderStatus: humanizeOrderStatus(order.status),
 		trackingNumber: tracking.trackingNumber,
 		trackingUrl: tracking.trackingUrl,

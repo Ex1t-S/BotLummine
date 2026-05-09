@@ -108,6 +108,16 @@ function getPaymentStatusTone(value) {
 function formatShippingStatusLabel(value) {
 	const key = String(value || '').trim().toLowerCase();
 	if (!key) return 'Sin dato';
+	if (key.includes('delivered') || key.includes('entregado')) return 'Entregado';
+	if (key.includes('packed') || key.includes('embalado')) return 'Embalado';
+	if (
+		key.includes('unpacked') ||
+		key.includes('unshipped') ||
+		key.includes('unfulfilled') ||
+		key.includes('prepar')
+	) {
+		return 'En preparación';
+	}
 	if (
 		key.includes('despach') ||
 		key.includes('en camino') ||
@@ -126,6 +136,8 @@ function formatShippingStatusLabel(value) {
 
 function getShippingStatusTone(value) {
 	const key = String(value || '').trim().toLowerCase();
+	if (key.includes('delivered') || key.includes('entregado')) return 'is-paid';
+	if (key.includes('packed') || key.includes('embalado')) return 'is-authorized';
 	if (
 		key.includes('despach') ||
 		key.includes('en camino') ||
@@ -139,6 +151,7 @@ function getShippingStatusTone(value) {
 	) {
 		return 'is-paid';
 	}
+	if (key.includes('cancel')) return 'is-refunded';
 	return 'is-neutral';
 }
 

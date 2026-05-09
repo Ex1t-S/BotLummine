@@ -3,6 +3,10 @@ import {
 	getCustomerSyncStatus as getCustomerSyncStatusService,
 	syncCustomers as syncCustomersService,
 } from '../services/customers/customer.service.js';
+import {
+	getShippingStatusMeta as getSharedShippingStatusMeta,
+	getShippingStatusSearchTerms,
+} from '../services/common/shipping-status.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 function normalizeText(value = '') {
@@ -76,6 +80,7 @@ function buildPaymentStatusVariants(paymentStatus = '') {
 }
 
 function buildDispatchedStatusVariants() {
+	return getShippingStatusSearchTerms(['dispatched', 'delivered']);
 	return [
 		'despach',
 		'despachado',
@@ -124,6 +129,16 @@ function getPaymentStatusMeta(paymentStatus = '') {
 }
 
 function getShippingStatusMeta(shippingStatus = '') {
+	const meta = getSharedShippingStatusMeta(shippingStatus);
+	const tones = {
+		preparing: 'neutral',
+		packed: 'info',
+		dispatched: 'success',
+		delivered: 'success',
+		cancelled: 'danger',
+		unknown: 'neutral',
+	};
+	return { ...meta, tone: tones[meta.category] || 'neutral' };
 	const raw = String(shippingStatus || '').trim().toLowerCase();
 	if (!raw) return { label: 'Sin dato', tone: 'neutral' };
 	if (buildDispatchedStatusVariants().some((value) => raw.includes(value))) {
@@ -448,7 +463,11 @@ function mapOrderToCard(order, enboxShipment = null) {
 	}
 
 	const paymentMeta = getPaymentStatusMeta(order.paymentStatus);
-	const shippingStatus = enboxShipment?.shippingStatus || order.shippingStatus || '';
+	const orderShippingMeta = getSharedShippingStatusMeta(order.shippingStatus || '');
+	const shippingStatus =
+		orderShippingMeta.category === 'delivered'
+			? order.shippingStatus || ''
+			: enboxShipment?.shippingStatus || order.shippingStatus || '';
 	const shippingMeta = getShippingStatusMeta(shippingStatus);
 
 	return {

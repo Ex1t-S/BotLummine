@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
+import { deriveShippingStatus } from '../common/shipping-status.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -33,7 +34,16 @@ const ORDER_FIELDS = [
 	'gateway_id',
 	'gateway_name',
 	'gateway_link',
-	'products'
+	'products',
+	'shipping_tracking_number',
+	'shipping_tracking_url',
+	'tracking_number',
+	'tracking_url',
+	'shipping_option',
+	'shipping_carrier',
+	'shipping',
+	'fulfillments',
+	'fulfillment_orders'
 ].join(',');
 
 const syncState = {
@@ -447,7 +457,7 @@ function mapOrderPayload(order, storeId, customerProfileId, workspaceId) {
 		contactPhone: cleanString(order?.contact_phone),
 		normalizedPhone: normalizePhone(order?.contact_phone),
 		paymentStatus: normalizeOrderStatus(order?.payment_status),
-		shippingStatus: normalizeOrderStatus(order?.shipping_status),
+		shippingStatus: normalizeOrderStatus(deriveShippingStatus(order)),
 		totalAmount: toDecimalOrNull(order?.total),
 		currency: cleanString(order?.currency) || 'ARS',
 		products: Array.isArray(order?.products) ? order.products : [],

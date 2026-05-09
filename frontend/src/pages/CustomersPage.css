@@ -506,12 +506,16 @@
 
 .customer-identity-copy {
 	min-width: 0;
+	overflow: hidden;
 }
 
 .customer-identity-copy h4 {
 	margin: 0 0 4px;
 	font-size: 17px;
 	color: #111827;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .customer-identity-copy p {
@@ -1284,9 +1288,37 @@
 
 .customer-card-focus {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto auto;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 7px;
 	align-items: stretch;
+}
+
+.customer-card-focus > .customer-payment-badge {
+	min-width: 0;
+	width: 100%;
+}
+
+.customer-card-focus > .customer-payment-badge strong,
+.customer-products-list li,
+.customer-section-header strong {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.customer-card-focus > .customer-payment-badge strong {
+	max-width: 100%;
+}
+
+@media (min-width: 521px) {
+	.customer-card-focus {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.customer-total-box {
+		grid-column: 1 / -1;
+	}
 }
 
 .customer-total-box {
@@ -1324,6 +1356,7 @@
 	min-width: 96px;
 	padding: 7px 9px;
 	border-radius: 9px;
+	min-height: 44px;
 }
 
 .customer-payment-badge span {

@@ -2,6 +2,11 @@ import { prisma } from '../../lib/prisma.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import {
+	extractOrderShippingSignals,
+	getShippingStatusMeta,
+	isDispatchedShippingStatus,
+} from '../common/shipping-status.js';
 import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
 const DEFAULT_DAYS_BACK = 3;
@@ -103,6 +108,7 @@ function normalizeStatusText(value = '') {
 }
 
 function isDispatchedStatus(value = '') {
+	return isDispatchedShippingStatus(value, { includeDelivered: false });
 	const normalized = normalizeStatusText(value);
 	return [
 		'despach',
@@ -301,6 +307,7 @@ function shipmentToCandidate(shipment = {}, order = null, notifiedKeys = new Set
 
 	const orderProducts = getOrderProductSummary(order || {});
 	const notificationKey = `shipment:${shipment.didEnvio}`;
+	const shippingMeta = getShippingStatusMeta(shipment.shippingStatus || order?.shippingStatus || '');
 
 	return {
 		notificationKey,
@@ -313,7 +320,7 @@ function shipmentToCandidate(shipment = {}, order = null, notifiedKeys = new Set
 		phone,
 		trackingNumber: shipment.trackingNumber || shipment.shipmentNumber || '',
 		trackingUrl: shipment.trackingUrl || '',
-		shippingStatus: shipment.shippingStatus || order?.shippingStatus || '',
+		shippingStatus: shippingMeta.label || shipment.shippingStatus || order?.shippingStatus || '',
 		shippingMethod: shipment.shippingMethod || '',
 		productName: orderProducts.productName,
 		updatedAt: shipment.lastSyncedAt || shipment.updatedAt || shipment.createdAt,
@@ -332,6 +339,8 @@ function orderToCandidate(order = {}, notifiedKeys = new Set()) {
 
 	const notificationKey = `order:${order.orderId}`;
 	const orderProducts = getOrderProductSummary(order);
+	const shippingSignals = extractOrderShippingSignals(order.rawPayload || {});
+	const shippingMeta = getShippingStatusMeta(order.shippingStatus || '');
 
 	return {
 		notificationKey,
@@ -342,10 +351,10 @@ function orderToCandidate(order = {}, notifiedKeys = new Set()) {
 		orderNumber: order.orderNumber || '',
 		contactName: order.contactName || phone,
 		phone,
-		trackingNumber: '',
-		trackingUrl: '',
-		shippingStatus: order.shippingStatus || '',
-		shippingMethod: '',
+		trackingNumber: shippingSignals.trackingNumber || '',
+		trackingUrl: shippingSignals.trackingUrl || '',
+		shippingStatus: shippingMeta.label || order.shippingStatus || '',
+		shippingMethod: shippingSignals.carrierName || '',
 		productName: orderProducts.productName,
 		updatedAt: order.orderUpdatedAt || order.updatedAt || order.createdAt,
 		rawPayload: {
