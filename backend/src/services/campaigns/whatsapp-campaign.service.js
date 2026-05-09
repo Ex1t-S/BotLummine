@@ -988,7 +988,19 @@ function buildRecipientVariables(recipient = {}) {
 	};
 }
 
-function buildBodyParametersFromText(text = '', variables = {}) {
+function isNamedTemplateParameterFormat(template = {}) {
+	return toUpper(
+		template?.parameterFormat ||
+			template?.rawPayload?.parameter_format ||
+			''
+	) === 'NAMED';
+}
+
+function isNumericPlaceholder(value = '') {
+	return /^\d+$/.test(normalizeString(value));
+}
+
+function buildBodyParametersFromText(text = '', variables = {}, { namedParameters = false } = {}) {
 	const matches = [...String(text || '').matchAll(/{{\s*([^}]+?)\s*}}/g)];
 
 	return matches.map((match, index) => {
@@ -1003,10 +1015,16 @@ function buildBodyParametersFromText(text = '', variables = {}) {
 			value = variables[fallbackKey];
 		}
 
-		return {
+		const parameter = {
 			type: 'text',
 			text: String(value ?? '')
 		};
+
+		if (namedParameters && rawKey && !isNumericPlaceholder(rawKey)) {
+			parameter.parameter_name = rawKey;
+		}
+
+		return parameter;
 	});
 }
 
@@ -1027,7 +1045,9 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 			template?.rawPayload?.components?.find((component) => toUpper(component?.type) === 'HEADER')?.text ||
 			'';
 
-		const params = buildBodyParametersFromText(headerText, variables);
+		const params = buildBodyParametersFromText(headerText, variables, {
+			namedParameters: isNamedTemplateParameterFormat(template)
+		});
 
 		if (!params.length) {
 			return null;
@@ -1099,9 +1119,11 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 	return null;
 }
 
-function buildBodyComponentForSend(bodyComponent = {}, variables = {}) {
+function buildBodyComponentForSend(bodyComponent = {}, variables = {}, template = {}) {
 	const text = normalizeString(bodyComponent?.text || '');
-	const parameters = buildBodyParametersFromText(text, variables);
+	const parameters = buildBodyParametersFromText(text, variables, {
+		namedParameters: isNamedTemplateParameterFormat(template)
+	});
 
 	if (!parameters.length) {
 		return null;
@@ -1130,7 +1152,9 @@ function buildButtonComponentsForSend(template = {}, variables = {}) {
 		}
 
 		const urlTemplate = normalizeString(button?.url || '');
-		const parameters = buildBodyParametersFromText(urlTemplate, variables);
+		const parameters = buildBodyParametersFromText(urlTemplate, variables, {
+			namedParameters: isNamedTemplateParameterFormat(template)
+		});
 
 		if (!parameters.length) {
 			return [];
@@ -1172,7 +1196,7 @@ export function buildSendComponentsFromTemplate({
 		sendComponents.push(headerSendComponent);
 	}
 
-	const bodySendComponent = buildBodyComponentForSend(templateBody || {}, variables);
+	const bodySendComponent = buildBodyComponentForSend(templateBody || {}, variables, template);
 
 	if (bodySendComponent) {
 		sendComponents.push(bodySendComponent);
