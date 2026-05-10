@@ -784,7 +784,7 @@
 	flex: 1 1 auto;
 	min-height: 118px;
 	display: grid;
-	grid-template-columns: repeat(5, minmax(16px, 1fr));
+	grid-template-columns: repeat(4, minmax(16px, 1fr));
 	grid-template-rows: minmax(76px, 1fr) auto;
 	align-items: end;
 	gap: 8px;
@@ -810,14 +810,14 @@
 	background: #bfdbfe;
 }
 
-.workspace-card-chart span:nth-child(5) {
+.workspace-card-chart span:nth-child(4) {
 	background: #0f172a;
 }
 
 .workspace-card-chart-labels {
 	grid-column: 1 / -1;
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 8px;
 	padding-top: 2px;
 }
@@ -1412,7 +1412,7 @@
 	background: #b8d6df;
 }
 
-.workspace-card-chart span:nth-child(5) {
+.workspace-card-chart span:nth-child(4) {
 	background: #23313a;
 }
 
