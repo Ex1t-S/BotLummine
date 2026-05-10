@@ -51,6 +51,44 @@ const SHIPMENT_DEFAULT_MAPPING = {
 };
 const SHIPMENT_CANDIDATES_PAGE_SIZE = 15;
 
+const PENDING_PAYMENT_DATA_OPTIONS = [
+	{ key: 'first_name', label: 'Nombre', description: 'Primer nombre del destinatario' },
+	{ key: 'contact_name', label: 'Nombre completo', description: 'Nombre completo del destinatario' },
+	{ key: 'phone', label: 'Telefono', description: 'Telefono normalizado' },
+	{ key: 'order_number', label: 'Numero de orden', description: 'Numero visible del pedido' },
+	{ key: 'order_id', label: 'ID de orden', description: 'Identificador interno del pedido' },
+	{ key: 'payment_status', label: 'Estado de pago', description: 'Estado de pago detectado' },
+	{ key: 'payment_link', label: 'Link de pago', description: 'Link de pago disponible' },
+	{ key: 'gateway_name', label: 'Gateway', description: 'Pasarela o metodo de pago' },
+	{ key: 'product_name', label: 'Producto', description: 'Primer producto del pedido' },
+	{ key: 'total_amount', label: 'Monto total', description: 'Total formateado del pedido' },
+	{ key: 'total_raw', label: 'Monto sin formato', description: 'Total numerico del pedido' },
+];
+
+const PENDING_PAYMENT_DEFAULT_MAPPING = {
+	'1': 'first_name',
+	'2': 'order_number',
+	'3': 'total_amount',
+	'4': 'payment_link',
+	'5': 'product_name',
+	contact_name: 'contact_name',
+	first_name: 'first_name',
+	phone: 'phone',
+	wa_id: 'phone',
+	order_number: 'order_number',
+	order_id: 'order_id',
+	last_order_id: 'order_id',
+	last_order_number: 'order_number',
+	payment_status: 'payment_status',
+	payment_link: 'payment_link',
+	gateway_link: 'payment_link',
+	gateway_name: 'gateway_name',
+	product_name: 'product_name',
+	first_product_name: 'product_name',
+	total_amount: 'total_amount',
+	total_raw: 'total_raw',
+};
+
 function collectTemplateText(value, texts = []) {
 	if (typeof value === 'string') {
 		texts.push(value);
@@ -88,6 +126,10 @@ function extractTemplateVariableKeys(template = null) {
 
 function getDefaultShipmentSource(variableKey = '') {
 	return SHIPMENT_DEFAULT_MAPPING[variableKey] || SHIPMENT_DEFAULT_MAPPING[String(variableKey).toLowerCase()] || 'contact_name';
+}
+
+function getDefaultPendingPaymentSource(variableKey = '') {
+	return PENDING_PAYMENT_DEFAULT_MAPPING[variableKey] || PENDING_PAYMENT_DEFAULT_MAPPING[String(variableKey).toLowerCase()] || 'contact_name';
 }
 
 const TAB_DEFINITIONS = [
@@ -236,7 +278,7 @@ const initialScheduleForm = {
 };
 
 const DEFAULT_PENDING_PAYMENT_FILTERS = {
-	daysBack: 30,
+	daysBack: 5,
 	limit: 50,
 	minTotal: '',
 	productQuery: '',
@@ -795,29 +837,49 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 	const filters = settings.filters || DEFAULT_PENDING_PAYMENT_FILTERS;
 	const [templateId, setTemplateId] = useState(settings.templateId || '');
 	const [enabled, setEnabled] = useState(Boolean(settings.enabled));
+	const [variableMapping, setVariableMapping] = useState({});
 	const [form, setForm] = useState({
-		daysBack: filters.daysBack || DEFAULT_PENDING_PAYMENT_FILTERS.daysBack,
 		limit: filters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
 		minTotal: filters.minTotal ?? '',
 		productQuery: filters.productQuery || '',
 	});
 	const saving = mutations.updatePendingPaymentAutomation.isPending;
 	const running = mutations.runPendingPaymentAutomationNow.isPending;
+	const selectedTemplate = useMemo(
+		() => templates.find((template) => template.id === templateId) || null,
+		[templates, templateId]
+	);
+	const templateVariableKeys = useMemo(() => extractTemplateVariableKeys(selectedTemplate), [selectedTemplate]);
+	const dataOptions = settings.availableVariables?.length ? settings.availableVariables : PENDING_PAYMENT_DATA_OPTIONS;
+	const effectiveVariableMapping = useMemo(() => {
+		const mapping = {};
+		templateVariableKeys.forEach((key) => {
+			mapping[key] = variableMapping[key] || getDefaultPendingPaymentSource(key);
+		});
+		return mapping;
+	}, [templateVariableKeys, variableMapping]);
 
 	useEffect(() => {
 		const nextFilters = settings.filters || DEFAULT_PENDING_PAYMENT_FILTERS;
 		setTemplateId(settings.templateId || '');
 		setEnabled(Boolean(settings.enabled));
+		setVariableMapping(settings.variableMapping || {});
 		setForm({
-			daysBack: nextFilters.daysBack || DEFAULT_PENDING_PAYMENT_FILTERS.daysBack,
 			limit: nextFilters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
 			minTotal: nextFilters.minTotal ?? '',
 			productQuery: nextFilters.productQuery || '',
 		});
-	}, [settings.templateId, settings.enabled, settings.filters]);
+	}, [settings.templateId, settings.enabled, settings.filters, settings.variableMapping]);
 
 	function updateField(field, value) {
 		setForm((current) => ({ ...current, [field]: value }));
+	}
+
+	function updateVariableMapping(variableKey, sourceKey) {
+		setVariableMapping((current) => ({
+			...current,
+			[variableKey]: sourceKey,
+		}));
 	}
 
 	function buildPayload(nextEnabled = enabled) {
@@ -825,11 +887,12 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 			enabled: nextEnabled,
 			templateId: templateId || null,
 			filters: {
-				daysBack: form.daysBack,
+				daysBack: DEFAULT_PENDING_PAYMENT_FILTERS.daysBack,
 				limit: form.limit,
 				minTotal: form.minTotal,
 				productQuery: form.productQuery,
 			},
+			variableMapping: effectiveVariableMapping,
 		};
 	}
 
@@ -880,13 +943,7 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 					</label>
 					<label className="field">
 						<span>Ventana</span>
-						<select value={form.daysBack} onChange={(event) => updateField('daysBack', event.target.value)}>
-							<option value="7">7 dias</option>
-							<option value="14">14 dias</option>
-							<option value="30">30 dias</option>
-							<option value="60">60 dias</option>
-							<option value="90">90 dias</option>
-						</select>
+						<input value="Ultimos 5 dias" readOnly />
 					</label>
 					<label className="field">
 						<span>Limite por corrida</span>
@@ -905,8 +962,50 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 
 			<div className="campaign-schedule-section">
 				<div className="campaign-schedule-section__title">
+					<strong>Variables del pago pendiente</strong>
+					<span>
+						{templateVariableKeys.length
+							? `${templateVariableKeys.length} variable(s) detectada(s) en el template.`
+							: 'Selecciona una plantilla con variables para mapear los datos.'}
+					</span>
+				</div>
+				<div className="campaign-shipment-variable-grid">
+					{templateVariableKeys.map((variableKey) => (
+						<label className="field" key={variableKey}>
+							<span>{`Variable {{${variableKey}}}`}</span>
+							<select
+								value={effectiveVariableMapping[variableKey] || ''}
+								onChange={(event) => updateVariableMapping(variableKey, event.target.value)}
+							>
+								{dataOptions.map((option) => (
+									<option key={option.key} value={option.key}>
+										{option.label}
+									</option>
+								))}
+							</select>
+						</label>
+					))}
+					{!templateVariableKeys.length ? (
+						<div className="campaign-custom-audience-empty">
+							<strong>Sin variables detectadas</strong>
+							<span>La plantilla seleccionada no tiene campos tipo {'{{1}}'} o {'{{order_number}}'}.</span>
+						</div>
+					) : null}
+				</div>
+				<div className="campaign-shipment-data-options">
+					{dataOptions.map((option) => (
+						<span key={option.key}>
+							<strong>{option.label}</strong>
+							<small>{option.description}</small>
+						</span>
+					))}
+				</div>
+			</div>
+
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
 					<strong>Estado</strong>
-					<span>Espera minima: {Number(settings.minOrderAgeMinutes || 120)} minutos.</span>
+					<span>Ultimos 5 dias, espera minima: {Number(settings.minOrderAgeMinutes || 120)} minutos.</span>
 				</div>
 				<div className="campaign-schedule-meta-grid">
 					<div>

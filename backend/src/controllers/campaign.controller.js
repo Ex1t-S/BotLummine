@@ -432,6 +432,7 @@ export async function updatePendingPaymentAutomationSettingsController(req, res)
 			enabled: normalizeBoolean(req.body?.enabled),
 			templateId: req.body?.templateId || null,
 			filters: req.body?.filters || {},
+			variableMapping: req.body?.variableMapping,
 		});
 		return res.json({ ok: true, settings });
 	} catch (error) {

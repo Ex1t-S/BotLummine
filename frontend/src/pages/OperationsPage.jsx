@@ -5,7 +5,6 @@ import {
 	AlertTriangle,
 	ArrowRight,
 	CheckCircle2,
-	Clock3,
 	MessageCircle,
 	RefreshCw,
 	Send,
@@ -134,7 +133,7 @@ function AutomationRow({
 				</div>
 			</div>
 			<div className="operations-automation-actions">
-				{!configured && configHref ? (
+				{configHref ? (
 					<ActionButton variant="secondary" icon={ArrowRight} onClick={() => onConfigure?.(configHref)}>
 						{configLabel}
 					</ActionButton>
@@ -214,6 +213,7 @@ function AutomationPanel({
 							enabled: nextEnabled,
 							templateId: pending.templateId || null,
 							filters: pending.filters || {},
+							variableMapping: pending.variableMapping || {},
 						})
 					}
 				/>
@@ -245,12 +245,6 @@ function AutomationPanel({
 					{saveError}
 				</div>
 			) : null}
-
-			<div className="operations-automation-foot">
-				<ActionButton variant="secondary" icon={Clock3} onClick={() => onNavigate('/campaigns/pending-payments')}>
-					Configurar pagos pendientes
-				</ActionButton>
-			</div>
 		</section>
 	);
 }

@@ -109,6 +109,15 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 	);
 }
 
+function normalizeVariableMapping(input = {}) {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+	return Object.fromEntries(
+		Object.entries(input)
+			.map(([key, value]) => [normalizeString(key), normalizeString(value)])
+			.filter(([key, value]) => key && value)
+	);
+}
+
 export function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder = null) {
 	const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 	const contactName = normalizeString(cart.contactName || contact?.name || '', normalizedPhone);
@@ -150,7 +159,12 @@ export function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder
 	};
 }
 
-function buildPendingPaymentVariables(order = {}, contact = null) {
+function getPendingPaymentSourceValue(baseVariables = {}, sourceKey = '') {
+	const normalizedKey = normalizeString(sourceKey);
+	return baseVariables[normalizedKey] ?? '';
+}
+
+function buildPendingPaymentVariables(order = {}, contact = null, variableMapping = {}) {
 	const normalizedPhone = normalizeCampaignPhone(order.normalizedPhone || order.contactPhone || '');
 	const contactName = normalizeString(order.contactName || contact?.name || '', normalizedPhone);
 	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
@@ -160,7 +174,7 @@ function buildPendingPaymentVariables(order = {}, contact = null) {
 	const orderNumber = normalizeString(order.orderNumber || orderId);
 	const paymentLink = normalizeString(order.gatewayLink || '');
 
-	return {
+	const variables = {
 		'1': firstName,
 		'2': orderNumber,
 		'3': totalFormatted,
@@ -188,6 +202,13 @@ function buildPendingPaymentVariables(order = {}, contact = null) {
 		total_amount: totalFormatted,
 		total_raw: order.totalAmount != null ? String(order.totalAmount) : '',
 	};
+	const mapping = normalizeVariableMapping(variableMapping);
+
+	for (const [templateKey, sourceKey] of Object.entries(mapping)) {
+		variables[templateKey] = getPendingPaymentSourceValue(variables, sourceKey);
+	}
+
+	return variables;
 }
 
 function dedupeRecipients(recipients = []) {
@@ -518,6 +539,7 @@ async function resolveRecipientsFromPendingPayments(input = {}) {
 	const selectedOrderKeys = safeArray(rawFilters.orderKeys || rawFilters.orderIds || rawFilters.orderNumbers)
 		.map((value) => normalizeString(value))
 		.filter(Boolean);
+	const variableMapping = normalizeVariableMapping(rawFilters.variableMapping || {});
 	const since = new Date();
 	since.setDate(since.getDate() - filters.daysBack);
 	const pendingStatuses = ['pending', 'pending_confirmation', 'unpaid', 'pago pendiente', 'pago en espera'];
@@ -629,7 +651,7 @@ async function resolveRecipientsFromPendingPayments(input = {}) {
 	return orders.map((order) => {
 		const normalizedPhone = normalizeCampaignPhone(order.normalizedPhone || order.contactPhone || '');
 		const contact = contactByPhone.get(normalizedPhone) || null;
-		const variables = buildPendingPaymentVariables(order, contact);
+		const variables = buildPendingPaymentVariables(order, contact, variableMapping);
 
 		return {
 			contactId: contact?.id || null,

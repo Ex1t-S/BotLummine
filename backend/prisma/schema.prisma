@@ -887,6 +887,7 @@ model PendingPaymentAutomationSetting {
   templateName       String?
   templateLanguage   String    @default("es_AR")
   filters            Json?
+  variableMapping    Json?
   intervalMinutes    Int       @default(60)
   minOrderAgeMinutes Int       @default(120)
   lastRunAt          DateTime?

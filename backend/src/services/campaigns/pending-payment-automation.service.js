@@ -9,11 +9,24 @@ const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_MIN_ORDER_AGE_MINUTES = 120;
 const PENDING_PAYMENT_STATUSES = ['pending', 'pending_confirmation', 'unpaid', 'pago pendiente', 'pago en espera'];
 const DEFAULT_FILTERS = {
-	daysBack: 30,
+	daysBack: 5,
 	limit: 50,
 	minTotal: null,
 	productQuery: '',
 };
+const PENDING_PAYMENT_VARIABLE_OPTIONS = [
+	{ key: 'first_name', label: 'Nombre', description: 'Primer nombre del destinatario' },
+	{ key: 'contact_name', label: 'Nombre completo', description: 'Nombre completo del destinatario' },
+	{ key: 'phone', label: 'Telefono', description: 'Telefono normalizado' },
+	{ key: 'order_number', label: 'Numero de orden', description: 'Numero visible del pedido' },
+	{ key: 'order_id', label: 'ID de orden', description: 'Identificador interno del pedido' },
+	{ key: 'payment_status', label: 'Estado de pago', description: 'Estado de pago detectado' },
+	{ key: 'payment_link', label: 'Link de pago', description: 'Link de pago disponible en el pedido' },
+	{ key: 'gateway_name', label: 'Gateway', description: 'Pasarela o metodo de pago' },
+	{ key: 'product_name', label: 'Producto', description: 'Primer producto del pedido' },
+	{ key: 'total_amount', label: 'Monto total', description: 'Total formateado del pedido' },
+	{ key: 'total_raw', label: 'Monto sin formato', description: 'Total numerico del pedido' },
+];
 
 function isPendingPaymentAutomationTableMissing(error) {
 	return (
@@ -35,6 +48,7 @@ CREATE TABLE IF NOT EXISTS "PendingPaymentAutomationSetting" (
     "templateName" TEXT,
     "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
     "filters" JSONB,
+    "variableMapping" JSONB,
     "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
     "minOrderAgeMinutes" INTEGER NOT NULL DEFAULT 120,
     "lastRunAt" TIMESTAMP(3),
@@ -69,6 +83,8 @@ ON "PendingPaymentAutomationLog"("workspaceId", "createdAt")`);
 		await prisma.$executeRawUnsafe(`
 CREATE INDEX IF NOT EXISTS "PendingPaymentAutomationLog_workspaceId_campaignId_idx"
 ON "PendingPaymentAutomationLog"("workspaceId", "campaignId")`);
+		await prisma.$executeRawUnsafe(`
+ALTER TABLE "PendingPaymentAutomationSetting" ADD COLUMN IF NOT EXISTS "variableMapping" JSONB`);
 		await prisma.$executeRawUnsafe(`
 DO $$
 BEGIN
@@ -114,7 +130,7 @@ function normalizeBoolean(value) {
 function normalizeFilters(input = {}) {
 	const parsedMinTotal = Number(input.minTotal);
 	return {
-		daysBack: Math.max(1, Math.min(Number(input.daysBack || DEFAULT_FILTERS.daysBack) || DEFAULT_FILTERS.daysBack, 90)),
+		daysBack: DEFAULT_FILTERS.daysBack,
 		limit: Math.max(1, Math.min(Number(input.limit || DEFAULT_FILTERS.limit) || DEFAULT_FILTERS.limit, 500)),
 		minTotal:
 			input.minTotal === '' || input.minTotal === null || input.minTotal === undefined
@@ -126,6 +142,15 @@ function normalizeFilters(input = {}) {
 	};
 }
 
+function normalizeMapping(input = {}) {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+	return Object.fromEntries(
+		Object.entries(input)
+			.map(([key, value]) => [normalizeString(key), normalizeString(value)])
+			.filter(([key, value]) => key && value)
+	);
+}
+
 function serializeSetting(setting = null) {
 	const filters = normalizeFilters(setting?.filters || DEFAULT_FILTERS);
 	return {
@@ -134,6 +159,8 @@ function serializeSetting(setting = null) {
 		templateName: setting?.templateName || '',
 		templateLanguage: setting?.templateLanguage || 'es_AR',
 		filters,
+		variableMapping: normalizeMapping(setting?.variableMapping || {}),
+		availableVariables: PENDING_PAYMENT_VARIABLE_OPTIONS,
 		intervalMinutes: Number(setting?.intervalMinutes || DEFAULT_INTERVAL_MINUTES),
 		minOrderAgeMinutes: Number(setting?.minOrderAgeMinutes || DEFAULT_MIN_ORDER_AGE_MINUTES),
 		lastRunAt: setting?.lastRunAt || null,
@@ -195,6 +222,7 @@ async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
 			workspaceId: resolvedWorkspaceId,
 			enabled: false,
 			filters: DEFAULT_FILTERS,
+			variableMapping: {},
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 			minOrderAgeMinutes: DEFAULT_MIN_ORDER_AGE_MINUTES,
 		},
@@ -210,6 +238,7 @@ export async function updatePendingPaymentAutomationSettings({
 	enabled = false,
 	templateId = null,
 	filters = {},
+	variableMapping = undefined,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const nextEnabled = normalizeBoolean(enabled);
@@ -229,6 +258,8 @@ export async function updatePendingPaymentAutomationSettings({
 	if (nextEnabled && !template) {
 		throw new Error('Elegi una plantilla antes de activar la automatizacion de pagos pendientes.');
 	}
+	const nextVariableMapping =
+		variableMapping === undefined ? normalizeMapping(current?.variableMapping || {}) : normalizeMapping(variableMapping);
 
 	const setting = await prisma.pendingPaymentAutomationSetting.upsert({
 		where: { workspaceId: resolvedWorkspaceId },
@@ -239,6 +270,7 @@ export async function updatePendingPaymentAutomationSettings({
 			templateName: template?.name || null,
 			templateLanguage: template?.language || 'es_AR',
 			filters: normalizeFilters(filters),
+			variableMapping: nextVariableMapping,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 			minOrderAgeMinutes: DEFAULT_MIN_ORDER_AGE_MINUTES,
 			lastError: null,
@@ -249,6 +281,7 @@ export async function updatePendingPaymentAutomationSettings({
 			templateName: template?.name || null,
 			templateLanguage: template?.language || 'es_AR',
 			filters: normalizeFilters(filters),
+			variableMapping: nextVariableMapping,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 			minOrderAgeMinutes: DEFAULT_MIN_ORDER_AGE_MINUTES,
 			lastError: null,
@@ -369,6 +402,7 @@ async function createAndLaunchAutomationCampaign(setting, orders = [], { launche
 		audienceSource: 'pending_payment',
 		audienceFilters: {
 			...filters,
+			variableMapping: normalizeMapping(setting.variableMapping || {}),
 			orderKeys,
 			limit: orderKeys.length,
 		},
