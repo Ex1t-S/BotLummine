@@ -1000,6 +1000,20 @@
 	border-bottom-left-radius: 5px;
 }
 
+.inbox-message-bubble--interactive-menu {
+	width: min(338px, 78vw);
+	min-width: min(338px, 78vw);
+	background: #202524;
+	border: 1px solid rgba(255, 255, 255, 0.05);
+	border-radius: 7px;
+	box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
+	overflow: hidden;
+}
+
+.inbox-message-bubble--interactive-menu::after {
+	display: none;
+}
+
 .inbox-message-bubble--outbound::after,
 .inbox-message-bubble--inbound::after {
 	content: "";
@@ -1025,6 +1039,58 @@
 
 .inbox-message-bubble-inner {
 	padding: 11px 13px 8px;
+}
+
+.inbox-interactive-menu-card {
+	color: #f4f6f5;
+}
+
+.inbox-interactive-menu-content {
+	position: relative;
+	padding: 12px 12px 8px;
+	min-height: 100px;
+}
+
+.inbox-interactive-menu-title {
+	font-size: 16px;
+	line-height: 1.2;
+	font-weight: 800;
+	color: #f7faf9;
+	margin-bottom: 11px;
+}
+
+.inbox-interactive-menu-body {
+	padding-right: 44px;
+	font-size: 14px;
+	line-height: 1.38;
+	font-weight: 700;
+	color: #eef2f1;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.inbox-interactive-menu-time {
+	position: absolute;
+	right: 10px;
+	bottom: 7px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	line-height: 1;
+	color: rgba(244, 246, 245, 0.66);
+}
+
+.inbox-interactive-menu-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	min-height: 44px;
+	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	color: #16c784;
+	font-size: 14px;
+	font-weight: 800;
 }
 
 .inbox-message-body {

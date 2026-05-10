@@ -10,6 +10,7 @@ import {
 	Eraser,
 	EyeOff,
 	Inbox,
+	List,
 	MessageCircle,
 	Paperclip,
 	RefreshCw,
@@ -287,6 +288,47 @@ function resolvePromoAction(message = {}) {
 	};
 }
 
+function getInteractivePayload(message = {}) {
+	if (String(message.type || '').toLowerCase() !== 'interactive') return null;
+	const payload = message.rawPayload?.interactivePayload || message.rawPayload?.sendResult?.interactivePayload || null;
+	return payload && typeof payload === 'object' ? payload : null;
+}
+
+function stripMenuFallbackOptions(text = '') {
+	const lines = String(text || '').split('\n');
+	const cleanLines = [];
+
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) {
+			if (cleanLines.length && cleanLines[cleanLines.length - 1] !== '') cleanLines.push('');
+			continue;
+		}
+		if (/^\*[^*]+\*$/.test(line)) continue;
+		if (/^(\d+[-.)]|[-*•])\s+/i.test(line)) continue;
+		if (/^(menu_|[a-z0-9_]+)$/i.test(line)) continue;
+		cleanLines.push(rawLine);
+	}
+
+	return cleanLines.join('\n').trim();
+}
+
+function resolveInteractiveMenuDisplay(message = {}) {
+	const payload = getInteractivePayload(message) || {};
+	const bodyText = String(payload.bodyText || payload.body || '').trim() || stripMenuFallbackOptions(message.body);
+	const title =
+		String(payload.headerText || '').trim() ||
+		String(message.senderName || '').trim() ||
+		'Lummine';
+	const buttonText = String(payload.buttonText || '').trim() || 'Abrir menu';
+
+	return {
+		title,
+		bodyText: bodyText || String(message.body || '').trim(),
+		buttonText,
+	};
+}
+
 function renderFormattedText(text = '') {
 	const value = String(text || '');
 	if (!value) return null;
@@ -334,6 +376,39 @@ function renderFormattedText(text = '') {
 			</span>
 		);
 	});
+}
+
+function InteractiveMenuMessage({ message, readState }) {
+	const display = resolveInteractiveMenuDisplay(message);
+
+	return (
+		<div className="inbox-interactive-menu-card">
+			<div className="inbox-interactive-menu-content">
+				<div className="inbox-interactive-menu-title">{display.title}</div>
+				{display.bodyText ? (
+					<div className="inbox-interactive-menu-body">
+						{renderFormattedText(display.bodyText)}
+					</div>
+				) : null}
+				<div className="inbox-interactive-menu-time">
+					<span>{formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || ''}</span>
+					<span
+						className={`inbox-message-status ${
+							readState === 'read' ? 'inbox-message-status--read' : 'inbox-message-status--sent'
+						}`}
+						aria-label={readState === 'read' ? 'Leido' : 'Enviado'}
+						title={readState === 'read' ? 'Leido' : 'Enviado'}
+					>
+						{readState === 'read' ? '✓✓' : '✓'}
+					</span>
+				</div>
+			</div>
+			<div className="inbox-interactive-menu-action" aria-hidden="true">
+				<List size={18} strokeWidth={2.4} />
+				<span>{display.buttonText}</span>
+			</div>
+		</div>
+	);
 }
 
 function AttachmentPreview({ message }) {
@@ -435,6 +510,7 @@ function resolveMessageReadState(message = {}, conversation = null) {
 
 function MessageBubble({ message, conversation }) {
 	const isOutbound = message.direction === 'OUTBOUND';
+	const interactivePayload = getInteractivePayload(message);
 	const hideBody = shouldHideBodyBecauseItIsOnlyPlaceholder(message);
 	const promo = resolvePromoAction(message);
 	const hasPromoButton = Boolean(promo.actionLabel);
@@ -450,8 +526,11 @@ function MessageBubble({ message, conversation }) {
 			<div
 				className={`inbox-message-bubble ${
 					isOutbound ? 'inbox-message-bubble--outbound' : 'inbox-message-bubble--inbound'
-				}`}
+				} ${interactivePayload ? 'inbox-message-bubble--interactive-menu' : ''}`}
 			>
+				{interactivePayload ? (
+					<InteractiveMenuMessage message={message} readState={readState} />
+				) : (
 				<div className="inbox-message-bubble-inner">
 					<AttachmentPreview message={message} />
 
@@ -503,6 +582,7 @@ function MessageBubble({ message, conversation }) {
 						) : null}
 					</div>
 				</div>
+				)}
 			</div>
 		</div>
 	);

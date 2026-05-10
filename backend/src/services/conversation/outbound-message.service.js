@@ -75,6 +75,12 @@ export async function sendAndPersistOutbound({
 	}
 
 	let sendResult = null;
+	const persistedInteractivePayload = interactivePayload
+		? {
+				...interactivePayload,
+				bodyText: cleanBody,
+			}
+		: null;
 
 	if (deliveryMode === 'lab') {
 		sendResult = {
@@ -84,7 +90,7 @@ export async function sendAndPersistOutbound({
 			rawPayload: {
 				deliveryMode: 'lab',
 				messageType,
-				interactivePayload,
+				interactivePayload: persistedInteractivePayload,
 				messages: [
 					{
 						id: `lab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -164,13 +170,14 @@ export async function sendAndPersistOutbound({
 			aiMeta: aiMeta?.raw || null,
 			userId,
 			messageType,
-			interactivePayload,
+			interactivePayload: persistedInteractivePayload,
 			mediaPayload,
 			attachment: attachmentMeta,
 			deliveryMode,
 				}
 				: {
 					...(sendResult?.rawPayload || {}),
+					...(persistedInteractivePayload ? { interactivePayload: persistedInteractivePayload } : {}),
 					...(mediaPayload ? { mediaPayload } : {}),
 					...(attachmentMeta ? { attachment: attachmentMeta } : {}),
 				},
