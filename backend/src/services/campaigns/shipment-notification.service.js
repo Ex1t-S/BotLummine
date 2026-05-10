@@ -66,6 +66,33 @@ function normalizeDaysBack(value) {
 	return Math.max(1, Math.min(Number(value || DEFAULT_DAYS_BACK) || DEFAULT_DAYS_BACK, 14));
 }
 
+async function resolveShipmentNotificationWorkspaceId(workspaceId = DEFAULT_WORKSPACE_ID) {
+	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+
+	if (normalizedWorkspaceId !== DEFAULT_WORKSPACE_ID) {
+		return normalizedWorkspaceId;
+	}
+
+	const hasDefaultData = await prisma.customerOrder.count({
+		where: { workspaceId: normalizedWorkspaceId },
+		take: 1,
+	});
+
+	if (hasDefaultData) {
+		return normalizedWorkspaceId;
+	}
+
+	const workspaceWithOrders = await prisma.customerOrder.findFirst({
+		where: {
+			workspace: { status: 'ACTIVE' },
+		},
+		select: { workspaceId: true },
+		orderBy: { updatedAt: 'desc' },
+	});
+
+	return workspaceWithOrders?.workspaceId || normalizedWorkspaceId;
+}
+
 function normalizeMapping(value = {}) {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
 	return Object.fromEntries(
@@ -211,7 +238,7 @@ function serializeSetting(setting = null) {
 }
 
 async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
 	const existing = await prisma.shipmentNotificationSetting.findUnique({
 		where: { workspaceId: resolvedWorkspaceId },
 	});
@@ -238,7 +265,7 @@ export async function updateShipmentNotificationSettings({
 	variableMapping = {},
 	daysBack = DEFAULT_DAYS_BACK,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
 	let template = null;
 
 	if (templateId) {
@@ -448,7 +475,7 @@ export async function listShipmentNotificationCandidates({
 	includeNotified = true,
 	limit = 250,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
 	const range = resolveDateRange({ daysBack, dateFrom, dateTo });
 
 	const shipments = await prisma.enboxShipment.findMany({
@@ -534,7 +561,7 @@ async function createAndLaunchShipmentCampaign({
 	name = null,
 	launchedByUserId = null,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
 	const template = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 	const usableCandidates = safeArray(candidates).filter((candidate) => !candidate.alreadyNotified);
 
@@ -594,7 +621,7 @@ export async function sendShipmentNotifications({
 	dateTo = null,
 	launchedByUserId = null,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
 	const settings = await ensureSetting(resolvedWorkspaceId);
 	const resolvedTemplateId = templateId || settings.templateLocalId;
 	const candidatesResult = await listShipmentNotificationCandidates({
