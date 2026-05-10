@@ -1,21 +1,31 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
 	AlertTriangle,
 	ArrowRight,
 	CheckCircle2,
+	Clock3,
 	MessageCircle,
 	RefreshCw,
 	Send,
+	Truck,
 	ShoppingCart,
 	WalletCards,
 } from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
+import {
+	fetchAbandonedCartAutomationSettings,
+	fetchCampaignSchedules,
+	fetchShipmentNotificationSettings,
+	updateAbandonedCartAutomationSettings,
+	updateCampaignSchedule,
+	updateShipmentNotificationSettings,
+} from '../lib/campaigns.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
-import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
+import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
 import MetricPanel from '../components/ui/MetricPanel.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './OperationsPage.css';
@@ -34,6 +44,52 @@ function getWorkspaceName(item = {}) {
 	return item.workspace?.displayName || item.workspace?.name || item.workspace?.slug || 'Marca';
 }
 
+function formatOperationDate(value) {
+	if (!value) return 'Nunca';
+	try {
+		return new Date(value).toLocaleString('es-AR', {
+			day: '2-digit',
+			month: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
+	} catch {
+		return 'Nunca';
+	}
+}
+
+function getScheduleList(data) {
+	if (Array.isArray(data)) return data;
+	if (Array.isArray(data?.schedules)) return data.schedules;
+	if (Array.isArray(data?.items)) return data.items;
+	return [];
+}
+
+function getPendingPaymentSchedules(data) {
+	return getScheduleList(data).filter(
+		(schedule) => String(schedule?.audienceSource || '').toLowerCase() === 'pending_payment'
+	);
+}
+
+function buildScheduleTogglePayload(schedule, nextStatus) {
+	return {
+		name: schedule.name,
+		templateId: schedule.templateLocalId,
+		timeOfDay: schedule.timeOfDay,
+		timezone: schedule.timezone,
+		status: nextStatus,
+		audienceSource: schedule.audienceSource || 'pending_payment',
+		audienceFilters: schedule.audienceFilters || {},
+		defaultComponents: Array.isArray(schedule.defaultComponents) ? schedule.defaultComponents : [],
+		notes: schedule.notes || null,
+	};
+}
+
+function getMutationErrorMessage(...mutations) {
+	const mutationWithError = mutations.find((mutation) => mutation?.isError);
+	return mutationWithError?.error?.response?.data?.error || mutationWithError?.error?.message || '';
+}
+
 function MetricCard({ label, value, helper, tone = 'neutral', onClick, icon: Icon }) {
 	return (
 		<MetricPanel
@@ -45,6 +101,189 @@ function MetricCard({ label, value, helper, tone = 'neutral', onClick, icon: Ico
 			icon={Icon}
 			formatValue={formatNumber}
 		/>
+	);
+}
+
+function AutomationSwitch({ checked, disabled = false, loading = false, label, onChange }) {
+	return (
+		<label className={`operations-switch ${checked ? 'is-on' : ''} ${loading ? 'is-loading' : ''}`.trim()}>
+			<input
+				type="checkbox"
+				checked={checked}
+				disabled={disabled || loading}
+				aria-label={label}
+				onChange={(event) => onChange?.(event.target.checked)}
+			/>
+			<span aria-hidden="true" />
+		</label>
+	);
+}
+
+function AutomationRow({
+	icon: Icon,
+	title,
+	description,
+	enabled,
+	configured,
+	loading = false,
+	saving = false,
+	lastRunAt = null,
+	lastError = '',
+	configHref,
+	configLabel = 'Configurar',
+	onConfigure,
+	onToggle,
+}) {
+	const statusTone = lastError ? 'danger' : enabled ? 'success' : configured ? 'warning' : 'neutral';
+	const statusLabel = lastError
+		? 'Con error'
+		: enabled
+			? 'Activa'
+			: configured
+				? 'Pausada'
+				: 'Requiere configuracion';
+	const switchDisabled = loading || saving || (!configured && !enabled);
+
+	return (
+		<article className="operations-automation-row">
+			<div className="operations-automation-icon" aria-hidden="true">
+				<Icon size={18} strokeWidth={2.2} />
+			</div>
+			<div className="operations-automation-copy">
+				<div className="operations-automation-title-line">
+					<strong>{title}</strong>
+					<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
+				</div>
+				<p>{description}</p>
+				<div className="operations-automation-meta">
+					<span>Ultima ejecucion: {formatOperationDate(lastRunAt)}</span>
+					{lastError ? <span className="is-error">{lastError}</span> : null}
+				</div>
+			</div>
+			<div className="operations-automation-actions">
+				{!configured && configHref ? (
+					<ActionButton variant="secondary" icon={ArrowRight} onClick={() => onConfigure?.(configHref)}>
+						{configLabel}
+					</ActionButton>
+				) : null}
+				<AutomationSwitch
+					checked={enabled}
+					disabled={switchDisabled}
+					loading={saving}
+					label={`${enabled ? 'Desactivar' : 'Activar'} ${title}`}
+					onChange={onToggle}
+				/>
+			</div>
+		</article>
+	);
+}
+
+function AutomationPanel({
+	abandonedSettings,
+	shipmentSettings,
+	pendingSchedules = [],
+	loading = false,
+	mutations,
+	onNavigate,
+}) {
+	const abandoned = abandonedSettings || {};
+	const shipment = shipmentSettings || {};
+	const pendingConfigured = pendingSchedules.length > 0;
+	const pendingEnabled = pendingConfigured && pendingSchedules.every(
+		(schedule) => String(schedule.status || '').toUpperCase() === 'ACTIVE'
+	);
+	const pendingLastRunAt = pendingSchedules
+		.map((schedule) => schedule.lastRunAt)
+		.filter(Boolean)
+		.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+	const pendingLastError = pendingSchedules.find((schedule) => schedule.lastError)?.lastError || '';
+	const saveError = getMutationErrorMessage(mutations.abandoned, mutations.pendingPayments, mutations.shipments);
+
+	return (
+		<section className="operations-automation-panel" aria-labelledby="operations-automation-title">
+			<div className="operations-automation-head">
+				<div>
+					<span className="operations-eyebrow">Automatizaciones</span>
+					<h3 id="operations-automation-title">Activar o pausar envios automaticos</h3>
+					<p>Solo admins de marca pueden cambiar estos controles.</p>
+				</div>
+			</div>
+
+			<div className="operations-automation-list" aria-busy={loading}>
+				<AutomationRow
+					icon={ShoppingCart}
+					title="Carritos abandonados"
+					description="Recupera carritos nuevos con la plantilla y filtros ya configurados."
+					enabled={Boolean(abandoned.enabled)}
+					configured={Boolean(abandoned.templateId)}
+					loading={loading}
+					saving={mutations.abandoned.isPending}
+					lastRunAt={abandoned.lastRunAt}
+					lastError={abandoned.lastError}
+					configHref="/campaigns/segment"
+					onConfigure={onNavigate}
+					onToggle={(nextEnabled) =>
+						mutations.abandoned.mutate({
+							enabled: nextEnabled,
+							templateId: abandoned.templateId || null,
+							filters: abandoned.filters || {},
+						})
+					}
+				/>
+				<AutomationRow
+					icon={WalletCards}
+					title="Pagos pendientes"
+					description="Activa o pausa todas las programaciones existentes para pagos pendientes."
+					enabled={pendingEnabled}
+					configured={pendingConfigured}
+					loading={loading}
+					saving={mutations.pendingPayments.isPending}
+					lastRunAt={pendingLastRunAt}
+					lastError={pendingLastError}
+					configHref="/campaigns/schedules"
+					onConfigure={onNavigate}
+					onToggle={(nextEnabled) =>
+						mutations.pendingPayments.mutate({
+							schedules: pendingSchedules,
+							status: nextEnabled ? 'ACTIVE' : 'PAUSED',
+						})
+					}
+				/>
+				<AutomationRow
+					icon={Truck}
+					title="Pedidos despachados"
+					description="Notifica despachos detectados con la plantilla y variables configuradas."
+					enabled={Boolean(shipment.enabled)}
+					configured={Boolean(shipment.templateId)}
+					loading={loading}
+					saving={mutations.shipments.isPending}
+					lastRunAt={shipment.lastRunAt}
+					lastError={shipment.lastError}
+					configHref="/campaigns/shipments"
+					onConfigure={onNavigate}
+					onToggle={(nextEnabled) =>
+						mutations.shipments.mutate({
+							enabled: nextEnabled,
+							templateId: shipment.templateId || null,
+							variableMapping: shipment.variableMapping || {},
+							daysBack: shipment.daysBack || 14,
+						})
+					}
+				/>
+			</div>
+
+			{saveError ? (
+				<div className="operations-automation-error" role="alert">
+					{saveError}
+				</div>
+			) : null}
+
+			<div className="operations-automation-foot">
+				<ActionButton variant="secondary" icon={Clock3} onClick={() => onNavigate('/campaigns/schedules')}>
+					Ver programaciones
+				</ActionButton>
+			</div>
+		</section>
 	);
 }
 
@@ -128,9 +367,11 @@ export default function OperationsPage() {
 	useInternalDarkOverrides();
 
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const platformAdmin = isPlatformAdminUser(user);
 	const isAdmin = isAdminUser(user);
+	const brandAdmin = isAdmin && !platformAdmin;
 
 	const summaryQuery = useQuery({
 		queryKey: queryKeys.operationsSummary,
@@ -142,10 +383,65 @@ export default function OperationsPage() {
 		...queryPresets.inbox,
 	});
 
+	const abandonedAutomationQuery = useQuery({
+		queryKey: ['operations', 'abandoned-cart-automation', 'settings'],
+		queryFn: fetchAbandonedCartAutomationSettings,
+		enabled: brandAdmin,
+		...queryPresets.campaigns,
+	});
+
+	const shipmentSettingsQuery = useQuery({
+		queryKey: ['operations', 'shipment-notifications', 'settings'],
+		queryFn: fetchShipmentNotificationSettings,
+		enabled: brandAdmin,
+		...queryPresets.campaigns,
+	});
+
+	const schedulesQuery = useQuery({
+		queryKey: ['operations', 'campaigns', 'schedules'],
+		queryFn: fetchCampaignSchedules,
+		enabled: brandAdmin,
+		...queryPresets.campaigns,
+	});
+
+	function invalidateAutomationQueries() {
+		queryClient.invalidateQueries({ queryKey: ['operations'] });
+		queryClient.invalidateQueries({ queryKey: ['campaigns', 'abandoned-cart-automation'] });
+		queryClient.invalidateQueries({ queryKey: ['campaigns', 'shipment-notifications'] });
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
+	}
+
+	const updateAbandonedMutation = useMutation({
+		mutationFn: updateAbandonedCartAutomationSettings,
+		onSuccess: invalidateAutomationQueries,
+	});
+
+	const updateShipmentsMutation = useMutation({
+		mutationFn: updateShipmentNotificationSettings,
+		onSuccess: invalidateAutomationQueries,
+	});
+
+	const updatePendingPaymentsMutation = useMutation({
+		mutationFn: async ({ schedules = [], status }) => {
+			await Promise.all(
+				schedules.map((schedule) =>
+					updateCampaignSchedule(schedule.id, buildScheduleTogglePayload(schedule, status))
+				)
+			);
+			return { updated: schedules.length };
+		},
+		onSuccess: invalidateAutomationQueries,
+	});
+
 	const summary = summaryQuery.data || {};
 	const totals = summary.totals || {};
 	const workspaces = summary.workspaces || [];
 	const primaryWorkspace = workspaces[0] || null;
+	const pendingPaymentSchedules = getPendingPaymentSchedules(schedulesQuery.data);
+	const automationLoading =
+		abandonedAutomationQuery.isLoading ||
+		shipmentSettingsQuery.isLoading ||
+		schedulesQuery.isLoading;
 
 	const quickActions = useMemo(() => {
 		const actions = [
@@ -175,7 +471,7 @@ export default function OperationsPage() {
 			},
 		];
 
-		if (isAdmin && !platformAdmin) {
+		if (brandAdmin) {
 			actions.push({
 				label: 'Carritos nuevos',
 				value: totals.abandonedCartsNew,
@@ -187,7 +483,7 @@ export default function OperationsPage() {
 		}
 
 		return actions;
-	}, [isAdmin, platformAdmin, totals]);
+	}, [brandAdmin, platformAdmin, totals]);
 
 	function goTo(path) {
 		navigate(path);
@@ -268,6 +564,21 @@ export default function OperationsPage() {
 					/>
 				))}
 			</div>
+
+			{brandAdmin ? (
+				<AutomationPanel
+					abandonedSettings={abandonedAutomationQuery.data?.settings || null}
+					shipmentSettings={shipmentSettingsQuery.data?.settings || null}
+					pendingSchedules={pendingPaymentSchedules}
+					loading={automationLoading}
+					mutations={{
+						abandoned: updateAbandonedMutation,
+						shipments: updateShipmentsMutation,
+						pendingPayments: updatePendingPaymentsMutation,
+					}}
+					onNavigate={goTo}
+				/>
+			) : null}
 
 			<div className={platformAdmin ? 'operations-workspaces-grid' : 'operations-single-workspace'}>
 				{workspaces.map((item) => (

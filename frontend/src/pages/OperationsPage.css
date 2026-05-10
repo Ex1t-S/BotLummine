@@ -152,6 +152,200 @@ button.operations-metric-card:focus-visible {
 	gap: 12px;
 }
 
+.operations-automation-panel {
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid var(--ui-border);
+	border-radius: 12px;
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
+}
+
+.operations-automation-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--ui-border);
+}
+
+.operations-automation-head h3,
+.operations-automation-head p {
+	margin: 0;
+}
+
+.operations-automation-head h3 {
+	margin-top: 4px;
+	color: var(--ui-heading);
+	font-size: 18px;
+	line-height: 1.2;
+}
+
+.operations-automation-head p {
+	margin-top: 4px;
+	color: var(--ui-muted);
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.operations-automation-list {
+	display: grid;
+	gap: 8px;
+}
+
+.operations-automation-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	min-height: 92px;
+	padding: 12px;
+	border: 1px solid var(--ui-border);
+	border-radius: 10px;
+	background: #ffffff;
+}
+
+.operations-automation-icon {
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 10px;
+	background: var(--ui-primary-muted);
+	color: var(--ui-primary);
+}
+
+.operations-automation-copy {
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+}
+
+.operations-automation-title-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.operations-automation-title-line > strong {
+	color: var(--ui-heading);
+	font-size: 15px;
+	line-height: 1.25;
+}
+
+.operations-automation-copy p {
+	margin: 0;
+	color: var(--ui-muted);
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.operations-automation-meta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	color: var(--ui-muted);
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.operations-automation-meta .is-error {
+	color: var(--ui-danger);
+	font-weight: 650;
+}
+
+.operations-automation-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.operations-switch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	width: 62px;
+	height: 34px;
+	flex: 0 0 auto;
+	cursor: pointer;
+}
+
+.operations-switch input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+}
+
+.operations-switch > span {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border: 1px solid #c9d1d8;
+	border-radius: 999px;
+	background: #d6d8da;
+	box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.16);
+	transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.operations-switch > span::after {
+	content: "";
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 26px;
+	height: 26px;
+	border-radius: 999px;
+	background: #ffffff;
+	box-shadow: 0 2px 5px rgba(16, 24, 40, 0.22);
+	transition: transform 0.16s ease;
+}
+
+.operations-switch.is-on > span {
+	border-color: #7fc83b;
+	background: #91cf39;
+}
+
+.operations-switch.is-on > span::after {
+	transform: translateX(28px);
+}
+
+.operations-switch input:focus-visible + span {
+	box-shadow: var(--ui-focus);
+}
+
+.operations-switch input:disabled + span {
+	cursor: not-allowed;
+	opacity: 0.58;
+}
+
+.operations-switch.is-loading > span::after {
+	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 2px 5px rgba(16, 24, 40, 0.22);
+}
+
+.operations-automation-foot {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.operations-automation-error {
+	padding: 10px 12px;
+	border: 1px solid #f3b8b1;
+	border-radius: 8px;
+	background: var(--ui-danger-soft);
+	color: var(--ui-danger);
+	font-size: 13px;
+	font-weight: 650;
+	line-height: 1.35;
+}
+
 .operations-single-workspace {
 	display: grid;
 	gap: 12px;
@@ -319,6 +513,16 @@ button.operations-metric-card:focus-visible {
 	.operations-workspace-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
+
+	.operations-automation-row {
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: start;
+	}
+
+	.operations-automation-actions {
+		grid-column: 1 / -1;
+		justify-content: space-between;
+	}
 }
 
 @media (max-width: 560px) {
@@ -331,6 +535,26 @@ button.operations-metric-card:focus-visible {
 	.operations-issue {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.operations-automation-panel {
+		padding: 12px;
+	}
+
+	.operations-automation-row {
+		grid-template-columns: 1fr;
+	}
+
+	.operations-automation-icon {
+		display: none;
+	}
+
+	.operations-automation-actions {
+		align-items: stretch;
+	}
+
+	.operations-automation-actions .internal-action-btn {
+		flex: 1;
 	}
 }
 
