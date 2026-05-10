@@ -118,7 +118,16 @@ export async function updateAbandonedCartAutomationSettings({
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const nextEnabled = normalizeBoolean(enabled);
-	let template = null;
+	const current = await prisma.abandonedCartAutomationSetting.findUnique({
+		where: { workspaceId: resolvedWorkspaceId },
+	});
+	let template = current?.templateLocalId
+		? {
+				id: current.templateLocalId,
+				name: current.templateName,
+				language: current.templateLanguage,
+			}
+		: null;
 
 	if (templateId) {
 		template = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });

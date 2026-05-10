@@ -323,7 +323,16 @@ export async function updateShipmentNotificationSettings({
 	daysBack = DEFAULT_DAYS_BACK,
 } = {}) {
 	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
-	let template = null;
+	const current = await prisma.shipmentNotificationSetting.findUnique({
+		where: { workspaceId: resolvedWorkspaceId },
+	});
+	let template = current?.templateLocalId
+		? {
+				id: current.templateLocalId,
+				name: current.templateName,
+				language: current.templateLanguage,
+			}
+		: null;
 
 	if (templateId) {
 		template = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
