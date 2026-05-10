@@ -49,6 +49,7 @@ const SHIPMENT_DEFAULT_MAPPING = {
 	product_name: 'product_name',
 	first_product_name: 'product_name',
 };
+const SHIPMENT_CANDIDATES_PAGE_SIZE = 15;
 
 function collectTemplateText(value, texts = []) {
 	if (typeof value === 'string') {
@@ -751,6 +752,7 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 	const [enabled, setEnabled] = useState(false);
 	const [selectedKeys, setSelectedKeys] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
+	const [currentPage, setCurrentPage] = useState(1);
 	const saving = mutations.updateShipmentSettings.isPending;
 	const sending = mutations.sendShipmentNotifications.isPending;
 	const selectedTemplate = useMemo(
@@ -779,6 +781,21 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 
 	const selectableCandidates = candidates.filter((candidate) => !candidate.alreadyNotified);
 	const selectedSet = new Set(selectedKeys);
+	const totalPages = Math.max(1, Math.ceil(candidates.length / SHIPMENT_CANDIDATES_PAGE_SIZE));
+	const boundedPage = Math.min(currentPage, totalPages);
+	const pageStartIndex = (boundedPage - 1) * SHIPMENT_CANDIDATES_PAGE_SIZE;
+	const pageEndIndex = Math.min(pageStartIndex + SHIPMENT_CANDIDATES_PAGE_SIZE, candidates.length);
+	const visibleCandidates = candidates.slice(pageStartIndex, pageEndIndex);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [range.dateFrom, range.dateTo]);
+
+	useEffect(() => {
+		if (currentPage > totalPages) {
+			setCurrentPage(totalPages);
+		}
+	}, [currentPage, totalPages]);
 
 	function toggleCandidate(candidate) {
 		if (candidate.alreadyNotified) return;
@@ -962,8 +979,37 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 					<div className="campaign-custom-audience-empty">Cargando despachos...</div>
 				) : null}
 
+				{!queries.shipmentCandidates.isLoading && candidates.length > SHIPMENT_CANDIDATES_PAGE_SIZE ? (
+					<div className="campaign-shipment-pagination" aria-label="Paginacion de despachos">
+						<span>
+							Mostrando {pageStartIndex + 1}-{pageEndIndex} de {candidates.length}
+						</span>
+						<div className="campaign-shipment-pagination__controls">
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+								disabled={boundedPage <= 1}
+							>
+								Anterior
+							</button>
+							<strong>
+								Pagina {boundedPage} de {totalPages}
+							</strong>
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+								disabled={boundedPage >= totalPages}
+							>
+								Siguiente
+							</button>
+						</div>
+					</div>
+				) : null}
+
 				<div className="campaign-shipment-list">
-					{candidates.map((candidate) => (
+					{visibleCandidates.map((candidate) => (
 						<label
 							key={candidate.notificationKey}
 							className={`campaign-shipment-row ${candidate.alreadyNotified ? 'is-disabled' : ''}`.trim()}
@@ -999,6 +1045,35 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 						</div>
 					) : null}
 				</div>
+
+				{!queries.shipmentCandidates.isLoading && candidates.length > SHIPMENT_CANDIDATES_PAGE_SIZE ? (
+					<div className="campaign-shipment-pagination campaign-shipment-pagination--bottom" aria-label="Paginacion de despachos inferior">
+						<span>
+							Mostrando {pageStartIndex + 1}-{pageEndIndex} de {candidates.length}
+						</span>
+						<div className="campaign-shipment-pagination__controls">
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+								disabled={boundedPage <= 1}
+							>
+								Anterior
+							</button>
+							<strong>
+								Pagina {boundedPage} de {totalPages}
+							</strong>
+							<button
+								type="button"
+								className="button ghost"
+								onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+								disabled={boundedPage >= totalPages}
+							>
+								Siguiente
+							</button>
+						</div>
+					</div>
+				) : null}
 			</div>
 		</div>
 	);

@@ -246,6 +246,37 @@
 	gap: 10px;
 }
 
+.campaign-shipment-pagination {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	align-items: center;
+	padding: 10px 0;
+}
+
+.campaign-shipment-pagination--bottom {
+	padding-bottom: 0;
+}
+
+.campaign-shipment-pagination > span,
+.campaign-shipment-pagination__controls strong {
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.campaign-shipment-pagination__controls {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.campaign-shipment-pagination__controls .button {
+	min-height: 34px;
+	padding: 7px 12px;
+}
+
 .campaign-shipment-range {
 	margin-bottom: 12px;
 }
@@ -443,6 +474,15 @@
 
 	.campaign-shipment-row {
 		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.campaign-shipment-pagination {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.campaign-shipment-pagination__controls {
+		justify-content: space-between;
 	}
 
 	.campaign-schedule-preview-row {
