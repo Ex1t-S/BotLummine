@@ -1046,7 +1046,9 @@
 }
 
 .inbox-interactive-menu-content {
-	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 	padding: 12px 12px 8px;
 	min-height: 100px;
 }
@@ -1056,11 +1058,10 @@
 	line-height: 1.2;
 	font-weight: 800;
 	color: #111827;
-	margin-bottom: 11px;
+	margin-bottom: 0;
 }
 
 .inbox-interactive-menu-body {
-	padding-right: 44px;
 	font-size: 14px;
 	line-height: 1.38;
 	font-weight: 700;
@@ -1070,9 +1071,8 @@
 }
 
 .inbox-interactive-menu-time {
-	position: absolute;
-	right: 10px;
-	bottom: 7px;
+	align-self: flex-end;
+	margin-top: auto;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;

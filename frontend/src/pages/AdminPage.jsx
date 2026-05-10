@@ -247,7 +247,7 @@ function getActivityItems(metrics = {}) {
 			key: 'conversions',
 			label: 'Conv.',
 			value: Number(metrics.conversionCount || 0),
-			help: 'Ventas o señales de compra atribuidas a mensajes o campañas.',
+			help: 'Ventas atribuidas y carritos recuperados desde mensajes o campañas.',
 		},
 	];
 	const values = items.map((item) => item.value);
@@ -295,13 +295,13 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 
 			<div
 				className="workspace-card-hero metric-help"
-				data-help="Señales de compra y compras por chat divididas por mensajes enviados en campañas. Sirve para ver cuánto WhatsApp termina en intención de compra."
-				title="Señales de compra / mensajes enviados en campañas."
+				data-help="Ventas reales atribuidas y carritos recuperados divididos por mensajes enviados en campañas."
+				title="Ventas y carritos recuperados / mensajes enviados en campañas."
 			>
 				<div>
 					<span>Conversión por WhatsApp</span>
 					<strong>{formatPercent(conversionRate)}</strong>
-					<small>{formatNumber(metrics.conversionCount)} señales de compra</small>
+					<small>{formatNumber(metrics.conversionCount)} ventas y carritos</small>
 				</div>
 				<div className="workspace-card-ring" aria-hidden="true">
 					<div style={{ '--progress': `${clampPercent(conversionRate)}%` }}>

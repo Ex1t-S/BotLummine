@@ -294,10 +294,8 @@ function getInteractivePayload(message = {}) {
 	return payload && typeof payload === 'object' ? payload : null;
 }
 
-const DEFAULT_INTERACTIVE_MENU_BODY = '¡Hola!\n\ncomo estas? Elegí una opción para ayudarte más rápido:';
-
 function isGenericMenuTitle(value = '') {
-	return /^men[uú]\s+principal$/i.test(String(value || '').trim());
+	return /^(men[uú]\s+principal|marca)$/i.test(String(value || '').trim());
 }
 
 function stripMenuFallbackOptions(text = '') {
@@ -332,8 +330,8 @@ function resolveInteractiveMenuDisplay(message = {}) {
 	const bodyText = String(payload.bodyText || payload.body || '').trim() || fallbackBody;
 	const headerText = String(payload.headerText || '').trim();
 	const title =
-		String(message.senderName || '').trim() ||
 		(isGenericMenuTitle(headerText) ? '' : headerText) ||
+		String(message.senderName || '').trim() ||
 		'Lummine';
 	const buttonText = String(payload.buttonText || '').trim() || 'Abrir menu';
 

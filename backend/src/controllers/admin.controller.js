@@ -897,7 +897,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 		for (const row of campaignStatsRows) {
 			const metrics = metricsByWorkspace.get(row.workspaceId);
 			if (!metrics) continue;
-			metrics.conversionCount = Number(row.stats?.conversionSignalRecipients || 0);
+			metrics.conversionCount = Number(row.stats?.purchasedRecipients || 0);
 		}
 
 		for (const row of abandonedCartRows) {
