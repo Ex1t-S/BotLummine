@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { formatPreviewText } from '../utils.js';
 
 function moneyLabel(value) {
@@ -11,6 +12,209 @@ function moneyLabel(value) {
 	}).format(numeric);
 }
 
+function formatAutomationDate(value) {
+	if (!value) return 'Nunca';
+	try {
+		return new Date(value).toLocaleString('es-AR', {
+			day: '2-digit',
+			month: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
+	} catch {
+		return 'Nunca';
+	}
+}
+
+const defaultAutomationForm = {
+	enabled: false,
+	templateId: '',
+	daysBack: 7,
+	limit: 50,
+	minTotal: '',
+	productQuery: '',
+};
+
+function AutomationCard({
+	templates = [],
+	settings = null,
+	loading = false,
+	saving = false,
+	running = false,
+	onSave,
+	onRunNow,
+}) {
+	const [form, setForm] = useState(defaultAutomationForm);
+	const selectedTemplate = useMemo(
+		() => templates.find((template) => template.id === form.templateId) || null,
+		[templates, form.templateId]
+	);
+
+	useEffect(() => {
+		const filters = settings?.filters || {};
+		setForm({
+			enabled: Boolean(settings?.enabled),
+			templateId: settings?.templateId || '',
+			daysBack: Number(filters.daysBack || 7),
+			limit: Number(filters.limit || 50),
+			minTotal: filters.minTotal ?? '',
+			productQuery: filters.productQuery || '',
+		});
+	}, [settings]);
+
+	function updateField(field, value) {
+		setForm((current) => ({ ...current, [field]: value }));
+	}
+
+	function handleSave() {
+		onSave?.({
+			enabled: form.enabled,
+			templateId: form.templateId,
+			filters: {
+				daysBack: form.daysBack,
+				status: 'NEW',
+				limit: form.limit,
+				minTotal: form.minTotal,
+				productQuery: form.productQuery,
+			},
+		});
+	}
+
+	return (
+		<div className="campaign-custom-audience-card campaign-abandoned-automation-card">
+			<div className="campaign-abandoned-automation-card__header">
+				<div>
+					<span className="campaigns-eyebrow">Automatizacion</span>
+					<h4>Enviar carritos nuevos cada hora</h4>
+					<p>Cuando esta activa, detecta carritos nuevos con al menos 1 hora y manda el template configurado.</p>
+				</div>
+				<span className={`campaign-schedule-status ${form.enabled ? 'is-active' : ''}`.trim()}>
+					{form.enabled ? 'Activa' : 'Pausada'}
+				</span>
+			</div>
+
+			<label className="campaign-toggle campaign-toggle--card">
+				<input
+					type="checkbox"
+					checked={form.enabled}
+					onChange={(event) => updateField('enabled', event.target.checked)}
+					disabled={loading || saving}
+				/>
+				<span>
+					<strong>Automatizacion {form.enabled ? 'activada' : 'desactivada'}</strong>
+					<small>El dispatcher revisa cada minuto y ejecuta esta regla como maximo una vez por hora.</small>
+				</span>
+			</label>
+
+			<div className="campaign-form-grid two-columns">
+				<label className="field">
+					<span>Template automatico</span>
+					<select
+						value={form.templateId}
+						onChange={(event) => updateField('templateId', event.target.value)}
+						disabled={loading || saving}
+					>
+						<option value="">Seleccionar template</option>
+						{templates.map((template) => (
+							<option key={template.id} value={template.id}>
+								{template.name} - {template.language} - {template.status}
+							</option>
+						))}
+					</select>
+				</label>
+				<label className="field">
+					<span>Ventana</span>
+					<select
+						value={form.daysBack}
+						onChange={(event) => updateField('daysBack', Number(event.target.value))}
+						disabled={loading || saving}
+					>
+						<option value={7}>7 dias</option>
+						<option value={15}>15 dias</option>
+						<option value={30}>30 dias</option>
+					</select>
+				</label>
+			</div>
+
+			<div className="campaign-custom-audience-grid-4">
+				<label className="field">
+					<span>Limite por hora</span>
+					<input
+						type="number"
+						min="1"
+						max="500"
+						value={form.limit}
+						onChange={(event) => updateField('limit', Number(event.target.value || 50))}
+						disabled={loading || saving}
+					/>
+				</label>
+				<label className="field">
+					<span>Monto minimo</span>
+					<input
+						type="number"
+						min="0"
+						value={form.minTotal}
+						onChange={(event) => updateField('minTotal', event.target.value)}
+						placeholder="Sin minimo"
+						disabled={loading || saving}
+					/>
+				</label>
+				<label className="field campaign-abandoned-automation-card__wide">
+					<span>Producto</span>
+					<input
+						value={form.productQuery}
+						onChange={(event) => updateField('productQuery', event.target.value)}
+						placeholder="Opcional"
+						disabled={loading || saving}
+					/>
+				</label>
+			</div>
+
+			<div className="campaign-abandoned-automation-meta">
+				<span>
+					<strong>Espera minima</strong>
+					<small>{Number(settings?.minCartAgeMinutes || 60)} minutos</small>
+				</span>
+				<span>
+					<strong>Ultima ejecucion</strong>
+					<small>{formatAutomationDate(settings?.lastRunAt)}</small>
+				</span>
+				<span>
+					<strong>Ultima campana</strong>
+					<small>{settings?.lastCampaignId || 'Sin campana'}</small>
+				</span>
+				<span>
+					<strong>Template</strong>
+					<small>{selectedTemplate?.name || settings?.templateName || 'Sin template'}</small>
+				</span>
+			</div>
+
+			{settings?.lastError ? (
+				<div className="campaign-schedule-error">{settings.lastError}</div>
+			) : null}
+
+			<div className="campaign-form-actions campaign-form-actions--end">
+				<button
+					type="button"
+					className="button ghost"
+					onClick={onRunNow}
+					disabled={running || saving || !settings?.enabled}
+				>
+					{running ? 'Ejecutando...' : 'Ejecutar ahora'}
+				</button>
+				<button
+					type="button"
+					className="button primary"
+					onClick={handleSave}
+					disabled={saving || loading || (form.enabled && !form.templateId)}
+				>
+					{saving ? 'Guardando...' : 'Guardar automatizacion'}
+				</button>
+			</div>
+		</div>
+	);
+}
+
 export default function AbandonedCartCampaignPanel({
 	templates = [],
 	selectedTemplate,
@@ -20,8 +224,14 @@ export default function AbandonedCartCampaignPanel({
 	preview,
 	previewing,
 	creating,
+	automationSettings,
+	automationLoading,
+	savingAutomation,
+	runningAutomation,
 	onPreview,
 	onCreate,
+	onSaveAutomation,
+	onRunAutomationNow,
 }) {
 	return (
 		<div className="campaign-custom-audience campaign-custom-audience--premium">
@@ -56,6 +266,16 @@ export default function AbandonedCartCampaignPanel({
 					Filtrá carritos, revisá destinatarios y creá una campaña específica de recuperación.
 				</p>
 			</div>
+
+			<AutomationCard
+				templates={templates}
+				settings={automationSettings}
+				loading={automationLoading}
+				saving={savingAutomation}
+				running={runningAutomation}
+				onSave={onSaveAutomation}
+				onRunNow={onRunAutomationNow}
+			/>
 
 			<div className="campaign-custom-audience-grid campaign-custom-audience-grid--balanced">
 				<div className="campaign-custom-audience-card campaign-custom-audience-card--form">

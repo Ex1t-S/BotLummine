@@ -106,8 +106,14 @@ export default function UnifiedCampaignSegmentPanel({
 						preview={abandonedCart.preview}
 						previewing={mutations.abandonedPreview.isPending}
 						creating={mutations.createAbandonedCampaign.isPending}
+						automationSettings={abandonedCart.automationSettings}
+						automationLoading={abandonedCart.automationLoading}
+						savingAutomation={mutations.updateAbandonedCartAutomation.isPending}
+						runningAutomation={mutations.runAbandonedCartAutomationNow.isPending}
 						onPreview={abandonedCart.handlePreview}
 						onCreate={abandonedCart.handleCreate}
+						onSaveAutomation={(payload) => mutations.updateAbandonedCartAutomation.mutate(payload)}
+						onRunAutomationNow={() => mutations.runAbandonedCartAutomationNow.mutate()}
 					/>
 				) : (
 					<CampaignComposerPanel

@@ -8,6 +8,6 @@
     "jobs:enbox-sync": "npm --prefix backend run jobs:enbox-sync",
     "jobs:diagnose": "npm --prefix backend run jobs:diagnose",
     "postinstall": "npm --prefix backend ci",
-    "start": "npm --prefix backend run start:prod"
+    "start": "npm --prefix backend run prisma:migrate && npm --prefix backend run start:prod"
   }
 }

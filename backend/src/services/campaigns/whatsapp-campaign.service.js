@@ -57,6 +57,9 @@ function normalizeAbandonedCartFilters(input = {}) {
 	const limit = Math.max(1, Math.min(Number(input.limit || 50) || 50, 500));
 	const rawStatus = normalizeString(input.status || 'NEW').toUpperCase();
 	const status = ['NEW', 'CONTACTED', 'ALL'].includes(rawStatus) ? rawStatus : 'NEW';
+	const checkoutIds = Array.isArray(input.checkoutIds)
+		? [...new Set(input.checkoutIds.map((value) => normalizeString(value)).filter(Boolean))].slice(0, 500)
+		: [];
 
 	let minTotal = null;
 	if (input.minTotal !== '' && input.minTotal !== null && input.minTotal !== undefined) {
@@ -69,7 +72,8 @@ function normalizeAbandonedCartFilters(input = {}) {
 		limit,
 		status,
 		minTotal,
-		productQuery: normalizeString(input.productQuery || '')
+		productQuery: normalizeString(input.productQuery || ''),
+		checkoutIds,
 	};
 }
 
@@ -393,6 +397,10 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 			gte: since
 		}
 	};
+
+	if (filters.checkoutIds.length) {
+		where.checkoutId = { in: filters.checkoutIds };
+	}
 
 	if (filters.status !== 'ALL') {
 		where.status = filters.status;

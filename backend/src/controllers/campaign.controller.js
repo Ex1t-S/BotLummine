@@ -35,6 +35,11 @@ import {
 	sendShipmentNotifications,
 	updateShipmentNotificationSettings,
 } from '../services/campaigns/shipment-notification.service.js';
+import {
+	getAbandonedCartAutomationSettings,
+	runAbandonedCartAutomation,
+	updateAbandonedCartAutomationSettings,
+} from '../services/campaigns/abandoned-cart-automation.service.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
 	normalizeBoolean,
@@ -360,6 +365,45 @@ export async function deleteCampaignScheduleController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 		});
 		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function getAbandonedCartAutomationSettingsController(req, res) {
+	try {
+		const settings = await getAbandonedCartAutomationSettings({
+			workspaceId: requireRequestWorkspaceId(req),
+		});
+		return res.json({ ok: true, settings });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function updateAbandonedCartAutomationSettingsController(req, res) {
+	try {
+		const settings = await updateAbandonedCartAutomationSettings({
+			workspaceId: requireRequestWorkspaceId(req),
+			enabled: normalizeBoolean(req.body?.enabled),
+			templateId: req.body?.templateId || null,
+			filters: req.body?.filters || {},
+		});
+		return res.json({ ok: true, settings });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function runAbandonedCartAutomationNowController(req, res) {
+	try {
+		const result = await runAbandonedCartAutomation({
+			workspaceId: requireRequestWorkspaceId(req),
+			force: true,
+			launchedByUserId: req.user?.id || null,
+		});
+		void executeCampaignDispatcherTick();
+		return res.status(201).json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);
 	}

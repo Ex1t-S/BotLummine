@@ -26,6 +26,9 @@ import {
 	runCampaignScheduleNowController,
 	updateCampaignScheduleController,
 	deleteCampaignScheduleController,
+	getAbandonedCartAutomationSettingsController,
+	updateAbandonedCartAutomationSettingsController,
+	runAbandonedCartAutomationNowController,
 	getShipmentNotificationSettingsController,
 	updateShipmentNotificationSettingsController,
 	listShipmentNotificationCandidatesController,
@@ -55,6 +58,9 @@ router.post('/schedules', createCampaignScheduleController);
 router.post('/schedules/:scheduleId/run-now', runCampaignScheduleNowController);
 router.patch('/schedules/:scheduleId', updateCampaignScheduleController);
 router.delete('/schedules/:scheduleId', deleteCampaignScheduleController);
+router.get('/abandoned-cart-automation/settings', getAbandonedCartAutomationSettingsController);
+router.patch('/abandoned-cart-automation/settings', updateAbandonedCartAutomationSettingsController);
+router.post('/abandoned-cart-automation/run-now', runAbandonedCartAutomationNowController);
 router.get('/shipment-notifications/settings', getShipmentNotificationSettingsController);
 router.patch('/shipment-notifications/settings', updateShipmentNotificationSettingsController);
 router.get('/shipment-notifications/candidates', listShipmentNotificationCandidatesController);

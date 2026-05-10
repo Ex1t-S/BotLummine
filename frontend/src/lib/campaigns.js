@@ -79,6 +79,21 @@ export async function previewAbandonedCartAudience(payload) {
 	return unwrap(response);
 }
 
+export async function fetchAbandonedCartAutomationSettings() {
+	const response = await api.get('/campaigns/abandoned-cart-automation/settings');
+	return unwrap(response);
+}
+
+export async function updateAbandonedCartAutomationSettings(payload) {
+	const response = await api.patch('/campaigns/abandoned-cart-automation/settings', payload);
+	return unwrap(response);
+}
+
+export async function runAbandonedCartAutomationNow() {
+	const response = await api.post('/campaigns/abandoned-cart-automation/run-now');
+	return unwrap(response);
+}
+
 export async function fetchCampaignSchedules() {
 	const response = await api.get('/campaigns/schedules');
 	return unwrap(response);

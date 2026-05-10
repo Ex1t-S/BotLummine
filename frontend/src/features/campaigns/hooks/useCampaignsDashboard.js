@@ -9,6 +9,7 @@ import {
 	deleteCampaignSchedule,
 	deleteTemplate,
 	dispatchCampaign,
+	fetchAbandonedCartAutomationSettings,
 	fetchCampaignOverview,
 	fetchCampaignSchedules,
 	fetchCampaigns,
@@ -20,10 +21,12 @@ import {
 	previewCampaignSchedule,
 	purgeDeletedTemplates,
 	resumeCampaign,
+	runAbandonedCartAutomationNow,
 	runCampaignScheduleNow,
 	runCampaignDispatchTick,
 	sendShipmentNotifications,
 	syncTemplates,
+	updateAbandonedCartAutomationSettings,
 	updateCampaignSchedule,
 	updateShipmentNotificationSettings,
 	updateTemplate,
@@ -244,6 +247,11 @@ export function useCampaignsDashboard() {
 		queryFn: fetchCampaignSchedules,
 	});
 
+	const abandonedCartAutomationQuery = useQuery({
+		queryKey: ['campaigns', 'abandoned-cart-automation', 'settings'],
+		queryFn: fetchAbandonedCartAutomationSettings,
+	});
+
 	const shipmentSettingsQuery = useQuery({
 		queryKey: ['campaigns', 'shipment-notifications', 'settings'],
 		queryFn: fetchShipmentNotificationSettings,
@@ -364,6 +372,7 @@ export function useCampaignsDashboard() {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
+		queryClient.invalidateQueries({ queryKey: ['campaigns', 'abandoned-cart-automation'] });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'shipment-notifications'] });
 
 		if (nextCampaignId) {
@@ -500,6 +509,26 @@ export function useCampaignsDashboard() {
 				error?.response?.data?.error || 'No se pudo generar la audiencia de carritos.'
 			);
 		},
+	});
+
+	const updateAbandonedCartAutomationMutation = useMutation({
+		mutationFn: updateAbandonedCartAutomationSettings,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Automatizacion de carritos actualizada.');
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar la automatizacion de carritos.'),
+	});
+
+	const runAbandonedCartAutomationNowMutation = useMutation({
+		mutationFn: runAbandonedCartAutomationNow,
+		onSuccess: (result) => {
+			invalidateAll(result?.campaignId || null);
+			showFeedback('success', `Automatizacion ejecutada para ${Number(result?.processed || 0)} destinatario(s).`);
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar la automatizacion de carritos.'),
 	});
 
 	const createAbandonedCartCampaignMutation = useMutation({
@@ -680,6 +709,7 @@ export function useCampaignsDashboard() {
 			campaigns: campaignsQuery,
 			campaignDetail: campaignDetailQuery,
 			schedules: schedulesQuery,
+			abandonedCartAutomation: abandonedCartAutomationQuery,
 			shipmentSettings: shipmentSettingsQuery,
 			shipmentCandidates: shipmentCandidatesQuery,
 		},
@@ -693,6 +723,8 @@ export function useCampaignsDashboard() {
 			deleteCampaign: deleteCampaignMutation,
 			action: actionMutation,
 			abandonedPreview: abandonedCartPreviewMutation,
+			updateAbandonedCartAutomation: updateAbandonedCartAutomationMutation,
+			runAbandonedCartAutomationNow: runAbandonedCartAutomationNowMutation,
 			createAbandonedCampaign: createAbandonedCartCampaignMutation,
 			createSchedule: createScheduleMutation,
 			updateSchedule: updateScheduleMutation,
@@ -717,6 +749,8 @@ export function useCampaignsDashboard() {
 		abandonedCart: {
 			form: abandonedCartForm,
 			preview: abandonedCartPreview,
+			automationSettings: abandonedCartAutomationQuery.data?.settings || null,
+			automationLoading: abandonedCartAutomationQuery.isLoading || abandonedCartAutomationQuery.isFetching,
 			updateField: updateAbandonedCartForm,
 			handlePreview: handlePreviewAbandonedCarts,
 			handleCreate: handleCreateAbandonedCartCampaign,
