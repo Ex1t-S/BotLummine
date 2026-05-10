@@ -5,6 +5,7 @@ import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/worksp
 import {
 	extractOrderShippingSignals,
 	getShippingStatusMeta,
+	getShippingStatusSearchTerms,
 	isDispatchedShippingStatus,
 } from '../common/shipping-status.js';
 import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
@@ -107,7 +108,7 @@ function hasTrackingUrl(value = '') {
 function isDispatchReady({ status = '', trackingUrl = '' } = {}) {
 	const shippingMeta = getShippingStatusMeta(status);
 	if (shippingMeta.category === 'cancelled') return false;
-	return isDispatchedShippingStatus(status, { includeDelivered: false }) || hasTrackingUrl(trackingUrl);
+	return isDispatchedShippingStatus(status, { includeDelivered: true }) || hasTrackingUrl(trackingUrl);
 }
 
 function getDispatchCandidateShippingMeta(status = '', trackingUrl = '') {
@@ -388,6 +389,57 @@ async function getNotifiedKeys(workspaceId, keys = []) {
 	return new Set(logs.map((log) => log.notificationKey));
 }
 
+async function getDispatchedOrderRefs(workspaceId) {
+	const variants = getShippingStatusSearchTerms(['dispatched', 'delivered']);
+	const shipments = await prisma.enboxShipment.findMany({
+		where: {
+			workspaceId,
+			OR: variants.flatMap((value) => [
+				{ shippingStatus: { contains: value, mode: 'insensitive' } },
+				{ shippingStatusCode: { contains: value, mode: 'insensitive' } },
+			]),
+		},
+		select: {
+			orderId: true,
+			orderNumber: true,
+		},
+		take: 5000,
+	});
+
+	return {
+		orderIds: [...new Set(shipments.map((shipment) => normalizeString(shipment.orderId)).filter(Boolean))],
+		orderNumbers: [...new Set(shipments.map((shipment) => normalizeString(shipment.orderNumber)).filter(Boolean))],
+	};
+}
+
+function buildDispatchedOrderWhere({ workspaceId, range, dispatchedOrderRefs = null }) {
+	const shippingStatusVariants = getShippingStatusSearchTerms(['dispatched', 'delivered']);
+	const orderRefFilters = [];
+
+	if (dispatchedOrderRefs?.orderIds?.length) {
+		orderRefFilters.push({ orderId: { in: dispatchedOrderRefs.orderIds } });
+	}
+	if (dispatchedOrderRefs?.orderNumbers?.length) {
+		orderRefFilters.push({ orderNumber: { in: dispatchedOrderRefs.orderNumbers } });
+	}
+
+	return {
+		workspaceId,
+		normalizedPhone: { not: null },
+		OR: buildRecentDateWhere(['orderUpdatedAt', 'updatedAt'], range),
+		AND: [
+			{
+				OR: [
+					...shippingStatusVariants.map((value) => ({
+						shippingStatus: { contains: value, mode: 'insensitive' },
+					})),
+					...orderRefFilters,
+				],
+			},
+		],
+	};
+}
+
 export async function listShipmentNotificationCandidates({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	daysBack = DEFAULT_DAYS_BACK,
@@ -415,13 +467,14 @@ export async function listShipmentNotificationCandidates({
 		dispatchedShipments.map((shipment) => shipment.orderNumber)
 	);
 	const shipmentKeys = dispatchedShipments.map((shipment) => `shipment:${shipment.didEnvio}`);
+	const dispatchedOrderRefs = await getDispatchedOrderRefs(resolvedWorkspaceId);
 
 	const fallbackOrders = await prisma.customerOrder.findMany({
-		where: {
+		where: buildDispatchedOrderWhere({
 			workspaceId: resolvedWorkspaceId,
-			normalizedPhone: { not: null },
-			OR: buildRecentDateWhere(['orderUpdatedAt', 'updatedAt'], range),
-		},
+			range,
+			dispatchedOrderRefs,
+		}),
 		orderBy: [{ orderUpdatedAt: 'desc' }, { updatedAt: 'desc' }],
 		take: Math.min(Number(limit) || 250, 500),
 	});
