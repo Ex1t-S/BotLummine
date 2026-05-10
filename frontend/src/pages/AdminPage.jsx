@@ -238,12 +238,6 @@ function getActivityItems(metrics = {}) {
 			help: 'Destinatarios de campañas que llegaron a estado leído.',
 		},
 		{
-			key: 'orders',
-			label: 'Pedidos',
-			value: Number(metrics.ordersCount || 0),
-			help: 'Pedidos sincronizados desde el ecommerce de la marca.',
-		},
-		{
 			key: 'conversions',
 			label: 'Conv.',
 			value: Number(metrics.conversionCount || 0),
@@ -301,7 +295,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 				<div>
 					<span>Conversión por WhatsApp</span>
 					<strong>{formatPercent(conversionRate)}</strong>
-					<small>{formatNumber(metrics.conversionCount)} ventas y carritos contactados</small>
+					<small>{formatNumber(metrics.conversionCount)} ventas y carritos recuperados</small>
 				</div>
 				<div className="workspace-card-ring" aria-hidden="true">
 					<div style={{ '--progress': `${clampPercent(conversionRate)}%` }}>
@@ -1247,7 +1241,6 @@ export default function AdminPage({ defaultTab = '' }) {
 							<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
 							<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
 							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
-							<StatusPill>Pedidos: {formatNumber(analytics?.totals?.ordersCount)}</StatusPill>
 							<StatusPill>Facturacion: {formatCurrency(analytics?.totals?.revenueTotal, analytics?.totals?.currency)}</StatusPill>
 							<StatusPill>Conversaciones 30d: {formatNumber(analytics?.totals?.activeConversations30d)}</StatusPill>
 							<StatusPill>Carritos recuperados: {formatNumber(analytics?.totals?.recoveredCartsCount)}</StatusPill>
