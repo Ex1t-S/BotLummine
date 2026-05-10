@@ -228,6 +228,14 @@ function isPaidLikeStatus(value = '') {
 	return ['paid', 'authorized', 'partially_paid', 'completed', 'fulfilled', 'closed'].includes(status);
 }
 
+function isMissingAutomationLogTable(error) {
+	const message = String(error?.message || error || '');
+	return (
+		['P2021', 'P2022'].includes(error?.code) ||
+		/AbandonedCartAutomationLog|public\.AbandonedCartAutomationLog/i.test(message)
+	);
+}
+
 function subtractDays(days = 0) {
 	return new Date(Date.now() - Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000);
 }
@@ -282,7 +290,7 @@ function applyEstimatedCost(metrics) {
 async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 	if (!workspaceIds.length) return new Map();
 
-	const [carts, orders] = await Promise.all([
+	const [carts, orders, automationLogs, campaignRecipients] = await Promise.all([
 		prisma.abandonedCart.findMany({
 			where: { workspaceId: { in: workspaceIds } },
 			select: {
@@ -295,6 +303,9 @@ async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 				contactPhone: true,
 				status: true,
 				totalAmount: true,
+				contactedAt: true,
+				lastMessageSentAt: true,
+				recoveredAt: true,
 				checkoutCreatedAt: true,
 				createdAt: true,
 			},
@@ -318,6 +329,31 @@ async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 				createdAt: true,
 			},
 		}),
+		prisma.abandonedCartAutomationLog.findMany({
+			where: { workspaceId: { in: workspaceIds } },
+			select: {
+				workspaceId: true,
+				checkoutId: true,
+				createdAt: true,
+			},
+		}).catch((error) => {
+			if (isMissingAutomationLogTable(error)) return [];
+			throw error;
+		}),
+		prisma.campaignRecipient.findMany({
+			where: {
+				workspaceId: { in: workspaceIds },
+				externalKey: { startsWith: 'abandoned_cart:' },
+				status: { in: ['SENT', 'DELIVERED', 'READ'] },
+			},
+			select: {
+				workspaceId: true,
+				externalKey: true,
+				sentAt: true,
+				deliveredAt: true,
+				readAt: true,
+			},
+		}),
 	]);
 
 	const makeKey = (workspaceId, storeId, type, value) => {
@@ -336,6 +372,15 @@ async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 		if (!indexes[type].has(key)) indexes[type].set(key, []);
 		indexes[type].get(key).push(order);
 	};
+	const cartContactDatesByKey = new Map();
+	const makeCartKey = (workspaceId, checkoutId) => [workspaceId || '', normalizeString(checkoutId || '')].join('::');
+	const addCartContactDate = (workspaceId, checkoutId, date) => {
+		if (!workspaceId || !checkoutId || !date) return;
+		const key = makeCartKey(workspaceId, checkoutId);
+		if (!cartContactDatesByKey.has(key)) cartContactDatesByKey.set(key, []);
+		cartContactDatesByKey.get(key).push(date);
+	};
+	const getOrderAt = (order = {}) => order.orderCreatedAt || order.createdAt || null;
 
 	for (const order of orders) {
 		if (!isPaidLikeStatus(order.paymentStatus) && !isPaidLikeStatus(order.status)) continue;
@@ -345,10 +390,17 @@ async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 		addToIndex('email', makeKey(order.workspaceId, order.storeId, 'email', order.normalizedEmail || order.contactEmail), order);
 		addToIndex('phone', makeKey(order.workspaceId, order.storeId, 'phone', order.normalizedPhone || order.contactPhone), order);
 	}
+	for (const log of automationLogs) {
+		addCartContactDate(log.workspaceId, log.checkoutId, log.createdAt);
+	}
+	for (const recipient of campaignRecipients) {
+		const checkoutId = normalizeString(String(recipient.externalKey || '').split(':').slice(1).join(':'));
+		addCartContactDate(recipient.workspaceId, checkoutId, recipient.sentAt || recipient.deliveredAt || recipient.readAt);
+	}
 
 	const result = new Map(workspaceIds.map((workspaceId) => [workspaceId, { count: 0, value: 0 }]));
 	const matchedCartIds = new Set();
-	const cartHasPaidOrder = (cart) => {
+	const getCartPaidOrders = (cart) => {
 		const cartAt = cart.checkoutCreatedAt || cart.createdAt || null;
 		const keys = [
 			['checkout', makeKey(cart.workspaceId, cart.storeId, 'checkout', cart.checkoutId)],
@@ -356,17 +408,33 @@ async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 			['email', makeKey(cart.workspaceId, cart.storeId, 'email', cart.contactEmail)],
 			['phone', makeKey(cart.workspaceId, cart.storeId, 'phone', cart.contactPhone)],
 		];
+		const matchingOrders = [];
 		for (const [type, key] of keys) {
 			const candidates = indexes[type].get(key) || [];
-			if (candidates.some((order) => !cartAt || (order.orderCreatedAt || order.createdAt || new Date(0)) >= cartAt)) {
-				return true;
+			for (const order of candidates) {
+				if (!cartAt || (getOrderAt(order) || new Date(0)) >= cartAt) {
+					matchingOrders.push(order);
+				}
 			}
 		}
-		return false;
+		return [...new Map(matchingOrders.map((order) => [order.id, order])).values()].sort(
+			(a, b) => new Date(getOrderAt(a) || 0).getTime() - new Date(getOrderAt(b) || 0).getTime()
+		);
+	};
+	const cartHasContactBeforeOrder = (cart, order) => {
+		const orderAt = getOrderAt(order) || cart.recoveredAt || null;
+		if (!orderAt) return false;
+		const contactDates = [
+			cart.contactedAt,
+			cart.lastMessageSentAt,
+			...(cartContactDatesByKey.get(makeCartKey(cart.workspaceId, cart.checkoutId)) || []),
+		].filter(Boolean);
+		return contactDates.some((date) => new Date(date).getTime() <= new Date(orderAt).getTime());
 	};
 
 	for (const cart of carts) {
-		if (cart.status !== 'RECOVERED' && !cartHasPaidOrder(cart)) continue;
+		const paidOrder = getCartPaidOrders(cart).find((order) => cartHasContactBeforeOrder(cart, order));
+		if (!paidOrder || !cartHasContactBeforeOrder(cart, paidOrder)) continue;
 		if (matchedCartIds.has(cart.id)) continue;
 		matchedCartIds.add(cart.id);
 		const metrics = result.get(cart.workspaceId) || { count: 0, value: 0 };

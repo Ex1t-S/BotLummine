@@ -247,7 +247,7 @@ function getActivityItems(metrics = {}) {
 			key: 'conversions',
 			label: 'Conv.',
 			value: Number(metrics.conversionCount || 0),
-			help: 'Ventas atribuidas y carritos recuperados desde mensajes o campañas.',
+			help: 'Ventas atribuidas y carritos recuperados con contacto previo de WhatsApp.',
 		},
 	];
 	const values = items.map((item) => item.value);
@@ -295,13 +295,13 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 
 			<div
 				className="workspace-card-hero metric-help"
-				data-help="Ventas reales atribuidas y carritos recuperados divididos por mensajes enviados en campañas."
-				title="Ventas y carritos recuperados / mensajes enviados en campañas."
+				data-help="Ventas reales atribuidas y carritos recuperados con contacto previo de WhatsApp divididos por mensajes enviados en campañas."
+				title="Ventas y carritos recuperados contactados / mensajes enviados en campañas."
 			>
 				<div>
 					<span>Conversión por WhatsApp</span>
 					<strong>{formatPercent(conversionRate)}</strong>
-					<small>{formatNumber(metrics.conversionCount)} ventas y carritos</small>
+					<small>{formatNumber(metrics.conversionCount)} ventas y carritos contactados</small>
 				</div>
 				<div className="workspace-card-ring" aria-hidden="true">
 					<div style={{ '--progress': `${clampPercent(conversionRate)}%` }}>
@@ -365,8 +365,8 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 			<div className="workspace-card-stats">
 				<div
 					className="metric-help"
-					data-help="Carritos abandonados que luego terminaron como recuperados."
-					title="Carritos con estado RECOVERED."
+					data-help="Carritos abandonados recuperados con contacto previo de WhatsApp."
+					title="Carritos recuperados atribuibles a WhatsApp."
 				>
 					<span>Carritos rec.</span>
 					<strong>{formatNumber(metrics.recoveredCartsCount)}</strong>
