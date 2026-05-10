@@ -37,6 +37,7 @@ const defaultAutomationForm = {
 
 function AutomationCard({
 	templates = [],
+	selectedTemplate = null,
 	settings = null,
 	loading = false,
 	saving = false,
@@ -45,7 +46,7 @@ function AutomationCard({
 	onRunNow,
 }) {
 	const [form, setForm] = useState(defaultAutomationForm);
-	const selectedTemplate = useMemo(
+	const selectedAutomationTemplate = useMemo(
 		() => templates.find((template) => template.id === form.templateId) || null,
 		[templates, form.templateId]
 	);
@@ -54,29 +55,46 @@ function AutomationCard({
 		const filters = settings?.filters || {};
 		setForm({
 			enabled: Boolean(settings?.enabled),
-			templateId: settings?.templateId || '',
+			templateId: settings?.templateId || selectedTemplate?.id || '',
 			daysBack: Number(filters.daysBack || 7),
 			limit: Number(filters.limit || 50),
 			minTotal: filters.minTotal ?? '',
 			productQuery: filters.productQuery || '',
 		});
-	}, [settings]);
+	}, [settings, selectedTemplate?.id]);
 
 	function updateField(field, value) {
 		setForm((current) => ({ ...current, [field]: value }));
 	}
 
-	function handleSave() {
-		onSave?.({
-			enabled: form.enabled,
-			templateId: form.templateId,
+	function buildPayload(overrides = {}) {
+		const nextForm = { ...form, ...overrides };
+		const templateId = nextForm.templateId || selectedTemplate?.id || settings?.templateId || '';
+		return {
+			enabled: nextForm.enabled,
+			templateId,
 			filters: {
-				daysBack: form.daysBack,
+				daysBack: nextForm.daysBack,
 				status: 'NEW',
-				limit: form.limit,
-				minTotal: form.minTotal,
-				productQuery: form.productQuery,
+				limit: nextForm.limit,
+				minTotal: nextForm.minTotal,
+				productQuery: nextForm.productQuery,
 			},
+		};
+	}
+
+	function handleToggle(nextEnabled) {
+		const templateId = form.templateId || selectedTemplate?.id || settings?.templateId || '';
+		updateField('enabled', nextEnabled);
+
+		if (nextEnabled && !templateId) return;
+		onSave?.(buildPayload({ enabled: nextEnabled, templateId }));
+	}
+
+	function handleSave() {
+		const payload = buildPayload();
+		onSave?.({
+			...payload,
 		});
 	}
 
@@ -97,12 +115,16 @@ function AutomationCard({
 				<input
 					type="checkbox"
 					checked={form.enabled}
-					onChange={(event) => updateField('enabled', event.target.checked)}
+					onChange={(event) => handleToggle(event.target.checked)}
 					disabled={loading || saving}
 				/>
 				<span>
 					<strong>Automatizacion {form.enabled ? 'activada' : 'desactivada'}</strong>
-					<small>El dispatcher revisa cada minuto y ejecuta esta regla como maximo una vez por hora.</small>
+					<small>
+						{form.enabled
+							? 'Queda guardada al activar y se ejecuta como maximo una vez por hora.'
+							: 'Activala para guardar el estado automaticamente.'}
+					</small>
 				</span>
 			</label>
 
@@ -185,7 +207,7 @@ function AutomationCard({
 				</span>
 				<span>
 					<strong>Template</strong>
-					<small>{selectedTemplate?.name || settings?.templateName || 'Sin template'}</small>
+					<small>{selectedAutomationTemplate?.name || settings?.templateName || 'Sin template'}</small>
 				</span>
 			</div>
 
@@ -206,7 +228,7 @@ function AutomationCard({
 					type="button"
 					className="button primary"
 					onClick={handleSave}
-					disabled={saving || loading || (form.enabled && !form.templateId)}
+					disabled={saving || loading || (form.enabled && !buildPayload().templateId)}
 				>
 					{saving ? 'Guardando...' : 'Guardar automatizacion'}
 				</button>
@@ -269,6 +291,7 @@ export default function AbandonedCartCampaignPanel({
 
 			<AutomationCard
 				templates={templates}
+				selectedTemplate={selectedTemplate}
 				settings={automationSettings}
 				loading={automationLoading}
 				saving={savingAutomation}
