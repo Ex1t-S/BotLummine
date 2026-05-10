@@ -100,8 +100,22 @@ function buildRecentDateWhere(fields = [], { from, to }) {
 	return fields.map((field) => ({ [field]: { gte: from, lte: to } }));
 }
 
-function isDispatchedStatus(value = '') {
-	return isDispatchedShippingStatus(value, { includeDelivered: false });
+function hasTrackingUrl(value = '') {
+	return Boolean(normalizeString(value));
+}
+
+function isDispatchReady({ status = '', trackingUrl = '' } = {}) {
+	const shippingMeta = getShippingStatusMeta(status);
+	if (shippingMeta.category === 'cancelled') return false;
+	return isDispatchedShippingStatus(status, { includeDelivered: false }) || hasTrackingUrl(trackingUrl);
+}
+
+function getDispatchCandidateShippingMeta(status = '', trackingUrl = '') {
+	const shippingMeta = getShippingStatusMeta(status);
+	if (shippingMeta.category === 'cancelled' || shippingMeta.category === 'dispatched') {
+		return shippingMeta;
+	}
+	return hasTrackingUrl(trackingUrl) ? getShippingStatusMeta('dispatched') : shippingMeta;
 }
 
 function getPrimaryProductName(products = []) {
@@ -287,7 +301,11 @@ function shipmentToCandidate(shipment = {}, order = null, notifiedKeys = new Set
 
 	const orderProducts = getOrderProductSummary(order || {});
 	const notificationKey = `shipment:${shipment.didEnvio}`;
-	const shippingMeta = getShippingStatusMeta(shipment.shippingStatus || order?.shippingStatus || '');
+	const trackingUrl = shipment.trackingUrl || '';
+	const shippingMeta = getDispatchCandidateShippingMeta(
+		shipment.shippingStatus || order?.shippingStatus || '',
+		trackingUrl
+	);
 	const alreadyNotified = notifiedKeys.has(notificationKey);
 
 	return {
@@ -304,7 +322,7 @@ function shipmentToCandidate(shipment = {}, order = null, notifiedKeys = new Set
 		contactName: shipment.recipientName || order?.contactName || phone,
 		phone,
 		trackingNumber: shipment.trackingNumber || shipment.shipmentNumber || '',
-		trackingUrl: shipment.trackingUrl || '',
+		trackingUrl,
 		shippingStatus: shippingMeta.label || shipment.shippingStatus || order?.shippingStatus || '',
 		shippingMethod: shipment.shippingMethod || '',
 		productName: orderProducts.productName,
@@ -325,7 +343,7 @@ function orderToCandidate(order = {}, notifiedKeys = new Set()) {
 	const notificationKey = `order:${order.orderId}`;
 	const orderProducts = getOrderProductSummary(order);
 	const shippingSignals = extractOrderShippingSignals(order.rawPayload || {});
-	const shippingMeta = getShippingStatusMeta(order.shippingStatus || '');
+	const shippingMeta = getDispatchCandidateShippingMeta(order.shippingStatus || '', shippingSignals.trackingUrl || '');
 	const alreadyNotified = notifiedKeys.has(notificationKey);
 
 	return {
@@ -389,7 +407,9 @@ export async function listShipmentNotificationCandidates({
 		orderBy: [{ lastSyncedAt: 'desc' }, { updatedAt: 'desc' }],
 		take: Math.min(Number(limit) || 250, 500),
 	});
-	const dispatchedShipments = shipments.filter((shipment) => isDispatchedStatus(shipment.shippingStatus));
+	const dispatchedShipments = shipments.filter((shipment) =>
+		isDispatchReady({ status: shipment.shippingStatus, trackingUrl: shipment.trackingUrl })
+	);
 	const ordersByNumber = await getOrdersByNumber(
 		resolvedWorkspaceId,
 		dispatchedShipments.map((shipment) => shipment.orderNumber)
@@ -406,9 +426,13 @@ export async function listShipmentNotificationCandidates({
 		take: Math.min(Number(limit) || 250, 500),
 	});
 	const shipmentOrderNumbers = new Set(dispatchedShipments.map((shipment) => shipment.orderNumber).filter(Boolean));
-	const dispatchedFallbackOrders = fallbackOrders.filter(
-		(order) => isDispatchedStatus(order.shippingStatus) && !shipmentOrderNumbers.has(order.orderNumber)
-	);
+	const dispatchedFallbackOrders = fallbackOrders.filter((order) => {
+		const shippingSignals = extractOrderShippingSignals(order.rawPayload || {});
+		return (
+			isDispatchReady({ status: order.shippingStatus, trackingUrl: shippingSignals.trackingUrl }) &&
+			!shipmentOrderNumbers.has(order.orderNumber)
+		);
+	});
 	const orderKeys = dispatchedFallbackOrders.map((order) => `order:${order.orderId}`);
 	const notifiedKeys = await getNotifiedKeys(resolvedWorkspaceId, [...shipmentKeys, ...orderKeys]);
 
