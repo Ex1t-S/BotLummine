@@ -136,6 +136,16 @@ const TAB_DEFINITIONS = [
 		title: 'Programar campañas',
 		description:
 			'Creá envíos recurrentes separados para carritos abandonados o pagos pendientes, con pausa, edición y eliminación.',
+		hiddenFromNav: true,
+	},
+	{
+		id: 'pending-payments',
+		path: 'pending-payments',
+		label: 'Pagos pendientes',
+		eyebrow: 'Automatizaciones',
+		title: 'Pagos pendientes',
+		description:
+			'Automatiza recordatorios para pedidos con pago pendiente sin mezclar este flujo con carritos abandonados.',
 	},
 	{
 		id: 'shipments',
@@ -223,6 +233,19 @@ const initialScheduleForm = {
 	minTotal: '',
 	productQuery: '',
 	notes: 'Recuperación diaria del último día.',
+};
+
+const pendingPaymentScheduleDefaults = {
+	name: 'Recordatorio pagos pendientes 20 hs',
+	timeOfDay: '20:00',
+	status: 'ACTIVE',
+	audienceSource: 'pending_payment',
+	daysBack: 3,
+	audienceStatus: 'ALL',
+	limit: 100,
+	minTotal: '',
+	productQuery: '',
+	notes: 'Recordatorio diario para pedidos con pago pendiente.',
 };
 
 const SCHEDULE_AUDIENCE_OPTIONS = {
@@ -332,11 +355,22 @@ function CampaignSchedulesPanel({
 	loading = false,
 	mutations,
 	onDeleteSchedule,
+	audienceSourceLock = null,
+	formDefaults = null,
+	formEyebrow = 'Envio diario',
+	emptyDescription = 'Crea una programacion para carritos abandonados o una distinta para pagos pendientes.',
 }) {
-	const [form, setForm] = useState(initialScheduleForm);
+	const buildInitialForm = () => ({
+		...initialScheduleForm,
+		...(formDefaults || {}),
+		audienceSource: audienceSourceLock || formDefaults?.audienceSource || initialScheduleForm.audienceSource,
+	});
+	const [form, setForm] = useState(buildInitialForm);
 	const isEditing = Boolean(form.id);
 	const saving = mutations.createSchedule.isPending || mutations.updateSchedule.isPending;
 	const runningDispatcher = mutations.dispatchTick?.isPending || false;
+	const lockedAudience = Boolean(audienceSourceLock);
+	const activeAudienceSource = audienceSourceLock || form.audienceSource;
 
 	function updateField(field, value) {
 		setForm((prev) => ({ ...prev, [field]: value }));
@@ -348,7 +382,7 @@ function CampaignSchedulesPanel({
 
 	function resetForm() {
 		setForm({
-			...initialScheduleForm,
+			...buildInitialForm(),
 			templateId: templates[0]?.id || '',
 		});
 	}
@@ -361,7 +395,11 @@ function CampaignSchedulesPanel({
 
 	function handleSubmit(event) {
 		event.preventDefault();
-		const payload = buildSchedulePayload(form);
+		const payload = buildSchedulePayload({
+			...form,
+			audienceSource: activeAudienceSource,
+			audienceStatus: activeAudienceSource === 'pending_payment' ? 'ALL' : form.audienceStatus,
+		});
 
 		if (!payload.templateId) return;
 
@@ -376,7 +414,11 @@ function CampaignSchedulesPanel({
 		mutations.createSchedule.mutate(payload, { onSuccess: resetForm });
 	}
 
-	const previewPayload = useMemo(() => buildSchedulePayload(form), [form]);
+	const previewPayload = useMemo(() => buildSchedulePayload({
+		...form,
+		audienceSource: activeAudienceSource,
+		audienceStatus: activeAudienceSource === 'pending_payment' ? 'ALL' : form.audienceStatus,
+	}), [form, activeAudienceSource]);
 	const previewKey = JSON.stringify({
 		templateId: previewPayload.templateId,
 		audienceSource: previewPayload.audienceSource,
@@ -420,7 +462,7 @@ function CampaignSchedulesPanel({
 			<form className="campaign-schedule-form campaign-custom-audience-card" onSubmit={handleSubmit}>
 				<div className="campaign-schedule-form__header">
 					<div>
-						<span className="campaigns-eyebrow">Envío diario</span>
+						<span className="campaigns-eyebrow">{formEyebrow}</span>
 						<h4>{isEditing ? 'Editar programación' : 'Nueva programación'}</h4>
 					</div>
 					{isEditing ? (
@@ -483,36 +525,47 @@ function CampaignSchedulesPanel({
 				<div className="campaign-schedule-section">
 					<div className="campaign-schedule-section__title">
 						<strong>Audiencia</strong>
-						<span>{SCHEDULE_AUDIENCE_OPTIONS[form.audienceSource]?.helper}</span>
+						<span>{SCHEDULE_AUDIENCE_OPTIONS[activeAudienceSource]?.helper}</span>
 					</div>
-					<div className="campaign-schedule-audience-choice" role="radiogroup" aria-label="Audiencia programada">
-						{Object.entries(SCHEDULE_AUDIENCE_OPTIONS).map(([value, option]) => (
-							<button
-								key={value}
-								type="button"
-								role="radio"
-								aria-checked={form.audienceSource === value}
-								className={`campaign-schedule-audience-choice__button ${form.audienceSource === value ? 'is-active' : ''}`.trim()}
-								onClick={() => updateField('audienceSource', value)}
-							>
-								<strong>{option.label}</strong>
-								<span>{option.helper}</span>
-							</button>
-						))}
-					</div>
+					{lockedAudience ? (
+						<div className="campaign-schedule-audience-choice campaign-schedule-audience-choice--locked">
+							<div className="campaign-schedule-audience-choice__button is-active">
+								<strong>{SCHEDULE_AUDIENCE_OPTIONS[activeAudienceSource]?.label}</strong>
+								<span>{SCHEDULE_AUDIENCE_OPTIONS[activeAudienceSource]?.helper}</span>
+							</div>
+						</div>
+					) : (
+						<div className="campaign-schedule-audience-choice" role="radiogroup" aria-label="Audiencia programada">
+							{Object.entries(SCHEDULE_AUDIENCE_OPTIONS).map(([value, option]) => (
+								<button
+									key={value}
+									type="button"
+									role="radio"
+									aria-checked={form.audienceSource === value}
+									className={`campaign-schedule-audience-choice__button ${form.audienceSource === value ? 'is-active' : ''}`.trim()}
+									onClick={() => updateField('audienceSource', value)}
+								>
+									<strong>{option.label}</strong>
+									<span>{option.helper}</span>
+								</button>
+							))}
+						</div>
+					)}
 					<div className="campaign-form-grid two-columns">
 						<label className="field">
-							<span>{SCHEDULE_AUDIENCE_OPTIONS[form.audienceSource]?.statusLabel}</span>
+							<span>{SCHEDULE_AUDIENCE_OPTIONS[activeAudienceSource]?.statusLabel}</span>
 							<select
-								value={form.audienceSource === 'pending_payment' ? 'ALL' : form.audienceStatus}
+								value={activeAudienceSource === 'pending_payment' ? 'ALL' : form.audienceStatus}
 								onChange={(event) => updateField('audienceStatus', event.target.value)}
-								disabled={form.audienceSource === 'pending_payment'}
+								disabled={activeAudienceSource === 'pending_payment'}
 							>
 								<option value="NEW">Carritos nuevos</option>
 								<option value="CONTACTED">Carritos ya contactados</option>
-								<option value="ALL">Todos los carritos</option>
+								<option value="ALL">
+									{activeAudienceSource === 'pending_payment' ? 'Pedidos con pago pendiente' : 'Todos los carritos'}
+								</option>
 							</select>
-							{form.audienceSource === 'pending_payment' ? (
+							{activeAudienceSource === 'pending_payment' ? (
 								<small>Pagos pendientes usa pedidos con estado pendiente; no aplica estado de carrito.</small>
 							) : null}
 						</label>
@@ -639,7 +692,7 @@ function CampaignSchedulesPanel({
 				{!loading && !schedules.length ? (
 					<div className="campaign-custom-audience-empty">
 						<strong>No hay programaciones creadas</strong>
-						<span>Creá una programación para carritos abandonados o una distinta para pagos pendientes.</span>
+						<span>{emptyDescription}</span>
 					</div>
 				) : null}
 
@@ -1119,6 +1172,10 @@ export default function CampaignsFeaturePage() {
 		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
 		[activeTab]
 	);
+	const pendingPaymentSchedules = useMemo(
+		() => schedules.filter((schedule) => String(schedule?.audienceSource || '').toLowerCase() === 'pending_payment'),
+		[schedules]
+	);
 
 	useEffect(() => {
 		const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -1301,6 +1358,28 @@ export default function CampaignsFeaturePage() {
 							loading={queries.schedules.isLoading}
 							mutations={mutations}
 							onDeleteSchedule={requestDeleteSchedule}
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'pending-payments':
+				return (
+					<CampaignSectionShell
+						tabId={currentTab.id}
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
+						description={currentTab.description}
+					>
+						<CampaignSchedulesPanel
+							templates={templates}
+							schedules={pendingPaymentSchedules}
+							loading={queries.schedules.isLoading}
+							mutations={mutations}
+							onDeleteSchedule={requestDeleteSchedule}
+							audienceSourceLock="pending_payment"
+							formDefaults={pendingPaymentScheduleDefaults}
+							formEyebrow="Pago pendiente"
+							emptyDescription="Crea una automatizacion para recordar pedidos pendientes de pago con una plantilla dedicada."
 						/>
 					</CampaignSectionShell>
 				);

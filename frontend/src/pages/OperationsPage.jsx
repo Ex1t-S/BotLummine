@@ -240,7 +240,7 @@ function AutomationPanel({
 					saving={mutations.pendingPayments.isPending}
 					lastRunAt={pendingLastRunAt}
 					lastError={pendingLastError}
-					configHref="/campaigns/schedules"
+					configHref="/campaigns/pending-payments"
 					onConfigure={onNavigate}
 					onToggle={(nextEnabled) =>
 						mutations.pendingPayments.mutate({
@@ -279,7 +279,7 @@ function AutomationPanel({
 			) : null}
 
 			<div className="operations-automation-foot">
-				<ActionButton variant="secondary" icon={Clock3} onClick={() => onNavigate('/campaigns/schedules')}>
+				<ActionButton variant="secondary" icon={Clock3} onClick={() => onNavigate('/campaigns/pending-payments')}>
 					Ver programaciones
 				</ActionButton>
 			</div>
