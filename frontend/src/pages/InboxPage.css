@@ -1003,15 +1003,15 @@
 .inbox-message-bubble--interactive-menu {
 	width: min(338px, 78vw);
 	min-width: min(338px, 78vw);
-	background: #202524;
-	border: 1px solid rgba(255, 255, 255, 0.05);
+	background: #ffffff;
+	border: 1px solid rgba(15, 23, 42, 0.1);
 	border-radius: 7px;
 	box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
 	overflow: hidden;
 }
 
 .inbox-message-bubble--interactive-menu::after {
-	display: none;
+	display: none !important;
 }
 
 .inbox-message-bubble--outbound::after,
@@ -1042,7 +1042,7 @@
 }
 
 .inbox-interactive-menu-card {
-	color: #f4f6f5;
+	color: #111827;
 }
 
 .inbox-interactive-menu-content {
@@ -1055,7 +1055,7 @@
 	font-size: 16px;
 	line-height: 1.2;
 	font-weight: 800;
-	color: #f7faf9;
+	color: #111827;
 	margin-bottom: 11px;
 }
 
@@ -1064,7 +1064,7 @@
 	font-size: 14px;
 	line-height: 1.38;
 	font-weight: 700;
-	color: #eef2f1;
+	color: #111827;
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -1078,7 +1078,11 @@
 	gap: 4px;
 	font-size: 12px;
 	line-height: 1;
-	color: rgba(244, 246, 245, 0.66);
+	color: rgba(17, 24, 39, 0.58);
+}
+
+.inbox-interactive-menu-time .inbox-message-status {
+	display: none;
 }
 
 .inbox-interactive-menu-action {
@@ -1087,10 +1091,36 @@
 	justify-content: center;
 	gap: 10px;
 	min-height: 44px;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid rgba(15, 23, 42, 0.08);
 	color: #16c784;
 	font-size: 14px;
 	font-weight: 800;
+}
+
+.inbox-message-bubble--outbound.inbox-message-bubble--interactive-menu {
+	background: #ffffff;
+	border-color: rgba(15, 23, 42, 0.1);
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--interactive-menu {
+	background: #202524 !important;
+	border-color: rgba(255, 255, 255, 0.05) !important;
+	color: #f4f6f5 !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--interactive-menu .inbox-interactive-menu-card,
+.dark .admin-shell .admin-content .inbox-message-bubble--interactive-menu .inbox-interactive-menu-title,
+.dark .admin-shell .admin-content .inbox-message-bubble--interactive-menu .inbox-interactive-menu-body {
+	color: #f4f6f5 !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--interactive-menu .inbox-interactive-menu-time {
+	color: rgba(244, 246, 245, 0.66) !important;
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--interactive-menu .inbox-interactive-menu-action {
+	border-top-color: rgba(255, 255, 255, 0.08) !important;
+	color: #16c784 !important;
 }
 
 .inbox-message-body {
@@ -1486,6 +1516,12 @@
 .inbox-message-bubble--inbound {
 	background: #ffffff;
 	border-color: var(--ui-border, #d8dee8);
+}
+
+.inbox-message-bubble--outbound.inbox-message-bubble--interactive-menu,
+.inbox-message-bubble--inbound.inbox-message-bubble--interactive-menu {
+	background: #ffffff;
+	border-color: rgba(15, 23, 42, 0.1);
 }
 
 .inbox-composer-shell {
@@ -2478,6 +2514,18 @@
 	background:
 		linear-gradient(135deg, rgba(36, 107, 134, 0.06), transparent 42%),
 		#ffffff;
+}
+
+.inbox-message-bubble--outbound.inbox-message-bubble--interactive-menu,
+.inbox-message-bubble--inbound.inbox-message-bubble--interactive-menu {
+	background: #ffffff;
+	border-color: rgba(15, 23, 42, 0.1);
+}
+
+.dark .admin-shell .admin-content .inbox-message-bubble--outbound.inbox-message-bubble--interactive-menu,
+.dark .admin-shell .admin-content .inbox-message-bubble--inbound.inbox-message-bubble--interactive-menu {
+	background: #202524 !important;
+	border-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 .inbox-composer {

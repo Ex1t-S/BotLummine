@@ -295,7 +295,12 @@ function getInteractivePayload(message = {}) {
 }
 
 function stripMenuFallbackOptions(text = '') {
-	const lines = String(text || '').split('\n');
+	const normalized = String(text || '')
+		.replace(/\*\s*([^*]+?)\s*\*/g, '$1')
+		.replace(/\s+\d+\s*[-.)]\s+[^0-9\n]+(?=(\s+\d+\s*[-.)]\s+|$))/g, ' ')
+		.replace(/\bmen[uú]\s+principal\b/gi, ' ')
+		.replace(/\bescrib[ií]\s+0\s+o\s+men[uú]\s+para\s+volver[^\n]*/gi, ' ');
+	const lines = normalized.split('\n');
 	const cleanLines = [];
 
 	for (const rawLine of lines) {
@@ -306,11 +311,13 @@ function stripMenuFallbackOptions(text = '') {
 		}
 		if (/^\*[^*]+\*$/.test(line)) continue;
 		if (/^(\d+[-.)]|[-*•])\s+/i.test(line)) continue;
+		if (/^menu principal$/i.test(line)) continue;
+		if (/^escribi\s+0\s+o\s+menu\s+para\s+volver/i.test(line)) continue;
 		if (/^(menu_|[a-z0-9_]+)$/i.test(line)) continue;
 		cleanLines.push(rawLine);
 	}
 
-	return cleanLines.join('\n').trim();
+	return cleanLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function resolveInteractiveMenuDisplay(message = {}) {
@@ -324,7 +331,7 @@ function resolveInteractiveMenuDisplay(message = {}) {
 
 	return {
 		title,
-		bodyText: bodyText || String(message.body || '').trim(),
+		bodyText,
 		buttonText,
 	};
 }
