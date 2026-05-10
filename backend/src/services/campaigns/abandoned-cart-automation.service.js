@@ -17,6 +17,94 @@ const DEFAULT_FILTERS = {
 	productQuery: '',
 };
 
+function isAbandonedCartAutomationTableMissing(error) {
+	return (
+		error?.code === 'P2021' ||
+		/AbandonedCartAutomationSetting|AbandonedCartAutomationLog|public\.AbandonedCartAutomation/i.test(
+			String(error?.message || '')
+		)
+	);
+}
+
+async function ensureAbandonedCartAutomationTables(workspaceId = DEFAULT_WORKSPACE_ID) {
+	try {
+		await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationSetting" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "templateLocalId" TEXT,
+    "templateName" TEXT,
+    "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
+    "filters" JSONB,
+    "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
+    "minCartAgeMinutes" INTEGER NOT NULL DEFAULT 60,
+    "lastRunAt" TIMESTAMP(3),
+    "lastCampaignId" TEXT,
+    "lastError" TEXT,
+    "runCount" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "AbandonedCartAutomationSetting_pkey" PRIMARY KEY ("id")
+)`);
+		await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationLog" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "checkoutId" TEXT NOT NULL,
+    "campaignId" TEXT,
+    "recipientPhone" TEXT,
+    "templateName" TEXT,
+    "rawPayload" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AbandonedCartAutomationLog_pkey" PRIMARY KEY ("id")
+)`);
+		await prisma.$executeRawUnsafe(`
+CREATE UNIQUE INDEX IF NOT EXISTS "AbandonedCartAutomationSetting_workspaceId_key"
+ON "AbandonedCartAutomationSetting"("workspaceId")`);
+		await prisma.$executeRawUnsafe(`
+CREATE UNIQUE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_checkoutId_key"
+ON "AbandonedCartAutomationLog"("workspaceId", "checkoutId")`);
+		await prisma.$executeRawUnsafe(`
+CREATE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_createdAt_idx"
+ON "AbandonedCartAutomationLog"("workspaceId", "createdAt")`);
+		await prisma.$executeRawUnsafe(`
+CREATE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_campaignId_idx"
+ON "AbandonedCartAutomationLog"("workspaceId", "campaignId")`);
+		await prisma.$executeRawUnsafe(`
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint WHERE conname = 'AbandonedCartAutomationSetting_workspaceId_fkey'
+	) THEN
+		ALTER TABLE "AbandonedCartAutomationSetting"
+		ADD CONSTRAINT "AbandonedCartAutomationSetting_workspaceId_fkey"
+		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+		ON DELETE CASCADE ON UPDATE CASCADE;
+	END IF;
+END $$;`);
+		await prisma.$executeRawUnsafe(`
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint WHERE conname = 'AbandonedCartAutomationLog_workspaceId_fkey'
+	) THEN
+		ALTER TABLE "AbandonedCartAutomationLog"
+		ADD CONSTRAINT "AbandonedCartAutomationLog_workspaceId_fkey"
+		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+		ON DELETE CASCADE ON UPDATE CASCADE;
+	END IF;
+END $$;`);
+		logger.warn('abandoned_cart_automation.tables_repaired', { workspaceId });
+	} catch (repairError) {
+		logger.error('abandoned_cart_automation.table_repair_failed', {
+			workspaceId,
+			error: repairError,
+		});
+		throw repairError;
+	}
+}
+
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
 	return normalized || fallback;
@@ -89,9 +177,19 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 
 async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const existing = await prisma.abandonedCartAutomationSetting.findUnique({
-		where: { workspaceId: resolvedWorkspaceId },
-	});
+	let existing = null;
+
+	try {
+		existing = await prisma.abandonedCartAutomationSetting.findUnique({
+			where: { workspaceId: resolvedWorkspaceId },
+		});
+	} catch (error) {
+		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
+		await ensureAbandonedCartAutomationTables(resolvedWorkspaceId);
+		existing = await prisma.abandonedCartAutomationSetting.findUnique({
+			where: { workspaceId: resolvedWorkspaceId },
+		});
+	}
 
 	if (existing) return existing;
 
@@ -118,9 +216,7 @@ export async function updateAbandonedCartAutomationSettings({
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const nextEnabled = normalizeBoolean(enabled);
-	const current = await prisma.abandonedCartAutomationSetting.findUnique({
-		where: { workspaceId: resolvedWorkspaceId },
-	});
+	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId
 		? {
 				id: current.templateLocalId,
@@ -190,15 +286,28 @@ async function findAutomationCandidates(setting) {
 
 	const recoverableCarts = await filterRecoverableAbandonedCarts(rawCarts, setting.workspaceId);
 	const checkoutIds = recoverableCarts.map((cart) => normalizeString(cart.checkoutId)).filter(Boolean);
-	const existingLogs = checkoutIds.length
-		? await prisma.abandonedCartAutomationLog.findMany({
+	let existingLogs = [];
+	if (checkoutIds.length) {
+		try {
+			existingLogs = await prisma.abandonedCartAutomationLog.findMany({
 				where: {
 					workspaceId: setting.workspaceId,
 					checkoutId: { in: checkoutIds },
 				},
 				select: { checkoutId: true },
-			})
-		: [];
+			});
+		} catch (error) {
+			if (!isAbandonedCartAutomationTableMissing(error)) throw error;
+			await ensureAbandonedCartAutomationTables(setting.workspaceId);
+			existingLogs = await prisma.abandonedCartAutomationLog.findMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					checkoutId: { in: checkoutIds },
+				},
+				select: { checkoutId: true },
+			});
+		}
+	}
 	const loggedCheckoutIds = new Set(existingLogs.map((log) => log.checkoutId));
 	const latestByPhone = new Map();
 
@@ -239,10 +348,19 @@ async function claimCandidateLogs(setting, candidates = []) {
 
 	if (!rows.length) return [];
 
-	await prisma.abandonedCartAutomationLog.createMany({
-		data: rows,
-		skipDuplicates: true,
-	});
+	try {
+		await prisma.abandonedCartAutomationLog.createMany({
+			data: rows,
+			skipDuplicates: true,
+		});
+	} catch (error) {
+		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
+		await ensureAbandonedCartAutomationTables(setting.workspaceId);
+		await prisma.abandonedCartAutomationLog.createMany({
+			data: rows,
+			skipDuplicates: true,
+		});
+	}
 
 	const claimed = await prisma.abandonedCartAutomationLog.findMany({
 		where: {
@@ -365,9 +483,19 @@ export async function runAbandonedCartAutomation({
 }
 
 export async function processAutomaticAbandonedCartAutomations() {
-	const settings = await prisma.abandonedCartAutomationSetting.findMany({
-		where: { enabled: true },
-	});
+	let settings = [];
+
+	try {
+		settings = await prisma.abandonedCartAutomationSetting.findMany({
+			where: { enabled: true },
+		});
+	} catch (error) {
+		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
+		await ensureAbandonedCartAutomationTables();
+		settings = await prisma.abandonedCartAutomationSetting.findMany({
+			where: { enabled: true },
+		});
+	}
 	const results = [];
 
 	for (const setting of settings) {
