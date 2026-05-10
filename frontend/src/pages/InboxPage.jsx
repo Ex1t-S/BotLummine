@@ -329,7 +329,7 @@ function stripMenuFallbackOptions(text = '') {
 function resolveInteractiveMenuDisplay(message = {}) {
 	const payload = getInteractivePayload(message) || {};
 	const fallbackBody = stripMenuFallbackOptions(message.body);
-	const bodyText = String(payload.bodyText || payload.body || '').trim() || fallbackBody || DEFAULT_INTERACTIVE_MENU_BODY;
+	const bodyText = String(payload.bodyText || payload.body || '').trim() || fallbackBody;
 	const headerText = String(payload.headerText || '').trim();
 	const title =
 		String(message.senderName || '').trim() ||

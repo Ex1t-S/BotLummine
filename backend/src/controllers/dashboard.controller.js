@@ -5,6 +5,7 @@ import { getQueueMeta } from '../services/conversation/inbox-routing.service.js'
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
 import { saveLocalInboxMediaCopy, uploadWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
+import { getWhatsAppMenuRuntimeConfig } from '../services/whatsapp/whatsapp-menu.service.js';
 import { publishInboxEvent, subscribeInboxEvents } from '../lib/inbox-events.js';
 import {
 	getEnboxSyncStatus,
@@ -26,6 +27,53 @@ const VISIBLE_INBOX_CONTACT_WHERE = {
 		},
 	},
 };
+
+function normalizeMenuText(value = '') {
+	return String(value || '').trim().toLowerCase();
+}
+
+function findRuntimeMenuForInteractivePayload(rawPayload = null, menuRuntime = null) {
+	const interactivePayload = rawPayload?.interactivePayload || rawPayload?.sendResult?.interactivePayload || null;
+	if (!interactivePayload || typeof interactivePayload !== 'object') return null;
+	const menus = Object.values(menuRuntime?.menusByKey || {});
+	const menuPath = rawPayload?.aiMeta?.menuPath || rawPayload?.menuPath || null;
+
+	if (menuPath && menuRuntime?.menusByKey?.[menuPath]) {
+		return menuRuntime.menusByKey[menuPath];
+	}
+
+	const headerText = normalizeMenuText(interactivePayload.headerText);
+	const buttonText = normalizeMenuText(interactivePayload.buttonText);
+
+	return menus.find((menu) => {
+		return (
+			(headerText && normalizeMenuText(menu.headerText || menu.title) === headerText) ||
+			(buttonText && normalizeMenuText(menu.buttonText) === buttonText)
+		);
+	}) || null;
+}
+
+function enrichInteractiveMenuPayload(message = {}, menuRuntime = null) {
+	const rawPayload = message.rawPayload && typeof message.rawPayload === 'object' ? message.rawPayload : null;
+	const interactivePayload = rawPayload?.interactivePayload || rawPayload?.sendResult?.interactivePayload || null;
+	if (message.type !== 'interactive' || !interactivePayload || interactivePayload.bodyText) {
+		return rawPayload;
+	}
+
+	const menu = findRuntimeMenuForInteractivePayload(rawPayload, menuRuntime);
+	if (!menu?.body) return rawPayload;
+
+	return {
+		...rawPayload,
+		interactivePayload: {
+			...interactivePayload,
+			bodyText: menu.body,
+			headerText: interactivePayload.headerText || menu.headerText || menu.title || '',
+			buttonText: interactivePayload.buttonText || menu.buttonText || 'Abrir menu',
+			footerText: interactivePayload.footerText || menu.footerText || '',
+		},
+	};
+}
 
 function formatTime(value) {
 	if (!value) return '';
@@ -1393,6 +1441,7 @@ export async function getConversationMessagesJson(req, res, next) {
 		const nextBefore = hasMoreMessages
 			? pageMessages[0]?.createdAt?.toISOString?.() || null
 			: null;
+		const menuRuntime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
 
 		return res.json({
 			ok: true,
@@ -1448,7 +1497,7 @@ export async function getConversationMessagesJson(req, res, next) {
 					attachmentName: msg.attachmentName || null,
 					attachmentMimeType: msg.attachmentMimeType || null,
 					attachmentUrl: msg.attachmentUrl || null,
-					rawPayload: msg.rawPayload || null,
+					rawPayload: enrichInteractiveMenuPayload(msg, menuRuntime),
 				})),
 				messagesPage: {
 					limit,
