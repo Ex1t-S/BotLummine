@@ -294,6 +294,12 @@ function getInteractivePayload(message = {}) {
 	return payload && typeof payload === 'object' ? payload : null;
 }
 
+const DEFAULT_INTERACTIVE_MENU_BODY = '¡Hola!\n\ncomo estas? Elegí una opción para ayudarte más rápido:';
+
+function isGenericMenuTitle(value = '') {
+	return /^men[uú]\s+principal$/i.test(String(value || '').trim());
+}
+
 function stripMenuFallbackOptions(text = '') {
 	const normalized = String(text || '')
 		.replace(/\*\s*([^*]+?)\s*\*/g, '$1')
@@ -322,10 +328,12 @@ function stripMenuFallbackOptions(text = '') {
 
 function resolveInteractiveMenuDisplay(message = {}) {
 	const payload = getInteractivePayload(message) || {};
-	const bodyText = String(payload.bodyText || payload.body || '').trim() || stripMenuFallbackOptions(message.body);
+	const fallbackBody = stripMenuFallbackOptions(message.body);
+	const bodyText = String(payload.bodyText || payload.body || '').trim() || fallbackBody || DEFAULT_INTERACTIVE_MENU_BODY;
+	const headerText = String(payload.headerText || '').trim();
 	const title =
-		String(payload.headerText || '').trim() ||
 		String(message.senderName || '').trim() ||
+		(isGenericMenuTitle(headerText) ? '' : headerText) ||
 		'Lummine';
 	const buttonText = String(payload.buttonText || '').trim() || 'Abrir menu';
 
