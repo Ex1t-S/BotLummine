@@ -52,13 +52,31 @@ const SHIPMENT_VARIABLE_OPTIONS = [
 
 function isShipmentNotificationLogMissing(error) {
 	return (
-		error?.code === 'P2021' ||
-		/ShipmentNotificationLog|public\.ShipmentNotificationLog/i.test(String(error?.message || ''))
+		['P2021', 'P2022'].includes(error?.code) ||
+		/ShipmentNotificationSetting|ShipmentNotificationLog|public\.ShipmentNotification/i.test(String(error?.message || ''))
 	);
 }
 
 async function ensureShipmentNotificationLogTable(workspaceId = DEFAULT_WORKSPACE_ID) {
 	try {
+		await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "ShipmentNotificationSetting" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "templateLocalId" TEXT,
+    "templateName" TEXT,
+    "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
+    "variableMapping" JSONB,
+    "daysBack" INTEGER NOT NULL DEFAULT 3,
+    "lastRunAt" TIMESTAMP(3),
+    "lastCampaignId" TEXT,
+    "lastError" TEXT,
+    "runCount" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "ShipmentNotificationSetting_pkey" PRIMARY KEY ("id")
+)`);
 		await prisma.$executeRawUnsafe(`
 CREATE TABLE IF NOT EXISTS "ShipmentNotificationLog" (
     "id" TEXT NOT NULL,
@@ -76,6 +94,11 @@ CREATE TABLE IF NOT EXISTS "ShipmentNotificationLog" (
     CONSTRAINT "ShipmentNotificationLog_pkey" PRIMARY KEY ("id")
 )`);
 		await prisma.$executeRawUnsafe(`
+ALTER TABLE "ShipmentNotificationSetting" ADD COLUMN IF NOT EXISTS "variableMapping" JSONB`);
+		await prisma.$executeRawUnsafe(`
+CREATE UNIQUE INDEX IF NOT EXISTS "ShipmentNotificationSetting_workspaceId_key"
+ON "ShipmentNotificationSetting"("workspaceId")`);
+		await prisma.$executeRawUnsafe(`
 CREATE UNIQUE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_notificationKey_key"
 ON "ShipmentNotificationLog"("workspaceId", "notificationKey")`);
 		await prisma.$executeRawUnsafe(`
@@ -88,6 +111,18 @@ ON "ShipmentNotificationLog"("workspaceId", "campaignId")`);
 DO $$
 BEGIN
 	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint WHERE conname = 'ShipmentNotificationSetting_workspaceId_fkey'
+	) THEN
+		ALTER TABLE "ShipmentNotificationSetting"
+		ADD CONSTRAINT "ShipmentNotificationSetting_workspaceId_fkey"
+		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+		ON DELETE CASCADE ON UPDATE CASCADE;
+	END IF;
+END $$;`);
+		await prisma.$executeRawUnsafe(`
+DO $$
+BEGIN
+	IF NOT EXISTS (
 		SELECT 1 FROM pg_constraint WHERE conname = 'ShipmentNotificationLog_workspaceId_fkey'
 	) THEN
 		ALTER TABLE "ShipmentNotificationLog"
@@ -96,9 +131,9 @@ BEGIN
 		ON DELETE CASCADE ON UPDATE CASCADE;
 	END IF;
 END $$;`);
-		logger.warn('shipment_notifications.log_table_repaired', { workspaceId });
+		logger.warn('shipment_notifications.tables_repaired', { workspaceId });
 	} catch (repairError) {
-		logger.error('shipment_notifications.log_table_repair_failed', {
+		logger.error('shipment_notifications.table_repair_failed', {
 			workspaceId,
 			error: repairError,
 		});
@@ -296,9 +331,19 @@ function serializeSetting(setting = null) {
 
 async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
-	const existing = await prisma.shipmentNotificationSetting.findUnique({
-		where: { workspaceId: resolvedWorkspaceId },
-	});
+	let existing = null;
+
+	try {
+		existing = await prisma.shipmentNotificationSetting.findUnique({
+			where: { workspaceId: resolvedWorkspaceId },
+		});
+	} catch (error) {
+		if (!isShipmentNotificationLogMissing(error)) throw error;
+		await ensureShipmentNotificationLogTable(resolvedWorkspaceId);
+		existing = await prisma.shipmentNotificationSetting.findUnique({
+			where: { workspaceId: resolvedWorkspaceId },
+		});
+	}
 
 	if (existing) return existing;
 
@@ -323,9 +368,7 @@ export async function updateShipmentNotificationSettings({
 	daysBack = DEFAULT_DAYS_BACK,
 } = {}) {
 	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
-	const current = await prisma.shipmentNotificationSetting.findUnique({
-		where: { workspaceId: resolvedWorkspaceId },
-	});
+	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId
 		? {
 				id: current.templateLocalId,
@@ -798,9 +841,19 @@ export async function sendShipmentNotifications({
 }
 
 export async function processAutomaticShipmentNotifications({ workspaceId = null } = {}) {
-	const settings = workspaceId
-		? [await ensureSetting(workspaceId)]
-		: await prisma.shipmentNotificationSetting.findMany({ where: { enabled: true } });
+	let settings = [];
+
+	if (workspaceId) {
+		settings = [await ensureSetting(workspaceId)];
+	} else {
+		try {
+			settings = await prisma.shipmentNotificationSetting.findMany({ where: { enabled: true } });
+		} catch (error) {
+			if (!isShipmentNotificationLogMissing(error)) throw error;
+			await ensureShipmentNotificationLogTable();
+			settings = await prisma.shipmentNotificationSetting.findMany({ where: { enabled: true } });
+		}
+	}
 	const results = [];
 
 	for (const setting of settings) {
