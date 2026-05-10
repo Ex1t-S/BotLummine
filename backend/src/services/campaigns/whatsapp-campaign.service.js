@@ -514,6 +514,10 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 async function resolveRecipientsFromPendingPayments(input = {}) {
 	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
 	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
+	const rawFilters = input.audienceFilters || input.filters || input || {};
+	const selectedOrderKeys = safeArray(rawFilters.orderKeys || rawFilters.orderIds || rawFilters.orderNumbers)
+		.map((value) => normalizeString(value))
+		.filter(Boolean);
 	const since = new Date();
 	since.setDate(since.getDate() - filters.daysBack);
 	const pendingStatuses = ['pending', 'pending_confirmation', 'unpaid', 'pago pendiente', 'pago en espera'];
@@ -523,9 +527,6 @@ async function resolveRecipientsFromPendingPayments(input = {}) {
 		normalizedPhone: {
 			not: null
 		},
-		orderCreatedAt: {
-			gte: since
-		},
 		OR: pendingStatuses.map((paymentStatus) => ({
 			paymentStatus: {
 				equals: paymentStatus,
@@ -533,6 +534,22 @@ async function resolveRecipientsFromPendingPayments(input = {}) {
 			}
 		}))
 	};
+
+	if (selectedOrderKeys.length) {
+		where.AND = [
+			{
+				OR: [
+					{ id: { in: selectedOrderKeys } },
+					{ orderId: { in: selectedOrderKeys } },
+					{ orderNumber: { in: selectedOrderKeys } }
+				]
+			}
+		];
+	} else {
+		where.orderCreatedAt = {
+			gte: since
+		};
+	}
 
 	if (typeof filters.minTotal === 'number' && Number.isFinite(filters.minTotal)) {
 		where.totalAmount = {

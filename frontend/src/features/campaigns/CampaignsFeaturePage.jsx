@@ -235,17 +235,11 @@ const initialScheduleForm = {
 	notes: 'Recuperación diaria del último día.',
 };
 
-const pendingPaymentScheduleDefaults = {
-	name: 'Recordatorio pagos pendientes 20 hs',
-	timeOfDay: '20:00',
-	status: 'ACTIVE',
-	audienceSource: 'pending_payment',
-	daysBack: 3,
-	audienceStatus: 'ALL',
-	limit: 100,
+const DEFAULT_PENDING_PAYMENT_FILTERS = {
+	daysBack: 30,
+	limit: 50,
 	minTotal: '',
 	productQuery: '',
-	notes: 'Recordatorio diario para pedidos con pago pendiente.',
 };
 
 const SCHEDULE_AUDIENCE_OPTIONS = {
@@ -796,6 +790,152 @@ function formatShipmentDate(value) {
 	}
 }
 
+function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutations }) {
+	const settings = pendingPayment?.automationSettings || {};
+	const filters = settings.filters || DEFAULT_PENDING_PAYMENT_FILTERS;
+	const [templateId, setTemplateId] = useState(settings.templateId || '');
+	const [enabled, setEnabled] = useState(Boolean(settings.enabled));
+	const [form, setForm] = useState({
+		daysBack: filters.daysBack || DEFAULT_PENDING_PAYMENT_FILTERS.daysBack,
+		limit: filters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
+		minTotal: filters.minTotal ?? '',
+		productQuery: filters.productQuery || '',
+	});
+	const saving = mutations.updatePendingPaymentAutomation.isPending;
+	const running = mutations.runPendingPaymentAutomationNow.isPending;
+
+	useEffect(() => {
+		const nextFilters = settings.filters || DEFAULT_PENDING_PAYMENT_FILTERS;
+		setTemplateId(settings.templateId || '');
+		setEnabled(Boolean(settings.enabled));
+		setForm({
+			daysBack: nextFilters.daysBack || DEFAULT_PENDING_PAYMENT_FILTERS.daysBack,
+			limit: nextFilters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
+			minTotal: nextFilters.minTotal ?? '',
+			productQuery: nextFilters.productQuery || '',
+		});
+	}, [settings.templateId, settings.enabled, settings.filters]);
+
+	function updateField(field, value) {
+		setForm((current) => ({ ...current, [field]: value }));
+	}
+
+	function buildPayload(nextEnabled = enabled) {
+		return {
+			enabled: nextEnabled,
+			templateId: templateId || null,
+			filters: {
+				daysBack: form.daysBack,
+				limit: form.limit,
+				minTotal: form.minTotal,
+				productQuery: form.productQuery,
+			},
+		};
+	}
+
+	function save(nextEnabled = enabled) {
+		mutations.updatePendingPaymentAutomation.mutate(buildPayload(nextEnabled));
+	}
+
+	return (
+		<div className="campaign-shipment-notifications">
+			<div className="campaign-schedule-ops">
+				<div>
+					<strong>Recordatorios de pagos pendientes</strong>
+					<span>Detecta pedidos pendientes, espera 2 horas desde la creacion y envia una sola vez por pedido.</span>
+				</div>
+				<label className="campaign-toggle">
+					<input
+						type="checkbox"
+						checked={enabled}
+						onChange={(event) => {
+							const nextEnabled = event.target.checked;
+							setEnabled(nextEnabled);
+							save(nextEnabled);
+						}}
+						disabled={saving || !templateId}
+					/>
+					<span>
+						<strong>{enabled ? 'Automatizacion activa' : 'Automatizacion desactivada'}</strong>
+					</span>
+				</label>
+			</div>
+
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
+					<strong>Configuracion</strong>
+					<span>La revision corre cada hora y tambien toma pedidos viejos pendientes que no fueron contactados.</span>
+				</div>
+				<div className="campaign-form-grid two-columns">
+					<label className="field">
+						<span>Template para pagos pendientes</span>
+						<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+							<option value="">Seleccionar plantilla</option>
+							{templates.map((template) => (
+								<option key={template.id} value={template.id}>
+									{template.name} - {template.language} - {template.status}
+								</option>
+							))}
+						</select>
+					</label>
+					<label className="field">
+						<span>Ventana</span>
+						<select value={form.daysBack} onChange={(event) => updateField('daysBack', event.target.value)}>
+							<option value="7">7 dias</option>
+							<option value="14">14 dias</option>
+							<option value="30">30 dias</option>
+							<option value="60">60 dias</option>
+							<option value="90">90 dias</option>
+						</select>
+					</label>
+					<label className="field">
+						<span>Limite por corrida</span>
+						<input type="number" min="1" max="500" value={form.limit} onChange={(event) => updateField('limit', event.target.value)} />
+					</label>
+					<label className="field">
+						<span>Monto minimo</span>
+						<input type="number" min="0" step="0.01" value={form.minTotal} placeholder="Sin minimo" onChange={(event) => updateField('minTotal', event.target.value)} />
+					</label>
+					<label className="field two-columns-span">
+						<span>Producto</span>
+						<input value={form.productQuery} placeholder="Opcional" onChange={(event) => updateField('productQuery', event.target.value)} />
+					</label>
+				</div>
+			</div>
+
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
+					<strong>Estado</strong>
+					<span>Espera minima: {Number(settings.minOrderAgeMinutes || 120)} minutos.</span>
+				</div>
+				<div className="campaign-schedule-meta-grid">
+					<div>
+						<span>Ultima ejecucion</span>
+						<strong>{formatScheduleDate(settings.lastRunAt)}</strong>
+					</div>
+					<div>
+						<span>Ultima campana</span>
+						<strong>{settings.lastCampaignId || 'Sin campana'}</strong>
+					</div>
+					<div>
+						<span>Template</span>
+						<strong>{settings.templateName || 'Sin template'}</strong>
+					</div>
+				</div>
+				{settings.lastError ? <div className="campaign-schedule-error">{settings.lastError}</div> : null}
+				<div className="campaign-form-actions campaign-form-actions--end">
+					<button type="button" className="button ghost" onClick={() => mutations.runPendingPaymentAutomationNow.mutate()} disabled={running || saving || !enabled || !templateId}>
+						{running ? 'Ejecutando...' : 'Ejecutar ahora'}
+					</button>
+					<button type="button" className="button primary" onClick={() => save()} disabled={saving || !templateId}>
+						{saving ? 'Guardando...' : 'Guardar configuracion'}
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, queries, mutations }) {
 	const settings = shipmentNotifications?.settings || {};
 	const range = shipmentNotifications?.range || {};
@@ -1149,6 +1289,7 @@ export default function CampaignsFeaturePage() {
 		mutations,
 		tracking,
 		abandonedCart,
+		pendingPayment,
 	} = useCampaignsDashboard();
 
 	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
@@ -1172,11 +1313,6 @@ export default function CampaignsFeaturePage() {
 		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
 		[activeTab]
 	);
-	const pendingPaymentSchedules = useMemo(
-		() => schedules.filter((schedule) => String(schedule?.audienceSource || '').toLowerCase() === 'pending_payment'),
-		[schedules]
-	);
-
 	useEffect(() => {
 		const pathSegments = location.pathname.split('/').filter(Boolean);
 		const activePath = pathSegments[1] || '';
@@ -1370,16 +1506,10 @@ export default function CampaignsFeaturePage() {
 						title={currentTab.title}
 						description={currentTab.description}
 					>
-						<CampaignSchedulesPanel
+						<PendingPaymentAutomationPanel
 							templates={templates}
-							schedules={pendingPaymentSchedules}
-							loading={queries.schedules.isLoading}
+							pendingPayment={pendingPayment}
 							mutations={mutations}
-							onDeleteSchedule={requestDeleteSchedule}
-							audienceSourceLock="pending_payment"
-							formDefaults={pendingPaymentScheduleDefaults}
-							formEyebrow="Pago pendiente"
-							emptyDescription="Crea una automatizacion para recordar pedidos pendientes de pago con una plantilla dedicada."
 						/>
 					</CampaignSectionShell>
 				);

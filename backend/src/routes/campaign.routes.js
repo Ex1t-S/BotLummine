@@ -29,6 +29,9 @@ import {
 	getAbandonedCartAutomationSettingsController,
 	updateAbandonedCartAutomationSettingsController,
 	runAbandonedCartAutomationNowController,
+	getPendingPaymentAutomationSettingsController,
+	updatePendingPaymentAutomationSettingsController,
+	runPendingPaymentAutomationNowController,
 	getShipmentNotificationSettingsController,
 	updateShipmentNotificationSettingsController,
 	listShipmentNotificationCandidatesController,
@@ -61,6 +64,9 @@ router.delete('/schedules/:scheduleId', deleteCampaignScheduleController);
 router.get('/abandoned-cart-automation/settings', getAbandonedCartAutomationSettingsController);
 router.patch('/abandoned-cart-automation/settings', updateAbandonedCartAutomationSettingsController);
 router.post('/abandoned-cart-automation/run-now', runAbandonedCartAutomationNowController);
+router.get('/pending-payment-automation/settings', getPendingPaymentAutomationSettingsController);
+router.patch('/pending-payment-automation/settings', updatePendingPaymentAutomationSettingsController);
+router.post('/pending-payment-automation/run-now', runPendingPaymentAutomationNowController);
 router.get('/shipment-notifications/settings', getShipmentNotificationSettingsController);
 router.patch('/shipment-notifications/settings', updateShipmentNotificationSettingsController);
 router.get('/shipment-notifications/candidates', listShipmentNotificationCandidatesController);

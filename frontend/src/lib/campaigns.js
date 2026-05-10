@@ -94,6 +94,21 @@ export async function runAbandonedCartAutomationNow() {
 	return unwrap(response);
 }
 
+export async function fetchPendingPaymentAutomationSettings() {
+	const response = await api.get('/campaigns/pending-payment-automation/settings');
+	return unwrap(response);
+}
+
+export async function updatePendingPaymentAutomationSettings(payload) {
+	const response = await api.patch('/campaigns/pending-payment-automation/settings', payload);
+	return unwrap(response);
+}
+
+export async function runPendingPaymentAutomationNow() {
+	const response = await api.post('/campaigns/pending-payment-automation/run-now');
+	return unwrap(response);
+}
+
 export async function fetchCampaignSchedules() {
 	const response = await api.get('/campaigns/schedules');
 	return unwrap(response);

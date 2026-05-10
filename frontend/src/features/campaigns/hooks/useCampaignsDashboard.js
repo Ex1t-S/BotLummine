@@ -13,6 +13,7 @@ import {
 	fetchCampaignOverview,
 	fetchCampaignSchedules,
 	fetchCampaigns,
+	fetchPendingPaymentAutomationSettings,
 	fetchShipmentNotificationCandidates,
 	fetchShipmentNotificationSettings,
 	fetchTemplates,
@@ -24,10 +25,12 @@ import {
 	runAbandonedCartAutomationNow,
 	runCampaignScheduleNow,
 	runCampaignDispatchTick,
+	runPendingPaymentAutomationNow,
 	sendShipmentNotifications,
 	syncTemplates,
 	updateAbandonedCartAutomationSettings,
 	updateCampaignSchedule,
+	updatePendingPaymentAutomationSettings,
 	updateShipmentNotificationSettings,
 	updateTemplate,
 } from '../../../lib/campaigns.js';
@@ -252,6 +255,11 @@ export function useCampaignsDashboard() {
 		queryFn: fetchAbandonedCartAutomationSettings,
 	});
 
+	const pendingPaymentAutomationQuery = useQuery({
+		queryKey: ['campaigns', 'pending-payment-automation', 'settings'],
+		queryFn: fetchPendingPaymentAutomationSettings,
+	});
+
 	const shipmentSettingsQuery = useQuery({
 		queryKey: ['campaigns', 'shipment-notifications', 'settings'],
 		queryFn: fetchShipmentNotificationSettings,
@@ -373,6 +381,7 @@ export function useCampaignsDashboard() {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'abandoned-cart-automation'] });
+		queryClient.invalidateQueries({ queryKey: ['campaigns', 'pending-payment-automation'] });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'shipment-notifications'] });
 
 		if (nextCampaignId) {
@@ -529,6 +538,26 @@ export function useCampaignsDashboard() {
 		},
 		onError: (error) =>
 			showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar la automatizacion de carritos.'),
+	});
+
+	const updatePendingPaymentAutomationMutation = useMutation({
+		mutationFn: updatePendingPaymentAutomationSettings,
+		onSuccess: () => {
+			invalidateAll();
+			showFeedback('success', 'Automatizacion de pagos pendientes actualizada.');
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar pagos pendientes.'),
+	});
+
+	const runPendingPaymentAutomationNowMutation = useMutation({
+		mutationFn: runPendingPaymentAutomationNow,
+		onSuccess: (result) => {
+			invalidateAll(result?.campaignId || null);
+			showFeedback('success', `Pagos pendientes ejecutados para ${Number(result?.processed || 0)} destinatario(s).`);
+		},
+		onError: (error) =>
+			showFeedback('error', error?.response?.data?.error || 'No se pudo ejecutar pagos pendientes.'),
 	});
 
 	const createAbandonedCartCampaignMutation = useMutation({
@@ -710,6 +739,7 @@ export function useCampaignsDashboard() {
 			campaignDetail: campaignDetailQuery,
 			schedules: schedulesQuery,
 			abandonedCartAutomation: abandonedCartAutomationQuery,
+			pendingPaymentAutomation: pendingPaymentAutomationQuery,
 			shipmentSettings: shipmentSettingsQuery,
 			shipmentCandidates: shipmentCandidatesQuery,
 		},
@@ -725,6 +755,8 @@ export function useCampaignsDashboard() {
 			abandonedPreview: abandonedCartPreviewMutation,
 			updateAbandonedCartAutomation: updateAbandonedCartAutomationMutation,
 			runAbandonedCartAutomationNow: runAbandonedCartAutomationNowMutation,
+			updatePendingPaymentAutomation: updatePendingPaymentAutomationMutation,
+			runPendingPaymentAutomationNow: runPendingPaymentAutomationNowMutation,
 			createAbandonedCampaign: createAbandonedCartCampaignMutation,
 			createSchedule: createScheduleMutation,
 			updateSchedule: updateScheduleMutation,
@@ -754,6 +786,10 @@ export function useCampaignsDashboard() {
 			updateField: updateAbandonedCartForm,
 			handlePreview: handlePreviewAbandonedCarts,
 			handleCreate: handleCreateAbandonedCartCampaign,
+		},
+		pendingPayment: {
+			automationSettings: pendingPaymentAutomationQuery.data?.settings || null,
+			automationLoading: pendingPaymentAutomationQuery.isLoading || pendingPaymentAutomationQuery.isFetching,
 		},
 	};
 }

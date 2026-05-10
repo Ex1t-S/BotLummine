@@ -17,10 +17,10 @@ import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import {
 	fetchAbandonedCartAutomationSettings,
-	fetchCampaignSchedules,
+	fetchPendingPaymentAutomationSettings,
 	fetchShipmentNotificationSettings,
 	updateAbandonedCartAutomationSettings,
-	updateCampaignSchedule,
+	updatePendingPaymentAutomationSettings,
 	updateShipmentNotificationSettings,
 } from '../lib/campaigns.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -56,33 +56,6 @@ function formatOperationDate(value) {
 	} catch {
 		return 'Nunca';
 	}
-}
-
-function getScheduleList(data) {
-	if (Array.isArray(data)) return data;
-	if (Array.isArray(data?.schedules)) return data.schedules;
-	if (Array.isArray(data?.items)) return data.items;
-	return [];
-}
-
-function getPendingPaymentSchedules(data) {
-	return getScheduleList(data).filter(
-		(schedule) => String(schedule?.audienceSource || '').toLowerCase() === 'pending_payment'
-	);
-}
-
-function buildScheduleTogglePayload(schedule, nextStatus) {
-	return {
-		name: schedule.name,
-		templateId: schedule.templateLocalId,
-		timeOfDay: schedule.timeOfDay,
-		timezone: schedule.timezone,
-		status: nextStatus,
-		audienceSource: schedule.audienceSource || 'pending_payment',
-		audienceFilters: schedule.audienceFilters || {},
-		defaultComponents: Array.isArray(schedule.defaultComponents) ? schedule.defaultComponents : [],
-		notes: schedule.notes || null,
-	};
 }
 
 function getMutationErrorMessage(...mutations) {
@@ -181,22 +154,16 @@ function AutomationRow({
 function AutomationPanel({
 	abandonedSettings,
 	shipmentSettings,
-	pendingSchedules = [],
+	pendingPaymentSettings,
 	loading = false,
 	mutations,
 	onNavigate,
 }) {
 	const abandoned = abandonedSettings || {};
 	const shipment = shipmentSettings || {};
-	const pendingConfigured = pendingSchedules.length > 0;
-	const pendingEnabled = pendingConfigured && pendingSchedules.every(
-		(schedule) => String(schedule.status || '').toUpperCase() === 'ACTIVE'
-	);
-	const pendingLastRunAt = pendingSchedules
-		.map((schedule) => schedule.lastRunAt)
-		.filter(Boolean)
-		.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
-	const pendingLastError = pendingSchedules.find((schedule) => schedule.lastError)?.lastError || '';
+	const pending = pendingPaymentSettings || {};
+	const pendingConfigured = Boolean(pending.templateId);
+	const pendingEnabled = Boolean(pending.enabled);
 	const saveError = getMutationErrorMessage(mutations.abandoned, mutations.pendingPayments, mutations.shipments);
 
 	return (
@@ -233,19 +200,20 @@ function AutomationPanel({
 				<AutomationRow
 					icon={WalletCards}
 					title="Pagos pendientes"
-					description="Activa o pausa todas las programaciones existentes para pagos pendientes."
+					description="Recuerda pedidos pendientes 2 horas despues de detectarlos, una sola vez por pedido."
 					enabled={pendingEnabled}
 					configured={pendingConfigured}
 					loading={loading}
 					saving={mutations.pendingPayments.isPending}
-					lastRunAt={pendingLastRunAt}
-					lastError={pendingLastError}
+					lastRunAt={pending.lastRunAt}
+					lastError={pending.lastError}
 					configHref="/campaigns/pending-payments"
 					onConfigure={onNavigate}
 					onToggle={(nextEnabled) =>
 						mutations.pendingPayments.mutate({
-							schedules: pendingSchedules,
-							status: nextEnabled ? 'ACTIVE' : 'PAUSED',
+							enabled: nextEnabled,
+							templateId: pending.templateId || null,
+							filters: pending.filters || {},
 						})
 					}
 				/>
@@ -280,7 +248,7 @@ function AutomationPanel({
 
 			<div className="operations-automation-foot">
 				<ActionButton variant="secondary" icon={Clock3} onClick={() => onNavigate('/campaigns/pending-payments')}>
-					Ver programaciones
+					Configurar pagos pendientes
 				</ActionButton>
 			</div>
 		</section>
@@ -397,9 +365,9 @@ export default function OperationsPage() {
 		...queryPresets.campaigns,
 	});
 
-	const schedulesQuery = useQuery({
-		queryKey: ['operations', 'campaigns', 'schedules'],
-		queryFn: fetchCampaignSchedules,
+	const pendingPaymentAutomationQuery = useQuery({
+		queryKey: ['operations', 'pending-payment-automation', 'settings'],
+		queryFn: fetchPendingPaymentAutomationSettings,
 		enabled: brandAdmin,
 		...queryPresets.campaigns,
 	});
@@ -407,8 +375,8 @@ export default function OperationsPage() {
 	function invalidateAutomationQueries() {
 		queryClient.invalidateQueries({ queryKey: ['operations'] });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'abandoned-cart-automation'] });
+		queryClient.invalidateQueries({ queryKey: ['campaigns', 'pending-payment-automation'] });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'shipment-notifications'] });
-		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
 	}
 
 	const updateAbandonedMutation = useMutation({
@@ -422,14 +390,7 @@ export default function OperationsPage() {
 	});
 
 	const updatePendingPaymentsMutation = useMutation({
-		mutationFn: async ({ schedules = [], status }) => {
-			await Promise.all(
-				schedules.map((schedule) =>
-					updateCampaignSchedule(schedule.id, buildScheduleTogglePayload(schedule, status))
-				)
-			);
-			return { updated: schedules.length };
-		},
+		mutationFn: updatePendingPaymentAutomationSettings,
 		onSuccess: invalidateAutomationQueries,
 	});
 
@@ -437,11 +398,10 @@ export default function OperationsPage() {
 	const totals = summary.totals || {};
 	const workspaces = summary.workspaces || [];
 	const primaryWorkspace = workspaces[0] || null;
-	const pendingPaymentSchedules = getPendingPaymentSchedules(schedulesQuery.data);
 	const automationLoading =
 		abandonedAutomationQuery.isLoading ||
 		shipmentSettingsQuery.isLoading ||
-		schedulesQuery.isLoading;
+		pendingPaymentAutomationQuery.isLoading;
 
 	const quickActions = useMemo(() => {
 		const actions = [
@@ -569,7 +529,7 @@ export default function OperationsPage() {
 				<AutomationPanel
 					abandonedSettings={abandonedAutomationQuery.data?.settings || null}
 					shipmentSettings={shipmentSettingsQuery.data?.settings || null}
-					pendingSchedules={pendingPaymentSchedules}
+					pendingPaymentSettings={pendingPaymentAutomationQuery.data?.settings || null}
 					loading={automationLoading}
 					mutations={{
 						abandoned: updateAbandonedMutation,

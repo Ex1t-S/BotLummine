@@ -40,6 +40,11 @@ import {
 	runAbandonedCartAutomation,
 	updateAbandonedCartAutomationSettings,
 } from '../services/campaigns/abandoned-cart-automation.service.js';
+import {
+	getPendingPaymentAutomationSettings,
+	runPendingPaymentAutomation,
+	updatePendingPaymentAutomationSettings,
+} from '../services/campaigns/pending-payment-automation.service.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
 	normalizeBoolean,
@@ -398,6 +403,45 @@ export async function updateAbandonedCartAutomationSettingsController(req, res) 
 export async function runAbandonedCartAutomationNowController(req, res) {
 	try {
 		const result = await runAbandonedCartAutomation({
+			workspaceId: requireRequestWorkspaceId(req),
+			force: true,
+			launchedByUserId: req.user?.id || null,
+		});
+		void executeCampaignDispatcherTick();
+		return res.status(201).json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function getPendingPaymentAutomationSettingsController(req, res) {
+	try {
+		const settings = await getPendingPaymentAutomationSettings({
+			workspaceId: requireRequestWorkspaceId(req),
+		});
+		return res.json({ ok: true, settings });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function updatePendingPaymentAutomationSettingsController(req, res) {
+	try {
+		const settings = await updatePendingPaymentAutomationSettings({
+			workspaceId: requireRequestWorkspaceId(req),
+			enabled: normalizeBoolean(req.body?.enabled),
+			templateId: req.body?.templateId || null,
+			filters: req.body?.filters || {},
+		});
+		return res.json({ ok: true, settings });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function runPendingPaymentAutomationNowController(req, res) {
+	try {
+		const result = await runPendingPaymentAutomation({
 			workspaceId: requireRequestWorkspaceId(req),
 			force: true,
 			launchedByUserId: req.user?.id || null,

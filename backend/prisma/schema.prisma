@@ -45,6 +45,8 @@ model Workspace {
   campaignSchedules   CampaignSchedule[]
   abandonedCartAutomationSetting AbandonedCartAutomationSetting?
   abandonedCartAutomationLogs    AbandonedCartAutomationLog[]
+  pendingPaymentAutomationSetting PendingPaymentAutomationSetting?
+  pendingPaymentAutomationLogs    PendingPaymentAutomationLog[]
   shipmentNotificationSetting ShipmentNotificationSetting?
   shipmentNotificationLogs    ShipmentNotificationLog[]
 }
@@ -873,6 +875,43 @@ model AbandonedCartAutomationLog {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, checkoutId])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, campaignId])
+}
+
+model PendingPaymentAutomationSetting {
+  id                 String    @id @default(cuid())
+  workspaceId        String    @unique
+  enabled            Boolean   @default(false)
+  templateLocalId    String?
+  templateName       String?
+  templateLanguage   String    @default("es_AR")
+  filters            Json?
+  intervalMinutes    Int       @default(60)
+  minOrderAgeMinutes Int       @default(120)
+  lastRunAt          DateTime?
+  lastCampaignId     String?
+  lastError          String?
+  runCount           Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model PendingPaymentAutomationLog {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  orderKey       String
+  campaignId     String?
+  recipientPhone String?
+  templateName   String?
+  rawPayload     Json?
+  createdAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, orderKey])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, campaignId])
 }
