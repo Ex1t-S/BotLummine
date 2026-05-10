@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
@@ -48,6 +49,62 @@ const SHIPMENT_VARIABLE_OPTIONS = [
 	{ key: 'source', label: 'Origen', description: 'Enbox o TiendaNube' },
 	{ key: 'updated_at', label: 'Fecha de actualizacion', description: 'Fecha detectada del despacho' },
 ];
+
+function isShipmentNotificationLogMissing(error) {
+	return (
+		error?.code === 'P2021' ||
+		/ShipmentNotificationLog|public\.ShipmentNotificationLog/i.test(String(error?.message || ''))
+	);
+}
+
+async function ensureShipmentNotificationLogTable(workspaceId = DEFAULT_WORKSPACE_ID) {
+	try {
+		await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "ShipmentNotificationLog" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "notificationKey" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "orderId" TEXT,
+    "orderNumber" TEXT,
+    "shipmentId" TEXT,
+    "campaignId" TEXT,
+    "recipientPhone" TEXT,
+    "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "rawPayload" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ShipmentNotificationLog_pkey" PRIMARY KEY ("id")
+)`);
+		await prisma.$executeRawUnsafe(`
+CREATE UNIQUE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_notificationKey_key"
+ON "ShipmentNotificationLog"("workspaceId", "notificationKey")`);
+		await prisma.$executeRawUnsafe(`
+CREATE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_sentAt_idx"
+ON "ShipmentNotificationLog"("workspaceId", "sentAt")`);
+		await prisma.$executeRawUnsafe(`
+CREATE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_campaignId_idx"
+ON "ShipmentNotificationLog"("workspaceId", "campaignId")`);
+		await prisma.$executeRawUnsafe(`
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint WHERE conname = 'ShipmentNotificationLog_workspaceId_fkey'
+	) THEN
+		ALTER TABLE "ShipmentNotificationLog"
+		ADD CONSTRAINT "ShipmentNotificationLog_workspaceId_fkey"
+		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+		ON DELETE CASCADE ON UPDATE CASCADE;
+	END IF;
+END $$;`);
+		logger.warn('shipment_notifications.log_table_repaired', { workspaceId });
+	} catch (repairError) {
+		logger.error('shipment_notifications.log_table_repair_failed', {
+			workspaceId,
+			error: repairError,
+		});
+		throw repairError;
+	}
+}
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -414,13 +471,26 @@ async function getNotifiedKeys(workspaceId, keys = []) {
 	const unique = [...new Set(keys.filter(Boolean))];
 	if (!unique.length) return new Set();
 
-	const logs = await prisma.shipmentNotificationLog.findMany({
-		where: {
-			workspaceId,
-			notificationKey: { in: unique },
-		},
-		select: { notificationKey: true },
-	});
+	let logs = [];
+	try {
+		logs = await prisma.shipmentNotificationLog.findMany({
+			where: {
+				workspaceId,
+				notificationKey: { in: unique },
+			},
+			select: { notificationKey: true },
+		});
+	} catch (error) {
+		if (!isShipmentNotificationLogMissing(error)) throw error;
+		await ensureShipmentNotificationLogTable(workspaceId);
+		logs = await prisma.shipmentNotificationLog.findMany({
+			where: {
+				workspaceId,
+				notificationKey: { in: unique },
+			},
+			select: { notificationKey: true },
+		});
+	}
 
 	return new Set(logs.map((log) => log.notificationKey));
 }
@@ -653,20 +723,30 @@ async function createAndLaunchShipmentCampaign({
 
 	if (campaignId) {
 		await launchCampaign(campaignId, { workspaceId: resolvedWorkspaceId });
-		await prisma.shipmentNotificationLog.createMany({
-			data: usableCandidates.map((candidate) => ({
-				workspaceId: resolvedWorkspaceId,
-				notificationKey: candidate.notificationKey,
-				source: candidate.source,
-				orderId: candidate.orderId || null,
-				orderNumber: candidate.orderNumber || null,
-				shipmentId: candidate.shipmentId || null,
-				campaignId,
-				recipientPhone: candidate.phone || null,
-				rawPayload: candidate.rawPayload || null,
-			})),
-			skipDuplicates: true,
-		});
+		const logRows = usableCandidates.map((candidate) => ({
+			workspaceId: resolvedWorkspaceId,
+			notificationKey: candidate.notificationKey,
+			source: candidate.source,
+			orderId: candidate.orderId || null,
+			orderNumber: candidate.orderNumber || null,
+			shipmentId: candidate.shipmentId || null,
+			campaignId,
+			recipientPhone: candidate.phone || null,
+			rawPayload: candidate.rawPayload || null,
+		}));
+		try {
+			await prisma.shipmentNotificationLog.createMany({
+				data: logRows,
+				skipDuplicates: true,
+			});
+		} catch (error) {
+			if (!isShipmentNotificationLogMissing(error)) throw error;
+			await ensureShipmentNotificationLogTable(resolvedWorkspaceId);
+			await prisma.shipmentNotificationLog.createMany({
+				data: logRows,
+				skipDuplicates: true,
+			});
+		}
 	}
 
 	return {
