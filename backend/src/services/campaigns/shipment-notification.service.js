@@ -9,7 +9,7 @@ import {
 } from '../common/shipping-status.js';
 import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
-const DEFAULT_DAYS_BACK = 3;
+const DEFAULT_DAYS_BACK = 14;
 const AUTO_LIMIT = 100;
 const DEFAULT_VARIABLE_MAPPING = {
 	'1': 'first_name',

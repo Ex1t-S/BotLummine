@@ -53,6 +53,7 @@ const CAMPAIGN_RECIPIENT_FETCH_SIZE = 500;
 const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
 const CAMPAIGN_POLL_INTERVAL_MS = 5000;
 const CAMPAIGN_STATUS_POLL_WINDOW_MS = 60 * 60 * 1000;
+const SHIPMENT_NOTIFICATION_DAYS_BACK = 14;
 
 function formatDateInput(date) {
 	return date.toISOString().slice(0, 10);
@@ -61,7 +62,7 @@ function formatDateInput(date) {
 function buildDefaultShipmentRange() {
 	const to = new Date();
 	const from = new Date();
-	from.setDate(to.getDate() - 2);
+	from.setDate(to.getDate() - (SHIPMENT_NOTIFICATION_DAYS_BACK - 1));
 	return {
 		dateFrom: formatDateInput(from),
 		dateTo: formatDateInput(to),

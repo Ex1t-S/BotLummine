@@ -383,7 +383,7 @@ export async function updateShipmentNotificationSettingsController(req, res) {
 			enabled: normalizeBoolean(req.body?.enabled),
 			templateId: req.body?.templateId || null,
 			variableMapping: req.body?.variableMapping || {},
-			daysBack: req.body?.daysBack || 3,
+			daysBack: req.body?.daysBack || 14,
 		});
 		return res.json({ ok: true, settings });
 	} catch (error) {
@@ -395,7 +395,7 @@ export async function listShipmentNotificationCandidatesController(req, res) {
 	try {
 		const result = await listShipmentNotificationCandidates({
 			workspaceId: requireRequestWorkspaceId(req),
-			daysBack: req.query?.daysBack || 3,
+			daysBack: req.query?.daysBack || 14,
 			dateFrom: req.query?.dateFrom || null,
 			dateTo: req.query?.dateTo || null,
 			includeNotified: normalizeBoolean(req.query?.includeNotified ?? 'true'),
