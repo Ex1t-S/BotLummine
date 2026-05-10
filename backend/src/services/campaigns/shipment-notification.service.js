@@ -364,39 +364,48 @@ function shipmentToCandidate(shipment = {}, order = null, notifiedKeys = new Set
 	};
 }
 
-function orderToCandidate(order = {}, notifiedKeys = new Set()) {
+function orderToCandidate(order = {}, notifiedKeys = new Set(), shipment = null) {
 	const phone = normalizePhone(order.normalizedPhone || order.contactPhone || '');
 	if (!phone) return null;
 
-	const notificationKey = `order:${order.orderId}`;
+	const notificationKey = shipment?.didEnvio ? `shipment:${shipment.didEnvio}` : `order:${order.orderId}`;
 	const orderProducts = getOrderProductSummary(order);
 	const shippingSignals = extractOrderShippingSignals(order.rawPayload || {});
-	const shippingMeta = getDispatchCandidateShippingMeta(order.shippingStatus || '', shippingSignals.trackingUrl || '');
+	const trackingUrl = shipment?.trackingUrl || shippingSignals.trackingUrl || '';
+	const shippingMeta = getDispatchCandidateShippingMeta(
+		shipment?.shippingStatus || order.shippingStatus || '',
+		trackingUrl
+	);
 	const alreadyNotified = notifiedKeys.has(notificationKey);
 
 	return {
 		notificationKey,
-		source: 'tiendanube',
+		source: shipment ? 'enbox' : 'tiendanube',
 		alreadyNotified,
 		statusCategory: shippingMeta.category,
 		statusLabel: shippingMeta.label,
-		reason: alreadyNotified ? 'Ya notificado' : 'Despacho detectado en TiendaNube',
+		reason: alreadyNotified
+			? 'Ya notificado'
+			: shipment
+				? 'Despacho detectado en Enbox'
+				: 'Despacho detectado en TiendaNube',
 		blockedReason: '',
-		shipmentId: '',
-		orderId: order.orderId || '',
+		shipmentId: shipment?.didEnvio || '',
+		orderId: shipment?.orderId || order.orderId || '',
 		orderNumber: order.orderNumber || '',
 		contactName: order.contactName || phone,
 		phone,
-		trackingNumber: shippingSignals.trackingNumber || '',
-		trackingUrl: shippingSignals.trackingUrl || '',
+		trackingNumber: shipment?.trackingNumber || shipment?.shipmentNumber || shippingSignals.trackingNumber || '',
+		trackingUrl,
 		shippingStatus: shippingMeta.label || order.shippingStatus || '',
-		shippingMethod: shippingSignals.carrierName || '',
+		shippingMethod: shipment?.shippingMethod || shippingSignals.carrierName || '',
 		productName: orderProducts.productName,
 		updatedAt: order.orderUpdatedAt || order.updatedAt || order.createdAt,
 		rawPayload: {
-			source: 'tiendanube',
+			source: shipment ? 'enbox' : 'tiendanube',
 			orderId: order.orderId || null,
 			orderNumber: order.orderNumber || null,
+			shipmentId: shipment?.didEnvio || null,
 		},
 	};
 }
@@ -439,6 +448,52 @@ async function getDispatchedOrderRefs(workspaceId) {
 	};
 }
 
+function orderMatchesDispatchedRefs(order = {}, dispatchedOrderRefs = null) {
+	return Boolean(
+		(order.orderId && dispatchedOrderRefs?.orderIds?.includes(order.orderId)) ||
+		(order.orderNumber && dispatchedOrderRefs?.orderNumbers?.includes(order.orderNumber))
+	);
+}
+
+async function getShipmentsByOrderRefs(workspaceId, orders = []) {
+	const orderIds = [...new Set(orders.map((order) => normalizeString(order.orderId)).filter(Boolean))];
+	const orderNumbers = [...new Set(orders.map((order) => normalizeString(order.orderNumber)).filter(Boolean))];
+	if (!orderIds.length && !orderNumbers.length) return new Map();
+	const variants = getShippingStatusSearchTerms(['dispatched', 'delivered']);
+
+	const shipments = await prisma.enboxShipment.findMany({
+		where: {
+			workspaceId,
+			AND: [
+				{
+					OR: [
+						...(orderIds.length ? [{ orderId: { in: orderIds } }] : []),
+						...(orderNumbers.length ? [{ orderNumber: { in: orderNumbers } }] : []),
+					],
+				},
+				{
+					OR: variants.flatMap((value) => [
+						{ shippingStatus: { contains: value, mode: 'insensitive' } },
+						{ shippingStatusCode: { contains: value, mode: 'insensitive' } },
+					]),
+				},
+			],
+		},
+		orderBy: [{ lastSyncedAt: 'desc' }, { updatedAt: 'desc' }],
+	});
+
+	const byRef = new Map();
+	for (const shipment of shipments) {
+		if (shipment.orderNumber && !byRef.has(`number:${shipment.orderNumber}`)) {
+			byRef.set(`number:${shipment.orderNumber}`, shipment);
+		}
+		if (shipment.orderId && !byRef.has(`id:${shipment.orderId}`)) {
+			byRef.set(`id:${shipment.orderId}`, shipment);
+		}
+	}
+	return byRef;
+}
+
 function buildDispatchedOrderWhere({ workspaceId, range, dispatchedOrderRefs = null }) {
 	const shippingStatusVariants = getShippingStatusSearchTerms(['dispatched', 'delivered']);
 	const orderRefFilters = [];
@@ -453,7 +508,7 @@ function buildDispatchedOrderWhere({ workspaceId, range, dispatchedOrderRefs = n
 	return {
 		workspaceId,
 		normalizedPhone: { not: null },
-		OR: buildRecentDateWhere(['orderUpdatedAt', 'updatedAt'], range),
+		OR: buildRecentDateWhere(['orderCreatedAt', 'orderUpdatedAt', 'updatedAt'], range),
 		AND: [
 			{
 				OR: [
@@ -506,21 +561,30 @@ export async function listShipmentNotificationCandidates({
 		take: Math.min(Number(limit) || 250, 500),
 	});
 	const shipmentOrderNumbers = new Set(dispatchedShipments.map((shipment) => shipment.orderNumber).filter(Boolean));
+	const shipmentOrderIds = new Set(dispatchedShipments.map((shipment) => shipment.orderId).filter(Boolean));
 	const dispatchedFallbackOrders = fallbackOrders.filter((order) => {
 		const shippingSignals = extractOrderShippingSignals(order.rawPayload || {});
 		return (
-			isDispatchReady({ status: order.shippingStatus, trackingUrl: shippingSignals.trackingUrl }) &&
-			!shipmentOrderNumbers.has(order.orderNumber)
+			(isDispatchReady({ status: order.shippingStatus, trackingUrl: shippingSignals.trackingUrl }) ||
+				orderMatchesDispatchedRefs(order, dispatchedOrderRefs)) &&
+			!shipmentOrderNumbers.has(order.orderNumber) &&
+			!shipmentOrderIds.has(order.orderId)
 		);
 	});
-	const orderKeys = dispatchedFallbackOrders.map((order) => `order:${order.orderId}`);
+	const fallbackShipmentsByRef = await getShipmentsByOrderRefs(resolvedWorkspaceId, dispatchedFallbackOrders);
+	const getFallbackShipment = (order) =>
+		fallbackShipmentsByRef.get(`number:${order.orderNumber}`) || fallbackShipmentsByRef.get(`id:${order.orderId}`) || null;
+	const orderKeys = dispatchedFallbackOrders.map((order) => {
+		const shipment = getFallbackShipment(order);
+		return shipment?.didEnvio ? `shipment:${shipment.didEnvio}` : `order:${order.orderId}`;
+	});
 	const notifiedKeys = await getNotifiedKeys(resolvedWorkspaceId, [...shipmentKeys, ...orderKeys]);
 
 	const candidates = [
 		...dispatchedShipments.map((shipment) =>
 			shipmentToCandidate(shipment, ordersByNumber.get(shipment.orderNumber) || null, notifiedKeys)
 		),
-		...dispatchedFallbackOrders.map((order) => orderToCandidate(order, notifiedKeys)),
+		...dispatchedFallbackOrders.map((order) => orderToCandidate(order, notifiedKeys, getFallbackShipment(order))),
 	]
 		.filter(Boolean)
 		.filter((candidate) => includeNotified || !candidate.alreadyNotified)
