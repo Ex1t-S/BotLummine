@@ -964,7 +964,16 @@ export default function AdminPage({ defaultTab = '' }) {
 	}
 
 	const brandName = workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca';
-	const brandStoreUrl = workspace?.storeInstallations?.[0]?.storeUrl || workspace?.commerceConnections?.[0]?.storeUrl || '';
+	const primaryCommerceConnection =
+		workspace?.commerceConnections?.find((item) => item.provider === 'SHOPIFY' && item.status === 'ACTIVE') ||
+		workspace?.commerceConnections?.find((item) => item.status === 'ACTIVE') ||
+		workspace?.commerceConnections?.[0] ||
+		null;
+	const primaryStoreInstallation = workspace?.storeInstallations?.[0] || null;
+	const activeCommerceProvider = primaryCommerceConnection?.provider || primaryStoreInstallation?.provider || '';
+	const activeStoreUrl = primaryCommerceConnection?.storeUrl || primaryStoreInstallation?.storeUrl || '';
+	const brandStoreUrl = activeStoreUrl;
+	const isShopifyCommerce = activeCommerceProvider === 'SHOPIFY' || Boolean(shopifyStatus?.connected);
 	const brandLogoUrl = resolveApiUrl(workspaceForm.branding?.logoUrl || '');
 
 	return (
@@ -1156,10 +1165,16 @@ export default function AdminPage({ defaultTab = '' }) {
 									</div>
 									<div className="tenant-admin-brand-copy">
 										<strong>{brandName}</strong>
-										<span>{brandStoreUrl || 'Tienda Nube sin URL sincronizada'}</span>
-										<button type="button" disabled={saving || loading} onClick={handleBrandingSync}>
-											{saving ? 'Importando...' : 'Importar logo Tienda Nube'}
-										</button>
+										<span>{brandStoreUrl || 'Tienda sin URL sincronizada'}</span>
+										{isShopifyCommerce ? (
+											<button type="button" disabled={saving || loading} onClick={() => handleCatalogSync('SHOPIFY')}>
+												{saving ? 'Sincronizando...' : 'Sincronizar catálogo Shopify'}
+											</button>
+										) : (
+											<button type="button" disabled={saving || loading} onClick={handleBrandingSync}>
+												{saving ? 'Importando...' : 'Importar logo Tienda Nube'}
+											</button>
+										)}
 									</div>
 								</div>
 								<div className="tenant-admin-shopify-card">
