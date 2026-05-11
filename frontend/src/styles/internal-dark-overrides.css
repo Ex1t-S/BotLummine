@@ -110,6 +110,10 @@
 .dark .admin-shell .admin-content :where(
 	.page-card,
 	.internal-page-header,
+	.internal-surface-card,
+	.internal-empty-state,
+	.internal-filter-bar,
+	.internal-field--search > div,
 	.page-header,
 	.tenant-admin-header,
 	.tenant-admin-panel,
@@ -145,14 +149,38 @@
 	.campaign-custom-audience-card,
 	.campaign-custom-audience-recipient,
 	.campaign-custom-audience-preview,
+	.campaign-variable-box,
+	.campaign-composer-summary,
+	.campaign-status-grid,
+	.campaign-detail-box,
+	.campaign-empty-state,
+	.campaign-recipient-table-wrapper,
+	.campaign-helper-box,
+	.campaign-custom-audience,
+	.campaign-custom-audience-intro,
+	.campaign-customer-kpi,
+	.campaign-preview-shell,
+	.campaign-whatsapp-preview,
+	.campaign-preview-bubble,
+	.campaign-preview-header,
+	.campaign-preview-footer,
 	.campaign-schedule-card,
 	.campaign-schedule-form,
 	.campaign-schedule-section,
 	.campaign-toggle--card,
 	.campaign-source-switch,
 	.campaign-segment-summary-card,
+	.campaign-product-filter-toggle,
+	.campaign-product-multiselect,
+	.campaign-product-option-empty,
+	.campaign-recipient-preview-box,
+	.campaign-recipient-preview-table,
+	.campaign-recipient-preview-row,
 	.template-builder-shell,
 	.template-builder-section,
+	.template-builder-media-panel,
+	.template-builder-media-upload,
+	.template-builder-media-preview,
 	.template-media-upload-box,
 	.template-media-preview-card,
 	.template-media-preview-meta,
@@ -184,6 +212,9 @@
 	.wam-phone__top,
 	.wam-phone__option,
 	.operations-header,
+	.operations-summary-strip,
+	.operations-quick-actions,
+	.operations-workspace-metrics,
 	.operations-automation-panel,
 	.operations-automation-row,
 	.operations-metric-card,
@@ -197,7 +228,17 @@
 	.inbox-selected-file,
 	.inbox-emoji-picker,
 	.metric-panel,
-	.metric-panel__icon
+	.metric-panel__icon,
+	.ai-lab-sidebar-card,
+	.ai-lab-chat-card,
+	.ai-lab-debug-card,
+	.ai-lab-meta-box,
+	.ai-lab-fixture-card,
+	.ai-lab-debug-item,
+	.ai-lab-inline-menu,
+	.ai-lab-inline-menu__option,
+	.ai-lab-persisted-run-item,
+	.ai-lab-session-banner
 ) {
 	background: var(--ui-surface) !important;
 	border-color: var(--ui-border) !important;
@@ -223,6 +264,8 @@
 	.wam-menu-item,
 	.wam-preview,
 	.campaign-recipient-preview-table,
+	.campaign-product-option-row:hover,
+	.campaign-recipient-preview-row--head,
 	.tenant-admin-table-wrap,
 	.customer-table-scroll
 ) {
@@ -1066,6 +1109,57 @@
 	background: transparent !important;
 	border-color: transparent !important;
 	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.template-builder-media-panel,
+	.template-builder-media-upload,
+	.template-builder-media-preview,
+	.template-builder-buttons-panel,
+	.template-builder-button-editor,
+	.campaign-product-filter-toggle,
+	.campaign-product-multiselect,
+	.campaign-product-option-empty,
+	.campaign-recipient-preview-box,
+	.campaign-recipient-preview-table,
+	.campaign-recipient-preview-row
+) {
+	background: var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.template-builder-media-status,
+	.campaign-product-option-row,
+	.campaign-recipient-preview-pagination span,
+	.campaign-recipient-preview-empty
+) {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.template-builder-media-status strong,
+	.campaign-segment-summary-card strong,
+	.campaign-recipient-preview-head strong,
+	.campaign-recipient-preview-page-indicator
+) {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.template-builder-media-status--success,
+	.template-builder-media-status--success strong
+) {
+	color: var(--ui-success) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.template-builder-media-status--warning,
+	.template-builder-media-status--warning strong
+) {
+	color: var(--ui-warning) !important;
 }
 
 .dark .admin-shell .admin-content :where(

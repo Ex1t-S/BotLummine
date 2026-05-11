@@ -703,7 +703,7 @@ export default function TemplateBuilderPanel({
 						</label>
 					) : ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) ? (
 						<div
-							className="field"
+							className="field template-builder-media-panel"
 							style={{
 								display: 'grid',
 								gap: 12,
@@ -717,6 +717,7 @@ export default function TemplateBuilderPanel({
 
 							<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
 								<label
+									className="template-builder-media-upload"
 									style={{
 										height: 42,
 										padding: '0 14px',
@@ -760,24 +761,34 @@ export default function TemplateBuilderPanel({
 							</div>
 
 							{form.headerAssetHandle ? (
-								<div style={{ fontSize: 12, color: '#475569' }}>
+								<div
+									className="template-builder-media-status template-builder-media-status--success"
+									style={{ fontSize: 12, color: '#475569' }}
+								>
 									Header handle listo: <strong>{form.headerAssetHandle}</strong>
 								</div>
 							) : (
-								<div style={{ fontSize: 12, color: '#b45309' }}>
+								<div
+									className="template-builder-media-status template-builder-media-status--warning"
+									style={{ fontSize: 12, color: '#b45309' }}
+								>
 									Para templates con {form.headerType}, Meta exige un <strong>header_handle</strong> de
 									ejemplo.
 								</div>
 							)}
 
 							{form.headerMediaId ? (
-								<div style={{ fontSize: 12, color: '#475569' }}>
+								<div
+									className="template-builder-media-status template-builder-media-status--success"
+									style={{ fontSize: 12, color: '#475569' }}
+								>
 									Media ID guardado: <strong>{form.headerMediaId}</strong>
 								</div>
 							) : null}
 
 							{form.headerMediaPreviewUrl ? (
 								<div
+									className="template-builder-media-preview"
 									style={{
 										borderRadius: 14,
 										border: '1px solid #e5e7eb',
@@ -815,7 +826,10 @@ export default function TemplateBuilderPanel({
 									)}
 								</div>
 							) : (
-								<div style={{ fontSize: 12, color: '#64748b' }}>
+								<div
+									className="template-builder-media-status"
+									style={{ fontSize: 12, color: '#64748b' }}
+								>
 									Subí el archivo y el editor va a intentar guardar tanto el media id como el
 									header handle.
 								</div>
