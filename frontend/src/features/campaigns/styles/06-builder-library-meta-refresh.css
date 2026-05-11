@@ -616,9 +616,132 @@
 	line-height: 1.45;
 }
 
+.campaign-composer-statusbar {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+	gap: 14px;
+	align-items: stretch;
+}
+
+.campaign-composer-statusbar__metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.campaign-composer-statusbar__next {
+	display: grid;
+	align-content: center;
+	gap: 4px;
+	min-width: 220px;
+	padding: 12px 14px;
+	border: 1px solid #bae6fd;
+	border-radius: 14px;
+	background: #f0f9ff;
+}
+
+.campaign-composer-statusbar__next span {
+	color: #0369a1;
+	font-size: 0.75rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.campaign-composer-statusbar__next strong {
+	color: #0f172a;
+	font-size: 0.98rem;
+	font-weight: 900;
+}
+
+.campaign-filter-block {
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid #e5e7eb;
+	border-radius: 16px;
+	background: #f8fafc;
+}
+
+.campaign-filter-block__head {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	align-items: flex-start;
+}
+
+.campaign-filter-block__head strong {
+	color: #0f172a;
+	font-size: 0.95rem;
+	font-weight: 900;
+}
+
+.campaign-filter-block__head span {
+	max-width: 420px;
+	color: #64748b;
+	font-size: 0.82rem;
+	font-weight: 700;
+	line-height: 1.45;
+	text-align: right;
+}
+
+.campaign-send-mode {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.campaign-send-mode__option {
+	display: grid;
+	gap: 5px;
+	padding: 13px 14px;
+	border: 1px solid #dbe4f0;
+	border-radius: 14px;
+	background: #fff;
+	color: #0f172a;
+	text-align: left;
+	cursor: pointer;
+}
+
+.campaign-send-mode__option strong {
+	font-size: 0.94rem;
+	font-weight: 900;
+}
+
+.campaign-send-mode__option span {
+	color: #64748b;
+	font-size: 0.82rem;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
+.campaign-send-mode__option.is-active {
+	border-color: #38bdf8;
+	background: #f0f9ff;
+	box-shadow: inset 3px 0 0 #38bdf8;
+}
+
+.campaign-review-grid--checklist .campaign-review-card.is-pending {
+	border-color: #fed7aa;
+	background: #fff7ed;
+}
+
 @media (max-width: 1100px) {
 	.campaign-variable-mapper-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.campaign-composer-statusbar,
+	.campaign-composer-statusbar__metrics,
+	.campaign-send-mode {
+		grid-template-columns: 1fr;
+	}
+
+	.campaign-filter-block__head {
+		display: grid;
+	}
+
+	.campaign-filter-block__head span {
+		text-align: left;
 	}
 }
 

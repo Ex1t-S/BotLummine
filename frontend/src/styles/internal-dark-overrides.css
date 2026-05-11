@@ -580,6 +580,9 @@
 	.campaign-custom-audience-card,
 	.campaign-custom-audience-preview,
 	.campaign-builder-section,
+	.campaign-composer-statusbar,
+	.campaign-composer-statusbar__next,
+	.campaign-filter-block,
 	.campaign-helper-box,
 	.campaign-variable-box,
 	.campaign-variable-mapper-card,
@@ -658,6 +661,7 @@
 	.campaign-composer-summary > div,
 	.campaign-variable-mapper-card,
 	.campaign-variable-preview-box,
+	.campaign-send-mode__option,
 	.campaign-customer-kpi,
 	.campaign-customer-meta span,
 	.campaign-toggle--card
@@ -674,6 +678,7 @@
 	.campaign-schedule-audience-choice__button.is-active,
 	.campaign-product-picker-trigger--field.open,
 	.campaign-choice-card.active,
+	.campaign-send-mode__option.is-active,
 	.campaign-list-card.selected,
 	.template-list-card.selected,
 	.template-builder-section.is-active,
@@ -798,6 +803,9 @@
 	.template-list-card-title strong,
 	.template-builder-section-head h4,
 	.campaign-step-head h4,
+	.campaign-composer-statusbar__next strong,
+	.campaign-filter-block__head strong,
+	.campaign-send-mode__option strong,
 	.campaign-variable-mapper-head strong,
 	.campaign-custom-audience-intro h3,
 	.campaign-custom-audience-preview-title
@@ -819,6 +827,9 @@
 	.campaign-list-body,
 	.campaign-helper-text,
 	.campaign-helper-inline-text,
+	.campaign-composer-statusbar__next span,
+	.campaign-filter-block__head span,
+	.campaign-send-mode__option span,
 	.campaign-variable-mapper-head span,
 	.campaign-custom-audience-preview-subtitle
 ) {

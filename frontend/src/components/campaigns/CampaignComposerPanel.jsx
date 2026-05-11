@@ -214,12 +214,12 @@ const VARIABLE_SOURCE_OPTIONS = [
 	{ value: 'first_name', label: 'Primer nombre' },
 	{ value: 'customer_name', label: 'Nombre cliente' },
 	{ value: 'customer_email', label: 'Email' },
-	{ value: 'phone', label: 'Telefono' },
+	{ value: 'phone', label: 'Teléfono' },
 	{ value: 'wa_id', label: 'WhatsApp ID' },
 	{ value: 'product_name', label: 'Producto principal' },
 	{ value: 'order_count', label: 'Cantidad de compras' },
-	{ value: 'last_order_id', label: 'Ultimo pedido ID' },
-	{ value: 'last_order_number', label: 'Ultimo pedido numero' },
+	{ value: 'last_order_id', label: 'Último pedido ID' },
+	{ value: 'last_order_number', label: 'Último pedido número' },
 	{ value: 'total_spent', label: 'Total gastado bruto' },
 	{ value: 'total_spent_label', label: 'Total gastado formateado' },
 	{ value: 'size', label: 'Talle' },
@@ -913,6 +913,23 @@ export default function CampaignComposerPanel({
 		]
 	);
 	const campaignReadyToCreate = campaignChecklist.every((item) => item.ok);
+	const nextActionLabel = useMemo(() => {
+		if (!selectedTemplate?.id) return 'Elegir plantilla';
+		if (requiresHeaderMedia && needsHeaderMediaUpload) return 'Cargar encabezado';
+		if (form.audienceMode === 'customers' && !recipients.length) return 'Seleccionar destinatarios';
+		if (form.audienceMode !== 'customers' && !recipients.length) return 'Cargar destinatarios';
+		if (templatePlaceholders.length && variableMappingError) return 'Completar variables';
+		return form.sendNow ? 'Crear y enviar ahora' : 'Crear campaña';
+	}, [
+		selectedTemplate?.id,
+		requiresHeaderMedia,
+		needsHeaderMediaUpload,
+		form.audienceMode,
+		form.sendNow,
+		recipients.length,
+		templatePlaceholders.length,
+		variableMappingError,
+	]);
 
 	const selectedCustomerCount = selectedCustomers.length;
 
@@ -1431,48 +1448,34 @@ export default function CampaignComposerPanel({
 				<div>
 					<h3>Crear campaña</h3>
 					<p>
-						Arma el envio en pasos: plantilla, audiencia, variables y revision final.
+						Armá el envío en pasos: plantilla, audiencia, variables y revisión final.
 					</p>
 				</div>
 
-				<div className="campaign-builder-top-summary">
-					<div className="campaign-builder-top-summary-item">
-						<strong>{selectedTemplate?.name || 'Sin plantilla'}</strong>
-						<span>plantilla elegida</span>
-					</div>
-					<div className="campaign-builder-top-summary-item">
-						<strong>{formatCompactNumber(recipients.length)}</strong>
-						<span>destinatarios</span>
-					</div>
-					<div className="campaign-builder-top-summary-item">
-						<strong>USD {estimatedCost.toFixed(2)}</strong>
-						<span>costo estimado</span>
-					</div>
-				</div>
-
-				<div className="campaign-helper-box">
-					<div className="campaign-helper-text">
-						Estado de preparacion. Completa los pendientes antes de crear o enviar.
-					</div>
-
-					<div className="campaign-review-grid">
-						{campaignChecklist.map((item) => (
-							<div key={`clean-${item.id}`} className="campaign-review-card">
-								<strong>{sanitizeCampaignCopy(item.label)}</strong>
-								<span>{sanitizeCampaignCopy(item.ok ? item.readyText : item.pendingText)}</span>
-							</div>
-						))}
-					</div>
-
-					{campaignReadyToCreate ? (
-						<div className="campaign-inline-success">
-							La campaña está lista para crearse.
+				<div className="campaign-composer-statusbar" aria-live="polite">
+					<div className="campaign-composer-statusbar__metrics">
+						<div className="campaign-builder-top-summary-item">
+							<strong>{selectedTemplate?.name || 'Sin plantilla'}</strong>
+							<span>plantilla</span>
 						</div>
-					) : (
-						<div className="campaign-inline-warning">
-							Completa los puntos pendientes antes de continuar.
+						<div className="campaign-builder-top-summary-item">
+							<strong>{formatCompactNumber(recipients.length)}</strong>
+							<span>destinatarios</span>
 						</div>
-					)}
+						<div className="campaign-builder-top-summary-item">
+							<strong>{templatePlaceholders.length ? (variableMappingError ? 'Pendientes' : 'Listas') : 'Sin variables'}</strong>
+							<span>variables</span>
+						</div>
+						<div className="campaign-builder-top-summary-item">
+							<strong>USD {estimatedCost.toFixed(2)}</strong>
+							<span>estimado</span>
+						</div>
+					</div>
+
+					<div className="campaign-composer-statusbar__next">
+						<span>{campaignReadyToCreate ? 'Listo para crear' : 'Próximo paso'}</span>
+						<strong>{nextActionLabel}</strong>
+					</div>
 				</div>
 
 			</div>
@@ -1613,79 +1616,12 @@ export default function CampaignComposerPanel({
 					) : null}
 				</div>
 
-				{templatePlaceholders.length ? (
-					<div className="campaign-builder-section campaign-builder-section--variables">
-						<div className="campaign-step-head">
-							<div>
-								<span className="campaign-step-badge">3. Variables</span>
-								<h4>Asigna cada variable</h4>
-								<p>
-									Esta plantilla usa {templatePlaceholders.length} variable{templatePlaceholders.length > 1 ? 's' : ''}. Define de donde sale cada valor.
-								</p>
-							</div>
-							<div className="campaign-customer-kpi campaign-customer-kpi--large">
-								<strong>{templatePlaceholders.length}</strong>
-								<span>variables</span>
-							</div>
-						</div>
-
-						<div className="campaign-variable-mapper-grid">
-							{templatePlaceholders.map((placeholder) => {
-								const config = variableMapping?.[placeholder] || { source: 'fixed', fixedValue: '' };
-								const sampleValue = sampleResolvedVariables?.[placeholder] || '';
-
-								return (
-									<div key={placeholder} className="campaign-variable-mapper-card">
-										<div className="campaign-variable-mapper-head">
-											<strong>{`{{${placeholder}}}`}</strong>
-											<span>
-												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Sin ejemplo todavía'}
-											</span>
-										</div>
-
-										<label className="field">
-											<span>Tomar valor desde</span>
-											<select
-												value={config.source}
-												onChange={(event) =>
-													updateVariableMapping(placeholder, { source: event.target.value })
-												}
-											>
-												{VARIABLE_SOURCE_OPTIONS.map((option) => (
-													<option key={option.value} value={option.value}>
-														{option.label}
-													</option>
-												))}
-											</select>
-										</label>
-
-										{config.source === 'fixed' ? (
-											<label className="field">
-												<span>Valor fijo</span>
-												<input
-													value={config.fixedValue || ''}
-													onChange={(event) =>
-														updateVariableMapping(placeholder, {
-															fixedValue: event.target.value,
-														})
-													}
-													placeholder={`Valor para {{${placeholder}}}`}
-												/>
-											</label>
-										) : null}
-									</div>
-								);
-							})}
-						</div>
-					</div>
-				) : null}
-
 				{form.audienceMode === 'customers' ? (
 					<div className="campaign-builder-section campaign-builder-section--audience">
 						<div className="campaign-step-head">
 							<div>
 								<span className="campaign-step-badge">2. Audiencia</span>
-								<h4>Elige a quien escribirle</h4>
+								<h4>Elige a quién escribirle</h4>
 								<p>
 									Filtrá clientes, revisá el alcance y seleccioná los destinatarios de la campaña.
 								</p>
@@ -1696,72 +1632,88 @@ export default function CampaignComposerPanel({
 							</div>
 						</div>
 
-						<div className="campaign-builder-grid campaign-builder-grid--2">
-							<label className="field">
-								<span>Buscar cliente</span>
-								<input
-									value={customerFilters.q}
-									onChange={(event) => updateCustomerFilter('q', event.target.value)}
-									placeholder="Nombre, mail o teléfono"
-								/>
-							</label>
+						<div className="campaign-filter-block">
+							<div className="campaign-filter-block__head">
+								<strong>Buscar</strong>
+								<span>Encontrá clientes por dato directo o número de pedido.</span>
+							</div>
+							<div className="campaign-builder-grid campaign-builder-grid--2">
+								<label className="field">
+									<span>Buscar cliente</span>
+									<input
+										value={customerFilters.q}
+										onChange={(event) => updateCustomerFilter('q', event.target.value)}
+										placeholder="Nombre, mail o teléfono"
+									/>
+								</label>
 
-							<label className="field">
-								<span>Nro. de pedido</span>
-								<input
-									value={customerFilters.orderNumber}
-									onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
-									placeholder="Ej. 23621"
-								/>
-							</label>
+								<label className="field">
+									<span>Nro. de pedido</span>
+									<input
+										value={customerFilters.orderNumber}
+										onChange={(event) => updateCustomerFilter('orderNumber', event.target.value)}
+										placeholder="Ej. 23621"
+									/>
+								</label>
+							</div>
 						</div>
 
-						<div className="campaign-builder-grid campaign-builder-grid--filters">
-							<label className="field">
-								<span>Gasto minimo</span>
-								<input
-									type="number"
-									min="0"
-									value={customerFilters.minSpent}
-									onChange={(event) => updateCustomerFilter('minSpent', event.target.value)}
-									placeholder="0"
-								/>
-							</label>
+						<div className="campaign-filter-block">
+							<div className="campaign-filter-block__head">
+								<strong>Compras</strong>
+								<span>Acotá la audiencia por fecha, gasto o estado de pago.</span>
+							</div>
+							<div className="campaign-builder-grid campaign-builder-grid--filters">
+								<label className="field">
+									<span>Gasto mínimo</span>
+									<input
+										type="number"
+										min="0"
+										value={customerFilters.minSpent}
+										onChange={(event) => updateCustomerFilter('minSpent', event.target.value)}
+										placeholder="0"
+									/>
+								</label>
 
-							<label className="field">
-								<span>Compra desde</span>
-								<input
-									type="date"
-									value={customerFilters.dateFrom}
-									onChange={(event) => updateCustomerFilter('dateFrom', event.target.value)}
-								/>
-							</label>
+								<label className="field">
+									<span>Compra desde</span>
+									<input
+										type="date"
+										value={customerFilters.dateFrom}
+										onChange={(event) => updateCustomerFilter('dateFrom', event.target.value)}
+									/>
+								</label>
 
-							<label className="field">
-								<span>Compra hasta</span>
-								<input
-									type="date"
-									value={customerFilters.dateTo}
-									onChange={(event) => updateCustomerFilter('dateTo', event.target.value)}
-								/>
-							</label>
+								<label className="field">
+									<span>Compra hasta</span>
+									<input
+										type="date"
+										value={customerFilters.dateTo}
+										onChange={(event) => updateCustomerFilter('dateTo', event.target.value)}
+									/>
+								</label>
 
-							<label className="field">
-								<span>Pago</span>
-								<select
-									value={customerFilters.paymentStatus}
-									onChange={(event) => updateCustomerFilter('paymentStatus', event.target.value)}
-								>
-									{PAYMENT_STATUS_OPTIONS.map((option) => (
-										<option key={option.value || 'all'} value={option.value}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</label>
+								<label className="field">
+									<span>Pago</span>
+									<select
+										value={customerFilters.paymentStatus}
+										onChange={(event) => updateCustomerFilter('paymentStatus', event.target.value)}
+									>
+										{PAYMENT_STATUS_OPTIONS.map((option) => (
+											<option key={option.value || 'all'} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</select>
+								</label>
+							</div>
 						</div>
 
-						<div className="campaign-product-filter-group">
+						<div className="campaign-filter-block campaign-product-filter-group">
+							<div className="campaign-filter-block__head">
+								<strong>Productos y exclusiones</strong>
+								<span>Marcá productos comprados o evitá repetir plantillas ya enviadas.</span>
+							</div>
 							<label className="campaign-toggle">
 								<input
 									type="checkbox"
@@ -1904,7 +1856,7 @@ export default function CampaignComposerPanel({
 								onClick={clearFilteredSelection}
 								disabled={!selectedCustomerCount}
 							>
-								Quitar seleccion masiva
+								Limpiar selección
 							</button>
 						</div>
 
@@ -1932,7 +1884,7 @@ export default function CampaignComposerPanel({
 
 						<div className="campaign-helper-box">
 							<div className="campaign-helper-text">
-								La seleccion se hace segun los filtros actuales para mantener el flujo liviano.
+								La selección se hace según los filtros actuales para mantener el flujo liviano.
 							</div>
 
 							{selectedProductFilters.length ? (
@@ -1954,9 +1906,13 @@ export default function CampaignComposerPanel({
 								<div className="campaign-inline-success">
 									Se seleccionaron {formatCompactNumber(bulkSelectionInfo.count)} cliente(s) para esta campaña.
 								</div>
+							) : totalFoundCount > 0 ? (
+								<div className="campaign-inline-warning">
+									Hay clientes encontrados, pero todavía no elegiste destinatarios. Usá el botón de selección para agregarlos a la campaña.
+								</div>
 							) : (
 								<div className="campaign-inline-warning">
-									Todavia no seleccionaste destinatarios. Filtra y despues usa el boton de seleccion.
+									Actualizá la audiencia para ver clientes y seleccionar destinatarios.
 								</div>
 							)}
 						</div>
@@ -1989,14 +1945,113 @@ export default function CampaignComposerPanel({
 					</div>
 				)}
 
+				{templatePlaceholders.length ? (
+					<div className="campaign-builder-section campaign-builder-section--variables">
+						<div className="campaign-step-head">
+							<div>
+								<span className="campaign-step-badge">3. Variables</span>
+								<h4>Asigna cada variable</h4>
+								<p>
+									Esta plantilla usa {templatePlaceholders.length} variable{templatePlaceholders.length > 1 ? 's' : ''}. Definí de dónde sale cada valor.
+								</p>
+							</div>
+							<div className="campaign-customer-kpi campaign-customer-kpi--large">
+								<strong>{templatePlaceholders.length}</strong>
+								<span>variables</span>
+							</div>
+						</div>
+
+						{recipients.length ? (
+							<div className="campaign-inline-success">
+								Los ejemplos se calculan con el primer destinatario seleccionado.
+							</div>
+						) : (
+							<div className="campaign-inline-warning">
+								Seleccioná destinatarios para ver ejemplos reales de cada variable.
+							</div>
+						)}
+
+						<div className="campaign-variable-mapper-grid">
+							{templatePlaceholders.map((placeholder) => {
+								const config = variableMapping?.[placeholder] || { source: 'fixed', fixedValue: '' };
+								const sampleValue = sampleResolvedVariables?.[placeholder] || '';
+
+								return (
+									<div key={placeholder} className="campaign-variable-mapper-card">
+										<div className="campaign-variable-mapper-head">
+											<strong>{`{{${placeholder}}}`}</strong>
+											<span>
+												{sampleValue ? `Ejemplo: ${sampleValue}` : 'Sin ejemplo todavía'}
+											</span>
+										</div>
+
+										<label className="field">
+											<span>Tomar valor desde</span>
+											<select
+												value={config.source}
+												onChange={(event) =>
+													updateVariableMapping(placeholder, { source: event.target.value })
+												}
+											>
+												{VARIABLE_SOURCE_OPTIONS.map((option) => (
+													<option key={option.value} value={option.value}>
+														{option.label}
+													</option>
+												))}
+											</select>
+										</label>
+
+										{config.source === 'fixed' ? (
+											<label className="field">
+												<span>Valor fijo</span>
+												<input
+													value={config.fixedValue || ''}
+													onChange={(event) =>
+														updateVariableMapping(placeholder, {
+															fixedValue: event.target.value,
+														})
+													}
+													placeholder={`Valor para {{${placeholder}}}`}
+												/>
+											</label>
+										) : null}
+									</div>
+								);
+							})}
+						</div>
+					</div>
+				) : null}
+
 				<div className="campaign-builder-section campaign-builder-section--review">
 					<div className="campaign-step-head">
 						<div>
-							<span className="campaign-step-badge">4. Revision</span>
-							<h4>Ultimo chequeo</h4>
+							<span className="campaign-step-badge">4. Revisión</span>
+							<h4>Último chequeo</h4>
 							<p>Confirmá que la campaña esté lista antes de crearla o enviarla.</p>
 						</div>
 					</div>
+
+					<div className="campaign-review-grid campaign-review-grid--checklist">
+						{campaignChecklist.map((item) => (
+							<div
+								key={`review-${item.id}`}
+								className={`campaign-review-card ${item.ok ? 'is-ready' : 'is-pending'}`.trim()}
+							>
+								<strong>{sanitizeCampaignCopy(item.label)}</strong>
+								<span>{sanitizeCampaignCopy(item.ok ? item.readyText : item.pendingText)}</span>
+							</div>
+						))}
+					</div>
+
+					{campaignReadyToCreate ? (
+						<div className="campaign-inline-success">
+							La campaña está lista para crearse.
+						</div>
+					) : (
+						<div className="campaign-inline-warning">
+							Completá los puntos pendientes antes de continuar.
+						</div>
+					)}
 
 					<div className="campaign-review-grid">
 						<div className="campaign-review-card">
@@ -2073,9 +2128,9 @@ export default function CampaignComposerPanel({
 							<div className="campaign-recipient-preview-table">
 								<div className="campaign-recipient-preview-row campaign-recipient-preview-row--head">
 									<span>Destinatario</span>
-									<span>Telefono</span>
+									<span>Teléfono</span>
 									<span>Producto</span>
-									<span>Accion</span>
+									<span>Acción</span>
 								</div>
 
 								{previewCustomers.length ? (
@@ -2100,7 +2155,7 @@ export default function CampaignComposerPanel({
 									))
 								) : (
 									<div className="campaign-recipient-preview-empty">
-										No hay destinatarios que coincidan con la busqueda.
+										No hay destinatarios que coincidan con la búsqueda.
 									</div>
 								)}
 							</div>
@@ -2145,16 +2200,24 @@ export default function CampaignComposerPanel({
 							</div>
 						</div>
 					) : null}
-					<label className="campaign-toggle">
-						<input
-							type="checkbox"
-							checked={form.sendNow}
-							onChange={(event) =>
-								setForm((current) => ({ ...current, sendNow: event.target.checked }))
-							}
-						/>
-						<span>{form.sendNow ? 'Crear y enviar ahora' : 'Crear como borrador'}</span>
-					</label>
+					<div className="campaign-send-mode" role="group" aria-label="Modo de creación">
+						<button
+							type="button"
+							className={`campaign-send-mode__option ${!form.sendNow ? 'is-active' : ''}`.trim()}
+							onClick={() => setForm((current) => ({ ...current, sendNow: false }))}
+						>
+							<strong>Guardar borrador</strong>
+							<span>Deja la campaña lista para revisar o lanzar después.</span>
+						</button>
+						<button
+							type="button"
+							className={`campaign-send-mode__option ${form.sendNow ? 'is-active' : ''}`.trim()}
+							onClick={() => setForm((current) => ({ ...current, sendNow: true }))}
+						>
+							<strong>Crear y enviar ahora</strong>
+							<span>Crea la campaña y dispara el envío al finalizar.</span>
+						</button>
+					</div>
 
 					{submitError ? <div className="campaign-inline-error">{submitError}</div> : null}
 
