@@ -4,7 +4,7 @@ import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
 import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { DEFAULT_WORKSPACE_ID, requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
-const SHOPIFY_DEFAULT_SCOPES = 'read_products,read_orders,read_customers,read_fulfillments,read_inventory,read_locations,read_checkouts';
+const SHOPIFY_DEFAULT_SCOPES = 'read_products,read_orders,read_customers,read_fulfillments,read_inventory,read_locations,read_checkouts,read_themes';
 const SHOPIFY_ALLOWED_SCOPES = new Set([
 	'read_products',
 	'read_orders',
@@ -12,7 +12,8 @@ const SHOPIFY_ALLOWED_SCOPES = new Set([
 	'read_fulfillments',
 	'read_inventory',
 	'read_locations',
-	'read_checkouts'
+	'read_checkouts',
+	'read_themes'
 ]);
 const SHOPIFY_WEBHOOK_TOPICS = [
 	'orders/create',

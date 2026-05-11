@@ -15,7 +15,8 @@ import {
 } from '../services/catalog/catalog.service.js';
 import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
 import { generateWorkspaceBusinessContextDraft } from '../services/workspaces/workspace-context-draft.service.js';
-import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
+import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '../services/commerce/active-commerce.service.js';
+import { getShopifyClient } from '../services/shopify/client.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -78,6 +79,159 @@ function normalizeAssetUrl(value) {
 	if (!raw || typeof raw !== 'string') return null;
 	if (/^\/\//.test(raw)) return `https:${raw}`;
 	return raw;
+}
+
+function pickShopifyBrandLogo(brand = {}) {
+	return normalizeAssetUrl(
+		brand?.logo?.image?.url ||
+		brand?.logo?.url ||
+		brand?.squareLogo?.image?.url ||
+		brand?.squareLogo?.url ||
+		null
+	);
+}
+
+function pickShopifyBrandColor(color = {}) {
+	return normalizeString(color?.background || color?.foreground || color?.hex || '');
+}
+
+function resolveUrlMaybeRelative(value = '', baseUrl = '') {
+	const raw = normalizeAssetUrl(value);
+	if (!raw) return null;
+	try {
+		return new URL(raw, baseUrl || undefined).toString();
+	} catch {
+		return raw;
+	}
+}
+
+function readHtmlAttribute(tag = '', attribute = '') {
+	const pattern = new RegExp(`${attribute}\\s*=\\s*([\"'])(.*?)\\1`, 'i');
+	return tag.match(pattern)?.[2] || '';
+}
+
+function extractLogoFromStorefrontHtml(html = '', baseUrl = '') {
+	const candidates = [];
+	const pushCandidate = (url, score = 0) => {
+		const resolved = resolveUrlMaybeRelative(url, baseUrl);
+		if (!resolved) return;
+		candidates.push({ url: resolved, score });
+	};
+
+	for (const match of String(html || '').matchAll(/<link\b[^>]*>/gi)) {
+		const tag = match[0];
+		const rel = readHtmlAttribute(tag, 'rel').toLowerCase();
+		const href = readHtmlAttribute(tag, 'href');
+		if (!href) continue;
+		if (rel.includes('apple-touch-icon')) pushCandidate(href, 90);
+		else if (rel.includes('icon')) pushCandidate(href, 80);
+	}
+
+	for (const match of String(html || '').matchAll(/<meta\b[^>]*>/gi)) {
+		const tag = match[0];
+		const property = (readHtmlAttribute(tag, 'property') || readHtmlAttribute(tag, 'name')).toLowerCase();
+		const content = readHtmlAttribute(tag, 'content');
+		if (!content) continue;
+		if (property === 'og:logo') pushCandidate(content, 100);
+		else if (property === 'og:image' || property === 'twitter:image') pushCandidate(content, 40);
+	}
+
+	for (const match of String(html || '').matchAll(/https?:\/\/[^"'\s<>]+/gi)) {
+		const url = match[0];
+		if (/logo|brand|favicon|icon/i.test(url) && /\.(png|jpe?g|webp|svg|ico)(\?|$)/i.test(url)) {
+			pushCandidate(url, /logo|brand/i.test(url) ? 95 : 70);
+		}
+	}
+
+	const seen = new Set();
+	return candidates
+		.filter((item) => {
+			if (seen.has(item.url)) return false;
+			seen.add(item.url);
+			return true;
+		})
+		.sort((a, b) => b.score - a.score)[0]?.url || null;
+}
+
+async function fetchStorefrontLogo(storeUrl = '') {
+	if (!storeUrl) return null;
+	try {
+		const response = await axios.get(storeUrl, {
+			timeout: 20000,
+			headers: {
+				'User-Agent': process.env.SHOPIFY_USER_AGENT || 'Multi tenant WhatsApp assistant',
+				Accept: 'text/html,application/xhtml+xml',
+			},
+		});
+		return extractLogoFromStorefrontHtml(response.data, storeUrl);
+	} catch {
+		return null;
+	}
+}
+
+function shopifyFileUrl(value = '', shopDomain = '') {
+	const raw = normalizeString(value);
+	if (!raw) return null;
+	if (/^https?:\/\//i.test(raw) || /^\/\//.test(raw)) return normalizeAssetUrl(raw);
+	if (raw.startsWith('shopify://shop_images/')) {
+		const fileName = raw.replace('shopify://shop_images/', '').split('/').map(encodeURIComponent).join('/');
+		return `https://${shopDomain}/cdn/shop/files/${fileName}`;
+	}
+	if (/\.(png|jpe?g|webp|svg|gif|ico)(\?|$)/i.test(raw)) {
+		const fileName = raw.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+		return `https://${shopDomain}/cdn/shop/files/${fileName}`;
+	}
+	return null;
+}
+
+function extractLogoFromThemeSettings(settings = {}, shopDomain = '') {
+	const candidates = [];
+	const walk = (value, path = []) => {
+		if (typeof value === 'string') {
+			const joinedPath = path.join('.').toLowerCase();
+			const url = shopifyFileUrl(value, shopDomain);
+			if (!url) return;
+			let score = 0;
+			if (joinedPath.includes('logo')) score += 100;
+			if (joinedPath.includes('brand')) score += 80;
+			if (joinedPath.includes('header')) score += 40;
+			if (joinedPath.includes('image')) score += 20;
+			if (joinedPath.includes('favicon')) score -= 40;
+			if (/logo|brand/i.test(value)) score += 30;
+			candidates.push({ url, score });
+			return;
+		}
+		if (!value || typeof value !== 'object') return;
+		for (const [key, nextValue] of Object.entries(value)) {
+			walk(nextValue, [...path, key]);
+		}
+	};
+
+	walk(settings);
+	return candidates.sort((a, b) => b.score - a.score)[0]?.url || null;
+}
+
+async function fetchShopifyThemeLogo(client, shopDomain = '') {
+	try {
+		const themesResponse = await client.get('/themes.json');
+		const themes = Array.isArray(themesResponse.data?.themes) ? themesResponse.data.themes : [];
+		const theme = themes.find((item) => item.role === 'main') || themes[0];
+		if (!theme?.id) return null;
+
+		const assetResponse = await client.get(`/themes/${theme.id}/assets.json`, {
+			params: { 'asset[key]': 'config/settings_data.json' },
+		});
+		const rawSettings = assetResponse.data?.asset?.value;
+		const parsed = typeof rawSettings === 'string' ? JSON.parse(rawSettings) : rawSettings;
+		return extractLogoFromThemeSettings(parsed, shopDomain);
+	} catch (error) {
+		if (error?.response?.status === 403) {
+			const permissionError = new Error('Shopify no permite leer el theme. Reinstalá la app para aceptar el permiso read_themes y después volvé a importar el logo.');
+			permissionError.status = 403;
+			throw permissionError;
+		}
+		return null;
+	}
 }
 
 function getDatabaseHostFingerprint() {
@@ -589,13 +743,17 @@ export async function syncWorkspaceBranding(req, res, next) {
 		const workspaceId = requireRequestWorkspaceId(req);
 		assertWorkspaceAdmin(req, workspaceId);
 
-		const provider = normalizeCommerceProvider(req.body?.provider || req.query?.provider || 'TIENDANUBE');
-		if (provider !== 'TIENDANUBE') {
+		const requestedProvider = normalizeCommerceProvider(req.body?.provider || req.query?.provider || '');
+		if ((req.body?.provider || req.query?.provider) && !requestedProvider) {
 			return res.status(400).json({
 				ok: false,
-				error: 'Por ahora la importacion automatica de branding esta disponible para TIENDANUBE.',
+				error: 'Proveedor invalido. Usa TIENDANUBE o SHOPIFY.',
 			});
 		}
+		const activeConnection = requestedProvider
+			? null
+			: await resolveActiveCommerceConnection({ workspaceId });
+		const provider = requestedProvider || activeConnection.provider;
 
 		const connection = await prisma.commerceConnection.findUnique({
 			where: {
@@ -617,32 +775,70 @@ export async function syncWorkspaceBranding(req, res, next) {
 		if (!storeId || !accessToken) {
 			return res.status(400).json({
 				ok: false,
-				error: 'Conecta Tienda Nube antes de importar branding.',
+				error: provider === 'SHOPIFY'
+					? 'Conecta Shopify antes de importar branding.'
+					: 'Conecta Tienda Nube antes de importar branding.',
 			});
 		}
 
-		const apiVersion = process.env.TIENDANUBE_API_VERSION || 'v1';
-		const response = await axios.get(
-			`https://api.tiendanube.com/${apiVersion}/${storeId}/store`,
-			{
-				headers: {
-					Authentication: `bearer ${accessToken}`,
-					'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Multi tenant WhatsApp assistant',
-				},
-				timeout: 20000,
-			}
-		);
+		let store = {};
+		let storeName = null;
+		let storeUrl = null;
+		let logoUrl = null;
+		let primaryColor = null;
+		let secondaryColor = null;
+		let accentColor = null;
 
-		const store = response.data || {};
-		const storeName = pickLocalized(store.name) || store.business_name || null;
-		const storeUrl =
-			(Array.isArray(store.domains) && store.domains[0] ? `https://${store.domains[0]}` : null) ||
-			(store.original_domain ? `https://${store.original_domain}` : null);
-		const logoUrl = normalizeAssetUrl(store.logo);
-		const colors = store.colors || store.theme?.colors || {};
-		const primaryColor = colors.primary || colors.main || colors.brand || null;
-		const secondaryColor = colors.secondary || colors.background || null;
-		const accentColor = colors.accent || colors.button || null;
+		if (provider === 'SHOPIFY') {
+			const { client, config } = await getShopifyClient({ workspaceId });
+			const query = `
+				query ShopBranding {
+					shop {
+						name
+						myshopifyDomain
+						primaryDomain { url host }
+					}
+				}
+			`;
+			const response = await client.post('/graphql.json', { query });
+			if (response.data?.errors?.length) {
+				throw new Error(response.data.errors.map((item) => item.message).filter(Boolean).join(' ') || 'No se pudo leer el branding de Shopify.');
+			}
+			const shop = response.data?.data?.shop || {};
+			store = shop;
+			storeName = normalizeString(shop.name) || connection?.storeName || config.storeName || null;
+			storeUrl = shop.primaryDomain?.url || (shop.myshopifyDomain ? `https://${shop.myshopifyDomain}` : config.storeUrl);
+			logoUrl =
+				pickShopifyBrandLogo(shop.brand || {}) ||
+				await fetchShopifyThemeLogo(client, config.shopDomain) ||
+				await fetchStorefrontLogo(storeUrl);
+			primaryColor = pickShopifyBrandColor(shop.brand?.colors?.primary);
+			secondaryColor = pickShopifyBrandColor(shop.brand?.colors?.secondary);
+			accentColor = secondaryColor || primaryColor;
+		} else {
+			const apiVersion = process.env.TIENDANUBE_API_VERSION || 'v1';
+			const response = await axios.get(
+				`https://api.tiendanube.com/${apiVersion}/${storeId}/store`,
+				{
+					headers: {
+						Authentication: `bearer ${accessToken}`,
+						'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Multi tenant WhatsApp assistant',
+					},
+					timeout: 20000,
+				}
+			);
+
+			store = response.data || {};
+			storeName = pickLocalized(store.name) || store.business_name || null;
+			storeUrl =
+				(Array.isArray(store.domains) && store.domains[0] ? `https://${store.domains[0]}` : null) ||
+				(store.original_domain ? `https://${store.original_domain}` : null);
+			logoUrl = normalizeAssetUrl(store.logo);
+			const colors = store.colors || store.theme?.colors || {};
+			primaryColor = colors.primary || colors.main || colors.brand || null;
+			secondaryColor = colors.secondary || colors.background || null;
+			accentColor = colors.accent || colors.button || null;
+		}
 
 		await prisma.workspaceBranding.upsert({
 			where: { workspaceId },
@@ -695,6 +891,7 @@ export async function syncWorkspaceBranding(req, res, next) {
 				workspaceId,
 				provider,
 				externalStoreId: String(storeId),
+				shopDomain: provider === 'SHOPIFY' ? normalizeShopDomain(connection?.shopDomain || storeId) : null,
 				accessToken,
 				storeName,
 				storeUrl,
@@ -705,6 +902,7 @@ export async function syncWorkspaceBranding(req, res, next) {
 		const workspace = await buildWorkspacePayload(workspaceId);
 		return res.json({
 			ok: true,
+			provider,
 			branding: { storeName, storeUrl, logoUrl, primaryColor, secondaryColor, accentColor },
 			workspace,
 		});

@@ -883,15 +883,19 @@ export default function AdminPage({ defaultTab = '' }) {
 		}
 	}
 
-	async function handleBrandingSync() {
+	async function handleBrandingSync(provider = '') {
 		setSaving(true);
 		try {
-			const res = await api.post(`/admin/workspaces/${selectedWorkspaceId}/branding/sync`, { provider: 'TIENDANUBE' });
+			const normalizedProvider = String(provider || '').toUpperCase();
+			const res = await api.post(
+				`/admin/workspaces/${selectedWorkspaceId}/branding/sync`,
+				normalizedProvider ? { provider: normalizedProvider } : {}
+			);
 			const nextWorkspace = res.data.workspace || null;
 			setWorkspace(nextWorkspace);
 			setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 			await refreshMe();
-			showNotice('Branding importado desde Tienda Nube.');
+			showNotice(`Branding importado desde ${res.data.provider === 'SHOPIFY' ? 'Shopify' : 'Tienda Nube'}.`);
 		} catch (err) {
 			showError(err);
 		} finally {
@@ -1167,11 +1171,11 @@ export default function AdminPage({ defaultTab = '' }) {
 										<strong>{brandName}</strong>
 										<span>{brandStoreUrl || 'Tienda sin URL sincronizada'}</span>
 										{isShopifyCommerce ? (
-											<button type="button" disabled={saving || loading} onClick={() => handleCatalogSync()}>
-												{saving ? 'Sincronizando...' : 'Sincronizar catálogo Shopify'}
+											<button type="button" disabled={saving || loading} onClick={() => handleBrandingSync('SHOPIFY')}>
+												{saving ? 'Importando...' : 'Importar logo Shopify'}
 											</button>
 										) : (
-											<button type="button" disabled={saving || loading} onClick={handleBrandingSync}>
+											<button type="button" disabled={saving || loading} onClick={() => handleBrandingSync('TIENDANUBE')}>
 												{saving ? 'Importando...' : 'Importar logo Tienda Nube'}
 											</button>
 										)}
@@ -1278,12 +1282,15 @@ export default function AdminPage({ defaultTab = '' }) {
 								Conectar Tiendanube
 							</button>
 							{platformAdmin ? (
-								<button type="button" disabled={saving} onClick={handleBrandingSync}>
+								<button type="button" disabled={saving} onClick={() => handleBrandingSync('TIENDANUBE')}>
 									Importar branding
 								</button>
 							) : null}
 							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync()}>
 								Sincronizar catalogo
+							</button>
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleBrandingSync('SHOPIFY')}>
+								Importar logo Shopify
 							</button>
 						</div>
 					</section>
@@ -1468,7 +1475,7 @@ export default function AdminPage({ defaultTab = '' }) {
 							<StatusPill>Ultima sync: {catalogStatus?.lastSync?.status || 'sin sync'}</StatusPill>
 						</div>
 						<div className="tenant-admin-actions">
-							<button type="button" disabled={saving} onClick={handleBrandingSync}>Importar branding Tienda Nube</button>
+							<button type="button" disabled={saving} onClick={() => handleBrandingSync()}>Importar branding</button>
 							<button type="button" disabled={saving} onClick={() => handleCatalogSync()}>Sincronizar catalogo</button>
 						</div>
 					</section>
