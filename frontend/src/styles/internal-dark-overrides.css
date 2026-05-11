@@ -582,6 +582,8 @@
 	.campaign-builder-section,
 	.campaign-helper-box,
 	.campaign-variable-box,
+	.campaign-variable-mapper-card,
+	.campaign-variable-preview-box,
 	.campaign-composer-summary,
 	.campaign-status-grid,
 	.campaign-detail-box,
@@ -654,6 +656,8 @@
 	.campaign-badge,
 	.campaign-status-grid > div,
 	.campaign-composer-summary > div,
+	.campaign-variable-mapper-card,
+	.campaign-variable-preview-box,
 	.campaign-customer-kpi,
 	.campaign-customer-meta span,
 	.campaign-toggle--card
@@ -794,6 +798,7 @@
 	.template-list-card-title strong,
 	.template-builder-section-head h4,
 	.campaign-step-head h4,
+	.campaign-variable-mapper-head strong,
 	.campaign-custom-audience-intro h3,
 	.campaign-custom-audience-preview-title
 ) {
@@ -814,6 +819,7 @@
 	.campaign-list-body,
 	.campaign-helper-text,
 	.campaign-helper-inline-text,
+	.campaign-variable-mapper-head span,
 	.campaign-custom-audience-preview-subtitle
 ) {
 	color: var(--ui-muted) !important;
