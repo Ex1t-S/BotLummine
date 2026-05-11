@@ -1143,22 +1143,41 @@ export default function AdminPage({ defaultTab = '' }) {
 								<div className="tenant-admin-empty">Seleccioná una marca para editarla.</div>
 							)
 						) : (
-							<div className="tenant-admin-brand-summary">
-								<div className="tenant-admin-brand-logo-box">
-									{brandLogoUrl && !brandLogoFailed ? (
-										<img src={brandLogoUrl} alt={brandName} onError={() => setBrandLogoFailed(true)} />
-									) : (
-										<span>{getInitials(brandName)}</span>
-									)}
+							<>
+								<div className="tenant-admin-brand-summary">
+									<div className="tenant-admin-brand-logo-box">
+										{brandLogoUrl && !brandLogoFailed ? (
+											<img src={brandLogoUrl} alt={brandName} onError={() => setBrandLogoFailed(true)} />
+										) : (
+											<span>{getInitials(brandName)}</span>
+										)}
+									</div>
+									<div className="tenant-admin-brand-copy">
+										<strong>{brandName}</strong>
+										<span>{brandStoreUrl || 'Tienda Nube sin URL sincronizada'}</span>
+										<button type="button" disabled={saving || loading} onClick={handleBrandingSync}>
+											{saving ? 'Importando...' : 'Importar logo Tienda Nube'}
+										</button>
+									</div>
 								</div>
-								<div className="tenant-admin-brand-copy">
-									<strong>{brandName}</strong>
-									<span>{brandStoreUrl || 'Tienda Nube sin URL sincronizada'}</span>
-									<button type="button" disabled={saving || loading} onClick={handleBrandingSync}>
-										{saving ? 'Importando...' : 'Importar logo Tienda Nube'}
-									</button>
+								<div className="tenant-admin-shopify-card">
+									<div>
+										<strong>Shopify</strong>
+										<span>{shopifyStatus?.shopDomain || 'Conecta la tienda Shopify de esta marca.'}</span>
+									</div>
+									<div className="tenant-admin-shopify-actions">
+										<Input
+											label="Dominio Shopify"
+											value={shopifyInstallShop}
+											placeholder="mi-tienda.myshopify.com"
+											onChange={setShopifyInstallShop}
+										/>
+										<button type="button" disabled={saving || loading || !selectedWorkspaceId} onClick={() => handleStartShopifyInstall(shopifyInstallShop)}>
+											Conectar Shopify
+										</button>
+									</div>
 								</div>
-							</div>
+							</>
 						)}
 					</section>
 				) : null}
