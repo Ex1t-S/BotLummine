@@ -429,7 +429,6 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [commerceForm, setCommerceForm] = useState(EMPTY_COMMERCE_FORM);
 	const [selectedBrandProvider, setSelectedBrandProvider] = useState('TIENDANUBE');
 	const [shopifyInstallShop, setShopifyInstallShop] = useState('');
-	const [shopifyCssDraft, setShopifyCssDraft] = useState('');
 	const [logisticsForm, setLogisticsForm] = useState(EMPTY_LOGISTICS_FORM);
 	const [catalogStatus, setCatalogStatus] = useState(null);
 	const [tiendanubeStatus, setTiendanubeStatus] = useState(null);
@@ -1334,12 +1333,6 @@ export default function AdminPage({ defaultTab = '' }) {
 							<StatusPill>API: {shopifyStatus?.apiVersion || '2026-04'}</StatusPill>
 						</div>
 						<div className="tenant-admin-grid">
-							<Textarea
-								label="CSS Shopify"
-								rows={5}
-								value={shopifyCssDraft}
-								onChange={setShopifyCssDraft}
-							/>
 							<Input
 								label="Dominio Shopify"
 								value={shopifyInstallShop}
