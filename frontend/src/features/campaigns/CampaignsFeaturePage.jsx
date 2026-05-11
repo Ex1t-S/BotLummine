@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CampaignRunsPanel from '../../components/campaigns/CampaignRunsPanel.jsx';
+import CampaignComposerPanel from '../../components/campaigns/CampaignComposerPanel.jsx';
 import TemplateBuilderPanel from '../../components/campaigns/TemplateBuilderPanel.jsx';
 import TemplateLibraryPanel from '../../components/campaigns/TemplateLibraryPanel.jsx';
-import UnifiedCampaignSegmentPanel from './components/UnifiedCampaignSegmentPanel.jsx';
+import AbandonedCartCampaignPanel from './components/AbandonedCartCampaignPanel.jsx';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 import { buildAbandonedCartFilters } from './utils.js';
@@ -159,7 +160,16 @@ const TAB_DEFINITIONS = [
 		eyebrow: 'Campañas',
 		title: 'Crear campañas',
 		description:
-			'Elegí si la audiencia sale de carritos abandonados o de clientes con compras, y armá cada campaña con su objetivo claro.',
+			'Creá campañas para clientes y compras, con audiencias comerciales separadas de las automatizaciones.',
+	},
+	{
+		id: 'abandoned-carts',
+		path: 'abandoned-carts',
+		label: 'Carritos',
+		eyebrow: 'Audiencia inteligente',
+		title: 'Recuperación de carritos',
+		description:
+			'Filtrá carritos, revisá destinatarios y automatizá recuperaciones desde una sección propia.',
 	},
 	{
 		id: 'tracking',
@@ -1544,14 +1554,43 @@ export default function CampaignsFeaturePage() {
 						title={currentTab.title}
 						description={currentTab.description}
 					>
-						<UnifiedCampaignSegmentPanel
+						<CampaignComposerPanel
 							templates={templates}
 							selectedTemplate={selectedTemplate}
 							onSelectTemplate={setSelectedTemplate}
-							abandonedCart={abandonedCart}
-							mutations={mutations}
 							onCreateCampaign={(payload) => mutations.createCampaign.mutateAsync(payload)}
 							creatingCampaign={mutations.createCampaign.isPending}
+							audienceModeOptions={['customers']}
+							lockedAudienceMode="customers"
+						/>
+					</CampaignSectionShell>
+				);
+
+			case 'abandoned-carts':
+				return (
+					<CampaignSectionShell
+						tabId={currentTab.id}
+						eyebrow={currentTab.eyebrow}
+						title={currentTab.title}
+						description={currentTab.description}
+					>
+						<AbandonedCartCampaignPanel
+							templates={templates}
+							selectedTemplate={selectedTemplate}
+							onSelectTemplate={setSelectedTemplate}
+							form={abandonedCart.form}
+							onUpdateField={abandonedCart.updateField}
+							preview={abandonedCart.preview}
+							previewing={mutations.abandonedPreview.isPending}
+							creating={mutations.createAbandonedCampaign.isPending}
+							automationSettings={abandonedCart.automationSettings}
+							automationLoading={abandonedCart.automationLoading}
+							savingAutomation={mutations.updateAbandonedCartAutomation.isPending}
+							runningAutomation={mutations.runAbandonedCartAutomationNow.isPending}
+							onPreview={abandonedCart.handlePreview}
+							onCreate={abandonedCart.handleCreate}
+							onSaveAutomation={(payload) => mutations.updateAbandonedCartAutomation.mutate(payload)}
+							onRunAutomationNow={() => mutations.runAbandonedCartAutomationNow.mutate()}
 						/>
 					</CampaignSectionShell>
 				);
