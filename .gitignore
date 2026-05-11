@@ -7,3 +7,4 @@ prisma/dev.db
 *.log
 *.tsbuildinfo
 docs/community-manager-brief.md
+.codex/
