@@ -1126,3 +1126,97 @@
 	box-shadow: none !important;
 	padding: 0 !important;
 }
+
+/* New campaign automation/tracking surfaces added after the first dark pass. */
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-schedule-ops,
+	.campaign-shipment-data-options span,
+	.campaign-shipment-row,
+	.campaign-schedule-preview-row,
+	.campaign-abandoned-automation-meta span,
+	.campaign-tracking-kpi,
+	.campaign-results-summary,
+	.campaign-conversion-source-strip,
+	.campaign-conversion-source-strip span,
+	.campaign-recipient-table-wrapper--tracking,
+	.campaign-confirm-dialog
+) {
+	background:
+		linear-gradient(135deg, rgba(56, 189, 248, 0.035), transparent 46%),
+		var(--ui-surface-soft) !important;
+	border-color: var(--ui-border) !important;
+	color: var(--ui-text) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-tracking-kpi--featured,
+	.campaign-shipment-status.is-ready,
+	.campaign-schedule-status.is-active
+) {
+	background: var(--ui-success-soft) !important;
+	border-color: rgba(91, 216, 160, 0.32) !important;
+	color: var(--ui-success) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-shipment-status.is-notified,
+	.campaign-schedule-status,
+	.campaign-results-summary
+) {
+	background: var(--ui-surface-muted) !important;
+	border-color: var(--ui-border-strong) !important;
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-shipment-data-options strong,
+	.campaign-shipment-row strong,
+	.campaign-schedule-preview-row strong,
+	.campaign-abandoned-automation-meta strong,
+	.campaign-tracking-kpi strong,
+	.campaign-results-summary strong,
+	.campaign-conversion-source-strip strong
+) {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-shipment-data-options small,
+	.campaign-shipment-row small,
+	.campaign-schedule-preview-row small,
+	.campaign-abandoned-automation-meta small,
+	.campaign-tracking-kpi span,
+	.campaign-tracking-kpi small,
+	.campaign-results-summary span,
+	.campaign-recipient-meta small,
+	.campaign-schedule-ops span
+) {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-schedule-section__title strong,
+	.campaign-schedule-ops strong,
+	.campaign-abandoned-automation-card__header h4
+) {
+	color: var(--ui-heading) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page :where(
+	.campaign-schedule-section__title span,
+	.campaign-abandoned-automation-card__header p,
+	.campaign-shipment-pagination > span,
+	.campaign-shipment-pagination__controls strong
+) {
+	color: var(--ui-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page .campaign-shipment-row.is-disabled {
+	opacity: 0.72 !important;
+}
+
+.dark .admin-shell .admin-content .campaigns-page .campaign-recipient-table-wrapper--tracking .campaign-table thead th {
+	background: var(--ui-surface-muted) !important;
+	color: var(--ui-muted) !important;
+}
