@@ -3,6 +3,7 @@ import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
 import { deriveShippingStatus } from '../common/shipping-status.js';
+import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
 import { getShopifyClient, getShopifyConfig } from '../shopify/client.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
@@ -16,6 +17,7 @@ const MAX_MONTH_WINDOWS_PER_SYNC = Math.max(1, Number(process.env.TIENDANUBE_ORD
 const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES_PER_WINDOW || 120));
 const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const SHOPIFY_ORDERS_PER_PAGE = Math.max(1, Math.min(250, Number(process.env.SHOPIFY_ORDERS_SYNC_PER_PAGE || 250)));
+const SHOPIFY_CUSTOMERS_PER_PAGE = Math.max(1, Math.min(250, Number(process.env.SHOPIFY_CUSTOMERS_SYNC_PER_PAGE || 250)));
 const CUSTOMER_ORDER_LIST_FIELDS = [
 	'id',
 	'number',
@@ -49,6 +51,7 @@ const syncState = {
 	ordersFetched: 0,
 	ordersUpserted: 0,
 	itemsUpserted: 0,
+	customersTouched: 0,
 	warnings: [],
 	errors: [],
 	hasMoreHistory: false,
@@ -208,6 +211,7 @@ function resetSyncState() {
 	syncState.ordersFetched = 0;
 	syncState.ordersUpserted = 0;
 	syncState.itemsUpserted = 0;
+	syncState.customersTouched = 0;
 	syncState.warnings = [];
 	syncState.errors = [];
 	syncState.hasMoreHistory = false;
@@ -228,6 +232,7 @@ export function getCustomerSyncStatus() {
 		ordersFetched: syncState.ordersFetched,
 		ordersUpserted: syncState.ordersUpserted,
 		itemsUpserted: syncState.itemsUpserted,
+		customersTouched: syncState.customersTouched,
 		warnings: syncState.warnings.slice(-10),
 		errors: syncState.errors.slice(-10),
 		hasMoreHistory: syncState.hasMoreHistory,
@@ -295,6 +300,114 @@ export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_
 		provider: 'TIENDANUBE',
 		source: 'storeInstallation',
 	};
+}
+
+function normalizeShopifyCustomer(customer = {}) {
+	const firstName = cleanString(customer?.first_name);
+	const lastName = cleanString(customer?.last_name);
+	const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() ||
+		cleanString(customer?.name) ||
+		cleanString(customer?.email) ||
+		'Cliente sin nombre';
+	const defaultAddress = customer?.default_address && typeof customer.default_address === 'object'
+		? customer.default_address
+		: null;
+	const phone = cleanString(customer?.phone) || cleanString(defaultAddress?.phone);
+
+	return {
+		externalCustomerId: String(customer?.id || ''),
+		displayName,
+		email: cleanString(customer?.email),
+		normalizedEmail: normalizeEmail(customer?.email),
+		phone,
+		normalizedPhone: normalizePhone(phone),
+		note: cleanString(customer?.note),
+		acceptsMarketing: customer?.accepts_marketing == null ? null : Boolean(customer.accepts_marketing),
+		acceptsMarketingUpdatedAt: parseDateOrNull(customer?.accepts_marketing_updated_at),
+		defaultAddress,
+		addresses: Array.isArray(customer?.addresses) ? customer.addresses : [],
+		billingAddress: cleanString(defaultAddress?.address1),
+		billingNumber: cleanString(defaultAddress?.address2),
+		billingZipcode: cleanString(defaultAddress?.zip),
+		billingCity: cleanString(defaultAddress?.city),
+		billingProvince: cleanString(defaultAddress?.province),
+		billingCountry: cleanString(defaultAddress?.country),
+		billingPhone: cleanString(defaultAddress?.phone),
+		orderCount: Number(customer?.orders_count || 0),
+		totalSpent: toDecimalOrNull(customer?.total_spent),
+		currency: cleanString(customer?.currency) || null,
+		rawCustomerPayload: customer,
+		syncedAt: new Date(),
+	};
+}
+
+async function upsertCustomerProfiles(customers, storeId, workspaceId, provider = 'SHOPIFY') {
+	const normalizedProvider = normalizeProvider(provider);
+	const normalizedCustomers = customers
+		.map(normalizeShopifyCustomer)
+		.filter((customer) => customer.externalCustomerId || customer.normalizedEmail || customer.normalizedPhone);
+
+	let touched = 0;
+	for (const customer of normalizedCustomers) {
+		const existing = await prisma.customerProfile.findFirst({
+			where: {
+				workspaceId,
+				OR: [
+					customer.externalCustomerId
+						? { provider: normalizedProvider, externalCustomerId: customer.externalCustomerId }
+						: null,
+					customer.normalizedEmail ? { normalizedEmail: customer.normalizedEmail } : null,
+					customer.normalizedPhone ? { normalizedPhone: customer.normalizedPhone } : null,
+				].filter(Boolean),
+			},
+			select: { id: true },
+		});
+
+		const data = {
+			provider: normalizedProvider,
+			storeId,
+			externalCustomerId: customer.externalCustomerId || null,
+			displayName: customer.displayName,
+			email: customer.email,
+			normalizedEmail: customer.normalizedEmail,
+			phone: customer.phone,
+			normalizedPhone: customer.normalizedPhone,
+			note: customer.note,
+			acceptsMarketing: customer.acceptsMarketing,
+			acceptsMarketingUpdatedAt: customer.acceptsMarketingUpdatedAt,
+			defaultAddress: customer.defaultAddress,
+			addresses: customer.addresses,
+			billingAddress: customer.billingAddress,
+			billingNumber: customer.billingNumber,
+			billingZipcode: customer.billingZipcode,
+			billingCity: customer.billingCity,
+			billingProvince: customer.billingProvince,
+			billingCountry: customer.billingCountry,
+			billingPhone: customer.billingPhone,
+			orderCount: customer.orderCount,
+			totalSpent: customer.totalSpent,
+			currency: customer.currency,
+			rawCustomerPayload: customer.rawCustomerPayload,
+			syncedAt: customer.syncedAt,
+		};
+
+		if (existing?.id) {
+			await prisma.customerProfile.update({
+				where: { id: existing.id },
+				data,
+			});
+		} else {
+			await prisma.customerProfile.create({
+				data: {
+					workspaceId,
+					...data,
+				},
+			});
+		}
+		touched += 1;
+	}
+
+	return touched;
 }
 
 async function fetchJson(url, accessToken, resourceLabel) {
@@ -859,6 +972,55 @@ async function fetchShopifyOrdersPage({ client, page, createdAtMin = null, creat
 	return orders;
 }
 
+async function fetchShopifyCustomersPage({ client, sinceId = 0 }) {
+	const response = await client.get('/customers.json', {
+		params: {
+			limit: SHOPIFY_CUSTOMERS_PER_PAGE,
+			since_id: sinceId,
+			fields: [
+				'id',
+				'first_name',
+				'last_name',
+				'email',
+				'phone',
+				'note',
+				'orders_count',
+				'total_spent',
+				'currency',
+				'accepts_marketing',
+				'accepts_marketing_updated_at',
+				'default_address',
+				'addresses',
+				'created_at',
+				'updated_at'
+			].join(',')
+		}
+	});
+	return Array.isArray(response.data?.customers) ? response.data.customers : [];
+}
+
+async function syncShopifyCustomerProfiles({ client, storeId, workspaceId }) {
+	let sinceId = 0;
+	let pages = 0;
+	let touched = 0;
+
+	while (pages < MAX_PAGES_PER_WINDOW) {
+		const customers = await fetchShopifyCustomersPage({ client, sinceId });
+		pages += 1;
+		syncState.pagesFetched += 1;
+		if (!customers.length) break;
+
+		touched += await upsertCustomerProfiles(customers, storeId, workspaceId, 'SHOPIFY');
+		syncState.customersTouched += customers.length;
+		sinceId = Math.max(...customers.map((customer) => Number(customer.id || 0)), sinceId);
+
+		if (customers.length < SHOPIFY_CUSTOMERS_PER_PAGE || !sinceId) break;
+		await sleep(350);
+	}
+
+	return { pagesFetched: pages, customersTouched: touched };
+}
+
 async function processShopifyWindow({ client, storeId, workspaceId, from, to, label }) {
 	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
 	syncState.activeWindow = { from, to, label };
@@ -959,6 +1121,17 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 		const runs = [];
 		if (normalizedProvider === 'SHOPIFY') {
 			const { client } = await getShopifyClient({ workspaceId: resolvedWorkspaceId });
+			runs.push({
+				label: 'customers',
+				...(await syncShopifyCustomerProfiles({
+					client,
+					storeId,
+					workspaceId: resolvedWorkspaceId,
+				})),
+				ordersFetched: 0,
+				ordersUpserted: 0,
+				itemsUpserted: 0,
+			});
 			runs.push(
 				await processShopifyWindow({
 					client,
@@ -1051,7 +1224,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 					pagesFetched: syncState.pagesFetched,
 					ordersFetched: syncState.ordersFetched,
 					ordersUpserted: syncState.ordersUpserted,
-					customersTouched: 0,
+					customersTouched: syncState.customersTouched,
 					message: syncState.message,
 				}),
 			});
@@ -1079,7 +1252,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 						pagesFetched: syncState.pagesFetched,
 						ordersFetched: syncState.ordersFetched,
 						ordersUpserted: syncState.ordersUpserted,
-						customersTouched: 0,
+						customersTouched: syncState.customersTouched,
 						message: error?.message || 'Error sincronizando pedidos',
 					}),
 				});
@@ -1093,9 +1266,11 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 	}
 }
 
-export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE' } = {}) {
+export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const normalizedProvider = normalizeProvider(provider);
+	const normalizedProvider = provider
+		? normalizeProvider(provider)
+		: (await resolveActiveCommerceConnection({ workspaceId: resolvedWorkspaceId })).provider;
 	if (syncState.running) {
 		return {
 			ok: true,

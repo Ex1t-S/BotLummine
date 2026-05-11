@@ -1,7 +1,7 @@
-import { prisma } from '../../lib/prisma.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { DEFAULT_WORKSPACE_ID } from '../workspaces/workspace-context.service.js';
 import { getOrderByNumber as getTiendanubeOrderByNumber } from '../tiendanube/orders.service.js';
 import { getShopifyClient } from '../shopify/client.js';
+import { resolveActiveCommerceConnection } from './active-commerce.service.js';
 
 function cleanString(value = '') {
 	return String(value || '').trim();
@@ -72,19 +72,7 @@ function normalizeShopifyOrderContext(order = {}) {
 }
 
 async function getActiveCommerceProvider(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const connection = await prisma.commerceConnection.findFirst({
-		where: {
-			workspaceId: resolvedWorkspaceId,
-			status: 'ACTIVE'
-		},
-		orderBy: [
-			{ provider: 'asc' },
-			{ updatedAt: 'desc' }
-		],
-		select: { provider: true }
-	});
-	return connection?.provider || 'TIENDANUBE';
+	return (await resolveActiveCommerceConnection({ workspaceId })).provider;
 }
 
 async function getShopifyOrderByNumber(orderNumber, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {

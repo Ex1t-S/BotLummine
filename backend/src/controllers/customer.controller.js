@@ -481,6 +481,80 @@ function mapOrderToCard(order, enboxShipment = null) {
 	};
 }
 
+function mapProfileToCard(profile) {
+	return {
+		id: profile.id,
+		displayName: profile.displayName || 'Cliente sin nombre',
+		initials: getInitials(profile.displayName),
+		phone: profile.phone || '',
+		email: profile.email || '',
+		lastOrderId: profile.lastOrderId || '',
+		lastOrderNumber: profile.lastOrderNumber || '',
+		lastOrderLabel: profile.lastOrderNumber ? `#${profile.lastOrderNumber}` : '-',
+		totalSpentLabel: formatCurrency(profile.totalSpent || 0, profile.currency || 'ARS'),
+		lastOrderDateLabel: formatDateLabel(profile.lastOrderAt),
+		totalUnitsPurchased: Number(profile.totalUnitsPurchased || 0),
+		productsPreview: [],
+		updatedAt: profile.syncedAt || profile.updatedAt || profile.createdAt || null,
+		paymentStatus: profile.lastPaymentStatus || '',
+		paymentStatusLabel: profile.lastPaymentStatus ? getPaymentStatusMeta(profile.lastPaymentStatus).label : 'Sin compras',
+		paymentStatusTone: profile.lastPaymentStatus ? getPaymentStatusMeta(profile.lastPaymentStatus).tone : 'neutral',
+		shippingStatus: profile.lastShippingStatus || '',
+		shippingStatusLabel: profile.lastShippingStatus ? getShippingStatusMeta(profile.lastShippingStatus).label : 'Sin dato',
+		shippingStatusTone: profile.lastShippingStatus ? getShippingStatusMeta(profile.lastShippingStatus).tone : 'neutral',
+		orderNumber: profile.lastOrderNumber || '',
+		rawTotal: Number(profile.totalSpent || 0),
+		rawDate: profile.lastOrderAt || null,
+	};
+}
+
+function hasOrderSpecificFilters(filters = {}) {
+	return [
+		filters.productQuery,
+		filters.orderNumber,
+		filters.dateFrom,
+		filters.dateTo,
+		filters.paymentStatus,
+		filters.shippingStatus,
+		filters.minSpent,
+	].some((value) => String(value || '').trim());
+}
+
+function buildOrderlessProfilesWhere({ workspaceId, q, hasPhoneOnly, excludedPhones = [] }) {
+	const and = [
+		{ workspaceId },
+		{ orders: { none: {} } },
+	];
+
+	const search = String(q || '').trim();
+	if (search) {
+		and.push({
+			OR: [
+				{ displayName: { contains: search, mode: 'insensitive' } },
+				{ email: { contains: search, mode: 'insensitive' } },
+				{ phone: { contains: search, mode: 'insensitive' } },
+			],
+		});
+	}
+
+	if (hasPhoneOnly === '1' || hasPhoneOnly === 'true' || hasPhoneOnly === true) {
+		and.push({ phone: { not: '' } });
+		and.push({ NOT: { phone: null } });
+	}
+
+	if (excludedPhones.length > 0) {
+		and.push({
+			OR: [
+				{ normalizedPhone: null },
+				{ normalizedPhone: '' },
+				{ normalizedPhone: { notIn: excludedPhones } },
+			],
+		});
+	}
+
+	return { AND: and };
+}
+
 
 export async function getCustomers(req, res) {
 	try {
@@ -532,20 +606,22 @@ export async function getCustomers(req, res) {
 		});
 
 		const orderBy = buildOrderBy(sort);
+		const includeOrderlessProfiles = !hasOrderSpecificFilters({
+			productQuery,
+			orderNumber,
+			dateFrom,
+			dateTo,
+			paymentStatus,
+			shippingStatus,
+			minSpent,
+		});
+		const orderlessWhere = includeOrderlessProfiles
+			? buildOrderlessProfilesWhere({ workspaceId, q, hasPhoneOnly, excludedPhones })
+			: null;
 
-		const [totalItems, orders, metricsBase] = await Promise.all([
+		const [totalOrderItems, orderlessProfilesCount, metricsBase, profileMetrics] = await Promise.all([
 			prisma.customerOrder.count({ where }),
-			prisma.customerOrder.findMany({
-				where,
-				orderBy,
-				skip,
-				take: parsedPageSize,
-				include: {
-					items: {
-						orderBy: [{ lineTotal: 'desc' }, { quantity: 'desc' }, { name: 'asc' }],
-					},
-				},
-			}),
+			orderlessWhere ? prisma.customerProfile.count({ where: orderlessWhere }) : 0,
 			prisma.customerOrder.findMany({
 				where,
 				select: {
@@ -555,6 +631,46 @@ export async function getCustomers(req, res) {
 					contactName: true,
 				},
 			}),
+			includeOrderlessProfiles
+				? prisma.customerProfile.findMany({
+					where: orderlessWhere,
+					select: {
+						id: true,
+						phone: true,
+						email: true,
+						displayName: true,
+						totalSpent: true,
+					},
+				})
+				: [],
+		]);
+		const totalItems = totalOrderItems + orderlessProfilesCount;
+		const ordersTake = skip >= totalOrderItems ? 0 : Math.min(parsedPageSize, totalOrderItems - skip);
+		const profilesTake = parsedPageSize - ordersTake;
+		const profilesSkip = skip >= totalOrderItems ? skip - totalOrderItems : 0;
+
+		const [orders, orderlessProfiles] = await Promise.all([
+			ordersTake
+				? prisma.customerOrder.findMany({
+					where,
+					orderBy,
+					skip,
+					take: ordersTake,
+					include: {
+						items: {
+							orderBy: [{ lineTotal: 'desc' }, { quantity: 'desc' }, { name: 'asc' }],
+						},
+					},
+				})
+				: [],
+			orderlessWhere && profilesTake > 0
+				? prisma.customerProfile.findMany({
+					where: orderlessWhere,
+					orderBy: [{ syncedAt: 'desc' }, { updatedAt: 'desc' }],
+					skip: profilesSkip,
+					take: profilesTake,
+				})
+				: [],
 		]);
 
 		const visibleOrderNumbers = [...new Set(orders.map((order) => order.orderNumber).filter(Boolean))];
@@ -586,12 +702,15 @@ export async function getCustomers(req, res) {
 			}
 		}
 
-		const customers = orders.map((order) =>
-			mapOrderToCard(
+		const customers = [
+			...orders.map((order) =>
+				mapOrderToCard(
 				order,
 				shipmentsByOrderRef.get(`number:${order.orderNumber}`) || shipmentsByOrderRef.get(`id:${order.orderId}`) || null
-			)
-		);
+				)
+			),
+			...orderlessProfiles.map(mapProfileToCard),
+		];
 
 		const uniquePhones = new Set();
 		const uniqueFallback = new Set();
@@ -610,11 +729,21 @@ export async function getCustomers(req, res) {
 				);
 			}
 		}
+		for (const row of profileMetrics) {
+			const phone = String(row.phone || '').trim();
+			if (phone) {
+				uniquePhones.add(phone);
+			} else {
+				uniqueFallback.add(
+					`${String(row.email || '').trim().toLowerCase()}::${String(row.displayName || '').trim().toLowerCase()}`
+				);
+			}
+		}
 
 		const totalSpent = metricsBase.reduce(
 			(acc, row) => acc + Number(row.totalAmount || 0),
 			0
-		);
+		) + profileMetrics.reduce((acc, row) => acc + Number(row.totalSpent || 0), 0);
 
 		const showingFrom = totalItems > 0 ? skip + 1 : 0;
 		const showingTo = Math.min(skip + parsedPageSize, totalItems);
@@ -623,12 +752,14 @@ export async function getCustomers(req, res) {
 			ok: true,
 			customers,
 			stats: {
-				totalOrders: totalItems,
+				totalOrders: totalOrderItems,
 				totalCustomers: uniquePhones.size + uniqueFallback.size,
-				withPhone: metricsBase.filter((row) => String(row.contactPhone || '').trim()).length,
+				withPhone:
+					metricsBase.filter((row) => String(row.contactPhone || '').trim()).length +
+					profileMetrics.filter((row) => String(row.phone || '').trim()).length,
 				excludedByTemplate: excludedPhones.length,
 				totalSpent,
-				avgTicket: totalItems > 0 ? totalSpent / totalItems : 0,
+				avgTicket: totalOrderItems > 0 ? totalSpent / totalOrderItems : 0,
 				currency: 'ARS',
 				showingFrom,
 				showingTo,
@@ -654,7 +785,7 @@ export async function postSyncCustomers(req, res) {
 	try {
 		const result = await syncCustomersService({
 			workspaceId: requireRequestWorkspaceId(req),
-			provider: req.body?.provider || req.query?.provider || 'TIENDANUBE',
+			provider: req.body?.provider || req.query?.provider || '',
 			force: req.body?.force === true,
 		});
 

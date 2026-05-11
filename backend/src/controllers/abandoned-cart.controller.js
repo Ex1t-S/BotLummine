@@ -229,7 +229,10 @@ export async function postSyncAbandonedCarts(req, res) {
 		const daysBack = FIXED_SYNC_WINDOW_DAYS;
 
 		const workspaceId = requireRequestWorkspaceId(req);
-		const result = await syncAbandonedCarts(daysBack, { workspaceId });
+		const result = await syncAbandonedCarts(daysBack, {
+			workspaceId,
+			provider: req.body?.provider || req.query?.provider || '',
+		});
 
 		return res.json({
 			ok: true,

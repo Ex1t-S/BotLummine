@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { getTiendanubeClient } from '../tiendanube/client.js';
 import { getShopifyClient } from '../shopify/client.js';
+import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	getSkuVariantMeta,
@@ -452,15 +453,26 @@ export async function syncCatalogFromShopify({ workspaceId = DEFAULT_WORKSPACE_I
 
 export async function syncCatalogFromProvider({
 	workspaceId = DEFAULT_WORKSPACE_ID,
-	provider = 'TIENDANUBE'
+	provider = ''
 } = {}) {
-	const normalizedProvider = String(provider || 'TIENDANUBE').trim().toUpperCase();
+	const normalizedProvider = String(provider || '').trim().toUpperCase() ||
+		(await resolveActiveCommerceConnection({ workspaceId })).provider;
 
 	if (normalizedProvider === 'SHOPIFY') {
 		return syncCatalogFromShopify({ workspaceId });
 	}
 
 	return syncCatalogFromTiendanube({ workspaceId });
+}
+
+export async function syncCatalogForWorkspace({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const connection = await resolveActiveCommerceConnection({ workspaceId });
+	const result = await syncCatalogFromProvider({ workspaceId, provider: connection.provider });
+	return {
+		...result,
+		provider: connection.provider,
+		source: connection.source,
+	};
 }
 
 export async function getCatalogPage({ q = '', page = 1, pageSize = 24, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {

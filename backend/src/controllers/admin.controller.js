@@ -10,10 +10,12 @@ import {
 } from '../services/workspaces/workspace-context.service.js';
 import {
 	getCatalogSummary,
+	syncCatalogForWorkspace,
 	syncCatalogFromProvider,
 } from '../services/catalog/catalog.service.js';
 import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
 import { generateWorkspaceBusinessContextDraft } from '../services/workspaces/workspace-context-draft.service.js';
+import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -564,15 +566,17 @@ export async function runWorkspaceCatalogSync(req, res, next) {
 		const workspaceId = requireRequestWorkspaceId(req);
 		assertWorkspaceAdmin(req, workspaceId);
 
-		const provider = normalizeCommerceProvider(req.body?.provider || req.query?.provider || 'TIENDANUBE');
-		if (!provider) {
+		const requestedProvider = normalizeCommerceProvider(req.body?.provider || req.query?.provider || '');
+		if ((req.body?.provider || req.query?.provider) && !requestedProvider) {
 			return res.status(400).json({
 				ok: false,
 				error: 'Proveedor invalido. Usa TIENDANUBE o SHOPIFY.',
 			});
 		}
 
-		const result = await syncCatalogFromProvider({ workspaceId, provider });
+		const result = requestedProvider
+			? await syncCatalogFromProvider({ workspaceId, provider: requestedProvider })
+			: await syncCatalogForWorkspace({ workspaceId });
 		const catalog = await getCatalogSummary({ workspaceId });
 		return res.json({ ok: true, result, catalog });
 	} catch (error) {
@@ -1678,6 +1682,9 @@ export async function upsertCommerceConnection(req, res, next) {
 				}),
 			},
 		});
+		if (connection.status === 'ACTIVE') {
+			await markPrimaryCommerceConnection(connection.id, { workspaceId });
+		}
 
 		return res.json({
 			ok: true,

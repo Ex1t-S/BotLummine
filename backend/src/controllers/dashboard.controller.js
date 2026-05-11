@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { prisma } from '../lib/prisma.js';
-import { getCatalogPage, syncCatalogFromProvider } from '../services/catalog/catalog.service.js';
+import { getCatalogPage, syncCatalogForWorkspace, syncCatalogFromProvider } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
@@ -1338,12 +1338,14 @@ export async function getCatalog(req, res, next) {
 export async function postSyncCatalog(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req);
-		const provider = String(req.body?.provider || req.query?.provider || 'TIENDANUBE').toUpperCase();
-		await syncCatalogFromProvider({ workspaceId, provider });
+		const requestedProvider = String(req.body?.provider || req.query?.provider || '').toUpperCase();
+		const result = requestedProvider
+			? await syncCatalogFromProvider({ workspaceId, provider: requestedProvider })
+			: await syncCatalogForWorkspace({ workspaceId });
 
 		return res.json({
 			ok: true,
-			provider,
+			...result,
 		});
 	} catch (error) {
 		next(error);

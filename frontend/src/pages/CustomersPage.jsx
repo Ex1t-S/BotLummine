@@ -335,7 +335,6 @@ export default function CustomersPage() {
 	const [productSearch, setProductSearch] = useState('');
 	const [showProductFilter, setShowProductFilter] = useState(false);
 	const [billingVisible, setBillingVisible] = useState(true);
-	const [syncProvider, setSyncProvider] = useState('TIENDANUBE');
 	const debouncedFilters = useDebouncedValue(filters);
 	const requestFilters = useMemo(
 		() => normalizeRequestFilters(debouncedFilters),
@@ -394,7 +393,7 @@ export default function CustomersPage() {
 
 	const syncMutation = useMutation({
 		mutationFn: async () => {
-			const response = await api.post('/dashboard/customers/sync', { provider: syncProvider });
+			const response = await api.post('/dashboard/customers/sync');
 			return response.data || initialSyncStatus;
 		},
 		onSuccess: async () => {
@@ -521,15 +520,6 @@ export default function CustomersPage() {
 				description="Pedidos reales, clientes y productos comprados en una vista para buscar oportunidades sin perder el estado de sincronización."
 			>
 				<div className="customers-hero-actions">
-					<select
-						className="customers-provider-select"
-						value={syncProvider}
-						onChange={(event) => setSyncProvider(event.target.value)}
-						disabled={syncing}
-					>
-						<option value="TIENDANUBE">Tiendanube</option>
-						<option value="SHOPIFY">Shopify</option>
-					</select>
 					<ActionButton className="primary-action-btn" onClick={handleSync} disabled={syncing} icon={RefreshCw}>
 						{syncing ? 'Sincronizando pedidos' : 'Sincronizar pedidos'}
 					</ActionButton>

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { prisma } from '../lib/prisma.js';
 import { getTiendanubeConfig } from '../services/tiendanube/client.js';
+import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import {
 	syncCatalogFromTiendanube,
 	getCatalogSummary,
@@ -573,7 +574,7 @@ export async function handleTiendanubeCallback(req, res) {
 			}
 		});
 
-		await prisma.commerceConnection.upsert({
+		const connection = await prisma.commerceConnection.upsert({
 			where: {
 				workspaceId_provider: {
 					workspaceId,
@@ -603,6 +604,7 @@ export async function handleTiendanubeCallback(req, res) {
 				}
 			}
 		});
+		await markPrimaryCommerceConnection(connection.id, { workspaceId });
 
 		let brandingResult = null;
 		try {

@@ -1,6 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
+import { getShopifyClient } from '../shopify/client.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CHECKOUTS_PER_PAGE = Math.min(
@@ -46,6 +48,11 @@ function buildHeaders(accessToken) {
 		'Content-Type': 'application/json; charset=utf-8',
 		'User-Agent': process.env.TIENDANUBE_USER_AGENT || 'Multi Brand IA Assistant',
 	};
+}
+
+function normalizeProvider(value = '') {
+	const provider = String(value || '').trim().toUpperCase();
+	return provider === 'SHOPIFY' ? 'SHOPIFY' : 'TIENDANUBE';
 }
 
 function parseDateOrNull(value) {
@@ -117,6 +124,28 @@ async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 	}
 
 	return { workspaceId: resolvedWorkspaceId, storeId: String(storeId), accessToken };
+}
+
+async function resolveSyncConnection({ workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	if (provider) {
+		const normalizedProvider = normalizeProvider(provider);
+		if (normalizedProvider === 'SHOPIFY') {
+			const connection = await resolveActiveCommerceConnection({ workspaceId: resolvedWorkspaceId });
+			if (connection.provider !== 'SHOPIFY') {
+				throw new Error('El ecommerce activo no es Shopify.');
+			}
+			return connection;
+		}
+		const credentials = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId });
+		return {
+			...credentials,
+			provider: 'TIENDANUBE',
+			source: 'tiendanubeCredentials',
+		};
+	}
+
+	return resolveActiveCommerceConnection({ workspaceId: resolvedWorkspaceId });
 }
 
 async function fetchCheckoutsPage({ storeId, accessToken, page, perPage = CHECKOUTS_PER_PAGE }) {
@@ -259,11 +288,72 @@ function buildCartPayload(cart, storeId, workspaceId) {
 	};
 }
 
-async function replaceCartBatch(carts, storeId, workspaceId) {
+function buildShopifyCartPayload(checkout, storeId, workspaceId) {
+	const customer = checkout?.customer || {};
+	const shippingAddress = checkout?.shipping_address || {};
+	const billingAddress = checkout?.billing_address || {};
+	const products = Array.isArray(checkout?.line_items)
+		? checkout.line_items.map((item) => ({
+				id: item?.id ?? null,
+				productId: item?.product_id ?? null,
+				variantId: item?.variant_id ?? null,
+				name: item?.title || item?.name || 'Producto sin nombre',
+				baseName: item?.title || item?.name || 'Producto sin nombre',
+				price: item?.price ?? null,
+				quantity: Number(item?.quantity || 1),
+				sku: item?.sku || null,
+				image: null,
+				variantValues: [item?.variant_title].filter(Boolean),
+		  }))
+		: [];
+	const contactName = [
+		cleanString(customer?.first_name || checkout?.shipping_address?.first_name || checkout?.billing_address?.first_name),
+		cleanString(customer?.last_name || checkout?.shipping_address?.last_name || checkout?.billing_address?.last_name),
+	].filter(Boolean).join(' ') || null;
+	const phone = normalizePhone(
+		checkout?.phone ||
+		customer?.phone ||
+		shippingAddress?.phone ||
+		billingAddress?.phone ||
+		''
+	);
+
+	return {
+		workspaceId,
+		provider: 'SHOPIFY',
+		storeId,
+		token: cleanString(checkout?.token || checkout?.cart_token),
+		contactName,
+		contactEmail: cleanString(checkout?.email || customer?.email),
+		contactPhone: phone,
+		abandonedCheckoutUrl: cleanString(checkout?.abandoned_checkout_url || checkout?.web_url),
+		subtotal: toDecimalOrNull(checkout?.subtotal_price),
+		totalAmount: toDecimalOrNull(checkout?.total_price),
+		currency: cleanString(checkout?.currency) || 'ARS',
+		gateway: cleanString(checkout?.gateway || checkout?.payment_due),
+		shipping: cleanString(checkout?.shipping_line?.title),
+		shippingPickupType: null,
+		shippingAddress: [
+			shippingAddress?.address1,
+			shippingAddress?.address2,
+		].filter(Boolean).join(' ').trim() || null,
+		shippingCity: cleanString(shippingAddress?.city),
+		shippingProvince: cleanString(shippingAddress?.province),
+		shippingZipcode: cleanString(shippingAddress?.zip),
+		products,
+		rawPayload: checkout,
+		checkoutCreatedAt: parseDateOrNull(checkout?.created_at),
+	};
+}
+
+async function replaceCartBatch(carts, storeId, workspaceId, provider = 'TIENDANUBE') {
+	const normalizedProvider = normalizeProvider(provider);
 	const rows = carts
 		.map((cart) => ({
 			checkoutId: String(cart?.id || '').trim(),
-			...buildCartPayload(cart, storeId, workspaceId)
+			...(normalizedProvider === 'SHOPIFY'
+				? buildShopifyCartPayload(cart, storeId, workspaceId)
+				: buildCartPayload(cart, storeId, workspaceId))
 		}))
 		.filter((row) => row.checkoutId);
 
@@ -275,7 +365,7 @@ async function replaceCartBatch(carts, storeId, workspaceId) {
 				where: {
 					workspaceId_provider_checkoutId: {
 						workspaceId,
-						provider: 'TIENDANUBE',
+						provider: normalizedProvider,
 						checkoutId: row.checkoutId
 					}
 				},
@@ -311,6 +401,41 @@ async function replaceCartBatch(carts, storeId, workspaceId) {
 	return rows.length;
 }
 
+async function fetchShopifyCheckoutsPage({ client, sinceId = 0, limit = CHECKOUTS_PER_PAGE }) {
+	const response = await client.get('/checkouts.json', {
+		params: {
+			limit: Math.min(250, Math.max(1, limit)),
+			since_id: sinceId,
+			fields: [
+				'id',
+				'token',
+				'cart_token',
+				'created_at',
+				'updated_at',
+				'completed_at',
+				'email',
+				'phone',
+				'customer',
+				'shipping_address',
+				'billing_address',
+				'abandoned_checkout_url',
+				'web_url',
+				'subtotal_price',
+				'total_price',
+				'currency',
+				'line_items',
+				'shipping_line'
+			].join(',')
+		}
+	});
+	const checkouts = Array.isArray(response.data?.checkouts) ? response.data.checkouts : [];
+	return {
+		items: checkouts,
+		reachedEnd: checkouts.length < Math.min(250, Math.max(1, limit)),
+		perPageUsed: Math.min(250, Math.max(1, limit)),
+	};
+}
+
 async function deleteCartIdsInChunks(ids = [], workspaceId = DEFAULT_WORKSPACE_ID) {
 	let deletedCount = 0;
 
@@ -328,13 +453,19 @@ async function deleteCartIdsInChunks(ids = [], workspaceId = DEFAULT_WORKSPACE_I
 	return deletedCount;
 }
 
-export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedDaysBack = ALLOWED_WINDOWS.has(Number(daysBack))
 		? Number(daysBack)
 		: DEFAULT_DAYS_BACK;
 
-	const { storeId, accessToken } = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId });
+	const connection = await resolveSyncConnection({ workspaceId: resolvedWorkspaceId, provider });
+	const normalizedProvider = normalizeProvider(connection.provider);
+	const storeId = String(connection.storeId || connection.externalStoreId);
+	const accessToken = connection.accessToken;
+	const shopifyClient = normalizedProvider === 'SHOPIFY'
+		? (await getShopifyClient({ workspaceId: resolvedWorkspaceId })).client
+		: null;
 
 	const startedAt = new Date();
 	const cutoff = new Date(startedAt);
@@ -346,14 +477,25 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 	let skippedOldCount = 0;
 	let stopSync = false;
 	let effectivePerPage = CHECKOUTS_PER_PAGE;
+	let shopifySinceId = 0;
 
 	for (let page = 1; page <= MAX_PAGES && !stopSync; page += 1) {
-		const pageResult = await fetchCheckoutsPage({
-			storeId,
-			accessToken,
-			page,
-			perPage: effectivePerPage
-		});
+		let pageResult;
+		try {
+			pageResult = normalizedProvider === 'SHOPIFY'
+				? await fetchShopifyCheckoutsPage({ client: shopifyClient, sinceId: shopifySinceId, limit: effectivePerPage })
+				: await fetchCheckoutsPage({
+					storeId,
+					accessToken,
+					page,
+					perPage: effectivePerPage
+				});
+		} catch (error) {
+			if (normalizedProvider === 'SHOPIFY' && error?.response?.status === 403) {
+				throw new Error('Shopify no permite leer carritos abandonados. Revisá que la app tenga permiso read_checkouts.');
+			}
+			throw error;
+		}
 
 		effectivePerPage = pageResult.perPageUsed || effectivePerPage;
 		pagesFetched += 1;
@@ -382,7 +524,12 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 		}
 
 		if (validCarts.length) {
-			syncedCount += await replaceCartBatch(validCarts, storeId, resolvedWorkspaceId);
+			syncedCount += await replaceCartBatch(validCarts, storeId, resolvedWorkspaceId, normalizedProvider);
+		}
+
+		if (normalizedProvider === 'SHOPIFY') {
+			const checkoutIds = carts.map((cart) => Number(cart?.id || 0)).filter(Boolean);
+			shopifySinceId = checkoutIds.length ? Math.max(shopifySinceId, ...checkoutIds) : shopifySinceId;
 		}
 
 		if (pageResult.reachedEnd) {
@@ -394,6 +541,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 		where: {
 			storeId,
 			workspaceId: resolvedWorkspaceId,
+			provider: normalizedProvider,
 			status: 'NEW',
 			checkoutCreatedAt: { lt: cutoff }
 		},
@@ -403,10 +551,11 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 	const idsToDelete = oldNewCarts.map((item) => item.id);
 	const uniqueIdsToDelete = [...new Set(idsToDelete)];
 	const deletedCount = await deleteCartIdsInChunks(uniqueIdsToDelete, resolvedWorkspaceId);
-	const remainingCount = await prisma.abandonedCart.count({ where: { workspaceId: resolvedWorkspaceId, storeId } });
+	const remainingCount = await prisma.abandonedCart.count({ where: { workspaceId: resolvedWorkspaceId, provider: normalizedProvider, storeId } });
 
 	return {
 		ok: true,
+		provider: normalizedProvider,
 		daysBack: normalizedDaysBack,
 		pagesFetched,
 		totalReceived,

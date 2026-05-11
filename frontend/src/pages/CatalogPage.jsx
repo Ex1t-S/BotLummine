@@ -23,7 +23,6 @@ export default function CatalogPage() {
 
 	const queryClient = useQueryClient();
 	const [query, setQuery] = useState('');
-	const [provider, setProvider] = useState('TIENDANUBE');
 	const [page, setPage] = useState(1);
 	const debouncedQuery = useDebouncedValue(query);
 
@@ -57,7 +56,7 @@ export default function CatalogPage() {
 
 	const syncMutation = useMutation({
 		mutationFn: async () => {
-			await api.post('/dashboard/catalog/sync', { provider });
+			await api.post('/dashboard/catalog/sync');
 		},
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: ['dashboard', 'catalog'] });
@@ -85,10 +84,6 @@ export default function CatalogPage() {
 				description={`${data.total} productos sincronizados para búsqueda y campañas.`}
 			>
 				<div className="catalog-sync-controls">
-					<select value={provider} onChange={(event) => setProvider(event.target.value)}>
-						<option value="TIENDANUBE">Tiendanube</option>
-						<option value="SHOPIFY">Shopify</option>
-					</select>
 					<ActionButton onClick={() => syncMutation.mutate()} disabled={syncing} icon={RefreshCw}>
 						{syncing ? 'Sincronizando' : 'Sincronizar catálogo'}
 					</ActionButton>

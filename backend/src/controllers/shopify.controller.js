@@ -1,16 +1,18 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
+import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { DEFAULT_WORKSPACE_ID, requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
-const SHOPIFY_DEFAULT_SCOPES = 'read_products,read_orders,read_customers,read_fulfillments,read_inventory,read_locations';
+const SHOPIFY_DEFAULT_SCOPES = 'read_products,read_orders,read_customers,read_fulfillments,read_inventory,read_locations,read_checkouts';
 const SHOPIFY_ALLOWED_SCOPES = new Set([
 	'read_products',
 	'read_orders',
 	'read_customers',
 	'read_fulfillments',
 	'read_inventory',
-	'read_locations'
+	'read_locations',
+	'read_checkouts'
 ]);
 const SHOPIFY_WEBHOOK_TOPICS = [
 	'orders/create',
@@ -288,7 +290,7 @@ export async function handleShopifyCallback(req, res) {
 
 		const shopInfo = await fetchShopInfo(shopDomain, accessToken).catch(() => null);
 		const shop = shopInfo?.shop || {};
-		await prisma.commerceConnection.upsert({
+		const connection = await prisma.commerceConnection.upsert({
 			where: {
 				workspaceId_provider: {
 					workspaceId,
@@ -328,6 +330,7 @@ export async function handleShopifyCallback(req, res) {
 				}
 			}
 		});
+		await markPrimaryCommerceConnection(connection.id, { workspaceId });
 
 		const webhookResult = await registerShopifyWebhooks(req, { shopDomain, accessToken });
 		let catalogError = null;
