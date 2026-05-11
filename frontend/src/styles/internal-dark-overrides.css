@@ -1139,7 +1139,9 @@
 	.campaign-conversion-source-strip,
 	.campaign-conversion-source-strip span,
 	.campaign-recipient-table-wrapper--tracking,
-	.campaign-confirm-dialog
+	.campaign-confirm-dialog,
+	.template-builder-buttons-panel,
+	.template-builder-button-editor
 ) {
 	background:
 		linear-gradient(135deg, rgba(56, 189, 248, 0.035), transparent 46%),
@@ -1190,7 +1192,8 @@
 	.campaign-tracking-kpi small,
 	.campaign-results-summary span,
 	.campaign-recipient-meta small,
-	.campaign-schedule-ops span
+	.campaign-schedule-ops span,
+	.template-builder-buttons-empty
 ) {
 	color: var(--ui-muted) !important;
 }

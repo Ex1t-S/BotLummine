@@ -847,7 +847,7 @@ export default function TemplateBuilderPanel({
 					</label>
 
 					<div
-						className="field"
+						className="field template-builder-buttons-panel"
 						style={{
 							display: 'grid',
 							gap: 12,
@@ -892,6 +892,7 @@ export default function TemplateBuilderPanel({
 								{form.buttons.map((button, index) => (
 									<div
 										key={button.id}
+										className="template-builder-button-editor"
 										style={{
 											display: 'grid',
 											gap: 10,
@@ -985,7 +986,7 @@ export default function TemplateBuilderPanel({
 								))}
 							</div>
 						) : (
-							<div style={{ fontSize: 13, color: '#64748b' }}>
+							<div className="template-builder-buttons-empty" style={{ fontSize: 13, color: '#64748b' }}>
 								Podés dejarlo sin botones o agregar hasta 3.
 							</div>
 						)}
