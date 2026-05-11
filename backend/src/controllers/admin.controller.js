@@ -13,6 +13,7 @@ import {
 	syncCatalogFromProvider,
 } from '../services/catalog/catalog.service.js';
 import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
+import { generateWorkspaceBusinessContextDraft } from '../services/workspaces/workspace-context-draft.service.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -1166,6 +1167,26 @@ export async function getWorkspace(req, res, next) {
 		}
 
 		return res.json({ ok: true, workspace });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function generateWorkspaceContextDraft(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+
+		const result = await generateWorkspaceBusinessContextDraft(workspaceId, {
+			websiteUrl: normalizeString(req.body?.websiteUrl) || ''
+		});
+		return res.json({
+			ok: true,
+			draft: result.draft,
+			basis: result.basis,
+			warnings: result.warnings,
+			generation: result.generation
+		});
 	} catch (error) {
 		next(error);
 	}

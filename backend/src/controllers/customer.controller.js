@@ -654,6 +654,7 @@ export async function postSyncCustomers(req, res) {
 	try {
 		const result = await syncCustomersService({
 			workspaceId: requireRequestWorkspaceId(req),
+			provider: req.body?.provider || req.query?.provider || 'TIENDANUBE',
 			force: req.body?.force === true,
 		});
 

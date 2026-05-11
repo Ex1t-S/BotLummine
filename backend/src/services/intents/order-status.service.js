@@ -1,4 +1,4 @@
-import { getOrderByNumber } from '../tiendanube/orders.service.js';
+import { getOrderByNumber } from '../commerce/orders.service.js';
 import { resolveEnboxTracking } from '../enbox/enbox.service.js';
 import { findCachedEnboxShipment } from '../enbox/enbox-sync.service.js';
 
@@ -76,7 +76,7 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 	}
 
 	const liveOrderContext = await getOrderByNumber(orderNumber, { workspaceId }).catch((err) => {
-		console.error('Error consultando pedido en Tiendanube:', err);
+		console.error('Error consultando pedido en ecommerce:', err);
 		return null;
 	});
 

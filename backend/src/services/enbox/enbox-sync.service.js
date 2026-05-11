@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
-import { getOrderByNumber } from '../tiendanube/orders.service.js';
+import { getOrderByNumber } from '../commerce/orders.service.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	buildPublicTrackingUrl,
@@ -338,7 +338,7 @@ async function discoverRecentShipments(mode = 'incremental', workspaceId = DEFAU
 		try {
 			liveOrder = await getOrderByNumber(candidate.orderNumber, { workspaceId });
 		} catch (error) {
-			pushError(`No se pudo cargar pedido ${candidate.orderNumber} desde Tiendanube: ${error?.message || error}`);
+			pushError(`No se pudo cargar pedido ${candidate.orderNumber} desde ecommerce: ${error?.message || error}`);
 			continue;
 		}
 

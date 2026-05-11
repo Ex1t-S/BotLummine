@@ -404,11 +404,14 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [channelForm, setChannelForm] = useState(EMPTY_CHANNEL_FORM);
 	const [commerceProvider, setCommerceProvider] = useState('SHOPIFY');
 	const [commerceForm, setCommerceForm] = useState(EMPTY_COMMERCE_FORM);
+	const [shopifyInstallShop, setShopifyInstallShop] = useState('');
 	const [logisticsForm, setLogisticsForm] = useState(EMPTY_LOGISTICS_FORM);
 	const [catalogStatus, setCatalogStatus] = useState(null);
 	const [tiendanubeStatus, setTiendanubeStatus] = useState(null);
+	const [shopifyStatus, setShopifyStatus] = useState(null);
 	const [analytics, setAnalytics] = useState(null);
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
+	const [generatingBusinessContext, setGeneratingBusinessContext] = useState(false);
 	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -456,11 +459,12 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function loadWorkspaceDetail(workspaceId) {
 		if (!workspaceId) return;
 
-		const [workspaceRes, usersRes, catalogRes, tiendanubeStatusRes] = await Promise.all([
+		const [workspaceRes, usersRes, catalogRes, tiendanubeStatusRes, shopifyStatusRes] = await Promise.all([
 			api.get(`/admin/workspaces/${workspaceId}`),
 			api.get(`/admin/workspaces/${workspaceId}/users`),
 			api.get(`/admin/workspaces/${workspaceId}/catalog/status`).catch(() => null),
-			api.get('/tiendanube/status', { params: { workspaceId } }).catch(() => null)
+			api.get('/tiendanube/status', { params: { workspaceId } }).catch(() => null),
+			api.get('/shopify/status', { params: { workspaceId } }).catch(() => null)
 		]);
 
 		const nextWorkspace = workspaceRes.data.workspace || null;
@@ -470,6 +474,13 @@ export default function AdminPage({ defaultTab = '' }) {
 		setUsers(usersRes.data.users || []);
 		setCatalogStatus(catalogRes?.data?.catalog || null);
 		setTiendanubeStatus(tiendanubeStatusRes?.data || null);
+		setShopifyStatus(shopifyStatusRes?.data || null);
+		setShopifyInstallShop(
+			shopifyStatusRes?.data?.shopDomain ||
+			nextWorkspace?.commerceConnections?.find((item) => item.provider === 'SHOPIFY')?.shopDomain ||
+			nextWorkspace?.commerceConnections?.find((item) => item.provider === 'SHOPIFY')?.externalStoreId ||
+			''
+		);
 
 		const channel = nextWorkspace?.whatsappChannels?.[0] || null;
 		setChannelForm({
@@ -538,6 +549,9 @@ export default function AdminPage({ defaultTab = '' }) {
 		const nextWorkspaceId = params.get('workspaceId');
 		const tiendanubeResult = params.get('tiendanube');
 		const connectedStoreId = params.get('storeId');
+		const tiendanubeMessage = params.get('message');
+		const shopifyResult = params.get('shopify');
+		const connectedShop = params.get('shop');
 
 		if (nextTab && visibleTabs.some((tab) => tab.key === nextTab)) {
 			setActiveTab(nextTab);
@@ -549,22 +563,60 @@ export default function AdminPage({ defaultTab = '' }) {
 
 		if (tiendanubeResult === 'connected') {
 			showNotice(
-				connectedStoreId
+				tiendanubeMessage ||
+				(connectedStoreId
 					? `Tienda Nube conectada. Store ID ${connectedStoreId}.`
-					: 'Tienda Nube conectada correctamente.'
+					: 'Tienda Nube conectada correctamente.')
 			);
 		}
 
 		if (tiendanubeResult === 'partial') {
 			setNotice('');
 			setError(
-				connectedStoreId
+				tiendanubeMessage ||
+				(connectedStoreId
 					? `La tienda ${connectedStoreId} se conecto, pero quedo alguna sincronizacion pendiente.`
-					: 'La tienda se conecto, pero quedo alguna sincronizacion pendiente.'
+					: 'La tienda se conecto, pero quedo alguna sincronizacion pendiente.')
 			);
 		}
 
-		if (nextTab || nextWorkspaceId || tiendanubeResult || connectedStoreId) {
+		if (tiendanubeResult === 'already_connected') {
+			showNotice(
+				tiendanubeMessage ||
+				'La app ya estaba conectada en esa tienda. Si queres, podes volver a sincronizar.'
+			);
+		}
+
+		if (tiendanubeResult === 'cancelled' || tiendanubeResult === 'error') {
+			setNotice('');
+			setError(
+				tiendanubeMessage ||
+				(tiendanubeResult === 'cancelled'
+					? 'La conexion con Tiendanube se cancelo antes de completarse.'
+					: 'No se pudo completar la conexion con Tiendanube.')
+			);
+		}
+
+		if (shopifyResult === 'connected') {
+			showNotice(tiendanubeMessage || (connectedShop ? `Shopify conectado. Tienda ${connectedShop}.` : 'Shopify conectado correctamente.'));
+		}
+
+		if (shopifyResult === 'partial') {
+			setNotice('');
+			setError(tiendanubeMessage || (connectedShop ? `Shopify ${connectedShop} se conecto, pero quedaron tareas pendientes.` : 'Shopify se conecto, pero quedaron tareas pendientes.'));
+		}
+
+		if (shopifyResult === 'cancelled' || shopifyResult === 'error') {
+			setNotice('');
+			setError(
+				tiendanubeMessage ||
+				(shopifyResult === 'cancelled'
+					? 'La conexion con Shopify se cancelo antes de completarse.'
+					: 'No se pudo completar la conexion con Shopify.')
+			);
+		}
+
+		if (nextTab || nextWorkspaceId || tiendanubeResult || connectedStoreId || tiendanubeMessage || shopifyResult || connectedShop) {
 			window.history.replaceState({}, document.title, window.location.pathname);
 		}
 	}, [platformAdmin, visibleTabs]);
@@ -694,6 +746,49 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function handleSavePayment(event) {
 		event.preventDefault();
 		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Datos de pago guardados.');
+	}
+
+	async function handleGenerateBusinessContext() {
+		if (!selectedWorkspaceId) return;
+		setGeneratingBusinessContext(true);
+		try {
+			const currentDraft = workspaceForm.aiConfig?.businessContext || '';
+			if (
+				currentDraft &&
+				!window.confirm('Esto va a reemplazar el contexto comercial actual en el formulario. ¿Querés seguir?')
+			) {
+				return;
+			}
+
+			const websiteUrl =
+				commerceForm.storeUrl ||
+				workspace?.commerceConnections?.[0]?.storeUrl ||
+				tiendanubeStatus?.storeUrl ||
+				'';
+			const res = await api.post(`/admin/workspaces/${selectedWorkspaceId}/ai-context/generate`, {
+				websiteUrl
+			});
+			const draft = String(res.data?.draft || '').trim();
+			if (!draft) {
+				setError('No se pudo generar un borrador de contexto comercial.');
+				return;
+			}
+
+			setWorkspaceForm((cur) => ({
+				...cur,
+				aiConfig: {
+					...cur.aiConfig,
+					businessContext: draft
+				}
+			}));
+
+			const mode = res.data?.generation?.mode === 'ai-assisted' ? 'IA' : 'base automatica';
+			showNotice(`Contexto comercial generado con ${mode} usando web, catalogo y configuracion operativa. Revisalo y guardalo si te sirve.`);
+		} catch (err) {
+			showError(err);
+		} finally {
+			setGeneratingBusinessContext(false);
+		}
 	}
 
 	async function handleSaveUser(event) {
@@ -826,6 +921,7 @@ export default function AdminPage({ defaultTab = '' }) {
 				setUsers([]);
 				setCatalogStatus(null);
 				setTiendanubeStatus(null);
+				setShopifyStatus(null);
 			}
 			showNotice(`Marca eliminada: ${deletedName}.`);
 		} catch (err) {
@@ -838,6 +934,21 @@ export default function AdminPage({ defaultTab = '' }) {
 	function handleStartTiendanubeInstall() {
 		if (!selectedWorkspaceId) return;
 		window.location.href = buildApiUrl(`/tiendanube/install?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
+	}
+
+	function handleStartShopifyInstall(shopOverride = '') {
+		if (!selectedWorkspaceId) return;
+		const shopDomain = shopOverride || shopifyInstallShop || commerceForm.shopDomain || commerceForm.externalStoreId || shopifyStatus?.shopDomain || '';
+		if (!shopDomain) {
+			setNotice('');
+			setError('Ingresa el dominio Shopify antes de conectar.');
+			return;
+		}
+		const params = new URLSearchParams({
+			workspaceId: selectedWorkspaceId,
+			shop: shopDomain
+		});
+		window.location.href = buildApiUrl(`/shopify/install?${params.toString()}`);
 	}
 
 	function editUser(item) {
@@ -1017,6 +1128,12 @@ export default function AdminPage({ defaultTab = '' }) {
 										<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
 										<Input label="Logo de la marca (URL)" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
 										<Textarea label="Contexto comercial" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
+										<div className="tenant-admin-context-tools">
+											<button type="button" disabled={saving || loading || generatingBusinessContext || !selectedWorkspaceId} onClick={handleGenerateBusinessContext}>
+												{generatingBusinessContext ? 'Generando contexto...' : 'Generar contexto base'}
+											</button>
+											<small>Arma un borrador con datos reales de la tienda, catalogo y configuracion operativa.</small>
+										</div>
 										<Textarea label="Instrucciones extra del sistema" rows={5} value={workspaceForm.aiConfig?.systemPrompt || ''} onChange={(value) => setNestedForm('aiConfig', 'systemPrompt', value)} />
 										<button type="submit" disabled={saving || loading}>Guardar marca</button>
 										<button type="button" disabled={saving || loading} onClick={handleDeleteWorkspace}>Borrar marca</button>
@@ -1136,6 +1253,35 @@ export default function AdminPage({ defaultTab = '' }) {
 					</section>
 				) : null}
 
+				{activeTab === 'integrations' ? (
+					<section className="tenant-admin-panel">
+						<h3>Conexion Shopify</h3>
+						<div className="tenant-admin-metrics">
+							<StatusPill>OAuth: {shopifyStatus?.hasClientSecret ? 'listo' : 'revisar credenciales'}</StatusPill>
+							<StatusPill>Tienda: {shopifyStatus?.shopDomain || 'sin tienda'}</StatusPill>
+							<StatusPill>Estado: {shopifyStatus?.status || 'sin resolver'}</StatusPill>
+							<StatusPill>API: {shopifyStatus?.apiVersion || '2026-04'}</StatusPill>
+						</div>
+						<div className="tenant-admin-grid">
+							<Input
+								label="Dominio Shopify"
+								value={shopifyInstallShop}
+								placeholder="mi-tienda.myshopify.com"
+								onChange={setShopifyInstallShop}
+							/>
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleStartShopifyInstall(shopifyInstallShop)}>
+								Conectar Shopify
+							</button>
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync('SHOPIFY')}>
+								Sincronizar catalogo Shopify
+							</button>
+						</div>
+						<small className="tenant-admin-helper">
+							Link directo: {selectedWorkspaceId && shopifyInstallShop ? buildApiUrl(`/shopify/install?${new URLSearchParams({ workspaceId: selectedWorkspaceId, shop: shopifyInstallShop }).toString()}`) : 'completa el dominio para generarlo'}
+						</small>
+					</section>
+				) : null}
+
 				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">
 						<h3>WhatsApp Cloud API</h3>
@@ -1169,6 +1315,14 @@ export default function AdminPage({ defaultTab = '' }) {
 								<StatusPill>Webhooks: {(tiendanubeStatus?.orderWebhookEvents || []).length || 0} eventos</StatusPill>
 							</div>
 						) : null}
+						{commerceProvider === 'SHOPIFY' ? (
+							<div className="tenant-admin-metrics">
+								<StatusPill>OAuth: {shopifyStatus?.hasClientSecret ? 'listo' : 'revisar credenciales'}</StatusPill>
+								<StatusPill>Tienda: {shopifyStatus?.shopDomain || 'sin tienda'}</StatusPill>
+								<StatusPill>Estado: {shopifyStatus?.status || 'sin resolver'}</StatusPill>
+								<StatusPill>API: {shopifyStatus?.apiVersion || commerceForm.apiVersion || '2026-04'}</StatusPill>
+							</div>
+						) : null}
 						<form className="tenant-admin-grid" onSubmit={handleSaveCommerce}>
 							<Select label="Proveedor" value={commerceProvider} onChange={(value) => {
 								setCommerceProvider(value);
@@ -1195,6 +1349,11 @@ export default function AdminPage({ defaultTab = '' }) {
 							{commerceProvider === 'TIENDANUBE' ? (
 								<button type="button" disabled={saving || !selectedWorkspaceId} onClick={handleStartTiendanubeInstall}>
 									Conectar Tiendanube
+								</button>
+							) : null}
+							{commerceProvider === 'SHOPIFY' ? (
+								<button type="button" disabled={saving || !selectedWorkspaceId} onClick={handleStartShopifyInstall}>
+									Conectar Shopify
 								</button>
 							) : null}
 						</form>

@@ -4,6 +4,7 @@ import {
 	createWorkspace,
 	deleteWorkspace,
 	createWorkspaceUser,
+	generateWorkspaceContextDraft,
 	getPlatformDiagnostics,
 	getWorkspaceAnalytics,
 	getWorkspace,
@@ -29,6 +30,7 @@ router.get('/workspaces', requirePlatformAdmin, listWorkspaces);
 router.post('/workspaces', requirePlatformAdmin, createWorkspace);
 router.delete('/workspaces/:workspaceId', requirePlatformAdmin, deleteWorkspace);
 router.get('/workspaces/:workspaceId', requireAdmin, getWorkspace);
+router.post('/workspaces/:workspaceId/ai-context/generate', requireAdmin, generateWorkspaceContextDraft);
 router.patch('/workspaces/:workspaceId', requireAdmin, updateWorkspace);
 router.get('/workspaces/:workspaceId/users', requireAdmin, listWorkspaceUsers);
 router.post('/workspaces/:workspaceId/users', requireAdmin, createWorkspaceUser);

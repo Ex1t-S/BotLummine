@@ -59,6 +59,16 @@
 	gap: 10px;
 }
 
+.customers-provider-select {
+	min-height: 42px;
+	border: 1px solid #d1d5db;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #111827;
+	font-weight: 700;
+	padding: 0 12px;
+}
+
 .primary-action-btn,
 .customers-apply-btn,
 .pagination-btn,

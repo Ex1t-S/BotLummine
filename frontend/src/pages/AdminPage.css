@@ -141,6 +141,28 @@
 	grid-column: 1 / -1;
 }
 
+.tenant-admin-context-tools {
+	grid-column: 1 / -1;
+	display: grid;
+	gap: 6px;
+	align-content: start;
+}
+
+.tenant-admin-context-tools small {
+	color: #64748b;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.tenant-admin-helper {
+	display: block;
+	margin-top: 10px;
+	color: #64748b;
+	font-size: 12px;
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
 .admin-field span {
 	font-size: 12px;
 	font-weight: 800;

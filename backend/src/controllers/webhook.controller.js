@@ -4,6 +4,7 @@ import { logger, maskPhone } from '../lib/logger.js';
 import { processInboundMessage } from '../services/conversation/chat.service.js';
 import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
 import { applyCampaignMessageStatusWebhook } from '../services/campaigns/whatsapp-campaign.service.js';
+import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
 import {
 	applyTemplateStatusWebhook,
 	applyTemplateQualityWebhook,
@@ -12,6 +13,8 @@ import {
 } from '../services/whatsapp/whatsapp-template.service.js';
 import {
 	fetchTiendanubeOrderById,
+	fetchShopifyOrderById,
+	upsertShopifyOrder,
 	upsertTiendanubeOrder,
 	resolveStoreCredentials
 } from '../services/customers/customer.service.js';
@@ -226,6 +229,24 @@ function timingSafeEquals(a = '', b = '') {
 	}
 
 	return crypto.timingSafeEqual(left, right);
+}
+
+function getShopifyWebhookSecret() {
+	return String(
+		process.env.SHOPIFY_CLIENT_SECRET ||
+		process.env.SHOPIFY_API_SECRET ||
+		''
+	).trim();
+}
+
+function verifyShopifyWebhook(rawBodyBuffer, signatureHeader) {
+	const secret = getShopifyWebhookSecret();
+	if (!secret || !signatureHeader) return false;
+	const expected = crypto
+		.createHmac('sha256', secret)
+		.update(rawBodyBuffer)
+		.digest('base64');
+	return timingSafeEquals(String(signatureHeader), expected);
 }
 
 function isSupportedTiendanubeOrderEvent(event = '') {
@@ -443,6 +464,174 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			error: process.env.NODE_ENV === 'production'
 				? 'No se pudo procesar el webhook de Tiendanube.'
 				: error?.message || 'No se pudo procesar el webhook de Tiendanube.',
+			requestId: req.requestId || null,
+		});
+	}
+}
+
+export async function receiveShopifyWebhook(req, res) {
+	try {
+		const rawBodyBuffer = Buffer.isBuffer(req.body)
+			? req.body
+			: Buffer.from(req.body || '');
+		const signatureHeader = req.headers['x-shopify-hmac-sha256'];
+		if (!verifyShopifyWebhook(rawBodyBuffer, signatureHeader)) {
+			return res.status(401).json({
+				ok: false,
+				error: 'Firma de webhook Shopify invalida.'
+			});
+		}
+
+		const shopDomain = String(req.headers['x-shopify-shop-domain'] || '').trim().toLowerCase();
+		const topic = String(req.headers['x-shopify-topic'] || '').trim().toLowerCase();
+		let payload = {};
+		try {
+			payload = JSON.parse(rawBodyBuffer.toString('utf8') || '{}');
+		} catch (error) {
+			return res.status(400).json({
+				ok: false,
+				error: `Webhook Shopify invalido: ${error.message}`
+			});
+		}
+
+		if (!shopDomain || !topic) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Webhook Shopify incompleto. Se esperaba shop domain y topic.'
+			});
+		}
+
+		if (['customers/data_request', 'customers/redact', 'shop/redact'].includes(topic)) {
+			logger.info('webhook.shopify_privacy_received', {
+				requestId: req.requestId || null,
+				shopDomain,
+				topic,
+			});
+			return res.json({ ok: true, topic, shopDomain, privacy: true });
+		}
+
+		const connection = await prisma.commerceConnection.findUnique({
+			where: {
+				provider_externalStoreId: {
+					provider: 'SHOPIFY',
+					externalStoreId: shopDomain
+				}
+			},
+			select: { workspaceId: true, externalStoreId: true }
+		});
+		if (!connection?.workspaceId) {
+			return res.status(404).json({
+				ok: false,
+				error: `No se encontro conexion Shopify para ${shopDomain}.`
+			});
+		}
+
+		if (topic === 'app/uninstalled') {
+			await prisma.commerceConnection.update({
+				where: {
+					provider_externalStoreId: {
+						provider: 'SHOPIFY',
+						externalStoreId: shopDomain
+					}
+				},
+				data: { status: 'DISABLED' }
+			});
+			return res.json({ ok: true, topic, shopDomain, disabled: true });
+		}
+
+		if (topic === 'products/delete') {
+			const productId = String(payload?.id || '').trim();
+			if (productId) {
+				await prisma.catalogProduct.deleteMany({
+					where: {
+						workspaceId: connection.workspaceId,
+						provider: 'SHOPIFY',
+						storeId: shopDomain,
+						productId
+					}
+				});
+			}
+			return res.json({ ok: true, topic, shopDomain, productId, deleted: Boolean(productId) });
+		}
+
+		if (['products/create', 'products/update'].includes(topic)) {
+			await syncCatalogFromShopify({ workspaceId: connection.workspaceId });
+			return res.json({ ok: true, topic, shopDomain, catalogSynced: true });
+		}
+
+		if (['customers/create', 'customers/update'].includes(topic)) {
+			logger.info('webhook.shopify_customer_received', {
+				requestId: req.requestId || null,
+				shopDomain,
+				topic,
+				customerId: payload?.id || null,
+			});
+			return res.json({ ok: true, topic, shopDomain, customerAccepted: true });
+		}
+
+		const orderTopics = [
+			'orders/create',
+			'orders/updated',
+			'orders/paid',
+			'orders/cancelled',
+			'orders/fulfilled',
+			'refunds/create',
+			'fulfillments/create',
+			'fulfillment_events/create'
+		];
+		if (!orderTopics.includes(topic)) {
+			return res.json({ ok: true, ignored: true, topic });
+		}
+
+		const orderId = String(payload?.order_id || payload?.id || '').trim();
+		if (!orderId) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Webhook Shopify de orden sin id u order_id.'
+			});
+		}
+
+		const order = await fetchShopifyOrderById({
+			workspaceId: connection.workspaceId,
+			orderId
+		}).catch(() => payload);
+		const saved = await upsertShopifyOrder(order, shopDomain, {
+			workspaceId: connection.workspaceId
+		});
+		const attribution = await attributeOrderConversions({
+			workspaceId: connection.workspaceId,
+			storeId: shopDomain,
+			orderId
+		}).catch((error) => {
+			logger.warn('webhook.shopify_attribution_failed', {
+				requestId: req.requestId || null,
+				shopDomain,
+				orderId,
+				error,
+			});
+			return { conversions: 0, recoveredCarts: 0 };
+		});
+
+		return res.json({
+			ok: true,
+			topic,
+			shopDomain,
+			orderId,
+			ordersUpserted: saved.ordersUpserted,
+			itemsUpserted: saved.itemsUpserted,
+			conversionsAttributed: attribution.conversions || 0,
+			recoveredCarts: attribution.recoveredCarts || 0
+		});
+	} catch (error) {
+		logger.error('webhook.shopify_failed', {
+			requestId: req.requestId || null,
+			error,
+		});
+		return res.status(500).json({
+			ok: false,
+			error: process.env.NODE_ENV === 'production'
+				? 'No se pudo procesar el webhook de Shopify.'
+				: error?.message || 'No se pudo procesar el webhook de Shopify.',
 			requestId: req.requestId || null,
 		});
 	}

@@ -3,6 +3,7 @@ import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
 import { deriveShippingStatus } from '../common/shipping-status.js';
+import { getShopifyClient, getShopifyConfig } from '../shopify/client.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || 'v1';
 const ORDERS_PER_PAGE = Math.max(1, Math.min(200, Number(process.env.TIENDANUBE_ORDERS_SYNC_PER_PAGE || 50)));
@@ -14,6 +15,7 @@ const ITEM_BATCH_SIZE = Math.max(50, Number(process.env.TIENDANUBE_ORDER_ITEMS_B
 const MAX_MONTH_WINDOWS_PER_SYNC = Math.max(1, Number(process.env.TIENDANUBE_ORDERS_MAX_MONTH_WINDOWS || 120));
 const MAX_PAGES_PER_WINDOW = Math.max(1, Number(process.env.TIENDANUBE_MAX_PAGES_PER_WINDOW || 120));
 const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
+const SHOPIFY_ORDERS_PER_PAGE = Math.max(1, Math.min(250, Number(process.env.SHOPIFY_ORDERS_SYNC_PER_PAGE || 250)));
 const CUSTOMER_ORDER_LIST_FIELDS = [
 	'id',
 	'number',
@@ -100,6 +102,77 @@ function isInvalidFieldsError(error) {
 	return error?.status === 404 && text.includes('some chosen field do not exist');
 }
 
+function normalizeProvider(value = '') {
+	const provider = String(value || '').trim().toUpperCase();
+	return provider === 'SHOPIFY' ? 'SHOPIFY' : 'TIENDANUBE';
+}
+
+function normalizeShopDomain(value = '') {
+	return String(value || '')
+		.trim()
+		.replace(/^https?:\/\//i, '')
+		.replace(/\/+$/, '')
+		.toLowerCase();
+}
+
+function getShopifyCustomerName(customer = {}, fallback = null) {
+	const firstName = cleanString(customer?.first_name);
+	const lastName = cleanString(customer?.last_name);
+	const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+	return fullName || cleanString(customer?.name) || fallback;
+}
+
+function normalizeShopifyOrder(order = {}) {
+	const customerName = getShopifyCustomerName(customerFromOrder(order), cleanString(order?.name));
+	const contactEmail =
+		cleanString(order?.email) ||
+		cleanString(order?.contact_email) ||
+		cleanString(order?.customer?.email);
+	const contactPhone =
+		cleanString(order?.phone) ||
+		cleanString(order?.customer?.phone) ||
+		cleanString(order?.shipping_address?.phone) ||
+		cleanString(order?.billing_address?.phone);
+	const lineItems = Array.isArray(order?.line_items) ? order.line_items : [];
+
+	return {
+		...order,
+		id: String(order?.id || order?.admin_graphql_api_id || ''),
+		number: cleanString(order?.order_number) || cleanString(order?.name),
+		token: cleanString(order?.token) || cleanString(order?.checkout_token),
+		created_at: order?.created_at,
+		updated_at: order?.updated_at,
+		total: order?.total_price,
+		currency: order?.currency,
+		payment_status: order?.financial_status,
+		shipping_status: order?.fulfillment_status || 'unfulfilled',
+		contact_name: customerName,
+		contact_email: contactEmail,
+		contact_phone: contactPhone,
+		status: order?.cancelled_at ? 'cancelled' : order?.closed_at ? 'closed' : 'open',
+		subtotal: order?.subtotal_price,
+		gateway: Array.isArray(order?.payment_gateway_names) ? order.payment_gateway_names.join(', ') : null,
+		products: lineItems.map((item) => ({
+			id: item?.id,
+			product_id: item?.product_id,
+			variant_id: item?.variant_id,
+			sku: item?.sku,
+			name: item?.title || item?.name,
+			name_without_variants: item?.title,
+			variant_values: [item?.variant_title].filter(Boolean),
+			quantity: item?.quantity,
+			price: item?.price,
+			image: null,
+			rawPayload: item
+		})),
+		_shopifyRaw: order
+	};
+}
+
+function customerFromOrder(order = {}) {
+	return order?.customer && typeof order.customer === 'object' ? order.customer : {};
+}
+
 function normalizeOrderStatus(value) {
 	const normalized = cleanString(value);
 	return normalized ? normalized.toLowerCase() : null;
@@ -175,8 +248,20 @@ function pushError(message) {
 	syncState.message = message;
 }
 
-export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedProvider = normalizeProvider(provider);
+	if (normalizedProvider === 'SHOPIFY') {
+		const config = await getShopifyConfig({ workspaceId: resolvedWorkspaceId });
+		return {
+			storeId: normalizeShopDomain(config.shopDomain || config.externalStoreId),
+			accessToken: config.accessToken,
+			workspaceId: resolvedWorkspaceId,
+			provider: 'SHOPIFY',
+			source: config.source,
+		};
+	}
+
 	const envStoreId = cleanString(process.env.TIENDANUBE_STORE_ID);
 	const envAccessToken = cleanString(process.env.TIENDANUBE_ACCESS_TOKEN);
 
@@ -185,6 +270,7 @@ export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_
 			storeId: envStoreId,
 			accessToken: envAccessToken,
 			workspaceId: resolvedWorkspaceId,
+			provider: 'TIENDANUBE',
 			source: 'env',
 		};
 	}
@@ -206,6 +292,7 @@ export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_
 		storeId: installation.storeId,
 		accessToken: installation.accessToken,
 		workspaceId: installation.workspaceId,
+		provider: 'TIENDANUBE',
 		source: 'storeInstallation',
 	};
 }
@@ -296,16 +383,17 @@ async function fetchOrdersPage({
 	}
 }
 
-async function getLocalOrderBounds(storeId, workspaceId) {
+async function getLocalOrderBounds(storeId, workspaceId, provider = 'TIENDANUBE') {
+	const normalizedProvider = normalizeProvider(provider);
 	const [count, earliest, latest] = await Promise.all([
-		prisma.customerOrder.count({ where: { workspaceId, storeId } }),
+		prisma.customerOrder.count({ where: { workspaceId, provider: normalizedProvider, storeId } }),
 		prisma.customerOrder.findFirst({
-			where: { workspaceId, storeId },
+			where: { workspaceId, provider: normalizedProvider, storeId },
 			orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
 			select: { orderCreatedAt: true },
 		}),
 		prisma.customerOrder.findFirst({
-			where: { workspaceId, storeId },
+			where: { workspaceId, provider: normalizedProvider, storeId },
 			orderBy: [{ orderUpdatedAt: 'desc' }, { orderCreatedAt: 'desc' }, { createdAt: 'desc' }],
 			select: { orderCreatedAt: true, orderUpdatedAt: true },
 		}),
@@ -337,7 +425,8 @@ function buildProfileIdentity(order) {
 	};
 }
 
-async function ensureProfilesForOrders(orders, storeId, workspaceId) {
+async function ensureProfilesForOrders(orders, storeId, workspaceId, provider = 'TIENDANUBE') {
+	const normalizedProvider = normalizeProvider(provider);
 	const candidatesMap = new Map();
 	for (const order of orders) {
 		const candidate = buildProfileIdentity(order);
@@ -384,7 +473,7 @@ async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 		await prisma.customerProfile.createMany({
 			data: missing.map((item) => ({
 				workspaceId,
-				provider: 'TIENDANUBE',
+				provider: normalizedProvider,
 				storeId,
 				externalCustomerId: item.externalCustomerId,
 				displayName: item.displayName,
@@ -437,10 +526,11 @@ async function ensureProfilesForOrders(orders, storeId, workspaceId) {
 	return orderToProfileId;
 }
 
-function mapOrderPayload(order, storeId, customerProfileId, workspaceId) {
+function mapOrderPayload(order, storeId, customerProfileId, workspaceId, provider = 'TIENDANUBE') {
+	const normalizedProvider = normalizeProvider(provider);
 	return {
 		workspaceId,
-		provider: 'TIENDANUBE',
+		provider: normalizedProvider,
 		customerProfileId,
 		storeId,
 		orderId: String(order?.id),
@@ -462,7 +552,8 @@ function mapOrderPayload(order, storeId, customerProfileId, workspaceId) {
 	};
 }
 
-function buildOrderItems(order, storeId, customerOrderId, customerProfileId, workspaceId) {
+function buildOrderItems(order, storeId, customerOrderId, customerProfileId, workspaceId, provider = 'TIENDANUBE') {
+	const normalizedProvider = normalizeProvider(provider);
 	const orderId = String(order?.id);
 	const orderNumber = cleanString(order?.number);
 	const orderCreatedAt = parseDateOrNull(order?.created_at);
@@ -478,7 +569,7 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId, wor
 
 		return {
 			workspaceId,
-			provider: 'TIENDANUBE',
+			provider: normalizedProvider,
 			customerOrderId,
 			customerProfileId,
 			storeId,
@@ -501,15 +592,16 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId, wor
 	});
 }
 
-async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKSPACE_ID) {
+async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE') {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedProvider = normalizeProvider(provider);
 	if (!orders.length) return { ordersUpserted: 0, itemsUpserted: 0 };
 
-	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, resolvedWorkspaceId);
+	const orderToProfileId = await ensureProfilesForOrders(orders, storeId, resolvedWorkspaceId, normalizedProvider);
 	const orderIds = orders.map((order) => String(order.id));
 
 	const existingOrders = await prisma.customerOrder.findMany({
-		where: { workspaceId: resolvedWorkspaceId, storeId, orderId: { in: orderIds } },
+		where: { workspaceId: resolvedWorkspaceId, provider: normalizedProvider, storeId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const existingMap = new Map(existingOrders.map((item) => [item.orderId, item.id]));
@@ -521,7 +613,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKS
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerProfileId) continue;
 
-		const payload = mapOrderPayload(order, storeId, customerProfileId, resolvedWorkspaceId);
+		const payload = mapOrderPayload(order, storeId, customerProfileId, resolvedWorkspaceId, normalizedProvider);
 		if (existingMap.has(orderId)) {
 			updates.push({ id: existingMap.get(orderId), data: payload });
 		} else {
@@ -551,7 +643,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKS
 	}
 
 	const savedOrders = await prisma.customerOrder.findMany({
-		where: { workspaceId: resolvedWorkspaceId, storeId, orderId: { in: orderIds } },
+		where: { workspaceId: resolvedWorkspaceId, provider: normalizedProvider, storeId, orderId: { in: orderIds } },
 		select: { id: true, orderId: true },
 	});
 	const savedOrderMap = new Map(savedOrders.map((item) => [item.orderId, item.id]));
@@ -568,7 +660,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKS
 		const customerOrderId = savedOrderMap.get(orderId);
 		const customerProfileId = orderToProfileId.get(orderId);
 		if (!customerOrderId || !customerProfileId) continue;
-		items.push(...buildOrderItems(order, storeId, customerOrderId, customerProfileId, resolvedWorkspaceId));
+		items.push(...buildOrderItems(order, storeId, customerOrderId, customerProfileId, resolvedWorkspaceId, normalizedProvider));
 	}
 
 	for (let index = 0; index < items.length; index += ITEM_BATCH_SIZE) {
@@ -609,7 +701,57 @@ export async function upsertTiendanubeOrder(order, storeId, { workspaceId = DEFA
 		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([order], storeId, workspaceId);
+	return upsertOrdersAndItems([order], storeId, workspaceId, 'TIENDANUBE');
+}
+
+export async function fetchShopifyOrderById({ workspaceId = DEFAULT_WORKSPACE_ID, orderId }) {
+	const normalizedOrderId = String(orderId || '').trim();
+	if (!normalizedOrderId) {
+		throw new Error('fetchShopifyOrderById requiere orderId.');
+	}
+
+	const { client } = await getShopifyClient({ workspaceId });
+	const response = await client.get(`/orders/${normalizedOrderId}.json`, {
+		params: {
+			fields: [
+				'id',
+				'name',
+				'order_number',
+				'token',
+				'checkout_token',
+				'created_at',
+				'updated_at',
+				'total_price',
+				'subtotal_price',
+				'currency',
+				'financial_status',
+				'fulfillment_status',
+				'cancelled_at',
+				'closed_at',
+				'email',
+				'phone',
+				'customer',
+				'shipping_address',
+				'billing_address',
+				'payment_gateway_names',
+				'line_items',
+				'fulfillments'
+			].join(',')
+		}
+	});
+	const order = response.data?.order;
+	if (!order || typeof order !== 'object') {
+		throw new Error(`La respuesta de Shopify para la orden ${normalizedOrderId} no fue valida.`);
+	}
+	return order;
+}
+
+export async function upsertShopifyOrder(order, storeId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	if (!order || !order.id) {
+		throw new Error('No se pudo guardar la orden de Shopify porque el payload no trae id.');
+	}
+
+	return upsertOrdersAndItems([normalizeShopifyOrder(order)], storeId, workspaceId, 'SHOPIFY');
 }
 
 async function processWindow({ storeId, accessToken, workspaceId, from, to, label }) {
@@ -676,6 +818,96 @@ async function processWindow({ storeId, accessToken, workspaceId, from, to, labe
 	};
 }
 
+async function fetchShopifyOrdersPage({ client, page, createdAtMin = null, createdAtMax = null, sinceId = 0 }) {
+	const params = {
+		limit: SHOPIFY_ORDERS_PER_PAGE,
+		status: 'any',
+		since_id: sinceId,
+		fields: [
+			'id',
+			'name',
+			'order_number',
+			'token',
+			'checkout_token',
+			'created_at',
+			'updated_at',
+			'total_price',
+			'subtotal_price',
+			'currency',
+			'financial_status',
+			'fulfillment_status',
+			'cancelled_at',
+			'closed_at',
+			'email',
+			'phone',
+			'customer',
+			'shipping_address',
+			'billing_address',
+			'payment_gateway_names',
+			'line_items',
+			'fulfillments'
+		].join(',')
+	};
+
+	if (createdAtMin) params.created_at_min = createdAtMin.toISOString();
+	if (createdAtMax) params.created_at_max = createdAtMax.toISOString();
+
+	const response = await client.get('/orders.json', { params });
+	const orders = Array.isArray(response.data?.orders) ? response.data.orders : [];
+	syncState.pagesFetched += 1;
+	syncState.message = `Shopify: pagina ${page} procesada.`;
+	return orders;
+}
+
+async function processShopifyWindow({ client, storeId, workspaceId, from, to, label }) {
+	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
+	syncState.activeWindow = { from, to, label };
+	syncState.message = `Sincronizando Shopify ${label}.`;
+
+	let sinceId = 0;
+	let page = 1;
+	let windowOrders = 0;
+	let windowUpserted = 0;
+	let windowItems = 0;
+
+	while (page <= MAX_PAGES_PER_WINDOW) {
+		const rawOrders = await fetchShopifyOrdersPage({ client, page, createdAtMin: from, createdAtMax: to, sinceId });
+		if (!rawOrders.length) break;
+
+		const orders = rawOrders.map(normalizeShopifyOrder).filter((order) => order.id);
+		syncState.ordersFetched += orders.length;
+		windowOrders += orders.length;
+
+		const saved = await upsertOrdersAndItems(orders, storeId, workspaceId, 'SHOPIFY');
+		await attributeOrdersByIds({
+			workspaceId,
+			storeId,
+			orderIds: saved.orderIds || orders.map((order) => String(order.id)),
+		}).catch((error) => {
+			pushWarning(`No se pudo atribuir conversiones Shopify: ${error?.message || error}`);
+		});
+
+		syncState.ordersUpserted += saved.ordersUpserted;
+		syncState.itemsUpserted += saved.itemsUpserted;
+		windowUpserted += saved.ordersUpserted;
+		windowItems += saved.itemsUpserted;
+		syncState.localOrdersAfter = await prisma.customerOrder.count({ where: { workspaceId, provider: 'SHOPIFY', storeId } });
+
+		sinceId = Math.max(...orders.map((order) => Number(order.id || 0)), sinceId);
+		if (rawOrders.length < SHOPIFY_ORDERS_PER_PAGE || !sinceId) break;
+		page += 1;
+		await sleep(350);
+	}
+
+	return {
+		label,
+		pagesFetched: page,
+		ordersFetched: windowOrders,
+		ordersUpserted: windowUpserted,
+		itemsUpserted: windowItems,
+	};
+}
+
 function safeSyncLogData(data) {
 	return {
 		workspaceId: data.workspaceId,
@@ -693,29 +925,31 @@ function safeSyncLogData(data) {
 	};
 }
 
-async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedProvider = normalizeProvider(provider);
 	const startedAt = Date.now();
 	let syncLog = null;
 
 	try {
-		const { storeId, accessToken } = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId });
+		const { storeId, accessToken } = await resolveStoreCredentials({ workspaceId: resolvedWorkspaceId, provider: normalizedProvider });
 		try {
 			syncLog = await prisma.customerSyncLog.create({
 				data: safeSyncLogData({
 					workspaceId: resolvedWorkspaceId,
+					provider: normalizedProvider,
 					storeId,
 					status: 'RUNNING',
 					fullSync: false,
 					startedAt: new Date(),
-					message: 'Sync de pedidos iniciada',
+					message: `Sync de pedidos ${normalizedProvider} iniciada`,
 				}),
 			});
 		} catch (logError) {
 			pushWarning(`No se pudo crear customerSyncLog: ${logError?.message || 'error desconocido'}`);
 		}
 
-		const boundsBefore = await getLocalOrderBounds(storeId, resolvedWorkspaceId);
+		const boundsBefore = await getLocalOrderBounds(storeId, resolvedWorkspaceId, normalizedProvider);
 		syncState.localOrdersBefore = boundsBefore.count;
 		syncState.localOrdersAfter = boundsBefore.count;
 
@@ -723,6 +957,19 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 		syncState.recentFrom = recentFrom.toISOString();
 
 		const runs = [];
+		if (normalizedProvider === 'SHOPIFY') {
+			const { client } = await getShopifyClient({ workspaceId: resolvedWorkspaceId });
+			runs.push(
+				await processShopifyWindow({
+					client,
+					storeId,
+					workspaceId: resolvedWorkspaceId,
+					from: recentFrom,
+					to: new Date(),
+					label: 'recent',
+				})
+			);
+		} else {
 		runs.push(
 			await processWindow({
 				storeId,
@@ -733,6 +980,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 				label: 'recent',
 			})
 		);
+		}
 
 		let cursor = boundsBefore.earliestOrderCreatedAt
 			? startOfMonthUTC(new Date(boundsBefore.earliestOrderCreatedAt.getTime() - 24 * 60 * 60 * 1000))
@@ -746,14 +994,23 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 			const monthEnd = endOfMonthUTC(cursor);
 			const label = monthLabel(monthStart);
 
-			const result = await processWindow({
-				storeId,
-				accessToken,
-				workspaceId: resolvedWorkspaceId,
-				from: monthStart,
-				to: monthEnd,
-				label,
-			});
+			const result = normalizedProvider === 'SHOPIFY'
+				? await processShopifyWindow({
+					client: (await getShopifyClient({ workspaceId: resolvedWorkspaceId })).client,
+					storeId,
+					workspaceId: resolvedWorkspaceId,
+					from: monthStart,
+					to: monthEnd,
+					label,
+				})
+				: await processWindow({
+					storeId,
+					accessToken,
+					workspaceId: resolvedWorkspaceId,
+					from: monthStart,
+					to: monthEnd,
+					label,
+				});
 			runs.push(result);
 
 			if (result.ordersFetched === 0) {
@@ -788,6 +1045,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 				data: safeSyncLogData({
 					status: 'SUCCESS',
 					workspaceId: resolvedWorkspaceId,
+					provider: normalizedProvider,
 					storeId,
 					finishedAt: new Date(),
 					pagesFetched: syncState.pagesFetched,
@@ -815,6 +1073,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 					data: safeSyncLogData({
 						status: 'ERROR',
 						workspaceId: resolvedWorkspaceId,
+						provider: normalizedProvider,
 						storeId: syncLog.storeId,
 						finishedAt: new Date(),
 						pagesFetched: syncState.pagesFetched,
@@ -834,8 +1093,9 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	}
 }
 
-export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedProvider = normalizeProvider(provider);
 	if (syncState.running) {
 		return {
 			ok: true,
@@ -849,10 +1109,10 @@ export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID } = {})
 	syncState.startedAt = new Date().toISOString();
 	syncState.finishedAt = null;
 	syncState.phase = 'starting';
-	syncState.message = 'Preparando sincronización de pedidos...';
+	syncState.message = `Preparando sincronizacion de pedidos ${normalizedProvider}...`;
 
 	setTimeout(() => {
-		runSyncJob({ workspaceId: resolvedWorkspaceId }).catch((error) => {
+		runSyncJob({ workspaceId: resolvedWorkspaceId, provider: normalizedProvider }).catch((error) => {
 			pushError(error?.message || 'Error sincronizando pedidos.');
 			syncState.running = false;
 			syncState.phase = 'error';

@@ -191,6 +191,8 @@ function buildTiendanubeInstallResultUrl({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	status = 'connected',
 	storeId = '',
+	message = '',
+	reason = '',
 }) {
 	const frontendBaseUrl = resolveFrontendAppBaseUrl();
 	if (!frontendBaseUrl) return null;
@@ -202,7 +204,102 @@ function buildTiendanubeInstallResultUrl({
 	if (storeId) {
 		url.searchParams.set('storeId', storeId);
 	}
+	if (message) {
+		url.searchParams.set('message', message);
+	}
+	if (reason) {
+		url.searchParams.set('reason', reason);
+	}
 	return url.toString();
+}
+
+function buildTiendanubeFallbackHtml({
+	title = 'Integracion Tiendanube',
+	message = 'La integracion termino.',
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	status = 'info'
+}) {
+	const safeTitle = String(title || 'Integracion Tiendanube');
+	const safeMessage = String(message || 'La integracion termino.');
+	const variant = status === 'error' ? '#b91c1c' : status === 'warning' ? '#b45309' : '#0f766e';
+	const adminUrl = `/admin?tab=integrations&workspaceId=${encodeURIComponent(workspaceId)}`;
+	return `<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>${safeTitle}</title>
+</head>
+<body style="margin:0;font-family:Arial,sans-serif;background:#f5f5f4;color:#111827;">
+	<div style="max-width:640px;margin:48px auto;padding:24px;">
+		<div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+			<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:${variant};color:#fff;font-size:12px;font-weight:700;letter-spacing:.02em;">Tiendanube</div>
+			<h1 style="margin:16px 0 8px;font-size:28px;line-height:1.1;">${safeTitle}</h1>
+			<p style="margin:0 0 20px;font-size:16px;line-height:1.5;color:#374151;">${safeMessage}</p>
+			<a href="${adminUrl}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#111827;color:#fff;text-decoration:none;font-weight:700;">Volver a integraciones</a>
+		</div>
+	</div>
+</body>
+</html>`;
+}
+
+function redirectTiendanubeInstallResult(res, payload) {
+	const resultUrl = buildTiendanubeInstallResultUrl(payload);
+	if (resultUrl) {
+		return res.redirect(resultUrl);
+	}
+
+	const status =
+		payload.status === 'connected'
+			? 'success'
+			: payload.status === 'partial' || payload.status === 'already_connected'
+				? 'warning'
+				: 'error';
+
+	return res
+		.status(payload.status === 'error' ? 400 : 200)
+		.send(
+			buildTiendanubeFallbackHtml({
+				title: 'Integracion Tiendanube',
+				message: payload.message || 'La integracion termino.',
+				workspaceId: payload.workspaceId,
+				status
+			})
+		);
+}
+
+function normalizeTiendanubeCallbackFailure(errorCode = '', errorDescription = '') {
+	const code = String(errorCode || '').trim().toLowerCase();
+	const description = String(errorDescription || '').trim();
+	const haystack = `${code} ${description}`.toLowerCase();
+
+	if (haystack.includes('access_denied') || haystack.includes('cancel')) {
+		return {
+			status: 'cancelled',
+			message: 'La conexion con Tiendanube fue cancelada antes de completarse.',
+			reason: code || 'cancelled'
+		};
+	}
+
+	if (
+		haystack.includes('already') ||
+		haystack.includes('instalada') ||
+		haystack.includes('instalado') ||
+		haystack.includes('registered') ||
+		haystack.includes('conectada')
+	) {
+		return {
+			status: 'already_connected',
+			message: 'La app ya estaba conectada en esa tienda. Si queres, podes sincronizar catalogo o volver a instalarla.',
+			reason: code || 'already_connected'
+		};
+	}
+
+	return {
+		status: 'error',
+		message: description || 'No se pudo completar la conexion con Tiendanube.',
+		reason: code || 'oauth_error'
+	};
 }
 
 async function listTiendanubeWebhooks({ storeId, accessToken }) {
@@ -434,11 +531,27 @@ export async function startTiendanubeInstall(req, res) {
 
 export async function handleTiendanubeCallback(req, res) {
 	try {
-		const { code } = req.query;
+		const {
+			code,
+			error: callbackError,
+			error_description: callbackErrorDescription
+		} = req.query;
 		const workspaceId = String(req.query?.state || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
 
+		if (callbackError) {
+			return redirectTiendanubeInstallResult(res, {
+				workspaceId,
+				...normalizeTiendanubeCallbackFailure(callbackError, callbackErrorDescription)
+			});
+		}
+
 		if (!code) {
-			return res.status(400).send('Falta code');
+			return redirectTiendanubeInstallResult(res, {
+				workspaceId,
+				status: 'error',
+				message: 'Tiendanube no devolvio el codigo de autorizacion. Proba de nuevo la conexion.',
+				reason: 'missing_code'
+			});
 		}
 
 		const data = await exchangeCodeForToken(code);
@@ -530,6 +643,16 @@ export async function handleTiendanubeCallback(req, res) {
 			console.error('[TIENDANUBE][CALLBACK][CATALOG]', catalogError);
 		}
 
+		return redirectTiendanubeInstallResult(res, {
+			workspaceId,
+			status: webhookError || catalogError ? 'partial' : 'connected',
+			storeId: String(data.user_id),
+			message:
+				webhookError || catalogError
+					? `La tienda ${String(data.user_id)} se conecto, pero quedaron tareas pendientes de sincronizacion.`
+					: `Tienda Nube conectada. Store ID ${String(data.user_id)}.`
+		});
+
 		const resultUrl = buildTiendanubeInstallResultUrl({
 			workspaceId,
 			status: webhookError || catalogError ? 'partial' : 'connected',
@@ -556,6 +679,19 @@ export async function handleTiendanubeCallback(req, res) {
 			'Error en callback Tiendanube:',
 			error.response?.data || error.message
 		);
+		const workspaceId = String(req.query?.state || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+		const rawMessage =
+			error.response?.data?.error_description ||
+			error.response?.data?.error ||
+			error.response?.data?.message ||
+			error.message;
+		return redirectTiendanubeInstallResult(res, {
+			workspaceId,
+			...normalizeTiendanubeCallbackFailure(
+				error.response?.data?.error || error.code || 'callback_error',
+				rawMessage
+			)
+		});
 		return res.status(500).json({
 			ok: false,
 			error: error.response?.data || error.message
