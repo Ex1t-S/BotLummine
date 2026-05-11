@@ -1371,7 +1371,7 @@ export default function AdminPage({ defaultTab = '' }) {
 								</button>
 							) : null}
 							{commerceProvider === 'SHOPIFY' ? (
-								<button type="button" disabled={saving || !selectedWorkspaceId} onClick={handleStartShopifyInstall}>
+								<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleStartShopifyInstall()}>
 									Conectar Shopify
 								</button>
 							) : null}
