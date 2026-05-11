@@ -18,7 +18,13 @@ import {
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
 
-const FIXED_SYNC_WINDOW_DAYS = 30;
+const DEFAULT_SYNC_WINDOW_DAYS = 30;
+const ALLOWED_SYNC_WINDOWS = new Set([1, 3, 7, 15, 30]);
+
+function normalizeSyncWindow(value = DEFAULT_SYNC_WINDOW_DAYS) {
+	const parsed = Number(value || DEFAULT_SYNC_WINDOW_DAYS);
+	return ALLOWED_SYNC_WINDOWS.has(parsed) ? parsed : DEFAULT_SYNC_WINDOW_DAYS;
+}
 
 function ensureAbandonedCartModel() {
 	if (!prisma?.abandonedCart) {
@@ -70,7 +76,7 @@ function buildSuggestedMessageForWorkspace(cart, workspaceConfig = null) {
 	].join('\n\n');
 }
 
-function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = FIXED_SYNC_WINDOW_DAYS }) {
+function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = DEFAULT_SYNC_WINDOW_DAYS }) {
 	const useManualDates = Boolean(dateFrom || dateTo);
 	const window = {};
 
@@ -86,17 +92,14 @@ function buildDateWindow({ dateFrom = '', dateTo = '', syncWindow = FIXED_SYNC_W
 		return Object.keys(window).length ? window : null;
 	}
 
-	if (Number(syncWindow) !== FIXED_SYNC_WINDOW_DAYS) {
-		return null;
-	}
-
+	const normalizedWindow = normalizeSyncWindow(syncWindow);
 	const cutoff = new Date();
-	cutoff.setDate(cutoff.getDate() - FIXED_SYNC_WINDOW_DAYS);
+	cutoff.setDate(cutoff.getDate() - normalizedWindow);
 	window.gte = cutoff;
 	return window;
 }
 
-function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '', syncWindow = FIXED_SYNC_WINDOW_DAYS }) {
+function buildWhereClause({ q = '', status = 'ALL', dateFrom = '', dateTo = '', syncWindow = DEFAULT_SYNC_WINDOW_DAYS }) {
 	const where = {};
 
 	if (status && status !== 'ALL') {
@@ -168,7 +171,7 @@ export async function getAbandonedCarts(req, res, next) {
 		const status = String(req.query.status || 'ALL').toUpperCase();
 		const dateFrom = String(req.query.dateFrom || '');
 		const dateTo = String(req.query.dateTo || '');
-		const syncWindow = FIXED_SYNC_WINDOW_DAYS;
+		const syncWindow = normalizeSyncWindow(req.query.syncWindow);
 
 		const where = buildWhereClause({ q, status, dateFrom, dateTo, syncWindow });
 		where.workspaceId = workspaceId;
@@ -226,7 +229,7 @@ export async function postSyncAbandonedCarts(req, res) {
 	try {
 		ensureAbandonedCartModel();
 
-		const daysBack = FIXED_SYNC_WINDOW_DAYS;
+		const daysBack = normalizeSyncWindow(req.body?.daysBack || req.query?.daysBack);
 
 		const workspaceId = requireRequestWorkspaceId(req);
 		const result = await syncAbandonedCarts(daysBack, {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import api from '../lib/api.js';
 import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
@@ -14,7 +14,8 @@ const initialFilters = {
 	page: 1
 };
 
-const FIXED_SYNC_WINDOW_DAYS = 30;
+const SYNC_WINDOW_OPTIONS = [1, 3, 7, 15, 30];
+const DEFAULT_SYNC_WINDOW_DAYS = 30;
 
 function getInitials(value = '') {
 	return (
@@ -58,6 +59,155 @@ function getVisiblePages(currentPage, totalPages) {
 
 	return pages;
 }
+
+const AbandonedCartCard = memo(function AbandonedCartCard({
+	cart,
+	active,
+	templates,
+	templatesLoading,
+	templatesError,
+	selectedTemplateId,
+	sending,
+	onToggleMessage,
+	onSelectTemplate,
+	onSendMessage,
+	onCloseMessage,
+}) {
+	return (
+		<article className="abandoned-card">
+			<div className="abandoned-topline">
+				<div className="abandoned-avatar">{cart.initials || getInitials(cart.contactName)}</div>
+
+				<div className="abandoned-head-copy">
+					<h3>{cart.contactName || 'Cliente sin nombre'}</h3>
+					<p>{cart.contactPhone || '-'}</p>
+					{cart.contactEmail ? <p>{cart.contactEmail}</p> : null}
+				</div>
+
+				<StatusBadge
+					tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
+					className={`status-badge ${
+						cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
+					}`}
+				>
+					{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
+				</StatusBadge>
+			</div>
+
+			<div className="abandoned-card-focus">
+				<div>
+					<span>Monto</span>
+					<strong>{cart.totalLabel}</strong>
+				</div>
+
+				<div className="abandoned-card-actions">
+					{cart.canMessage ? (
+						<button
+							type="button"
+							className="primary-action-btn"
+							onClick={() => onToggleMessage(cart)}
+							disabled={sending}
+						>
+							{active ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
+						</button>
+					) : (
+						<button type="button" className="primary-action-btn" disabled>
+							Falta telefono
+						</button>
+					)}
+
+					{cart.canOpenCart ? (
+						<a
+							href={cart.abandonedCheckoutUrl}
+							target="_blank"
+							rel="noreferrer"
+							className="secondary-link-btn"
+						>
+							Abrir carrito
+						</a>
+					) : (
+						<button type="button" className="secondary-link-btn" disabled>
+							Falta link
+						</button>
+					)}
+				</div>
+			</div>
+
+			<div className="abandoned-meta-grid">
+				<div>
+					<span>Fecha</span>
+					<strong>{cart.displayCreatedAt || '-'}</strong>
+				</div>
+
+				<div>
+					<span>Ubicacion</span>
+					<strong>{[cart.shippingCity, cart.shippingProvince].filter(Boolean).join(', ') || '-'}</strong>
+				</div>
+			</div>
+
+			<div className="abandoned-products">
+				{Array.isArray(cart.productsPreview) && cart.productsPreview.length > 0 ? (
+					cart.productsPreview.map((productName, index) => (
+						<span key={`${cart.id}-${index}`}>{productName}</span>
+					))
+				) : (
+					<span>Sin productos detectados</span>
+				)}
+			</div>
+
+			{cart.status === 'CONTACTED' ? (
+				<div className="abandoned-contact-note">
+					Ultimo envio: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
+				</div>
+			) : null}
+
+			{active ? (
+				<div className="abandoned-message-box">
+					<label>
+						<span>Plantilla aprobada de Meta</span>
+						<select
+							value={selectedTemplateId || templates[0]?.id || ''}
+							onChange={(e) => onSelectTemplate(cart.id, e.target.value)}
+							disabled={templatesLoading || sending}
+						>
+							<option value="">
+								{templatesLoading ? 'Cargando plantillas...' : 'Seleccionar plantilla'}
+							</option>
+							{templates.map((template) => (
+								<option key={template.id} value={template.id}>
+									{template.name} - {template.language || 'es_AR'}
+								</option>
+							))}
+						</select>
+					</label>
+
+					<div className="abandoned-template-note">
+						{templatesError || 'Se envia una plantilla aprobada por Meta con los datos del carrito.'}
+					</div>
+
+					<div className="abandoned-message-actions">
+						<button
+							type="button"
+							className="secondary-link-btn"
+							onClick={onCloseMessage}
+							disabled={sending}
+						>
+							Cancelar
+						</button>
+						<button
+							type="button"
+							className="primary-action-btn"
+							onClick={() => onSendMessage(cart)}
+							disabled={sending || templatesLoading || !templates.length}
+						>
+							{sending ? 'Enviando...' : 'Enviar WhatsApp'}
+						</button>
+					</div>
+				</div>
+			) : null}
+		</article>
+	);
+});
 
 export default function AbandonedCartsPage() {
 	useInternalDarkOverrides();
@@ -152,12 +302,12 @@ export default function AbandonedCartsPage() {
 		};
 	}, []);
 
-	function updateFilter(name, value) {
+	const updateFilter = useCallback((name, value) => {
 		setFilters((prev) => ({
 			...prev,
 			[name]: value
 		}));
-	}
+	}, []);
 
 	async function handleApplyFilters(e) {
 		e.preventDefault();
@@ -179,10 +329,13 @@ export default function AbandonedCartsPage() {
 		setSuccessMessage('');
 
 		try {
-			const res = await api.post('/dashboard/abandoned-carts/sync', {});
+			const syncWindow = SYNC_WINDOW_OPTIONS.includes(Number(filters.syncWindow))
+				? Number(filters.syncWindow)
+				: DEFAULT_SYNC_WINDOW_DAYS;
+			const res = await api.post('/dashboard/abandoned-carts/sync', { daysBack: syncWindow });
 
 			setSyncSummary({
-				daysBack: res.data?.daysBack || FIXED_SYNC_WINDOW_DAYS,
+				daysBack: res.data?.daysBack || syncWindow,
 				syncedCount: res.data?.syncedCount ?? res.data?.count ?? 0,
 				deletedCount: res.data?.deletedCount ?? 0,
 				remainingCount: res.data?.remainingCount ?? 0,
@@ -191,7 +344,7 @@ export default function AbandonedCartsPage() {
 
 			const next = {
 				...filters,
-				syncWindow: FIXED_SYNC_WINDOW_DAYS,
+				syncWindow,
 				page: 1
 			};
 
@@ -210,7 +363,7 @@ export default function AbandonedCartsPage() {
 		}
 	}
 
-	function handleToggleMessageBox(cart) {
+	const handleToggleMessageBox = useCallback((cart) => {
 		setErrorMessage('');
 		setSuccessMessage('');
 
@@ -224,9 +377,20 @@ export default function AbandonedCartsPage() {
 			...prev,
 			[cart.id]: prev[cart.id] || templates[0]?.id || ''
 		}));
-	}
+	}, [activeMessageCartId, templates]);
 
-	async function handleSendMessage(cart) {
+	const handleSelectTemplate = useCallback((cartId, templateId) => {
+		setSelectedTemplateIds((prev) => ({
+			...prev,
+			[cartId]: templateId
+		}));
+	}, []);
+
+	const handleCloseMessage = useCallback(() => {
+		setActiveMessageCartId('');
+	}, []);
+
+	const handleSendMessage = useCallback(async (cart) => {
 		const templateId = String(selectedTemplateIds[cart.id] || templates[0]?.id || '').trim();
 
 		if (!templateId) {
@@ -253,7 +417,7 @@ export default function AbandonedCartsPage() {
 		} finally {
 			setSendingCartId('');
 		}
-	}
+	}, [filters, selectedTemplateIds, templates]);
 
 	async function handlePageChange(nextPage) {
 		const totalPages = data.pagination?.totalPages || 1;
@@ -287,7 +451,7 @@ export default function AbandonedCartsPage() {
 			<PageHeader
 				className="page-header"
 				title="Carritos abandonados"
-				description={`${stats.total || 0} carritos en los últimos 30 días. Se conserva el estado de los ya contactados por campañas.`}
+				description={`${stats.total || 0} carritos en los ultimos ${filters.syncWindow || DEFAULT_SYNC_WINDOW_DAYS} dias. Se conserva el estado de los ya contactados por campanas.`}
 			>
 				<div className="inline-actions">
 					<ActionButton onClick={handleSync} disabled={syncing} icon={RefreshCw}>
@@ -368,6 +532,18 @@ export default function AbandonedCartsPage() {
 				</label>
 
 				<label>
+					<span>Ventana sync</span>
+					<select
+						value={filters.syncWindow}
+						onChange={(e) => updateFilter('syncWindow', Number(e.target.value))}
+					>
+						{SYNC_WINDOW_OPTIONS.map((days) => (
+							<option key={days} value={days}>{days} dia{days === 1 ? '' : 's'}</option>
+						))}
+					</select>
+				</label>
+
+				<label>
 					<span>Estado</span>
 					<select
 						value={filters.status}
@@ -401,143 +577,20 @@ export default function AbandonedCartsPage() {
 			) : (
 				<div className="abandoned-carts-grid">
 					{carts.map((cart) => (
-						<article key={cart.id} className="abandoned-card">
-							<div className="abandoned-topline">
-								<div className="abandoned-avatar">{cart.initials || getInitials(cart.contactName)}</div>
-
-								<div className="abandoned-head-copy">
-									<h3>{cart.contactName || 'Cliente sin nombre'}</h3>
-									<p>{cart.contactPhone || '-'}</p>
-									{cart.contactEmail ? <p>{cart.contactEmail}</p> : null}
-								</div>
-
-								<StatusBadge
-									tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
-									className={`status-badge ${
-										cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
-									}`}
-								>
-									{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
-								</StatusBadge>
-							</div>
-
-							<div className="abandoned-card-focus">
-								<div>
-									<span>Monto</span>
-									<strong>{cart.totalLabel}</strong>
-								</div>
-
-								<div className="abandoned-card-actions">
-									{cart.canMessage ? (
-										<button
-											type="button"
-											className="primary-action-btn"
-											onClick={() => handleToggleMessageBox(cart)}
-											disabled={sendingCartId === cart.id}
-										>
-											{activeMessageCartId === cart.id ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
-										</button>
-									) : (
-										<button type="button" className="primary-action-btn" disabled>
-											Falta teléfono
-										</button>
-									)}
-
-									{cart.canOpenCart ? (
-										<a
-											href={cart.abandonedCheckoutUrl}
-											target="_blank"
-											rel="noreferrer"
-											className="secondary-link-btn"
-										>
-											Abrir carrito
-										</a>
-									) : (
-										<button type="button" className="secondary-link-btn" disabled>
-											Falta link
-										</button>
-									)}
-								</div>
-							</div>
-
-							<div className="abandoned-meta-grid">
-								<div>
-									<span>Fecha</span>
-									<strong>{cart.displayCreatedAt || '-'}</strong>
-								</div>
-
-								<div>
-									<span>Ubicación</span>
-									<strong>{[cart.shippingCity, cart.shippingProvince].filter(Boolean).join(', ') || '-'}</strong>
-								</div>
-							</div>
-
-							<div className="abandoned-products">
-								{Array.isArray(cart.productsPreview) && cart.productsPreview.length > 0 ? (
-									cart.productsPreview.map((productName, index) => (
-										<span key={`${cart.id}-${index}`}>{productName}</span>
-									))
-								) : (
-									<span>Sin productos detectados</span>
-								)}
-							</div>
-
-							{cart.status === 'CONTACTED' ? (
-								<div className="abandoned-contact-note">
-									Último envío: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
-								</div>
-							) : null}
-
-							{activeMessageCartId === cart.id ? (
-								<div className="abandoned-message-box">
-									<label>
-										<span>Plantilla aprobada de Meta</span>
-										<select
-											value={selectedTemplateIds[cart.id] || templates[0]?.id || ''}
-											onChange={(e) =>
-												setSelectedTemplateIds((prev) => ({
-													...prev,
-													[cart.id]: e.target.value
-												}))
-											}
-											disabled={templatesLoading || sendingCartId === cart.id}
-										>
-											<option value="">
-												{templatesLoading ? 'Cargando plantillas...' : 'Seleccionar plantilla'}
-											</option>
-											{templates.map((template) => (
-												<option key={template.id} value={template.id}>
-													{template.name} - {template.language || 'es_AR'}
-												</option>
-											))}
-										</select>
-									</label>
-
-									<div className="abandoned-template-note">
-										{templatesError || 'Se envía una plantilla aprobada por Meta con los datos del carrito.'}
-									</div>
-
-									<div className="abandoned-message-actions">
-										<button
-											type="button"
-											className="secondary-link-btn"
-											onClick={() => setActiveMessageCartId('')}
-											disabled={sendingCartId === cart.id}
-										>
-											Cancelar
-										</button>
-										<button
-											type="button"
-											className="primary-action-btn"
-											onClick={() => handleSendMessage(cart)}
-											disabled={sendingCartId === cart.id || templatesLoading || !templates.length}
-										>
-											{sendingCartId === cart.id ? 'Enviando...' : 'Enviar WhatsApp'}
-										</button>
-									</div>
-								</div>
-							) : null}
-						</article>
+						<AbandonedCartCard
+							key={cart.id}
+							cart={cart}
+							active={activeMessageCartId === cart.id}
+							templates={templates}
+							templatesLoading={templatesLoading}
+							templatesError={templatesError}
+							selectedTemplateId={selectedTemplateIds[cart.id]}
+							sending={sendingCartId === cart.id}
+							onToggleMessage={handleToggleMessageBox}
+							onSelectTemplate={handleSelectTemplate}
+							onSendMessage={handleSendMessage}
+							onCloseMessage={handleCloseMessage}
+						/>
 					))}
 				</div>
 			)}

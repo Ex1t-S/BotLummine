@@ -103,8 +103,8 @@ function AutomationCard({
 			<div className="campaign-abandoned-automation-card__header">
 				<div>
 					<span className="campaigns-eyebrow">Automatizacion</span>
-					<h4>Enviar carritos nuevos cada hora</h4>
-					<p>Cuando esta activa, detecta carritos nuevos con al menos 1 hora y manda el template configurado.</p>
+					<h4>Enviar carritos nuevos cada 30 minutos</h4>
+					<p>Cuando esta activa, sincroniza y detecta carritos nuevos con al menos 1 hora para mandar el template configurado.</p>
 				</div>
 				<span className={`campaign-schedule-status ${form.enabled ? 'is-active' : ''}`.trim()}>
 					{form.enabled ? 'Activa' : 'Pausada'}
@@ -122,7 +122,7 @@ function AutomationCard({
 					<strong>Automatizacion {form.enabled ? 'activada' : 'desactivada'}</strong>
 					<small>
 						{form.enabled
-							? 'Queda guardada al activar y se ejecuta como maximo una vez por hora.'
+							? 'Queda guardada al activar y se ejecuta como maximo cada 30 minutos.'
 							: 'Activala para guardar el estado automaticamente.'}
 					</small>
 				</span>
@@ -151,6 +151,8 @@ function AutomationCard({
 						onChange={(event) => updateField('daysBack', Number(event.target.value))}
 						disabled={loading || saving}
 					>
+						<option value={1}>1 dia</option>
+						<option value={3}>3 dias</option>
 						<option value={7}>7 dias</option>
 						<option value={15}>15 dias</option>
 						<option value={30}>30 dias</option>
@@ -160,7 +162,7 @@ function AutomationCard({
 
 			<div className="campaign-custom-audience-grid-4">
 				<label className="field">
-					<span>Limite por hora</span>
+					<span>Limite por ejecucion</span>
 					<input
 						type="number"
 						min="1"
@@ -336,6 +338,8 @@ export default function AbandonedCartCampaignPanel({
 								value={form.daysBack}
 								onChange={(e) => onUpdateField('daysBack', Number(e.target.value))}
 							>
+								<option value={1}>1 dia</option>
+								<option value={3}>3 dias</option>
 								<option value={7}>7 días</option>
 								<option value={15}>15 días</option>
 								<option value={30}>30 días</option>

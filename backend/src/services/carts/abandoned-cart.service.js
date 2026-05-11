@@ -27,7 +27,7 @@ const DELETE_CHUNK_SIZE = Math.max(
 );
 const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const DEFAULT_DAYS_BACK = 30;
-const ALLOWED_WINDOWS = new Set([30]);
+const ALLOWED_WINDOWS = new Set([1, 3, 7, 15, 30]);
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,6 +53,11 @@ function buildHeaders(accessToken) {
 function normalizeProvider(value = '') {
 	const provider = String(value || '').trim().toUpperCase();
 	return provider === 'SHOPIFY' ? 'SHOPIFY' : 'TIENDANUBE';
+}
+
+function normalizeDaysBack(value = DEFAULT_DAYS_BACK) {
+	const parsed = Number(value || DEFAULT_DAYS_BACK);
+	return ALLOWED_WINDOWS.has(parsed) ? parsed : DEFAULT_DAYS_BACK;
 }
 
 function parseDateOrNull(value) {
@@ -401,32 +406,38 @@ async function replaceCartBatch(carts, storeId, workspaceId, provider = 'TIENDAN
 	return rows.length;
 }
 
-async function fetchShopifyCheckoutsPage({ client, sinceId = 0, limit = CHECKOUTS_PER_PAGE }) {
+async function fetchShopifyCheckoutsPage({ client, sinceId = 0, limit = CHECKOUTS_PER_PAGE, createdAtMin = null }) {
+	const params = {
+		limit: Math.min(250, Math.max(1, limit)),
+		since_id: sinceId,
+		status: 'open',
+		fields: [
+			'id',
+			'token',
+			'cart_token',
+			'created_at',
+			'updated_at',
+			'completed_at',
+			'email',
+			'phone',
+			'customer',
+			'shipping_address',
+			'billing_address',
+			'abandoned_checkout_url',
+			'web_url',
+			'subtotal_price',
+			'total_price',
+			'currency',
+			'line_items',
+			'shipping_line'
+		].join(',')
+	};
+	if (createdAtMin) {
+		params.created_at_min = createdAtMin.toISOString();
+	}
+
 	const response = await client.get('/checkouts.json', {
-		params: {
-			limit: Math.min(250, Math.max(1, limit)),
-			since_id: sinceId,
-			fields: [
-				'id',
-				'token',
-				'cart_token',
-				'created_at',
-				'updated_at',
-				'completed_at',
-				'email',
-				'phone',
-				'customer',
-				'shipping_address',
-				'billing_address',
-				'abandoned_checkout_url',
-				'web_url',
-				'subtotal_price',
-				'total_price',
-				'currency',
-				'line_items',
-				'shipping_line'
-			].join(',')
-		}
+		params
 	});
 	const checkouts = Array.isArray(response.data?.checkouts) ? response.data.checkouts : [];
 	return {
@@ -455,9 +466,7 @@ async function deleteCartIdsInChunks(ids = [], workspaceId = DEFAULT_WORKSPACE_I
 
 export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const normalizedDaysBack = ALLOWED_WINDOWS.has(Number(daysBack))
-		? Number(daysBack)
-		: DEFAULT_DAYS_BACK;
+	const normalizedDaysBack = normalizeDaysBack(daysBack);
 
 	const connection = await resolveSyncConnection({ workspaceId: resolvedWorkspaceId, provider });
 	const normalizedProvider = normalizeProvider(connection.provider);
@@ -470,6 +479,8 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 	const startedAt = new Date();
 	const cutoff = new Date(startedAt);
 	cutoff.setDate(cutoff.getDate() - normalizedDaysBack);
+	const retentionCutoff = new Date(startedAt);
+	retentionCutoff.setDate(retentionCutoff.getDate() - DEFAULT_DAYS_BACK);
 
 	let pagesFetched = 0;
 	let totalReceived = 0;
@@ -483,7 +494,12 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 		let pageResult;
 		try {
 			pageResult = normalizedProvider === 'SHOPIFY'
-				? await fetchShopifyCheckoutsPage({ client: shopifyClient, sinceId: shopifySinceId, limit: effectivePerPage })
+				? await fetchShopifyCheckoutsPage({
+					client: shopifyClient,
+					sinceId: shopifySinceId,
+					limit: effectivePerPage,
+					createdAtMin: cutoff
+				})
 				: await fetchCheckoutsPage({
 					storeId,
 					accessToken,
@@ -509,6 +525,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 		}
 
 		const validCarts = [];
+		let datedOlderThanWindow = 0;
 
 		for (const cart of carts) {
 			const checkoutId = String(cart?.id || '').trim();
@@ -517,10 +534,15 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 			const createdAt = parseDateOrNull(cart?.created_at);
 			if (createdAt && createdAt < cutoff) {
 				skippedOldCount += 1;
+				datedOlderThanWindow += 1;
 				continue;
 			}
 
 			validCarts.push(cart);
+		}
+
+		if (carts.length && !validCarts.length && datedOlderThanWindow === carts.length) {
+			stopSync = true;
 		}
 
 		if (validCarts.length) {
@@ -543,7 +565,7 @@ export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspa
 			workspaceId: resolvedWorkspaceId,
 			provider: normalizedProvider,
 			status: 'NEW',
-			checkoutCreatedAt: { lt: cutoff }
+			checkoutCreatedAt: { lt: retentionCutoff }
 		},
 		select: { id: true }
 	});

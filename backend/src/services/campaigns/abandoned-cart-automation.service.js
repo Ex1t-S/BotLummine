@@ -7,7 +7,7 @@ import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { filterRecoverableAbandonedCarts } from './campaign-attribution.service.js';
 import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
-const DEFAULT_INTERVAL_MINUTES = 60;
+const DEFAULT_INTERVAL_MINUTES = 30;
 const DEFAULT_MIN_CART_AGE_MINUTES = 60;
 const DEFAULT_FILTERS = {
 	daysBack: 7,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationSetting" (
     "templateName" TEXT,
     "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
     "filters" JSONB,
-    "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
+    "intervalMinutes" INTEGER NOT NULL DEFAULT 30,
     "minCartAgeMinutes" INTEGER NOT NULL DEFAULT 60,
     "lastRunAt" TIMESTAMP(3),
     "lastCampaignId" TEXT,
@@ -142,7 +142,7 @@ function serializeSetting(setting = null) {
 		templateName: setting?.templateName || '',
 		templateLanguage: setting?.templateLanguage || 'es_AR',
 		filters,
-		intervalMinutes: Number(setting?.intervalMinutes || DEFAULT_INTERVAL_MINUTES),
+		intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 		minCartAgeMinutes: Number(setting?.minCartAgeMinutes || DEFAULT_MIN_CART_AGE_MINUTES),
 		lastRunAt: setting?.lastRunAt || null,
 		lastCampaignId: setting?.lastCampaignId || null,
@@ -423,7 +423,7 @@ export async function runAbandonedCartAutomation({
 		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'disabled' };
 	}
 
-	const intervalMs = Math.max(1, Number(setting.intervalMinutes || DEFAULT_INTERVAL_MINUTES)) * 60 * 1000;
+	const intervalMs = DEFAULT_INTERVAL_MINUTES * 60 * 1000;
 	if (!force && setting.lastRunAt && Date.now() - new Date(setting.lastRunAt).getTime() < intervalMs) {
 		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'interval' };
 	}
