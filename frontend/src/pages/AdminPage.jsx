@@ -868,9 +868,11 @@ export default function AdminPage({ defaultTab = '' }) {
 		setSaving(true);
 		try {
 			const normalizedProvider = String(provider || '').toUpperCase();
-			const res = !platformAdmin && normalizedProvider === 'TIENDANUBE'
-				? await api.post('/tiendanube/catalog/sync', { workspaceId: selectedWorkspaceId })
-				: await api.post(`/admin/workspaces/${selectedWorkspaceId}/catalog/sync`, { provider });
+			const res = platformAdmin
+				? await api.post(`/admin/workspaces/${selectedWorkspaceId}/catalog/sync`, { provider })
+				: normalizedProvider === 'TIENDANUBE'
+					? await api.post('/tiendanube/catalog/sync', { workspaceId: selectedWorkspaceId })
+					: await api.post('/dashboard/catalog/sync', { provider: normalizedProvider, workspaceId: selectedWorkspaceId });
 			setCatalogStatus(res.data.catalog || res.data || null);
 			await loadWorkspaceDetail(selectedWorkspaceId);
 			showNotice(`Sincronizacion ${provider} completada.`);
