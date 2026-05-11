@@ -62,16 +62,6 @@ function getVisiblePages(currentPage, totalPages) {
 
 const AbandonedCartCard = memo(function AbandonedCartCard({
 	cart,
-	active,
-	templates,
-	templatesLoading,
-	templatesError,
-	selectedTemplateId,
-	sending,
-	onToggleMessage,
-	onSelectTemplate,
-	onSendMessage,
-	onCloseMessage,
 }) {
 	return (
 		<article className="abandoned-card">
@@ -101,21 +91,6 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 				</div>
 
 				<div className="abandoned-card-actions">
-					{cart.canMessage ? (
-						<button
-							type="button"
-							className="primary-action-btn"
-							onClick={() => onToggleMessage(cart)}
-							disabled={sending}
-						>
-							{active ? 'Cerrar mensaje' : 'Enviar WhatsApp'}
-						</button>
-					) : (
-						<button type="button" className="primary-action-btn" disabled>
-							Falta telefono
-						</button>
-					)}
-
 					{cart.canOpenCart ? (
 						<a
 							href={cart.abandonedCheckoutUrl}
@@ -160,51 +135,6 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 					Ultimo envio: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
 				</div>
 			) : null}
-
-			{active ? (
-				<div className="abandoned-message-box">
-					<label>
-						<span>Plantilla aprobada de Meta</span>
-						<select
-							value={selectedTemplateId || templates[0]?.id || ''}
-							onChange={(e) => onSelectTemplate(cart.id, e.target.value)}
-							disabled={templatesLoading || sending}
-						>
-							<option value="">
-								{templatesLoading ? 'Cargando plantillas...' : 'Seleccionar plantilla'}
-							</option>
-							{templates.map((template) => (
-								<option key={template.id} value={template.id}>
-									{template.name} - {template.language || 'es_AR'}
-								</option>
-							))}
-						</select>
-					</label>
-
-					<div className="abandoned-template-note">
-						{templatesError || 'Se envia una plantilla aprobada por Meta con los datos del carrito.'}
-					</div>
-
-					<div className="abandoned-message-actions">
-						<button
-							type="button"
-							className="secondary-link-btn"
-							onClick={onCloseMessage}
-							disabled={sending}
-						>
-							Cancelar
-						</button>
-						<button
-							type="button"
-							className="primary-action-btn"
-							onClick={() => onSendMessage(cart)}
-							disabled={sending || templatesLoading || !templates.length}
-						>
-							{sending ? 'Enviando...' : 'Enviar WhatsApp'}
-						</button>
-					</div>
-				</div>
-			) : null}
 		</article>
 	);
 });
@@ -218,12 +148,6 @@ export default function AbandonedCartsPage() {
 	const [syncSummary, setSyncSummary] = useState(null);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [successMessage, setSuccessMessage] = useState('');
-	const [activeMessageCartId, setActiveMessageCartId] = useState('');
-	const [templates, setTemplates] = useState([]);
-	const [templatesLoading, setTemplatesLoading] = useState(true);
-	const [templatesError, setTemplatesError] = useState('');
-	const [selectedTemplateIds, setSelectedTemplateIds] = useState({});
-	const [sendingCartId, setSendingCartId] = useState('');
 	const [data, setData] = useState({
 		carts: [],
 		stats: {
@@ -264,42 +188,6 @@ export default function AbandonedCartsPage() {
 
 	useEffect(() => {
 		loadAbandonedCarts(filters);
-	}, []);
-
-	useEffect(() => {
-		let ignore = false;
-
-		async function loadTemplates() {
-			setTemplatesLoading(true);
-			setTemplatesError('');
-
-			try {
-				const res = await api.get('/campaigns/templates');
-				const collection = res.data?.templates || res.data?.items || res.data?.data?.templates || [];
-				const approvedTemplates = collection.filter(
-					(template) => String(template?.status || '').toUpperCase() === 'APPROVED'
-				);
-
-				if (!ignore) {
-					setTemplates(approvedTemplates);
-				}
-			} catch (error) {
-				console.error(error);
-				if (!ignore) {
-					setTemplatesError('No pudimos cargar las plantillas aprobadas. Probá nuevamente en unos segundos.');
-				}
-			} finally {
-				if (!ignore) {
-					setTemplatesLoading(false);
-				}
-			}
-		}
-
-		loadTemplates();
-
-		return () => {
-			ignore = true;
-		};
 	}, []);
 
 	const updateFilter = useCallback((name, value) => {
@@ -362,62 +250,6 @@ export default function AbandonedCartsPage() {
 			setSyncing(false);
 		}
 	}
-
-	const handleToggleMessageBox = useCallback((cart) => {
-		setErrorMessage('');
-		setSuccessMessage('');
-
-		if (activeMessageCartId === cart.id) {
-			setActiveMessageCartId('');
-			return;
-		}
-
-		setActiveMessageCartId(cart.id);
-		setSelectedTemplateIds((prev) => ({
-			...prev,
-			[cart.id]: prev[cart.id] || templates[0]?.id || ''
-		}));
-	}, [activeMessageCartId, templates]);
-
-	const handleSelectTemplate = useCallback((cartId, templateId) => {
-		setSelectedTemplateIds((prev) => ({
-			...prev,
-			[cartId]: templateId
-		}));
-	}, []);
-
-	const handleCloseMessage = useCallback(() => {
-		setActiveMessageCartId('');
-	}, []);
-
-	const handleSendMessage = useCallback(async (cart) => {
-		const templateId = String(selectedTemplateIds[cart.id] || templates[0]?.id || '').trim();
-
-		if (!templateId) {
-			setErrorMessage('Elegí una plantilla aprobada antes de enviar.');
-			return;
-		}
-
-		setSendingCartId(cart.id);
-		setErrorMessage('');
-		setSuccessMessage('');
-
-		try {
-			await api.post(`/dashboard/abandoned-carts/${cart.id}/message`, { templateId });
-			setSuccessMessage('Plantilla enviada por WhatsApp.');
-			setActiveMessageCartId('');
-			await loadAbandonedCarts(filters);
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(
-				error?.response?.data?.error ||
-				error?.response?.data?.message ||
-				'No pudimos enviar la plantilla. Probá nuevamente.'
-			);
-		} finally {
-			setSendingCartId('');
-		}
-	}, [filters, selectedTemplateIds, templates]);
 
 	async function handlePageChange(nextPage) {
 		const totalPages = data.pagination?.totalPages || 1;
@@ -580,16 +412,6 @@ export default function AbandonedCartsPage() {
 						<AbandonedCartCard
 							key={cart.id}
 							cart={cart}
-							active={activeMessageCartId === cart.id}
-							templates={templates}
-							templatesLoading={templatesLoading}
-							templatesError={templatesError}
-							selectedTemplateId={selectedTemplateIds[cart.id]}
-							sending={sendingCartId === cart.id}
-							onToggleMessage={handleToggleMessageBox}
-							onSelectTemplate={handleSelectTemplate}
-							onSendMessage={handleSendMessage}
-							onCloseMessage={handleCloseMessage}
 						/>
 					))}
 				</div>

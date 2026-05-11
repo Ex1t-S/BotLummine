@@ -1119,6 +1119,55 @@
 	}
 }
 
+.abandoned-card,
+.abandoned-card * {
+	min-width: 0;
+}
+
+.abandoned-card-focus {
+	grid-template-columns: minmax(128px, 1fr) auto;
+}
+
+.abandoned-card-focus > div:first-child {
+	overflow: hidden;
+}
+
+.abandoned-card-focus strong,
+.abandoned-meta-grid strong,
+.abandoned-head-copy h3,
+.abandoned-head-copy p,
+.abandoned-contact-note strong {
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.abandoned-card-focus strong {
+	display: block;
+	line-height: 1.15;
+}
+
+.abandoned-card-actions {
+	justify-content: flex-end;
+}
+
+.abandoned-card-actions .secondary-link-btn {
+	white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+	.abandoned-card-focus {
+		grid-template-columns: 1fr;
+	}
+
+	.abandoned-card-actions {
+		justify-content: stretch;
+	}
+
+	.abandoned-card-actions .secondary-link-btn {
+		width: 100%;
+	}
+}
+
 /* Dark mode: abandoned carts lazy CSS loads after global.css */
 .dark .admin-shell .admin-content .abandoned-carts-page .page-header,
 .dark .admin-shell .admin-content .abandoned-carts-page .filters-form,
