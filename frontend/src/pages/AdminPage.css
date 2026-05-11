@@ -163,6 +163,11 @@
 	overflow-wrap: anywhere;
 }
 
+.tenant-admin-provider-switch {
+	max-width: 340px;
+}
+
+.tenant-admin-provider-card,
 .tenant-admin-shopify-card {
 	display: grid;
 	gap: 12px;
@@ -173,25 +178,51 @@
 	background: #ffffff;
 }
 
+.tenant-admin-provider-card > div:first-child,
 .tenant-admin-shopify-card > div:first-child {
 	display: grid;
 	gap: 3px;
 }
 
+.tenant-admin-provider-card strong,
 .tenant-admin-shopify-card strong {
 	color: #172033;
 }
 
+.tenant-admin-provider-card span,
 .tenant-admin-shopify-card span {
 	color: #64748b;
 	font-size: 13px;
 }
 
+.tenant-admin-provider-actions,
 .tenant-admin-shopify-actions {
 	display: grid;
 	grid-template-columns: minmax(220px, 1fr) auto;
 	gap: 10px;
 	align-items: end;
+}
+
+.tenant-admin-provider-actions button {
+	align-self: end;
+	border: 1px solid var(--ui-primary-strong, #0a5f59);
+	border-radius: 8px;
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+	font-weight: 800;
+	padding: 11px 14px;
+	min-height: 42px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tenant-admin-provider-actions button:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+}
+
+.tenant-admin-provider-actions button:disabled {
+	opacity: 0.55;
+	cursor: default;
 }
 
 .admin-field span {
@@ -991,6 +1022,7 @@
 		grid-template-columns: 1fr;
 	}
 
+	.tenant-admin-provider-actions,
 	.tenant-admin-shopify-actions {
 		grid-template-columns: 1fr;
 	}

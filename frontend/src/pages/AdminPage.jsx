@@ -83,8 +83,31 @@ const brandAdminTabs = [
 	{ key: 'users', label: 'Usuarios' }
 ];
 
+const BRAND_PROVIDER_OPTIONS = [
+	{ value: 'TIENDANUBE', label: 'Tienda Nube' },
+	{ value: 'SHOPIFY', label: 'Shopify' }
+];
+
 function fieldValue(value) {
 	return value == null ? '' : String(value);
+}
+
+function findCommerceConnection(workspace, provider) {
+	return workspace?.commerceConnections?.find((item) => item.provider === provider) || null;
+}
+
+function resolveSelectedBrandProvider(workspace, tiendanubeStatus, shopifyStatus) {
+	const primaryConnection =
+		workspace?.commerceConnections?.find((item) => item.isPrimary && item.status === 'ACTIVE') ||
+		workspace?.commerceConnections?.find((item) => item.status === 'ACTIVE') ||
+		workspace?.commerceConnections?.[0] ||
+		null;
+	const primaryStoreInstallation = workspace?.storeInstallations?.[0] || null;
+	const provider = primaryConnection?.provider || primaryStoreInstallation?.provider || '';
+
+	if (provider === 'SHOPIFY' || shopifyStatus?.connected) return 'SHOPIFY';
+	if (provider === 'TIENDANUBE' || tiendanubeStatus?.connected || tiendanubeStatus?.storeId) return 'TIENDANUBE';
+	return 'TIENDANUBE';
 }
 
 function mapWorkspaceForm(workspace) {
@@ -404,7 +427,9 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [channelForm, setChannelForm] = useState(EMPTY_CHANNEL_FORM);
 	const [commerceProvider, setCommerceProvider] = useState('SHOPIFY');
 	const [commerceForm, setCommerceForm] = useState(EMPTY_COMMERCE_FORM);
+	const [selectedBrandProvider, setSelectedBrandProvider] = useState('TIENDANUBE');
 	const [shopifyInstallShop, setShopifyInstallShop] = useState('');
+	const [shopifyCssDraft, setShopifyCssDraft] = useState('');
 	const [logisticsForm, setLogisticsForm] = useState(EMPTY_LOGISTICS_FORM);
 	const [catalogStatus, setCatalogStatus] = useState(null);
 	const [tiendanubeStatus, setTiendanubeStatus] = useState(null);
@@ -475,10 +500,11 @@ export default function AdminPage({ defaultTab = '' }) {
 		setCatalogStatus(catalogRes?.data?.catalog || null);
 		setTiendanubeStatus(tiendanubeStatusRes?.data || null);
 		setShopifyStatus(shopifyStatusRes?.data || null);
+		setSelectedBrandProvider(resolveSelectedBrandProvider(nextWorkspace, tiendanubeStatusRes?.data, shopifyStatusRes?.data));
 		setShopifyInstallShop(
 			shopifyStatusRes?.data?.shopDomain ||
-			nextWorkspace?.commerceConnections?.find((item) => item.provider === 'SHOPIFY')?.shopDomain ||
-			nextWorkspace?.commerceConnections?.find((item) => item.provider === 'SHOPIFY')?.externalStoreId ||
+			findCommerceConnection(nextWorkspace, 'SHOPIFY')?.shopDomain ||
+			findCommerceConnection(nextWorkspace, 'SHOPIFY')?.externalStoreId ||
 			''
 		);
 
@@ -969,15 +995,16 @@ export default function AdminPage({ defaultTab = '' }) {
 
 	const brandName = workspaceForm.aiConfig?.businessName || workspaceForm.name || 'Marca';
 	const primaryCommerceConnection =
-		workspace?.commerceConnections?.find((item) => item.provider === 'SHOPIFY' && item.status === 'ACTIVE') ||
+		workspace?.commerceConnections?.find((item) => item.isPrimary && item.status === 'ACTIVE') ||
 		workspace?.commerceConnections?.find((item) => item.status === 'ACTIVE') ||
 		workspace?.commerceConnections?.[0] ||
 		null;
 	const primaryStoreInstallation = workspace?.storeInstallations?.[0] || null;
-	const activeCommerceProvider = primaryCommerceConnection?.provider || primaryStoreInstallation?.provider || '';
 	const activeStoreUrl = primaryCommerceConnection?.storeUrl || primaryStoreInstallation?.storeUrl || '';
 	const brandStoreUrl = activeStoreUrl;
-	const isShopifyCommerce = activeCommerceProvider === 'SHOPIFY' || Boolean(shopifyStatus?.connected);
+	const selectedProviderLabel = BRAND_PROVIDER_OPTIONS.find((item) => item.value === selectedBrandProvider)?.label || 'Tienda Nube';
+	const isShopifySelected = selectedBrandProvider === 'SHOPIFY';
+	const isTiendanubeSelected = selectedBrandProvider === 'TIENDANUBE';
 	const brandLogoUrl = resolveApiUrl(workspaceForm.branding?.logoUrl || '');
 
 	return (
@@ -1159,6 +1186,13 @@ export default function AdminPage({ defaultTab = '' }) {
 							)
 						) : (
 							<>
+								<div className="tenant-admin-provider-switch">
+									<Select label="Que queres configurar" value={selectedBrandProvider} onChange={setSelectedBrandProvider}>
+										{BRAND_PROVIDER_OPTIONS.map((item) => (
+											<option key={item.value} value={item.value}>{item.label}</option>
+										))}
+									</Select>
+								</div>
 								<div className="tenant-admin-brand-summary">
 									<div className="tenant-admin-brand-logo-box">
 										{brandLogoUrl && !brandLogoFailed ? (
@@ -1169,8 +1203,8 @@ export default function AdminPage({ defaultTab = '' }) {
 									</div>
 									<div className="tenant-admin-brand-copy">
 										<strong>{brandName}</strong>
-										<span>{brandStoreUrl || 'Tienda sin URL sincronizada'}</span>
-										{isShopifyCommerce ? (
+										<span>{brandStoreUrl || `${selectedProviderLabel} sin URL sincronizada`}</span>
+										{isShopifySelected ? (
 											<button type="button" disabled={saving || loading} onClick={() => handleBrandingSync('SHOPIFY')}>
 												{saving ? 'Importando...' : 'Importar logo Shopify'}
 											</button>
@@ -1181,23 +1215,25 @@ export default function AdminPage({ defaultTab = '' }) {
 										)}
 									</div>
 								</div>
-								<div className="tenant-admin-shopify-card">
-									<div>
-										<strong>Shopify</strong>
-										<span>{shopifyStatus?.shopDomain || 'Conecta la tienda Shopify de esta marca.'}</span>
+								{isShopifySelected ? (
+									<div className="tenant-admin-provider-card">
+										<div>
+											<strong>Shopify</strong>
+											<span>{shopifyStatus?.shopDomain || 'Agrega el dominio myshopify.com para conectar esta marca.'}</span>
+										</div>
+										<div className="tenant-admin-provider-actions">
+											<Input
+												label="Dominio Shopify"
+												value={shopifyInstallShop}
+												placeholder="mi-tienda.myshopify.com"
+												onChange={setShopifyInstallShop}
+											/>
+											<button type="button" disabled={saving || loading || !selectedWorkspaceId} onClick={() => handleStartShopifyInstall(shopifyInstallShop)}>
+												Conectar Shopify
+											</button>
+										</div>
 									</div>
-									<div className="tenant-admin-shopify-actions">
-										<Input
-											label="Dominio Shopify"
-											value={shopifyInstallShop}
-											placeholder="mi-tienda.myshopify.com"
-											onChange={setShopifyInstallShop}
-										/>
-										<button type="button" disabled={saving || loading || !selectedWorkspaceId} onClick={() => handleStartShopifyInstall(shopifyInstallShop)}>
-											Conectar Shopify
-										</button>
-									</div>
-								</div>
+								) : null}
 							</>
 						)}
 					</section>
@@ -1268,7 +1304,7 @@ export default function AdminPage({ defaultTab = '' }) {
 					</section>
 				) : null}
 
-				{activeTab === 'integrations' ? (
+				{!platformAdmin && activeTab === 'integrations' && isTiendanubeSelected ? (
 					<section className="tenant-admin-panel">
 						<h3>Conexion Tienda Nube</h3>
 						<div className="tenant-admin-metrics">
@@ -1281,22 +1317,14 @@ export default function AdminPage({ defaultTab = '' }) {
 							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={handleStartTiendanubeInstall}>
 								Conectar Tiendanube
 							</button>
-							{platformAdmin ? (
-								<button type="button" disabled={saving} onClick={() => handleBrandingSync('TIENDANUBE')}>
-									Importar branding
-								</button>
-							) : null}
-							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync()}>
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync('TIENDANUBE')}>
 								Sincronizar catalogo
-							</button>
-							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleBrandingSync('SHOPIFY')}>
-								Importar logo Shopify
 							</button>
 						</div>
 					</section>
 				) : null}
 
-				{activeTab === 'integrations' ? (
+				{!platformAdmin && activeTab === 'integrations' && isShopifySelected ? (
 					<section className="tenant-admin-panel">
 						<h3>Conexion Shopify</h3>
 						<div className="tenant-admin-metrics">
@@ -1306,6 +1334,12 @@ export default function AdminPage({ defaultTab = '' }) {
 							<StatusPill>API: {shopifyStatus?.apiVersion || '2026-04'}</StatusPill>
 						</div>
 						<div className="tenant-admin-grid">
+							<Textarea
+								label="CSS Shopify"
+								rows={5}
+								value={shopifyCssDraft}
+								onChange={setShopifyCssDraft}
+							/>
 							<Input
 								label="Dominio Shopify"
 								value={shopifyInstallShop}
@@ -1315,13 +1349,10 @@ export default function AdminPage({ defaultTab = '' }) {
 							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleStartShopifyInstall(shopifyInstallShop)}>
 								Conectar Shopify
 							</button>
-							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync()}>
+							<button type="button" disabled={saving || !selectedWorkspaceId} onClick={() => handleCatalogSync('SHOPIFY')}>
 								Sincronizar catalogo
 							</button>
 						</div>
-						<small className="tenant-admin-helper">
-							Link directo: {selectedWorkspaceId && shopifyInstallShop ? buildApiUrl(`/shopify/install?${new URLSearchParams({ workspaceId: selectedWorkspaceId, shop: shopifyInstallShop }).toString()}`) : 'completa el dominio para generarlo'}
-						</small>
 					</section>
 				) : null}
 
