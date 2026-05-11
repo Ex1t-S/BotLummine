@@ -4,6 +4,14 @@ import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
 import { DEFAULT_WORKSPACE_ID, requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 const SHOPIFY_DEFAULT_SCOPES = 'read_products,read_orders,read_customers,read_fulfillments,read_inventory,read_locations';
+const SHOPIFY_ALLOWED_SCOPES = new Set([
+	'read_products',
+	'read_orders',
+	'read_customers',
+	'read_fulfillments',
+	'read_inventory',
+	'read_locations'
+]);
 const SHOPIFY_WEBHOOK_TOPICS = [
 	'orders/create',
 	'orders/updated',
@@ -47,7 +55,12 @@ function getClientSecret() {
 }
 
 function getScopes() {
-	return cleanString(process.env.SHOPIFY_APP_SCOPES || SHOPIFY_DEFAULT_SCOPES);
+	const configuredScopes = cleanString(process.env.SHOPIFY_APP_SCOPES || SHOPIFY_DEFAULT_SCOPES)
+		.split(',')
+		.map((scope) => scope.trim())
+		.filter(Boolean)
+		.filter((scope) => SHOPIFY_ALLOWED_SCOPES.has(scope));
+	return (configuredScopes.length ? configuredScopes : SHOPIFY_DEFAULT_SCOPES.split(',')).join(',');
 }
 
 function getApiVersion() {
