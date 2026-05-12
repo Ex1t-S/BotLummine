@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
 import logoBladeIA from '../assets/app-logo-mark.png';
 import './LoginPage.css';
+
+const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
 
 const pricingPlans = [
 	{
@@ -35,6 +37,7 @@ const commandMetrics = [
 
 const trustStats = [
 	{ label: 'Conversaciones ordenadas', value: '+12k' },
+	{ label: 'Campañas listas para activar', value: '8' },
 	{ label: 'Tiempo medio ahorrado', value: '42%' },
 ];
 
@@ -205,7 +208,6 @@ export default function LoginPage() {
 	const publicPath = location.pathname;
 	const isLogin = publicPath === '/login';
 	const isHome = publicPath === '/inicio';
-	const isLowMotionPublicPath = isLogin || publicPath === '/precios';
 
 	const [form, setForm] = useState({ email: '', password: '' });
 	const [error, setError] = useState('');
@@ -273,9 +275,11 @@ export default function LoginPage() {
 		<div
 			id={isLogin ? 'login' : 'inicio'}
 			className={`login-page ${isLogin ? 'login-page--login' : isHome ? 'login-page--home' : 'login-page--public'}`}
-			onPointerMove={isLowMotionPublicPath ? undefined : handlePointerMove}
+			onPointerMove={handlePointerMove}
 		>
-			<div className="login-dotted-surface" aria-hidden="true" />
+			<Suspense fallback={null}>
+				<DottedSurface className="login-dotted-surface" />
+			</Suspense>
 			<div className="login-orb login-orb--one" aria-hidden="true" />
 			<div className="login-orb login-orb--two" aria-hidden="true" />
 			<div className="login-grid" aria-hidden="true" />
@@ -472,6 +476,7 @@ export default function LoginPage() {
 							Entra a la consola para responder WhatsApp, revisar clientes, activar campañas y medir el avance
 							comercial.
 						</p>
+						<ProductPreview compact />
 					</div>
 
 					<LoginForm
