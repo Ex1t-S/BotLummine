@@ -10,5 +10,11 @@ frontend/test-results
 prisma/dev.db
 *.log
 *.tsbuildinfo
-docs/community-manager-brief.md
+docs/
+scripts/
+backend/scripts/
+debug-output/
+backend/debug-output/
+**/debug-output/
+tmp/
 .codex/
