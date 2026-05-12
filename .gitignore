@@ -17,4 +17,5 @@ debug-output/
 backend/debug-output/
 **/debug-output/
 tmp/
+generated/*.pdf
 .codex/
