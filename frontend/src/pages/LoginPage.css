@@ -3088,7 +3088,25 @@ body:has(.login-page),
 .login-page--home .login-dotted-surface,
 .login-page--public .login-dotted-surface,
 .login-page--login .login-dotted-surface {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
 	opacity: 0.38;
+	background:
+		radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.72) 0 1px, transparent 1.6px),
+		radial-gradient(circle at 31% 42%, rgba(125, 211, 252, 0.42) 0 1px, transparent 1.8px),
+		radial-gradient(circle at 58% 82%, rgba(255, 255, 255, 0.48) 0 0.8px, transparent 1.6px),
+		radial-gradient(circle at 86% 66%, rgba(56, 189, 248, 0.38) 0 1px, transparent 1.8px),
+		linear-gradient(rgba(125, 211, 252, 0.035) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(125, 211, 252, 0.025) 1px, transparent 1px);
+	background-size:
+		100% 100%,
+		100% 100%,
+		100% 100%,
+		100% 100%,
+		72px 72px,
+		72px 72px;
 	filter:
 		grayscale(1)
 		saturate(0)

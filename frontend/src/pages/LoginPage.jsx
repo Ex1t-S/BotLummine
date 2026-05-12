@@ -1,11 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
 import logoBladeIA from '../assets/app-logo-mark.png';
 import './LoginPage.css';
-
-const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
 
 const pricingPlans = [
 	{
@@ -277,9 +275,7 @@ export default function LoginPage() {
 			className={`login-page ${isLogin ? 'login-page--login' : isHome ? 'login-page--home' : 'login-page--public'}`}
 			onPointerMove={handlePointerMove}
 		>
-			<Suspense fallback={null}>
-				<DottedSurface className="login-dotted-surface" />
-			</Suspense>
+			<div className="login-dotted-surface" aria-hidden="true" />
 			<div className="login-orb login-orb--one" aria-hidden="true" />
 			<div className="login-orb login-orb--two" aria-hidden="true" />
 			<div className="login-grid" aria-hidden="true" />

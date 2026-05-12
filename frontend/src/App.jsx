@@ -1,9 +1,5 @@
 import { Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-
-import DashboardLayout from './layout/DashboardLayout.jsx';
-
-import LoginPage from './pages/LoginPage.jsx';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BrandLoader from './components/ui/BrandLoader.jsx';
@@ -19,6 +15,8 @@ const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage.jsx'), '
 const WhatsAppMenuPage = lazyWithRetry(() => import('./pages/WhatsAppMenuPage.jsx'), 'WhatsAppMenuPage');
 const AdminPage = lazyWithRetry(() => import('./pages/AdminPage.jsx'), 'AdminPage');
 const OperationsPage = lazyWithRetry(() => import('./pages/OperationsPage.jsx'), 'OperationsPage');
+const PrivateAppShell = lazyWithRetry(() => import('./layout/PrivateAppShell.jsx'), 'PrivateAppShell');
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage.jsx'), 'LoginPage');
 
 function RoleHomeRedirect() {
 	const { user } = useAuth();
@@ -34,6 +32,14 @@ function PageLoader() {
 	);
 }
 
+function PublicPage() {
+	return (
+		<Suspense fallback={<BrandLoader label="Cargando" />}>
+			<LoginPage />
+		</Suspense>
+	);
+}
+
 function BrandAnalyticsRoute() {
 	const { user } = useAuth();
 	if (isPlatformAdminUser(user)) {
@@ -45,23 +51,27 @@ function BrandAnalyticsRoute() {
 
 export default function App() {
 	const { loading } = useAuth();
+	const location = useLocation();
+	const isPublicPath = ['/inicio', '/contacto', '/precios', '/login'].includes(location.pathname);
 
-	if (loading) {
+	if (loading && !isPublicPath) {
 		return <BrandLoader label="Cargando" />;
 	}
 
 	return (
 		<Routes>
-			<Route path="/inicio" element={<LoginPage />} />
-			<Route path="/contacto" element={<LoginPage />} />
-			<Route path="/precios" element={<LoginPage />} />
-			<Route path="/login" element={<LoginPage />} />
+			<Route path="/inicio" element={<PublicPage />} />
+			<Route path="/contacto" element={<PublicPage />} />
+			<Route path="/precios" element={<PublicPage />} />
+			<Route path="/login" element={<PublicPage />} />
 
 			<Route
 				path="/"
 				element={
 					<ProtectedRoute>
-						<DashboardLayout />
+						<Suspense fallback={<BrandLoader label="Cargando panel" />}>
+							<PrivateAppShell />
+						</Suspense>
 					</ProtectedRoute>
 				}
 			>
