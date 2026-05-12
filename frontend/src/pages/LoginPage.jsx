@@ -37,7 +37,6 @@ const commandMetrics = [
 
 const trustStats = [
 	{ label: 'Conversaciones ordenadas', value: '+12k' },
-	{ label: 'Campañas listas para activar', value: '8' },
 	{ label: 'Tiempo medio ahorrado', value: '42%' },
 ];
 
