@@ -205,6 +205,7 @@ model Conversation {
   @@index([workspaceId, lastMessageAt])
   @@index([workspaceId, unreadCount, lastMessageAt])
   @@index([workspaceId, archivedAt, lastMessageAt])
+  @@index([workspaceId, archivedAt, queue, lastMessageAt])
   @@index([workspaceId, queue, aiEnabled, lastMessageAt])
 }
 

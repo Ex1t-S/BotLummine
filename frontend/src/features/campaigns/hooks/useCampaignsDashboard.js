@@ -203,7 +203,7 @@ function extractDetailResponsePayload(data) {
 	return data;
 }
 
-export function useCampaignsDashboard() {
+export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	const queryClient = useQueryClient();
 	const { feedback, showFeedback } = useCampaignFeedback();
 
@@ -220,21 +220,39 @@ export function useCampaignsDashboard() {
 	const [campaignTrackingSearch, setCampaignTrackingSearch] = useState('');
 	const [campaignTrackingPage, setCampaignTrackingPage] = useState(1);
 	const [shipmentRange, setShipmentRange] = useState(buildDefaultShipmentRange);
+	const needsTemplates = [
+		'library',
+		'builder',
+		'segment',
+		'abandoned-carts',
+		'schedules',
+		'pending-payments',
+		'shipments',
+	].includes(activeTab);
+	const needsCampaignRuns = activeTab === 'tracking';
+	const needsSchedules = activeTab === 'schedules';
+	const needsAbandonedAutomation = activeTab === 'abandoned-carts';
+	const needsPendingPaymentAutomation = activeTab === 'pending-payments';
+	const needsShipmentNotifications = activeTab === 'shipments';
 
 	const overviewQuery = useQuery({
 		queryKey: queryKeys.campaigns.overview,
 		queryFn: fetchCampaignOverview,
+		enabled: false,
 	});
 
 	const templatesQuery = useQuery({
 		queryKey: queryKeys.campaigns.templates(),
 		queryFn: () => fetchTemplates(),
+		enabled: needsTemplates,
 	});
 
 	const campaignsQuery = useQuery({
 		queryKey: queryKeys.campaigns.runs(),
 		queryFn: () => fetchCampaigns(),
+		enabled: needsCampaignRuns,
 		refetchInterval: (query) => {
+			if (!needsCampaignRuns) return false;
 			const payload = query.state.data;
 			const runs =
 				Array.isArray(payload?.campaigns) ? payload.campaigns : Array.isArray(payload) ? payload : [];
@@ -248,21 +266,25 @@ export function useCampaignsDashboard() {
 	const schedulesQuery = useQuery({
 		queryKey: queryKeys.campaigns.schedules,
 		queryFn: fetchCampaignSchedules,
+		enabled: needsSchedules,
 	});
 
 	const abandonedCartAutomationQuery = useQuery({
 		queryKey: ['campaigns', 'abandoned-cart-automation', 'settings'],
 		queryFn: fetchAbandonedCartAutomationSettings,
+		enabled: needsAbandonedAutomation,
 	});
 
 	const pendingPaymentAutomationQuery = useQuery({
 		queryKey: ['campaigns', 'pending-payment-automation', 'settings'],
 		queryFn: fetchPendingPaymentAutomationSettings,
+		enabled: needsPendingPaymentAutomation,
 	});
 
 	const shipmentSettingsQuery = useQuery({
 		queryKey: ['campaigns', 'shipment-notifications', 'settings'],
 		queryFn: fetchShipmentNotificationSettings,
+		enabled: needsShipmentNotifications,
 	});
 
 	const shipmentCandidatesQuery = useQuery({
@@ -272,6 +294,7 @@ export function useCampaignsDashboard() {
 			dateTo: shipmentRange.dateTo,
 			includeNotified: true,
 		}),
+		enabled: needsShipmentNotifications,
 	});
 
 	const campaignDetailQuery = useQuery({

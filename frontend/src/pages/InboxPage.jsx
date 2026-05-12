@@ -103,7 +103,7 @@ const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Sticker recibido]',
 ]);
 
-const INBOX_PAGE_SIZE = 60;
+const INBOX_PAGE_SIZE = 30;
 
 function isDocumentVisible() {
 	if (typeof document === 'undefined') return true;
@@ -793,6 +793,7 @@ export default function InboxPage() {
 	}, [selectedConversationId]);
 
 	useEffect(() => {
+		if (!routeConversationId) return;
 		if (readFilter === 'UNREAD' && !selectedConversationId) {
 			return;
 		}
@@ -822,6 +823,7 @@ export default function InboxPage() {
 		visibleContacts,
 		selectedConversationId,
 		firstInboxPage,
+		routeConversationId,
 		readFilter,
 		navigate,
 		queue,

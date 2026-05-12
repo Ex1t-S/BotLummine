@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import CampaignRunsPanel from '../../components/campaigns/CampaignRunsPanel.jsx';
-import CampaignComposerPanel from '../../components/campaigns/CampaignComposerPanel.jsx';
-import TemplateBuilderPanel from '../../components/campaigns/TemplateBuilderPanel.jsx';
-import TemplateLibraryPanel from '../../components/campaigns/TemplateLibraryPanel.jsx';
-import AbandonedCartCampaignPanel from './components/AbandonedCartCampaignPanel.jsx';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
+import { lazyWithRetry } from '../../lib/lazyWithRetry.js';
 import { buildAbandonedCartFilters } from './utils.js';
 import './CampaignsFeaturePage.css';
+
+const CampaignRunsPanel = lazyWithRetry(() => import('../../components/campaigns/CampaignRunsPanel.jsx'), 'CampaignRunsPanel');
+const CampaignComposerPanel = lazyWithRetry(() => import('../../components/campaigns/CampaignComposerPanel.jsx'), 'CampaignComposerPanel');
+const TemplateBuilderPanel = lazyWithRetry(() => import('../../components/campaigns/TemplateBuilderPanel.jsx'), 'TemplateBuilderPanel');
+const TemplateLibraryPanel = lazyWithRetry(() => import('../../components/campaigns/TemplateLibraryPanel.jsx'), 'TemplateLibraryPanel');
+const AbandonedCartCampaignPanel = lazyWithRetry(() => import('./components/AbandonedCartCampaignPanel.jsx'), 'AbandonedCartCampaignPanel');
 
 function cleanCampaignCopy(value = '') {
 	return String(value || '');
@@ -241,8 +243,20 @@ function CampaignSectionShell({ tabId, eyebrow, title, description, children }) 
 					{description ? <p>{cleanCampaignCopy(description)}</p> : null}
 				</div>
 			</div>
-			<div className="campaigns-tab-shell__body">{children}</div>
+			<div className="campaigns-tab-shell__body">
+				<Suspense fallback={<CampaignTabLoader />}>
+					{children}
+				</Suspense>
+			</div>
 		</section>
+	);
+}
+
+function CampaignTabLoader() {
+	return (
+		<div className="campaign-custom-audience-empty" role="status" aria-live="polite">
+			Cargando panel...
+		</div>
 	);
 }
 
@@ -1384,6 +1398,19 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 export default function CampaignsFeaturePage() {
 	const location = useLocation();
 	const navigate = useNavigate();
+	const tabsByPath = useMemo(
+		() =>
+			TAB_DEFINITIONS.reduce((acc, tab) => {
+				acc[tab.path] = tab;
+				return acc;
+			}, {}),
+		[]
+	);
+	const activeTab = useMemo(() => {
+		const pathSegments = location.pathname.split('/').filter(Boolean);
+		const activePath = pathSegments[1] || '';
+		return tabsByPath[activePath]?.id || 'library';
+	}, [location.pathname, tabsByPath]);
 	const {
 		feedback,
 		templates,
@@ -1399,24 +1426,10 @@ export default function CampaignsFeaturePage() {
 		tracking,
 		abandonedCart,
 		pendingPayment,
-	} = useCampaignsDashboard();
+	} = useCampaignsDashboard({ activeTab });
 
 	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
 	const [pendingConfirm, setPendingConfirm] = useState(null);
-	const tabsByPath = useMemo(
-		() =>
-			TAB_DEFINITIONS.reduce((acc, tab) => {
-				acc[tab.path] = tab;
-				return acc;
-			}, {}),
-		[]
-	);
-
-	const activeTab = useMemo(() => {
-		const pathSegments = location.pathname.split('/').filter(Boolean);
-		const activePath = pathSegments[1] || '';
-		return tabsByPath[activePath]?.id || 'library';
-	}, [location.pathname, tabsByPath]);
 
 	const currentTab = useMemo(
 		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
