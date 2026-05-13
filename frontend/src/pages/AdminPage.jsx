@@ -436,6 +436,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [analytics, setAnalytics] = useState(null);
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
 	const [generatingBusinessContext, setGeneratingBusinessContext] = useState(false);
+	const [uploadingLogo, setUploadingLogo] = useState(false);
 	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -766,20 +767,51 @@ export default function AdminPage({ defaultTab = '' }) {
 		}, 'Contenido de marca guardado.');
 	}
 
-	async function handleSaveBrandLogo(event) {
-		event.preventDefault();
-		if (platformAdmin) return;
-
-		await saveWorkspace({
-			branding: {
-				logoUrl: workspaceForm.branding?.logoUrl || ''
-			}
-		}, 'Logo de marca guardado.');
-	}
-
 	async function handleSavePayment(event) {
 		event.preventDefault();
 		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Datos de pago guardados.');
+	}
+
+	async function handleBrandLogoFileChange(event) {
+		const file = event.target.files?.[0] || null;
+		event.target.value = '';
+		if (!file || platformAdmin) return;
+
+		setUploadingLogo(true);
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			const res = await api.post('/media/brand-logo', formData, {
+				headers: { 'Content-Type': 'multipart/form-data' }
+			});
+			const logoUrl = res.data?.logoUrl || '';
+
+			if (!logoUrl) {
+				setError('El backend no devolvió la URL del logo.');
+				return;
+			}
+
+			setWorkspaceForm((cur) => ({
+				...cur,
+				branding: {
+					...(cur.branding || {}),
+					logoUrl
+				}
+			}));
+			setWorkspace((cur) => cur ? {
+				...cur,
+				branding: {
+					...(cur.branding || {}),
+					logoUrl
+				}
+			} : cur);
+			await refreshMe();
+			showNotice('Logo de marca actualizado.');
+		} catch (err) {
+			showError(err);
+		} finally {
+			setUploadingLogo(false);
+		}
 	}
 
 	async function handleGenerateBusinessContext() {
@@ -1222,17 +1254,21 @@ export default function AdminPage({ defaultTab = '' }) {
 										)}
 									</div>
 								</div>
-								<form className="tenant-admin-logo-form" onSubmit={handleSaveBrandLogo}>
-									<Input
-										label="Logo de la marca (URL)"
-										value={workspaceForm.branding?.logoUrl || ''}
-										placeholder="https://tu-tienda.com/logo.png"
-										onChange={(value) => setNestedForm('branding', 'logoUrl', value)}
-									/>
-									<button type="submit" disabled={saving || loading || !selectedWorkspaceId}>
-										Guardar logo
-									</button>
-								</form>
+								<div className="tenant-admin-logo-form">
+									<div className="tenant-admin-logo-form__copy">
+										<strong>Logo de la marca</strong>
+										<span>PNG, JPG, WebP o GIF hasta 5 MB.</span>
+									</div>
+									<label className={`tenant-admin-logo-upload${uploadingLogo ? ' is-uploading' : ''}${saving || loading || uploadingLogo || !selectedWorkspaceId ? ' is-disabled' : ''}`.trim()}>
+										<input
+											type="file"
+											accept="image/png,image/jpeg,image/webp,image/gif"
+											disabled={saving || loading || uploadingLogo || !selectedWorkspaceId}
+											onChange={handleBrandLogoFileChange}
+										/>
+										<span>{uploadingLogo ? 'Subiendo...' : 'Subir logo'}</span>
+									</label>
+								</div>
 								{isShopifySelected ? (
 									<div className="tenant-admin-provider-card">
 										<div>

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import {
 	uploadWhatsAppMedia,
@@ -7,7 +8,44 @@ import {
 	getWhatsAppMediaMetadata,
 	downloadWhatsAppMediaBuffer
 } from '../services/whatsapp/whatsapp-media.service.js';
-import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
+import {
+	isPlatformAdmin,
+	requireRequestWorkspaceId
+} from '../services/workspaces/workspace-context.service.js';
+
+const BRAND_LOGO_DIR = path.resolve(process.env.BRAND_LOGO_DIR || 'storage/brand-logos');
+const BRAND_LOGO_PUBLIC_PREFIX = '/api/media/brand-logo';
+
+function sanitizeFileStem(value = '', fallback = 'brand-logo') {
+	const clean = String(value || '')
+		.normalize('NFKD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/[^a-zA-Z0-9._-]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 80);
+
+	return clean || fallback;
+}
+
+function getLogoExtension(file = {}) {
+	const originalExtension = path.extname(file.originalname || '').toLowerCase();
+	if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(originalExtension)) {
+		return originalExtension;
+	}
+
+	const mimeMap = {
+		'image/png': '.png',
+		'image/jpeg': '.jpg',
+		'image/webp': '.webp',
+		'image/gif': '.gif',
+	};
+
+	return mimeMap[file.mimetype] || '.png';
+}
+
+function buildBrandLogoUrl(fileName = '') {
+	return `${BRAND_LOGO_PUBLIC_PREFIX}/${encodeURIComponent(path.basename(fileName))}`;
+}
 
 async function findInboxMediaMessage(fileName, workspaceId) {
 	const safeFileName = String(fileName || '').trim();
@@ -183,3 +221,86 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 }
 
 export const uploadCampaignHeaderImageController = uploadCampaignHeaderMediaController;
+
+export async function uploadBrandLogoController(req, res) {
+	const file = req.file || null;
+
+	if (!req.user) {
+		return res.status(401).json({ ok: false, error: 'No autenticado' });
+	}
+
+	if (isPlatformAdmin(req.user)) {
+		return res.status(403).json({
+			ok: false,
+			error: 'Solo el admin de la marca puede cambiar el logo manualmente.'
+		});
+	}
+
+	if (!file) {
+		return res.status(400).json({ ok: false, error: 'No se recibió ninguna imagen.' });
+	}
+
+	try {
+		const workspaceId = requireRequestWorkspaceId(req, { allowDefaultForPlatformAdmin: false });
+		const extension = getLogoExtension(file);
+		const stem = sanitizeFileStem(path.basename(file.originalname || 'brand-logo', path.extname(file.originalname || '')));
+		const fileName = `${workspaceId}-${stem}-${crypto.randomUUID()}${extension}`;
+		const absolutePath = path.join(BRAND_LOGO_DIR, fileName);
+		const logoUrl = buildBrandLogoUrl(fileName);
+
+		await fs.mkdir(BRAND_LOGO_DIR, { recursive: true });
+		await fs.rename(file.path, absolutePath);
+
+		await prisma.workspaceBranding.upsert({
+			where: { workspaceId },
+			update: { logoUrl },
+			create: { workspaceId, logoUrl },
+		});
+
+		return res.json({
+			ok: true,
+			logoUrl,
+			fileName,
+			mimeType: file.mimetype || null,
+			fileSize: file.size || null
+		});
+	} catch (error) {
+		return res.status(error.status || 500).json({
+			ok: false,
+			error: error.message || 'No se pudo guardar el logo.'
+		});
+	} finally {
+		try {
+			if (file?.path) {
+				await fs.unlink(file.path);
+			}
+		} catch {
+			// The file may have been moved into permanent storage.
+		}
+	}
+}
+
+export async function serveBrandLogoController(req, res) {
+	const fileName = path.basename(String(req.params?.fileName || '').trim());
+
+	if (!fileName) {
+		return res.status(400).json({ ok: false, error: 'Nombre de archivo inválido.' });
+	}
+
+	try {
+		const absolutePath = path.join(BRAND_LOGO_DIR, fileName);
+		const stats = await fs.stat(absolutePath).catch(() => null);
+
+		if (!stats || !stats.isFile()) {
+			return res.status(404).json({ ok: false, error: 'Logo no encontrado.' });
+		}
+
+		res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+		return res.sendFile(absolutePath);
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			error: error.message || 'No se pudo servir el logo.'
+		});
+	}
+}

@@ -350,16 +350,45 @@
 
 .tenant-admin-logo-form {
 	display: grid;
-	grid-template-columns: minmax(240px, 1fr) auto;
+	grid-template-columns: minmax(180px, 1fr) auto;
 	gap: 10px;
-	align-items: end;
+	align-items: center;
 	padding: 12px;
 	border: 1px solid #d9e2ef;
 	border-radius: 8px;
 	background: #f8fafc;
 }
 
-.tenant-admin-logo-form button {
+.tenant-admin-logo-form__copy {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.tenant-admin-logo-form__copy strong,
+.tenant-admin-logo-form__copy span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tenant-admin-logo-form__copy strong {
+	color: #172033;
+	font-size: 14px;
+	font-weight: 800;
+}
+
+.tenant-admin-logo-form__copy span {
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.tenant-admin-logo-upload {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	min-height: 42px;
 	border: 1px solid #0a5f59;
 	border-radius: 8px;
@@ -372,7 +401,14 @@
 	white-space: nowrap;
 }
 
-.tenant-admin-logo-form button:disabled {
+.tenant-admin-logo-upload input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: inherit;
+}
+
+.tenant-admin-logo-upload.is-disabled {
 	opacity: 0.55;
 	cursor: default;
 }
@@ -555,7 +591,7 @@
 		grid-template-columns: 1fr;
 	}
 
-	.tenant-admin-logo-form button {
+	.tenant-admin-logo-upload {
 		width: 100%;
 	}
 }
@@ -1511,13 +1547,13 @@
 	box-shadow: none;
 }
 
-.tenant-admin-logo-form button {
+.tenant-admin-logo-upload {
 	border-color: var(--ui-primary-strong, #0a5f59);
 	background: var(--ui-primary, #0f766e);
 	color: #ffffff;
 }
 
-.tenant-admin-logo-form button:hover:not(:disabled) {
+.tenant-admin-logo-upload:hover:not(.is-disabled) {
 	background: var(--ui-primary-strong, #0a5f59);
 }
 
