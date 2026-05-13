@@ -530,14 +530,7 @@
 	height: 64px;
 	border: 1px solid #d9e2ef;
 	border-radius: 8px;
-	background:
-		linear-gradient(45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
-		linear-gradient(-45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
-		linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
-		linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
-		#ffffff;
-	background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-	background-size: 16px 16px;
+	background: #ffffff;
 	display: grid;
 	place-items: center;
 	overflow: hidden;
@@ -1558,14 +1551,7 @@
 }
 
 .tenant-admin-brand-logo-box {
-	background:
-		linear-gradient(45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
-		linear-gradient(-45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
-		linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
-		linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
-		#ffffff;
-	background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-	background-size: 16px 16px;
+	background: #ffffff;
 }
 
 .admin-field input:focus,
@@ -1672,14 +1658,7 @@
 }
 
 .dark .admin-shell .admin-content .tenant-admin-brand-logo-box {
-	background:
-		linear-gradient(45deg, rgba(148, 163, 184, 0.12) 25%, transparent 25%),
-		linear-gradient(-45deg, rgba(148, 163, 184, 0.12) 25%, transparent 25%),
-		linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.12) 75%),
-		linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.12) 75%),
-		var(--ui-surface-soft, #192234) !important;
-	background-position: 0 0, 0 8px, 8px -8px, -8px 0 !important;
-	background-size: 16px 16px !important;
+	background: var(--ui-surface-soft, #192234) !important;
 }
 
 .dark .admin-shell .admin-content .tenant-admin-header h2,
