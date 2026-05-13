@@ -478,6 +478,322 @@ export function buildResponsePolicy({
 	};
 }
 
+function normalizeGateText(value = '') {
+	return normalizeText(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+}
+
+function isAiOutbound(message = null) {
+	if (!message || message.direction !== 'OUTBOUND') return false;
+	return (
+		['gemini', 'openai'].includes(String(message.provider || '').toLowerCase()) ||
+		/gemini|gpt/i.test(String(message.model || ''))
+	);
+}
+
+function isSimpleClosingMessage(text = '') {
+	const q = normalizeGateText(text);
+	if (!q) return false;
+
+	return /^(ok|okay|oka|dale|listo|gracias|muchas gracias|mil gracias|perfecto|genial|buenisimo|buenisimo gracias|bueno gracias|de nada|👍|🙏|🙌)[\s!.]*$/i.test(q);
+}
+
+function isReactionLikeMessage(messageType = '', body = '') {
+	const normalizedType = String(messageType || '').toLowerCase();
+	if (['reaction', 'sticker', 'contacts'].includes(normalizedType)) return true;
+	if (normalizedType !== 'text' && !normalizeText(body)) return true;
+	return false;
+}
+
+function lastAssistantAskedQuestion(message = null) {
+	if (!message?.body) return false;
+	const text = String(message.body || '');
+	return /\?\s*$/.test(text) || /(?:decime|pasame|confirmame|enviame|mandame|contame|indicam[eé])\b/i.test(text);
+}
+
+function looksLikeCancellationRequest(text = '') {
+	const q = normalizeGateText(text);
+	return /(cancelar|cancelen|anular|anulen|dar de baja).*(compra|pedido|orden|carrito)|(?:compra|pedido|orden).*(cancelar|cancelen|anular|anulen|dar de baja)/i.test(q);
+}
+
+function looksLikeReturnOrWrongItemRequest(text = '') {
+	const q = normalizeGateText(text);
+	return /(devolucion|devolver|devuelvan|devolv|reembolso|reintegro|arrepentimiento|cambio|cambiar|me quedo chico|me quedo grande|me llego mal|vino mal|vino fallado|vino roto|me mandaron otro|no coincide|sin color|talle equivocado|color equivocado|envien.*(?:calza|producto)|dinero)/i.test(q);
+}
+
+function looksLikeReturnCaseFollowup(text = '') {
+	const q = normalizeGateText(text);
+	return /(?:orden|pedido|#)?\s*\d{4,10}\b|foto|etiqueta|talle|color|tabla|no coincide|detalle|adjunto|te paso/i.test(q);
+}
+
+function isReturnExchangeAlreadyRouted(currentState = {}, lastOutbound = null) {
+	if (currentState?.handoffReason === 'return_exchange') return true;
+
+	const lastText = normalizeGateText(lastOutbound?.body || '');
+	return /devolucion|cambio automatico|asesora vea tu caso|queda derivado para revisarlo/.test(lastText);
+}
+
+function isReturnExchangeFinalHandoffSent(currentState = {}, lastOutbound = null) {
+	if (currentState?.handoffReason !== 'return_exchange') return false;
+
+	const lastText = normalizeGateText(lastOutbound?.body || '');
+	return /ya sumo ese dato al caso|queda derivado para que una asesora/.test(lastText);
+}
+
+function isWaitingForHuman(currentState = {}) {
+	return Boolean(currentState?.needsHuman && currentState?.handoffReason);
+}
+
+function isHumanHandoffWithinSilenceWindow(currentState = {}, hours = 24) {
+	if (!isWaitingForHuman(currentState)) return false;
+	const updatedAt = currentState?.updatedAt ? new Date(currentState.updatedAt).getTime() : 0;
+	if (!updatedAt || !Number.isFinite(updatedAt)) return true;
+	return Date.now() - updatedAt < hours * 60 * 60 * 1000;
+}
+
+function looksLikeSameHandoffTopic(text = '', currentState = {}) {
+	const q = normalizeGateText(text);
+	const reason = String(currentState?.handoffReason || '');
+	if (!q) return true;
+
+	if (reason === 'return_exchange') {
+		return looksLikeReturnOrWrongItemRequest(q) || looksLikeReturnCaseFollowup(q);
+	}
+
+	if (reason === 'tracking_followup') {
+		return looksLikeTrackingEscalation(q) || /(seguimiento|tracking|envio|enbox|correo|pedido|demora|llega|direccion)/i.test(q);
+	}
+
+	if (reason === 'cancel_request') {
+		return looksLikeCancellationRequest(q) || /(cancel|anular|pedido|compra)/i.test(q);
+	}
+
+	return /(pedido|envio|seguimiento|tracking|devolucion|cambio|cancel|reclamo|asesora|humano|comprobante|pago)/i.test(q);
+}
+
+function lastOutboundSharedTracking(lastOutbound = null) {
+	const text = normalizeGateText(lastOutbound?.body || '');
+	return /(podes seguirlo|seguimiento|tracking|codigo de seguimiento|link de seguimiento|correo\/logistica|correo argentino|enbox|pedido #[0-9])/.test(text) &&
+		/(https?:\/\/|podes seguirlo|codigo de seguimiento|link de seguimiento|correo argentino|enbox)/.test(text);
+}
+
+function looksLikeTrackingEscalation(text = '') {
+	const q = normalizeGateText(text);
+	return /(\bpero\b|demora|demorado|demorando|tarda|tardando|hace\s+\w+\s+(dia|dias|semana|semanas)|no llega|no me llego|no avanza|no se mueve|ni avanzo|sigue igual|preparando|cuando lo van a enviar|cuando sale|hoy tenia que llegar|reclamo|necesito cambiar|cambiar.*domicilio|cambio.*domicilio|direccion|direcci[oó]n|me responden)/i.test(q);
+}
+
+function looksLikeTrackingClosing(text = '') {
+	const q = normalizeGateText(text);
+	return /^(ok|oki|oka|dale|perfecto|joya|bueno|listo|gracias|muchas gracias|espero|espero entonces|quedo atenta|quedo atento|aguardo|aguardo entonces)[\s!.]*$/i.test(q) ||
+		/(gracias|perfecto|espero entonces|aguardo entonces|quedo atent[ao])/.test(q);
+}
+
+function looksLikeSensitiveSupport(text = '') {
+	const q = normalizeGateText(text);
+	return /(estafa|defensa del consumidor|denuncia|reclamo|verg[uü]enza|me bloquearon|bloquearon|no responden|nadie responde|se borran|me llego mal|vino mal|devolucion|devolver|arrepentimiento)/i.test(q);
+}
+
+export function isSupportIntent(intent = '') {
+	return ['order_status', 'complaint', 'return_exchange', 'human_handoff'].includes(
+		String(intent || '')
+	);
+}
+
+export function sanitizeStateForSupportPrompt(state = {}, intent = '') {
+	if (!isSupportIntent(intent)) return state;
+
+	return {
+		...state,
+		currentProductFocus: null,
+		currentProductFamily: null,
+		requestedOfferType: null,
+		categoryLocked: false,
+		salesStage: null,
+		shownOffers: [],
+		shownPrices: [],
+		sharedLinks: [],
+		lastRecommendedProduct: null,
+		lastRecommendedOffer: null,
+		buyingIntentLevel: null,
+		commercialSummary: null,
+	};
+}
+
+export function resolveReplyGate({
+	messageBody = '',
+	messageType = 'text',
+	intent = 'general',
+	currentState = {},
+	lastOutbound = null,
+	recentMessages = [],
+} = {}) {
+	const text = normalizeText(messageBody);
+	const q = normalizeGateText(text);
+
+	if (!text || isReactionLikeMessage(messageType, messageBody)) {
+		return {
+			action: 'suppress',
+			reason: 'non_text_or_empty_signal',
+		};
+	}
+
+	const lastOutboundAt = lastOutbound?.createdAt ? new Date(lastOutbound.createdAt).getTime() : 0;
+	const secondsSinceLastAi =
+		lastOutboundAt && isAiOutbound(lastOutbound)
+			? (Date.now() - lastOutboundAt) / 1000
+			: Number.POSITIVE_INFINITY;
+
+	if (
+		isSimpleClosingMessage(text) &&
+		!lastAssistantAskedQuestion(lastOutbound) &&
+		!['payment', 'order_status', 'human_handoff'].includes(String(intent || ''))
+	) {
+		return {
+			action: 'suppress',
+			reason: 'simple_closing',
+		};
+	}
+
+	if (
+		secondsSinceLastAi <= 8 &&
+		isSimpleClosingMessage(text) &&
+		!lastAssistantAskedQuestion(lastOutbound)
+	) {
+		return {
+			action: 'suppress',
+			reason: 'rapid_ack_after_ai',
+		};
+	}
+
+	if (isReturnExchangeFinalHandoffSent(currentState, lastOutbound)) {
+		return {
+			action: 'suppress',
+			reason: 'return_exchange_waiting_human',
+		};
+	}
+
+	if (lastOutboundSharedTracking(lastOutbound) && looksLikeTrackingClosing(q)) {
+		return {
+			action: 'suppress',
+			reason: 'tracking_closing_after_status',
+		};
+	}
+
+	if (lastOutboundSharedTracking(lastOutbound) && looksLikeTrackingEscalation(q)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'tracking_followup_needs_human',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'tracking_followup',
+			},
+			reply:
+				'Entiendo. Ya tenemos el seguimiento cargado, pero si no avanza o necesitas cambiar un dato del envio, lo tiene que revisar una asesora. Dejo el caso derivado para que lo vean por aca.',
+		};
+	}
+
+	if (
+		isReturnExchangeAlreadyRouted(currentState, lastOutbound) &&
+		(looksLikeReturnOrWrongItemRequest(q) ||
+		 looksLikeReturnCaseFollowup(q) ||
+		 ['image', 'document'].includes(String(messageType || '').toLowerCase()))
+	) {
+		return {
+			action: 'fixed_reply',
+			reason: 'return_exchange_followup_received',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'return_exchange',
+			},
+			reply:
+				'Gracias, ya sumo ese dato al caso. Queda derivado para que una asesora lo revise y te responda por aca. Si podes, mandanos tambien una foto del producto o de la etiqueta para acelerar la revision.',
+		};
+	}
+
+	if (isWaitingForHuman(currentState)) {
+		if (
+			isHumanHandoffWithinSilenceWindow(currentState) ||
+			looksLikeSameHandoffTopic(q, currentState)
+		) {
+			return {
+				action: 'suppress',
+				reason: 'waiting_human_handoff',
+			};
+		}
+
+		return {
+			action: 'reply',
+			reason: 'handoff_expired_new_topic',
+		};
+	}
+
+	if (looksLikeCancellationRequest(q)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'cancel_request_needs_human',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'cancel_request',
+			},
+			reply:
+				'Puedo dejar el pedido para que lo revise una asesora, pero no te confirmo una cancelacion automatica desde aca. Te derivamos para verlo bien.',
+		};
+	}
+
+	if (looksLikeReturnOrWrongItemRequest(q)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'return_exchange_needs_human',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'return_exchange',
+			},
+			reply:
+				'Entiendo, lo revisamos. Para que una asesora vea tu caso puntual, pasame el numero de pedido y una foto del producto o etiqueta si la tenes. No te confirmo una devolucion o cambio automatico desde aca, pero queda derivado para revisarlo bien.',
+		};
+	}
+
+	if (looksLikeSensitiveSupport(q)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'sensitive_support',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'sensitive_support',
+			},
+			reply:
+				'Entiendo la preocupacion. Te paso con una asesora para revisar tu caso puntual y evitar darte una respuesta incompleta desde aca.',
+		};
+	}
+
+	if (
+		recentMessages.filter((message) => message.role === 'assistant').slice(-2).length >= 2 &&
+		isSimpleClosingMessage(text)
+	) {
+		return {
+			action: 'suppress',
+			reason: 'closing_after_multiple_assistant_replies',
+		};
+	}
+
+	return {
+		action: 'reply',
+		reason: null,
+	};
+}
+
 export function stripRepeatedGreeting(text = '', recentMessages = [], contactName = '', preserveGreeting = false) {
 	if (preserveGreeting) return text;
 	const assistantCount = recentMessages.filter((msg) => msg.role === 'assistant').length;
@@ -620,6 +936,39 @@ function looksLikeInventedTracking(text = '', liveOrderContext = null) {
 	return false;
 }
 
+function looksLikeUnsupportedOperationalPromise(text = '', responsePolicy = {}) {
+	const normalized = normalizeGateText(text);
+	const action = String(responsePolicy?.action || '');
+
+	if (
+		/(ya\s+)?(te\s+)?(cancelo|cancelamos|anulo|anulamos|di de baja|damos de baja)\b/i.test(
+			normalized
+		)
+	) {
+		return true;
+	}
+
+	if (
+		/(ya\s+)?(lo\s+)?(revise|revisamos|estoy revisando|me fijo|lo verifico|verificamos)\b/i.test(
+			normalized
+		) &&
+		!/(order_status|payment|handoff)/i.test(action)
+	) {
+		return true;
+	}
+
+	if (
+		/(podemos coordinar|gestionamos|se puede enviar por oca|via cargo|andreani sin problema|sin problema)/i.test(
+			normalized
+		) &&
+		action !== 'shipping_guidance'
+	) {
+		return true;
+	}
+
+	return false;
+}
+
 export function auditAssistantReply({
 	text,
 	responsePolicy,
@@ -673,6 +1022,13 @@ export function auditAssistantReply({
 		};
 	}
 
+	if (looksLikeUnsupportedOperationalPromise(cleaned, responsePolicy)) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false,
+		};
+	}
+
 	const triggerHumanHandoff =
 		commercialPlan?.shouldEscalate || responseMentionsHumanHandoff(cleaned);
 
@@ -704,7 +1060,7 @@ export async function resolveIntentAction({
 	}
 
 	if (intent === 'shipping') {
-		return handleShippingIntent();
+		return handleShippingIntent({ messageBody, currentState });
 	}
 
 	if (intent === 'size_help') {
@@ -736,6 +1092,7 @@ export function buildStatePayload({
 	const shouldKeepOrderContext =
 		intent === 'order_status' ||
 		(currentState?.lastIntent === 'order_status' && explicitOrderNumber);
+	const shouldClearCommercialContext = isSupportIntent(intent);
 
 	const interestedProducts = Array.isArray(menuStatePatch?.interestedProducts)
 		? menuStatePatch.interestedProducts
@@ -786,30 +1143,40 @@ export function buildStatePayload({
 		handoffReason: memoryPatch.handoffReason,
 		interactionCount: memoryPatch.interactionCount,
 		notes: currentState?.notes || null,
-		currentProductFocus:
-			menuStatePatch?.currentProductFocus ||
-			memoryPatch?.currentProductFocus ||
-			currentState?.currentProductFocus ||
-			null,
-		currentProductFamily: nextProductFamily,
+		currentProductFocus: shouldClearCommercialContext
+			? null
+			: menuStatePatch?.currentProductFocus ||
+			  memoryPatch?.currentProductFocus ||
+			  currentState?.currentProductFocus ||
+			  null,
+		currentProductFamily: shouldClearCommercialContext ? null : nextProductFamily,
 		requestedOfferType:
-			memoryPatch?.requestedOfferType ||
-			(familyChanged ? null : currentState?.requestedOfferType) ||
-			null,
-		excludedProductKeywords,
-		categoryLocked:
-			typeof memoryPatch?.categoryLocked === 'boolean'
+			shouldClearCommercialContext
+				? null
+				: memoryPatch?.requestedOfferType ||
+				  (familyChanged ? null : currentState?.requestedOfferType) ||
+				  null,
+		excludedProductKeywords: shouldClearCommercialContext ? [] : excludedProductKeywords,
+		categoryLocked: shouldClearCommercialContext
+			? false
+			: typeof memoryPatch?.categoryLocked === 'boolean'
 				? memoryPatch.categoryLocked
 				: Boolean(currentState?.categoryLocked),
-		salesStage: currentState?.salesStage || null,
-		shownOffers: currentState?.shownOffers || [],
-		shownPrices: currentState?.shownPrices || [],
-		sharedLinks: currentState?.sharedLinks || [],
-		lastRecommendedProduct: currentState?.lastRecommendedProduct || null,
-		lastRecommendedOffer: currentState?.lastRecommendedOffer || null,
-		buyingIntentLevel: currentState?.buyingIntentLevel || null,
+		salesStage: shouldClearCommercialContext ? null : currentState?.salesStage || null,
+		shownOffers: shouldClearCommercialContext ? [] : currentState?.shownOffers || [],
+		shownPrices: shouldClearCommercialContext ? [] : currentState?.shownPrices || [],
+		sharedLinks: shouldClearCommercialContext ? [] : currentState?.sharedLinks || [],
+		lastRecommendedProduct: shouldClearCommercialContext
+			? null
+			: currentState?.lastRecommendedProduct || null,
+		lastRecommendedOffer: shouldClearCommercialContext
+			? null
+			: currentState?.lastRecommendedOffer || null,
+		buyingIntentLevel: shouldClearCommercialContext ? null : currentState?.buyingIntentLevel || null,
 		frictionLevel: currentState?.frictionLevel || null,
-		commercialSummary: currentState?.commercialSummary || null,
+		commercialSummary: shouldClearCommercialContext
+			? null
+			: currentState?.commercialSummary || null,
 		menuActive: false,
 		menuPath: null,
 		menuLastSelection:

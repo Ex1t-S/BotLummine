@@ -22,6 +22,10 @@ export function isRetryableGeminiError(error) {
 }
 
 export async function runGeminiReply(prompt, options = {}) {
+	return runGeminiContent(prompt, options);
+}
+
+export async function runGeminiContent(contents, options = {}) {
 	const apiKey = process.env.GEMINI_API_KEY;
 	const modelName = options.model || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 	const maxRetries = Number(process.env.GEMINI_MAX_RETRIES || 2);
@@ -39,7 +43,8 @@ export async function runGeminiReply(prompt, options = {}) {
 			const response = await withTimeout(
 				ai.models.generateContent({
 					model: modelName,
-					contents: prompt,
+					contents,
+					...(options.config ? { config: options.config } : {}),
 				}),
 				timeoutMs,
 				`Gemini timeout after ${timeoutMs}ms`

@@ -94,7 +94,7 @@ const BODY_FAMILY_PATTERN = /\b(body|bodys|bodies|bodyus)\b|\bbodys modeladores\
 
 const FAMILY_PATTERNS = [
 	{ family: 'body_modelador', regex: BODY_FAMILY_PATTERN },
-	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora|reductora)|\bcalzas? linfaticas?\b|\bcalzas? modeladoras?\b/ },
+	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora|reductora)|\bcalzas? linfaticas?\b|\bcalzas? modeladoras?\b|\bcalzas?\b/ },
 	{ family: 'legging', regex: /\blegging\b|\bleggings\b/ },
 	{ family: 'short_faja', regex: /\bshort\b.*(faja|modelador|reductor)|\bshort faja\b|\bshort modelador\b/ },
 	{ family: 'bombacha_modeladora', regex: /\bbombacha\b.*(modelador|reductor)|\bbombacha modeladora\b/ },

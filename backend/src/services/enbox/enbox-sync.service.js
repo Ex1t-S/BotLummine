@@ -91,8 +91,7 @@ async function mapInBatches(items, worker, concurrency = DISCOVERY_CONCURRENCY) 
 	return results;
 }
 
-function buildTrackingToken(didEnvio, didCliente) {
-	const config = getEnboxConfig();
+function buildTrackingToken(didEnvio, didCliente, config = {}) {
 	if (!didEnvio || !didCliente) return null;
 	return `${didEnvio}${config.publicTrackingSalt}${didCliente}`;
 }
@@ -154,7 +153,7 @@ function normalizeShipmentRecord(source = {}, config = null) {
 		shipmentNumber,
 		packId,
 		trackingNumber,
-		trackingToken: buildTrackingToken(didEnvio, didCliente),
+		trackingToken: buildTrackingToken(didEnvio, didCliente, config),
 		trackingUrl,
 		shippingStatus,
 		shippingStatusCode,

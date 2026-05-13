@@ -557,6 +557,111 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 			userMessage: 'open_menu',
 			trace: session.lastTrace,
 		});
+	} else if (cleanAction === 'simulate_empty_signal') {
+		const result = await processInboundMessage({
+			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			waId: conversation.contact?.waId,
+			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			messageBody: '',
+			messageType: 'reaction',
+			attachmentMeta: null,
+			rawPayload: {
+				source: 'ai-lab',
+				sessionId,
+				simulatedSignal: 'reaction'
+			},
+			transportMode: 'lab'
+		});
+
+		session.lastTrace = result.trace || null;
+
+		await persistAiLabRun({
+			sessionId: session.sessionId,
+			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			fixtureKey: session.fixtureKey,
+			conversationId: conversation.id,
+			action: 'simulate_empty_signal',
+			userMessage: '',
+			trace: session.lastTrace,
+		});
+	} else if (cleanAction === 'simulate_payment_image') {
+		const result = await processInboundMessage({
+			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			waId: conversation.contact?.waId,
+			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			messageBody: '[Imagen recibida]',
+			messageType: 'image',
+			attachmentMeta: {
+				attachmentMimeType: 'image/png',
+				attachmentName: 'comprobante.png',
+			},
+			rawPayload: {
+				source: 'ai-lab',
+				sessionId,
+				attachment: {
+					type: 'image',
+					mimeType: 'image/png',
+					name: 'comprobante.png',
+				},
+				aiLabAttachmentClassification: {
+					kind: 'payment_proof',
+					confidence: 0.91,
+					reason: 'comprobante de pago simulado',
+				},
+			},
+			transportMode: 'lab'
+		});
+
+		session.lastTrace = result.trace || null;
+
+		await persistAiLabRun({
+			sessionId: session.sessionId,
+			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			fixtureKey: session.fixtureKey,
+			conversationId: conversation.id,
+			action: 'simulate_payment_image',
+			userMessage: '[Imagen recibida]',
+			trace: session.lastTrace,
+		});
+	} else if (cleanAction === 'simulate_return_image') {
+		const result = await processInboundMessage({
+			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			waId: conversation.contact?.waId,
+			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			messageBody: '[Imagen recibida]',
+			messageType: 'image',
+			attachmentMeta: {
+				attachmentMimeType: 'image/jpeg',
+				attachmentName: 'producto.jpg',
+			},
+			rawPayload: {
+				source: 'ai-lab',
+				sessionId,
+				attachment: {
+					type: 'image',
+					mimeType: 'image/jpeg',
+					name: 'producto.jpg',
+				},
+				aiLabAttachmentClassification: {
+					kind: 'return_evidence',
+					confidence: 0.88,
+					reason: 'evidencia de devolucion simulada',
+				},
+			},
+			transportMode: 'lab'
+		});
+
+		session.lastTrace = result.trace || null;
+
+		await persistAiLabRun({
+			sessionId: session.sessionId,
+			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			fixtureKey: session.fixtureKey,
+			conversationId: conversation.id,
+			action: 'simulate_return_image',
+			userMessage: '[Imagen recibida]',
+			trace: session.lastTrace,
+		});
 	} else {
 		if (!cleanBody && !cleanSelectionId) {
 			const error = new Error('El mensaje no puede estar vacio.');

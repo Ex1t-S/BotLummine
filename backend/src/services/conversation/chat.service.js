@@ -23,9 +23,13 @@ import { buildPrompt } from '../common/prompt-builder.js';
 import {
 	isPaymentProofMessage,
 	isAmbiguousPaymentAttachment,
-	buildPaymentReviewAck,
+	PAYMENT_REVIEW_ACK,
 	resolveConversationQueue
 } from './inbox-routing.service.js';
+import {
+	classifyInboundAttachment,
+	attachmentClassificationLooksLikeReturnEvidence
+} from './attachment-classifier.service.js';
 import {
 	normalizeText,
 	buildConversationSummary,
@@ -37,6 +41,9 @@ import {
 	shouldForceCatalogSafetyFallback,
 	buildStatePayload,
 	buildFallbackOrderAwareReply,
+	resolveReplyGate,
+	sanitizeStateForSupportPrompt,
+	isSupportIntent,
 } from './conversation-helpers.service.js';
 import {
 	maybeHandleMenuFlow,
@@ -512,6 +519,126 @@ export async function processInboundMessage({
 		};
 	}
 
+	const replyGate = resolveReplyGate({
+		messageBody: effectiveMessageBody,
+		messageType,
+		intent,
+		currentState,
+		lastOutbound,
+		recentMessages,
+	});
+
+	if (replyGate.action === 'suppress') {
+		trace = {
+			...trace,
+			intent,
+			provider: 'system',
+			model: 'reply-gate',
+			shouldReply: false,
+			responsePolicy: {
+				action: 'suppress',
+				useAI: false,
+				allowHandoffMention: false,
+				maxChars: 0,
+				tone: 'silent',
+				reason: replyGate.reason,
+			},
+		};
+
+		return { conversation: freshConversation, trace };
+	}
+
+	if (replyGate.action === 'fixed_reply') {
+		const gateStatePatch = {
+			customerName: contactName || normalizedWaId,
+			lastIntent: intent,
+			lastDetectedIntent: intent,
+			lastUserGoal: 'hablar_con_humano',
+			needsHuman: Boolean(replyGate.statePatch?.needsHuman),
+			handoffReason: replyGate.statePatch?.handoffReason || replyGate.reason,
+			interactionCount: Number(currentState.interactionCount || 0) + 1,
+		};
+
+		await prisma.conversationState.upsert({
+			where: { conversationId: freshConversation.id },
+			update: gateStatePatch,
+			create: {
+				conversationId: freshConversation.id,
+				...gateStatePatch,
+			},
+		});
+
+		await prisma.conversation.update({
+			where: { id: freshConversation.id },
+			data: {
+				queue: replyGate.queue || 'HUMAN',
+				aiEnabled: replyGate.aiEnabled ?? false,
+				lastMessageAt: new Date(),
+			},
+		});
+
+		await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			body: replyGate.reply,
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'reply-gate',
+				raw: {
+					reason: replyGate.reason,
+				},
+			},
+		});
+
+		await prisma.conversation.update({
+			where: { id: freshConversation.id },
+			data: {
+				lastSummary: buildConversationSummary({
+					intent,
+					enrichedState: { ...currentState, ...gateStatePatch },
+					lastUserMessage: summaryUserMessage,
+					lastAssistantMessage: replyGate.reply,
+					liveOrderContext: null,
+				}),
+			},
+		});
+
+		trace = {
+			...trace,
+			intent,
+			queueDecision: {
+				queue: replyGate.queue || 'HUMAN',
+				aiEnabled: replyGate.aiEnabled ?? false,
+				reason: replyGate.reason,
+			},
+			responsePolicy: {
+				action: 'fixed_reply',
+				useAI: false,
+				allowHandoffMention: true,
+				maxChars: 220,
+				tone: 'empatico_concreto',
+				reason: replyGate.reason,
+			},
+			assistantMessage: replyGate.reply,
+			provider: 'system',
+			model: 'reply-gate',
+			shouldReply: false,
+		};
+
+		return { conversation: freshConversation, trace };
+	}
+
+	const handoffExpiredNewTopic = replyGate.reason === 'handoff_expired_new_topic';
+	const attachmentClassification = await classifyInboundAttachment({
+		messageType,
+		messageBody: effectiveMessageBody,
+		rawPayload,
+		attachmentMeta,
+		currentState,
+		recentMessages,
+		waId: normalizedWaId,
+	});
+
 	const memoryPatch = analyzeConversationTurn({
 		messageBody: effectiveMessageBody,
 		intent,
@@ -524,12 +651,18 @@ export async function processInboundMessage({
 		memoryPatch.handoffReason = 'requested_human';
 	}
 
+	if (handoffExpiredNewTopic) {
+		memoryPatch.needsHuman = false;
+		memoryPatch.handoffReason = null;
+	}
+
 	const detectedPaymentProof = isPaymentProofMessage({
 		messageType,
 		body: effectiveMessageBody,
 		rawPayload,
 		currentState,
-		recentMessages
+		recentMessages,
+		attachmentClassification
 	}) || looksLikePaymentClarifierConfirmation({
 		text: effectiveMessageBody,
 		lastOutbound,
@@ -540,7 +673,8 @@ export async function processInboundMessage({
 		body: effectiveMessageBody,
 		rawPayload,
 		currentState,
-		recentMessages
+		recentMessages,
+		attachmentClassification
 	});
 
 	let queueDecision = resolveConversationQueue({
@@ -549,6 +683,13 @@ export async function processInboundMessage({
 		detectedPaymentProof,
 		aiDeclaredHandoff: false
 	});
+
+	if (handoffExpiredNewTopic && !detectedPaymentProof) {
+		queueDecision = {
+			queue: 'AUTO',
+			aiEnabled: true,
+		};
+	}
 
 	if (menuDecision?.queueDecisionOverride && !detectedPaymentProof) {
 		queueDecision = menuDecision.queueDecisionOverride;
@@ -607,6 +748,59 @@ export async function processInboundMessage({
 		...currentState,
 		...nextStatePayload
 	};
+	let promptState = sanitizeStateForSupportPrompt(enrichedState, intent);
+
+	if (
+		attachmentClassificationLooksLikeReturnEvidence(attachmentClassification) &&
+		(enrichedState?.handoffReason === 'return_exchange' || currentState?.handoffReason === 'return_exchange')
+	) {
+		const reply =
+			'Gracias, ya sumo la foto al caso. Queda derivado para que una asesora lo revise y te responda por aca.';
+		trace = {
+			...trace,
+			attachmentClassification,
+			assistantMessage: reply,
+			provider: 'system',
+			model: 'return-evidence-router',
+			shouldReply: false,
+		};
+
+		await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			body: reply,
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'return-evidence-router',
+				raw: { attachmentClassification }
+			}
+		});
+
+		await prisma.conversation.update({
+			where: { id: freshConversation.id },
+			data: {
+				queue: 'HUMAN',
+				aiEnabled: false,
+				lastSummary: buildConversationSummary({
+					intent,
+					enrichedState: { ...enrichedState, needsHuman: true, handoffReason: 'return_exchange' },
+					lastUserMessage: summaryUserMessage,
+					lastAssistantMessage: reply,
+					liveOrderContext
+				})
+			}
+		});
+
+		await prisma.conversationState.update({
+			where: { conversationId: freshConversation.id },
+			data: {
+				needsHuman: true,
+				handoffReason: 'return_exchange',
+			},
+		});
+
+		return { conversation: freshConversation, trace };
+	}
 
 	if (ambiguousPaymentAttachment && !detectedPaymentProof) {
 		const clarification =
@@ -647,7 +841,7 @@ export async function processInboundMessage({
 	}
 
 	if (detectedPaymentProof) {
-		const ack = buildPaymentReviewAck();
+		const ack = PAYMENT_REVIEW_ACK;
 		trace = {
 			...trace,
 			assistantMessage: ack,
@@ -776,33 +970,78 @@ export async function processInboundMessage({
 	const aiBrand = workspaceConfig.ai;
 
 	try {
-		catalogProducts = await searchCatalogProducts({
-			query: effectiveMessageBody,
-			interestedProducts: enrichedState.interestedProducts || [],
-			limit: 5,
-			workspaceId: resolvedWorkspaceId
-		});
+		if (isSupportIntent(intent)) {
+			catalogProducts = [];
+			catalogContext = '';
+			commercialPlan = {
+				stage: 'SUPPORT',
+				mood: enrichedState.customerMood || 'neutral',
+				buyingIntentLevel: null,
+				requestedAction: 'SUPPORT',
+				productFocus: null,
+				productFocusLabel: null,
+				productFamily: null,
+				productFamilyLabel: null,
+				categoryLocked: false,
+				rankedProducts: [],
+				bestOffer: null,
+				fallbackOffer: null,
+				offerOptions: [],
+				offerCandidates: [],
+				alreadyShared: {
+					sharedLinks: [],
+					shownPrices: [],
+					shownOffers: []
+				},
+				shareLinkNow: false,
+				repeatPriceNow: false,
+				shouldEscalate: Boolean(enrichedState.needsHuman),
+				handoffReason: enrichedState.handoffReason || null,
+				recommendedAction: enrichedState.needsHuman ? 'handoff_human' : 'support_reply',
+				responseRules: [
+					'Responde como soporte, no como venta.',
+					'No menciones promos, precios, links de producto ni catalogo.',
+					'No prometas acciones operativas que el sistema no confirmo.'
+				],
+				greetingOnly: false
+			};
+			commercialHints = [
+				'Es una conversacion de soporte o postventa.',
+				'No abras promociones ni productos.',
+				'No prometas tracking, cancelaciones, devoluciones ni revisiones si no estan confirmadas.'
+			];
+		} else {
+			catalogProducts = await searchCatalogProducts({
+				query: effectiveMessageBody,
+				interestedProducts: enrichedState.interestedProducts || [],
+				limit: 5,
+				workspaceId: resolvedWorkspaceId
+			});
 
-		const catalogStatus = await getCatalogLookupStatus({ workspaceId: resolvedWorkspaceId });
+			const catalogStatus = await getCatalogLookupStatus({ workspaceId: resolvedWorkspaceId });
 
-		commercialPlan = {
-			...resolveCommercialBrainV2({
-				intent,
-				messageBody: effectiveMessageBody,
-				currentState: enrichedState,
-				recentMessages: fullRecentMessages,
-				catalogProducts
-			}),
-			catalogAvailable: catalogStatus.available !== false,
-			catalogStatusReason: catalogStatus.reason || 'ok',
-			catalogStatusMessage: catalogStatus.message || null
-		};
+			commercialPlan = {
+				...resolveCommercialBrainV2({
+					intent,
+					messageBody: effectiveMessageBody,
+					currentState: enrichedState,
+					recentMessages: fullRecentMessages,
+					catalogProducts
+				}),
+				catalogAvailable: catalogStatus.available !== false,
+				catalogStatusReason: catalogStatus.reason || 'ok',
+				catalogStatusMessage: catalogStatus.message || null
+			};
+		}
 
 		catalogProducts = commercialPlan?.rankedProducts?.length
 			? commercialPlan.rankedProducts.slice(0, 5)
 			: catalogProducts;
 
-		if (commercialPlan?.greetingOnly) {
+		if (isSupportIntent(intent)) {
+			catalogProducts = [];
+			catalogContext = '';
+		} else if (commercialPlan?.greetingOnly) {
 			catalogProducts = [];
 			catalogContext = '';
 			commercialHints = [
@@ -847,7 +1086,9 @@ export async function processInboundMessage({
 
 		if (aiGuidance?.type === 'shipping') {
 			commercialHints.push(
-				'Si falta ubicación, pedí zona, localidad o provincia sin cortar el hilo.'
+				aiGuidance.hasLocation
+					? 'La clienta ya dio ubicacion o codigo postal. No se lo vuelvas a pedir.'
+					: 'Si falta ubicacion, pedi zona, localidad o provincia sin cortar el hilo.'
 			);
 		}
 
@@ -931,6 +1172,8 @@ export async function processInboundMessage({
 	} catch (catalogError) {
 		console.error('Error buscando productos en catálogo local:', catalogError);
 	}
+
+	promptState = sanitizeStateForSupportPrompt(enrichedState, intent);
 
 	const responsePolicy = buildResponsePolicy({
 		intent,
@@ -1018,7 +1261,7 @@ export async function processInboundMessage({
 					name: freshConversation.contact.name || freshConversation.contact.waId,
 					waId: freshConversation.contact.waId
 				},
-				conversationState: enrichedState,
+				conversationState: promptState,
 				liveOrderContext,
 				catalogProducts,
 				catalogContext,
@@ -1038,7 +1281,7 @@ export async function processInboundMessage({
 					name: freshConversation.contact.name || freshConversation.contact.waId,
 					waId: freshConversation.contact.waId
 				},
-				conversationState: enrichedState,
+				conversationState: promptState,
 				liveOrderContext,
 				catalogProducts,
 				catalogContext,

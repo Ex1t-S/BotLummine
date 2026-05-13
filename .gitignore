@@ -12,7 +12,10 @@ prisma/dev.db
 *.tsbuildinfo
 docs/
 scripts/
-backend/scripts/
+!backend/scripts/
+backend/scripts/*
+!backend/scripts/run-ai-regression-suite.mjs
+!backend/scripts/compare-ai-regression-suite.mjs
 debug-output/
 backend/debug-output/
 **/debug-output/

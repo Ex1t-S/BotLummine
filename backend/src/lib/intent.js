@@ -88,6 +88,12 @@ function hasTrackingKeywords(q = '') {
 	);
 }
 
+function hasOrderDelayFollowupKeywords(q = '') {
+	return /(demora|demorado|demorando|tarda|tardando|hace\s+\w+\s+(dia|dias|semana|semanas)|preparando|en preparacion|no avanza|todavia no|todavia sigue|cuando sale|cuando llega)/.test(
+		q
+	);
+}
+
 function hasPurchaseKeywords(q = '') {
 	return /(quiero comprar|quiero ese|quiero uno|me interesa|pasame el link|como compro|te lo compro|te compro|armar el pedido|armo el pedido|podemos hacer el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|encargar|reservarmelo|reservamelo)/.test(
 		q
@@ -162,8 +168,9 @@ function isTrackingIntent(q, currentState = {}) {
 
 	if (
 		currentState?.lastIntent === 'order_status' &&
-		/(seguimiento|estado|donde esta|mi compra|mi pedido|no llego|despachado|correo|tracking)/.test(
-			q
+		(
+			/(seguimiento|estado|donde esta|mi compra|mi pedido|no llego|despachado|correo|tracking)/.test(q) ||
+			hasOrderDelayFollowupKeywords(q)
 		)
 	) {
 		return true;

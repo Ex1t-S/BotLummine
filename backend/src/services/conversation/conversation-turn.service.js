@@ -21,9 +21,13 @@ import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
 import {
 	isPaymentProofMessage,
 	isAmbiguousPaymentAttachment,
-	buildPaymentReviewAck,
+	PAYMENT_REVIEW_ACK,
 	resolveConversationQueue
 } from './inbox-routing.service.js';
+import {
+	classifyInboundAttachment,
+	attachmentClassificationLooksLikeReturnEvidence
+} from './attachment-classifier.service.js';
 import {
 	normalizeText,
 	createResetConversationState,
@@ -74,12 +78,23 @@ export async function runConversationTurn({
 		memoryPatch.handoffReason = 'requested_human';
 	}
 
+	const attachmentClassification = await classifyInboundAttachment({
+		messageType,
+		messageBody,
+		rawPayload,
+		attachmentMeta,
+		currentState,
+		recentMessages,
+		waId: normalizedWaId,
+	});
+
 	const detectedPaymentProof = isPaymentProofMessage({
 		messageType,
 		body: messageBody,
 		rawPayload,
 		currentState,
-		recentMessages
+		recentMessages,
+		attachmentClassification
 	});
 
 	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
@@ -87,7 +102,8 @@ export async function runConversationTurn({
 		body: messageBody,
 		rawPayload,
 		currentState,
-		recentMessages
+		recentMessages,
+		attachmentClassification
 	});
 
 	const queueDecision = resolveConversationQueue({
@@ -123,6 +139,64 @@ export async function runConversationTurn({
 		...currentState,
 		...nextStatePayload
 	};
+
+	if (
+		attachmentClassificationLooksLikeReturnEvidence(attachmentClassification) &&
+		(enrichedState?.handoffReason === 'return_exchange' || currentState?.handoffReason === 'return_exchange')
+	) {
+		const reply =
+			'Gracias, ya sumo la foto al caso. Queda derivado para que una asesora lo revise y te responda por aca.';
+		return {
+			intent,
+			queueDecision: {
+				queue: 'HUMAN',
+				aiEnabled: false,
+			},
+			nextStatePayload: {
+				...nextStatePayload,
+				needsHuman: true,
+				handoffReason: 'return_exchange',
+			},
+			enrichedState: {
+				...enrichedState,
+				needsHuman: true,
+				handoffReason: 'return_exchange',
+			},
+			outbound: {
+				kind: 'return_evidence_ack',
+				body: reply,
+				aiMeta: {
+					provider: 'system',
+					model: 'return-evidence-router',
+					raw: { attachmentClassification }
+				}
+			},
+			lastSummary: buildConversationSummary({
+				intent,
+				enrichedState: {
+					...enrichedState,
+					needsHuman: true,
+					handoffReason: 'return_exchange',
+				},
+				lastUserMessage: messageBody,
+				lastAssistantMessage: reply,
+				liveOrderContext
+			}),
+			trace: {
+				intent,
+				queueDecision: {
+					queue: 'HUMAN',
+					aiEnabled: false,
+				},
+				attachmentClassification,
+				assistantMessage: reply,
+				provider: 'system',
+				model: 'return-evidence-router',
+				aiGuidance,
+				liveOrderContext
+			}
+		};
+	}
 
 	if (ambiguousPaymentAttachment && !detectedPaymentProof) {
 		const clarification =
@@ -166,7 +240,7 @@ export async function runConversationTurn({
 	}
 
 	if (detectedPaymentProof) {
-		const ack = buildPaymentReviewAck();
+		const ack = PAYMENT_REVIEW_ACK;
 		return {
 			intent,
 			queueDecision,
@@ -338,7 +412,9 @@ export async function runConversationTurn({
 
 		if (aiGuidance?.type === 'shipping') {
 			commercialHints.push(
-				'Si falta ubicación, pedí zona, localidad o provincia sin cortar el hilo.'
+				aiGuidance.hasLocation
+					? 'La clienta ya dio ubicacion o codigo postal. No se lo vuelvas a pedir.'
+					: 'Si falta ubicacion, pedi zona, localidad o provincia sin cortar el hilo.'
 			);
 		}
 

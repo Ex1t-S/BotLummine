@@ -32,12 +32,16 @@ function attachmentLooksLikeFile({ messageType = 'text', rawPayload = null } = {
 	return typeLooksLikeAttachment || mime.includes('pdf') || mime.includes('image');
 }
 
+export const PAYMENT_REVIEW_ACK =
+	'Gracias, ya recibimos el comprobante. Lo dejamos para revision de pago y seguimos por aca cuando este verificado.';
+
 export function isPaymentProofMessage({
 	messageType = 'text',
 	body = '',
 	rawPayload = null,
 	currentState = {},
-	recentMessages = []
+	recentMessages = [],
+	attachmentClassification = null
 } = {}) {
 	const text = normalizeText(body);
 
@@ -50,6 +54,13 @@ export function isPaymentProofMessage({
 		return true;
 	}
 
+	if (
+		attachmentClassification?.kind === 'payment_proof' &&
+		Number(attachmentClassification?.confidence || 0) >= 0.72
+	) {
+		return true;
+	}
+
 	return false;
 }
 
@@ -58,10 +69,13 @@ export function isAmbiguousPaymentAttachment({
 	body = '',
 	rawPayload = null,
 	currentState = {},
-	recentMessages = []
+	recentMessages = [],
+	attachmentClassification = null
 } = {}) {
 	const text = normalizeText(body);
 	if (!attachmentLooksLikeFile({ messageType, rawPayload })) return false;
+	if (attachmentClassification?.kind === 'payment_proof') return false;
+	if (attachmentClassification?.kind === 'return_evidence') return false;
 	if (!text) return true;
 
 	const weakAttachmentCaption =

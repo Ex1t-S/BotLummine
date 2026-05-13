@@ -1,6 +1,7 @@
 import { getOrderByNumber } from '../commerce/orders.service.js';
 import { resolveEnboxTracking } from '../enbox/enbox.service.js';
 import { findCachedEnboxShipment } from '../enbox/enbox-sync.service.js';
+import { getShippingStatusMeta } from '../common/shipping-status.js';
 
 function formatMoney(value, currency = 'ARS') {
 	const num = Number(value || 0);
@@ -18,42 +19,63 @@ function formatMoney(value, currency = 'ARS') {
 
 export function buildFixedOrderReply(order) {
 	if (!order) {
-		return 'No encontré un pedido con ese número. Si querés, revisalo y mandamelo de nuevo.';
+		return 'No encontre un pedido con ese numero. Si queres, revisalo y mandamelo de nuevo.';
 	}
 
 	const parts = [];
-	parts.push(`Ya encontré tu pedido #${order.orderNumber}.`);
+	const shippingMeta = getShippingStatusMeta(order.shippingStatus || order.fulfillmentStatus || '');
+	const shippingCategory = shippingMeta.category;
+	const carrier = String(order.shippingCarrier || '').trim();
+	const isEnbox = /enbox/i.test(carrier);
+	const statusLabel =
+		shippingCategory && shippingCategory !== 'unknown'
+			? shippingMeta.label
+			: order.shippingStatus || 'Sin dato de envio';
+
+	parts.push(`Encontre tu pedido #${order.orderNumber}.`);
 
 	if (order.paymentStatus) {
-		parts.push(`Pago: ${order.paymentStatus}.`);
+		parts.push(`El pago figura como: ${order.paymentStatus}.`);
 	}
 
-	if (order.shippingStatus) {
-		parts.push(`Estado del envío: ${order.shippingStatus}.`);
+	if (statusLabel) {
+		parts.push(`El envio esta: ${statusLabel}.`);
 	}
 
 	if (order.orderStatus) {
 		parts.push(`Estado general: ${order.orderStatus}.`);
 	}
 
-	if (order.shippingCarrier) {
-		parts.push(`Envío: ${order.shippingCarrier}.`);
+	if (carrier) {
+		parts.push(
+			isEnbox
+				? 'Lo gestiona Enbox, nuestra logistica privada.'
+				: `Correo/logistica: ${carrier}.`
+		);
 	}
 
 	if (order.total) {
-		parts.push(`Total: ${formatMoney(order.total, order.currency)}.`);
+		parts.push(`Total del pedido: ${formatMoney(order.total, order.currency)}.`);
 	}
 
 	if (order.trackingUrl) {
-		parts.push(`Podés seguirlo acá: ${order.trackingUrl}`);
+		parts.push(
+			isEnbox
+				? `Podes ver el seguimiento de Enbox aca: ${order.trackingUrl}`
+				: `Podes seguirlo desde este link: ${order.trackingUrl}`
+		);
 	} else if (order.trackingNumber) {
-		parts.push(`Código de seguimiento: ${order.trackingNumber}.`);
-	} else if (String(order.shippingStatus || '').toLowerCase().includes('entregado')) {
-		parts.push('Ya figura como entregado. En este caso no tengo un link de seguimiento para compartirte por acá.');
-	} else if (order.shippingCarrier && /enbox/i.test(order.shippingCarrier)) {
-		parts.push('Este envío figura gestionado por EnBox y por ahora no tengo un código de seguimiento cargado para compartirte.');
+		parts.push(
+			isEnbox
+				? `Codigo interno de Enbox: ${order.trackingNumber}.`
+				: `Codigo de seguimiento: ${order.trackingNumber}.`
+		);
+	} else if (shippingCategory === 'delivered') {
+		parts.push('Ya figura como entregado. En este caso no tengo un link de seguimiento para compartirte por aca.');
+	} else if (isEnbox) {
+		parts.push('Todavia no tengo un link de seguimiento de Enbox cargado para compartirte. Si el estado no cambia o necesitas revisarlo puntual, lo toma una asesora.');
 	} else {
-		parts.push('Por ahora no tengo un código de seguimiento cargado para compartirte.');
+		parts.push('Todavia no tengo un link o codigo de seguimiento cargado. Cuando el correo lo informe, deberia aparecer actualizado en el pedido.');
 	}
 
 	return parts.join(' ');
@@ -66,7 +88,7 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 	if (!orderNumber) {
 		return {
 			handled: true,
-			forcedReply: 'Pasame tu número de pedido y te reviso el estado por acá.',
+			forcedReply: 'Pasame tu numero de pedido y te reviso el estado por aca.',
 			liveOrderContext: null,
 			aiGuidance: {
 				type: 'order_status',
@@ -83,7 +105,7 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 	if (!liveOrderContext) {
 		return {
 			handled: true,
-			forcedReply: `No encontré un pedido con el número ${orderNumber}. Si querés, revisalo y mandamelo de nuevo.`,
+			forcedReply: `No encontre un pedido con el numero ${orderNumber}. Si queres, revisalo y mandamelo de nuevo.`,
 			liveOrderContext: null,
 			aiGuidance: {
 				type: 'order_status',

@@ -28,6 +28,113 @@ function normalizeCampaignPhone(value = '') {
 	return normalizeWhatsAppIdentityPhone(value);
 }
 
+const CAMPAIGN_ANY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const CAMPAIGN_SAME_SOURCE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isOpenHumanConversation(conversation = null) {
+	if (!conversation) return false;
+	return Boolean(
+		conversation.queue === 'HUMAN' ||
+		conversation.aiEnabled === false ||
+		conversation.state?.needsHuman === true ||
+		conversation.state?.handoffReason
+	);
+}
+
+function isComplaintLikeSummary(value = '') {
+	return /(reclamo|devolucion|cambio|cancel|seguimiento|tracking|demora|no llega|fallado|vino mal|asesora|humano|comprobante)/i.test(
+		String(value || '')
+	);
+}
+
+async function buildCampaignSuppressionMap({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	phones = [],
+	audienceSource = 'manual',
+} = {}) {
+	const normalizedPhones = [...new Set(phones.map(normalizeCampaignPhone).filter(Boolean))];
+	const result = new Map();
+	if (!normalizedPhones.length) return result;
+
+	const [contacts, recentAnyRecipients, recentSameSourceRecipients] = await Promise.all([
+		prisma.contact.findMany({
+			where: {
+				workspaceId,
+				waId: { in: normalizedPhones },
+			},
+			select: {
+				waId: true,
+				conversations: {
+					select: {
+						queue: true,
+						aiEnabled: true,
+						lastSummary: true,
+						lastMessageAt: true,
+						state: {
+							select: {
+								needsHuman: true,
+								handoffReason: true,
+								updatedAt: true,
+							}
+						}
+					},
+					orderBy: { updatedAt: 'desc' },
+					take: 1,
+				}
+			}
+		}),
+		prisma.campaignRecipient.findMany({
+			where: {
+				workspaceId,
+				phone: { in: normalizedPhones },
+				status: { in: ['SENT', 'DELIVERED', 'READ'] },
+				sentAt: { gte: new Date(Date.now() - CAMPAIGN_ANY_COOLDOWN_MS) },
+			},
+			select: { phone: true, sentAt: true },
+		}),
+		prisma.campaignRecipient.findMany({
+			where: {
+				workspaceId,
+				phone: { in: normalizedPhones },
+				status: { in: ['SENT', 'DELIVERED', 'READ'] },
+				sentAt: { gte: new Date(Date.now() - CAMPAIGN_SAME_SOURCE_COOLDOWN_MS) },
+				campaign: {
+					audienceSource: normalizeAudienceSource(audienceSource || 'manual'),
+				},
+			},
+			select: { phone: true, sentAt: true },
+		}),
+	]);
+
+	for (const contact of contacts) {
+		const phone = normalizeCampaignPhone(contact.waId || '');
+		const conversation = contact.conversations?.[0] || null;
+		if (isOpenHumanConversation(conversation)) {
+			result.set(phone, 'human_or_handoff_open');
+			continue;
+		}
+		if (
+			conversation?.lastMessageAt &&
+			Date.now() - new Date(conversation.lastMessageAt).getTime() < CAMPAIGN_ANY_COOLDOWN_MS &&
+			isComplaintLikeSummary(conversation.lastSummary || '')
+		) {
+			result.set(phone, 'recent_support_context');
+		}
+	}
+
+	for (const recipient of recentAnyRecipients) {
+		const phone = normalizeCampaignPhone(recipient.phone || '');
+		if (!result.has(phone)) result.set(phone, 'campaign_cooldown_24h');
+	}
+
+	for (const recipient of recentSameSourceRecipients) {
+		const phone = normalizeCampaignPhone(recipient.phone || '');
+		if (!result.has(phone)) result.set(phone, 'campaign_source_cooldown_7d');
+	}
+
+	return result;
+}
+
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1834,6 +1941,11 @@ export async function createCampaignDraft({
 		audienceSource: normalizedAudienceSource,
 		audienceFilters
 	});
+	const suppressionByPhone = await buildCampaignSuppressionMap({
+		workspaceId: resolvedWorkspaceId,
+		phones: resolvedRecipients.map((recipient) => recipient.phone || recipient.waId || ''),
+		audienceSource: normalizedAudienceSource,
+	});
 
 	if (!resolvedRecipients.length) {
 		throw new Error('No hay destinatarios válidos para crear la campaña.');
@@ -1869,8 +1981,10 @@ export async function createCampaignDraft({
 			variables
 		);
 
+		const suppressionReason = suppressionByPhone.get(normalizedPhone) || null;
 		const shouldSkipRecipient =
-			normalizedAudienceSource !== 'manual' && recipient.isOptedOut;
+			Boolean(suppressionReason) ||
+			(normalizedAudienceSource !== 'manual' && recipient.isOptedOut);
 
 		recipientRows.push({
 			workspaceId: resolvedWorkspaceId,
@@ -1884,7 +1998,7 @@ export async function createCampaignDraft({
 			renderedPreviewText: personalized.previewText,
 			status: shouldSkipRecipient ? 'SKIPPED' : 'PENDING',
 			errorMessage: shouldSkipRecipient
-				? normalizeString(recipient.optOutReason, 'opted_out')
+				? normalizeString(suppressionReason || recipient.optOutReason, 'opted_out')
 				: null
 		});
 	}
@@ -2202,6 +2316,30 @@ async function dispatchSingleRecipient(campaign, recipient) {
 
 	if (recipient.status !== 'PENDING') {
 		return recipient;
+	}
+
+	const suppressionByPhone = await buildCampaignSuppressionMap({
+		workspaceId: campaign.workspaceId,
+		phones: [recipient.phone || recipient.waId || ''],
+		audienceSource: campaign.audienceSource || 'manual',
+	});
+	const suppressionReason = suppressionByPhone.get(normalizeCampaignPhone(recipient.phone || recipient.waId || ''));
+	if (suppressionReason) {
+		logger.info('campaign.recipient_send_skipped', {
+			workspaceId: campaign.workspaceId,
+			campaignId: campaign.id,
+			recipientId: recipient.id,
+			phone: maskPhone(recipient.phone || ''),
+			reason: suppressionReason,
+		});
+
+		return prisma.campaignRecipient.update({
+			where: { id: recipient.id },
+			data: {
+				status: 'SKIPPED',
+				errorMessage: suppressionReason,
+			},
+		});
 	}
 
 	const componentsToSend = buildSendComponentsFromTemplate({

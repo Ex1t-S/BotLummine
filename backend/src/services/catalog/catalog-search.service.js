@@ -27,6 +27,22 @@ function normalizeSpacing(value = '') {
 		.trim();
 }
 
+function localizedValue(value) {
+	if (value == null) return '';
+	if (typeof value === 'string' || typeof value === 'number') return String(value);
+	if (typeof value === 'object') {
+		return String(
+			value.es ||
+			value.en ||
+			value.value ||
+			value.name ||
+			Object.values(value).find((item) => typeof item === 'string' || typeof item === 'number') ||
+			''
+		);
+	}
+	return '';
+}
+
 function splitTerms(text = '') {
 	return normalizeText(text)
 		.split(/[^a-z0-9]+/i)
@@ -59,7 +75,7 @@ function resolveCatalogPrices(aValue, bValue) {
 	return { currentPrice: null, originalPrice: null };
 }
 
-const COLOR_PATTERNS = /(negro|negra|blanco|blanca|beige|avellana|marron|marrón|nude|rosa|gris|azul|verde|bordo|chocolate)/i;
+const COLOR_PATTERNS = /(negro|negra|blanco|blanca|beige|avellana|marron|nude|rosa|gris|azul|verde|bordo|chocolate)/i;
 const CATALOG_STOPWORDS = new Set([
 	'hola', 'holi', 'buenas', 'buenos', 'dias', 'dia', 'tardes', 'noches',
 	'gracias', 'ok', 'oka', 'dale', 'joya', 'bien', 'genial', 'perfecto',
@@ -83,6 +99,7 @@ const GENERIC_VARIANT_VALUES = new Set([
 	'pack 3',
 	'pack x3',
 	'pack x2',
+	'default title',
 	'-'
 ]);
 
@@ -104,7 +121,7 @@ function isGenericVariantValue(value = '') {
 }
 
 function normalizeColorLabel(value = '') {
-	const raw = normalizeSpacing(value).toLowerCase();
+	const raw = normalizeText(value);
 	if (!raw) return null;
 
 	const normalized = raw
@@ -113,6 +130,30 @@ function normalizeColorLabel(value = '') {
 
 	if (!COLOR_PATTERNS.test(normalized)) return null;
 	return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function normalizeVariantLabel(value = '') {
+	return normalizeSpacing(localizedValue(value));
+}
+
+function isColorOptionName(value = '') {
+	const normalized = normalizeText(value);
+	return /\b(color|colour|tono|tonalidad)\b/.test(normalized);
+}
+
+function isSizeOptionName(value = '') {
+	const normalized = normalizeText(value);
+	return /\b(talle|talla|size|tamano|medida)\b/.test(normalized);
+}
+
+function extractColorLabels(value = '') {
+	const normalized = normalizeText(value)
+		.replace(/\bnegra\b/g, 'negro')
+		.replace(/\bblanca\b/g, 'blanco');
+	const matches = normalized.match(/negro|blanco|beige|avellana|marron|nude|rosa|gris|azul|verde|bordo|chocolate/g);
+	return uniqueStrings(
+		(matches || []).map((color) => color.charAt(0).toUpperCase() + color.slice(1))
+	);
 }
 
 function normalizeSizeLabel(value = '') {
@@ -135,11 +176,11 @@ function extractAtomicSizes(value = '') {
 	const normalized = normalizeSizeLabel(value);
 	if (!normalized) return [];
 
-	const matches = normalized.match(
-		/(TALLE UNICO|TALLE 1|TALLE 2|TALLE 3|TALLE 4|5XL\/6XL|4XL|3XL\/4XL|2XL\/3XL|XL\/2XL|XL\/XXL|L\/XL|M\/L|S\/M|XXXL|XXL|XL|L|M|S|XS|110)/g
-	);
+	const matches = [...normalized.matchAll(
+		/(^|[^A-Z0-9])(TALLE UNICO|TALLE 1|TALLE 2|TALLE 3|TALLE 4|5XL\/6XL|4XL|3XL\/4XL|2XL\/3XL|XL\/2XL|XL\/XXL|L\/XL|M\/L|S\/M|XXXL|XXL|XL|XS|L|M|S|110)(?=$|[^A-Z0-9])/g
+	)];
 
-	return uniqueStrings(matches || []);
+	return uniqueStrings(matches.map((match) => match[2]));
 }
 
 function pickFamilyRelevantSizes(meta = {}, family = null) {
@@ -174,8 +215,10 @@ function extractTextSizes(value = '', family = null) {
 	return extractAtomicSizes(base);
 }
 
-function extractVariantMeta(variants = [], { family = null } = {}) {
+function extractVariantMeta(variants = [], { family = null, attributes = [] } = {}) {
 	const flat = parseJsonArray(variants);
+	const optionDefinitions = parseJsonArray(attributes);
+	const optionNames = optionDefinitions.map((attribute) => normalizeVariantLabel(attribute?.name || attribute));
 	const hintSet = new Set();
 	const colorSet = new Set();
 	const sizeSet = new Set();
@@ -201,8 +244,38 @@ function extractVariantMeta(variants = [], { family = null } = {}) {
 		if (searchText) searchChunks.push(searchText);
 	};
 
-	const pushPlainValue = (rawValue) => {
-		const cleaned = normalizeSpacing(rawValue);
+	const pushColorValue = (rawValue) => {
+		const cleaned = normalizeVariantLabel(rawValue);
+		if (!cleaned || isGenericVariantValue(cleaned)) return;
+
+		const knownColors = extractColorLabels(cleaned);
+		if (knownColors.length) {
+			for (const color of knownColors) colorSet.add(color);
+			return;
+		}
+
+		if (!looksLikeInternalCode(cleaned) && cleaned.length <= 80) {
+			colorSet.add(cleaned);
+		}
+	};
+
+	const pushSizeValue = (rawValue) => {
+		const cleaned = normalizeVariantLabel(rawValue);
+		if (!cleaned || isGenericVariantValue(cleaned)) return;
+
+		const sizes = extractTextSizes(cleaned, family);
+		if (sizes.length) {
+			for (const size of sizes) sizeSet.add(size);
+			return;
+		}
+
+		if (!looksLikeInternalCode(cleaned) && cleaned.length <= 40) {
+			sizeSet.add(normalizeSizeLabel(cleaned));
+		}
+	};
+
+	const pushPlainValue = (rawValue, optionName = '') => {
+		const cleaned = normalizeVariantLabel(rawValue);
 		if (!cleaned) return;
 
 		if (looksLikeSkuCode(cleaned)) {
@@ -212,8 +285,15 @@ function extractVariantMeta(variants = [], { family = null } = {}) {
 
 		if (isGenericVariantValue(cleaned)) return;
 
-		const normalizedColor = normalizeColorLabel(cleaned);
-		if (normalizedColor) colorSet.add(normalizedColor);
+		if (isColorOptionName(optionName)) {
+			pushColorValue(cleaned);
+		} else if (isSizeOptionName(optionName)) {
+			pushSizeValue(cleaned);
+		}
+
+		for (const color of extractColorLabels(cleaned)) {
+			colorSet.add(color);
+		}
 
 		for (const size of extractTextSizes(cleaned, family)) {
 			sizeSet.add(size);
@@ -224,14 +304,24 @@ function extractVariantMeta(variants = [], { family = null } = {}) {
 		}
 	};
 
+	for (const attribute of optionDefinitions) {
+		const optionName = normalizeVariantLabel(attribute?.name || attribute);
+		const values = Array.isArray(attribute?.values) ? attribute.values : [];
+		for (const value of values) {
+			pushPlainValue(value, optionName);
+		}
+	}
+
 	for (const variant of flat) {
 		if (variant?.sku) pushSkuMeta(variant.sku);
-		if (variant?.option1) pushPlainValue(variant.option1);
-		if (variant?.option2) pushPlainValue(variant.option2);
-		if (variant?.option3) pushPlainValue(variant.option3);
+		if (variant?.option1) pushPlainValue(variant.option1, optionNames[0]);
+		if (variant?.option2) pushPlainValue(variant.option2, optionNames[1]);
+		if (variant?.option3) pushPlainValue(variant.option3, optionNames[2]);
 
 		if (Array.isArray(variant?.values)) {
-			for (const value of variant.values) pushPlainValue(value);
+			for (const [index, value] of variant.values.entries()) {
+				pushPlainValue(value, optionNames[index]);
+			}
 		}
 
 		if (Array.isArray(variant?.attributes)) {
@@ -403,7 +493,7 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 		signals.requestedFamily ||
 		inferCommercialFamily([product.name, product.tags, product.handle, product.description].filter(Boolean).join(' '));
 
-	const variantMeta = extractVariantMeta(product.variants, { family: guessedFamily });
+	const variantMeta = extractVariantMeta(product.variants, { family: guessedFamily, attributes: product.attributes });
 
 	const name = normalizeText(product.name || '');
 	const brand = normalizeText(product.brand || '');
@@ -522,7 +612,7 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 					.filter(Boolean)
 					.join(' ')
 			);
-			const variantMeta = extractVariantMeta(product.variants, { family });
+			const variantMeta = extractVariantMeta(product.variants, { family, attributes: product.attributes });
 			const offerType = inferOfferType(product);
 			const profileScore = scoreProductAgainstCommercialProfile({
 				name: product.name,
@@ -576,10 +666,15 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 		.filter((item) => !item.isGiftLike)
 		.sort((a, b) => (b.score + b.commercialScoreBoost) - (a.score + a.commercialScoreBoost));
 
+	const familyScopedRanked =
+		signals.requestedFamily && ranked.some((item) => item.family === signals.requestedFamily)
+			? ranked.filter((item) => item.family === signals.requestedFamily)
+			: ranked;
+
 	const deduped = [];
 	const seen = new Set();
 
-	for (const item of ranked) {
+	for (const item of familyScopedRanked) {
 		const signature = normalizeOfferSignature(item);
 		if (seen.has(signature)) continue;
 		seen.add(signature);

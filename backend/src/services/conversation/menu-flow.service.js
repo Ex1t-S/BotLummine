@@ -295,7 +295,7 @@ function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) 
 		: false;
 
 	if (!hasAssistantHistory) {
-		return true;
+		return isGreetingOnlyMessage(normalizedMessage) || !shouldLetFreeTextBypassMenu(normalizedMessage);
 	}
 
 	if (isGreetingOnlyMessage(normalizedMessage)) {
@@ -334,10 +334,17 @@ function isConversationStaleForMenu(messages = []) {
 }
 
 function isHardHumanLock(currentState = {}) {
+	const updatedAt = currentState?.updatedAt ? new Date(currentState.updatedAt).getTime() : 0;
+	const stillWithinSilenceWindow =
+		!updatedAt ||
+		!Number.isFinite(updatedAt) ||
+		Date.now() - updatedAt < 24 * 60 * 60 * 1000;
+
 	return Boolean(
 		currentState?.needsHuman === true &&
 		currentState?.handoffReason &&
-		currentState?.handoffReason !== 'manual_human_lock'
+		currentState?.handoffReason !== 'manual_human_lock' &&
+		stillWithinSilenceWindow
 	);
 }
 
@@ -512,8 +519,22 @@ export async function maybeHandleMenuFlow({
 	const hardHumanLock = isHardHumanLock(currentState);
 	const isStaleConversation = isConversationStaleForMenu(conversation?.messages);
 	const autoMenuDisabledForConsole = shouldDisableAutoMenuForConsoleChat(rawPayload);
+	const inboundAttachment = ['image', 'document', 'audio', 'video'].includes(
+		String(messageType || '').toLowerCase()
+	);
 
-	if (!hardHumanLock && interactiveReplyId) {
+	if (hardHumanLock || inboundAttachment) {
+		return {
+			handled: false,
+			effectiveMessageBody: messageBody,
+			summaryUserMessage: messageBody,
+			forceIntent: null,
+			statePatch: null,
+			queueDecisionOverride: null,
+		};
+	}
+
+	if (interactiveReplyId) {
 		const resolvedSelection = await detectMenuSelectionAcrossMenus({
 			messageBody,
 			rawPayload,
@@ -537,7 +558,6 @@ export async function maybeHandleMenuFlow({
 
 	const shouldOfferMenu =
 		!autoMenuDisabledForConsole &&
-		!hardHumanLock &&
 		(
 			isStaleConversation ||
 			shouldForceMenuFirst({
@@ -611,7 +631,7 @@ export async function maybeHandleMenuFlow({
 		return { handled: true };
 	}
 
-	if (!hardHumanLock && currentState?.menuActive && currentState?.menuPath) {
+	if (currentState?.menuActive && currentState?.menuPath) {
 		const selectionId = await detectMenuSelection({
 			messageBody,
 			rawPayload,

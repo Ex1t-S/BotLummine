@@ -102,6 +102,213 @@ export const AI_LAB_FIXTURES = [
 			'Si la clienta cambia de tema fuerte, la IA no deberia quedar atrapada en el menu',
 			'La seleccion de menu deberia orientar familia, soporte o postventa segun el caso'
 		]
+	},
+	{
+		key: 'real-cart-later',
+		name: 'Carrito: lo deja para despues',
+		description: 'Replica una respuesta real a carrito abandonado donde la clienta no quiere avanzar ahora.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			currentProductFocus: 'Pack 3x1 Calzas Linfaticas Modeladoras',
+			currentProductFamily: 'calzas_linfaticas',
+			salesStage: 'DISCOVERY'
+		},
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Hola! Vimos que dejaste tu compra sin finalizar. Si queres retomarla, te ayudo por aca.'
+			}
+		],
+		expected: [
+			'Debe aceptar el cierre sin empujar promo',
+			'No debe cambiar el nombre de la clienta',
+			'No debe mandar link ni precio'
+		]
+	},
+	{
+		key: 'real-cancel-card-issue',
+		name: 'Tarjeta fallida y cancelacion',
+		description: 'La clienta tuvo problema con tarjeta y pide cancelar la compra.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			currentProductFocus: 'Pack 3x1 Calzas Linfaticas Modeladoras',
+			currentProductFamily: 'calzas_linfaticas',
+			salesStage: 'DISCOVERY'
+		},
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Tu pedido quedo con pago pendiente. Si necesitas ayuda para terminarlo, te ayudo por aca.'
+			},
+			{
+				direction: 'INBOUND',
+				body: 'Hola buen dia, no pude realizar la compra por inconvenientes con la tarjeta'
+			}
+		],
+		expected: [
+			'Si pide cancelar, no debe prometer que ya cancelo',
+			'Debe derivar a asesora o dejar claro que requiere revision',
+			'No debe insistir con la compra'
+		]
+	},
+	{
+		key: 'real-size-fabric-doubt',
+		name: 'Duda de talle y tela',
+		description: 'Consulta frecuente de compra: duda entre talle y material.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			currentProductFocus: 'Pack 3x1 Calzas Linfaticas Modeladoras',
+			currentProductFamily: 'calzas_linfaticas',
+			salesStage: 'SIZE_COLOR_CHECK'
+		},
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Hola! Si necesitas ayuda con tu pedido o talle, te leo por aca.'
+			}
+		],
+		expected: [
+			'Debe pedir una medida o talle habitual si falta',
+			'No debe confirmar stock/tela si no esta en catalogo',
+			'No debe abrir otra promo'
+		]
+	},
+	{
+		key: 'real-order-delay-no-tracking',
+		name: 'Pedido demorado sin tracking',
+		description: 'Cliente consulta porque el pedido lleva varios dias en preparacion.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			lastIntent: 'order_status',
+			lastOrderNumber: '25130',
+			needsHuman: false
+		},
+		seedMessages: [
+			{
+				direction: 'INBOUND',
+				body: '25130'
+			},
+			{
+				direction: 'OUTBOUND',
+				body: 'Ya encontre tu pedido #25130. Pago aprobado. Estado del envio: estamos preparando tu pedido. Por ahora no tengo codigo de seguimiento cargado.'
+			}
+		],
+		expected: [
+			'Debe responder como postventa, no como venta',
+			'No debe inventar tracking ni fecha exacta',
+			'Si hay molestia fuerte, debe derivar'
+		]
+	},
+	{
+		key: 'real-scam-complaint',
+		name: 'Soporte sensible: estafa',
+		description: 'Cliente molesta pregunta si es una estafa por demora o falta de respuesta.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			currentProductFocus: 'Pack 3x1 Calzas Linfaticas Modeladoras',
+			currentProductFamily: 'calzas_linfaticas',
+			salesStage: 'READY_TO_BUY'
+		},
+		seedMessages: [
+			{
+				direction: 'INBOUND',
+				body: 'Me podes dar informacion de mi pedido'
+			},
+			{
+				direction: 'OUTBOUND',
+				body: 'Pasame tu numero de pedido y lo revisamos.'
+			}
+		],
+		expected: [
+			'Debe desactivar venta y tratarlo como caso sensible',
+			'Debe derivar o responder empatico concreto',
+			'No debe mencionar promos ni calzas'
+		]
+	},
+	{
+		key: 'real-wrong-item-return',
+		name: 'Reclamo por producto recibido',
+		description: 'Cliente recibio color/talle equivocado y pregunta por devolucion.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			currentProductFocus: 'Pack 3x1 Calzas Linfaticas Modeladoras',
+			currentProductFamily: 'calzas_linfaticas',
+			salesStage: 'OFFER_DISCOVERY'
+		},
+		seedMessages: [
+			{
+				direction: 'INBOUND',
+				body: 'Compre el pack de 3 y me mandaron otro tono'
+			}
+		],
+		expected: [
+			'Debe tratarlo como reclamo/postventa',
+			'No debe intentar vender otra promo',
+			'Debe pedir revision humana o datos concretos sin vueltas'
+		]
+	},
+	{
+		key: 'real-ambiguous-image-payment',
+		name: 'Imagen ambigua de pago',
+		description: 'La clienta manda imagen mientras habla de Mercado Pago.',
+		stateOverrides: {
+			customerName: 'Cliente Lab',
+			paymentPreference: 'mercadopago',
+			currentProductFocus: 'Pack 3x1 Calzas Linfaticas Modeladoras',
+			currentProductFamily: 'calzas_linfaticas',
+			salesStage: 'READY_TO_BUY'
+		},
+		seedMessages: [
+			{
+				direction: 'INBOUND',
+				body: 'No estoy segura si logre hacer el pago correspondiente'
+			},
+			{
+				direction: 'OUTBOUND',
+				body: 'Decime que medio de pago usaste y te guio.'
+			},
+			{
+				direction: 'INBOUND',
+				body: 'Mercado'
+			}
+		],
+		expected: [
+			'Debe aclarar si la imagen es comprobante o error cuando no sea claro',
+			'No debe vender productos por una imagen',
+			'No debe decir que verifico el pago si no lo hizo'
+		]
+	},
+	{
+		key: 'real-empty-reaction',
+		name: 'Reaccion o mensaje vacio',
+		description: 'WhatsApp puede mandar reacciones o cuerpos vacios que no requieren respuesta.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Gracias por escribir. Cualquier duda, te leo por aca.'
+			}
+		],
+		expected: [
+			'No debe responder a mensaje vacio',
+			'No debe reabrir venta',
+			'Trace esperado: reply-gate suppress'
+		]
+	},
+	{
+		key: 'real-thanks-close',
+		name: 'Cierre con gracias u ok',
+		description: 'Validar que la IA no conteste de mas ante cierres cotidianos.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Listo, por ahora no tengo codigo de seguimiento cargado. Cuando se actualice, lo vas a ver en el pedido.'
+			}
+		],
+		expected: [
+			'No debe responder a gracias u ok si no hay pregunta pendiente',
+			'No debe abrir catalogo ni promo',
+			'Trace esperado: reply-gate suppress'
+		]
 	}
 ];
 

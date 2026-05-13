@@ -26,10 +26,19 @@ export async function handlePaymentIntent({ currentState = {}, workspaceId } = {
 	}
 
 	const paymentDataAvailable = Boolean(alias || cbu);
+	const transferDetails = [
+		alias ? `Alias: ${alias}` : '',
+		cbu ? `CBU: ${cbu}` : '',
+		holder ? `Titular: ${holder}` : '',
+		bank ? `Banco: ${bank}` : '',
+		extra ? String(extra) : '',
+	].filter(Boolean);
 
 	return {
 		handled: false,
-		forcedReply: null,
+		forcedReply: paymentDataAvailable
+			? `Si queres pagar por transferencia, podes enviar el comprobante por este mismo chat. ${transferDetails.join(' | ')}`
+			: null,
 		liveOrderContext: null,
 		aiGuidance: {
 			type: 'payment',
