@@ -450,10 +450,6 @@ export async function runPendingPaymentAutomation({
 		const claimedCandidates = await claimCandidateLogs(setting, candidates);
 
 		if (!claimedCandidates.length) {
-			await prisma.pendingPaymentAutomationSetting.update({
-				where: { workspaceId: setting.workspaceId },
-				data: { lastRunAt: new Date(), lastError: null },
-			});
 			return { workspaceId: setting.workspaceId, processed: 0, campaignId: null };
 		}
 

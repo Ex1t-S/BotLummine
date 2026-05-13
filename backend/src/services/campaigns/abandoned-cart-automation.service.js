@@ -9,6 +9,9 @@ import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service
 
 const DEFAULT_INTERVAL_MINUTES = 30;
 const DEFAULT_MIN_CART_AGE_MINUTES = 60;
+const DEFAULT_ACTIVE_INTERVAL_MINUTES = 10;
+const DEFAULT_IDLE_INTERVAL_MINUTES = 30;
+const DEFAULT_DEEP_IDLE_INTERVAL_MINUTES = 60;
 const DEFAULT_FILTERS = {
 	daysBack: 7,
 	status: 'NEW',
@@ -16,6 +19,7 @@ const DEFAULT_FILTERS = {
 	minTotal: null,
 	productQuery: '',
 };
+const runtimeStateByWorkspace = new Map();
 
 function isAbandonedCartAutomationTableMissing(error) {
 	return (
@@ -114,6 +118,74 @@ function normalizeBoolean(value) {
 	if (typeof value === 'boolean') return value;
 	const normalized = normalizeString(value).toLowerCase();
 	return ['1', 'true', 'yes', 'on', 'si'].includes(normalized);
+}
+
+function normalizeIntervalMinutes(value, fallback, min = 5, max = 24 * 60) {
+	const parsed = Number(value || fallback);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.max(min, Math.min(parsed, max));
+}
+
+function getRuntimeState(workspaceId) {
+	const key = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const current = runtimeStateByWorkspace.get(key) || {
+		lastCheckedAt: null,
+		emptyRuns: 0,
+		lastProcessed: 0,
+	};
+	runtimeStateByWorkspace.set(key, current);
+	return current;
+}
+
+function resolveNextIntervalMs(setting = {}, runtimeState = {}) {
+	const activeMinutes = normalizeIntervalMinutes(
+		process.env.ABANDONED_CART_ACTIVE_INTERVAL_MINUTES || setting.intervalMinutes,
+		DEFAULT_ACTIVE_INTERVAL_MINUTES,
+		5,
+		10
+	);
+	const idleMinutes = normalizeIntervalMinutes(
+		process.env.ABANDONED_CART_IDLE_INTERVAL_MINUTES,
+		DEFAULT_IDLE_INTERVAL_MINUTES,
+		30,
+		60
+	);
+	const deepIdleMinutes = normalizeIntervalMinutes(
+		process.env.ABANDONED_CART_DEEP_IDLE_INTERVAL_MINUTES,
+		DEFAULT_DEEP_IDLE_INTERVAL_MINUTES,
+		30,
+		120
+	);
+
+	if (Number(runtimeState.lastProcessed || 0) > 0 || Number(runtimeState.emptyRuns || 0) === 0) {
+		return activeMinutes * 60 * 1000;
+	}
+
+	return (Number(runtimeState.emptyRuns || 0) >= 3 ? deepIdleMinutes : idleMinutes) * 60 * 1000;
+}
+
+function shouldSkipRuntimeInterval(setting = {}) {
+	const runtimeState = getRuntimeState(setting.workspaceId);
+	if (!runtimeState.lastCheckedAt) return { skip: false, runtimeState };
+
+	const intervalMs = resolveNextIntervalMs(setting, runtimeState);
+	const elapsedMs = Date.now() - new Date(runtimeState.lastCheckedAt).getTime();
+	if (elapsedMs >= intervalMs) return { skip: false, runtimeState };
+
+	return {
+		skip: true,
+		runtimeState,
+		nextRunInMs: intervalMs - elapsedMs,
+	};
+}
+
+function recordRuntimeResult(workspaceId, processed = 0) {
+	const runtimeState = getRuntimeState(workspaceId);
+	const count = Number(processed || 0);
+	runtimeState.lastCheckedAt = new Date();
+	runtimeState.lastProcessed = count;
+	runtimeState.emptyRuns = count > 0 ? 0 : Number(runtimeState.emptyRuns || 0) + 1;
+	runtimeStateByWorkspace.set(normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID, runtimeState);
 }
 
 function normalizeFilters(input = {}) {
@@ -423,7 +495,12 @@ export async function runAbandonedCartAutomation({
 		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'disabled' };
 	}
 
-	const intervalMs = DEFAULT_INTERVAL_MINUTES * 60 * 1000;
+	const intervalMs = normalizeIntervalMinutes(
+		process.env.ABANDONED_CART_ACTIVE_INTERVAL_MINUTES || Math.min(Number(setting.intervalMinutes || DEFAULT_ACTIVE_INTERVAL_MINUTES), DEFAULT_ACTIVE_INTERVAL_MINUTES),
+		DEFAULT_ACTIVE_INTERVAL_MINUTES,
+		5,
+		10
+	) * 60 * 1000;
 	if (!force && setting.lastRunAt && Date.now() - new Date(setting.lastRunAt).getTime() < intervalMs) {
 		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'interval' };
 	}
@@ -434,13 +511,6 @@ export async function runAbandonedCartAutomation({
 		const claimedCandidates = await claimCandidateLogs(setting, candidates);
 
 		if (!claimedCandidates.length) {
-			await prisma.abandonedCartAutomationSetting.update({
-				where: { workspaceId: setting.workspaceId },
-				data: {
-					lastRunAt: new Date(),
-					lastError: null,
-				},
-			});
 			return { workspaceId: setting.workspaceId, processed: 0, campaignId: null };
 		}
 
@@ -499,7 +569,22 @@ export async function processAutomaticAbandonedCartAutomations() {
 	const results = [];
 
 	for (const setting of settings) {
-		results.push(await runAbandonedCartAutomation({ workspaceId: setting.workspaceId }));
+		const intervalDecision = shouldSkipRuntimeInterval(setting);
+		if (intervalDecision.skip) {
+			results.push({
+				workspaceId: setting.workspaceId,
+				processed: 0,
+				skipped: true,
+				reason: 'adaptive_interval',
+				emptyRuns: intervalDecision.runtimeState.emptyRuns,
+				nextRunInMs: intervalDecision.nextRunInMs,
+			});
+			continue;
+		}
+
+		const result = await runAbandonedCartAutomation({ workspaceId: setting.workspaceId });
+		recordRuntimeResult(setting.workspaceId, result.processed || 0);
+		results.push(result);
 	}
 
 	return {

@@ -13,6 +13,7 @@ import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service
 
 const DEFAULT_DAYS_BACK = 14;
 const AUTO_LIMIT = 100;
+const DEFAULT_AUTOMATION_INTERVAL_MINUTES = 30;
 const DEFAULT_VARIABLE_MAPPING = {
 	'1': 'first_name',
 	'2': 'order_number',
@@ -144,6 +145,16 @@ END $$;`);
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
 	return normalized || fallback;
+}
+
+function normalizeAutomationIntervalMs() {
+	const parsed = Number(
+		process.env.SHIPMENT_NOTIFICATION_INTERVAL_MINUTES ||
+			process.env.CAMPAIGN_AUTOMATION_INTERVAL_MINUTES ||
+			DEFAULT_AUTOMATION_INTERVAL_MINUTES
+	);
+	const minutes = Number.isFinite(parsed) ? parsed : DEFAULT_AUTOMATION_INTERVAL_MINUTES;
+	return Math.max(5, minutes) * 60 * 1000;
 }
 
 function safeArray(value) {
@@ -855,9 +866,18 @@ export async function processAutomaticShipmentNotifications({ workspaceId = null
 		}
 	}
 	const results = [];
+	const intervalMs = normalizeAutomationIntervalMs();
 
 	for (const setting of settings) {
 		if (!setting.enabled || !setting.templateLocalId) continue;
+
+		if (
+			setting.lastRunAt &&
+			Date.now() - new Date(setting.lastRunAt).getTime() < intervalMs
+		) {
+			results.push({ workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'interval' });
+			continue;
+		}
 
 		try {
 			const candidatesResult = await listShipmentNotificationCandidates({
@@ -868,10 +888,6 @@ export async function processAutomaticShipmentNotifications({ workspaceId = null
 			});
 
 			if (!candidatesResult.candidates.length) {
-				await prisma.shipmentNotificationSetting.update({
-					where: { workspaceId: setting.workspaceId },
-					data: { lastRunAt: new Date(), lastError: null },
-				});
 				results.push({ workspaceId: setting.workspaceId, processed: 0 });
 				continue;
 			}
