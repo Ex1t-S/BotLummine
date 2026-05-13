@@ -15,6 +15,11 @@ import {
 } from '../services/catalog/catalog.service.js';
 import { getCampaignStats } from '../services/campaigns/campaign-stats.service.js';
 import { generateWorkspaceBusinessContextDraft } from '../services/workspaces/workspace-context-draft.service.js';
+import {
+	assertWorkspaceFeatureFlagKey,
+	listWorkspaceFeatureFlags,
+	setWorkspaceFeatureFlag,
+} from '../services/workspaces/workspace-feature-flags.service.js';
 import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { getShopifyClient } from '../services/shopify/client.js';
 
@@ -988,6 +993,48 @@ export async function getPlatformDiagnostics(req, res, next) {
 				campaigns,
 				campaignRecipients,
 			},
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getWorkspaceFeatureFlags(req, res, next) {
+	try {
+		assertPlatformAdmin(req);
+		const workspace = await getWorkspaceOrThrow(req.params.workspaceId);
+		const flags = await listWorkspaceFeatureFlags(workspace.id);
+
+		return res.json({
+			ok: true,
+			workspaceId: workspace.id,
+			flags,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function updateWorkspaceFeatureFlag(req, res, next) {
+	try {
+		assertPlatformAdmin(req);
+		const workspace = await getWorkspaceOrThrow(req.params.workspaceId);
+		const key = assertWorkspaceFeatureFlagKey(req.params.key);
+		const enabled = Boolean(req.body?.enabled);
+		const reason = normalizeString(req.body?.reason || '');
+		const flag = await setWorkspaceFeatureFlag({
+			workspaceId: workspace.id,
+			key,
+			enabled,
+			reason,
+			updatedById: req.user?.id || null,
+		});
+
+		return res.json({
+			ok: true,
+			workspaceId: workspace.id,
+			flag,
+			flags: await listWorkspaceFeatureFlags(workspace.id),
 		});
 	} catch (error) {
 		next(error);

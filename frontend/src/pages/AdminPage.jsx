@@ -88,6 +88,33 @@ const BRAND_PROVIDER_OPTIONS = [
 	{ value: 'SHOPIFY', label: 'Shopify' }
 ];
 
+const FALLBACK_FEATURE_FLAGS = [
+	{
+		key: 'ai_auto_replies',
+		label: 'IA automatica',
+		description: 'Permite respuestas generadas por IA en conversaciones AUTO.',
+		enabled: true
+	},
+	{
+		key: 'campaign_dispatch',
+		label: 'Campanas',
+		description: 'Permite lanzar y despachar campanas de WhatsApp.',
+		enabled: true
+	},
+	{
+		key: 'automation_dispatch',
+		label: 'Automatizaciones',
+		description: 'Permite carritos abandonados, pagos pendientes y avisos automaticos.',
+		enabled: true
+	},
+	{
+		key: 'whatsapp_outbound',
+		label: 'Salientes WhatsApp',
+		description: 'Permite enviar mensajes salientes por WhatsApp Cloud API.',
+		enabled: true
+	}
+];
+
 function fieldValue(value) {
 	return value == null ? '' : String(value);
 }
@@ -431,6 +458,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [shopifyInstallShop, setShopifyInstallShop] = useState('');
 	const [logisticsForm, setLogisticsForm] = useState(EMPTY_LOGISTICS_FORM);
 	const [catalogStatus, setCatalogStatus] = useState(null);
+	const [featureFlags, setFeatureFlags] = useState(FALLBACK_FEATURE_FLAGS);
 	const [tiendanubeStatus, setTiendanubeStatus] = useState(null);
 	const [shopifyStatus, setShopifyStatus] = useState(null);
 	const [analytics, setAnalytics] = useState(null);
@@ -484,10 +512,11 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function loadWorkspaceDetail(workspaceId) {
 		if (!workspaceId) return;
 
-		const [workspaceRes, usersRes, catalogRes, tiendanubeStatusRes, shopifyStatusRes] = await Promise.all([
+		const [workspaceRes, usersRes, catalogRes, featureFlagsRes, tiendanubeStatusRes, shopifyStatusRes] = await Promise.all([
 			api.get(`/admin/workspaces/${workspaceId}`),
 			api.get(`/admin/workspaces/${workspaceId}/users`),
 			api.get(`/admin/workspaces/${workspaceId}/catalog/status`).catch(() => null),
+			platformAdmin ? api.get(`/admin/workspaces/${workspaceId}/feature-flags`).catch(() => null) : Promise.resolve(null),
 			api.get('/tiendanube/status', { params: { workspaceId } }).catch(() => null),
 			api.get('/shopify/status', { params: { workspaceId } }).catch(() => null)
 		]);
@@ -498,6 +527,7 @@ export default function AdminPage({ defaultTab = '' }) {
 		setPaymentForm(mapPaymentForm(nextWorkspace));
 		setUsers(usersRes.data.users || []);
 		setCatalogStatus(catalogRes?.data?.catalog || null);
+		setFeatureFlags(featureFlagsRes?.data?.flags || FALLBACK_FEATURE_FLAGS);
 		setTiendanubeStatus(tiendanubeStatusRes?.data || null);
 		setShopifyStatus(shopifyStatusRes?.data || null);
 		setSelectedBrandProvider(resolveSelectedBrandProvider(nextWorkspace, tiendanubeStatusRes?.data, shopifyStatusRes?.data));
@@ -962,6 +992,26 @@ export default function AdminPage({ defaultTab = '' }) {
 			setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 			await refreshMe();
 			showNotice(`Branding importado desde ${res.data.provider === 'SHOPIFY' ? 'Shopify' : 'Tienda Nube'}.`);
+		} catch (err) {
+			showError(err);
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function handleToggleFeatureFlag(flag) {
+		if (!platformAdmin || !selectedWorkspaceId || !flag?.key) return;
+		const nextEnabled = !flag.enabled;
+		const reason = nextEnabled ? '' : 'Pausado desde Platform Admin';
+
+		setSaving(true);
+		try {
+			const res = await api.patch(
+				`/admin/workspaces/${selectedWorkspaceId}/feature-flags/${flag.key}`,
+				{ enabled: nextEnabled, reason }
+			);
+			setFeatureFlags(res.data?.flags || []);
+			showNotice(`${flag.label || flag.key}: ${nextEnabled ? 'activado' : 'pausado'}.`);
 		} catch (err) {
 			showError(err);
 		} finally {
@@ -1552,6 +1602,28 @@ export default function AdminPage({ defaultTab = '' }) {
 							<StatusPill>Productos: {catalogStatus?.totalProducts ?? 0}</StatusPill>
 							<StatusPill>Publicados: {catalogStatus?.totalPublished ?? 0}</StatusPill>
 							<StatusPill>Ultima sync: {catalogStatus?.lastSync?.status || 'sin sync'}</StatusPill>
+						</div>
+						<div className="tenant-admin-kill-switches">
+							{featureFlags.map((flag) => (
+								<div
+									key={flag.key}
+									className={`tenant-admin-kill-switch ${flag.enabled ? '' : 'tenant-admin-kill-switch--paused'}`}
+								>
+									<div>
+										<strong>{flag.label}</strong>
+										<span>{flag.description}</span>
+										{flag.reason ? <small>Motivo: {flag.reason}</small> : null}
+									</div>
+									<button
+										type="button"
+										className={flag.enabled ? 'tenant-admin-danger-btn' : ''}
+										disabled={saving}
+										onClick={() => handleToggleFeatureFlag(flag)}
+									>
+										{flag.enabled ? 'Pausar' : 'Reactivar'}
+									</button>
+								</div>
+							))}
 						</div>
 						<div className="tenant-admin-actions">
 							<button type="button" disabled={saving} onClick={() => handleBrandingSync()}>Importar branding</button>

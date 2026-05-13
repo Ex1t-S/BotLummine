@@ -56,6 +56,10 @@ import {
 	getWorkspaceRuntimeConfig,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
+import {
+	WORKSPACE_FEATURE_FLAGS,
+	isWorkspaceFeatureEnabled,
+} from '../workspaces/workspace-feature-flags.service.js';
 import { persistChatConfirmationConversions } from '../campaigns/campaign-attribution.service.js';
 
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
@@ -939,9 +943,14 @@ export async function processInboundMessage({
 
 	const isAiEnabledGlobal =
 		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true';
+	const isAiEnabledForWorkspace = await isWorkspaceFeatureEnabled(
+		resolvedWorkspaceId,
+		WORKSPACE_FEATURE_FLAGS.AI_AUTO_REPLIES
+	);
 
 	const shouldReply =
 		isAiEnabledGlobal &&
+		isAiEnabledForWorkspace &&
 		queueDecision.aiEnabled &&
 		queueDecision.queue === 'AUTO';
 
@@ -949,6 +958,7 @@ export async function processInboundMessage({
 		workspaceId: resolvedWorkspaceId,
 		conversationId: freshConversation.id,
 		isAiEnabledGlobal,
+		isAiEnabledForWorkspace,
 		queue: queueDecision.queue,
 		queueAiEnabled: queueDecision.aiEnabled,
 		shouldReply,

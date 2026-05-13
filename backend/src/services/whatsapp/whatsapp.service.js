@@ -15,6 +15,10 @@ import {
 	getWhatsAppPhoneNumberId,
 } from './meta-graph.service.js';
 import { getWhatsAppChannelForWorkspace } from '../workspaces/workspace-context.service.js';
+import {
+	WORKSPACE_FEATURE_FLAGS,
+	isWorkspaceFeatureEnabled,
+} from '../workspaces/workspace-feature-flags.service.js';
 
 const WHATSAPP_TIMEOUT_MS = getHttpTimeoutMs('WHATSAPP_SEND_TIMEOUT_MS', 15000);
 
@@ -71,6 +75,27 @@ async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel
 			provider: 'whatsapp-cloud-api',
 			model: null,
 			error: { message: 'Falta número para enviar por WhatsApp.' },
+		};
+	}
+
+	if (
+		workspaceId &&
+		!(await isWorkspaceFeatureEnabled(workspaceId, WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND))
+	) {
+		logger.warn('whatsapp.outbound_blocked_by_feature_flag', {
+			workspaceId,
+			to: maskPhone(finalTo || rawTo || ''),
+			payloadType: payload?.type || null,
+		});
+
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: {
+				code: 'WHATSAPP_OUTBOUND_PAUSED',
+				message: 'Los envios salientes de WhatsApp estan pausados para este workspace.',
+			},
 		};
 	}
 

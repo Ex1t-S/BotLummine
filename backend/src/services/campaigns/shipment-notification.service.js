@@ -4,6 +4,10 @@ import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
+	WORKSPACE_FEATURE_FLAGS,
+	isWorkspaceFeatureEnabled,
+} from '../workspaces/workspace-feature-flags.service.js';
+import {
 	extractOrderShippingSignals,
 	getShippingStatusMeta,
 	getShippingStatusSearchTerms,
@@ -829,6 +833,10 @@ export async function sendShipmentNotifications({
 	launchedByUserId = null,
 } = {}) {
 	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
+	if (!(await isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.AUTOMATION_DISPATCH))) {
+		throw new Error('Las automatizaciones estan pausadas para este workspace.');
+	}
+
 	const settings = await ensureSetting(resolvedWorkspaceId);
 	const resolvedTemplateId = templateId || settings.templateLocalId;
 	const candidatesResult = await listShipmentNotificationCandidates({
@@ -870,6 +878,16 @@ export async function processAutomaticShipmentNotifications({ workspaceId = null
 
 	for (const setting of settings) {
 		if (!setting.enabled || !setting.templateLocalId) continue;
+
+		if (!(await isWorkspaceFeatureEnabled(setting.workspaceId, WORKSPACE_FEATURE_FLAGS.AUTOMATION_DISPATCH))) {
+			results.push({
+				workspaceId: setting.workspaceId,
+				processed: 0,
+				skipped: true,
+				reason: 'automation_dispatch_paused',
+			});
+			continue;
+		}
 
 		if (
 			setting.lastRunAt &&

@@ -43,6 +43,7 @@ model Workspace {
   campaignRecipients  CampaignRecipient[]
   campaignConversions CampaignConversion[]
   campaignSchedules   CampaignSchedule[]
+  featureFlags        WorkspaceFeatureFlag[]
   abandonedCartAutomationSetting AbandonedCartAutomationSetting?
   abandonedCartAutomationLogs    AbandonedCartAutomationLog[]
   pendingPaymentAutomationSetting PendingPaymentAutomationSetting?
@@ -80,6 +81,23 @@ model WorkspaceAiConfig {
   updatedAt       DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceFeatureFlag {
+  id          String   @id @default(cuid())
+  workspaceId String
+  key         String
+  enabled     Boolean  @default(true)
+  reason      String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedBy User?     @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, enabled])
 }
 
 model CommerceConnection {
@@ -156,6 +174,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  featureFlagUpdates WorkspaceFeatureFlag[]
 
   @@index([workspaceId, role])
 }

@@ -6,6 +6,7 @@ import {
 	createWorkspaceUser,
 	generateWorkspaceContextDraft,
 	getPlatformDiagnostics,
+	getWorkspaceFeatureFlags,
 	getWorkspaceAnalytics,
 	getWorkspace,
 	getWorkspaceCatalogStatus,
@@ -14,6 +15,7 @@ import {
 	runWorkspaceCatalogSync,
 	syncWorkspaceBranding,
 	updateWorkspace,
+	updateWorkspaceFeatureFlag,
 	updateWorkspaceUser,
 	upsertCommerceConnection,
 	upsertLogisticsConnection,
@@ -35,6 +37,8 @@ router.patch('/workspaces/:workspaceId', requireAdmin, updateWorkspace);
 router.get('/workspaces/:workspaceId/users', requireAdmin, listWorkspaceUsers);
 router.post('/workspaces/:workspaceId/users', requireAdmin, createWorkspaceUser);
 router.get('/workspaces/:workspaceId/catalog/status', requireAdmin, getWorkspaceCatalogStatus);
+router.get('/workspaces/:workspaceId/feature-flags', requirePlatformAdmin, getWorkspaceFeatureFlags);
+router.patch('/workspaces/:workspaceId/feature-flags/:key', requirePlatformAdmin, updateWorkspaceFeatureFlag);
 router.post('/workspaces/:workspaceId/catalog/sync', requirePlatformAdmin, runWorkspaceCatalogSync);
 router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspaceBranding);
 router.put('/workspaces/:workspaceId/whatsapp-channel', requirePlatformAdmin, upsertWhatsAppChannel);

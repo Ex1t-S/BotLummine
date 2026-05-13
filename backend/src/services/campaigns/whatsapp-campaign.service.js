@@ -11,6 +11,10 @@ import {
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
 import {
+	WORKSPACE_FEATURE_FLAGS,
+	isWorkspaceFeatureEnabled,
+} from '../workspaces/workspace-feature-flags.service.js';
+import {
 	filterRecoverableAbandonedCarts,
 	getPersistedConversionInsights,
 } from './campaign-attribution.service.js';
@@ -2046,6 +2050,15 @@ export async function createCampaignDraft({
 
 export async function launchCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const campaignDispatchEnabled = await isWorkspaceFeatureEnabled(
+		resolvedWorkspaceId,
+		WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH
+	);
+
+	if (!campaignDispatchEnabled) {
+		throw new Error('El envio de campanas esta pausado para este workspace.');
+	}
+
 	const campaign = await prisma.campaign.findFirst({
 		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
 	});
@@ -2198,6 +2211,19 @@ export async function claimNextCampaignForDispatch() {
 	});
 
 	for (const candidate of candidates) {
+		const campaignDispatchEnabled = await isWorkspaceFeatureEnabled(
+			candidate.workspaceId,
+			WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH
+		);
+
+		if (!campaignDispatchEnabled) {
+			logger.warn('campaign.dispatch_skipped_by_feature_flag', {
+				workspaceId: candidate.workspaceId,
+				campaignId: candidate.id,
+			});
+			continue;
+		}
+
 		const lockId = randomUUID();
 		const claimed = await prisma.campaign.updateMany({
 			where: {

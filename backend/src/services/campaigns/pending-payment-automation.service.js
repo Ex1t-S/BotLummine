@@ -1,6 +1,10 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import {
+	WORKSPACE_FEATURE_FLAGS,
+	isWorkspaceFeatureEnabled,
+} from '../workspaces/workspace-feature-flags.service.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
@@ -435,6 +439,10 @@ export async function runPendingPaymentAutomation({
 	launchedByUserId = null,
 } = {}) {
 	const setting = await ensureSetting(workspaceId);
+
+	if (!(await isWorkspaceFeatureEnabled(setting.workspaceId, WORKSPACE_FEATURE_FLAGS.AUTOMATION_DISPATCH))) {
+		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'automation_dispatch_paused' };
+	}
 
 	if (!setting.enabled || !setting.templateLocalId) {
 		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'disabled' };

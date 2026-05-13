@@ -331,6 +331,53 @@
 	padding: 11px 14px;
 }
 
+.tenant-admin-kill-switches {
+	display: grid;
+	gap: 10px;
+	margin: 14px 0;
+}
+
+.tenant-admin-kill-switch {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 14px;
+	align-items: center;
+	padding: 14px;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #ffffff;
+}
+
+.tenant-admin-kill-switch--paused {
+	border-color: #fecaca;
+	background: #fff7f7;
+}
+
+.tenant-admin-kill-switch div {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.tenant-admin-kill-switch strong {
+	color: #0f172a;
+	font-size: 14px;
+	font-weight: 900;
+}
+
+.tenant-admin-kill-switch span,
+.tenant-admin-kill-switch small {
+	color: #64748b;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.tenant-admin-danger-btn {
+	border-color: #fecaca;
+	background: #fef2f2;
+	color: #b91c1c;
+}
+
 .tenant-admin-pill {
 	border: 1px solid #d9e2ef;
 	border-radius: 8px;
@@ -1636,6 +1683,7 @@
 .dark .admin-shell .admin-content .tenant-admin-table-wrap,
 .dark .admin-shell .admin-content .tenant-admin-brand-logo-box,
 .dark .admin-shell .admin-content .tenant-admin-logo-form,
+.dark .admin-shell .admin-content .tenant-admin-kill-switch,
 .dark .admin-shell .admin-content .workspace-analytics-card,
 .dark .admin-shell .admin-content .workspace-card-hero,
 .dark .admin-shell .admin-content .workspace-card-progress > div,
@@ -1659,6 +1707,11 @@
 
 .dark .admin-shell .admin-content .tenant-admin-brand-logo-box {
 	background: var(--ui-surface-soft, #192234) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-kill-switch--paused {
+	background: rgba(127, 29, 29, 0.2) !important;
+	border-color: rgba(248, 113, 113, 0.45) !important;
 }
 
 .dark .admin-shell .admin-content .tenant-admin-header h2,
