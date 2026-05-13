@@ -41,8 +41,8 @@
 	width: 42px;
 	height: 42px;
 	padding: 8px;
-	background: #fff;
-	border: 1px solid rgba(255, 255, 255, 0.18);
+	background: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.14);
 	border-radius: 10px;
 }
 
@@ -424,7 +424,7 @@
 .admin-brand-mark--logo {
 	border-radius: 9px;
 	border-color: rgba(255, 255, 255, 0.16);
-	background: #ffffff;
+	background: transparent;
 }
 
 .admin-brand-copy h1 {
@@ -778,10 +778,10 @@
 	width: 38px;
 	height: 38px;
 	padding: 7px;
-	border: 1px solid #e8edf5;
+	border: 1px solid transparent;
 	border-radius: 13px;
-	background: #ffffff;
-	box-shadow: 0 8px 22px rgba(42, 79, 201, 0.1);
+	background: transparent;
+	box-shadow: none;
 }
 
 .admin-brand-copy h1 {
