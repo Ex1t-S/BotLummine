@@ -25,7 +25,7 @@ import {
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
 import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
-import MetricPanel from '../components/ui/MetricPanel.jsx';
+import { KpiCard } from '../components/ui/kpi-card';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './OperationsPage.css';
 
@@ -62,17 +62,33 @@ function getMutationErrorMessage(...mutations) {
 	return mutationWithError?.error?.response?.data?.error || mutationWithError?.error?.message || '';
 }
 
+function mapKpiTone(tone = 'neutral') {
+	if (tone === 'warning') return 'warning';
+	if (tone === 'danger') return 'danger';
+	if (tone === 'success') return 'success';
+	if (tone === 'info') return 'primary';
+	return 'default';
+}
+
 function MetricCard({ label, value, helper, tone = 'neutral', onClick, icon: Icon }) {
-	return (
-		<MetricPanel
+	const card = (
+		<KpiCard
 			label={label}
-			value={value}
-			helper={helper}
-			tone={tone}
-			onClick={onClick}
-			icon={Icon}
-			formatValue={formatNumber}
+			value={formatNumber(value)}
+			caption={helper}
+			tone={mapKpiTone(tone)}
+			size="md"
+			className="operations-kpi-card"
+			icon={Icon ? <Icon className="operations-kpi-icon" aria-hidden="true" /> : null}
 		/>
+	);
+
+	if (!onClick) return card;
+
+	return (
+		<button type="button" className="operations-kpi-button" onClick={onClick}>
+			{card}
+		</button>
 	);
 }
 

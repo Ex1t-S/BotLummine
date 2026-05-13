@@ -855,6 +855,160 @@ button.operations-metric-card {
 	}
 }
 
+/* Shared KPI card integration */
+
+.operations-kpi-button {
+	display: block;
+	width: 100%;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.operations-kpi-button:focus-visible {
+	outline: none;
+}
+
+.operations-kpi-button:focus-visible .operations-kpi-card {
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.22));
+}
+
+.operations-kpi-button:hover .operations-kpi-card {
+	transform: translateY(-1px);
+	box-shadow: var(--ui-shadow-md, 0 12px 28px rgba(15, 23, 42, 0.08));
+}
+
+.operations-kpi-card {
+	height: 100%;
+	min-width: 0;
+	border-radius: 12px;
+	border: 1px solid var(--ui-border, #d7dee5);
+	background: var(--ui-surface, #ffffff) !important;
+	color: var(--ui-text, #172027);
+	transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+	box-shadow: var(--ui-shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+
+.operations-kpi-card.kpi-card--primary {
+	border-color: #b8d9e1;
+	background: #edf8fb !important;
+}
+
+.operations-kpi-card.kpi-card--warning {
+	border-color: #f2c794;
+	background: #fff7ed !important;
+}
+
+.operations-kpi-card.kpi-card--success {
+	border-color: #b7e4c7;
+	background: #ecfdf3 !important;
+}
+
+.operations-kpi-card.kpi-card--danger {
+	border-color: #f4b6b6;
+	background: #fff1f2 !important;
+}
+
+.operations-kpi-card.kpi-card--default {
+	background: #ffffff !important;
+}
+
+.operations-kpi-card .kpi-card__label {
+	color: var(--ui-muted, #5f6b7a) !important;
+	font-weight: 760;
+	text-transform: uppercase;
+}
+
+.operations-kpi-card .kpi-card__value {
+	color: var(--ui-heading, #111827) !important;
+}
+
+.operations-kpi-card .kpi-card__caption {
+	color: var(--ui-muted, #667085) !important;
+}
+
+.operations-kpi-card .kpi-card__icon {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	background: rgba(255, 255, 255, 0.78);
+	color: var(--ui-primary, #0f766e);
+}
+
+.operations-kpi-card.kpi-card--warning .kpi-card__value,
+.operations-kpi-card.kpi-card--warning .kpi-card__icon {
+	color: var(--ui-warning, #b54708) !important;
+}
+
+.operations-kpi-card.kpi-card--primary .kpi-card__value,
+.operations-kpi-card.kpi-card--primary .kpi-card__icon {
+	color: var(--ui-info, #246b86) !important;
+}
+
+.operations-kpi-card.kpi-card--success .kpi-card__value,
+.operations-kpi-card.kpi-card--success .kpi-card__icon {
+	color: var(--ui-success, #067647) !important;
+}
+
+.operations-kpi-card.kpi-card--danger .kpi-card__value,
+.operations-kpi-card.kpi-card--danger .kpi-card__icon {
+	color: var(--ui-danger, #b42318) !important;
+}
+
+.operations-kpi-card .kpi-card__bar {
+	color: currentColor;
+	opacity: 0.24;
+}
+
+.operations-kpi-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card {
+	background: var(--ui-surface-muted, #171b22) !important;
+	border-color: var(--ui-border, #292f3a) !important;
+	color: var(--ui-text, #e7e7ea);
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card.kpi-card--primary {
+	background: #102832 !important;
+	border-color: rgba(45, 156, 186, 0.36) !important;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card.kpi-card--warning {
+	background: #302214 !important;
+	border-color: rgba(245, 158, 11, 0.32) !important;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card.kpi-card--success {
+	background: #10291f !important;
+	border-color: rgba(34, 197, 94, 0.28) !important;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card.kpi-card--danger {
+	background: #31171c !important;
+	border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card .kpi-card__label,
+.dark .admin-shell .admin-content .operations-kpi-card .kpi-card__caption {
+	color: var(--ui-muted, #aab3c2) !important;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card .kpi-card__value {
+	color: var(--ui-heading, #ffffff) !important;
+}
+
+.dark .admin-shell .admin-content .operations-kpi-card .kpi-card__icon {
+	background: rgba(255, 255, 255, 0.08);
+}
+
 /* Futuristic operations details */
 
 .operations-workspace-card {

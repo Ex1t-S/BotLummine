@@ -240,12 +240,23 @@ export async function getOrCreateConversation({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	waId,
 	contactName,
+	profileImageUrl,
+	profileImageSource = 'unknown',
 	queue = 'HUMAN',
 	aiEnabled = false,
 	forceRouting = false
 }) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedWaId = normalizeThreadPhone(waId);
+	const normalizedProfileImageUrl = String(profileImageUrl || '').trim();
+	const hasProfileImageUrl = Boolean(normalizedProfileImageUrl);
+	const profileImageData = hasProfileImageUrl
+		? {
+				profileImageUrl: normalizedProfileImageUrl,
+				profileImageSource: String(profileImageSource || 'unknown').trim() || 'unknown',
+				profileImageUpdatedAt: new Date(),
+		  }
+		: {};
 
 	const contact = await prisma.contact.upsert({
 		where: {
@@ -256,13 +267,15 @@ export async function getOrCreateConversation({
 		},
 		update: {
 			name: contactName || undefined,
-			phone: normalizedWaId
+			phone: normalizedWaId,
+			...profileImageData
 		},
 		create: {
 			workspaceId: resolvedWorkspaceId,
 			waId: normalizedWaId,
 			phone: normalizedWaId,
-			name: contactName || normalizedWaId
+			name: contactName || normalizedWaId,
+			...profileImageData
 		}
 	});
 
@@ -333,6 +346,8 @@ export async function processInboundMessage({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	waId,
 	contactName,
+	profileImageUrl,
+	profileImageSource = 'unknown',
 	messageBody,
 	messageType = 'text',
 	attachmentMeta = null,
@@ -346,7 +361,9 @@ export async function processInboundMessage({
 	const conversation = await getOrCreateConversation({
 		workspaceId: resolvedWorkspaceId,
 		waId: normalizedWaId,
-		contactName
+		contactName,
+		profileImageUrl,
+		profileImageSource
 	});
 
 	if (metaMessageId) {

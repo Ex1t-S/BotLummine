@@ -474,6 +474,9 @@ async function deduplicateInboxContacts(workspaceId) {
 					name: true,
 					phone: true,
 					waId: true,
+					profileImageUrl: true,
+					profileImageSource: true,
+					profileImageUpdatedAt: true,
 				},
 			},
 			state: {
@@ -584,6 +587,19 @@ async function deduplicateInboxContacts(workspaceId) {
 			sorted.map((item) => item.contact?.name),
 			primary.contact?.name || mergedWaId
 		);
+		const mergedProfileImageUrl = firstMeaningfulValue(
+			sorted.map((item) => item.contact?.profileImageUrl)
+		);
+		const mergedProfileImageSource = firstMeaningfulValue(
+			sorted
+				.filter((item) => item.contact?.profileImageUrl === mergedProfileImageUrl)
+				.map((item) => item.contact?.profileImageSource)
+		);
+		const mergedProfileImageUpdatedAt = pickLatestDate(
+			sorted
+				.filter((item) => item.contact?.profileImageUrl)
+				.map((item) => item.contact?.profileImageUpdatedAt)
+		);
 
 		const mergedArchivedAt = sorted.some((item) => !item.archivedAt)
 			? null
@@ -620,6 +636,13 @@ async function deduplicateInboxContacts(workspaceId) {
 					name: mergedContactName || undefined,
 					phone: mergedWaId || primary.contact?.phone || undefined,
 					waId: mergedWaId || primary.contact?.waId,
+					...(mergedProfileImageUrl
+						? {
+								profileImageUrl: mergedProfileImageUrl,
+								profileImageSource: mergedProfileImageSource || primary.contact?.profileImageSource || null,
+								profileImageUpdatedAt: mergedProfileImageUpdatedAt || primary.contact?.profileImageUpdatedAt || new Date(),
+						  }
+						: {}),
 				},
 			});
 
@@ -726,7 +749,11 @@ function buildContactCard(conversation, lastMessage) {
 		hasUnread: unreadCount > 0,
 		lastReadAt: conversation.lastReadAt || null,
 		lastInboundMessageAt: conversation.lastInboundMessageAt || null,
-		avatar: buildAvatar(displayName, phone),
+		avatar: {
+			...buildAvatar(displayName, phone),
+			url: contact.profileImageUrl || '',
+		},
+		profileImageUrl: contact.profileImageUrl || '',
 		lastSummary: conversation.lastSummary || '',
 	};
 }
@@ -796,6 +823,9 @@ async function fetchInboxData({
 					name: true,
 					phone: true,
 					waId: true,
+					profileImageUrl: true,
+					profileImageSource: true,
+					profileImageUpdatedAt: true,
 				},
 			},
 			state: {
@@ -897,6 +927,9 @@ async function ensureConversationExists(conversationId, workspaceId) {
 					name: true,
 					phone: true,
 					waId: true,
+					profileImageUrl: true,
+					profileImageSource: true,
+					profileImageUpdatedAt: true,
 				},
 			},
 			state: {
@@ -1375,6 +1408,7 @@ export async function getConversationMessagesJson(req, res, next) {
 						name: true,
 						phone: true,
 						waId: true,
+						profileImageUrl: true,
 					},
 				},
 				state: {
@@ -1459,6 +1493,7 @@ export async function getConversationMessagesJson(req, res, next) {
 				contact: {
 					name: conversation.contact?.name || '',
 					phone: conversation.contact?.phone || conversation.contact?.waId || '',
+					profileImageUrl: conversation.contact?.profileImageUrl || '',
 				},
 				state: {
 					handoffReason: conversation.state?.handoffReason || '',

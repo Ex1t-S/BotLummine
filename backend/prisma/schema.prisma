@@ -166,6 +166,9 @@ model Contact {
   waId                  String
   phone                 String?
   name                  String?
+  profileImageUrl       String?
+  profileImageSource    String?
+  profileImageUpdatedAt DateTime?
   marketingOptIn        Boolean   @default(true)
   marketingOptedOutAt   DateTime?
   marketingOptOutReason String?

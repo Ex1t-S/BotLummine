@@ -8,6 +8,47 @@ export function normalizeRole(value = '') {
 	return String(value || '').trim().toUpperCase();
 }
 
+function isLocalDevelopmentRequest(req) {
+	if (process.env.NODE_ENV === 'production') return false;
+	if (String(process.env.DEV_AUTH_BYPASS || '').trim().toLowerCase() === 'false') return false;
+
+	const origin = String(req.headers?.origin || '').trim();
+	const referer = String(req.headers?.referer || '').trim();
+	const host = String(req.hostname || req.headers?.host || '').trim();
+	const remoteAddress = String(req.ip || req.socket?.remoteAddress || '').trim();
+	const localUrlPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(?:\/|$)/i;
+
+	return (
+		localUrlPattern.test(origin) ||
+		localUrlPattern.test(referer) ||
+		/^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host) ||
+		['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddress)
+	);
+}
+
+async function findDevelopmentUser() {
+	return await prisma.user.findFirst({
+		where: {
+			role: { in: ['ADMIN', 'AGENT'] },
+			workspace: {
+				status: 'ACTIVE',
+			},
+		},
+		orderBy: [
+			{ role: 'asc' },
+			{ createdAt: 'asc' },
+		],
+		include: {
+			workspace: {
+				include: {
+					branding: true,
+					aiConfig: true,
+				},
+			},
+		},
+	});
+}
+
 export function hasAnyRole(user, allowedRoles = []) {
 	if (!user) return false;
 	if (!Array.isArray(allowedRoles) || !allowedRoles.length) return true;
@@ -28,6 +69,15 @@ export async function attachUser(req, _res, next) {
 		const token = parsedCookies?.[cookieName];
 
 		if (!token) {
+			if (isLocalDevelopmentRequest(req)) {
+				req.user = await findDevelopmentUser();
+
+				if (req.user) {
+					req.devAuthBypass = true;
+					return next();
+				}
+			}
+
 			req.user = null;
 			return next();
 		}

@@ -72,6 +72,41 @@ function extractAttachmentMeta(message = {}) {
 	return {};
 }
 
+function firstNonEmptyString(...values) {
+	for (const value of values) {
+		const normalized = String(value || '').trim();
+		if (normalized) return normalized;
+	}
+
+	return '';
+}
+
+function extractContactProfileImageUrl(contactInfo = {}, message = {}, value = {}) {
+	return firstNonEmptyString(
+		contactInfo?.profile?.picture,
+		contactInfo?.profile?.profile_picture,
+		contactInfo?.profile?.profilePicture,
+		contactInfo?.profile?.imageUrl,
+		contactInfo?.profile?.avatarUrl,
+		contactInfo?.profile_picture,
+		contactInfo?.profilePicture,
+		contactInfo?.imageUrl,
+		contactInfo?.avatarUrl,
+		message?.contactInfo?.profile?.picture,
+		message?.contactInfo?.profile_picture,
+		message?.profile_picture,
+		message?.profilePicture,
+		message?.imageUrl,
+		message?.avatarUrl,
+		value?.contactInfo?.profile?.picture,
+		value?.contactInfo?.profile_picture,
+		value?.profile_picture,
+		value?.profilePicture,
+		value?.imageUrl,
+		value?.avatarUrl
+	);
+}
+
 async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, workspaceId = null) {
 	if (!attachmentMeta?.attachmentId) {
 		return attachmentMeta;
@@ -138,6 +173,7 @@ async function processInboundMessages(req, value = {}) {
 
 	for (const message of messages) {
 		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
+		const profileImageUrl = extractContactProfileImageUrl(contactInfo, message, value);
 		const baseAttachmentMeta = extractAttachmentMeta(message);
 		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta, workspaceId);
 
@@ -145,6 +181,8 @@ async function processInboundMessages(req, value = {}) {
 			workspaceId,
 			waId: message.from,
 			contactName: contactInfo?.profile?.name || message.from,
+			profileImageUrl,
+			profileImageSource: profileImageUrl ? 'whatsapp_webhook' : undefined,
 			messageBody: extractInboundBody(message),
 			messageType: message.type || 'text',
 			attachmentMeta,

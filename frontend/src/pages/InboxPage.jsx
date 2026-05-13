@@ -3,24 +3,32 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
 	ArchiveRestore,
-	ArrowLeft,
 	Bot,
 	CheckCheck,
 	Clock3,
+	Copy,
+	CornerUpLeft,
 	Eraser,
 	EyeOff,
+	Forward,
 	Inbox,
 	List,
-	MessageCircle,
-	Paperclip,
+	MoreVertical,
 	RefreshCw,
 	RotateCcw,
-	Send,
-	Smile,
 	UserRound,
 } from 'lucide-react';
 import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
+import AiChatInput from '../components/ui/ai-chat-input';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import MessageConversation from '../components/ui/messaging-conversation';
 import './InboxPage.css';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
@@ -57,11 +65,6 @@ function buildInboxPath(queueKey = 'AUTO', conversationId = '', readFilter = 'AL
 	return `/inbox/${slug}${query}`;
 }
 
-const QUICK_EMOJIS = [
-	'😊', '😂', '😍', '😉', '👍', '🙏',
-	'❤️', '🔥', '🎉', '😮', '😢', '🤝',
-	'✨', '💬', '📦', '🛍️', '✅', '🙌',
-];
 
 const READ_FILTERS = [
 	{ key: 'ALL', label: 'Todos' },
@@ -85,16 +88,6 @@ function resolveReadFilter(value = '') {
 	return READ_FILTERS.some((item) => item.key === normalized) ? normalized : 'ALL';
 }
 
-const EXTENDED_QUICK_EMOJIS = [
-	'\u{1F600}', '\u{1F603}', '\u{1F604}', '\u{1F601}', '\u{1F606}', '\u{1F605}', '\u{1F602}', '\u{1F923}',
-	'\u{1F60A}', '\u{1F607}', '\u{1F642}', '\u{1F609}', '\u{1F60D}', '\u{1F970}', '\u{1F618}', '\u{1F617}',
-	'\u{1F61C}', '\u{1F61D}', '\u{1F911}', '\u{1F917}', '\u{1F914}', '\u{1F92D}', '\u{1F92B}', '\u{1F928}',
-	'\u{1F610}', '\u{1F62E}', '\u{1F632}', '\u{1F97A}', '\u{1F622}', '\u{1F62D}', '\u{1F621}', '\u{1F624}',
-	'\u{1F44B}', '\u{1F91A}', '\u{1F44C}', '\u{1F44D}', '\u{1F44E}', '\u{1F64C}', '\u{1F64F}', '\u{1F91D}',
-	'\u{1F44F}', '\u{1F4AA}', '\u{1F525}', '\u{2728}', '\u{2B50}', '\u{1F389}', '\u{1F381}', '\u{1F48C}',
-	'\u{2764}\u{FE0F}', '\u{1F9E1}', '\u{1F49B}', '\u{1F49A}', '\u{1F499}', '\u{1F49C}', '\u{1F90D}', '\u{1F5A4}',
-	'\u{1F4AC}', '\u{1F4A1}', '\u{1F4E6}', '\u{1F6CD}\u{FE0F}', '\u{1F457}', '\u{1F460}', '\u{1F48E}', '\u{2705}',
-];
 
 const MEDIA_PLACEHOLDER_BODIES = new Set([
 	'[Audio recibido]',
@@ -164,13 +157,6 @@ function cleanPreviewText(value = '') {
 		.trim();
 }
 
-function formatFileSize(bytes = 0) {
-	const size = Number(bytes || 0);
-	if (!Number.isFinite(size) || size <= 0) return '';
-	if (size < 1024) return `${size} B`;
-	if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-	return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function getMediaKind(message = {}) {
 	const type = String(message.type || '').toLowerCase();
@@ -521,6 +507,106 @@ function resolveMessageReadState(message = {}, conversation = null) {
 	return 'sent';
 }
 
+function getInitials(value = '') {
+	const words = String(value || '')
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean);
+
+	if (!words.length) return '?';
+	if (words.length === 1) return words[0].charAt(0).toUpperCase();
+	return `${words[0].charAt(0)}${words[1].charAt(0)}`.toUpperCase();
+}
+
+function resolveContactAvatarUrl(contact = null) {
+	if (!contact) return '';
+	const rawUrl = (
+		contact.avatar?.url ||
+		contact.avatarUrl ||
+		contact.profileImageUrl ||
+		contact.profilePhotoUrl ||
+		contact.pictureUrl ||
+		''
+	);
+
+	return resolveApiUrl(rawUrl);
+}
+
+function AvatarImageOrFallback({ url = '', fallback = '?' }) {
+	const resolvedUrl = String(url || '').trim();
+	const [failedUrl, setFailedUrl] = useState('');
+	const canShowImage = Boolean(resolvedUrl) && failedUrl !== resolvedUrl;
+
+	if (!canShowImage) {
+		return fallback || '?';
+	}
+
+	return (
+		<img
+			src={resolvedUrl}
+			alt=""
+			loading="lazy"
+			onError={() => setFailedUrl(resolvedUrl)}
+		/>
+	);
+}
+
+function copyMessageText(message = {}) {
+	const text = String(message.body || '').trim();
+	if (!text) return;
+
+	if (navigator?.clipboard?.writeText) {
+		navigator.clipboard.writeText(text).catch(() => {});
+		return;
+	}
+
+	const textarea = document.createElement('textarea');
+	textarea.value = text;
+	textarea.setAttribute('readonly', '');
+	textarea.style.position = 'fixed';
+	textarea.style.opacity = '0';
+	document.body.appendChild(textarea);
+	textarea.select();
+	document.execCommand('copy');
+	document.body.removeChild(textarea);
+}
+
+function MessageActionMenu({ message }) {
+	const hasBody = Boolean(String(message?.body || '').trim());
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<button type="button" className="inbox-message-menu-trigger" aria-label="Acciones del mensaje">
+					<MoreVertical size={16} strokeWidth={2.4} aria-hidden="true" />
+				</button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent className="inbox-message-menu" align="end" sideOffset={6}>
+				<DropdownMenuItem
+					className="inbox-message-menu-item"
+					disabled={!hasBody}
+					onSelect={(event) => {
+						event.preventDefault();
+						copyMessageText(message);
+					}}
+				>
+					<Copy size={14} strokeWidth={2.3} aria-hidden="true" />
+					<span>Copiar</span>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem className="inbox-message-menu-item" disabled>
+					<CornerUpLeft size={14} strokeWidth={2.3} aria-hidden="true" />
+					<span>Responder</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem className="inbox-message-menu-item" disabled>
+					<Forward size={14} strokeWidth={2.3} aria-hidden="true" />
+					<span>Reenviar</span>
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function MessageBubble({ message, conversation }) {
 	const isOutbound = message.direction === 'OUTBOUND';
 	const interactivePayload = getInteractivePayload(message);
@@ -529,6 +615,9 @@ function MessageBubble({ message, conversation }) {
 	const hasPromoButton = Boolean(promo.actionLabel);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
 	const readState = resolveMessageReadState(message, conversation);
+	const senderLabel = message.senderName || (isOutbound ? 'Marca' : conversation?.contact?.name || 'Cliente');
+	const createdAtLabel = formatArgentinaDateTime(message.createdAt) || message.createdAtLabel || '';
+	const inboundAvatarUrl = !isOutbound ? resolveContactAvatarUrl(conversation?.contact) : '';
 
 	return (
 		<div
@@ -536,6 +625,10 @@ function MessageBubble({ message, conversation }) {
 				isOutbound ? 'inbox-message-row--outbound' : 'inbox-message-row--inbound'
 			}`}
 		>
+			<div className="inbox-message-avatar" aria-hidden="true">
+				<AvatarImageOrFallback url={inboundAvatarUrl} fallback={getInitials(senderLabel)} />
+			</div>
+			<div className="inbox-message-stack">
 			<div
 				className={`inbox-message-bubble ${
 					isOutbound ? 'inbox-message-bubble--outbound' : 'inbox-message-bubble--inbound'
@@ -574,7 +667,7 @@ function MessageBubble({ message, conversation }) {
 						)
 					) : null}
 
-					<div className="inbox-message-meta">
+					<div className="inbox-message-meta inbox-message-meta--legacy">
 						<span className="inbox-message-sender-pill">
 							{message.senderName || (isOutbound ? 'Marca' : 'Cliente')}
 						</span>
@@ -596,6 +689,28 @@ function MessageBubble({ message, conversation }) {
 					</div>
 				</div>
 				)}
+			</div>
+			<MessageActionMenu message={message} />
+			<div className="inbox-message-meta">
+				<span className="inbox-message-sender-pill">
+					{senderLabel}
+				</span>
+
+				<span>{createdAtLabel}</span>
+				{isOutbound ? (
+					<span
+						className={`inbox-message-status ${
+							readState === 'read'
+								? 'inbox-message-status--read'
+								: 'inbox-message-status--sent'
+						}`}
+						aria-label={readState === 'read' ? 'Leido' : 'Enviado'}
+						title={readState === 'read' ? 'Leido' : 'Enviado'}
+					>
+						{readState === 'read' ? '✓✓' : '✓'}
+					</span>
+				) : null}
+			</div>
 			</div>
 		</div>
 	);
@@ -629,9 +744,6 @@ export default function InboxPage() {
 	const isAdmin = isAdminUser(user);
 	const contactsContainerRef = useRef(null);
 	const messagesContainerRef = useRef(null);
-	const emojiPickerRef = useRef(null);
-	const fileInputRef = useRef(null);
-	const textareaRef = useRef(null);
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
 	const lastReadRequestRef = useRef('');
@@ -643,9 +755,7 @@ export default function InboxPage() {
 
 	const [queue, setQueue] = useState(routeQueue);
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
-	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 	const [selectedConversationId, setSelectedConversationId] = useState(routeConversationId);
-	const [messageText, setMessageText] = useState('');
 	const [selectedFile, setSelectedFile] = useState(null);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [readFilter, setReadFilter] = useState(routeReadFilter);
@@ -1176,27 +1286,6 @@ export default function InboxPage() {
 	}, [conversation?.messages?.length]);
 
 	useEffect(() => {
-		function handleOutsideClick(event) {
-			if (!emojiPickerRef.current) return;
-
-			if (!emojiPickerRef.current.contains(event.target)) {
-				setShowEmojiPicker(false);
-			}
-		}
-
-		document.addEventListener('mousedown', handleOutsideClick);
-		return () => document.removeEventListener('mousedown', handleOutsideClick);
-	}, []);
-
-	useEffect(() => {
-		const el = textareaRef.current;
-		if (!el) return;
-
-		el.style.height = '24px';
-		el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-	}, [messageText]);
-
-	useEffect(() => {
 		if (!actionFeedback) return undefined;
 
 		const timeout = window.setTimeout(() => {
@@ -1244,16 +1333,11 @@ export default function InboxPage() {
 		},
 		onSuccess: async (result) => {
 			if (result?.conversationId === selectedConversationId) {
-				setMessageText((current) => (
-					current.trim() === result.body ? '' : current
-				));
 				setSelectedFile((current) => (
 					!current || current.name === result.fileName ? null : current
 				));
-				if (fileInputRef.current) fileInputRef.current.value = '';
 			}
 			setComposerError('');
-			setShowEmojiPicker(false);
 			shouldStickToBottomRef.current = true;
 			await invalidateInboxAndConversation(result?.conversationId || selectedConversationId);
 		},
@@ -1403,9 +1487,8 @@ export default function InboxPage() {
 		}
 	}
 
-	function handleSubmit(event) {
-		event.preventDefault();
-		const body = messageText.trim();
+	function handleSendComposerMessage(message = '') {
+		const body = String(message || '').trim();
 		if (!selectedConversationId || (!body && !selectedFile)) return;
 		setComposerError('');
 		sendMessageMutation.mutate({
@@ -1415,15 +1498,13 @@ export default function InboxPage() {
 		});
 	}
 
-	function handleSelectFile(event) {
-		const file = event.target.files?.[0] || null;
+	function handleSelectFile(file) {
 		setComposerError('');
-		setSelectedFile(file);
+		setSelectedFile(file || null);
 	}
 
 	function handleClearSelectedFile() {
 		setSelectedFile(null);
-		if (fileInputRef.current) fileInputRef.current.value = '';
 	}
 
 	function handleMoveQueue(nextQueue) {
@@ -1438,28 +1519,6 @@ export default function InboxPage() {
 	function handleMarkUnread() {
 		if (!selectedConversationId || markConversationUnreadMutation.isPending) return;
 		markConversationUnreadMutation.mutate(selectedConversationId);
-	}
-
-	function insertEmoji(emoji) {
-		setMessageText((prev) => `${prev}${emoji}`);
-		setShowEmojiPicker(false);
-		textareaRef.current?.focus();
-	}
-
-	function handleComposerKeyDown(event) {
-		if (event.key === 'Enter' && !event.shiftKey) {
-			event.preventDefault();
-
-			const body = messageText.trim();
-			if (selectedConversationId && (body || selectedFile) && !sendMessageMutation.isPending) {
-				setComposerError('');
-				sendMessageMutation.mutate({
-					conversationId: selectedConversationId,
-					body,
-					file: selectedFile,
-				});
-			}
-		}
 	}
 
 	const inboxPageClassName = [
@@ -1587,6 +1646,7 @@ export default function InboxPage() {
 						const isSelected = contact.conversationId === selectedConversationId;
 						const unreadCount = Math.max(0, Number(contact.unreadCount || 0));
 						const hasUnread = Boolean(contact.hasUnread) || unreadCount > 0;
+						const avatarUrl = resolveContactAvatarUrl(contact);
 
 						return (
 							<button
@@ -1613,7 +1673,10 @@ export default function InboxPage() {
 												: { background: '#94a3b8' }
 										}
 									>
-										{contact.avatar?.initials || '?'}
+										<AvatarImageOrFallback
+											url={avatarUrl}
+											fallback={contact.avatar?.initials || '?'}
+										/>
 										{hasUnread ? <span className="inbox-contact-dot" /> : null}
 									</div>
 
@@ -1689,306 +1752,158 @@ export default function InboxPage() {
 					</div>
 				) : (
 					<div className="inbox-chat-workspace">
-						<div className="inbox-chat-main">
-						<div className="inbox-chat-header">
-							<div className="inbox-chat-header-top">
-								<button
-									type="button"
-									className="inbox-back-to-list-btn"
-									onClick={() => setShowConversationSidebar(true)}
-								>
-									<ArrowLeft size={15} strokeWidth={2.4} aria-hidden="true" />
-									<span>Conversaciones</span>
-								</button>
+						<MessageConversation
+							contactName={
+								conversation?.contact?.name ||
+								activeContact?.displayName ||
+								'Sin nombre'
+							}
+							contactSubtitle={
+								conversation?.contact?.phone ||
+								activeContact?.phoneDisplay ||
+								'Sin telefono'
+							}
+							avatarFallback={(
+								conversation?.contact?.name ||
+								activeContact?.displayName ||
+								'?'
+							).trim().charAt(0).toUpperCase()}
+							avatarUrl={
+								resolveContactAvatarUrl(conversation?.contact) ||
+								resolveContactAvatarUrl(activeContact)
+							}
+							status={conversation?.aiEnabled ? 'online' : 'dnd'}
+							queueLabel={currentQueueLabel}
+							aiLabel={conversation?.aiEnabled ? 'IA activa' : 'Humano'}
+							showBackButton
+							onBack={() => setShowConversationSidebar(true)}
+							actions={[
+								{
+									id: 'toggle-sidebar',
+									label: showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones',
+									active: showConversationSidebar,
+									onClick: () => setShowConversationSidebar((prev) => !prev),
+									icon: showConversationSidebar ? EyeOff : Inbox,
+								},
+								{
+									id: 'auto',
+									label: 'Automatico',
+									active: conversation?.queue === 'AUTO',
+									disabled: moveQueueMutation.isPending,
+									onClick: () => handleMoveQueue('AUTO'),
+									icon: Bot,
+								},
+								{
+									id: 'human',
+									label: 'Atencion humana',
+									active: conversation?.queue === 'HUMAN',
+									disabled: moveQueueMutation.isPending,
+									onClick: () => handleMoveQueue('HUMAN'),
+									icon: UserRound,
+								},
+								{
+									id: 'payment',
+									label: 'Comprobantes',
+									active: conversation?.queue === 'PAYMENT_REVIEW',
+									disabled: moveQueueMutation.isPending,
+									onClick: () => handleMoveQueue('PAYMENT_REVIEW'),
+									icon: CheckCheck,
+								},
+								...(conversation?.queue === 'PAYMENT_REVIEW'
+									? [{
+										id: 'payment-verified',
+										label: 'Comprobante verificado',
+										disabled: moveQueueMutation.isPending,
+										onClick: handlePaymentVerified,
+										icon: ArchiveRestore,
+									}]
+									: []),
+								{
+									id: 'mark-unread',
+									label: 'Marcar no leido',
+									active: Boolean(activeContact?.hasUnread || conversation?.hasUnread),
+									disabled: markConversationUnreadMutation.isPending || !selectedConversationId,
+									onClick: handleMarkUnread,
+									icon: Clock3,
+								},
+							]}
+							moreActions={isAdmin ? [
+								{
+									id: 'reset-context',
+									label: 'Reiniciar IA',
+									danger: true,
+									disabled: resetContextMutation.isPending || !selectedConversationId,
+									onClick: () => resetContextMutation.mutate(),
+									icon: RotateCcw,
+								},
+								{
+									id: 'clear-history',
+									label: 'Borrar historial',
+									danger: true,
+									disabled: clearHistoryMutation.isPending || !selectedConversationId,
+									onClick: () => {
+										const confirmed = window.confirm(
+											'Borrar historial\n\nSe eliminaran los mensajes y el contexto de esta conversacion. Esta accion no se puede deshacer.\n\nQueres borrar el historial?'
+										);
 
-								<div className="inbox-chat-identity">
-									<div className="inbox-chat-title">
-										{conversation?.contact?.name ||
-											activeContact?.displayName ||
-											'Sin nombre'}
-									</div>
-									<div className="inbox-chat-subtitle">
-										{conversation?.contact?.phone ||
-											activeContact?.phoneDisplay ||
-											'Sin teléfono'}
-									</div>
-								</div>
-
-								<div className="inbox-badges">
-									<span className="inbox-badge inbox-badge--neutral">
-										{currentQueueLabel}
-									</span>
-
-									<span
-										className={`inbox-badge ${
-											conversation?.aiEnabled
-												? 'inbox-badge--ai'
-												: 'inbox-badge--human'
-										}`}
-									>
-										{conversation?.aiEnabled ? 'IA activa' : 'Humano'}
-									</span>
-								</div>
-							</div>
-
-							<div className="inbox-actions">
-								<div className="inbox-actions-primary">
-									<ActionButton
-										active={showConversationSidebar}
-										onClick={() => setShowConversationSidebar((prev) => !prev)}
-										icon={showConversationSidebar ? EyeOff : Inbox}
-									>
-										{showConversationSidebar ? 'Ocultar conversaciones' : 'Mostrar conversaciones'}
-									</ActionButton>
-
-									<ActionButton
-										active={conversation?.queue === 'AUTO'}
-										disabled={moveQueueMutation.isPending}
-										onClick={() => handleMoveQueue('AUTO')}
-										icon={Bot}
-									>
-										Automático
-									</ActionButton>
-
-									<ActionButton
-										active={conversation?.queue === 'HUMAN'}
-										disabled={moveQueueMutation.isPending}
-										onClick={() => handleMoveQueue('HUMAN')}
-										icon={UserRound}
-									>
-										Atención humana
-									</ActionButton>
-
-									<ActionButton
-										active={conversation?.queue === 'PAYMENT_REVIEW'}
-										disabled={moveQueueMutation.isPending}
-										onClick={() => handleMoveQueue('PAYMENT_REVIEW')}
-										icon={CheckCheck}
-									>
-										Comprobantes
-									</ActionButton>
-
-									{conversation?.queue === 'PAYMENT_REVIEW' ? (
-										<ActionButton
-											disabled={moveQueueMutation.isPending}
-											onClick={handlePaymentVerified}
-											icon={ArchiveRestore}
-										>
-											Comprobante verificado
-										</ActionButton>
-									) : null}
-
-									<ActionButton
-										active={Boolean(activeContact?.hasUnread || conversation?.hasUnread)}
-										disabled={
-											markConversationUnreadMutation.isPending ||
-											!selectedConversationId
+										if (confirmed) {
+											clearHistoryMutation.mutate();
 										}
-										onClick={handleMarkUnread}
-										icon={Clock3}
-									>
-										Marcar no leído
-									</ActionButton>
-								</div>
-
-								{isAdmin ? (
-									<div className="inbox-actions-danger">
-										<ActionButton
-											danger
-											disabled={
-												resetContextMutation.isPending ||
-												!selectedConversationId
-											}
-											onClick={() => resetContextMutation.mutate()}
-											icon={RotateCcw}
-										>
-											Reiniciar IA
-										</ActionButton>
-
-										<ActionButton
-											danger
-											disabled={
-												clearHistoryMutation.isPending ||
-												!selectedConversationId
-											}
-											onClick={() => {
-												const confirmed = window.confirm(
-													'Borrar historial\n\nSe eliminarán los mensajes y el contexto de esta conversación. Esta acción no se puede deshacer.\n\n¿Querés borrar el historial?'
-												);
-
-												if (confirmed) {
-													clearHistoryMutation.mutate();
-												}
-											}}
-											icon={Eraser}
-										>
-											Borrar historial
-										</ActionButton>
-									</div>
-								) : null}
-							</div>
-
-							{actionFeedback || isBusyWithConversationAction ? (
-								<div
-									className={`inbox-action-feedback ${
-										isBusyWithConversationAction ? 'inbox-action-feedback--busy' : ''
-									}`}
-								>
-									{isBusyWithConversationAction ? 'Procesando acción...' : actionFeedback}
-								</div>
-							) : null}
-						</div>
-
-						<div
-							ref={messagesContainerRef}
-							className="inbox-messages"
-							onScroll={handleMessagesScroll}
-						>
-							<div className="inbox-messages-list">
-								{conversationQuery.isLoading ? (
-									<div className="inbox-empty">
-										<strong>Cargando mensajes</strong>
-										<span>Estamos preparando el historial de esta conversación.</span>
-									</div>
-								) : null}
-
-								{hasOlderMessages ? (
-									<button
-										type="button"
-										className="inbox-load-older-messages"
-										disabled={isLoadingOlderMessages}
-										onClick={handleLoadOlderMessages}
-									>
-										{isLoadingOlderMessages
-											? 'Cargando mensajes...'
-											: 'Cargar mensajes anteriores'}
-									</button>
-								) : null}
-
-								{!conversationQuery.isLoading &&
-								displayedMessages.length === 0 ? (
-									<div className="inbox-empty">
-										Todavía no hay mensajes. Cuando el cliente escriba, el historial va a aparecer acá.
-									</div>
-								) : null}
-
-								{displayedMessages.map((msg) => (
-									<MessageBubble key={msg.id} message={msg} conversation={conversation} />
-								))}
-							</div>
-						</div>
-
-						<div className="inbox-composer-shell">
-							{composerError ? (
-								<div className="inbox-composer-feedback inbox-composer-feedback--error">
-									{composerError}
-								</div>
-							) : sendMessageMutation.isPending ? (
-								<div className="inbox-composer-feedback inbox-composer-feedback--sending">
-									Enviando mensaje...
-								</div>
-							) : null}
-
-							{selectedFile ? (
-								<div className="inbox-selected-file">
-									<div className="inbox-selected-file-main">
-										<span className="inbox-selected-file-icon">
-											<Paperclip size={13} strokeWidth={2.4} aria-hidden="true" />
-										</span>
-										<span className="inbox-selected-file-name">{selectedFile.name}</span>
-										<span className="inbox-selected-file-size">
-											{formatFileSize(selectedFile.size)}
-										</span>
-									</div>
-
-									<button
-										type="button"
-										className="inbox-selected-file-remove"
-										onClick={handleClearSelectedFile}
-										disabled={sendMessageMutation.isPending}
-										title="Quitar archivo"
-									>
-										x
-									</button>
-								</div>
-							) : null}
-
-							<form onSubmit={handleSubmit} className="inbox-composer">
-								<div className="inbox-composer-leading" ref={emojiPickerRef}>
-									<button
-										type="button"
-										className="inbox-emoji-trigger"
-										onClick={() => setShowEmojiPicker((prev) => !prev)}
-										title="Emoji"
-									>
-										🙂
-									</button>
-
-									{showEmojiPicker ? (
-										<div className="inbox-emoji-picker">
-											<div className="inbox-emoji-title">Elegí un emoji</div>
-
-											<div className="inbox-emoji-grid">
-												{EXTENDED_QUICK_EMOJIS.map((emoji) => (
-													<button
-														key={emoji}
-														type="button"
-														className="inbox-emoji-btn"
-														onClick={() => insertEmoji(emoji)}
-													>
-														{emoji}
-													</button>
-												))}
-											</div>
-										</div>
-									) : null}
-								</div>
-
-								<input
-									ref={fileInputRef}
-									type="file"
-									className="inbox-file-input"
-									accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv"
-									onChange={handleSelectFile}
-									disabled={sendMessageMutation.isPending}
-								/>
-
+									},
+									icon: Eraser,
+								},
+							] : []}
+							feedback={actionFeedback}
+							isBusy={isBusyWithConversationAction}
+							messagesContainerRef={messagesContainerRef}
+							onMessagesScroll={handleMessagesScroll}
+							loadOlderControl={hasOlderMessages ? (
 								<button
 									type="button"
-									className="inbox-attach-trigger"
-									onClick={() => fileInputRef.current?.click()}
-									disabled={sendMessageMutation.isPending}
-									title="Adjuntar archivo"
+									className="inbox-load-older-messages"
+									disabled={isLoadingOlderMessages}
+									onClick={handleLoadOlderMessages}
 								>
-									<Paperclip size={18} strokeWidth={2.3} aria-hidden="true" />
+									{isLoadingOlderMessages
+										? 'Cargando mensajes...'
+										: 'Cargar mensajes anteriores'}
 								</button>
-
-								<textarea
-									ref={textareaRef}
-									value={messageText}
-									onChange={(event) => {
-										setComposerError('');
-										setMessageText(event.target.value);
-									}}
-									onKeyDown={handleComposerKeyDown}
-									placeholder="Escribí un mensaje"
-									rows={1}
-									className="inbox-textarea"
+							) : null}
+							emptyState={(
+								<div className="inbox-empty">
+									Todavia no hay mensajes. Cuando el cliente escriba, el historial va a aparecer aca.
+								</div>
+							)}
+							composer={(
+								<AiChatInput
+									onSendMessage={handleSendComposerMessage}
+									onUploadFile={handleSelectFile}
+									selectedFile={selectedFile}
+									onClearFile={handleClearSelectedFile}
+									isLoading={sendMessageMutation.isPending}
+									disabled={!selectedConversationId}
+									error={composerError}
+									placeholder="Escribi un mensaje"
 								/>
+							)}
+						>
+							{conversationQuery.isLoading ? (
+								<div className="inbox-empty">
+									<strong>Cargando mensajes</strong>
+									<span>Estamos preparando el historial de esta conversacion.</span>
+								</div>
+							) : null}
 
-								<button
-									type="submit"
-									disabled={
-										sendMessageMutation.isPending || (!messageText.trim() && !selectedFile)
-									}
-									title="Enviar"
-									className="inbox-send-btn"
-								>
-									➤
-								</button>
-							</form>
-						</div>
-						</div>
+							{!conversationQuery.isLoading && displayedMessages.length === 0 ? (
+								<div className="inbox-empty">
+									Todavia no hay mensajes. Cuando el cliente escriba, el historial va a aparecer aca.
+								</div>
+							) : null}
+
+							{displayedMessages.map((msg) => (
+								<MessageBubble key={msg.id} message={msg} conversation={conversation} />
+							))}
+						</MessageConversation>
 
 					</div>
 				)}

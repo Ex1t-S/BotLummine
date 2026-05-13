@@ -223,9 +223,14 @@
 	.operations-issue,
 	.inbox-sidebar,
 	.inbox-chat-panel,
+	.messaging-conversation-card,
+	.messaging-conversation-header,
+	.messaging-conversation-avatar,
 	.inbox-contact-card,
 	.inbox-composer-shell,
 	.inbox-composer,
+	.ai-chat-input,
+	.ai-chat-input__bar,
 	.inbox-selected-file,
 	.inbox-emoji-picker,
 	.metric-panel,
@@ -1022,6 +1027,8 @@
 /* Keep layout wrappers from being painted as panels. */
 .dark .admin-shell .admin-content :is(
 	.inbox-message-row,
+	.inbox-message-stack,
+	.inbox-message-avatar,
 	.inbox-message-bubble-inner,
 	.inbox-message-body,
 	.inbox-message-text-chunk,
