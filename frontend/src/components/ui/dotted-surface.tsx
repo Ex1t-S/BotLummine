@@ -25,9 +25,11 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 			return undefined;
 		}
 
+		const isSmallViewport = window.matchMedia('(max-width: 768px)').matches;
+		const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		const SEPARATION = 125;
-		const AMOUNTX = 54;
-		const AMOUNTY = 42;
+		const AMOUNTX = isSmallViewport ? 34 : 54;
+		const AMOUNTY = isSmallViewport ? 28 : 42;
 
 		const scene = new THREE.Scene();
 		scene.fog = new THREE.FogExp2(0x000000, 0.00015);
@@ -59,9 +61,9 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 
 				positions.push(x, y, z);
 				colors.push(
-					isDark ? 0.92 + softVariance : 0.28,
-					isDark ? 0.92 + softVariance : 0.28,
-					isDark ? 0.95 + softVariance : 0.3,
+					isDark ? 1 + softVariance : 0.28,
+					isDark ? 1 + softVariance : 0.28,
+					isDark ? 1.04 + softVariance : 0.3,
 				);
 			}
 		}
@@ -70,10 +72,10 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 		geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
 		const material = new THREE.PointsMaterial({
-			size: 5.35,
+			size: 5.7,
 			vertexColors: true,
 			transparent: true,
-			opacity: 0.62,
+			opacity: 0.9,
 			sizeAttenuation: true,
 			depthWrite: false,
 		});
@@ -93,7 +95,7 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 			renderer.setSize(width, height, false);
 		};
 
-		const animate = () => {
+		const renderFrame = () => {
 			animationId = requestAnimationFrame(animate);
 
 			const positionAttribute = geometry.attributes.position;
@@ -118,10 +120,23 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 			count += 0.028;
 		};
 
+		const animate = () => {
+			if (document.hidden) {
+				animationId = requestAnimationFrame(animate);
+				return;
+			}
+
+			renderFrame();
+		};
+
 		const resizeObserver = new ResizeObserver(resize);
 		resizeObserver.observe(container);
 		resize();
-		animate();
+		if (prefersReducedMotion) {
+			renderer.render(scene, camera);
+		} else {
+			animate();
+		}
 
 		sceneRef.current = {
 			scene,

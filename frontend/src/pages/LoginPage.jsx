@@ -1,38 +1,75 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { CheckCircle2, MessageCircle, Rocket } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
 import logoBladeIA from '../assets/app-logo-mark.png';
+import showcaseInboxAuto from '../assets/feature-carousel/showcase-inbox-auto.png';
+import showcaseInboxPayments from '../assets/feature-carousel/showcase-inbox-payments.png';
+import showcaseCampaigns from '../assets/feature-carousel/showcase-campaigns.png';
+import showcaseTemplates from '../assets/feature-carousel/showcase-templates.png';
+import showcaseCarts from '../assets/feature-carousel/showcase-carts.png';
+import showcaseOperations from '../assets/feature-carousel/showcase-operations.png';
+import * as PricingCard from '../components/ui/pricing-card.tsx';
+import { ProjectCard } from '../components/ui/project-card.tsx';
 import './LoginPage.css';
 
 const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
+const FeatureCarousel = lazy(() =>
+	import('../components/ui/animated-feature-carousel.tsx').then((module) => ({
+		default: module.FeatureCarousel,
+	})),
+);
 
 const pricingPlans = [
 	{
-		name: 'Basico',
+		name: 'Básico',
 		price: 'US$ 50',
-		description: 'Para ordenar la atencion diaria y centralizar clientes desde WhatsApp.',
-		features: ['Inbox de WhatsApp', 'CRM de clientes', 'Respuestas asistidas', 'Catalogo conectado', 'Reportes basicos'],
+		period: '/mes',
+		icon: MessageCircle,
+		description: 'Para responder mejor, ordenar clientes y no perder conversaciones importantes.',
+		features: ['Inbox de WhatsApp centralizado', 'Clientes e historial en una sola vista', 'Respuestas asistidas para ganar tiempo', 'Catálogo conectado a la conversación', 'Resumen simple de la actividad'],
 	},
 	{
 		name: 'Avanzado',
 		price: 'US$ 80',
-		description: 'Para crecer con automatizaciones, campañas y medicion comercial.',
+		period: '/mes',
+		badge: 'M\u00e1s elegido',
+		icon: Rocket,
+		description: 'Para retomar conversaciones, recuperar ventas y entender qué acciones generan más respuesta.',
 		features: [
-			'Todo lo del plan Basico',
-			'Campañas por WhatsApp API',
-			'Segmentacion de audiencias',
-			'Recuperacion de carritos',
-			'Metricas avanzadas y atribucion',
-			'Soporte prioritario',
+			'Todo lo del plan Básico',
+			'Campañas para volver a hablar con tus clientes',
+			'Audiencias mejor segmentadas',
+			'Recuperación de carritos abandonados',
+			'Métricas para seguir resultados',
+			'Soporte prioritario cuando necesitás avanzar más rápido',
 		],
 	},
 ];
 
-const commandMetrics = [
-	{ value: '24/7', label: 'Atencion asistida para responder consultas y pedidos' },
-	{ value: 'CRM', label: 'Clientes, historial y seguimiento en una sola vista' },
-	{ value: 'API', label: 'Campañas, carritos y mensajes conectados' },
+const removedCommandMetrics = [
+	{ value: 'Menos demora', label: 'Respondé más rápido y evitá que una consulta se enfríe antes de avanzar.' },
+	{ value: 'Campañas', label: 'Activá envíos y seguimientos sin depender de tareas manuales una por una.' },
+	{ value: 'Carritos', label: 'Detectá ventas abandonadas y volvé a moverlas antes de que se pierdan.' },
+];
+
+const capabilityCards = [
+	{
+		value: 'Respuestas sin espera',
+		label: 'La IA ayuda a priorizar consultas, sugerir respuestas y mantener cada conversaci\u00f3n lista para avanzar.',
+		image: showcaseInboxAuto,
+	},
+	{
+		value: 'Campa\u00f1as con seguimiento',
+		label: 'Segment\u00e1 clientes, retom\u00e1 conversaciones y med\u00ed qu\u00e9 mensajes vuelven a generar oportunidades.',
+		image: showcaseCampaigns,
+	},
+	{
+		value: 'Carritos recuperables',
+		label: 'Detect\u00e1 abandonos, activ\u00e1 recordatorios y llev\u00e1 cada intento de compra de vuelta al inbox.',
+		image: showcaseCarts,
+	},
 ];
 
 const trustStats = [
@@ -40,22 +77,15 @@ const trustStats = [
 	{ label: 'Tiempo medio ahorrado', value: '42%' },
 ];
 
-const integrationLogos = ['Tiendanube', 'Shopify', 'WhatsApp API', 'Meta Ads', 'CRM', 'Catalogo'];
-
-const productPillars = [
-	{
-		title: 'Ventas y costos visibles',
-		copy: 'Reuni ingresos, carritos, conversaciones y seguimiento comercial en un mismo tablero.',
-	},
-	{
-		title: 'Campañas sin hojas sueltas',
-		copy: 'Segmenta clientes, dispara WhatsApp API y mide respuesta desde la misma operacion.',
-	},
-	{
-		title: 'Atencion con contexto',
-		copy: 'Cada mensaje llega con historial, estado del cliente y proximo paso recomendado.',
-	},
-];
+const featureCarouselImages = {
+	alt: 'Pantallas internas de BladeIA',
+	step1img1: showcaseInboxAuto,
+	step1img2: showcaseInboxPayments,
+	step2img1: showcaseCampaigns,
+	step2img2: showcaseTemplates,
+	step3img: showcaseCarts,
+	step4img: showcaseOperations,
+};
 
 const dashboardRows = [
 	['Ventas', '$37.0M', '+12.4%'],
@@ -65,6 +95,41 @@ const dashboardRows = [
 	['Campañas', '24', '+6.4%'],
 	['Respuestas', '94%', '+11.6%'],
 ];
+
+function LazyWhenVisible({ children, className, fallback = null, rootMargin = '360px' }) {
+	const containerRef = useRef(null);
+	const [isVisible, setIsVisible] = useState(false);
+
+	useEffect(() => {
+		if (isVisible) return undefined;
+		const node = containerRef.current;
+		if (!node) return undefined;
+
+		if (!('IntersectionObserver' in window)) {
+			setIsVisible(true);
+			return undefined;
+		}
+
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) {
+					setIsVisible(true);
+					observer.disconnect();
+				}
+			},
+			{ rootMargin },
+		);
+
+		observer.observe(node);
+		return () => observer.disconnect();
+	}, [isVisible, rootMargin]);
+
+	return (
+		<div ref={containerRef} className={className}>
+			{isVisible ? children : fallback}
+		</div>
+	);
+}
 
 const publicNavLinks = [
 	{ label: 'Producto', to: '/inicio', activePaths: ['/inicio'] },
@@ -126,7 +191,7 @@ function ProductPreview({ compact = false }) {
 				))}
 			</div>
 			<div className="login-product-preview__footer">
-				<strong>76%</strong>
+				<strong>86%</strong>
 				<span>de las tiendas mejoran seguimiento comercial en los primeros 30 dias</span>
 			</div>
 		</aside>
@@ -144,8 +209,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 					BladeIA
 				</span>
 				<div>
-					<h2 id="login-access-title">Bienvenido de nuevo</h2>
-					<small>Ingresa tus credenciales para acceder a tu cuenta.</small>
+					<h2 id="login-access-title">Ingreso</h2>
 				</div>
 			</div>
 
@@ -165,7 +229,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 			</label>
 
 			<label className="login-field">
-				<span>Contrasena</span>
+				<span>Contraseña</span>
 				<div className="login-password-control">
 					<input
 						type={showPassword ? 'text' : 'password'}
@@ -180,7 +244,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 						type="button"
 						className="login-password-toggle"
 						onClick={togglePassword}
-						aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+						aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
 					>
 						{showPassword ? 'Ocultar' : 'Mostrar'}
 					</button>
@@ -194,7 +258,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 			) : null}
 
 			<button className="login-submit" type="submit" disabled={submitting || !form.email || !form.password}>
-				<strong>{submitting ? 'Ingresando...' : 'Ingresar al panel'}</strong>
+				<strong>{submitting ? 'Ingresando...' : 'Ingresar'}</strong>
 			</button>
 		</form>
 	);
@@ -214,6 +278,8 @@ export default function LoginPage() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [navScrolled, setNavScrolled] = useState(false);
 	const [mobileNavOpen, setMobileNavOpen] = useState(false);
+	const pointerFrameRef = useRef(0);
+	const pointerPositionRef = useRef({ x: '50%', y: '42%' });
 
 	const requestedPath = location.state?.from?.pathname || '';
 	const redirectTo = resolveRedirectPath(user, requestedPath);
@@ -241,6 +307,14 @@ export default function LoginPage() {
 		setMobileNavOpen(false);
 	}, [publicPath]);
 
+	useEffect(() => {
+		return () => {
+			if (pointerFrameRef.current) {
+				window.cancelAnimationFrame(pointerFrameRef.current);
+			}
+		};
+	}, []);
+
 	async function handleSubmit(e) {
 		e.preventDefault();
 		setError('');
@@ -261,9 +335,19 @@ export default function LoginPage() {
 		const bounds = e.currentTarget.getBoundingClientRect();
 		const x = ((e.clientX - bounds.left) / bounds.width) * 100;
 		const y = ((e.clientY - bounds.top) / bounds.height) * 100;
+		const target = e.currentTarget;
 
-		e.currentTarget.style.setProperty('--pointer-x', `${x.toFixed(2)}%`);
-		e.currentTarget.style.setProperty('--pointer-y', `${y.toFixed(2)}%`);
+		pointerPositionRef.current = {
+			x: `${x.toFixed(2)}%`,
+			y: `${y.toFixed(2)}%`,
+		};
+
+		if (pointerFrameRef.current) return;
+		pointerFrameRef.current = window.requestAnimationFrame(() => {
+			target.style.setProperty('--pointer-x', pointerPositionRef.current.x);
+			target.style.setProperty('--pointer-y', pointerPositionRef.current.y);
+			pointerFrameRef.current = 0;
+		});
 	}
 
 	function isActiveNavLink(link) {
@@ -304,7 +388,7 @@ export default function LoginPage() {
 							</span>
 							<span className="login-nav__brand-text">BladeIA</span>
 						</Link>
-						<nav className="login-nav__links" aria-label="Navegacion publica">
+						<nav className="login-nav__links" aria-label="Navegación pública">
 							{publicNavLinks.map((link) => (
 								<Link
 									className={`login-nav__link${isActiveNavLink(link) ? ' login-nav__link--active' : ''}`}
@@ -343,7 +427,7 @@ export default function LoginPage() {
 						tabIndex={mobileNavOpen ? 0 : -1}
 						onClick={() => setMobileNavOpen(false)}
 					/>
-					<nav className="login-mobile-nav__panel" aria-label="Navegacion movil">
+					<nav className="login-mobile-nav__panel" aria-label="Navegación móvil">
 						<div className="login-mobile-nav__links">
 							{publicNavLinks.map((link) => (
 								<Link
@@ -369,11 +453,9 @@ export default function LoginPage() {
 			<main className="login-shell">
 				{publicPath === '/contacto' ? (
 					<section className="public-section public-section--single" aria-labelledby="contact-title">
-						<p className="login-eyebrow">Contacto</p>
-						<h1 id="contact-title">Conectemos tu operacion comercial.</h1>
+						<h1 id="contact-title">Hablemos de tu operación comercial.</h1>
 						<p className="login-lead">
-							Escribinos por email o WhatsApp y coordinamos el mejor camino para ordenar ventas, clientes y
-							campañas.
+							Escribinos por email o WhatsApp. Te ayudamos a ordenar la atención, hacer mejor seguimiento y aprovechar más conversaciones.
 						</p>
 
 						<div className="contact-list" aria-label="Canales de contacto">
@@ -388,28 +470,44 @@ export default function LoginPage() {
 
 				{publicPath === '/precios' ? (
 					<section className="public-section public-section--single" aria-labelledby="pricing-title">
-						<p className="login-eyebrow">Precios</p>
-						<h1 id="pricing-title">Planes para operar y crecer con WhatsApp.</h1>
+						<h1 id="pricing-title">Planes para empezar</h1>
 						<p className="login-lead">
-							El plan Basico ordena la atencion y el CRM. El Avanzado suma campañas, automatizacion y medicion
-							para escalar ventas.
+							Elegí la opción que mejor encaja con tu operación.
 						</p>
 
-						<div className="pricing-board" aria-label="Comparacion de planes">
-							{pricingPlans.map((plan) => (
-								<article className="pricing-plan" key={plan.name}>
-									<div>
-										<h2>{plan.name}</h2>
-										<strong>{plan.price}</strong>
-										<p>{plan.description}</p>
-									</div>
-									<ul>
-										{plan.features.map((feature) => (
-											<li key={feature}>{feature}</li>
-										))}
-									</ul>
-								</article>
-							))}
+						<div className="pricing-board login-pricing-board" aria-label="Comparación de planes">
+							{pricingPlans.map((plan) => {
+								const PlanIcon = plan.icon;
+
+								return (
+									<PricingCard.Card className={`login-pricing-card${plan.badge ? ' login-pricing-card--featured' : ''}`} key={plan.name}>
+										<PricingCard.Header className="login-pricing-card__header">
+											<PricingCard.Plan>
+												<PricingCard.PlanName className="login-pricing-card__name">
+													<PlanIcon aria-hidden="true" />
+													<span>{plan.name}</span>
+												</PricingCard.PlanName>
+												{plan.badge ? <PricingCard.Badge className="login-pricing-card__badge">{plan.badge}</PricingCard.Badge> : null}
+											</PricingCard.Plan>
+											<PricingCard.Price className="login-pricing-card__price">
+												<PricingCard.MainPrice>{plan.price}</PricingCard.MainPrice>
+												<PricingCard.Period>{plan.period}</PricingCard.Period>
+											</PricingCard.Price>
+										</PricingCard.Header>
+										<PricingCard.Body className="login-pricing-card__body">
+											<PricingCard.Description className="login-pricing-card__description">{plan.description}</PricingCard.Description>
+											<PricingCard.List className="login-pricing-card__features">
+												{plan.features.map((feature) => (
+													<PricingCard.ListItem className="login-pricing-card__feature" key={feature}>
+														<CheckCircle2 aria-hidden="true" />
+														<span>{feature}</span>
+													</PricingCard.ListItem>
+												))}
+											</PricingCard.List>
+										</PricingCard.Body>
+									</PricingCard.Card>
+								);
+							})}
 						</div>
 					</section>
 				) : null}
@@ -418,66 +516,52 @@ export default function LoginPage() {
 					<>
 						<section className="login-story" aria-label="Resumen de la plataforma">
 							<div className="login-hero-copy">
-								<p className="login-eyebrow">Confiado por equipos de e-commerce</p>
-								<h1>Resultados reales, en tiempo real.</h1>
+								<h1>Responde, retoma y recupera oportunidades desde WhatsApp.</h1>
 								<p className="login-lead">
-									BladeIA centraliza WhatsApp, ventas, CRM y campañas para que sepas que pasa, que cliente
-									responder y que accion comercial conviene tomar.
+									BladeIA reúne conversaciones, clientes, campañas y recuperación de carritos para que tu equipo responda mejor, haga seguimiento a tiempo y deje menos ventas dormidas.
 								</p>
 							</div>
 
-							<ProductPreview />
-
-							<div className="login-metrics" aria-label="Capacidades principales">
-								{commandMetrics.map((metric) => (
-									<article className="login-metric-card" key={metric.value}>
-										<strong>{metric.value}</strong>
-										<span>{metric.label}</span>
-									</article>
-								))}
+							<div className="login-dashboard-stack">
+								<ProductPreview />
+								<div className="login-trust-stats login-trust-stats--under-dashboard">
+									{trustStats.map((stat) => (
+										<article key={stat.label}>
+											<strong>{stat.value}</strong>
+											<span>{stat.label}</span>
+										</article>
+									))}
+								</div>
 							</div>
 						</section>
 
 						<section className="login-trust-section" aria-label="Prueba social">
-							<div className="login-trust-stats">
-								{trustStats.map((stat) => (
-									<article key={stat.label}>
-										<strong>{stat.value}</strong>
-										<span>{stat.label}</span>
-									</article>
-								))}
-							</div>
-							<div className="login-logo-wall" aria-label="Integraciones y canales">
-								{integrationLogos.map((logo) => (
-									<span key={logo}>{logo}</span>
+							<div className="login-metrics login-metrics--below-preview" aria-label="Capacidades principales">
+								{capabilityCards.map((metric) => (
+									<ProjectCard
+										className="login-capability-card"
+										description={metric.label}
+										imgSrc={metric.image}
+										key={metric.value}
+										title={metric.value}
+									/>
 								))}
 							</div>
 						</section>
 
-						<section className="login-pillar-section" aria-label="Que resuelve BladeIA">
-							{productPillars.map((pillar) => (
-								<article className="login-pillar-card" key={pillar.title}>
-									<h2>{pillar.title}</h2>
-									<p>{pillar.copy}</p>
-								</article>
-							))}
+						<section className="login-feature-carousel" aria-label="Recorrido por BladeIA">
+							<LazyWhenVisible className="login-feature-carousel__lazy" fallback={<div className="login-feature-carousel__placeholder" aria-hidden="true" />}>
+								<Suspense fallback={<div className="login-feature-carousel__placeholder" aria-hidden="true" />}>
+									<FeatureCarousel image={featureCarouselImages} />
+								</Suspense>
+							</LazyWhenVisible>
 						</section>
 					</>
 				) : null}
 			</main>
 
 			{isLogin ? (
-				<section className="login-access-section" aria-labelledby="login-access-title">
-					<div className="login-access-copy">
-						<p className="login-eyebrow">Acceso privado</p>
-						<h1>Gestiona tus ventas desde un solo panel.</h1>
-						<p>
-							Entra a la consola para responder WhatsApp, revisar clientes, activar campañas y medir el avance
-							comercial.
-						</p>
-						<ProductPreview compact />
-					</div>
-
+				<section className="login-access-section login-access-section--form-only" aria-labelledby="login-access-title">
 					<LoginForm
 						error={error}
 						form={form}
