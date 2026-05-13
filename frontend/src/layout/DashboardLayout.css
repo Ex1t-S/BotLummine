@@ -40,9 +40,9 @@
 .admin-brand-mark--logo {
 	width: 42px;
 	height: 42px;
-	padding: 8px;
+	padding: 0;
 	background: transparent;
-	border: 1px solid rgba(255, 255, 255, 0.14);
+	border: 0;
 	border-radius: 10px;
 }
 
@@ -52,6 +52,7 @@
 	height: 100%;
 	object-fit: contain;
 	object-position: center;
+	border-radius: inherit;
 }
 
 .admin-brand-copy {
@@ -423,7 +424,6 @@
 
 .admin-brand-mark--logo {
 	border-radius: 9px;
-	border-color: rgba(255, 255, 255, 0.16);
 	background: transparent;
 }
 
@@ -777,7 +777,7 @@
 .admin-brand-mark--logo {
 	width: 38px;
 	height: 38px;
-	padding: 7px;
+	padding: 0;
 	border: 1px solid transparent;
 	border-radius: 13px;
 	background: transparent;

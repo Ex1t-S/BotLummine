@@ -1416,22 +1416,18 @@ export async function updateWorkspace(req, res, next) {
 			});
 		}
 
-		if (platformAdmin && req.body?.branding) {
+		if (!platformAdmin && req.body?.branding) {
 			const branding = req.body.branding || {};
+			const brandingData = {
+				logoUrl: normalizeString(branding.logoUrl) || null,
+			};
+
 			await prisma.workspaceBranding.upsert({
 				where: { workspaceId },
-				update: {
-					logoUrl: normalizeString(branding.logoUrl) || null,
-					primaryColor: normalizeString(branding.primaryColor) || null,
-					secondaryColor: normalizeString(branding.secondaryColor) || null,
-					accentColor: normalizeString(branding.accentColor) || null,
-				},
+				update: brandingData,
 				create: {
 					workspaceId,
-					logoUrl: normalizeString(branding.logoUrl) || null,
-					primaryColor: normalizeString(branding.primaryColor) || null,
-					secondaryColor: normalizeString(branding.secondaryColor) || null,
-					accentColor: normalizeString(branding.accentColor) || null,
+					...brandingData,
 				},
 			});
 		}

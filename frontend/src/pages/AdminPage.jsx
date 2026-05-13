@@ -716,6 +716,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			setWorkspace(nextWorkspace);
 			setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 			setPaymentForm(mapPaymentForm(nextWorkspace));
+			await refreshMe();
 			showNotice(successMessage);
 		} catch (err) {
 			showError(err);
@@ -748,9 +749,6 @@ export default function AdminPage({ defaultTab = '' }) {
 				name: workspaceForm.name,
 				slug: workspaceForm.slug,
 				status: workspaceForm.status,
-				branding: {
-					logoUrl: workspaceForm.branding?.logoUrl || ''
-				},
 				aiConfig: {
 					businessName: workspaceForm.aiConfig?.businessName || '',
 					systemPrompt: workspaceForm.aiConfig?.systemPrompt || '',
@@ -766,6 +764,17 @@ export default function AdminPage({ defaultTab = '' }) {
 				tone: workspaceForm.aiConfig?.tone || ''
 			}
 		}, 'Contenido de marca guardado.');
+	}
+
+	async function handleSaveBrandLogo(event) {
+		event.preventDefault();
+		if (platformAdmin) return;
+
+		await saveWorkspace({
+			branding: {
+				logoUrl: workspaceForm.branding?.logoUrl || ''
+			}
+		}, 'Logo de marca guardado.');
 	}
 
 	async function handleSavePayment(event) {
@@ -1167,7 +1176,6 @@ export default function AdminPage({ defaultTab = '' }) {
 											<option value="ARCHIVED">ARCHIVED</option>
 										</Select>
 										<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
-										<Input label="Logo de la marca (URL)" value={workspaceForm.branding?.logoUrl || ''} onChange={(value) => setNestedForm('branding', 'logoUrl', value)} />
 										<Textarea label="Contexto comercial" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
 										<div className="tenant-admin-context-tools">
 											<button type="button" disabled={saving || loading || generatingBusinessContext || !selectedWorkspaceId} onClick={handleGenerateBusinessContext}>
@@ -1214,6 +1222,17 @@ export default function AdminPage({ defaultTab = '' }) {
 										)}
 									</div>
 								</div>
+								<form className="tenant-admin-logo-form" onSubmit={handleSaveBrandLogo}>
+									<Input
+										label="Logo de la marca (URL)"
+										value={workspaceForm.branding?.logoUrl || ''}
+										placeholder="https://tu-tienda.com/logo.png"
+										onChange={(value) => setNestedForm('branding', 'logoUrl', value)}
+									/>
+									<button type="submit" disabled={saving || loading || !selectedWorkspaceId}>
+										Guardar logo
+									</button>
+								</form>
 								{isShopifySelected ? (
 									<div className="tenant-admin-provider-card">
 										<div>

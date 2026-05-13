@@ -348,6 +348,35 @@
 	min-width: 0;
 }
 
+.tenant-admin-logo-form {
+	display: grid;
+	grid-template-columns: minmax(240px, 1fr) auto;
+	gap: 10px;
+	align-items: end;
+	padding: 12px;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+
+.tenant-admin-logo-form button {
+	min-height: 42px;
+	border: 1px solid #0a5f59;
+	border-radius: 8px;
+	background: #0f766e;
+	color: #ffffff;
+	font: inherit;
+	font-weight: 800;
+	padding: 11px 14px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tenant-admin-logo-form button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
 .tenant-admin-selected-brand {
 	display: flex;
 	flex-wrap: wrap;
@@ -461,11 +490,18 @@
 }
 
 .tenant-admin-brand-logo-box {
-	width: 72px;
-	height: 72px;
+	width: 88px;
+	height: 64px;
 	border: 1px solid #d9e2ef;
 	border-radius: 8px;
-	background: #f8fafc;
+	background:
+		linear-gradient(45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
+		linear-gradient(-45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
+		linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
+		#ffffff;
+	background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+	background-size: 16px 16px;
 	display: grid;
 	place-items: center;
 	overflow: hidden;
@@ -476,7 +512,7 @@
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
-	padding: 8px;
+	padding: 6px;
 }
 
 .tenant-admin-brand-logo-box span {
@@ -512,6 +548,16 @@
 .tenant-admin-brand-copy span {
 	color: #64748b;
 	font-size: 13px;
+}
+
+@media (max-width: 720px) {
+	.tenant-admin-logo-form {
+		grid-template-columns: 1fr;
+	}
+
+	.tenant-admin-logo-form button {
+		width: 100%;
+	}
 }
 
 .tenant-admin-table-wrap {
@@ -1458,6 +1504,34 @@
 	background: #ffffff;
 }
 
+.tenant-admin-logo-form {
+	border-color: var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-lg, 12px);
+	background: var(--ui-surface-soft, #f8fafb);
+	box-shadow: none;
+}
+
+.tenant-admin-logo-form button {
+	border-color: var(--ui-primary-strong, #0a5f59);
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+}
+
+.tenant-admin-logo-form button:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+}
+
+.tenant-admin-brand-logo-box {
+	background:
+		linear-gradient(45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
+		linear-gradient(-45deg, rgba(148, 163, 184, 0.14) 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
+		linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.14) 75%),
+		#ffffff;
+	background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+	background-size: 16px 16px;
+}
+
 .admin-field input:focus,
 .admin-field select:focus,
 .admin-field textarea:focus {
@@ -1539,6 +1613,7 @@
 .dark .admin-shell .admin-content .tenant-admin-empty,
 .dark .admin-shell .admin-content .tenant-admin-table-wrap,
 .dark .admin-shell .admin-content .tenant-admin-brand-logo-box,
+.dark .admin-shell .admin-content .tenant-admin-logo-form,
 .dark .admin-shell .admin-content .workspace-analytics-card,
 .dark .admin-shell .admin-content .workspace-card-hero,
 .dark .admin-shell .admin-content .workspace-card-progress > div,
@@ -1552,11 +1627,23 @@
 }
 
 .dark .admin-shell .admin-content .tenant-admin-tabs,
+.dark .admin-shell .admin-content .tenant-admin-logo-form,
 .dark .admin-shell .admin-content .workspace-card-hero,
 .dark .admin-shell .admin-content .workspace-card-progress > div,
 .dark .admin-shell .admin-content .workspace-card-stats > div,
 .dark .admin-shell .admin-content .workspace-card-chart {
 	background: var(--ui-surface-soft, #192234) !important;
+}
+
+.dark .admin-shell .admin-content .tenant-admin-brand-logo-box {
+	background:
+		linear-gradient(45deg, rgba(148, 163, 184, 0.12) 25%, transparent 25%),
+		linear-gradient(-45deg, rgba(148, 163, 184, 0.12) 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.12) 75%),
+		linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.12) 75%),
+		var(--ui-surface-soft, #192234) !important;
+	background-position: 0 0, 0 8px, 8px -8px, -8px 0 !important;
+	background-size: 16px 16px !important;
 }
 
 .dark .admin-shell .admin-content .tenant-admin-header h2,
