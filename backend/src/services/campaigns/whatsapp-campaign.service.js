@@ -1367,6 +1367,22 @@ function getRecipientDispatchAt(recipient = {}) {
 	return recipient.sentAt || recipient.deliveredAt || recipient.readAt || null;
 }
 
+function getLatestDate(...values) {
+	const dates = values
+		.filter(Boolean)
+		.map((value) => new Date(value))
+		.filter((date) => !Number.isNaN(date.getTime()));
+
+	if (!dates.length) return null;
+
+	return dates.reduce((latest, date) => (date.getTime() > latest.getTime() ? date : latest), dates[0]);
+}
+
+function getOrderConversionAt(order = {}) {
+	if (!order) return null;
+	return getLatestDate(order.orderUpdatedAt, order.updatedAt, order.orderCreatedAt, order.createdAt);
+}
+
 function getAbandonedCartCheckoutId(externalKey = '') {
 	const normalized = normalizeString(externalKey || '');
 	if (!normalized.toLowerCase().startsWith('abandoned_cart:')) {
@@ -1379,6 +1395,15 @@ function getAbandonedCartCheckoutId(externalKey = '') {
 function isPaidLikePaymentStatus(paymentStatus = '') {
 	const normalized = normalizeString(paymentStatus || '').toLowerCase();
 	return ['paid', 'partially_paid', 'authorized', 'pagado', 'pago aprobado'].includes(normalized);
+}
+
+function isCompletedLikeStatus(status = '') {
+	const normalized = normalizeString(status || '').toLowerCase();
+	return ['completed', 'complete', 'fulfilled', 'closed', 'completado', 'finalizado'].includes(normalized);
+}
+
+function isPaidOrCompletedOrder(order = {}) {
+	return isPaidLikePaymentStatus(order.paymentStatus) || isCompletedLikeStatus(order.status);
 }
 
 function messageSuggestsCompletedPurchase(text = '') {
@@ -1484,7 +1509,15 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 					where: {
 						workspaceId: resolvedWorkspaceId,
 						normalizedPhone: { in: normalizedPhones },
-						orderCreatedAt: earliestDispatchAt ? { gte: earliestDispatchAt } : undefined,
+						...(earliestDispatchAt
+							? {
+									OR: [
+										{ orderCreatedAt: { gte: earliestDispatchAt } },
+										{ orderUpdatedAt: { gte: earliestDispatchAt } },
+										{ updatedAt: { gte: earliestDispatchAt } },
+									],
+							  }
+							: {}),
 					},
 					orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
 					select: {
@@ -1494,6 +1527,8 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 						orderNumber: true,
 						orderCreatedAt: true,
 						orderUpdatedAt: true,
+						updatedAt: true,
+						createdAt: true,
 						totalAmount: true,
 						currency: true,
 						paymentStatus: true,
@@ -1573,10 +1608,10 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 			: null;
 		const matchingOrderByCart = dispatchAt && abandonedCartToken
 			? (ordersByToken.get(abandonedCartToken) || []).find((order) => {
-					const effectiveOrderTimestamp = order.orderUpdatedAt || order.orderCreatedAt || null;
+					const effectiveOrderTimestamp = getOrderConversionAt(order);
 					if (!effectiveOrderTimestamp) return false;
 					return (
-						isPaidLikePaymentStatus(order.paymentStatus) &&
+						isPaidOrCompletedOrder(order) &&
 						new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime()
 					);
 			  }) || null
@@ -1584,9 +1619,12 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 		const purchaseOrder = matchingOrderByCart || (
 			dispatchAt && normalizedPhone
 				? (ordersByPhone.get(normalizedPhone) || []).find((order) => {
-						const effectiveOrderTimestamp = order.orderUpdatedAt || order.orderCreatedAt || null;
+						const effectiveOrderTimestamp = getOrderConversionAt(order);
 						if (!effectiveOrderTimestamp) return false;
-						return new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime();
+						return (
+							isPaidOrCompletedOrder(order) &&
+							new Date(effectiveOrderTimestamp).getTime() >= new Date(dispatchAt).getTime()
+						);
 				  }) || null
 				: null
 		);
@@ -1612,7 +1650,7 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 			chatConfirmedPurchaseAt: purchaseChatMessage?.createdAt || null,
 			chatConfirmedPurchaseBody: normalizeString(purchaseChatMessage?.body || '') || null,
 			conversionSignal,
-			purchaseAt: purchaseOrder?.orderUpdatedAt || purchaseOrder?.orderCreatedAt || null,
+			purchaseAt: getOrderConversionAt(purchaseOrder),
 			purchaseOrderId: normalizeString(purchaseOrder?.orderId || '') || null,
 			purchaseOrderNumber: normalizeString(purchaseOrder?.orderNumber || '') || null,
 			purchasePaymentStatus: normalizeString(purchaseOrder?.paymentStatus || '') || null,
@@ -1651,19 +1689,24 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 		});
 	}
 
+	const mergedRecipientInsights = [...recipientsById.values()];
+	const mergedPurchasedRecipients = mergedRecipientInsights.filter((insight) => insight.purchaseDetected).length;
+	const mergedChatConfirmedRecipients = mergedRecipientInsights.filter((insight) => insight.chatConfirmedPurchase).length;
+	const mergedConversionSignalRecipients = mergedRecipientInsights.filter((insight) => insight.conversionSignal).length;
+
 	return {
 		summary: {
 			...emptySummary,
 			repliedRecipients,
 			effectiveReadRecipients,
-			purchasedRecipients: finalPurchasedRecipients,
-			chatConfirmedPurchaseRecipients: finalChatConfirmedRecipients,
-			conversionSignalRecipients: finalConversionSignalRecipients,
+			purchasedRecipients: Math.max(finalPurchasedRecipients, mergedPurchasedRecipients),
+			chatConfirmedPurchaseRecipients: Math.max(finalChatConfirmedRecipients, mergedChatConfirmedRecipients),
+			conversionSignalRecipients: Math.max(finalConversionSignalRecipients, mergedConversionSignalRecipients),
 			replyRate: base > 0 ? repliedRecipients / base : 0,
 			effectiveReadRate: base > 0 ? effectiveReadRecipients / base : 0,
-			purchaseRate: base > 0 ? finalPurchasedRecipients / base : 0,
-			chatConfirmedPurchaseRate: base > 0 ? finalChatConfirmedRecipients / base : 0,
-			conversionSignalRate: base > 0 ? finalConversionSignalRecipients / base : 0,
+			purchaseRate: base > 0 ? Math.max(finalPurchasedRecipients, mergedPurchasedRecipients) / base : 0,
+			chatConfirmedPurchaseRate: base > 0 ? Math.max(finalChatConfirmedRecipients, mergedChatConfirmedRecipients) / base : 0,
+			conversionSignalRate: base > 0 ? Math.max(finalConversionSignalRecipients, mergedConversionSignalRecipients) / base : 0,
 			attributedRevenue: persistedSummary.attributedRevenue || 0,
 			attributedCurrency: persistedSummary.attributedCurrency || 'ARS',
 			conversionsBySource: finalConversionsBySource,

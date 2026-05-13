@@ -119,8 +119,19 @@ export function messageSuggestsCompletedPurchase(text = '') {
 	return positivePatterns.some((pattern) => pattern.test(normalized));
 }
 
+function getLatestDate(...values) {
+	const dates = values
+		.filter(Boolean)
+		.map((value) => new Date(value))
+		.filter((date) => !Number.isNaN(date.getTime()));
+
+	if (!dates.length) return null;
+
+	return dates.reduce((latest, date) => (date.getTime() > latest.getTime() ? date : latest), dates[0]);
+}
+
 function getOrderConvertedAt(order = {}) {
-	return order.orderUpdatedAt || order.orderCreatedAt || order.updatedAt || order.createdAt || new Date();
+	return getLatestDate(order.orderUpdatedAt, order.updatedAt, order.orderCreatedAt, order.createdAt) || new Date();
 }
 
 function getOrderMatchValues(order = {}) {
@@ -469,6 +480,17 @@ export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPAC
 					order,
 					matchReason,
 				}));
+			} else {
+				const identityMatchReason = recipientMatchesOrderIdentity(recipient, orderValues);
+				if (identityMatchReason) {
+					conversions.push(buildOrderConversionPayload({
+						source: 'PENDING_PAYMENT',
+						confidence: identityMatchReason === 'name_exact' ? 'LOW' : 'MEDIUM',
+						recipient,
+						order,
+						matchReason: `pending_payment_${identityMatchReason}`,
+					}));
+				}
 			}
 			continue;
 		}
