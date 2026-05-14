@@ -138,10 +138,13 @@ export async function sendAndPersistOutbound({
 	}
 
 	if (!sendResult?.ok) {
-		throw new Error(
+		const error = new Error(
 			sendResult?.error?.message ||
 			'No se pudo enviar el mensaje por WhatsApp.'
 		);
+		error.status = 400;
+		error.details = sendResult?.error || null;
+		throw error;
 	}
 
 	const createdMessage = await prisma.message.create({

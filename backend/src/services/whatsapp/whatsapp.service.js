@@ -224,6 +224,98 @@ export async function sendWhatsAppMedia({
 	});
 }
 
+async function sendWhatsAppLinkedMedia({
+	workspaceId = null,
+	to,
+	mediaType,
+	mediaUrl,
+	caption = '',
+	filename = '',
+}) {
+	const cleanMediaType = String(mediaType || '').trim().toLowerCase();
+	const cleanMediaUrl = String(mediaUrl || '').trim();
+	const cleanCaption = String(caption || '').trim();
+	const cleanFilename = String(filename || '').trim();
+	const supportedTypes = new Set(['image', 'video', 'audio', 'document']);
+
+	if (!supportedTypes.has(cleanMediaType) || !cleanMediaUrl) {
+		return {
+			ok: false,
+			provider: 'whatsapp-cloud-api',
+			model: null,
+			error: { message: 'Falta mediaUrl valido para enviar por WhatsApp.' },
+		};
+	}
+
+	const mediaPayload = {
+		link: cleanMediaUrl,
+	};
+
+	if (cleanCaption && ['image', 'video', 'document'].includes(cleanMediaType)) {
+		mediaPayload.caption = cleanCaption;
+	}
+
+	if (cleanMediaType === 'document' && cleanFilename) {
+		mediaPayload.filename = cleanFilename;
+	}
+
+	return sendWhatsAppRequest({
+		workspaceId,
+		to,
+		debugLabel: 'MEDIA_LINK',
+		payload: {
+			type: cleanMediaType,
+			[cleanMediaType]: mediaPayload,
+		},
+	});
+}
+
+export async function sendWhatsAppImage({ workspaceId = null, to, mediaUrl, caption = '' }) {
+	return sendWhatsAppLinkedMedia({
+		workspaceId,
+		to,
+		mediaType: 'image',
+		mediaUrl,
+		caption,
+	});
+}
+
+export async function sendWhatsAppDocument({
+	workspaceId = null,
+	to,
+	mediaUrl,
+	filename = '',
+	caption = '',
+}) {
+	return sendWhatsAppLinkedMedia({
+		workspaceId,
+		to,
+		mediaType: 'document',
+		mediaUrl,
+		filename,
+		caption,
+	});
+}
+
+export async function sendWhatsAppVideo({ workspaceId = null, to, mediaUrl, caption = '' }) {
+	return sendWhatsAppLinkedMedia({
+		workspaceId,
+		to,
+		mediaType: 'video',
+		mediaUrl,
+		caption,
+	});
+}
+
+export async function sendWhatsAppAudio({ workspaceId = null, to, mediaUrl }) {
+	return sendWhatsAppLinkedMedia({
+		workspaceId,
+		to,
+		mediaType: 'audio',
+		mediaUrl,
+	});
+}
+
 export async function sendWhatsAppInteractiveList({
 	workspaceId = null,
 	to,

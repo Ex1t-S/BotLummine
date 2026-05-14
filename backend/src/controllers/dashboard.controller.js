@@ -1778,6 +1778,14 @@ export async function postConversationMessage(req, res, next) {
 			ok: true,
 		});
 	} catch (error) {
+		if (error?.status && error.status < 500) {
+			return res.status(error.status).json({
+				ok: false,
+				error: error.message || 'No se pudo enviar el mensaje.',
+				details: error.details || null,
+			});
+		}
+
 		next(error);
 	} finally {
 		if (uploadedFile?.path) {

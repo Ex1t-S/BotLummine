@@ -6,7 +6,7 @@ import { BookOpen, Languages, Paperclip, Send, Smile, StopCircle, Trash2, Wand2,
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +92,19 @@ export default function AiChatInput({
 		setEmojiOpen(false);
 	};
 
+	const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+		if (!onUploadFile || disabled || isLoading || selectedFile) return;
+
+		const clipboardItems = Array.from(event.clipboardData?.items || []);
+		const imageItem = clipboardItems.find((item) => item.kind === "file" && item.type.startsWith("image/"));
+		const pastedFile = imageItem?.getAsFile() || null;
+
+		if (!pastedFile) return;
+
+		event.preventDefault();
+		onUploadFile(pastedFile);
+	};
+
 	return (
 		<div className="ai-chat-input w-full bg-background">
 			{error ? <div className="inbox-composer-feedback inbox-composer-feedback--error">{error}</div> : null}
@@ -164,17 +177,18 @@ export default function AiChatInput({
 					) : null}
 
 					<Popover open={commandOpen} onOpenChange={setCommandOpen}>
-						<PopoverTrigger asChild>
+						<PopoverAnchor asChild>
 							<Textarea
 								value={input}
 								onChange={(event) => setInput(event.target.value)}
 								onKeyDown={handleKeyDown}
+								onPaste={handlePaste}
 								placeholder={placeholder}
 								disabled={disabled || isLoading}
 								className="inbox-textarea min-h-[44px] max-h-[160px] resize-none rounded-xl px-3 py-2 text-sm"
 								rows={1}
 							/>
-						</PopoverTrigger>
+						</PopoverAnchor>
 						<PopoverContent className="w-60 p-0" align="start">
 							<Command>
 								<CommandInput placeholder="Buscar herramienta..." />

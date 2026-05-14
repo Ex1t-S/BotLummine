@@ -6,14 +6,10 @@ import {
 	Bot,
 	CheckCheck,
 	Clock3,
-	Copy,
-	CornerUpLeft,
 	Eraser,
 	EyeOff,
-	Forward,
 	Inbox,
 	List,
-	MoreVertical,
 	RefreshCw,
 	RotateCcw,
 	UserRound,
@@ -21,13 +17,6 @@ import {
 import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import AiChatInput from '../components/ui/ai-chat-input';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
 import MessageConversation from '../components/ui/messaging-conversation';
 import './InboxPage.css';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -551,62 +540,6 @@ function AvatarImageOrFallback({ url = '', fallback = '?' }) {
 	);
 }
 
-function copyMessageText(message = {}) {
-	const text = String(message.body || '').trim();
-	if (!text) return;
-
-	if (navigator?.clipboard?.writeText) {
-		navigator.clipboard.writeText(text).catch(() => {});
-		return;
-	}
-
-	const textarea = document.createElement('textarea');
-	textarea.value = text;
-	textarea.setAttribute('readonly', '');
-	textarea.style.position = 'fixed';
-	textarea.style.opacity = '0';
-	document.body.appendChild(textarea);
-	textarea.select();
-	document.execCommand('copy');
-	document.body.removeChild(textarea);
-}
-
-function MessageActionMenu({ message }) {
-	const hasBody = Boolean(String(message?.body || '').trim());
-
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<button type="button" className="inbox-message-menu-trigger" aria-label="Acciones del mensaje">
-					<MoreVertical size={16} strokeWidth={2.4} aria-hidden="true" />
-				</button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent className="inbox-message-menu" align="end" sideOffset={6}>
-				<DropdownMenuItem
-					className="inbox-message-menu-item"
-					disabled={!hasBody}
-					onSelect={(event) => {
-						event.preventDefault();
-						copyMessageText(message);
-					}}
-				>
-					<Copy size={14} strokeWidth={2.3} aria-hidden="true" />
-					<span>Copiar</span>
-				</DropdownMenuItem>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem className="inbox-message-menu-item" disabled>
-					<CornerUpLeft size={14} strokeWidth={2.3} aria-hidden="true" />
-					<span>Responder</span>
-				</DropdownMenuItem>
-				<DropdownMenuItem className="inbox-message-menu-item" disabled>
-					<Forward size={14} strokeWidth={2.3} aria-hidden="true" />
-					<span>Reenviar</span>
-				</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
-	);
-}
-
 function MessageBubble({ message, conversation }) {
 	const isOutbound = message.direction === 'OUTBOUND';
 	const interactivePayload = getInteractivePayload(message);
@@ -690,7 +623,6 @@ function MessageBubble({ message, conversation }) {
 				</div>
 				)}
 			</div>
-			<MessageActionMenu message={message} />
 			<div className="inbox-message-meta">
 				<span className="inbox-message-sender-pill">
 					{senderLabel}
