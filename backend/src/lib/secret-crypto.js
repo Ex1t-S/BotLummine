@@ -18,6 +18,18 @@ export function hasSecretEncryptionKey() {
 	return Boolean(getEncryptionSecret());
 }
 
+export function validateSecretEncryptionConfig() {
+	const secret = getEncryptionSecret();
+
+	if (secret && secret.length < 64) {
+		throw new Error('SECRET_ENCRYPTION_KEY debe tener al menos 64 caracteres.');
+	}
+
+	if (process.env.NODE_ENV === 'production' && !secret) {
+		throw new Error('SECRET_ENCRYPTION_KEY es obligatorio en production para guardar secretos cifrados.');
+	}
+}
+
 export function encryptSecret(value) {
 	if (value === null || value === undefined) return value;
 	const normalized = String(value);

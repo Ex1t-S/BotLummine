@@ -19,9 +19,11 @@ import adminRoutes from './routes/admin.routes.js';
 import { prisma } from './lib/prisma.js';
 import { logger } from './lib/logger.js';
 import { attachRequestId } from './lib/request-id.js';
+import { validateSecretEncryptionConfig } from './lib/secret-crypto.js';
 
 dotenv.config();
 validateAuthConfig();
+validateSecretEncryptionConfig();
 
 const app = express();
 app.set('trust proxy', 1);
