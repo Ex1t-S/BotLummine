@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { getTiendanubeConfig } from '../services/tiendanube/client.js';
 import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
@@ -69,6 +70,65 @@ function getRegisterSecret() {
 	).trim();
 }
 
+function getTiendanubeStateSecret() {
+	return String(
+		process.env.TIENDANUBE_STATE_SECRET ||
+		process.env.TIENDANUBE_CLIENT_SECRET ||
+		process.env.TIENDANUBE_REGISTER_SECRET ||
+		''
+	).trim();
+}
+
+function signTiendanubeState(payload = {}) {
+	const secret = getTiendanubeStateSecret();
+	if (!secret) {
+		throw new Error('Falta TIENDANUBE_STATE_SECRET o TIENDANUBE_CLIENT_SECRET para firmar OAuth state.');
+	}
+
+	const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+	const signature = crypto.createHmac('sha256', secret).update(body).digest('base64url');
+	return `${body}.${signature}`;
+}
+
+function verifyTiendanubeState(value = '') {
+	const secret = getTiendanubeStateSecret();
+	if (!secret) {
+		throw new Error('Falta TIENDANUBE_STATE_SECRET o TIENDANUBE_CLIENT_SECRET para validar OAuth state.');
+	}
+
+	const [body, signature] = String(value || '').trim().split('.');
+	if (!body || !signature) {
+		if (process.env.NODE_ENV !== 'production' && value) {
+			return { workspaceId: String(value).trim() };
+		}
+		throw new Error('State Tiendanube invalido.');
+	}
+
+	const expected = crypto.createHmac('sha256', secret).update(body).digest('base64url');
+	if (
+		signature.length !== expected.length ||
+		!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+	) {
+		throw new Error('State Tiendanube no coincide.');
+	}
+
+	const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+	if (!payload?.workspaceId) {
+		throw new Error('State Tiendanube sin workspaceId.');
+	}
+
+	const ageMs = Date.now() - Number(payload.ts || 0);
+	if (!Number.isFinite(ageMs) || ageMs > 60 * 60 * 1000) {
+		throw new Error('State Tiendanube vencido.');
+	}
+
+	return payload;
+}
+
+function resolveTiendanubeStateWorkspaceId(value = '') {
+	return String(verifyTiendanubeState(value)?.workspaceId || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+}
+
 function isAuthorizedAdminRequest(req) {
 	if (req.user) {
 		return true;
@@ -100,7 +160,7 @@ function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const url = new URL(`https://www.tiendanube.com/apps/${appId}/authorize`);
 	url.searchParams.set('redirect_uri', redirectUri);
 	url.searchParams.set('response_type', 'code');
-	url.searchParams.set('state', workspaceId);
+	url.searchParams.set('state', signTiendanubeState({ workspaceId, ts: Date.now(), nonce: crypto.randomUUID() }));
 	url.searchParams.set(
 		'scope',
 		process.env.TIENDANUBE_APP_SCOPES || 'read_orders read_products'
@@ -537,7 +597,7 @@ export async function handleTiendanubeCallback(req, res) {
 			error: callbackError,
 			error_description: callbackErrorDescription
 		} = req.query;
-		const workspaceId = String(req.query?.state || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+		const workspaceId = resolveTiendanubeStateWorkspaceId(req.query?.state || '');
 
 		if (callbackError) {
 			return redirectTiendanubeInstallResult(res, {
@@ -588,7 +648,8 @@ export async function handleTiendanubeCallback(req, res) {
 				status: 'ACTIVE',
 				rawPayload: {
 					source: 'oauth-callback',
-					token: data
+					userId: String(data.user_id),
+					scope: data.scope || null
 				}
 			},
 			create: {
@@ -600,7 +661,8 @@ export async function handleTiendanubeCallback(req, res) {
 				status: 'ACTIVE',
 				rawPayload: {
 					source: 'oauth-callback',
-					token: data
+					userId: String(data.user_id),
+					scope: data.scope || null
 				}
 			}
 		});
@@ -681,7 +743,12 @@ export async function handleTiendanubeCallback(req, res) {
 			'Error en callback Tiendanube:',
 			error.response?.data || error.message
 		);
-		const workspaceId = String(req.query?.state || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+		let workspaceId = DEFAULT_WORKSPACE_ID;
+		try {
+			workspaceId = resolveTiendanubeStateWorkspaceId(req.query?.state || '');
+		} catch {
+			workspaceId = DEFAULT_WORKSPACE_ID;
+		}
 		const rawMessage =
 			error.response?.data?.error_description ||
 			error.response?.data?.error ||

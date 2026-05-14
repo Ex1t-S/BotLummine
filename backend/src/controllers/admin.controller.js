@@ -7,6 +7,9 @@ import {
 	getWorkspacePublicPayload,
 	isPlatformAdmin,
 	requireRequestWorkspaceId,
+	sanitizeCommerceConnection,
+	sanitizeLogisticsConnection,
+	sanitizeWhatsAppChannel,
 } from '../services/workspaces/workspace-context.service.js';
 import {
 	getCatalogSummary,
@@ -1737,10 +1740,7 @@ export async function upsertLogisticsConnection(req, res, next) {
 
 		return res.json({
 			ok: true,
-			connection: {
-				...connection,
-				password: undefined,
-			},
+			connection: sanitizeLogisticsConnection(connection),
 		});
 	} catch (error) {
 		next(error);
@@ -1820,10 +1820,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 
 		return res.json({
 			ok: true,
-			channel: {
-				...channel,
-				accessToken: undefined,
-			},
+			channel: sanitizeWhatsAppChannel(channel),
 		});
 	} catch (error) {
 		next(error);
@@ -1929,11 +1926,7 @@ export async function upsertCommerceConnection(req, res, next) {
 
 		return res.json({
 			ok: true,
-			connection: {
-				...connection,
-				accessToken: undefined,
-				refreshToken: undefined,
-			},
+			connection: sanitizeCommerceConnection(connection),
 		});
 	} catch (error) {
 		next(error);

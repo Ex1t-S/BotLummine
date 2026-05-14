@@ -227,6 +227,78 @@ export async function resolveWorkspaceIdFromPhoneNumberId(phoneNumberId = '') {
 	return null;
 }
 
+const SECRET_PAYLOAD_KEY_PATTERN = /(access[_-]?token|refresh[_-]?token|token|secret|password|authorization|cookie|client[_-]?secret|verify[_-]?token)/i;
+
+function sanitizeSecretPayload(value, depth = 0) {
+	if (value === null || value === undefined) return value;
+	if (depth > 8) return '[truncated]';
+	if (Array.isArray(value)) {
+		return value.map((item) => sanitizeSecretPayload(item, depth + 1));
+	}
+	if (typeof value !== 'object') return value;
+
+	return Object.fromEntries(
+		Object.entries(value)
+			.filter(([key]) => !SECRET_PAYLOAD_KEY_PATTERN.test(key))
+			.map(([key, item]) => [key, sanitizeSecretPayload(item, depth + 1)])
+	);
+}
+
+export function sanitizeCommerceConnection(connection = {}) {
+	const {
+		accessToken: _accessToken,
+		refreshToken: _refreshToken,
+		rawPayload,
+		...safeConnection
+	} = connection || {};
+
+	return {
+		...safeConnection,
+		rawPayload: rawPayload ? sanitizeSecretPayload(rawPayload) : rawPayload,
+	};
+}
+
+export function sanitizeLogisticsConnection(connection = {}) {
+	const {
+		password: _password,
+		config,
+		...safeConnection
+	} = connection || {};
+
+	return {
+		...safeConnection,
+		config: config ? sanitizeSecretPayload(config) : config,
+	};
+}
+
+export function sanitizeStoreInstallation(installation = {}) {
+	const {
+		accessToken: _accessToken,
+		refreshToken: _refreshToken,
+		rawPayload,
+		...safeInstallation
+	} = installation || {};
+
+	return {
+		...safeInstallation,
+		rawPayload: rawPayload ? sanitizeSecretPayload(rawPayload) : rawPayload,
+	};
+}
+
+export function sanitizeWhatsAppChannel(channel = {}) {
+	const {
+		accessToken: _accessToken,
+		verifyToken: _verifyToken,
+		rawPayload,
+		...safeChannel
+	} = channel || {};
+
+	return {
+		...safeChannel,
+		rawPayload: rawPayload ? sanitizeSecretPayload(rawPayload) : rawPayload,
+	};
+}
+
 export function getWorkspacePublicPayload(workspace = {}) {
 	return {
 		id: workspace.id,
@@ -254,16 +326,16 @@ export function getWorkspacePublicPayload(workspace = {}) {
 			  }
 			: null,
 		commerceConnections: Array.isArray(workspace.commerceConnections)
-			? workspace.commerceConnections
+			? workspace.commerceConnections.map(sanitizeCommerceConnection)
 			: [],
 		logisticsConnections: Array.isArray(workspace.logisticsConnections)
-			? workspace.logisticsConnections
+			? workspace.logisticsConnections.map(sanitizeLogisticsConnection)
 			: [],
 		storeInstallations: Array.isArray(workspace.storeInstallations)
-			? workspace.storeInstallations
+			? workspace.storeInstallations.map(sanitizeStoreInstallation)
 			: [],
 		whatsappChannels: Array.isArray(workspace.whatsappChannels)
-			? workspace.whatsappChannels
+			? workspace.whatsappChannels.map(sanitizeWhatsAppChannel)
 			: [],
 		createdAt: workspace.createdAt,
 		updatedAt: workspace.updatedAt,

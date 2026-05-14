@@ -310,7 +310,7 @@ export async function handleShopifyCallback(req, res) {
 					source: 'oauth-callback',
 					apiVersion: getApiVersion(),
 					shop,
-					token: tokenData
+					scope: tokenData.scope || getScopes()
 				}
 			},
 			create: {
@@ -327,7 +327,7 @@ export async function handleShopifyCallback(req, res) {
 					source: 'oauth-callback',
 					apiVersion: getApiVersion(),
 					shop,
-					token: tokenData
+					scope: tokenData.scope || getScopes()
 				}
 			}
 		});

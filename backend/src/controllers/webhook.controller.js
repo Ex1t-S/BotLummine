@@ -277,6 +277,33 @@ function getShopifyWebhookSecret() {
 	).trim();
 }
 
+function getWhatsAppWebhookSecret() {
+	return String(
+		process.env.WHATSAPP_APP_SECRET ||
+		process.env.META_APP_SECRET ||
+		process.env.FACEBOOK_APP_SECRET ||
+		''
+	).trim();
+}
+
+function isWhatsAppWebhookSignatureRequired() {
+	if (getWhatsAppWebhookSecret()) return true;
+	return process.env.NODE_ENV === 'production';
+}
+
+function verifyWhatsAppWebhook(rawBodyBuffer, signatureHeader) {
+	const secret = getWhatsAppWebhookSecret();
+	if (!secret || !signatureHeader) return false;
+
+	const provided = String(signatureHeader).replace(/^sha256=/i, '');
+	const expected = crypto
+		.createHmac('sha256', secret)
+		.update(rawBodyBuffer)
+		.digest('hex');
+
+	return timingSafeEquals(provided, expected);
+}
+
 function verifyShopifyWebhook(rawBodyBuffer, signatureHeader) {
 	const secret = getShopifyWebhookSecret();
 	if (!secret || !signatureHeader) return false;
@@ -360,9 +387,41 @@ export function verifyWhatsappWebhook(req, res) {
 
 export async function receiveWhatsappWebhook(req, res) {
 	try {
+		const rawBodyBuffer = Buffer.isBuffer(req.body)
+			? req.body
+			: Buffer.from(JSON.stringify(req.body || {}));
+		const signatureHeader = req.headers['x-hub-signature-256'];
+
+		if (isWhatsAppWebhookSignatureRequired()) {
+			if (!getWhatsAppWebhookSecret()) {
+				return res.status(500).json({
+					ok: false,
+					error: 'Falta WHATSAPP_APP_SECRET o META_APP_SECRET para validar el webhook de WhatsApp.'
+				});
+			}
+
+			if (!verifyWhatsAppWebhook(rawBodyBuffer, signatureHeader)) {
+				return res.status(401).json({
+					ok: false,
+					error: 'Firma de webhook WhatsApp invalida.'
+				});
+			}
+		}
+
+		let payload = {};
+		try {
+			payload = rawBodyBuffer.length ? JSON.parse(rawBodyBuffer.toString('utf8')) : {};
+		} catch (error) {
+			return res.status(400).json({
+				ok: false,
+				error: `Webhook WhatsApp invalido: ${error.message}`
+			});
+		}
+
+		req.body = payload;
 		res.sendStatus(200);
 
-		const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+		const entries = Array.isArray(payload?.entry) ? payload.entry : [];
 		const changesCount = entries.reduce((total, entry) => total + (entry.changes?.length || 0), 0);
 
 		logger.info('webhook.whatsapp_received', {

@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import cors from 'cors';
 
-import { attachUser } from './middleware/auth.js';
+import { attachUser, validateAuthConfig } from './middleware/auth.js';
 import authRoutes from './routes/auth.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import campaignRoutes from './routes/campaign.routes.js';
@@ -20,6 +20,7 @@ import { logger } from './lib/logger.js';
 import { attachRequestId } from './lib/request-id.js';
 
 dotenv.config();
+validateAuthConfig();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -104,6 +105,7 @@ app.options('/api/auth/me', cors(corsOptions));
 app.options('/api/tiendanube/webhooks/register', cors(corsOptions));
 
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use('/api/webhook/whatsapp', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use('/api/webhook/tiendanube', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use('/api/webhook/shopify', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '10mb' }));

@@ -8,9 +8,23 @@ export function normalizeRole(value = '') {
 	return String(value || '').trim().toUpperCase();
 }
 
+function getJwtSecret() {
+	const secret = String(process.env.JWT_SECRET || '').trim();
+
+	if (!secret && process.env.NODE_ENV === 'production') {
+		throw new Error('JWT_SECRET es obligatorio en production.');
+	}
+
+	return secret || 'dev-secret';
+}
+
+export function validateAuthConfig() {
+	getJwtSecret();
+}
+
 function isLocalDevelopmentRequest(req) {
 	if (process.env.NODE_ENV === 'production') return false;
-	if (String(process.env.DEV_AUTH_BYPASS || '').trim().toLowerCase() === 'false') return false;
+	if (String(process.env.DEV_AUTH_BYPASS || '').trim().toLowerCase() !== 'true') return false;
 
 	const origin = String(req.headers?.origin || '').trim();
 	const referer = String(req.headers?.referer || '').trim();
@@ -82,7 +96,7 @@ export async function attachUser(req, _res, next) {
 			return next();
 		}
 
-		const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+		const payload = jwt.verify(token, getJwtSecret());
 
 		const user = await prisma.user.findUnique({
 			where: { id: payload.sub },
@@ -159,7 +173,7 @@ export function issueAuthCookie(res, user) {
 			email: user.email,
 			workspaceId: user.workspaceId || null,
 		},
-		process.env.JWT_SECRET || 'dev-secret',
+		getJwtSecret(),
 		{ expiresIn: '7d' }
 	);
 
