@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { attachUser, requireAuth, requireAdmin } from '../middleware/auth.js';
+import { attachUser, requireAuth, requireAdmin, requirePlatformAdmin } from '../middleware/auth.js';
 import {
 	listTemplates,
 	getTemplate,
@@ -53,7 +53,7 @@ router.post('/templates/preview', renderTemplatePreviewController);
 
 router.post('/abandoned-carts/preview', previewAbandonedCartAudienceController);
 
-router.post('/dispatch/tick', dispatchTickController);
+router.post('/dispatch/tick', requirePlatformAdmin, dispatchTickController);
 router.get('/stats', getCampaignStatsController);
 router.get('/schedules', listCampaignSchedulesController);
 router.post('/schedules/preview', previewCampaignScheduleController);

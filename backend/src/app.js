@@ -32,6 +32,11 @@ function parseOriginList(value) {
 		.filter(Boolean);
 }
 
+const allowedPreviewOrigins = parseOriginList(
+	process.env.VERCEL_PREVIEW_ALLOWED_ORIGINS ||
+	process.env.CORS_ALLOWED_PREVIEW_ORIGINS
+);
+
 const allowedOrigins = [
 	'http://localhost:5173',
 	'http://127.0.0.1:5173',
@@ -39,7 +44,12 @@ const allowedOrigins = [
 	'http://127.0.0.1:3000',
 	process.env.FRONTEND_URL,
 	process.env.FRONTEND_URL_PROD,
-	...parseOriginList(process.env.CORS_ALLOWED_ORIGINS)
+	process.env.PUBLIC_APP_URL,
+	process.env.APP_URL,
+	process.env.BACKEND_PUBLIC_URL,
+	process.env.BACKEND_URL,
+	...parseOriginList(process.env.CORS_ALLOWED_ORIGINS),
+	...allowedPreviewOrigins
 ]
 	.filter(Boolean)
 	.map(normalizeOrigin);
@@ -66,12 +76,86 @@ function isAllowedOrigin(origin) {
 
 	if (
 		process.env.ALLOW_VERCEL_PREVIEWS === 'true' &&
-		/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)
+		allowedPreviewOrigins.includes(normalizedOrigin)
 	) {
 		return true;
 	}
 
 	return false;
+}
+
+function getRequestHeaderOrigin(value = '') {
+	const raw = String(value || '').trim();
+	if (!raw) return '';
+
+	try {
+		return new URL(raw).origin;
+	} catch {
+		return normalizeOrigin(raw);
+	}
+}
+
+function isTrustedBrowserOrigin(value = '') {
+	const origin = getRequestHeaderOrigin(value);
+	return Boolean(origin && isAllowedOrigin(origin));
+}
+
+function isStateChangingRequest(req) {
+	return !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase());
+}
+
+function isWebhookRequest(req) {
+	return String(req.originalUrl || req.url || '').startsWith('/api/webhook/');
+}
+
+function enforceAuthenticatedRequestOrigin(req, res, next) {
+	if (!isStateChangingRequest(req) || isWebhookRequest(req) || !req.user) {
+		return next();
+	}
+
+	const origin = String(req.headers.origin || '').trim();
+	const referer = String(req.headers.referer || '').trim();
+	const fetchSite = String(req.headers['sec-fetch-site'] || '').trim().toLowerCase();
+
+	if (origin && !isTrustedBrowserOrigin(origin)) {
+		logger.warn('security.origin_blocked', {
+			requestId: req.requestId || null,
+			origin: normalizeOrigin(origin),
+			path: req.originalUrl || req.url,
+		});
+		return res.status(403).json({
+			ok: false,
+			error: 'Origen no permitido.',
+			requestId: req.requestId || null,
+		});
+	}
+
+	if (!origin && referer && !isTrustedBrowserOrigin(referer)) {
+		logger.warn('security.referer_blocked', {
+			requestId: req.requestId || null,
+			refererOrigin: getRequestHeaderOrigin(referer),
+			path: req.originalUrl || req.url,
+		});
+		return res.status(403).json({
+			ok: false,
+			error: 'Origen no permitido.',
+			requestId: req.requestId || null,
+		});
+	}
+
+	if (!origin && fetchSite === 'cross-site') {
+		logger.warn('security.cross_site_mutation_blocked', {
+			requestId: req.requestId || null,
+			path: req.originalUrl || req.url,
+		});
+		return res.status(403).json({
+			ok: false,
+			error: 'Origen no permitido.',
+			requestId: req.requestId || null,
+		});
+	}
+
+	return next();
 }
 
 const corsOptions = {
@@ -113,6 +197,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use(attachUser);
+app.use(enforceAuthenticatedRequestOrigin);
 
 const RELEASE_ID = 'backend-hardening-20260501';
 

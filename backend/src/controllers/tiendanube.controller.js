@@ -12,6 +12,7 @@ import {
 	DEFAULT_WORKSPACE_ID,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
+import { hasAnyRole } from '../middleware/auth.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const ORDER_WEBHOOK_EVENTS = [
@@ -131,7 +132,7 @@ function resolveTiendanubeStateWorkspaceId(value = '') {
 
 function isAuthorizedAdminRequest(req) {
 	if (req.user) {
-		return true;
+		return hasAnyRole(req.user, ['ADMIN']);
 	}
 
 	const expected = getRegisterSecret();
@@ -140,10 +141,7 @@ function isAuthorizedAdminRequest(req) {
 	}
 
 	const provided = String(
-		req.headers['x-admin-secret'] ||
-		req.body?.secret ||
-		req.query?.secret ||
-		''
+		req.headers['x-admin-secret'] || ''
 	).trim();
 
 	return Boolean(provided) && provided === expected;
