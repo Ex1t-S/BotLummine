@@ -34,10 +34,41 @@ import {
 
 const router = Router();
 const requireInboxAccess = requireAnyRole(['ADMIN', 'AGENT']);
+const OUTBOUND_MEDIA_ALLOWED_MIME_TYPES = new Set([
+	'image/jpeg',
+	'image/jpg',
+	'image/png',
+	'image/webp',
+	'video/mp4',
+	'video/3gpp',
+	'audio/aac',
+	'audio/amr',
+	'audio/mpeg',
+	'audio/mp3',
+	'audio/ogg',
+	'application/pdf',
+	'text/plain',
+	'application/msword',
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	'application/vnd.ms-excel',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+const outboundMediaMaxBytes = Math.max(
+	1024 * 1024,
+	Math.min(Number(process.env.OUTBOUND_MEDIA_MAX_BYTES || 25 * 1024 * 1024), 100 * 1024 * 1024)
+);
 const uploadInboxAttachment = multer({
 	dest: 'tmp/',
 	limits: {
-		fileSize: 100 * 1024 * 1024,
+		fileSize: outboundMediaMaxBytes,
+	},
+	fileFilter(_req, file, callback) {
+		const mimeType = String(file.mimetype || '').toLowerCase();
+		if (OUTBOUND_MEDIA_ALLOWED_MIME_TYPES.has(mimeType)) {
+			return callback(null, true);
+		}
+
+		return callback(new Error('Tipo de archivo no permitido para enviar por WhatsApp.'));
 	},
 });
 

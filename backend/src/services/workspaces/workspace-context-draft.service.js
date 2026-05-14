@@ -2,6 +2,8 @@ import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { runGeminiReply, isRetryableGeminiError } from '../ai/gemini.service.js';
 import { runOpenAIReply } from '../ai/openai.service.js';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -82,6 +84,94 @@ function normalizeUrl(value = '') {
 	return `https://${raw.replace(/^\/+/, '')}`;
 }
 
+function isPrivateIpv4(ip = '') {
+	const parts = String(ip).split('.').map((part) => Number(part));
+	if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+	const [a, b] = parts;
+	return (
+		a === 0 ||
+		a === 10 ||
+		a === 127 ||
+		a === 169 && b === 254 ||
+		a === 172 && b >= 16 && b <= 31 ||
+		a === 192 && b === 168 ||
+		a === 100 && b >= 64 && b <= 127 ||
+		a >= 224
+	);
+}
+
+function isPrivateIpv6(ip = '') {
+	const normalized = String(ip || '').toLowerCase();
+	return (
+		normalized === '::1' ||
+		normalized === '::' ||
+		normalized.startsWith('fc') ||
+		normalized.startsWith('fd') ||
+		normalized.startsWith('fe80:') ||
+		normalized.startsWith('::ffff:127.') ||
+		normalized.startsWith('::ffff:10.') ||
+		normalized.startsWith('::ffff:192.168.')
+	);
+}
+
+function isBlockedIp(ip = '') {
+	const version = net.isIP(ip);
+	if (version === 4) return isPrivateIpv4(ip);
+	if (version === 6) return isPrivateIpv6(ip);
+	return true;
+}
+
+async function assertPublicHttpUrl(rawUrl = '') {
+	const url = new URL(rawUrl);
+	if (!['http:', 'https:'].includes(url.protocol)) {
+		throw new Error('La URL debe usar http o https.');
+	}
+	if (url.username || url.password) {
+		throw new Error('La URL no puede incluir credenciales.');
+	}
+
+	const hostname = url.hostname;
+	if (!hostname || ['localhost', 'localhost.localdomain'].includes(hostname.toLowerCase())) {
+		throw new Error('La URL no puede apuntar a localhost.');
+	}
+
+	const directIpVersion = net.isIP(hostname);
+	const addresses = directIpVersion
+		? [{ address: hostname }]
+		: await dns.lookup(hostname, { all: true, verbatim: true });
+
+	if (!addresses.length || addresses.some((item) => isBlockedIp(item.address))) {
+		throw new Error('La URL apunta a una red privada o no permitida.');
+	}
+
+	return url.toString();
+}
+
+async function fetchPublicWebsite(url, options = {}, timeoutMs = 15000, redirectLimit = 3) {
+	let currentUrl = await assertPublicHttpUrl(url);
+
+	for (let attempt = 0; attempt <= redirectLimit; attempt += 1) {
+		const response = await fetchWithTimeout(
+			currentUrl,
+			{
+				...options,
+				redirect: 'manual',
+			},
+			timeoutMs
+		);
+
+		if (![301, 302, 303, 307, 308].includes(response.status)) {
+			return response;
+		}
+
+		const location = response.headers.get('location');
+		if (!location) return response;
+		currentUrl = await assertPublicHttpUrl(new URL(location, currentUrl).toString());
+	}
+
+	throw new Error('La web redirige demasiadas veces.');
+}
+
 function stripHtml(html = '') {
 	return decodeHtmlEntities(
 		String(html || '')
@@ -114,15 +204,14 @@ async function fetchWebsiteSignals(url = '') {
 	if (!normalizedUrl) return null;
 
 	const timeoutMs = getHttpTimeoutMs('WEBSITE_ANALYSIS_TIMEOUT_MS', 12000);
-	const response = await fetchWithTimeout(
+	const response = await fetchPublicWebsite(
 		normalizedUrl,
 		{
 			method: 'GET',
 			headers: {
 				'User-Agent': 'BotLummine Context Analyzer',
 				'Accept': 'text/html,application/xhtml+xml'
-			},
-			redirect: 'follow'
+			}
 		},
 		timeoutMs
 	);
@@ -131,7 +220,13 @@ async function fetchWebsiteSignals(url = '') {
 		throw new Error(`No se pudo leer la web (${response.status}).`);
 	}
 
-	const html = String(await response.text() || '').slice(0, 250000);
+	const contentLength = Number(response.headers.get('content-length') || 0);
+	const maxBytes = Number(process.env.WEBSITE_ANALYSIS_MAX_BYTES || 500_000);
+	if (contentLength && contentLength > maxBytes) {
+		throw new Error('La web es demasiado grande para analizarla.');
+	}
+
+	const html = String(await response.text() || '').slice(0, maxBytes);
 	const title = extractFirstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
 	const metaDescription =
 		extractFirstMatch(html, /<meta[^>]+name=["']description["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i) ||

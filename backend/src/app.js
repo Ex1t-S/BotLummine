@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 
 import { attachUser, validateAuthConfig } from './middleware/auth.js';
+import { createRateLimiter, makeIpEmailKey } from './middleware/rate-limit.js';
 import authRoutes from './routes/auth.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import campaignRoutes from './routes/campaign.routes.js';
@@ -24,6 +25,21 @@ validateAuthConfig();
 
 const app = express();
 app.set('trust proxy', 1);
+
+const authLoginLimiter = createRateLimiter({
+	scope: 'auth-login',
+	windowMs: Number(process.env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+	max: Number(process.env.AUTH_LOGIN_RATE_LIMIT_MAX || 20),
+	keyGenerator: makeIpEmailKey('auth-login'),
+	message: 'Demasiados intentos de login. Probá de nuevo en unos minutos.',
+});
+
+const sensitiveActionLimiter = createRateLimiter({
+	scope: 'sensitive-action',
+	windowMs: Number(process.env.SENSITIVE_ACTION_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+	max: Number(process.env.SENSITIVE_ACTION_RATE_LIMIT_MAX || 30),
+	message: 'Demasiadas acciones sensibles. Probá de nuevo en unos minutos.',
+});
 
 function parseOriginList(value) {
 	return String(value || '')
@@ -195,6 +211,9 @@ app.use('/api/webhook/shopify', express.raw({ type: 'application/json', limit: '
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+app.use('/api/auth/login', authLoginLimiter);
+app.use(['/api/tiendanube/webhooks/register', '/api/tiendanube/catalog/sync'], sensitiveActionLimiter);
 
 app.use(attachUser);
 app.use(enforceAuthenticatedRequestOrigin);

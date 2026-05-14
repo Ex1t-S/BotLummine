@@ -10,11 +10,31 @@ import { attachUser, requireAdmin, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
+const CAMPAIGN_HEADER_ALLOWED_MIME_TYPES = new Set([
+	'image/jpeg',
+	'image/jpg',
+	'image/png',
+	'video/mp4',
+	'application/pdf',
+]);
+const campaignHeaderMediaMaxBytes = Math.max(
+	1024 * 1024,
+	Math.min(Number(process.env.CAMPAIGN_HEADER_MEDIA_MAX_BYTES || 25 * 1024 * 1024), 100 * 1024 * 1024)
+);
+
 const upload = multer({
 	dest: 'tmp/',
 	limits: {
-		fileSize: 100 * 1024 * 1024
-	}
+		fileSize: campaignHeaderMediaMaxBytes
+	},
+	fileFilter(_req, file, callback) {
+		const mimeType = String(file.mimetype || '').toLowerCase();
+		if (CAMPAIGN_HEADER_ALLOWED_MIME_TYPES.has(mimeType)) {
+			return callback(null, true);
+		}
+
+		return callback(new Error('El header de campaña tiene que ser JPG, PNG, MP4 o PDF.'));
+	},
 });
 
 const uploadBrandLogo = multer({
