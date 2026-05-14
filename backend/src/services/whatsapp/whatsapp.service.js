@@ -100,6 +100,7 @@ async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel
 	}
 
 	const finalPayload = {
+		messaging_product: 'whatsapp',
 		to: finalTo,
 		...payload,
 	};
