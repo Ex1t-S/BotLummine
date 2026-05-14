@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
+import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import {
 	sendWhatsAppText,
 	sendWhatsAppMedia,
@@ -14,6 +15,7 @@ function isOutboundDebugEnabled() {
 export async function sendAndPersistOutbound({
 	conversationId,
 	workspaceId: expectedWorkspaceId = null,
+	waId: providedWaId = '',
 	body,
 	userId = null,
 	provider = 'whatsapp-cloud-api',
@@ -55,7 +57,12 @@ export async function sendAndPersistOutbound({
 		throw new Error('Conversación no encontrada.');
 	}
 
-	const waId = conversation.contact?.waId;
+	const waId = normalizeThreadPhone(
+		providedWaId ||
+		conversation.contact?.waId ||
+		conversation.contact?.phone ||
+		''
+	);
 	const workspaceId = conversation.workspaceId;
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 
