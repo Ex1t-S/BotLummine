@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { prisma } from '../../lib/prisma.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 function normalizeString(value = '') {
@@ -46,7 +47,8 @@ async function getStoredShopifyConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 		orderBy: { updatedAt: 'desc' }
 	});
 
-	if (!connection?.accessToken || !connection?.externalStoreId) return null;
+	const accessToken = connection?.accessToken ? decryptSecret(connection.accessToken) : '';
+	if (!accessToken || !connection?.externalStoreId) return null;
 
 	const shopDomain = normalizeShopDomain(connection.shopDomain || connection.externalStoreId);
 
@@ -56,7 +58,7 @@ async function getStoredShopifyConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 		provider: 'SHOPIFY',
 		externalStoreId: connection.externalStoreId,
 		shopDomain,
-		accessToken: connection.accessToken,
+		accessToken,
 		storeName: connection.storeName || shopDomain,
 		storeUrl: connection.storeUrl || `https://${shopDomain}`,
 		apiVersion:

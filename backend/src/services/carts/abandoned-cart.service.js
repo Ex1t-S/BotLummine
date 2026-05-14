@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
 import { getShopifyClient } from '../shopify/client.js';
@@ -120,7 +121,9 @@ async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 
 	const useEnv = resolvedWorkspaceId === DEFAULT_WORKSPACE_ID;
 	const storeId = installation?.storeId || (useEnv ? process.env.TIENDANUBE_STORE_ID : null) || null;
-	const accessToken = installation?.accessToken || (useEnv ? process.env.TIENDANUBE_ACCESS_TOKEN : null) || null;
+	const accessToken = installation?.accessToken
+		? decryptSecret(installation.accessToken)
+		: (useEnv ? process.env.TIENDANUBE_ACCESS_TOKEN : null) || null;
 
 	if (!storeId || !accessToken) {
 		throw new Error(

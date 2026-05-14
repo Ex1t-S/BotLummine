@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
@@ -295,7 +296,7 @@ export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_
 
 	return {
 		storeId: installation.storeId,
-		accessToken: installation.accessToken,
+		accessToken: decryptSecret(installation.accessToken),
 		workspaceId: installation.workspaceId,
 		provider: 'TIENDANUBE',
 		source: 'storeInstallation',

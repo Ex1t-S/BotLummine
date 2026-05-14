@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
+import { decryptSecret } from '../lib/secret-crypto.js';
 import { logger, maskPhone } from '../lib/logger.js';
 import { processInboundMessage } from '../services/conversation/chat.service.js';
 import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
@@ -345,7 +346,7 @@ async function resolveWebhookStoreCredentials(storeId) {
 	if (installation?.storeId && installation?.accessToken) {
 		return {
 			storeId: installation.storeId,
-			accessToken: installation.accessToken,
+			accessToken: decryptSecret(installation.accessToken),
 			workspaceId: installation.workspaceId,
 			source: 'storeInstallation'
 		};

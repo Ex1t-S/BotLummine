@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 
 export const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
 export const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'default';
@@ -175,8 +176,8 @@ export async function getWhatsAppChannelForWorkspace(workspaceId) {
 			wabaId: channel.wabaId,
 			phoneNumberId: channel.phoneNumberId,
 			displayPhoneNumber: channel.displayPhoneNumber || null,
-			accessToken: channel.accessToken,
-			verifyToken: channel.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || '',
+			accessToken: decryptSecret(channel.accessToken),
+			verifyToken: channel.verifyToken ? decryptSecret(channel.verifyToken) : process.env.WHATSAPP_VERIFY_TOKEN || '',
 		};
 	}
 

@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { createPartFromBase64 } from '@google/genai';
 
 import { runGeminiContent } from '../ai/gemini.service.js';
 import { resolveInboxMediaAbsolutePath } from '../whatsapp/whatsapp-media.service.js';
@@ -7,6 +6,15 @@ import { logger, maskPhone } from '../../lib/logger.js';
 
 const SUPPORTED_MIME_RE = /^(image\/(png|jpe?g|webp)|application\/pdf)$/i;
 const MAX_CLASSIFICATION_BYTES = Number(process.env.AI_ATTACHMENT_CLASSIFIER_MAX_BYTES || 8 * 1024 * 1024);
+
+function createPartFromBase64(data, mimeType) {
+	return {
+		inlineData: {
+			mimeType,
+			data,
+		},
+	};
+}
 
 function normalizeString(value = '') {
 	return String(value || '').trim();

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { prisma } from '../../lib/prisma.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 function buildHeaders(accessToken) {
@@ -43,13 +44,14 @@ async function getStoredTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 		orderBy: { installedAt: 'desc' }
 	});
 
-	if (!installation?.storeId || !installation?.accessToken) {
+	const accessToken = installation?.accessToken ? decryptSecret(installation.accessToken) : '';
+	if (!installation?.storeId || !accessToken) {
 		return null;
 	}
 
 	return {
 		storeId: String(installation.storeId),
-		accessToken: String(installation.accessToken),
+		accessToken: String(accessToken),
 		workspaceId: installation.workspaceId,
 		storeName: installation.storeName || null,
 		storeUrl: installation.storeUrl || null,

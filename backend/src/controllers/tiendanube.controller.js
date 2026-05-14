@@ -1,6 +1,7 @@
 import axios from 'axios';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
+import { decryptSecret, encryptSecret } from '../lib/secret-crypto.js';
 import { getTiendanubeConfig } from '../services/tiendanube/client.js';
 import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import {
@@ -425,7 +426,7 @@ async function syncTiendanubeBranding({ workspaceId, storeId, accessToken }) {
 		},
 		update: {
 			externalStoreId: String(storeId),
-			accessToken,
+			accessToken: encryptSecret(accessToken),
 			status: 'ACTIVE',
 			storeName,
 			storeUrl,
@@ -438,7 +439,7 @@ async function syncTiendanubeBranding({ workspaceId, storeId, accessToken }) {
 			workspaceId,
 			provider: 'TIENDANUBE',
 			externalStoreId: String(storeId),
-			accessToken,
+			accessToken: encryptSecret(accessToken),
 			status: 'ACTIVE',
 			storeName,
 			storeUrl,
@@ -531,7 +532,7 @@ async function resolveInstallationForWebhook(requestedStoreId = null, workspaceI
 		if (byStore?.storeId && byStore?.accessToken) {
 			return {
 				storeId: String(byStore.storeId),
-				accessToken: String(byStore.accessToken),
+				accessToken: String(decryptSecret(byStore.accessToken)),
 				workspaceId: byStore.workspaceId,
 				scope: byStore.scope || null,
 				source: 'database:requested'
@@ -547,7 +548,7 @@ async function resolveInstallationForWebhook(requestedStoreId = null, workspaceI
 	if (latestInstallation?.storeId && latestInstallation?.accessToken) {
 		return {
 			storeId: String(latestInstallation.storeId),
-			accessToken: String(latestInstallation.accessToken),
+			accessToken: String(decryptSecret(latestInstallation.accessToken)),
 			workspaceId: latestInstallation.workspaceId,
 			scope: latestInstallation.scope || null,
 			source: 'database:latest'
@@ -614,20 +615,21 @@ export async function handleTiendanubeCallback(req, res) {
 		}
 
 		const data = await exchangeCodeForToken(code);
+		const encryptedAccessToken = encryptSecret(data.access_token);
 
 		await prisma.storeInstallation.upsert({
 			where: { storeId: String(data.user_id) },
 			update: {
 				workspaceId,
 				provider: 'TIENDANUBE',
-				accessToken: data.access_token,
+				accessToken: encryptedAccessToken,
 				scope: data.scope || null
 			},
 			create: {
 				workspaceId,
 				provider: 'TIENDANUBE',
 				storeId: String(data.user_id),
-				accessToken: data.access_token,
+				accessToken: encryptedAccessToken,
 				scope: data.scope || null
 			}
 		});
@@ -641,7 +643,7 @@ export async function handleTiendanubeCallback(req, res) {
 			},
 			update: {
 				externalStoreId: String(data.user_id),
-				accessToken: data.access_token,
+				accessToken: encryptedAccessToken,
 				scope: data.scope || null,
 				status: 'ACTIVE',
 				rawPayload: {
@@ -654,7 +656,7 @@ export async function handleTiendanubeCallback(req, res) {
 				workspaceId,
 				provider: 'TIENDANUBE',
 				externalStoreId: String(data.user_id),
-				accessToken: data.access_token,
+				accessToken: encryptedAccessToken,
 				scope: data.scope || null,
 				status: 'ACTIVE',
 				rawPayload: {

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
+import { encryptSecret } from '../lib/secret-crypto.js';
 import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
 import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { DEFAULT_WORKSPACE_ID, requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
@@ -270,6 +271,7 @@ export async function handleShopifyCallback(req, res) {
 		const tokenData = await tokenResponse.json();
 		const accessToken = cleanString(tokenData.access_token);
 		if (!accessToken) throw new Error('Shopify no devolvio access_token.');
+		const encryptedAccessToken = encryptSecret(accessToken);
 
 		const existingExternal = await prisma.commerceConnection.findUnique({
 			where: {
@@ -301,7 +303,7 @@ export async function handleShopifyCallback(req, res) {
 			update: {
 				externalStoreId: shopDomain,
 				shopDomain,
-				accessToken,
+				accessToken: encryptedAccessToken,
 				scope: tokenData.scope || getScopes(),
 				status: 'ACTIVE',
 				storeName: shop.name || shopDomain,
@@ -318,7 +320,7 @@ export async function handleShopifyCallback(req, res) {
 				provider: 'SHOPIFY',
 				externalStoreId: shopDomain,
 				shopDomain,
-				accessToken,
+				accessToken: encryptedAccessToken,
 				scope: tokenData.scope || getScopes(),
 				status: 'ACTIVE',
 				storeName: shop.name || shopDomain,

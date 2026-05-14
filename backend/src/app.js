@@ -26,6 +26,20 @@ validateAuthConfig();
 const app = express();
 app.set('trust proxy', 1);
 
+function applySecurityHeaders(req, res, next) {
+	res.setHeader('X-Content-Type-Options', 'nosniff');
+	res.setHeader('X-Frame-Options', 'DENY');
+	res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+	res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()');
+	res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+
+	if (process.env.NODE_ENV === 'production') {
+		res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+	}
+
+	next();
+}
+
 const authLoginLimiter = createRateLimiter({
 	scope: 'auth-login',
 	windowMs: Number(process.env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
@@ -198,6 +212,7 @@ const corsOptions = {
 };
 
 app.use(attachRequestId);
+app.use(applySecurityHeaders);
 app.use(cors(corsOptions));
 
 app.options('/api/auth/login', cors(corsOptions));

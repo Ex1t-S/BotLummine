@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 const DEFAULT_PANEL_BASE_URL = 'https://enbox.lightdata.com.ar';
@@ -73,7 +74,7 @@ export async function getEnboxConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}
 			publicBaseUrl: String(config.publicBaseUrl || DEFAULT_PUBLIC_BASE_URL).replace(/\/+$/, ''),
 			publicTrackingSalt: String(config.publicTrackingSalt || DEFAULT_PUBLIC_TRACKING_SALT).trim(),
 			username: String(connection.username || '').trim(),
-			password: String(connection.password || '').trim(),
+			password: String(decryptSecret(connection.password) || '').trim(),
 		};
 	}
 

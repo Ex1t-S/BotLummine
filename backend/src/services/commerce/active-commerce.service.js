@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 function normalizeString(value = '') {
@@ -27,7 +28,10 @@ function normalizeCommerceConnection(connection = null) {
 		? shopDomain || normalizeString(connection.externalStoreId)
 		: normalizeString(connection.externalStoreId);
 
-	if (!provider || !storeId || !connection.accessToken) return null;
+	const accessToken = connection.accessToken ? decryptSecret(connection.accessToken) : '';
+	const refreshToken = connection.refreshToken ? decryptSecret(connection.refreshToken) : null;
+
+	if (!provider || !storeId || !accessToken) return null;
 
 	return {
 		source: 'commerceConnection',
@@ -36,8 +40,8 @@ function normalizeCommerceConnection(connection = null) {
 		storeId,
 		externalStoreId: normalizeString(connection.externalStoreId) || storeId,
 		shopDomain: shopDomain || null,
-		accessToken: connection.accessToken,
-		refreshToken: connection.refreshToken || null,
+		accessToken,
+		refreshToken,
 		scope: connection.scope || null,
 		status: connection.status || 'ACTIVE',
 		isPrimary: Boolean(connection.isPrimary),
@@ -49,7 +53,8 @@ function normalizeCommerceConnection(connection = null) {
 }
 
 function normalizeStoreInstallation(installation = null) {
-	if (!installation?.storeId || !installation?.accessToken) return null;
+	const accessToken = installation?.accessToken ? decryptSecret(installation.accessToken) : '';
+	if (!installation?.storeId || !accessToken) return null;
 	return {
 		source: 'storeInstallation',
 		workspaceId: installation.workspaceId,
@@ -57,7 +62,7 @@ function normalizeStoreInstallation(installation = null) {
 		storeId: normalizeString(installation.storeId),
 		externalStoreId: normalizeString(installation.storeId),
 		shopDomain: null,
-		accessToken: installation.accessToken,
+		accessToken,
 		refreshToken: null,
 		scope: installation.scope || null,
 		status: 'ACTIVE',

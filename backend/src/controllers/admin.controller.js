@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import axios from 'axios';
 import { prisma } from '../lib/prisma.js';
+import { decryptSecret, encryptSecret } from '../lib/secret-crypto.js';
 import {
 	ensureWorkspaceAccess,
 	getWorkspaceOrThrow,
@@ -778,7 +779,11 @@ export async function syncWorkspaceBranding(req, res, next) {
 		});
 
 		const storeId = connection?.externalStoreId || installation?.storeId;
-		const accessToken = connection?.accessToken || installation?.accessToken;
+		const accessToken = connection?.accessToken
+			? decryptSecret(connection.accessToken)
+			: installation?.accessToken
+				? decryptSecret(installation.accessToken)
+				: '';
 
 		if (!storeId || !accessToken) {
 			return res.status(400).json({
@@ -900,7 +905,7 @@ export async function syncWorkspaceBranding(req, res, next) {
 				provider,
 				externalStoreId: String(storeId),
 				shopDomain: provider === 'SHOPIFY' ? normalizeShopDomain(connection?.shopDomain || storeId) : null,
-				accessToken,
+				accessToken: encryptSecret(accessToken),
 				storeName,
 				storeUrl,
 				rawPayload: { store },
@@ -1698,7 +1703,7 @@ export async function upsertLogisticsConnection(req, res, next) {
 		});
 
 		if (!username && existingConnection?.username) username = existingConnection.username;
-		if (!password && existingConnection?.password) password = existingConnection.password;
+		if (!password && existingConnection?.password) password = decryptSecret(existingConnection.password);
 
 		if (!username || !password) {
 			return res.status(400).json({
@@ -1724,7 +1729,7 @@ export async function upsertLogisticsConnection(req, res, next) {
 			},
 			update: {
 				username,
-				password,
+				password: encryptSecret(password),
 				status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
 				config,
 			},
@@ -1732,7 +1737,7 @@ export async function upsertLogisticsConnection(req, res, next) {
 				workspaceId,
 				provider,
 				username,
-				password,
+				password: encryptSecret(password),
 				status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
 				config,
 			},
@@ -1779,11 +1784,11 @@ export async function upsertWhatsAppChannel(req, res, next) {
 		}
 
 		if (!data.accessToken && existingChannel?.accessToken) {
-			data.accessToken = existingChannel.accessToken;
+			data.accessToken = decryptSecret(existingChannel.accessToken);
 		}
 
 		if (!data.verifyToken && existingChannel?.verifyToken) {
-			data.verifyToken = existingChannel.verifyToken;
+			data.verifyToken = decryptSecret(existingChannel.verifyToken);
 		}
 
 		if (!data.wabaId || !data.phoneNumberId || !data.accessToken) {
@@ -1810,12 +1815,24 @@ export async function upsertWhatsAppChannel(req, res, next) {
 		const channel = channelId
 			? await prisma.whatsAppChannel.update({
 					where: { id: channelId },
-					data,
+					data: {
+						...data,
+						accessToken: encryptSecret(data.accessToken),
+						verifyToken: data.verifyToken ? encryptSecret(data.verifyToken) : null,
+					},
 			  })
 			: await prisma.whatsAppChannel.upsert({
 					where: { phoneNumberId: data.phoneNumberId },
-					update: data,
-					create: data,
+					update: {
+						...data,
+						accessToken: encryptSecret(data.accessToken),
+						verifyToken: data.verifyToken ? encryptSecret(data.verifyToken) : null,
+					},
+					create: {
+						...data,
+						accessToken: encryptSecret(data.accessToken),
+						verifyToken: data.verifyToken ? encryptSecret(data.verifyToken) : null,
+					},
 			  });
 
 		return res.json({
@@ -1857,8 +1874,10 @@ export async function upsertCommerceConnection(req, res, next) {
 		});
 
 		if (!accessToken && existingConnection?.accessToken) {
-			accessToken = existingConnection.accessToken;
+			accessToken = decryptSecret(existingConnection.accessToken);
 		}
+		const refreshToken = normalizeString(req.body?.refreshToken) ||
+			(existingConnection?.refreshToken ? decryptSecret(existingConnection.refreshToken) : null);
 
 		if (!externalStoreId || !accessToken) {
 			return res.status(400).json({
@@ -1894,8 +1913,8 @@ export async function upsertCommerceConnection(req, res, next) {
 			update: {
 				externalStoreId,
 				shopDomain,
-				accessToken,
-				refreshToken: normalizeString(req.body?.refreshToken) || null,
+				accessToken: encryptSecret(accessToken),
+				refreshToken: refreshToken ? encryptSecret(refreshToken) : null,
 				scope: normalizeString(req.body?.scope) || null,
 				status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
 				storeName: normalizeString(req.body?.storeName) || null,
@@ -1909,8 +1928,8 @@ export async function upsertCommerceConnection(req, res, next) {
 				provider,
 				externalStoreId,
 				shopDomain,
-				accessToken,
-				refreshToken: normalizeString(req.body?.refreshToken) || null,
+				accessToken: encryptSecret(accessToken),
+				refreshToken: refreshToken ? encryptSecret(refreshToken) : null,
 				scope: normalizeString(req.body?.scope) || null,
 				status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
 				storeName: normalizeString(req.body?.storeName) || null,
