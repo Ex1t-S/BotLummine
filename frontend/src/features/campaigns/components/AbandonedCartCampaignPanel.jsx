@@ -35,6 +35,97 @@ const defaultAutomationForm = {
 	productQuery: '',
 };
 
+const ABANDONED_CART_DATA_OPTIONS = [
+	{ key: 'first_name', label: 'Nombre', description: 'Primer nombre del destinatario' },
+	{ key: 'contact_name', label: 'Nombre completo', description: 'Nombre completo del destinatario' },
+	{ key: 'phone', label: 'Telefono', description: 'Telefono normalizado' },
+	{ key: 'checkout_url', label: 'Link del carrito', description: 'URL de recuperacion del checkout abandonado' },
+	{ key: 'product_name', label: 'Producto', description: 'Primer producto del carrito' },
+	{ key: 'total_amount', label: 'Monto total', description: 'Total formateado del carrito' },
+	{ key: 'total_raw', label: 'Monto sin formato', description: 'Total numerico del carrito' },
+	{ key: 'checkout_id', label: 'ID del carrito', description: 'Identificador del checkout abandonado' },
+	{ key: 'last_order_id', label: 'ID ultimo pedido', description: 'Identificador interno del ultimo pedido' },
+	{ key: 'last_order_number', label: 'Ultimo pedido', description: 'Ultimo pedido detectado del contacto' },
+	{ key: '__manual__', label: 'Valor manual', description: 'Escribe un link o texto fijo para esa variable' },
+];
+
+const ABANDONED_CART_DEFAULT_MAPPING = {
+	'1': 'first_name',
+	'2': 'checkout_url',
+	'3': 'product_name',
+	'4': 'total_amount',
+	'5': 'checkout_id',
+	contact_name: 'contact_name',
+	first_name: 'first_name',
+	phone: 'phone',
+	wa_id: 'phone',
+	checkout_url: 'checkout_url',
+	abandoned_checkout_url: 'checkout_url',
+	product_name: 'product_name',
+	first_product_name: 'product_name',
+	total_amount: 'total_amount',
+	total_raw: 'total_raw',
+	checkout_id: 'checkout_id',
+	last_order_id: 'last_order_id',
+	last_order_number: 'last_order_number',
+};
+
+function normalizeString(value = '') {
+	return String(value || '').trim();
+}
+
+function collectTemplateText(value, texts = []) {
+	if (typeof value === 'string') {
+		texts.push(value);
+		return texts;
+	}
+	if (Array.isArray(value)) {
+		value.forEach((item) => collectTemplateText(item, texts));
+		return texts;
+	}
+	if (value && typeof value === 'object') {
+		Object.values(value).forEach((item) => collectTemplateText(item, texts));
+	}
+	return texts;
+}
+
+function extractTemplateVariableKeys(template = null) {
+	const components = Array.isArray(template?.rawPayload?.components) ? template.rawPayload.components : [];
+	const keys = new Set();
+	collectTemplateText(components).forEach((text) => {
+		String(text).replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawKey) => {
+			const key = normalizeString(rawKey);
+			if (key) keys.add(key);
+			return _match;
+		});
+	});
+	return [...keys].sort((a, b) => {
+		const aNumber = Number(a);
+		const bNumber = Number(b);
+		if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+		if (Number.isFinite(aNumber)) return -1;
+		if (Number.isFinite(bNumber)) return 1;
+		return a.localeCompare(b);
+	});
+}
+
+function getDefaultAbandonedCartSource(variableKey = '') {
+	const normalized = normalizeString(variableKey);
+	return (
+		ABANDONED_CART_DEFAULT_MAPPING[variableKey] ||
+		ABANDONED_CART_DEFAULT_MAPPING[normalized.toLowerCase()] ||
+		'contact_name'
+	);
+}
+
+function normalizeManualVariables(values = {}, mapping = {}) {
+	return Object.fromEntries(
+		Object.entries(values || {})
+			.map(([key, value]) => [normalizeString(key), String(value ?? '').trim()])
+			.filter(([key]) => key && mapping[key] === '__manual__')
+	);
+}
+
 function AutomationCard({
 	templates = [],
 	selectedTemplate = null,
@@ -46,9 +137,29 @@ function AutomationCard({
 	onRunNow,
 }) {
 	const [form, setForm] = useState(defaultAutomationForm);
+	const [variableMapping, setVariableMapping] = useState({});
+	const [manualVariables, setManualVariables] = useState({});
 	const selectedAutomationTemplate = useMemo(
 		() => templates.find((template) => template.id === form.templateId) || null,
 		[templates, form.templateId]
+	);
+	const templateVariableKeys = useMemo(
+		() => extractTemplateVariableKeys(selectedAutomationTemplate),
+		[selectedAutomationTemplate]
+	);
+	const dataOptions = settings?.availableVariables?.length
+		? settings.availableVariables
+		: ABANDONED_CART_DATA_OPTIONS;
+	const effectiveVariableMapping = useMemo(() => {
+		const mapping = {};
+		templateVariableKeys.forEach((key) => {
+			mapping[key] = variableMapping[key] || getDefaultAbandonedCartSource(key);
+		});
+		return mapping;
+	}, [templateVariableKeys, variableMapping]);
+	const effectiveManualVariables = useMemo(
+		() => normalizeManualVariables(manualVariables, effectiveVariableMapping),
+		[manualVariables, effectiveVariableMapping]
 	);
 
 	useEffect(() => {
@@ -61,10 +172,26 @@ function AutomationCard({
 			minTotal: filters.minTotal ?? '',
 			productQuery: filters.productQuery || '',
 		});
+		setVariableMapping(settings?.variableMapping || {});
+		setManualVariables(settings?.manualVariables || {});
 	}, [settings, selectedTemplate?.id]);
 
 	function updateField(field, value) {
 		setForm((current) => ({ ...current, [field]: value }));
+	}
+
+	function updateVariableSource(variableKey, sourceKey) {
+		setVariableMapping((current) => ({
+			...current,
+			[variableKey]: sourceKey,
+		}));
+	}
+
+	function updateManualVariable(variableKey, value) {
+		setManualVariables((current) => ({
+			...current,
+			[variableKey]: value,
+		}));
 	}
 
 	function buildPayload(overrides = {}) {
@@ -80,6 +207,8 @@ function AutomationCard({
 				minTotal: nextForm.minTotal,
 				productQuery: nextForm.productQuery,
 			},
+			variableMapping: effectiveVariableMapping,
+			manualVariables: effectiveManualVariables,
 		};
 	}
 
@@ -213,6 +342,57 @@ function AutomationCard({
 				</span>
 			</div>
 
+			<div className="campaign-schedule-section">
+				<div className="campaign-schedule-section__title">
+					<strong>Variables del carrito</strong>
+					<span>
+						{templateVariableKeys.length
+							? `${templateVariableKeys.length} variable(s) detectada(s) en el template.`
+							: 'Selecciona una plantilla con variables para mapear el link, nombre y otros datos.'}
+					</span>
+				</div>
+				<div className="campaign-shipment-variable-grid">
+					{templateVariableKeys.map((variableKey) => (
+						<div className="field" key={variableKey}>
+							<span>{`Variable {{${variableKey}}}`}</span>
+							<select
+								value={effectiveVariableMapping[variableKey] || ''}
+								onChange={(event) => updateVariableSource(variableKey, event.target.value)}
+								disabled={loading || saving}
+							>
+								{dataOptions.map((option) => (
+									<option key={option.key} value={option.key}>
+										{option.label}
+									</option>
+								))}
+							</select>
+							{effectiveVariableMapping[variableKey] === '__manual__' ? (
+								<input
+									value={manualVariables[variableKey] || ''}
+									onChange={(event) => updateManualVariable(variableKey, event.target.value)}
+									placeholder="Pega un link o texto fijo"
+									disabled={loading || saving}
+								/>
+							) : null}
+						</div>
+					))}
+					{!templateVariableKeys.length ? (
+						<div className="campaign-custom-audience-empty">
+							<strong>Sin variables detectadas</strong>
+							<span>La plantilla seleccionada no tiene campos tipo {'{{1}}'} o {'{{checkout_url}}'}.</span>
+						</div>
+					) : null}
+				</div>
+				<div className="campaign-shipment-data-options">
+					{dataOptions.map((option) => (
+						<span key={option.key}>
+							<strong>{option.label}</strong>
+							<small>{option.description}</small>
+						</span>
+					))}
+				</div>
+			</div>
+
 			{settings?.lastError ? (
 				<div className="campaign-schedule-error">{settings.lastError}</div>
 			) : null}
@@ -257,6 +437,51 @@ export default function AbandonedCartCampaignPanel({
 	onSaveAutomation,
 	onRunAutomationNow,
 }) {
+	const [variableMapping, setVariableMapping] = useState({});
+	const [manualVariables, setManualVariables] = useState({});
+	const templateVariableKeys = useMemo(
+		() => extractTemplateVariableKeys(selectedTemplate),
+		[selectedTemplate]
+	);
+	const effectiveVariableMapping = useMemo(() => {
+		const mapping = {};
+		templateVariableKeys.forEach((key) => {
+			mapping[key] = variableMapping[key] || getDefaultAbandonedCartSource(key);
+		});
+		return mapping;
+	}, [templateVariableKeys, variableMapping]);
+	const effectiveManualVariables = useMemo(
+		() => normalizeManualVariables(manualVariables, effectiveVariableMapping),
+		[manualVariables, effectiveVariableMapping]
+	);
+
+	function updateVariableSource(variableKey, sourceKey) {
+		setVariableMapping((current) => ({
+			...current,
+			[variableKey]: sourceKey,
+		}));
+	}
+
+	function updateManualVariable(variableKey, value) {
+		setManualVariables((current) => ({
+			...current,
+			[variableKey]: value,
+		}));
+	}
+
+	function buildAudienceFilters() {
+		return {
+			daysBack: Number(form.daysBack || 7),
+			status: form.status || 'NEW',
+			limit: Number(form.limit || 50),
+			minTotal:
+				form.minTotal === '' || form.minTotal === null || form.minTotal === undefined
+					? null
+					: Number(form.minTotal),
+			productQuery: normalizeString(form.productQuery || ''),
+		};
+	}
+
 	return (
 		<div className="campaign-custom-audience campaign-custom-audience--premium">
 			<div className="campaign-custom-audience-intro campaign-custom-audience-intro--compact">
@@ -414,11 +639,67 @@ export default function AbandonedCartCampaignPanel({
 						</span>
 					</label>
 
+					<div className="campaign-schedule-section">
+						<div className="campaign-schedule-section__title">
+							<strong>Variables del carrito</strong>
+							<span>
+								{templateVariableKeys.length
+									? `${templateVariableKeys.length} variable(s) detectada(s) en el template.`
+									: 'Selecciona una plantilla con variables para mapear link, nombre y otros datos.'}
+							</span>
+						</div>
+						<div className="campaign-shipment-variable-grid">
+							{templateVariableKeys.map((variableKey) => (
+								<div className="field" key={variableKey}>
+									<span>{`Variable {{${variableKey}}}`}</span>
+									<select
+										value={effectiveVariableMapping[variableKey] || ''}
+										onChange={(event) => updateVariableSource(variableKey, event.target.value)}
+									>
+										{ABANDONED_CART_DATA_OPTIONS.map((option) => (
+											<option key={option.key} value={option.key}>
+												{option.label}
+											</option>
+										))}
+									</select>
+									{effectiveVariableMapping[variableKey] === '__manual__' ? (
+										<input
+											value={manualVariables[variableKey] || ''}
+											onChange={(event) => updateManualVariable(variableKey, event.target.value)}
+											placeholder="Pega un link o texto fijo"
+										/>
+									) : null}
+								</div>
+							))}
+							{!templateVariableKeys.length ? (
+								<div className="campaign-custom-audience-empty">
+									<strong>Sin variables detectadas</strong>
+									<span>La plantilla seleccionada no tiene campos tipo {'{{1}}'} o {'{{checkout_url}}'}.</span>
+								</div>
+							) : null}
+						</div>
+						<div className="campaign-shipment-data-options">
+							{ABANDONED_CART_DATA_OPTIONS.map((option) => (
+								<span key={option.key}>
+									<strong>{option.label}</strong>
+									<small>{option.description}</small>
+								</span>
+							))}
+						</div>
+					</div>
+
 					<div className="campaign-form-actions campaign-form-actions--end">
 						<button
 							type="button"
 							className="button ghost"
-							onClick={onPreview}
+							onClick={() =>
+								onPreview({
+									templateId: selectedTemplate?.id || null,
+									filters: buildAudienceFilters(),
+									variableMapping: effectiveVariableMapping,
+									manualVariables: effectiveManualVariables,
+								})
+							}
 							disabled={previewing || !selectedTemplate}
 						>
 							{previewing ? 'Generando...' : 'Previsualizar'}
@@ -427,7 +708,18 @@ export default function AbandonedCartCampaignPanel({
 						<button
 							type="button"
 							className="button primary"
-							onClick={() => onCreate(form.launchNow)}
+							onClick={() =>
+								onCreate({
+									launchNow: Boolean(form.launchNow),
+									name: form.name,
+									notes: form.notes || null,
+									templateId: selectedTemplate?.id || null,
+									languageCode: selectedTemplate?.language || 'es_AR',
+									filters: buildAudienceFilters(),
+									variableMapping: effectiveVariableMapping,
+									manualVariables: effectiveManualVariables,
+								})
+							}
 							disabled={creating || !selectedTemplate}
 						>
 							{creating

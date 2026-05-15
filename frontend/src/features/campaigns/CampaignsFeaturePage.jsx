@@ -1618,8 +1618,7 @@ export default function CampaignsFeaturePage() {
 							onSelectTemplate={setSelectedTemplate}
 							onCreateCampaign={(payload) => mutations.createCampaign.mutateAsync(payload)}
 							creatingCampaign={mutations.createCampaign.isPending}
-							audienceModeOptions={['customers']}
-							lockedAudienceMode="customers"
+							audienceModeOptions={['customers', 'abandoned_carts']}
 						/>
 					</CampaignSectionShell>
 				);

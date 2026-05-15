@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
 	fetchCampaignCustomers,
+	previewAbandonedCartAudience,
 	uploadCampaignHeaderMedia,
 } from '../../lib/campaigns.js';
 import api from '../../lib/api.js';
@@ -31,6 +32,13 @@ const initialCustomerFilters = {
 	hasOrders: false,
 	hasPhoneOnly: true,
 	excludeSentTemplate: true,
+};
+const initialAbandonedCartFilters = {
+	daysBack: 7,
+	status: 'NEW',
+	limit: 50,
+	minTotal: '',
+	productQuery: '',
 };
 const PAYMENT_STATUS_OPTIONS = [
 	{ value: '', label: 'Todos' },
@@ -240,6 +248,11 @@ const VARIABLE_SOURCE_OPTIONS = [
 	{ value: 'phone', label: 'Teléfono' },
 	{ value: 'wa_id', label: 'WhatsApp ID' },
 	{ value: 'product_name', label: 'Producto principal' },
+	{ value: 'checkout_url', label: 'Link del carrito' },
+	{ value: 'abandoned_checkout_url', label: 'Link carrito alternativo' },
+	{ value: 'checkout_id', label: 'ID del carrito' },
+	{ value: 'total_amount', label: 'Total formateado carrito' },
+	{ value: 'total_raw', label: 'Total bruto carrito' },
 	{ value: 'order_count', label: 'Cantidad de compras' },
 	{ value: 'last_order_id', label: 'Último pedido ID' },
 	{ value: 'last_order_number', label: 'Último pedido número' },
@@ -404,6 +417,18 @@ function guessSourceForVariable(variableKey = '') {
 		)
 	) {
 		return 'last_order_number';
+	}
+
+	if (['checkout_url', 'abandoned_checkout_url', 'cart_link', 'link_carrito', 'link'].includes(key)) {
+		return 'checkout_url';
+	}
+
+	if (['checkout_id', 'cart_id', 'carrito_id'].includes(key)) {
+		return 'checkout_id';
+	}
+
+	if (['total_amount', 'total_raw', 'monto_carrito', 'importe_carrito'].includes(key)) {
+		return 'total_amount';
 	}
 
 	if (['email', 'mail', 'customer_email'].includes(key)) {
@@ -703,6 +728,7 @@ export default function CampaignComposerPanel({
 	});
 
 	const [customerFilters, setCustomerFilters] = useState(initialCustomerFilters);
+	const [abandonedCartFilters, setAbandonedCartFilters] = useState(initialAbandonedCartFilters);
 	const [customerAudience, setCustomerAudience] = useState({
 		customers: [],
 		stats: {},
@@ -714,6 +740,12 @@ export default function CampaignComposerPanel({
 		},
 		loading: false,
 		loadingAll: false,
+		error: '',
+	});
+	const [abandonedCartAudience, setAbandonedCartAudience] = useState({
+		recipients: [],
+		total: 0,
+		loading: false,
 		error: '',
 	});
 	const [selectedCustomersMap, setSelectedCustomersMap] = useState({});
@@ -778,6 +810,17 @@ export default function CampaignComposerPanel({
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [form.audienceMode]);
+	useEffect(() => {
+		if (
+			form.audienceMode === 'abandoned_carts' &&
+			!abandonedCartAudience.loading &&
+			!abandonedCartAudience.recipients.length &&
+			!abandonedCartAudience.error
+		) {
+			void loadAbandonedCarts(abandonedCartFilters);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [form.audienceMode, selectedTemplate?.id]);
 	useEffect(() => {
 		void loadCatalogOptions();
 	}, []);
@@ -869,9 +912,24 @@ export default function CampaignComposerPanel({
 			.filter((recipient) => recipient.phone);
 	}, [selectedCustomers, extraVariables, variableMapping, templatePlaceholders]);
 
+	const abandonedCartRecipients = useMemo(() => {
+		return (Array.isArray(abandonedCartAudience.recipients) ? abandonedCartAudience.recipients : [])
+			.map((recipient) => ({
+				contactId: recipient.contactId || null,
+				contactName: recipient.contactName || recipient.phone || '',
+				phone: normalizePhone(recipient.phone || ''),
+				waId: normalizePhone(recipient.phone || ''),
+				variables: recipient.variables || {},
+				externalKey: recipient.externalKey || null,
+			}))
+			.filter((recipient) => recipient.phone);
+	}, [abandonedCartAudience.recipients]);
+
 	const recipients = useMemo(() => {
-		return form.audienceMode === 'customers' ? customerRecipients : manualRecipients;
-	}, [form.audienceMode, customerRecipients, manualRecipients]);
+		if (form.audienceMode === 'customers') return customerRecipients;
+		if (form.audienceMode === 'abandoned_carts') return abandonedCartRecipients;
+		return manualRecipients;
+	}, [form.audienceMode, customerRecipients, abandonedCartRecipients, manualRecipients]);
 
 	const estimatedCost = useMemo(() => recipients.length * 0.06, [recipients.length]);
 
@@ -1170,6 +1228,47 @@ export default function CampaignComposerPanel({
 		}
 	}
 
+	async function loadAbandonedCarts(nextFilters = abandonedCartFilters) {
+		setAbandonedCartAudience((current) => ({
+			...current,
+			loading: true,
+			error: '',
+		}));
+
+		try {
+			const data = await previewAbandonedCartAudience({
+				templateId: selectedTemplate?.id || null,
+				filters: {
+					daysBack: Number(nextFilters.daysBack || 7),
+					status: nextFilters.status || 'NEW',
+					limit: Number(nextFilters.limit || 50),
+					minTotal:
+						nextFilters.minTotal === '' || nextFilters.minTotal === null
+							? null
+							: Number(nextFilters.minTotal),
+					productQuery: String(nextFilters.productQuery || '').trim(),
+				},
+			});
+
+			setAbandonedCartAudience({
+				recipients: Array.isArray(data?.recipients) ? data.recipients : [],
+				total: Number(data?.total || 0),
+				loading: false,
+				error: '',
+			});
+		} catch (error) {
+			setAbandonedCartAudience({
+				recipients: [],
+				total: 0,
+				loading: false,
+				error:
+					error?.response?.data?.message ||
+					error?.response?.data?.error ||
+					'No se pudieron cargar los carritos abandonados.',
+			});
+		}
+	}
+
 	function updateCustomerFilter(field, value) {
 		setCustomerFilters((current) => ({
 			...current,
@@ -1180,6 +1279,13 @@ export default function CampaignComposerPanel({
 		if (field !== 'page') {
 			clearFilteredSelection();
 		}
+	}
+
+	function updateAbandonedCartFilter(field, value) {
+		setAbandonedCartFilters((current) => ({
+			...current,
+			[field]: value,
+		}));
 	}
 
 	function updateVariableMapping(key, patch) {
@@ -1411,7 +1517,12 @@ export default function CampaignComposerPanel({
 			templateId: selectedTemplate.id,
 			languageCode: selectedTemplate.language || 'es_AR',
 			recipients,
-			audienceSource: form.audienceMode === 'customers' ? 'customers' : 'manual',
+			audienceSource:
+				form.audienceMode === 'customers'
+					? 'customers'
+					: form.audienceMode === 'abandoned_carts'
+						? 'abandoned_carts'
+						: 'manual',
 			audienceFilters:
 				form.audienceMode === 'customers'
 					? {
@@ -1438,6 +1549,18 @@ export default function CampaignComposerPanel({
 						selectedCount: selectedCustomers.length,
 						variableMapping,
 					}
+					: form.audienceMode === 'abandoned_carts'
+						? {
+							daysBack: Number(abandonedCartFilters.daysBack || 7),
+							status: abandonedCartFilters.status || 'NEW',
+							limit: Number(abandonedCartFilters.limit || 50),
+							minTotal:
+								abandonedCartFilters.minTotal === ''
+									? null
+									: Number(abandonedCartFilters.minTotal),
+							productQuery: abandonedCartFilters.productQuery || '',
+							variableMapping,
+						}
 					: {
 						variableMapping,
 					},
@@ -1592,6 +1715,20 @@ export default function CampaignComposerPanel({
 								>
 									<strong>Lista manual</strong>
 									<span>Un contacto por línea: teléfono|nombre|producto|talle|color</span>
+								</button>
+							) : null}
+
+							{audienceModeOptions.includes('abandoned_carts') ? (
+								<button
+									type="button"
+									className={`campaign-choice-card ${form.audienceMode === 'abandoned_carts' ? 'active' : ''}`}
+									onClick={() => {
+										setForm((current) => ({ ...current, audienceMode: 'abandoned_carts' }));
+										setSubmitError('');
+									}}
+								>
+									<strong>Carritos abandonados</strong>
+									<span>Segmenta por ventana, monto y producto para salir rapido con otro template</span>
 								</button>
 							) : null}
 						</div>
@@ -2022,6 +2159,129 @@ export default function CampaignComposerPanel({
 						{customerAudience.error ? (
 							<div className="campaign-inline-error">{customerAudience.error}</div>
 						) : null}
+					</div>
+				) : form.audienceMode === 'abandoned_carts' ? (
+					<div className="campaign-builder-section campaign-builder-section--audience">
+						<div className="campaign-step-head">
+							<div>
+								<span className="campaign-step-badge">2. Audiencia</span>
+								<h4>Segmenta carritos abandonados</h4>
+								<p>
+									Usa esta vista para mandar cualquier template rapido a carritos abandonados.
+								</p>
+							</div>
+							<div className="campaign-customer-kpi campaign-customer-kpi--large">
+								<strong>{formatCompactNumber(abandonedCartAudience.total || recipients.length)}</strong>
+								<span>carritos encontrados</span>
+							</div>
+						</div>
+
+						<div className="campaign-filter-block">
+							<div className="campaign-filter-block__head">
+								<strong>Filtros</strong>
+								<span>Acota por ventana, estado, monto minimo y producto.</span>
+							</div>
+							<div className="campaign-builder-grid campaign-builder-grid--filters">
+								<label className="field">
+									<span>Ventana</span>
+									<select
+										value={abandonedCartFilters.daysBack}
+										onChange={(event) => updateAbandonedCartFilter('daysBack', Number(event.target.value))}
+									>
+										<option value={1}>1 dia</option>
+										<option value={3}>3 dias</option>
+										<option value={7}>7 dias</option>
+										<option value={15}>15 dias</option>
+										<option value={30}>30 dias</option>
+									</select>
+								</label>
+
+								<label className="field">
+									<span>Estado</span>
+									<select
+										value={abandonedCartFilters.status}
+										onChange={(event) => updateAbandonedCartFilter('status', event.target.value)}
+									>
+										<option value="NEW">Nuevos</option>
+										<option value="CONTACTED">Contactados</option>
+										<option value="ALL">Todos</option>
+									</select>
+								</label>
+
+								<label className="field">
+									<span>Limite</span>
+									<input
+										type="number"
+										min="1"
+										max="500"
+										value={abandonedCartFilters.limit}
+										onChange={(event) => updateAbandonedCartFilter('limit', Number(event.target.value || 50))}
+									/>
+								</label>
+
+								<label className="field">
+									<span>Monto minimo</span>
+									<input
+										type="number"
+										min="0"
+										value={abandonedCartFilters.minTotal}
+										onChange={(event) => updateAbandonedCartFilter('minTotal', event.target.value)}
+										placeholder="0"
+									/>
+								</label>
+
+								<label className="field">
+									<span>Producto</span>
+									<input
+										value={abandonedCartFilters.productQuery}
+										onChange={(event) => updateAbandonedCartFilter('productQuery', event.target.value)}
+										placeholder="body, faja, calza"
+									/>
+								</label>
+							</div>
+						</div>
+
+						<div className="campaign-inline-actions campaign-inline-actions--wrap">
+							<button
+								type="button"
+								className="button primary"
+								onClick={() => loadAbandonedCarts(abandonedCartFilters)}
+								disabled={abandonedCartAudience.loading}
+							>
+								{abandonedCartAudience.loading ? 'Buscando...' : 'Actualizar audiencia'}
+							</button>
+						</div>
+
+						<div className="campaign-audience-summary-grid">
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(abandonedCartAudience.total || 0)}</strong>
+								<span>carritos encontrados</span>
+							</div>
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(recipients.length)}</strong>
+								<span>destinatarios utilizables</span>
+							</div>
+							<div className="campaign-audience-summary-card">
+								<strong>{formatCompactNumber(abandonedCartFilters.daysBack)}</strong>
+								<span>dias analizados</span>
+							</div>
+							<div className="campaign-audience-summary-card">
+								<strong>{abandonedCartFilters.productQuery ? 'Si' : 'No'}</strong>
+								<span>filtro por producto</span>
+							</div>
+						</div>
+
+						{abandonedCartAudience.error ? (
+							<div className="campaign-inline-error">{abandonedCartAudience.error}</div>
+						) : recipients.length ? (
+							<div className="campaign-inline-success">
+								Audiencia lista con {formatCompactNumber(recipients.length)} carrito(s) para esta campana.
+							</div>
+						) : (
+							<div className="campaign-inline-warning">
+								Actualiza la audiencia para ver carritos disponibles.
+							</div>
+						)}
 					</div>
 				) : (
 					<div className="campaign-builder-section campaign-builder-section--audience">

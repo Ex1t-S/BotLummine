@@ -528,7 +528,19 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	});
 
 	const abandonedCartPreviewMutation = useMutation({
-		mutationFn: ({ templateId, filters }) => previewAbandonedCartAudience({ templateId, filters }),
+		mutationFn: ({
+			templateId,
+			filters,
+			variableMapping = {},
+			manualVariables = {},
+		}) => previewAbandonedCartAudience({
+			templateId,
+			filters: {
+				...(filters || {}),
+				variableMapping,
+				manualVariables,
+			},
+		}),
 		onSuccess: (response) => {
 			setAbandonedCartPreview({
 				total: response?.total || 0,
@@ -585,20 +597,36 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	});
 
 	const createAbandonedCartCampaignMutation = useMutation({
-		mutationFn: async ({ launchNow }) => {
-			if (!selectedTemplate?.id) {
+		mutationFn: async (input = {}) => {
+			const {
+				launchNow = false,
+				name = '',
+				notes = null,
+				templateId = null,
+				languageCode = null,
+				filters = null,
+				variableMapping = {},
+				manualVariables = {},
+			} = input;
+			const resolvedTemplateId = templateId || selectedTemplate?.id || null;
+
+			if (!resolvedTemplateId) {
 				throw new Error('Elegí un template antes de crear la campaña.');
 			}
 
 			const payload = {
 				name:
-					String(abandonedCartForm.name || '').trim() ||
+					String(name || abandonedCartForm.name || '').trim() ||
 					`Recuperación ${abandonedCartForm.daysBack} días`,
-				templateId: selectedTemplate.id,
-				languageCode: selectedTemplate.language || 'es_AR',
+				templateId: resolvedTemplateId,
+				languageCode: languageCode || selectedTemplate?.language || 'es_AR',
 				audienceSource: 'abandoned_carts',
-				audienceFilters: buildAbandonedCartFilters(abandonedCartForm),
-				notes: abandonedCartForm.notes || null,
+				audienceFilters: {
+					...(filters || buildAbandonedCartFilters(abandonedCartForm)),
+					variableMapping,
+					manualVariables,
+				},
+				notes: (notes ?? abandonedCartForm.notes) || null,
 			};
 
 			const response = await api.post('/campaigns', payload);
@@ -729,20 +757,24 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		}));
 	}
 
-	function handlePreviewAbandonedCarts() {
-		if (!selectedTemplate?.id) {
+	function handlePreviewAbandonedCarts(payload = {}) {
+		const resolvedTemplateId = payload.templateId || selectedTemplate?.id || null;
+
+		if (!resolvedTemplateId) {
 			showFeedback('error', 'Elegí un template para previsualizar la campaña.');
 			return;
 		}
 
 		abandonedCartPreviewMutation.mutate({
-			templateId: selectedTemplate.id,
-			filters: buildAbandonedCartFilters(abandonedCartForm),
+			templateId: resolvedTemplateId,
+			filters: payload.filters || buildAbandonedCartFilters(abandonedCartForm),
+			variableMapping: payload.variableMapping || {},
+			manualVariables: payload.manualVariables || {},
 		});
 	}
 
-	function handleCreateAbandonedCartCampaign(launchNow = false) {
-		createAbandonedCartCampaignMutation.mutate({ launchNow });
+	function handleCreateAbandonedCartCampaign(payload = {}) {
+		createAbandonedCartCampaignMutation.mutate(payload);
 	}
 
 	return {
