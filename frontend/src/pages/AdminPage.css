@@ -195,6 +195,64 @@
 	font-size: 13px;
 }
 
+.tenant-admin-whatsapp-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: center;
+	padding: 14px;
+	border: 1px solid #d7dee5;
+	border-radius: 8px;
+	background: #ffffff;
+}
+
+.tenant-admin-whatsapp-card div {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.tenant-admin-whatsapp-card strong,
+.tenant-admin-whatsapp-card span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tenant-admin-whatsapp-card strong {
+	color: #172033;
+	font-size: 15px;
+	font-weight: 800;
+	white-space: nowrap;
+}
+
+.tenant-admin-whatsapp-card span {
+	color: #64748b;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.tenant-admin-whatsapp-card button {
+	border: 1px solid var(--ui-primary-strong, #0a5f59);
+	border-radius: 8px;
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+	font: inherit;
+	font-weight: 800;
+	padding: 11px 14px;
+	min-height: 42px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tenant-admin-whatsapp-card button:hover:not(:disabled) {
+	background: var(--ui-primary-strong, #0a5f59);
+}
+
+.tenant-admin-whatsapp-card button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
 .tenant-admin-provider-actions,
 .tenant-admin-shopify-actions {
 	display: grid;
@@ -1145,7 +1203,8 @@
 	}
 
 	.tenant-admin-provider-actions,
-	.tenant-admin-shopify-actions {
+	.tenant-admin-shopify-actions,
+	.tenant-admin-whatsapp-card {
 		grid-template-columns: 1fr;
 	}
 
@@ -1486,6 +1545,7 @@
 .tenant-admin-empty,
 .tenant-admin-table-wrap,
 .tenant-admin-brand-logo-box,
+.tenant-admin-whatsapp-card,
 .workspace-analytics-card,
 .workspace-card-hero,
 .workspace-card-progress > div,
@@ -1683,6 +1743,7 @@
 .dark .admin-shell .admin-content .tenant-admin-table-wrap,
 .dark .admin-shell .admin-content .tenant-admin-brand-logo-box,
 .dark .admin-shell .admin-content .tenant-admin-logo-form,
+.dark .admin-shell .admin-content .tenant-admin-whatsapp-card,
 .dark .admin-shell .admin-content .tenant-admin-kill-switch,
 .dark .admin-shell .admin-content .workspace-analytics-card,
 .dark .admin-shell .admin-content .workspace-card-hero,
@@ -1716,6 +1777,7 @@
 
 .dark .admin-shell .admin-content .tenant-admin-header h2,
 .dark .admin-shell .admin-content .tenant-admin-panel h3,
+.dark .admin-shell .admin-content .tenant-admin-whatsapp-card strong,
 .dark .admin-shell .admin-content .workspace-card-brand strong,
 .dark .admin-shell .admin-content .workspace-card-hero strong,
 .dark .admin-shell .admin-content .workspace-card-stats strong,
@@ -1726,6 +1788,7 @@
 
 .dark .admin-shell .admin-content .tenant-admin-header p,
 .dark .admin-shell .admin-content .tenant-admin-panel-heading p,
+.dark .admin-shell .admin-content .tenant-admin-whatsapp-card span,
 .dark .admin-shell .admin-content .workspace-card-brand span,
 .dark .admin-shell .admin-content .workspace-card-hero small,
 .dark .admin-shell .admin-content .workspace-card-chat small,

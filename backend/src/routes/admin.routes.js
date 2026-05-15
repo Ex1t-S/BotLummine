@@ -3,6 +3,7 @@ import { requireAuth, requirePlatformAdmin, requireAdmin } from '../middleware/a
 import {
 	createWorkspace,
 	deleteWorkspace,
+	completeWhatsAppEmbeddedSignupForWorkspace,
 	createWorkspaceUser,
 	generateWorkspaceContextDraft,
 	getPlatformDiagnostics,
@@ -41,6 +42,7 @@ router.get('/workspaces/:workspaceId/feature-flags', requirePlatformAdmin, getWo
 router.patch('/workspaces/:workspaceId/feature-flags/:key', requirePlatformAdmin, updateWorkspaceFeatureFlag);
 router.post('/workspaces/:workspaceId/catalog/sync', requirePlatformAdmin, runWorkspaceCatalogSync);
 router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspaceBranding);
+router.post('/workspaces/:workspaceId/whatsapp/embedded-signup/complete', requireAdmin, completeWhatsAppEmbeddedSignupForWorkspace);
 router.put('/workspaces/:workspaceId/whatsapp-channel', requirePlatformAdmin, upsertWhatsAppChannel);
 router.put('/workspaces/:workspaceId/commerce-connections/:provider', requirePlatformAdmin, upsertCommerceConnection);
 router.put('/workspaces/:workspaceId/logistics-connections/:provider', requirePlatformAdmin, upsertLogisticsConnection);

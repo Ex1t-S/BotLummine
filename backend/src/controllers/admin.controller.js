@@ -26,6 +26,7 @@ import {
 } from '../services/workspaces/workspace-feature-flags.service.js';
 import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { getShopifyClient } from '../services/shopify/client.js';
+import { completeWhatsAppEmbeddedSignup } from '../services/whatsapp/whatsapp-embedded-signup.service.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -1838,6 +1839,88 @@ export async function upsertWhatsAppChannel(req, res, next) {
 		return res.json({
 			ok: true,
 			channel: sanitizeWhatsAppChannel(channel),
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req, {
+			allowDefaultForPlatformAdmin: Boolean(req.params?.workspaceId),
+		});
+		assertWorkspaceAdmin(req, workspaceId);
+
+		const result = await completeWhatsAppEmbeddedSignup({
+			code: req.body?.code,
+			wabaId: req.body?.wabaId || req.body?.waba_id,
+			phoneNumberId: req.body?.phoneNumberId || req.body?.phone_number_id,
+			businessId: req.body?.businessId || req.body?.business_id,
+		});
+
+		const existingPhone = await prisma.whatsAppChannel.findUnique({
+			where: { phoneNumberId: result.phoneNumberId },
+			select: { id: true, workspaceId: true },
+		});
+
+		if (existingPhone?.workspaceId && existingPhone.workspaceId !== workspaceId) {
+			return res.status(409).json({
+				ok: false,
+				error: 'Ese numero de WhatsApp ya esta conectado a otra marca.',
+			});
+		}
+
+		const channelData = {
+			workspaceId,
+			name: result.phoneNumber?.verified_name || result.waba?.name || 'Canal principal',
+			wabaId: result.wabaId,
+			phoneNumberId: result.phoneNumberId,
+			displayPhoneNumber: result.displayPhoneNumber || null,
+			accessToken: encryptSecret(result.accessToken),
+			verifyToken: null,
+			graphVersion: result.graphVersion,
+			status: 'ACTIVE',
+			rawPayload: {
+				source: 'embedded_signup',
+				businessId: result.businessId || null,
+				waba: result.waba || null,
+				phoneNumber: result.phoneNumber || null,
+				subscription: result.subscription || null,
+				token: result.token || null,
+				connectedByUserId: req.user?.id || null,
+				connectedAt: new Date().toISOString(),
+			},
+		};
+
+		const channel = await prisma.$transaction(async (tx) => {
+			const connectedChannel = existingPhone?.id
+				? await tx.whatsAppChannel.update({
+						where: { id: existingPhone.id },
+						data: channelData,
+				  })
+				: await tx.whatsAppChannel.create({
+						data: channelData,
+				  });
+
+			await tx.whatsAppChannel.updateMany({
+				where: {
+					workspaceId,
+					id: { not: connectedChannel.id },
+					status: 'ACTIVE',
+				},
+				data: { status: 'DISABLED' },
+			});
+
+			return connectedChannel;
+		});
+
+		const workspace = await buildWorkspacePayload(workspaceId);
+
+		return res.json({
+			ok: true,
+			channel: sanitizeWhatsAppChannel(channel),
+			workspace,
 		});
 	} catch (error) {
 		next(error);

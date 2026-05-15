@@ -69,6 +69,10 @@ const EMPTY_PAYMENT_FORM = {
 	transferExtra: ''
 };
 
+const META_APP_ID = import.meta.env.VITE_META_APP_ID || import.meta.env.VITE_FACEBOOK_APP_ID || '';
+const META_GRAPH_VERSION = import.meta.env.VITE_META_GRAPH_VERSION || import.meta.env.VITE_WHATSAPP_GRAPH_VERSION || 'v25.0';
+const WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || '';
+
 const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
 	{ key: 'integrations', label: 'Integraciones' },
@@ -207,6 +211,73 @@ function Textarea({ label, value, onChange, rows = 3 }) {
 
 function StatusPill({ children }) {
 	return <span className="tenant-admin-pill">{children || 'Sin datos'}</span>;
+}
+
+function loadFacebookSdk() {
+	if (typeof window === 'undefined') {
+		return Promise.reject(new Error('El navegador no esta disponible.'));
+	}
+
+	if (window.FB) {
+		return Promise.resolve(window.FB);
+	}
+
+	if (window.__facebookSdkPromise) {
+		return window.__facebookSdkPromise;
+	}
+
+	window.__facebookSdkPromise = new Promise((resolve, reject) => {
+		const existingScript = document.getElementById('facebook-jssdk');
+		const initialize = () => {
+			if (!window.FB) {
+				reject(new Error('No se pudo cargar el SDK de Meta.'));
+				return;
+			}
+			window.FB.init({
+				appId: META_APP_ID,
+				cookie: true,
+				xfbml: false,
+				version: META_GRAPH_VERSION
+			});
+			resolve(window.FB);
+		};
+
+		if (existingScript) {
+			existingScript.addEventListener('load', initialize, { once: true });
+			existingScript.addEventListener('error', () => reject(new Error('No se pudo cargar el SDK de Meta.')), { once: true });
+			return;
+		}
+
+		const script = document.createElement('script');
+		script.id = 'facebook-jssdk';
+		script.async = true;
+		script.defer = true;
+		script.crossOrigin = 'anonymous';
+		script.src = 'https://connect.facebook.net/es_LA/sdk.js';
+		script.onload = initialize;
+		script.onerror = () => reject(new Error('No se pudo cargar el SDK de Meta.'));
+		document.body.appendChild(script);
+	});
+
+	return window.__facebookSdkPromise;
+}
+
+function parseEmbeddedSignupMessage(event) {
+	const origin = String(event?.origin || '');
+	if (!/^https:\/\/([a-z0-9-]+\.)*(facebook|meta)\.com$/i.test(origin)) return null;
+
+	const payload = typeof event.data === 'string'
+		? (() => {
+				try {
+					return JSON.parse(event.data);
+				} catch {
+					return null;
+				}
+		  })()
+		: event.data;
+
+	if (payload?.type !== 'WA_EMBEDDED_SIGNUP') return null;
+	return payload;
 }
 
 function SectionIntro({ title, description }) {
@@ -465,6 +536,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
 	const [generatingBusinessContext, setGeneratingBusinessContext] = useState(false);
 	const [uploadingLogo, setUploadingLogo] = useState(false);
+	const [whatsappConnecting, setWhatsappConnecting] = useState(false);
 	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -1073,6 +1145,80 @@ export default function AdminPage({ defaultTab = '' }) {
 		window.location.href = buildApiUrl(`/shopify/install?${params.toString()}`);
 	}
 
+	async function handleConnectWhatsApp() {
+		if (!selectedWorkspaceId || whatsappConnecting) return;
+		if (!META_APP_ID || !WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID) {
+			setNotice('');
+			setError('Falta configurar VITE_META_APP_ID y VITE_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID.');
+			return;
+		}
+
+		setWhatsappConnecting(true);
+		setSaving(true);
+		setNotice('');
+		setError('');
+
+		let embeddedSignupData = {};
+		const handleEmbeddedSignupMessage = (event) => {
+			const payload = parseEmbeddedSignupMessage(event);
+			if (!payload) return;
+
+			if (payload.event === 'FINISH' || payload.event === 'FINISH_ONLY_WABA') {
+				embeddedSignupData = {
+					...embeddedSignupData,
+					...(payload.data || {})
+				};
+			}
+		};
+
+		try {
+			window.addEventListener('message', handleEmbeddedSignupMessage);
+			const FB = await loadFacebookSdk();
+			const authPayload = await new Promise((resolve, reject) => {
+				FB.login((response) => {
+					const code = response?.authResponse?.code;
+					if (!code) {
+						reject(new Error('Conexion cancelada o sin autorizacion de Meta.'));
+						return;
+					}
+					resolve({
+						code,
+						wabaId: embeddedSignupData.waba_id || embeddedSignupData.wabaId || '',
+						phoneNumberId: embeddedSignupData.phone_number_id || embeddedSignupData.phoneNumberId || '',
+						businessId: embeddedSignupData.business_id || embeddedSignupData.businessId || ''
+					});
+				}, {
+					config_id: WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
+					response_type: 'code',
+					override_default_response_type: true,
+					extras: {
+						setup: {},
+						feature: 'whatsapp_embedded_signup'
+					}
+				});
+			});
+
+			const res = await api.post(
+				`/admin/workspaces/${selectedWorkspaceId}/whatsapp/embedded-signup/complete`,
+				authPayload
+			);
+			const nextWorkspace = res.data.workspace || null;
+			if (nextWorkspace) {
+				setWorkspace(nextWorkspace);
+				setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
+			}
+			await loadWorkspaceDetail(selectedWorkspaceId);
+			await refreshMe();
+			showNotice('WhatsApp conectado. El chatbot ya puede usar este numero.');
+		} catch (err) {
+			showError(err);
+		} finally {
+			window.removeEventListener('message', handleEmbeddedSignupMessage);
+			setWhatsappConnecting(false);
+			setSaving(false);
+		}
+	}
+
 	function editUser(item) {
 		setUserForm({
 			id: item.id,
@@ -1096,6 +1242,11 @@ export default function AdminPage({ defaultTab = '' }) {
 	const isShopifySelected = selectedBrandProvider === 'SHOPIFY';
 	const isTiendanubeSelected = selectedBrandProvider === 'TIENDANUBE';
 	const brandLogoUrl = resolveApiUrl(workspaceForm.branding?.logoUrl || '');
+	const currentWhatsAppChannel = workspace?.whatsappChannels?.[0] || null;
+	const whatsappConnected = Boolean(currentWhatsAppChannel?.phoneNumberId && currentWhatsAppChannel?.status === 'ACTIVE');
+	const whatsappStatusLabel = whatsappConnected
+		? 'Conectado'
+		: currentWhatsAppChannel?.status || 'Sin conectar';
 
 	return (
 		<div className="tenant-admin-page">
@@ -1405,6 +1556,37 @@ export default function AdminPage({ defaultTab = '' }) {
 							<button type="submit" disabled={saving}>{userForm.id ? 'Actualizar usuario' : 'Crear usuario'}</button>
 							{userForm.id ? <button type="button" onClick={() => setUserForm(EMPTY_USER_FORM)}>Cancelar edicion</button> : null}
 						</form>
+					</section>
+				) : null}
+
+				{!platformAdmin && activeTab === 'integrations' ? (
+					<section className="tenant-admin-panel tenant-admin-whatsapp-connect">
+						<SectionIntro
+							title="WhatsApp"
+							description="ConectÃ¡ el nÃºmero oficial de la marca con Meta para activar el inbox, el chatbot y las campaÃ±as."
+						/>
+						<div className="tenant-admin-metrics">
+							<StatusPill>Estado: {whatsappStatusLabel}</StatusPill>
+							<StatusPill>Numero: {currentWhatsAppChannel?.displayPhoneNumber || 'sin conectar'}</StatusPill>
+							<StatusPill>WABA: {currentWhatsAppChannel?.wabaId || 'sin conectar'}</StatusPill>
+						</div>
+						<div className="tenant-admin-whatsapp-card">
+							<div>
+								<strong>{whatsappConnected ? 'WhatsApp conectado' : 'Conectar WhatsApp Business'}</strong>
+								<span>
+									{whatsappConnected
+										? 'El chatbot usa este canal para responder mensajes y enviar plantillas.'
+										: 'Vas a elegir o crear el portafolio comercial, WABA y numero desde el flujo oficial de Meta.'}
+								</span>
+							</div>
+							<button
+								type="button"
+								disabled={saving || loading || whatsappConnecting || !selectedWorkspaceId}
+								onClick={handleConnectWhatsApp}
+							>
+								{whatsappConnecting ? 'Conectando...' : whatsappConnected ? 'Reconectar WhatsApp' : 'Conectar WhatsApp'}
+							</button>
+						</div>
 					</section>
 				) : null}
 
