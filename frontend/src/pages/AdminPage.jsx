@@ -123,6 +123,24 @@ function fieldValue(value) {
 	return value == null ? '' : String(value);
 }
 
+function normalizeLookupValue(value = '') {
+	return String(value || '')
+		.trim()
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+}
+
+function isVeraWorkspace(workspace = {}) {
+	const candidates = [
+		workspace?.slug,
+		workspace?.name,
+		workspace?.aiConfig?.businessName
+	].map(normalizeLookupValue);
+
+	return candidates.some((value) => value === 'vera' || value.includes('vera'));
+}
+
 function findCommerceConnection(workspace, provider) {
 	return workspace?.commerceConnections?.find((item) => item.provider === provider) || null;
 }
@@ -1242,6 +1260,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const isShopifySelected = selectedBrandProvider === 'SHOPIFY';
 	const isTiendanubeSelected = selectedBrandProvider === 'TIENDANUBE';
 	const brandLogoUrl = resolveApiUrl(workspaceForm.branding?.logoUrl || '');
+	const showWhatsAppEmbeddedSignup = !platformAdmin && isVeraWorkspace(workspace);
 	const currentWhatsAppChannel = workspace?.whatsappChannels?.[0] || null;
 	const whatsappConnected = Boolean(currentWhatsAppChannel?.phoneNumberId && currentWhatsAppChannel?.status === 'ACTIVE');
 	const whatsappStatusLabel = whatsappConnected
@@ -1559,7 +1578,7 @@ export default function AdminPage({ defaultTab = '' }) {
 					</section>
 				) : null}
 
-				{!platformAdmin && activeTab === 'integrations' ? (
+				{showWhatsAppEmbeddedSignup && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel tenant-admin-whatsapp-connect">
 						<SectionIntro
 							title="WhatsApp"
