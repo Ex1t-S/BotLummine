@@ -42,6 +42,18 @@ function ensureArgentinaCountryCode(value = '') {
 	return `54${digits}`;
 }
 
+function normalizeArgentinaProviderArtifacts(value = '') {
+	if (value.startsWith('5490')) {
+		return `549${value.slice(4)}`;
+	}
+
+	if (value.startsWith('540')) {
+		return `549${value.slice(3)}`;
+	}
+
+	return value;
+}
+
 function removeDomesticMobile15(national = '') {
 	if (national.length !== 12) {
 		return national;
@@ -62,7 +74,7 @@ function removeDomesticMobile15(national = '') {
 }
 
 function removeMobile15AfterArea(value = '') {
-	const digits = ensureArgentinaCountryCode(value);
+	const digits = normalizeArgentinaProviderArtifacts(ensureArgentinaCountryCode(value));
 
 	if (!digits.startsWith('54')) {
 		return digits;

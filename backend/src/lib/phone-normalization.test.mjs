@@ -25,6 +25,11 @@ describe('normalizeWhatsAppIdentityPhone', () => {
 		assert.equal(normalizeWhatsAppIdentityPhone('0341 512-3456'), '5493415123456');
 	});
 
+	it('fixes common Argentina provider artifacts before validating', () => {
+		assert.equal(normalizeWhatsAppIdentityPhone('54901164423384'), '5491164423384');
+		assert.equal(normalizeWhatsAppIdentityPhone('5402213047454'), '5492213047454');
+	});
+
 	it('rejects malformed Argentine numbers instead of producing short WhatsApp ids', () => {
 		assert.equal(normalizeWhatsAppIdentityPhone('549225123456'), '');
 		assert.equal(normalizeWhatsAppIdentityPhone('54918555447'), '');
