@@ -1,6 +1,7 @@
 import { runAssistantReply } from '../ai/index.js';
 import { buildPrompt } from '../common/prompt-builder.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
+import { logger } from '../../lib/logger.js';
 import {
 	detectIntent,
 	extractOrderNumber,
@@ -486,7 +487,11 @@ export async function runConversationTurn({
 			...nextStatePayload
 		};
 	} catch (catalogError) {
-		console.error('Error buscando productos en catálogo local:', catalogError);
+		logger.warn('catalog.conversation_turn_lookup_failed', {
+			workspaceId,
+			conversationId: currentConversation?.id || null,
+			error: catalogError,
+		});
 	}
 
 	const responsePolicy = buildResponsePolicy({
@@ -624,7 +629,11 @@ export async function runConversationTurn({
 			aiMeta = aiResult;
 			postReplyHandoff = audited.triggerHumanHandoff;
 		} catch (error) {
-			console.error('Error en flujo de respuesta automática:', error);
+			logger.error('ai.conversation_turn_failed', {
+				workspaceId,
+				conversationId: currentConversation?.id || null,
+				error,
+			});
 			finalReply = buildFallbackOrderAwareReply({
 				intent,
 				liveOrderContext,

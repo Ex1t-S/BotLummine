@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 
 export const DEFAULT_MENU_PATHS = {
@@ -574,7 +575,7 @@ export async function getWhatsAppMenuRuntimeConfig({ workspaceId = DEFAULT_WORKS
 		});
 		return runtimePayload;
 	} catch (error) {
-		console.error('[WHATSAPP MENU] No se pudo cargar la configuración desde la base. Se usa fallback.', error);
+		logger.warn('whatsapp_menu.runtime_config_failed', { workspaceId: resolvedWorkspaceId, error });
 		const runtimePayload = buildRuntimePayload({
 			id: null,
 			name: 'Fallback local',

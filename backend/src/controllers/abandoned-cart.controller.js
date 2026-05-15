@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
 import { filterRecoverableAbandonedCarts } from '../services/campaigns/campaign-attribution.service.js';
 import {
@@ -245,7 +246,7 @@ export async function postSyncAbandonedCarts(req, res) {
 			message: `Sync ${daysBack} días completada: ${result.syncedCount || result.count || 0} sincronizados y ${Number(result.deletedCount ?? result.removedCount ?? 0)} eliminados fuera de ventana.`
 		});
 	} catch (error) {
-		console.error('[ABANDONED CARTS][SYNC ERROR]', error);
+		logger.error('abandoned_cart.sync_failed', { error });
 		return res.status(500).json({
 			ok: false,
 			error: error?.message || 'No se pudo sincronizar carritos abandonados.'

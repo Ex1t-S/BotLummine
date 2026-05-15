@@ -410,7 +410,12 @@ export async function processInboundMessage({
 		phone: normalizedWaId,
 		createdAt: createdInboundAt,
 	}).catch((error) => {
-		console.error('[CAMPAIGN ATTRIBUTION][CHAT]', error?.message || error);
+		logger.warn('campaign.attribution_chat_failed', {
+			workspaceId: resolvedWorkspaceId,
+			conversationId: conversation.id,
+			phone: maskPhone(normalizedWaId),
+			error,
+		});
 	});
 
 	await prisma.conversation.update({
@@ -1197,7 +1202,11 @@ export async function processInboundMessage({
 			}
 		});
 	} catch (catalogError) {
-		console.error('Error buscando productos en catálogo local:', catalogError);
+		logger.warn('catalog.conversation_lookup_failed', {
+			workspaceId: resolvedWorkspaceId,
+			conversationId: freshConversation.id,
+			error: catalogError,
+		});
 	}
 
 	promptState = sanitizeStateForSupportPrompt(enrichedState, intent);
@@ -1221,7 +1230,11 @@ export async function processInboundMessage({
 			queueDecision,
 		});
 	} catch (menuContextError) {
-		console.error('[MENU ASSISTANT] No se pudo construir el contexto:', menuContextError);
+		logger.warn('menu_assistant.context_build_failed', {
+			workspaceId: resolvedWorkspaceId,
+			conversationId: freshConversation.id,
+			error: menuContextError,
+		});
 	}
 
 	trace = {
@@ -1351,7 +1364,11 @@ export async function processInboundMessage({
 				});
 			}
 		} catch (aiError) {
-			console.error('Error en flujo de respuesta automática:', aiError);
+			logger.error('ai.autoreply_failed', {
+				workspaceId: resolvedWorkspaceId,
+				conversationId: freshConversation.id,
+				error: aiError,
+			});
 
 			finalReply = buildFallbackOrderAwareReply({
 				intent,

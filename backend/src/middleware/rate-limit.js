@@ -1,4 +1,5 @@
 import { captureSecurityEvent } from '../lib/sentry.js';
+import { logger } from '../lib/logger.js';
 
 const buckets = new Map();
 let warnedUpstashFallback = false;
@@ -122,13 +123,10 @@ export function createRateLimiter({
 			} catch (error) {
 				if (!warnedUpstashFallback) {
 					warnedUpstashFallback = true;
-					console.warn(JSON.stringify({
-						ts: new Date().toISOString(),
-						level: 'warn',
-						event: 'security.rate_limit_fallback',
+					logger.warn('security.rate_limit_fallback', {
 						scope,
-						error: error?.message || String(error),
-					}));
+						error,
+					});
 					captureSecurityEvent('security.rate_limit_fallback', {
 						extra: { scope, error: error?.message || String(error) },
 					});

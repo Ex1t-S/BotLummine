@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { getCatalogPage, syncCatalogForWorkspace, syncCatalogFromProvider } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
@@ -1323,7 +1324,7 @@ export async function getInboxStream(req, res, next) {
 				res.write(`event: inbox:update\n`);
 				res.write(`data: ${JSON.stringify(payload)}\n\n`);
 			} catch (error) {
-				console.error('[SSE][INBOX] write error:', error?.message || error);
+				logger.warn('inbox.stream_write_failed', { workspaceId, error });
 			}
 		});
 
@@ -1332,7 +1333,7 @@ export async function getInboxStream(req, res, next) {
 				res.write(`event: ping\n`);
 				res.write(`data: ${JSON.stringify({ ts: Date.now() })}\n\n`);
 			} catch (error) {
-				console.error('[SSE][INBOX] ping error:', error?.message || error);
+				logger.warn('inbox.stream_ping_failed', { workspaceId, error });
 			}
 		}, 25000);
 

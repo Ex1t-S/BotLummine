@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { pathToFileURL } from 'node:url';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { syncEnboxShipments } from '../services/enbox/enbox-sync.service.js';
 
 dotenv.config();
@@ -13,11 +14,11 @@ function resolveMode() {
 
 async function main() {
 	const mode = resolveMode();
-	console.log(`[JOB][ENBOX SYNC] start mode=${mode}`);
+	logger.info('enbox.sync_job_started', { mode });
 
 	const result = await syncEnboxShipments({ mode });
 
-	console.log('[JOB][ENBOX SYNC] result', {
+	logger.info('enbox.sync_job_finished', {
 		ok: result.ok,
 		started: result.started,
 		mode: result.lastMode || mode,
@@ -36,7 +37,7 @@ async function main() {
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
 	main()
 		.catch((error) => {
-			console.error('[JOB][ENBOX SYNC] failed', error);
+			logger.error('enbox.sync_job_failed', { error });
 			process.exitCode = 1;
 		})
 		.finally(async () => {

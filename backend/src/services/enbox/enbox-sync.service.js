@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 import { getOrderByNumber } from '../commerce/orders.service.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
@@ -35,7 +36,11 @@ const syncState = {
 function pushError(message) {
 	syncState.errors.push({ message, at: new Date().toISOString() });
 	syncState.message = message;
-	console.error(`[ENBOX SYNC] ${message}`);
+	logger.error('enbox.sync_error', {
+		workspaceId: syncState.workspaceId,
+		mode: syncState.lastMode,
+		message,
+	});
 }
 
 function resetSyncState(mode, workspaceId = DEFAULT_WORKSPACE_ID) {
@@ -50,16 +55,22 @@ function resetSyncState(mode, workspaceId = DEFAULT_WORKSPACE_ID) {
 	syncState.ordersScanned = 0;
 	syncState.ordersMatched = 0;
 	syncState.errors = [];
-	console.log(`[ENBOX SYNC] iniciando modo=${mode}`);
+	logger.info('enbox.sync_started', { workspaceId, mode });
 }
 
 function finishSyncState(message) {
 	syncState.running = false;
 	syncState.finishedAt = new Date().toISOString();
 	syncState.message = message;
-	console.log(
-		`[ENBOX SYNC] finalizado modo=${syncState.lastMode} checked=${syncState.shipmentsChecked} upserted=${syncState.shipmentsUpserted} scanned=${syncState.ordersScanned} matched=${syncState.ordersMatched} message="${message}"`
-	);
+	logger.info('enbox.sync_finished', {
+		workspaceId: syncState.workspaceId,
+		mode: syncState.lastMode,
+		shipmentsChecked: syncState.shipmentsChecked,
+		shipmentsUpserted: syncState.shipmentsUpserted,
+		ordersScanned: syncState.ordersScanned,
+		ordersMatched: syncState.ordersMatched,
+		message,
+	});
 }
 
 function subtractDays(days) {
@@ -202,7 +213,7 @@ async function upsertEnboxShipment(source = {}, workspaceId = DEFAULT_WORKSPACE_
 }
 
 async function refreshKnownShipments(limit = REFRESH_BATCH_SIZE, workspaceId = DEFAULT_WORKSPACE_ID) {
-	console.log(`[ENBOX SYNC] refrescando envíos conocidos limit=${limit}`);
+	logger.debug('enbox.refresh_started', { workspaceId, limit });
 	const rows = await prisma.enboxShipment.findMany({
 		where: { workspaceId },
 		orderBy: [{ lastSyncedAt: 'asc' }, { updatedAt: 'asc' }],
@@ -253,7 +264,12 @@ async function crawlDidWindow(mode = 'incremental', workspaceId = DEFAULT_WORKSP
 	const seedDid = await getDiscoverySeedDid(workspaceId);
 	const dids = buildDidRange(seedDid, mode);
 
-	console.log(`[ENBOX SYNC] crawl did window mode=${mode} seed=${seedDid} total=${dids.length}`);
+	logger.debug('enbox.did_crawl_started', {
+		workspaceId,
+		mode,
+		seedDid,
+		total: dids.length,
+	});
 
 	await mapInBatches(
 		dids,
@@ -305,7 +321,7 @@ async function getCandidateOrders(mode = 'incremental', workspaceId = DEFAULT_WO
 
 async function discoverRecentShipments(mode = 'incremental', workspaceId = DEFAULT_WORKSPACE_ID) {
 	const candidates = await getCandidateOrders(mode, workspaceId);
-	console.log(`[ENBOX SYNC] candidatos mode=${mode} total=${candidates.length}`);
+	logger.debug('enbox.candidates_loaded', { workspaceId, mode, total: candidates.length });
 
 	for (const candidate of candidates) {
 		syncState.ordersScanned += 1;
@@ -424,7 +440,7 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 	let syncLog = null;
 
 	try {
-		console.log(`[ENBOX SYNC] creando log mode=${mode}`);
+		logger.debug('enbox.sync_log_create_started', { workspaceId: resolvedWorkspaceId, mode });
 		syncLog = await prisma.enboxSyncLog.create({
 			data: safeSyncLogData({
 				workspaceId: resolvedWorkspaceId,
@@ -434,8 +450,12 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 				message: `Sincronización Enbox iniciada (${mode}).`,
 			}),
 		});
-	} catch {
-		console.warn(`[ENBOX SYNC] no se pudo crear EnboxSyncLog mode=${mode}`);
+	} catch (error) {
+		logger.warn('enbox.sync_log_create_failed', {
+			workspaceId: resolvedWorkspaceId,
+			mode,
+			error,
+		});
 		syncLog = null;
 	}
 

@@ -1,16 +1,17 @@
 import dotenv from 'dotenv';
 import { pathToFileURL } from 'node:url';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { executeCampaignDispatcherTick } from '../services/campaigns/campaign-dispatcher.service.js';
 
 dotenv.config();
 
 async function main() {
-	console.log('[JOB][CAMPAIGN DISPATCH] start');
+	logger.info('campaign.dispatch_job_started');
 
 	const result = await executeCampaignDispatcherTick();
 
-	console.log('[JOB][CAMPAIGN DISPATCH] result', {
+	logger.info('campaign.dispatch_job_finished', {
 		ok: result.ok,
 		skipped: result.skipped || false,
 		schedules: result.schedules || null,
@@ -27,7 +28,7 @@ async function main() {
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
 	main()
 		.catch((error) => {
-			console.error('[JOB][CAMPAIGN DISPATCH] failed', error);
+			logger.error('campaign.dispatch_job_failed', { error });
 			process.exitCode = 1;
 		})
 		.finally(async () => {

@@ -45,6 +45,7 @@ import {
 	runPendingPaymentAutomation,
 	updatePendingPaymentAutomationSettings,
 } from '../services/campaigns/pending-payment-automation.service.js';
+import { logger } from '../lib/logger.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
 	normalizeBoolean,
@@ -222,12 +223,17 @@ export async function createCampaignController(req, res) {
 
 export async function launchCampaignController(req, res) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		const result = await launchCampaign(req.params.campaignId, {
-			workspaceId: requireRequestWorkspaceId(req),
+			workspaceId,
 		});
 		return res.json(result);
 	} catch (error) {
-		console.log('[CAMPAIGN][LAUNCH][ERROR]', error.message);
+		logger.warn('campaign.launch_failed', {
+			campaignId: req.params.campaignId,
+			userId: req.user?.id || null,
+			error,
+		});
 		return res.status(400).json({ error: error.message });
 	}
 }

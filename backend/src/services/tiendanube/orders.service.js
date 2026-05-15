@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { logger } from '../../lib/logger.js';
 import { getTiendanubeClient } from './client.js';
 import { deriveShippingStatus, extractOrderShippingSignals, getShippingStatusMeta } from '../common/shipping-status.js';
 
@@ -240,10 +241,10 @@ async function fetchOrderDetail(client, orderId) {
 		const response = await client.get(`/orders/${orderId}`);
 		return response?.data || null;
 	} catch (error) {
-		console.error(
-			'Error obteniendo detalle de orden en Tiendanube:',
-			error.response?.data || error.message
-		);
+		logger.warn('tiendanube.order_detail_failed', {
+			orderId,
+			error: error.response?.data || error,
+		});
 		return null;
 	}
 }

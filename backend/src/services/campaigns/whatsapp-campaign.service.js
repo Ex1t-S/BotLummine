@@ -2517,7 +2517,13 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 		try {
 			await dispatchSingleRecipient(campaign, recipient);
 		} catch (error) {
-			console.log('[CAMPAIGN][DISPATCH][EXCEPTION]', error.message);
+			logger.error('campaign.dispatch_failed', {
+				workspaceId: campaign.workspaceId,
+				campaignId,
+				recipientId: recipient.id,
+				phone: maskPhone(recipient.phone || ''),
+				error,
+			});
 
 			if (!error?.recipientHandled) {
 				await prisma.campaignRecipient.update({
@@ -2639,7 +2645,13 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 			try {
 				await dispatchSingleRecipient(campaign, recipient);
 			} catch (error) {
-				console.log('[CAMPAIGN][DISPATCH][EXCEPTION]', error.message);
+				logger.error('campaign.dispatch_failed', {
+					workspaceId: campaign.workspaceId,
+					campaignId,
+					recipientId: recipient.id,
+					phone: maskPhone(recipient.phone || ''),
+					error,
+				});
 
 				if (!error?.recipientHandled) {
 					await prisma.campaignRecipient.update({
@@ -2775,7 +2787,7 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 	});
 
 	if (!recipient) {
-		console.log('[CAMPAIGN][STATUS][UNMATCHED]', {
+		logger.debug('campaign.status_unmatched', {
 			waMessageId,
 			status: statusPayload?.status || null,
 			workspaceId: workspaceId || null
@@ -2831,7 +2843,7 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 	}
 
 	if (!['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(normalizedNextStatus)) {
-		console.log('[CAMPAIGN][STATUS][IGNORED]', {
+		logger.debug('campaign.status_ignored', {
 			waMessageId,
 			status: statusPayload?.status || null,
 			workspaceId: workspaceId || null

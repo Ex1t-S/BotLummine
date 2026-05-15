@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import {
 	getCustomerSyncStatus as getCustomerSyncStatusService,
 	syncCustomers as syncCustomersService,
@@ -772,7 +773,7 @@ export async function getCustomers(req, res) {
 			},
 		});
 	} catch (error) {
-		console.error('[CUSTOMERS][GET] error:', error);
+		logger.error('customers.list_failed', { error });
 		return res.status(500).json({
 			ok: false,
 			message: 'No se pudo cargar el listado comercial.',
@@ -794,7 +795,7 @@ export async function postSyncCustomers(req, res) {
 			...result,
 		});
 	} catch (error) {
-		console.error('[CUSTOMERS][SYNC] error:', error);
+		logger.error('customers.sync_failed', { error });
 		return res.status(500).json({
 			ok: false,
 			message: 'No se pudo iniciar la sincronización.',
@@ -811,7 +812,7 @@ export async function getCustomersSyncStatus(req, res) {
 			...status,
 		});
 	} catch (error) {
-		console.error('[CUSTOMERS][SYNC_STATUS] error:', error);
+		logger.error('customers.sync_status_failed', { error });
 		return res.status(500).json({
 			ok: false,
 			message: 'No se pudo obtener el estado de sincronización.',

@@ -1,6 +1,7 @@
 import { runGeminiReply, isRetryableGeminiError } from './gemini.service.js';
 import { runOpenAIReply } from './openai.service.js';
 import { buildPrompt } from '../common/prompt-builder.js';
+import { logger } from '../../lib/logger.js';
 
 function buildProviderChain() {
 	const preferred = String(process.env.AI_PROVIDER || 'gemini').toLowerCase();
@@ -67,7 +68,7 @@ export async function runAssistantReply({
 			}
 		} catch (error) {
 			lastError = error;
-			console.error(`[AI] Falló proveedor ${provider}:`, error.message);
+			logger.warn('ai.provider_failed', { provider, error });
 
 			if (provider === 'gemini' && !isRetryableGeminiError(error)) {
 				break;

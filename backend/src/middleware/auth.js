@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { captureSecurityEvent } from '../lib/sentry.js';
 
 const cookieName = process.env.AUTH_COOKIE_NAME || 'wa_assistant_token';
@@ -114,7 +115,7 @@ export async function attachUser(req, _res, next) {
 		req.user = user || null;
 		return next();
 	} catch (error) {
-		console.warn('[AUTH] attachUser failed:', error.message);
+		logger.warn('auth.attach_user_failed', { error });
 		req.user = null;
 		return next();
 	}
@@ -195,7 +196,7 @@ export function issueAuthCookie(res, user) {
 		maxAge: 7 * 24 * 60 * 60 * 1000
 	};
 
-	console.log('[AUTH] cookie issued', {
+	logger.info('auth.cookie_issued', {
 		cookieName,
 		userId: user.id,
 		workspaceId: user.workspaceId || null,
@@ -212,7 +213,7 @@ export function clearAuthCookie(res) {
 		path: '/'
 	};
 
-	console.log('[AUTH] cookie cleared', { cookieName });
+	logger.info('auth.cookie_cleared', { cookieName });
 
 	res.clearCookie(cookieName, cookieOptions);
 }

@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	getCommercialProfile,
@@ -594,7 +595,7 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 			take: signals.asksPromo || signals.requestedFamily ? 250 : 180
 		});
 	} catch (error) {
-		console.error('[CATALOG SEARCH] No se pudo consultar CatalogProduct:', error?.message || error);
+		logger.error('catalog.search_failed', { workspaceId: resolvedWorkspaceId, error });
 		return [];
 	}
 

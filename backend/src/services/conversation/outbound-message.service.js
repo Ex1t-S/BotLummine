@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
+import { logger, maskPhone } from '../../lib/logger.js';
 import {
 	sendWhatsAppText,
 	sendWhatsAppMedia,
@@ -10,6 +11,41 @@ import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.servi
 
 function isOutboundDebugEnabled() {
 	return String(process.env.OUTBOUND_DEBUG || '').trim().toLowerCase() === 'true';
+}
+
+function getOutboundMessageId(sendResult = null) {
+	return (
+		sendResult?.messageId ||
+		sendResult?.rawPayload?.messages?.[0]?.id ||
+		sendResult?.rawPayload?.id ||
+		null
+	);
+}
+
+function getOutboundError(sendResult = null) {
+	const error = sendResult?.error || sendResult?.rawPayload?.error || {};
+	return {
+		errorCode: error?.code || error?.error_code || null,
+		errorMessage: error?.message || error?.error_user_msg || null,
+	};
+}
+
+function buildOutboundDebugPayload({
+	sendResult = null,
+	provider = 'whatsapp-cloud-api',
+	workspaceId,
+	conversationId,
+	messageType,
+} = {}) {
+	return {
+		provider: sendResult?.provider || provider,
+		ok: Boolean(sendResult?.ok),
+		messageId: getOutboundMessageId(sendResult),
+		workspaceId,
+		conversationId,
+		messageType,
+		...getOutboundError(sendResult),
+	};
 }
 
 export async function sendAndPersistOutbound({
@@ -67,10 +103,11 @@ export async function sendAndPersistOutbound({
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 
 	if (isOutboundDebugEnabled()) {
-		console.log('[OUTBOUND DEBUG] sendAndPersistOutbound', {
+		logger.debug('whatsapp.outbound_send_started', {
+			provider,
+			workspaceId,
 			conversationId,
-			waId,
-			contactName: conversation.contact?.name || null,
+			waId: maskPhone(waId),
 			messageType,
 			bodyPreview: cleanBody.slice(0, 160),
 			replyMessageId,
@@ -141,7 +178,13 @@ export async function sendAndPersistOutbound({
 	}
 
 	if (isOutboundDebugEnabled()) {
-		console.log('[OUTBOUND DEBUG] send result', sendResult);
+		logger.debug('whatsapp.outbound_send_result', buildOutboundDebugPayload({
+			sendResult,
+			provider,
+			workspaceId,
+			conversationId,
+			messageType,
+		}));
 	}
 
 	if (!sendResult?.ok) {

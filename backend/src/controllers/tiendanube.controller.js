@@ -1,6 +1,7 @@
 import axios from 'axios';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-crypto.js';
 import { getTiendanubeConfig } from '../services/tiendanube/client.js';
 import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
@@ -561,7 +562,7 @@ export async function startTiendanubeInstall(req, res) {
 		const workspaceId = requireRequestWorkspaceId(req);
 		return res.redirect(buildInstallUrl(workspaceId));
 	} catch (error) {
-		console.error('Error iniciando instalación Tiendanube:', error.message);
+		logger.error('tiendanube.install_start_failed', { error });
 		return res.status(500).json({ ok: false, error: error.message });
 	}
 }
@@ -653,7 +654,11 @@ export async function handleTiendanubeCallback(req, res) {
 				accessToken: data.access_token
 			});
 		} catch (error) {
-			console.error('[TIENDANUBE][CALLBACK][BRANDING]', error?.message || error);
+			logger.warn('tiendanube.branding_sync_failed', {
+				workspaceId,
+				storeId: String(data.user_id),
+				error,
+			});
 		}
 
 		let webhookResult = null;
@@ -672,7 +677,11 @@ export async function handleTiendanubeCallback(req, res) {
 			webhookError =
 				error?.message ||
 				'No se pudieron registrar webhooks automáticamente.';
-			console.error('[TIENDANUBE][CALLBACK][WEBHOOKS]', webhookError);
+			logger.warn('tiendanube.webhook_registration_failed', {
+				workspaceId,
+				storeId: String(data.user_id),
+				error,
+			});
 		}
 
 		try {
@@ -681,7 +690,11 @@ export async function handleTiendanubeCallback(req, res) {
 			catalogError =
 				error?.message ||
 				'No se pudo sincronizar el catalogo automaticamente.';
-			console.error('[TIENDANUBE][CALLBACK][CATALOG]', catalogError);
+			logger.warn('tiendanube.catalog_sync_failed', {
+				workspaceId,
+				storeId: String(data.user_id),
+				error,
+			});
 		}
 
 		return redirectTiendanubeInstallResult(res, {
@@ -716,10 +729,9 @@ export async function handleTiendanubeCallback(req, res) {
 			}</p>
 		`);
 	} catch (error) {
-		console.error(
-			'Error en callback Tiendanube:',
-			error.response?.data || error.message
-		);
+		logger.error('tiendanube.callback_failed', {
+			error: error.response?.data || error,
+		});
 		let workspaceId = DEFAULT_WORKSPACE_ID;
 		try {
 			workspaceId = resolveTiendanubeStateWorkspaceId(req.query?.state || '');
@@ -774,10 +786,9 @@ export async function registerTiendanubeWebhooks(req, res) {
 			...result
 		});
 	} catch (error) {
-		console.error(
-			'[TIENDANUBE][REGISTER WEBHOOKS]',
-			error.response?.data || error.message
-		);
+		logger.error('tiendanube.webhook_registration_failed', {
+			error: error.response?.data || error,
+		});
 		return res.status(500).json({
 			ok: false,
 			error: error.response?.data || error.message
@@ -807,7 +818,7 @@ export async function runTiendanubeCatalogSync(req, res) {
 
 		return res.json(result);
 	} catch (error) {
-		console.error('[TIENDANUBE][CATALOG SYNC]', error.message);
+		logger.error('tiendanube.catalog_sync_failed', { error });
 		return res.status(500).json({ ok: false, error: error.message });
 	}
 }
@@ -825,7 +836,7 @@ export async function getTiendanubeCatalogStatus(req, res) {
 		const summary = await getCatalogSummary({ workspaceId });
 		return res.json({ ok: true, ...summary });
 	} catch (error) {
-		console.error('[TIENDANUBE][CATALOG STATUS]', error.message);
+		logger.error('tiendanube.catalog_status_failed', { error });
 		return res.status(500).json({ ok: false, error: error.message });
 	}
 }
@@ -852,7 +863,7 @@ export async function getTiendanubeCatalogProducts(req, res) {
 
 		return res.json({ ok: true, ...result });
 	} catch (error) {
-		console.error('[TIENDANUBE][CATALOG PRODUCTS]', error.message);
+		logger.error('tiendanube.catalog_products_failed', { error });
 		return res.status(500).json({ ok: false, error: error.message });
 	}
 }
@@ -894,7 +905,7 @@ export async function getTiendanubeStatus(req, res) {
 			catalog: catalogSummary
 		});
 	} catch (error) {
-		console.error('Error obteniendo estado de Tiendanube:', error.message);
+		logger.error('tiendanube.status_failed', { error });
 		return res.status(500).json({ ok: false, error: error.message });
 	}
 }

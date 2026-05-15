@@ -2,6 +2,7 @@ import { getOrderByNumber } from '../commerce/orders.service.js';
 import { resolveEnboxTracking } from '../enbox/enbox.service.js';
 import { findCachedEnboxShipment } from '../enbox/enbox-sync.service.js';
 import { getShippingStatusMeta } from '../common/shipping-status.js';
+import { logger } from '../../lib/logger.js';
 
 function formatMoney(value, currency = 'ARS') {
 	const num = Number(value || 0);
@@ -98,7 +99,11 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 	}
 
 	const liveOrderContext = await getOrderByNumber(orderNumber, { workspaceId }).catch((err) => {
-		console.error('Error consultando pedido en ecommerce:', err);
+		logger.warn('order_status.ecommerce_lookup_failed', {
+			workspaceId,
+			orderNumber,
+			error: err,
+		});
 		return null;
 	});
 
@@ -128,7 +133,11 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 				liveOrderContext.enboxTracking = cachedShipment;
 			}
 		} catch (error) {
-			console.error('Error consultando cache de Enbox:', error);
+			logger.warn('order_status.enbox_cache_lookup_failed', {
+				workspaceId,
+				orderNumber,
+				error,
+			});
 		}
 
 		if (liveOrderContext.trackingUrl || liveOrderContext.trackingNumber) {
@@ -158,7 +167,11 @@ export async function handleOrderStatusIntent({ explicitOrderNumber, currentStat
 				liveOrderContext.enboxTracking = enboxTracking;
 			}
 		} catch (error) {
-			console.error('Error consultando tracking en Enbox:', error);
+			logger.warn('order_status.enbox_tracking_lookup_failed', {
+				workspaceId,
+				orderNumber,
+				error,
+			});
 		}
 	}
 

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
+import { logger, fingerprint } from '../lib/logger.js';
 import {
 	uploadWhatsAppMedia,
 	resolveInboxMediaAbsolutePath,
@@ -125,7 +126,11 @@ export async function serveInboxMediaController(req, res) {
 
 		if (!stats || !stats.isFile()) {
 			const restored = await tryRestoreMissingInboxMedia(fileName, workspaceId).catch((error) => {
-				console.error('[MEDIA][RESTORE ERROR]', fileName, error?.message || error);
+				logger.warn('media.restore_failed', {
+					workspaceId,
+					fileNameFingerprint: fingerprint(fileName),
+					error,
+				});
 				return false;
 			});
 
@@ -163,8 +168,6 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 	const purpose = String(req.body?.purpose || '').trim().toLowerCase();
 	const generateHeaderHandle = purpose === 'template_header';
 
-	console.log('[MEDIA][UPLOAD] user:', req.user?.id || null);
-
 	if (!req.user) {
 		return res.status(401).json({ ok: false, error: 'No autenticado' });
 	}
@@ -174,8 +177,9 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 	}
 
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
 		const result = await uploadWhatsAppMedia({
-			workspaceId: requireRequestWorkspaceId(req),
+			workspaceId,
 			filePath: file.path,
 			fileName: file.originalname || file.filename || 'header-image',
 			mimeType: file.mimetype,
@@ -183,7 +187,14 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 		});
 
 		if (!result.ok) {
-			console.log('[MEDIA][UPLOAD][ERROR]', JSON.stringify(result.error, null, 2));
+			logger.warn('media.upload_failed', {
+				workspaceId,
+				userId: req.user?.id || null,
+				fileNameFingerprint: fingerprint(file.originalname || file.filename || ''),
+				mimeType: file.mimetype || null,
+				fileSize: file.size || null,
+				error: result.error || null,
+			});
 
 			return res.status(400).json({
 				ok: false,
@@ -203,7 +214,14 @@ export async function uploadCampaignHeaderMediaController(req, res) {
 			warnings: Array.isArray(result.warnings) ? result.warnings : []
 		});
 	} catch (error) {
-		console.log('[MEDIA][UPLOAD][EXCEPTION]', error.message);
+		logger.error('media.upload_exception', {
+			workspaceId: req.user?.workspaceId || null,
+			userId: req.user?.id || null,
+			fileNameFingerprint: fingerprint(file?.originalname || file?.filename || ''),
+			mimeType: file?.mimetype || null,
+			fileSize: file?.size || null,
+			error,
+		});
 
 		return res.status(500).json({
 			ok: false,
