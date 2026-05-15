@@ -283,6 +283,44 @@
 	cursor: default;
 }
 
+.tenant-admin-toggle-card {
+	display: grid;
+	gap: 14px;
+}
+
+.tenant-admin-switch-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 14px;
+	border: 1px solid #d7dee5;
+	border-radius: 8px;
+	background: #ffffff;
+}
+
+.tenant-admin-switch-row > div {
+	display: grid;
+	gap: 4px;
+}
+
+.tenant-admin-switch-row strong {
+	color: #172033;
+	font-size: 14px;
+}
+
+.tenant-admin-switch-row span {
+	color: #64748b;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.tenant-admin-switch-row input[type='checkbox'] {
+	width: 18px;
+	height: 18px;
+	flex: 0 0 auto;
+}
+
 .admin-field span {
 	font-size: 12px;
 	font-weight: 800;

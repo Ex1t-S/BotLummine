@@ -115,9 +115,16 @@ const FALLBACK_FEATURE_FLAGS = [
 		key: 'whatsapp_outbound',
 		label: 'Salientes WhatsApp',
 		description: 'Permite enviar mensajes salientes por WhatsApp Cloud API.',
-		enabled: true
+	enabled: true
 	}
 ];
+
+const DEFAULT_MENU_SETTINGS_STATE = {
+	id: '',
+	name: 'Configuracion principal',
+	autoMenuEnabled: true,
+	config: null,
+};
 
 function fieldValue(value) {
 	return value == null ? '' : String(value);
@@ -550,6 +557,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [featureFlags, setFeatureFlags] = useState(FALLBACK_FEATURE_FLAGS);
 	const [tiendanubeStatus, setTiendanubeStatus] = useState(null);
 	const [shopifyStatus, setShopifyStatus] = useState(null);
+	const [menuSettings, setMenuSettings] = useState(DEFAULT_MENU_SETTINGS_STATE);
 	const [analytics, setAnalytics] = useState(null);
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
 	const [generatingBusinessContext, setGeneratingBusinessContext] = useState(false);
@@ -602,13 +610,14 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function loadWorkspaceDetail(workspaceId) {
 		if (!workspaceId) return;
 
-		const [workspaceRes, usersRes, catalogRes, featureFlagsRes, tiendanubeStatusRes, shopifyStatusRes] = await Promise.all([
+		const [workspaceRes, usersRes, catalogRes, featureFlagsRes, tiendanubeStatusRes, shopifyStatusRes, menuSettingsRes] = await Promise.all([
 			api.get(`/admin/workspaces/${workspaceId}`),
 			api.get(`/admin/workspaces/${workspaceId}/users`),
 			api.get(`/admin/workspaces/${workspaceId}/catalog/status`).catch(() => null),
 			platformAdmin ? api.get(`/admin/workspaces/${workspaceId}/feature-flags`).catch(() => null) : Promise.resolve(null),
 			api.get('/tiendanube/status', { params: { workspaceId } }).catch(() => null),
-			api.get('/shopify/status', { params: { workspaceId } }).catch(() => null)
+			api.get('/shopify/status', { params: { workspaceId } }).catch(() => null),
+			api.get('/whatsapp-menu', { params: { workspaceId } }).catch(() => null),
 		]);
 
 		const nextWorkspace = workspaceRes.data.workspace || null;
@@ -620,6 +629,12 @@ export default function AdminPage({ defaultTab = '' }) {
 		setFeatureFlags(featureFlagsRes?.data?.flags || FALLBACK_FEATURE_FLAGS);
 		setTiendanubeStatus(tiendanubeStatusRes?.data || null);
 		setShopifyStatus(shopifyStatusRes?.data || null);
+		setMenuSettings({
+			id: menuSettingsRes?.data?.settings?.id || '',
+			name: menuSettingsRes?.data?.settings?.name || DEFAULT_MENU_SETTINGS_STATE.name,
+			autoMenuEnabled: menuSettingsRes?.data?.runtime?.autoMenuEnabled !== false,
+			config: menuSettingsRes?.data?.settings?.config || null,
+		});
 		setSelectedBrandProvider(resolveSelectedBrandProvider(nextWorkspace, tiendanubeStatusRes?.data, shopifyStatusRes?.data));
 		setShopifyInstallShop(
 			shopifyStatusRes?.data?.shopDomain ||
@@ -890,6 +905,34 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function handleSavePayment(event) {
 		event.preventDefault();
 		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Datos de pago guardados.');
+	}
+
+	async function handleSaveAutoMenu(event) {
+		event.preventDefault();
+		if (!menuSettings.config) {
+			setError('No se pudo cargar la configuracion del menu de WhatsApp.');
+			return;
+		}
+
+		setSaving(true);
+		try {
+			await api.put('/whatsapp-menu', {
+				name: menuSettings.name || DEFAULT_MENU_SETTINGS_STATE.name,
+				config: {
+					...menuSettings.config,
+					autoMenuEnabled: menuSettings.autoMenuEnabled !== false,
+				},
+			}, {
+				params: { workspaceId: selectedWorkspaceId },
+			});
+
+			await loadWorkspaceDetail(selectedWorkspaceId);
+			showNotice('Configuracion del menu automatico guardada.');
+		} catch (err) {
+			showError(err);
+		} finally {
+			setSaving(false);
+		}
 	}
 
 	async function handleBrandLogoFileChange(event) {
@@ -1510,6 +1553,39 @@ export default function AdminPage({ defaultTab = '' }) {
 								) : null}
 							</>
 						)}
+					</section>
+				) : null}
+
+				{activeTab === 'content' ? (
+					<section className="tenant-admin-panel">
+						<SectionIntro
+							title="Menu automatico de WhatsApp"
+							description="Defini si el menu principal se ofrece automaticamente en saludos o conversaciones nuevas. Si el cliente escribe menu, sigue disponible igual."
+						/>
+						<form className="tenant-admin-toggle-card" onSubmit={handleSaveAutoMenu}>
+							<label className="tenant-admin-switch-row">
+								<div>
+									<strong>Mostrar menu como respuesta automatica</strong>
+									<span>
+										Activa o desactiva la aparicion automatica del menu principal en la bandeja AUTO.
+									</span>
+								</div>
+								<input
+									type="checkbox"
+									checked={menuSettings.autoMenuEnabled !== false}
+									disabled={saving || loading || !menuSettings.config}
+									onChange={(event) =>
+										setMenuSettings((current) => ({
+											...current,
+											autoMenuEnabled: event.target.checked,
+										}))
+									}
+								/>
+							</label>
+							<button type="submit" disabled={saving || loading || !menuSettings.config}>
+								Guardar menu automatico
+							</button>
+						</form>
 					</section>
 				) : null}
 

@@ -164,6 +164,8 @@ function buildCustomersWhere({
 	paymentStatus,
 	shippingStatus,
 	minSpent,
+	minOrders,
+	hasOrders,
 	hasPhoneOnly,
 	dispatchedOrderRefs = null,
 	excludedPhones = [],
@@ -273,6 +275,29 @@ function buildCustomersWhere({
 				totalAmount: { gte: parsed },
 			});
 		}
+	}
+
+	if (minOrders !== undefined && minOrders !== null && String(minOrders).trim() !== '') {
+		const parsed = Number(minOrders);
+		if (!Number.isNaN(parsed) && parsed > 0) {
+			and.push({
+				customerProfile: {
+					is: {
+						orderCount: { gte: parsed },
+					},
+				},
+			});
+		}
+	}
+
+	if (hasOrders === '1' || hasOrders === 'true' || hasOrders === true) {
+		and.push({
+			customerProfile: {
+				is: {
+					orderCount: { gte: 1 },
+				},
+			},
+		});
 	}
 
 	if (hasPhoneOnly === '1' || hasPhoneOnly === 'true' || hasPhoneOnly === true) {
@@ -518,14 +543,19 @@ function hasOrderSpecificFilters(filters = {}) {
 		filters.paymentStatus,
 		filters.shippingStatus,
 		filters.minSpent,
+		filters.minOrders,
 	].some((value) => String(value || '').trim());
 }
 
-function buildOrderlessProfilesWhere({ workspaceId, q, hasPhoneOnly, excludedPhones = [] }) {
+function buildOrderlessProfilesWhere({ workspaceId, q, hasPhoneOnly, hasOrders, excludedPhones = [] }) {
 	const and = [
 		{ workspaceId },
 		{ orders: { none: {} } },
 	];
+
+	if (hasOrders === '1' || hasOrders === 'true' || hasOrders === true) {
+		and.push({ id: '__never_match_orderless_profiles__' });
+	}
 
 	const search = String(q || '').trim();
 	if (search) {
@@ -568,6 +598,8 @@ export async function getCustomers(req, res) {
 			paymentStatus = '',
 			shippingStatus = '',
 			minSpent = '',
+			minOrders = '',
+			hasOrders = '',
 			hasPhoneOnly = '',
 			excludeSentTemplate = '',
 			sentTemplateName = '',
@@ -601,6 +633,8 @@ export async function getCustomers(req, res) {
 			paymentStatus,
 			shippingStatus,
 			minSpent,
+			minOrders,
+			hasOrders,
 			hasPhoneOnly,
 			dispatchedOrderRefs,
 			excludedPhones,
@@ -615,9 +649,10 @@ export async function getCustomers(req, res) {
 			paymentStatus,
 			shippingStatus,
 			minSpent,
+			minOrders,
 		});
 		const orderlessWhere = includeOrderlessProfiles
-			? buildOrderlessProfilesWhere({ workspaceId, q, hasPhoneOnly, excludedPhones })
+			? buildOrderlessProfilesWhere({ workspaceId, q, hasPhoneOnly, hasOrders, excludedPhones })
 			: null;
 
 		const [totalOrderItems, orderlessProfilesCount, metricsBase, profileMetrics] = await Promise.all([

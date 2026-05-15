@@ -21,6 +21,7 @@ export async function getWhatsAppMenu(req, res) {
 			config: settings.config
 		},
 		runtime: {
+			autoMenuEnabled: runtime.config?.autoMenuEnabled !== false,
 			mainMenuKey: runtime.mainMenuKey,
 			menus: Object.values(runtime.menusByKey || {}).map((menu) => ({
 				key: menu.key,
@@ -62,6 +63,7 @@ export async function updateWhatsAppMenu(req, res) {
 			config: settings.config
 		},
 		runtime: {
+			autoMenuEnabled: runtime.config?.autoMenuEnabled !== false,
 			mainMenuKey: runtime.mainMenuKey,
 			menus: Object.values(runtime.menusByKey || {})
 		}
@@ -84,6 +86,7 @@ export async function restoreDefaultWhatsAppMenu(req, res) {
 			config: settings.config
 		},
 		runtime: {
+			autoMenuEnabled: runtime.config?.autoMenuEnabled !== false,
 			mainMenuKey: runtime.mainMenuKey,
 			menus: Object.values(runtime.menusByKey || {})
 		}

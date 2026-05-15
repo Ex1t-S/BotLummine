@@ -137,6 +137,7 @@ function normalizeMenu(rawMenu = {}, fallbackMenu = {}, index = 0) {
 
 export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 	version: 1,
+	autoMenuEnabled: true,
 	mainMenuKey: DEFAULT_MAIN_MENU_KEY,
 	menus: [
 		{
@@ -392,6 +393,9 @@ export function normalizeWhatsAppMenuConfig(inputConfig = {}) {
 	const fallbackMenus = asArray(defaultConfig.menus);
 	const mergedConfig = {
 		version: Number.isFinite(Number(sourceConfig.version)) ? Number(sourceConfig.version) : defaultConfig.version,
+		autoMenuEnabled: hasOwn(sourceConfig, 'autoMenuEnabled')
+			? Boolean(sourceConfig.autoMenuEnabled)
+			: Boolean(defaultConfig.autoMenuEnabled),
 		mainMenuKey: normalizeText(sourceConfig.mainMenuKey || defaultConfig.mainMenuKey) || DEFAULT_MAIN_MENU_KEY,
 		menus: []
 	};

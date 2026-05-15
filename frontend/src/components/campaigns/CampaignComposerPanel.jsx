@@ -22,10 +22,13 @@ const initialCustomerFilters = {
 	dateFrom: '',
 	dateTo: '',
 	paymentStatus: '',
+	shippingStatus: '',
 	sort: 'purchase_desc',
 	page: 1,
 	pageSize: 24,
 	minSpent: '',
+	minOrders: '',
+	hasOrders: false,
 	hasPhoneOnly: true,
 	excludeSentTemplate: true,
 };
@@ -39,6 +42,15 @@ const PAYMENT_STATUS_OPTIONS = [
 	{ value: 'refunded', label: 'Reembolsado' },
 	{ value: 'partially_refunded', label: 'Reembolso parcial' },
 	{ value: 'voided', label: 'Anulado' },
+];
+
+const SHIPPING_STATUS_OPTIONS = [
+	{ value: '', label: 'Todos' },
+	{ value: 'preparing', label: 'En preparacion' },
+	{ value: 'packed', label: 'Embalado' },
+	{ value: 'dispatched', label: 'Despachado' },
+	{ value: 'delivered', label: 'Entregado' },
+	{ value: 'cancelled', label: 'Cancelado' },
 ];
 
 function TemplateMultiSelect({
@@ -1027,6 +1039,7 @@ export default function CampaignComposerPanel({
 			dateFrom: nextFilters.dateFrom || '',
 			dateTo: nextFilters.dateTo || '',
 			paymentStatus: nextFilters.paymentStatus || '',
+			shippingStatus: nextFilters.shippingStatus || '',
 			sort: nextFilters.sort || 'purchase_desc',
 			page: nextFilters.page || 1,
 			pageSize: nextFilters.pageSize || 24,
@@ -1034,6 +1047,11 @@ export default function CampaignComposerPanel({
 				nextFilters.minSpent === '' || nextFilters.minSpent === null
 					? undefined
 					: Number(nextFilters.minSpent),
+			minOrders:
+				nextFilters.minOrders === '' || nextFilters.minOrders === null
+					? undefined
+					: Number(nextFilters.minOrders),
+			hasOrders: nextFilters.hasOrders ? 'true' : 'false',
 			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
 			excludeSentTemplate:
 				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length ? 'true' : 'false',
@@ -1387,6 +1405,11 @@ export default function CampaignComposerPanel({
 				form.audienceMode === 'customers'
 					? {
 						q: customerFilters.q || '',
+						orderNumber: customerFilters.orderNumber || '',
+						dateFrom: customerFilters.dateFrom || '',
+						dateTo: customerFilters.dateTo || '',
+						paymentStatus: customerFilters.paymentStatus || '',
+						shippingStatus: customerFilters.shippingStatus || '',
 						sort: customerFilters.sort || 'purchase_desc',
 						pageSize: customerFilters.pageSize || 24,
 						minSpent:
@@ -1706,7 +1729,40 @@ export default function CampaignComposerPanel({
 										))}
 									</select>
 								</label>
+
+								<label className="field">
+									<span>Envio</span>
+									<select
+										value={customerFilters.shippingStatus}
+										onChange={(event) => updateCustomerFilter('shippingStatus', event.target.value)}
+									>
+										{SHIPPING_STATUS_OPTIONS.map((option) => (
+											<option key={option.value || 'all'} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</select>
+								</label>
+
+								<label className="field">
+									<span>Compras minimas</span>
+									<input
+										type="number"
+										min="0"
+										value={customerFilters.minOrders || ''}
+										onChange={(event) => updateCustomerFilter('minOrders', event.target.value)}
+										placeholder="0"
+									/>
+								</label>
 							</div>
+							<label className="campaign-toggle">
+								<input
+									type="checkbox"
+									checked={Boolean(customerFilters.hasOrders)}
+									onChange={(event) => updateCustomerFilter('hasOrders', event.target.checked)}
+								/>
+								<span>Solo clientes con al menos una compra</span>
+							</label>
 						</div>
 
 						<div className="campaign-filter-block campaign-product-filter-group">

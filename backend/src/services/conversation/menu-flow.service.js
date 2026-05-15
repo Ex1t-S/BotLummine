@@ -516,6 +516,8 @@ export async function maybeHandleMenuFlow({
 	const wantsMenu = isMenuResetCommand(messageBody);
 	const menuPath = currentState?.menuPath || MENU_PATHS.MAIN;
 	const interactiveReplyId = getInteractiveReplyId(rawPayload);
+	const menuRuntime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
+	const autoMenuEnabled = menuRuntime?.config?.autoMenuEnabled !== false;
 	const hardHumanLock = isHardHumanLock(currentState);
 	const isStaleConversation = isConversationStaleForMenu(conversation?.messages);
 	const autoMenuDisabledForConsole = shouldDisableAutoMenuForConsoleChat(rawPayload);
@@ -557,6 +559,7 @@ export async function maybeHandleMenuFlow({
 	}
 
 	const shouldOfferMenu =
+		autoMenuEnabled &&
 		!autoMenuDisabledForConsole &&
 		(
 			isStaleConversation ||
