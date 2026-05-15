@@ -33,7 +33,7 @@
 
 .inbox-sidebar {
 	display: grid;
-	grid-template-rows: auto auto auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto minmax(0, 1fr);
 	padding: 14px;
 	min-height: 0;
 	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
@@ -76,6 +76,74 @@
 
 .inbox-sidebar-refresh:disabled {
 	color: #94a3b8;
+}
+
+.inbox-sidebar-actions {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.inbox-queue-menu-trigger {
+	display: inline-grid;
+	width: 34px;
+	height: 34px;
+	min-width: 34px;
+	place-items: center;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 10px;
+	background: #ffffff;
+	color: #475569;
+	cursor: pointer;
+	transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.inbox-queue-menu-trigger:hover,
+.inbox-queue-menu-trigger:focus-visible,
+.inbox-queue-menu-trigger[data-state="open"] {
+	border-color: rgba(15, 118, 110, 0.22);
+	background: #f8fafc;
+	color: #0f766e;
+}
+
+.inbox-queue-menu {
+	border: 1px solid var(--ui-border, #d7dee5);
+	background: var(--ui-surface, #ffffff);
+	color: var(--ui-text, #111827);
+	box-shadow: 0 16px 34px rgba(16, 24, 40, 0.14);
+}
+
+.inbox-queue-menu-item {
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr) auto;
+	gap: 8px;
+	align-items: center;
+	min-height: 36px;
+	cursor: pointer;
+	border-radius: 7px;
+	font-size: 12px;
+	font-weight: 700;
+	color: #52616b;
+}
+
+.inbox-queue-menu-item strong {
+	min-width: 24px;
+	height: 22px;
+	padding: 0 7px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(15, 23, 42, 0.06);
+	color: inherit;
+	font-size: 11px;
+}
+
+.inbox-queue-menu-item--active {
+	background: rgba(15, 118, 110, 0.1);
+	color: var(--ui-primary, #0f766e);
 }
 
 .inbox-queue-tabs {
@@ -1890,7 +1958,7 @@
 }
 
 .inbox-sidebar {
-	grid-template-rows: auto auto auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto minmax(0, 1fr);
 	padding: 10px;
 }
 
@@ -2507,7 +2575,7 @@
 }
 
 .inbox-sidebar {
-	grid-template-rows: auto auto auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto minmax(0, 1fr);
 	padding: 12px;
 }
 

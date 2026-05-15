@@ -10,6 +10,7 @@ import {
 	EyeOff,
 	Inbox,
 	List,
+	MoreVertical,
 	RefreshCw,
 	RotateCcw,
 	UserRound,
@@ -18,6 +19,12 @@ import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import AiChatInput from '../components/ui/ai-chat-input';
 import MessageConversation from '../components/ui/messaging-conversation';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import './InboxPage.css';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
@@ -1476,34 +1483,52 @@ export default function InboxPage() {
 						<strong>Inbox</strong>
 						<span>{counts.ALL || 0} conversaciones en esta vista</span>
 					</div>
-					<button
-						type="button"
-						className="inbox-sidebar-refresh"
-						onClick={() => inboxQuery.refetch()}
-						disabled={inboxQuery.isFetching}
-					>
-						<RefreshCw size={14} strokeWidth={2.4} aria-hidden="true" />
-						<span>{inboxQuery.isFetching ? '...' : 'Actualizar'}</span>
-					</button>
-				</div>
+					<div className="inbox-sidebar-actions">
+						<button
+							type="button"
+							className="inbox-sidebar-refresh"
+							onClick={() => inboxQuery.refetch()}
+							disabled={inboxQuery.isFetching}
+						>
+							<RefreshCw size={14} strokeWidth={2.4} aria-hidden="true" />
+							<span>{inboxQuery.isFetching ? '...' : 'Actualizar'}</span>
+						</button>
 
-				<div className="inbox-queue-tabs">
-					{QUEUES.map((item) => {
-						const isActive = queue === item.key;
-
-						return (
-							<ActionButton
-								key={item.key}
-								active={isActive}
-								disabled={inboxQuery.isFetching && isActive}
-								onClick={() => selectQueue(item.key)}
-								icon={item.key === 'PAYMENT_REVIEW' ? CheckCheck : item.key === 'HUMAN' ? UserRound : item.key === 'AUTO' ? Bot : Inbox}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<button
+									type="button"
+									className="inbox-queue-menu-trigger"
+									aria-label="Seleccionar cola"
+									title="Seleccionar cola"
+								>
+									<MoreVertical size={18} strokeWidth={2.3} aria-hidden="true" />
+								</button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent
+								align="end"
+								className="inbox-queue-menu min-w-56 rounded-lg bg-popover p-1 shadow-xl"
 							>
-								<span>{getQueueLabel(item.key)}</span>
-								<strong>{counts[item.key] || 0}</strong>
-							</ActionButton>
-						);
-					})}
+								{QUEUES.map((item) => {
+									const isActive = queue === item.key;
+									const Icon = item.key === 'PAYMENT_REVIEW' ? CheckCheck : item.key === 'HUMAN' ? UserRound : item.key === 'AUTO' ? Bot : Inbox;
+
+									return (
+										<DropdownMenuItem
+											key={item.key}
+											disabled={inboxQuery.isFetching && isActive}
+											className={`inbox-queue-menu-item ${isActive ? 'inbox-queue-menu-item--active' : ''}`}
+											onSelect={() => selectQueue(item.key)}
+										>
+											<Icon size={16} strokeWidth={2.3} aria-hidden="true" />
+											<span>{getQueueLabel(item.key)}</span>
+											<strong>{counts[item.key] || 0}</strong>
+										</DropdownMenuItem>
+									);
+								})}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 				</div>
 
 				<div className="inbox-section-header">
