@@ -472,7 +472,7 @@
 	background: rgba(15, 118, 110, 0.26);
 	border-color: rgba(45, 212, 191, 0.22);
 	color: #ffffff;
-	box-shadow: inset 3px 0 0 #2dd4bf;
+	box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.18);
 }
 
 .logout-btn {
@@ -619,7 +619,7 @@
 }
 
 .admin-menu-link.active {
-	box-shadow: inset 3px 0 0 #2dd4bf;
+	box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.18);
 }
 
 .logout-btn {

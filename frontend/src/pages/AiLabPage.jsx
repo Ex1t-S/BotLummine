@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { MessageSquarePlus, RotateCcw } from 'lucide-react';
 import api from '../lib/api.js';
 import { ActionButton } from '../components/ui/InternalPage.jsx';
+import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './AiLabPage.css';
 
 function JsonBlock({ value }) {
@@ -32,6 +33,8 @@ function getApiError(error) {
 }
 
 export default function AiLabPage() {
+	useInternalDarkOverrides();
+
 	const messagesEndRef = useRef(null);
 	const [session, setSession] = useState(null);
 	const [fixtureKey, setFixtureKey] = useState('blank');

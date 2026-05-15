@@ -695,7 +695,7 @@
 .ai-lab-fixture-card.active {
 	border-color: rgba(15, 118, 110, 0.32);
 	background: var(--ui-primary-muted, #f0fdfa);
-	box-shadow: inset 3px 0 0 var(--ui-primary, #0f766e);
+	box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.14);
 }
 
 .ai-lab-chat-header,
