@@ -158,7 +158,7 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'segment',
 		path: 'segment',
-		label: 'Crear campañas',
+		label: 'Campañas',
 		eyebrow: 'Campañas',
 		title: 'Crear campañas',
 		description:
@@ -195,7 +195,7 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'pending-payments',
 		path: 'pending-payments',
-		label: 'Pagos pendientes',
+		label: 'Pagos',
 		eyebrow: 'Automatizaciones',
 		title: 'Pagos pendientes',
 		description:
@@ -209,6 +209,32 @@ const TAB_DEFINITIONS = [
 		title: 'Avisos de despacho',
 		description:
 			'Selecciona pedidos despachados por rango de fechas, elegi una plantilla y activa o envia los avisos.',
+		hiddenFromNav: true,
+	},
+];
+
+const MAIN_NAV_ITEMS = [
+	{ id: 'library', label: 'Templates', helper: 'Biblioteca y editor' },
+	{ id: 'abandoned-carts', label: 'Automatización', helper: 'Reglas recurrentes' },
+	{ id: 'segment', label: 'Campañas', helper: 'Envío puntual' },
+	{ id: 'tracking', label: 'Historial', helper: 'Métricas y resultados' },
+];
+
+const AUTOMATION_RULES = [
+	{
+		id: 'abandoned-carts',
+		title: 'Carritos abandonados',
+		description: 'Recuperá carritos nuevos con una regla cada 30 minutos o una campaña puntual.',
+	},
+	{
+		id: 'pending-payments',
+		title: 'Pagos pendientes',
+		description: 'Recordá pedidos pendientes de pago sin mezclar este flujo con carritos.',
+	},
+	{
+		id: 'shipments',
+		title: 'Avisos de despacho',
+		description: 'Enviá tracking a pedidos despachados por rango de fechas.',
 	},
 ];
 
@@ -224,7 +250,26 @@ function DashboardTabButton({ tab, isActive, onClick }) {
 			onClick={() => onClick(tab.id)}
 		>
 			<span className="campaigns-tab-button__label">{cleanCampaignCopy(tab.label)}</span>
+			{tab.helper ? <span className="campaigns-tab-button__helper">{cleanCampaignCopy(tab.helper)}</span> : null}
 		</button>
+	);
+}
+
+function AutomationRuleNav({ activeTab, onSelect }) {
+	return (
+		<div className="campaign-automation-rule-nav" aria-label="Reglas de automatización">
+			{AUTOMATION_RULES.map((rule) => (
+				<button
+					key={rule.id}
+					type="button"
+					className={`campaign-automation-rule-card ${activeTab === rule.id ? 'is-active' : ''}`.trim()}
+					onClick={() => onSelect(rule.id)}
+				>
+					<strong>{rule.title}</strong>
+					<span>{rule.description}</span>
+				</button>
+			))}
+		</div>
 	);
 }
 
@@ -1587,6 +1632,7 @@ export default function CampaignsFeaturePage() {
 						title={currentTab.title}
 						description={currentTab.description}
 					>
+						<AutomationRuleNav activeTab={activeTab} onSelect={openTab} />
 						<AbandonedCartCampaignPanel
 							templates={templates}
 							selectedTemplate={selectedTemplate}
@@ -1639,6 +1685,7 @@ export default function CampaignsFeaturePage() {
 						title={currentTab.title}
 						description={currentTab.description}
 					>
+						<AutomationRuleNav activeTab={activeTab} onSelect={openTab} />
 						<CampaignSchedulesPanel
 							templates={templates}
 							schedules={schedules}
@@ -1657,6 +1704,7 @@ export default function CampaignsFeaturePage() {
 						title={currentTab.title}
 						description={currentTab.description}
 					>
+						<AutomationRuleNav activeTab={activeTab} onSelect={openTab} />
 						<PendingPaymentAutomationPanel
 							templates={templates}
 							pendingPayment={pendingPayment}
@@ -1673,6 +1721,7 @@ export default function CampaignsFeaturePage() {
 						title={currentTab.title}
 						description={currentTab.description}
 					>
+						<AutomationRuleNav activeTab={activeTab} onSelect={openTab} />
 						<ShipmentNotificationsPanel
 							templates={templates}
 							shipmentNotifications={shipmentNotifications}
@@ -1700,11 +1749,15 @@ export default function CampaignsFeaturePage() {
 					<CampaignFeedbackAlert feedback={feedback} />
 
 					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campañas">
-						{TAB_DEFINITIONS.filter((tab) => !tab.hiddenFromNav).map((tab) => (
+						{MAIN_NAV_ITEMS.map((tab) => (
 							<DashboardTabButton
 								key={tab.id}
 								tab={tab}
-								isActive={activeTab === tab.id}
+								isActive={
+									activeTab === tab.id ||
+									(tab.id === 'abandoned-carts' && ['abandoned-carts', 'pending-payments', 'shipments', 'schedules'].includes(activeTab)) ||
+									(tab.id === 'library' && activeTab === 'builder')
+								}
 								onClick={openTab}
 							/>
 						))}
