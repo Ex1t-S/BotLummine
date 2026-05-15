@@ -1,15 +1,31 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma.js';
 import { issueAuthCookie, clearAuthCookie } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
+import { captureSecurityEvent } from '../lib/sentry.js';
+import { verifyTurnstileToken } from '../services/auth/turnstile.service.js';
 
 export async function login(req, res, next) {
 	try {
-		const { email, password } = req.body || {};
+		const { email, password, turnstileToken } = req.body || {};
 
 		if (!email || !password) {
 			return res.status(400).json({
 				ok: false,
 				error: 'Faltan credenciales'
+			});
+		}
+
+		const turnstile = await verifyTurnstileToken({
+			token: turnstileToken,
+			ip: String(req.headers?.['cf-connecting-ip'] || req.ip || '').trim(),
+			requestId: req.requestId || null,
+		});
+
+		if (!turnstile.ok) {
+			return res.status(403).json({
+				ok: false,
+				error: turnstile.error || 'Verificacion anti-bot requerida.'
 			});
 		}
 
@@ -28,6 +44,10 @@ export async function login(req, res, next) {
 		});
 
 		if (!user) {
+			logger.warn('security.login_failed', {
+				requestId: req.requestId || null,
+				reason: 'unknown_user',
+			});
 			return res.status(401).json({
 				ok: false,
 				error: 'Credenciales inválidas'
@@ -37,6 +57,11 @@ export async function login(req, res, next) {
 		const isValid = await bcrypt.compare(password, user.passwordHash);
 
 		if (!isValid) {
+			logger.warn('security.login_failed', {
+				requestId: req.requestId || null,
+				reason: 'invalid_password',
+				userId: user.id,
+			});
 			return res.status(401).json({
 				ok: false,
 				error: 'Credenciales inválidas'
@@ -49,6 +74,13 @@ export async function login(req, res, next) {
 			user.workspace?.status &&
 			user.workspace.status !== 'ACTIVE'
 		) {
+			captureSecurityEvent('security.login_inactive_workspace', {
+				extra: {
+					requestId: req.requestId || null,
+					userId: user.id,
+					workspaceId: user.workspaceId || null,
+				},
+			});
 			return res.status(403).json({
 				ok: false,
 				error: 'Workspace inactivo'

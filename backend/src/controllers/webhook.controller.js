@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { decryptSecret } from '../lib/secret-crypto.js';
 import { logger, maskPhone } from '../lib/logger.js';
+import { captureException, captureSecurityEvent } from '../lib/sentry.js';
 import { processInboundMessage } from '../services/conversation/chat.service.js';
 import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
 import { applyCampaignMessageStatusWebhook } from '../services/campaigns/whatsapp-campaign.service.js';
@@ -402,6 +403,12 @@ export async function receiveWhatsappWebhook(req, res) {
 			}
 
 			if (!verifyWhatsAppWebhook(rawBodyBuffer, signatureHeader)) {
+				captureSecurityEvent('security.webhook_invalid_signature', {
+					extra: {
+						requestId: req.requestId || null,
+						provider: 'whatsapp',
+					},
+				});
 				return res.status(401).json({
 					ok: false,
 					error: 'Firma de webhook WhatsApp invalida.'
@@ -453,6 +460,12 @@ export async function receiveWhatsappWebhook(req, res) {
 			requestId: req.requestId || null,
 			error,
 		});
+		captureException(error, {
+			extra: {
+				requestId: req.requestId || null,
+				provider: 'whatsapp',
+			},
+		});
 	}
 }
 
@@ -482,6 +495,12 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			.digest('hex');
 
 		if (!signatureHeader || !timingSafeEquals(String(signatureHeader), expectedSignature)) {
+			captureSecurityEvent('security.webhook_invalid_signature', {
+				extra: {
+					requestId: req.requestId || null,
+					provider: 'tiendanube',
+				},
+			});
 			return res.status(401).json({
 				ok: false,
 				error: 'Firma de webhook Tiendanube inválida.'
@@ -557,6 +576,12 @@ export async function receiveTiendanubeOrderWebhook(req, res) {
 			requestId: req.requestId || null,
 			error,
 		});
+		captureException(error, {
+			extra: {
+				requestId: req.requestId || null,
+				provider: 'tiendanube',
+			},
+		});
 		return res.status(500).json({
 			ok: false,
 			error: process.env.NODE_ENV === 'production'
@@ -574,6 +599,12 @@ export async function receiveShopifyWebhook(req, res) {
 			: Buffer.from(req.body || '');
 		const signatureHeader = req.headers['x-shopify-hmac-sha256'];
 		if (!verifyShopifyWebhook(rawBodyBuffer, signatureHeader)) {
+			captureSecurityEvent('security.webhook_invalid_signature', {
+				extra: {
+					requestId: req.requestId || null,
+					provider: 'shopify',
+				},
+			});
 			return res.status(401).json({
 				ok: false,
 				error: 'Firma de webhook Shopify invalida.'
@@ -724,6 +755,12 @@ export async function receiveShopifyWebhook(req, res) {
 		logger.error('webhook.shopify_failed', {
 			requestId: req.requestId || null,
 			error,
+		});
+		captureException(error, {
+			extra: {
+				requestId: req.requestId || null,
+				provider: 'shopify',
+			},
 		});
 		return res.status(500).json({
 			ok: false,

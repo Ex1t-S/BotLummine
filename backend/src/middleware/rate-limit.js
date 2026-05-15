@@ -1,4 +1,7 @@
+import { captureSecurityEvent } from '../lib/sentry.js';
+
 const buckets = new Map();
+let warnedUpstashFallback = false;
 
 function normalizeNumber(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
 	const parsed = Number(value);
@@ -20,6 +23,85 @@ function cleanupExpired(now = Date.now()) {
 	}
 }
 
+function getRateLimitBackend() {
+	return String(process.env.RATE_LIMIT_BACKEND || 'memory').trim().toLowerCase();
+}
+
+function isFailOpenEnabled() {
+	return String(process.env.RATE_LIMIT_FAIL_OPEN || 'false').trim().toLowerCase() === 'true';
+}
+
+function getUpstashConfig() {
+	return {
+		url: String(process.env.UPSTASH_REDIS_REST_URL || '').trim().replace(/\/+$/, ''),
+		token: String(process.env.UPSTASH_REDIS_REST_TOKEN || '').trim(),
+	};
+}
+
+async function incrementUpstashBucket(key, windowMs) {
+	const { url, token } = getUpstashConfig();
+	if (!url || !token) {
+		throw new Error('Upstash Redis no configurado.');
+	}
+
+	const redisKey = `rate-limit:${key}`;
+	const response = await fetch(`${url}/pipeline`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify([
+			['INCR', redisKey],
+			['PTTL', redisKey],
+		]),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Upstash Redis respondio ${response.status}.`);
+	}
+
+	const data = await response.json();
+	const count = Number(data?.[0]?.result || 0);
+	let ttlMs = Number(data?.[1]?.result || -1);
+
+	if (!Number.isFinite(count) || count < 1) {
+		throw new Error('Upstash Redis devolvio un contador invalido.');
+	}
+
+	if (!Number.isFinite(ttlMs) || ttlMs < 0) {
+		const expireResponse = await fetch(`${url}/pexpire/${encodeURIComponent(redisKey)}/${windowMs}`, {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${token}` },
+		});
+
+		if (!expireResponse.ok) {
+			throw new Error(`Upstash Redis no pudo setear TTL (${expireResponse.status}).`);
+		}
+
+		ttlMs = windowMs;
+	}
+
+	return {
+		count,
+		resetAt: Date.now() + ttlMs,
+	};
+}
+
+function incrementMemoryBucket(key, windowMs) {
+	const now = Date.now();
+	if (Math.random() < 0.01) cleanupExpired(now);
+
+	const current = buckets.get(key);
+	const bucket = current && current.resetAt > now
+		? current
+		: { count: 0, resetAt: now + windowMs };
+
+	bucket.count += 1;
+	buckets.set(key, bucket);
+	return bucket;
+}
+
 export function createRateLimiter({
 	scope = 'global',
 	windowMs = 60_000,
@@ -30,18 +112,41 @@ export function createRateLimiter({
 	const resolvedWindowMs = normalizeNumber(windowMs, 60_000, { min: 1_000, max: 24 * 60 * 60 * 1000 });
 	const resolvedMax = normalizeNumber(max, 60, { min: 1, max: 100_000 });
 
-	return (req, res, next) => {
-		const now = Date.now();
-		if (Math.random() < 0.01) cleanupExpired(now);
-
+	return async (req, res, next) => {
 		const key = keyGenerator ? keyGenerator(req) : getClientKey(req, scope);
-		const current = buckets.get(key);
-		const bucket = current && current.resetAt > now
-			? current
-			: { count: 0, resetAt: now + resolvedWindowMs };
+		let bucket;
 
-		bucket.count += 1;
-		buckets.set(key, bucket);
+		if (getRateLimitBackend() === 'upstash') {
+			try {
+				bucket = await incrementUpstashBucket(key, resolvedWindowMs);
+			} catch (error) {
+				if (!warnedUpstashFallback) {
+					warnedUpstashFallback = true;
+					console.warn(JSON.stringify({
+						ts: new Date().toISOString(),
+						level: 'warn',
+						event: 'security.rate_limit_fallback',
+						scope,
+						error: error?.message || String(error),
+					}));
+					captureSecurityEvent('security.rate_limit_fallback', {
+						extra: { scope, error: error?.message || String(error) },
+					});
+				}
+
+				if (!isFailOpenEnabled()) {
+					return res.status(503).json({
+						ok: false,
+						error: 'Rate limit temporalmente no disponible.',
+						requestId: req.requestId || null,
+					});
+				}
+
+				bucket = incrementMemoryBucket(key, resolvedWindowMs);
+			}
+		} else {
+			bucket = incrementMemoryBucket(key, resolvedWindowMs);
+		}
 
 		const remaining = Math.max(0, resolvedMax - bucket.count);
 		res.setHeader('RateLimit-Limit', String(resolvedMax));
@@ -49,8 +154,17 @@ export function createRateLimiter({
 		res.setHeader('RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1000)));
 
 		if (bucket.count > resolvedMax) {
+			const now = Date.now();
 			const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
 			res.setHeader('Retry-After', String(retryAfterSeconds));
+			captureSecurityEvent('security.rate_limit_exceeded', {
+				extra: {
+					requestId: req.requestId || null,
+					scope,
+					path: req.originalUrl || req.url,
+					retryAfterSeconds,
+				},
+			});
 			return res.status(429).json({
 				ok: false,
 				error: message,

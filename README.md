@@ -1,176 +1,213 @@
-# WhatsApp AI Assistant Starter
+# BotLummine
 
-Starter completo para:
+Panel multi marca para operar ventas por WhatsApp con IA, inbox humano, catalogo, campanias, carritos abandonados, clientes e integraciones de ecommerce/logistica.
 
-- recibir mensajes de **WhatsApp Cloud API**
-- responder con **Gemini** o **OpenAI**
-- guardar usuarios, contactos, conversaciones y mensajes con **Prisma + PostgreSQL/Neon**
-- entrar a una **pantalla web** con login para ver todos los chats
-- probar integraciones sin Meta usando un **simulador de mensajes**
-- importar chats viejos exportados de WhatsApp a tu base de datos
+El backend corre con Express, Prisma y PostgreSQL/Neon. El frontend corre con Vite + React. Produccion esta pensada para Railway en backend y dominio publico del panel en `bladeia.com`.
 
-## Stack
+## Estructura
 
-- Node.js
-- Express
-- Prisma
-- PostgreSQL / Neon
-- EJS + CSS simple
-- Gemini u OpenAI por configuración
-
-## 1) Crear el proyecto en Visual Studio Code
-
-```bash
-npm install
-cp .env.example .env
+```txt
+backend/
+  prisma/        schema y migraciones
+  scripts/       utilidades operativas versionadas
+  src/           API, jobs, servicios e integraciones
+frontend/
+  src/           panel web
+  tests/         pruebas Playwright/performance
+.github/         auditoria de seguridad y dependabot
 ```
 
-Después completá `.env`.
+## Desarrollo Local
 
-## 2) Base de datos
-
-Este proyecto está pensado para **PostgreSQL**. Si ya usaste Neon, seguí con Neon.
+Instalar dependencias:
 
 ```bash
-npm run prisma:generate
-npm run prisma:migrate -- --name init
-npm run db:seed
+npm --prefix backend ci
+npm --prefix frontend ci
 ```
 
-Usuario inicial:
-
-- email: el valor de `SEED_ADMIN_EMAIL`
-- password: el valor de `SEED_ADMIN_PASSWORD`
-
-## 3) Levantar en desarrollo
+Generar Prisma:
 
 ```bash
-npm run dev
+npm --prefix backend run prisma:generate
 ```
 
-Abrí:
+Levantar servicios:
 
-- `http://localhost:3000/login`
+```bash
+npm --prefix backend run dev
+npm --prefix frontend run dev
+```
 
-## 4) Probar sin WhatsApp real
+El frontend local usa `http://localhost:5173`. El backend por defecto usa `PORT=3000` si no se define otro puerto.
 
-Mientras `WHATSAPP_DRY_RUN=true`, el sistema no le pega a Meta: guarda el mensaje y simula el envío.
+## Produccion En Railway
 
-En el dashboard vas a tener:
+Railway ejecuta el comando de inicio definido en `railway.json`:
 
-- un formulario para **simular mensaje entrante**
-- un formulario para **probar la IA**
-- listado de conversaciones
-- detalle de cada chat
-- respuesta manual
-- switch de IA por conversación
+```bash
+npm start
+```
 
-## 5) Conectar WhatsApp Cloud API
+Ese comando aplica migraciones Prisma y arranca el backend.
 
-### Webhook de verificación
-Meta va a verificar:
+Jobs operativos recomendados:
 
-- `GET /webhook/whatsapp`
+```bash
+npm run jobs:campaign-dispatch
+npm run jobs:enbox-sync
+npm run jobs:diagnose
+```
 
-### Webhook entrante
-Meta enviará mensajes a:
+Schedules sugeridos:
 
-- `POST /webhook/whatsapp`
+- Campanias: cada 5 minutos.
+- Enbox sync: cada 30 minutos.
+- Diagnostico: cada 6 horas.
+- Compactacion de payloads crudos: manual o cron controlado con `npm --prefix backend run raw-payloads:compact:apply`.
 
-### Variables necesarias
+## Variables De Entorno
 
+No guardar valores reales en git. Configurar secretos solo en Railway o en `.env` local ignorado.
+
+Base:
+
+- `NODE_ENV=production`
+- `PORT`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `AUTH_COOKIE_NAME`
+- `SECRET_ENCRYPTION_KEY`
+- `BACKEND_PUBLIC_URL`
+- `FRONTEND_URL`
+- `FRONTEND_URL_PROD`
+- `ALLOW_VERCEL_PREVIEWS=false`
+
+IA:
+
+- `AI_PROVIDER`
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `MAX_CONTEXT_MESSAGES`
+- `AI_AUTOREPLY_ENABLED`
+
+WhatsApp / Meta:
+
+- `META_APP_ID`
+- `META_APP_SECRET`
+- `WHATSAPP_DRY_RUN=false`
+- `WHATSAPP_GRAPH_VERSION`
+- `WHATSAPP_INBOUND_MEDIA_DIR`
 - `WHATSAPP_VERIFY_TOKEN`
 - `WHATSAPP_ACCESS_TOKEN`
 - `WHATSAPP_PHONE_NUMBER_ID`
 
-## 6) Elegir proveedor de IA
+Tiendanube:
 
-En `.env`:
+- `TIENDANUBE_APP_ID`
+- `TIENDANUBE_CLIENT_SECRET`
+- `TIENDANUBE_REGISTER_SECRET`
+- `TIENDANUBE_STATE_SECRET`
+- `TIENDANUBE_WEBHOOK_BASE_URL`
+- `TIENDANUBE_REDIRECT_URI`
 
-```env
-AI_PROVIDER=gemini
-```
+Shopify, si aplica:
 
-o
+- `SHOPIFY_CLIENT_ID`
+- `SHOPIFY_CLIENT_SECRET`
+- `SHOPIFY_REDIRECT_URI`
+- `SHOPIFY_WEBHOOK_BASE_URL`
+- `SHOPIFY_APP_SCOPES`
 
-```env
-AI_PROVIDER=openai
-```
+Seguridad y observabilidad:
 
-### Gemini
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
+- `RATE_LIMIT_BACKEND=upstash`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `RATE_LIMIT_FAIL_OPEN=false`
+- `TURNSTILE_REQUIRED=true` cuando el widget este validado en frontend
+- `TURNSTILE_SECRET_KEY`
+- `SENTRY_DSN`
+- `LOG_LEVEL=info`
+- `DEBUG_EXTERNAL_PAYLOADS=false`
 
-### OpenAI
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
+Campanias:
 
-## 7) Importar chats exportados
+- `CAMPAIGN_DISPATCHER_ENABLED=true`
+- `CAMPAIGN_DISPATCHER_INTERVAL_MS`
+- `CAMPAIGN_HEADER_MEDIA_MAX_BYTES`
+- `OUTBOUND_MEDIA_MAX_BYTES`
 
-Podés exportar un chat de WhatsApp a `.txt` e importarlo.
+## Seguridad Operativa
 
-Ejemplo:
+Estado actual cubierto por el codigo:
+
+- Cookies de sesion `httpOnly`, `secure` y firmadas con JWT.
+- CORS por allowlist de origenes.
+- Bloqueo por `Origin`/`Referer` para mutaciones autenticadas.
+- Webhooks de WhatsApp, Shopify y Tiendanube validados por firma.
+- Secretos de proveedores cifrados con `SECRET_ENCRYPTION_KEY`.
+- Rate limiting para login, webhooks y acciones sensibles.
+- Sentry opcional para errores y eventos de seguridad.
+
+Checklist de produccion:
+
+- Mantener `DEV_AUTH_BYPASS=false`.
+- Usar `RATE_LIMIT_BACKEND=upstash` y `RATE_LIMIT_FAIL_OPEN=false`.
+- Activar Turnstile cuando el login tenga el token frontend conectado.
+- No activar `OUTBOUND_DEBUG` ni `DEBUG_EXTERNAL_PAYLOADS` en produccion.
+- Rotar secretos si fueron compartidos en capturas, chats o logs.
+- Ejecutar compactacion de payloads crudos segun retencion.
+- Revisar backups despues de cifrar secretos y definir desde que fecha contienen `enc:v1`.
+
+Backlog de hardening:
+
+- Agregar token CSRF para mutaciones autenticadas.
+- Sanitizar `rawPayload` antes de responder al inbox.
+- Validar passwords nuevos con minimo 12 caracteres.
+- Sanitizar logs debug de proveedores antes de imprimirlos.
+
+## Scripts Utiles
+
+Backend:
 
 ```bash
-node scripts/import-whatsapp-export.mjs "./exports/cliente1.txt" "Mi Negocio" "+5492210000000" "Cliente Demo"
+npm --prefix backend run audit:security
+npm --prefix backend run prisma:generate
+npm --prefix backend run prisma:migrate
+npm --prefix backend run raw-payloads:compact:dry-run
+npm --prefix backend run raw-payloads:compact:apply
+npm --prefix backend run ai:regression
 ```
 
-Parámetros:
+Frontend:
 
-1. ruta del `.txt`
-2. nombre de tu negocio en el chat exportado
-3. teléfono / waId del contacto
-4. nombre del contacto
-
-El importador intenta parsear formatos típicos como:
-
-- `12/03/26, 14:22 - Juan: Hola`
-- `[12/03/26, 14:22:10] Juan: Hola`
-
-## 8) Producción
-
-Recomendado para producción:
-
-- Railway / Render / Fly.io / VPS para el backend
-- Neon para PostgreSQL
-- nginx o proxy
-- HTTPS real para el webhook
-- Railway web: `npm start`
-- Railway cron Enbox: `npm run jobs:enbox-sync`, schedule `*/30 * * * *`
-- Railway cron campañas: `npm run jobs:campaign-dispatch`, schedule `*/5 * * * *`
-- Diagnostico operativo opcional: `npm run jobs:diagnose`, schedule `0 */6 * * *`
-- guia de workers/cron: `docs/railway-cron.md`
-- hardening env: `LOG_LEVEL=info`, `DEBUG_EXTERNAL_PAYLOADS=false`, `HEALTHCHECK_DB=false`
-- CORS del panel: configurar `FRONTEND_URL` o `FRONTEND_URL_PROD` con el dominio exacto del frontend. Para varios dominios, usar `CORS_ALLOWED_ORIGINS=https://panel.example.com,https://preview.example.com`
-- timeouts env: `META_GRAPH_TIMEOUT_MS`, `WHATSAPP_SEND_TIMEOUT_MS`, `TIENDANUBE_TIMEOUT_MS`, `ENBOX_TIMEOUT_MS`, `AI_PROVIDER_TIMEOUT_MS`
-- `WHATSAPP_DRY_RUN=false`
-- rotación de logs
-- rate limiting
-- cola de tareas si el tráfico sube
-
-## 9) Próximas mejoras recomendadas
-
-- búsqueda full text / pgvector
-- asignación de chats a agentes
-- etiquetas
-- notas internas
-- archivos y media
-- respuestas rápidas / templates
-- analytics
-- panel de configuración desde UI
-
-## 10) Estructura
-
-```txt
-src/
-  controllers/
-  middleware/
-  routes/
-  services/
-    ai/
-  views/
-  lib/
-public/
-prisma/
-scripts/
+```bash
+npm --prefix frontend run build
+npm --prefix frontend run test:e2e
+npm --prefix frontend run test:perf
 ```
+
+Repositorio completo:
+
+```bash
+npm run audit:security
+npm run build
+```
+
+## Verificacion Antes De Deploy
+
+```bash
+npm --prefix backend audit --audit-level=high
+npm --prefix frontend audit --audit-level=high
+npm --prefix backend run prisma:generate
+npm --prefix frontend run build
+```
+
+Confirmar tambien:
+
+- `git status` no muestra secretos ni artefactos locales.
+- Railway tiene los dominios exactos en `FRONTEND_URL`, `FRONTEND_URL_PROD` y `BACKEND_PUBLIC_URL`.
+- Los webhooks publicos usan HTTPS.

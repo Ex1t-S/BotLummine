@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
 import { prisma } from '../lib/prisma.js';
+import { captureSecurityEvent } from '../lib/sentry.js';
 
 const cookieName = process.env.AUTH_COOKIE_NAME || 'wa_assistant_token';
 
@@ -152,6 +153,15 @@ export function requireAnyRole(allowedRoles = []) {
 		}
 
 		if (!hasAnyRole(req.user, allowedRoles)) {
+			captureSecurityEvent('security.admin_unauthorized', {
+				extra: {
+					requestId: req.requestId || null,
+					userId: req.user.id,
+					role: req.user.role,
+					allowedRoles,
+					path: req.originalUrl || req.url,
+				},
+			});
 			return res.status(403).json({
 				ok: false,
 				error: 'No autorizado'

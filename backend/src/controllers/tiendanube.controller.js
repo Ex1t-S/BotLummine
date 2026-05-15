@@ -13,7 +13,6 @@ import {
 	DEFAULT_WORKSPACE_ID,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
-import { hasAnyRole } from '../middleware/auth.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const ORDER_WEBHOOK_EVENTS = [
@@ -64,19 +63,10 @@ function normalizeAssetUrl(value = '') {
 	return normalized;
 }
 
-function getRegisterSecret() {
-	return String(
-		process.env.TIENDANUBE_REGISTER_SECRET ||
-		process.env.TIENDANUBE_CLIENT_SECRET ||
-		''
-	).trim();
-}
-
 function getTiendanubeStateSecret() {
 	return String(
 		process.env.TIENDANUBE_STATE_SECRET ||
 		process.env.TIENDANUBE_CLIENT_SECRET ||
-		process.env.TIENDANUBE_REGISTER_SECRET ||
 		''
 	).trim();
 }
@@ -132,20 +122,7 @@ function resolveTiendanubeStateWorkspaceId(value = '') {
 }
 
 function isAuthorizedAdminRequest(req) {
-	if (req.user) {
-		return hasAnyRole(req.user, ['ADMIN']);
-	}
-
-	const expected = getRegisterSecret();
-	if (!expected) {
-		return false;
-	}
-
-	const provided = String(
-		req.headers['x-admin-secret'] || ''
-	).trim();
-
-	return Boolean(provided) && provided === expected;
+	return Boolean(req.user);
 }
 
 function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
@@ -773,7 +750,7 @@ export async function registerTiendanubeWebhooks(req, res) {
 		if (!isAuthorizedAdminRequest(req)) {
 			return res.status(401).json({
 				ok: false,
-				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+				error: 'No autenticado. Inicia sesion admin.'
 			});
 		}
 
@@ -813,7 +790,7 @@ export async function runTiendanubeCatalogSync(req, res) {
 		if (!isAuthorizedAdminRequest(req)) {
 			return res.status(401).json({
 				ok: false,
-				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+				error: 'No autenticado. Inicia sesion admin.'
 			});
 		}
 
@@ -840,7 +817,7 @@ export async function getTiendanubeCatalogStatus(req, res) {
 		if (!isAuthorizedAdminRequest(req)) {
 			return res.status(401).json({
 				ok: false,
-				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+				error: 'No autenticado. Inicia sesion admin.'
 			});
 		}
 
@@ -858,7 +835,7 @@ export async function getTiendanubeCatalogProducts(req, res) {
 		if (!isAuthorizedAdminRequest(req)) {
 			return res.status(401).json({
 				ok: false,
-				error: 'No autenticado. Iniciá sesión o enviá x-admin-secret.'
+				error: 'No autenticado. Inicia sesion admin.'
 			});
 		}
 

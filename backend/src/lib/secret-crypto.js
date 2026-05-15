@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { captureSecurityEvent } from './sentry.js';
 
 const PREFIX = 'enc:v1:';
 
@@ -52,25 +53,32 @@ export function encryptSecret(value) {
 }
 
 export function decryptSecret(value) {
-	if (value === null || value === undefined) return value;
-	const normalized = String(value);
-	if (!isEncryptedSecret(normalized)) return normalized;
+	try {
+		if (value === null || value === undefined) return value;
+		const normalized = String(value);
+		if (!isEncryptedSecret(normalized)) return normalized;
 
-	const secret = getEncryptionSecret();
-	if (!secret) {
-		throw new Error('SECRET_ENCRYPTION_KEY es obligatorio para leer secretos cifrados.');
+		const secret = getEncryptionSecret();
+		if (!secret) {
+			throw new Error('SECRET_ENCRYPTION_KEY es obligatorio para leer secretos cifrados.');
+		}
+
+		const parts = normalized.split(':');
+		if (parts.length !== 5) {
+			throw new Error('Formato de secreto cifrado invalido.');
+		}
+
+		const [, , ivRaw, tagRaw, ciphertextRaw] = parts;
+		const decipher = crypto.createDecipheriv('aes-256-gcm', deriveKey(secret), Buffer.from(ivRaw, 'base64url'));
+		decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
+		return Buffer.concat([
+			decipher.update(Buffer.from(ciphertextRaw, 'base64url')),
+			decipher.final(),
+		]).toString('utf8');
+	} catch (error) {
+		captureSecurityEvent('security.secret_decrypt_failed', {
+			extra: { error: error?.message || String(error) },
+		});
+		throw error;
 	}
-
-	const parts = normalized.split(':');
-	if (parts.length !== 5) {
-		throw new Error('Formato de secreto cifrado invalido.');
-	}
-
-	const [, , ivRaw, tagRaw, ciphertextRaw] = parts;
-	const decipher = crypto.createDecipheriv('aes-256-gcm', deriveKey(secret), Buffer.from(ivRaw, 'base64url'));
-	decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
-	return Buffer.concat([
-		decipher.update(Buffer.from(ciphertextRaw, 'base64url')),
-		decipher.final(),
-	]).toString('utf8');
 }

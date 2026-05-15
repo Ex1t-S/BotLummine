@@ -20,10 +20,12 @@ import { prisma } from './lib/prisma.js';
 import { logger } from './lib/logger.js';
 import { attachRequestId } from './lib/request-id.js';
 import { validateSecretEncryptionConfig } from './lib/secret-crypto.js';
+import { captureException, captureSecurityEvent, initSentry } from './lib/sentry.js';
 
 dotenv.config();
 validateAuthConfig();
 validateSecretEncryptionConfig();
+initSentry();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -55,6 +57,13 @@ const sensitiveActionLimiter = createRateLimiter({
 	windowMs: Number(process.env.SENSITIVE_ACTION_RATE_LIMIT_WINDOW_MS || 60 * 1000),
 	max: Number(process.env.SENSITIVE_ACTION_RATE_LIMIT_MAX || 30),
 	message: 'Demasiadas acciones sensibles. Probá de nuevo en unos minutos.',
+});
+
+const webhookLimiter = createRateLimiter({
+	scope: 'webhook',
+	windowMs: Number(process.env.WEBHOOK_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+	max: Number(process.env.WEBHOOK_RATE_LIMIT_MAX || 1000),
+	message: 'Demasiadas solicitudes de webhook.',
 });
 
 function parseOriginList(value) {
@@ -155,6 +164,13 @@ function enforceAuthenticatedRequestOrigin(req, res, next) {
 			origin: normalizeOrigin(origin),
 			path: req.originalUrl || req.url,
 		});
+		captureSecurityEvent('security.origin_blocked', {
+			extra: {
+				requestId: req.requestId || null,
+				origin: normalizeOrigin(origin),
+				path: req.originalUrl || req.url,
+			},
+		});
 		return res.status(403).json({
 			ok: false,
 			error: 'Origen no permitido.',
@@ -168,6 +184,13 @@ function enforceAuthenticatedRequestOrigin(req, res, next) {
 			refererOrigin: getRequestHeaderOrigin(referer),
 			path: req.originalUrl || req.url,
 		});
+		captureSecurityEvent('security.origin_blocked', {
+			extra: {
+				requestId: req.requestId || null,
+				refererOrigin: getRequestHeaderOrigin(referer),
+				path: req.originalUrl || req.url,
+			},
+		});
 		return res.status(403).json({
 			ok: false,
 			error: 'Origen no permitido.',
@@ -179,6 +202,13 @@ function enforceAuthenticatedRequestOrigin(req, res, next) {
 		logger.warn('security.cross_site_mutation_blocked', {
 			requestId: req.requestId || null,
 			path: req.originalUrl || req.url,
+		});
+		captureSecurityEvent('security.origin_blocked', {
+			extra: {
+				requestId: req.requestId || null,
+				path: req.originalUrl || req.url,
+				fetchSite,
+			},
 		});
 		return res.status(403).json({
 			ok: false,
@@ -199,6 +229,9 @@ const corsOptions = {
 		}
 
 		logger.warn('cors.origin_blocked', { origin: normalizedOrigin || null });
+		captureSecurityEvent('security.origin_blocked', {
+			extra: { origin: normalizedOrigin || null, source: 'cors' },
+		});
 		return callback(new Error(`Origen no permitido por CORS: ${origin}`));
 	},
 	credentials: true,
@@ -208,8 +241,7 @@ const corsOptions = {
 		'X-Requested-With',
 		'Content-Type',
 		'Accept',
-		'Authorization',
-		'X-Admin-Secret'
+		'Authorization'
 	]
 };
 
@@ -222,6 +254,7 @@ app.options('/api/auth/me', cors(corsOptions));
 app.options('/api/tiendanube/webhooks/register', cors(corsOptions));
 
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use('/api/webhook', webhookLimiter);
 app.use('/api/webhook/whatsapp', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use('/api/webhook/tiendanube', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use('/api/webhook/shopify', express.raw({ type: 'application/json', limit: '2mb' }));
@@ -274,7 +307,8 @@ app.use('/api/admin', adminRoutes);
 
 app.use((err, req, res, _next) => {
 	const isCorsOriginError = err.message?.startsWith('Origen no permitido por CORS');
-	const status = isCorsOriginError ? 403 : err.status || err.statusCode || 500;
+	const isUploadRejected = err?.name === 'MulterError' || /archivo|logo|header/i.test(String(err?.message || ''));
+	const status = isCorsOriginError ? 403 : isUploadRejected ? 400 : err.status || err.statusCode || 500;
 	logger.error('http.unhandled_error', {
 		requestId: req.requestId || null,
 		method: req.method,
@@ -282,6 +316,27 @@ app.use((err, req, res, _next) => {
 		status,
 		error: err,
 	});
+
+	if (status >= 500) {
+		captureException(err, {
+			extra: {
+				requestId: req.requestId || null,
+				method: req.method,
+				path: req.originalUrl || req.url,
+				status,
+			},
+		});
+	}
+
+	if (isUploadRejected) {
+		captureSecurityEvent('security.upload_rejected', {
+			extra: {
+				requestId: req.requestId || null,
+				path: req.originalUrl || req.url,
+				error: err?.message || String(err),
+			},
+		});
+	}
 
 	if (isCorsOriginError) {
 		return res.status(403).json({

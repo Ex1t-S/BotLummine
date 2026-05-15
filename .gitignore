@@ -12,9 +12,6 @@ prisma/dev.db
 *.log
 *.tsbuildinfo
 docs/
-!docs/
-docs/*
-!docs/security-hardening.md
 scripts/
 !backend/scripts/
 backend/scripts/*

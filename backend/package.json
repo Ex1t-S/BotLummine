@@ -15,6 +15,9 @@
     "ai:test:workspace-flow": "node scripts/test-ai-workspace-flow.mjs",
     "ai:regression": "node scripts/run-ai-regression-suite.mjs",
     "ai:regression:compare": "node scripts/compare-ai-regression-suite.mjs",
+    "audit:security": "npm audit --audit-level=high",
+    "raw-payloads:compact:dry-run": "node scripts/compact-raw-payloads.mjs",
+    "raw-payloads:compact:apply": "node scripts/compact-raw-payloads.mjs --apply",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
@@ -24,6 +27,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@sentry/node": "^10.53.1",
     "axios": "^1.16.1",
     "bcryptjs": "^3.0.2",
     "cookie": "^1.1.1",

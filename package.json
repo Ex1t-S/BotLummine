@@ -3,10 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "audit:security": "npm --prefix backend run audit:security && npm --prefix frontend run audit:security",
     "build": "npm --prefix backend run prisma:generate",
     "jobs:campaign-dispatch": "npm --prefix backend run jobs:campaign-dispatch",
     "jobs:enbox-sync": "npm --prefix backend run jobs:enbox-sync",
     "jobs:diagnose": "npm --prefix backend run jobs:diagnose",
+    "local:demo": "npm --prefix frontend run build && node local-demo/server.mjs",
+    "local:demo:api": "node local-demo/server.mjs",
     "postinstall": "npm --prefix backend ci",
     "start": "npm --prefix backend run prisma:migrate && npm --prefix backend run start:prod"
   }
