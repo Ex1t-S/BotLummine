@@ -280,6 +280,14 @@ function buildConversionSourceItems(conversionsBySource = {}) {
 		}));
 }
 
+function formatBlockedReason(reason = '') {
+	const normalized = String(reason || '').trim();
+	if (normalized === 'campaign_dispatch_paused') return 'Campanas pausadas para la marca';
+	if (normalized === 'whatsapp_outbound_paused') return 'Salientes de WhatsApp pausados';
+	if (normalized === 'no_pending_or_failed_recipients') return 'Sin destinatarios pendientes o fallidos';
+	return normalized || 'Sin detalle';
+}
+
 export default function CampaignRunsPanel({
 	campaigns = [],
 	selectedCampaign,
@@ -323,6 +331,9 @@ export default function CampaignRunsPanel({
 		[selectedCampaign]
 	);
 	const analytics = selectedCampaign?.analytics || {};
+	const diagnostics = selectedCampaign?.diagnostics || {};
+	const failureDiagnostics = diagnostics.failures || {};
+	const operationalControls = diagnostics.controls || {};
 	const campaignCost = calculateCampaignCost(recipientMetrics.sent);
 	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
 
@@ -439,6 +450,59 @@ export default function CampaignRunsPanel({
 							<div className="campaign-helper-box">
 								<div className="campaign-helper-text">{actionModel.helperText}</div>
 							</div>
+
+							{operationalControls.blockedReasons?.length || failureDiagnostics.totalFailed ? (
+								<div className={`campaign-safety-panel campaign-safety-panel--${operationalControls.riskLevel || 'notice'}`}>
+									<div className="campaign-safety-panel__head">
+										<div>
+											<strong>Seguridad comercial y fallidos</strong>
+											<span>
+												{failureDiagnostics.totalFailed
+													? `${failureDiagnostics.totalFailed} destinatario(s) fallidos detectados.`
+													: 'Sin fallidos registrados para esta campana.'}
+											</span>
+										</div>
+										{failureDiagnostics.possiblePhoneNormalization ? (
+											<b>{failureDiagnostics.possiblePhoneNormalization} posible(s) telefono mal normalizado</b>
+										) : null}
+									</div>
+
+									{operationalControls.blockedReasons?.length ? (
+										<div className="campaign-safety-list">
+											{operationalControls.blockedReasons.map((reason) => (
+												<span key={reason}>{formatBlockedReason(reason)}</span>
+											))}
+										</div>
+									) : null}
+
+									{failureDiagnostics.byReason?.length ? (
+										<div className="campaign-failure-reasons">
+											{failureDiagnostics.byReason.map((item) => (
+												<div key={item.key}>
+													<strong>{item.count}</strong>
+													<span>{item.label}</span>
+													<small>{item.action}</small>
+												</div>
+											))}
+										</div>
+									) : null}
+
+									{failureDiagnostics.examples?.length ? (
+										<div className="campaign-failure-examples">
+											{failureDiagnostics.examples.slice(0, 3).map((item) => (
+												<span key={item.id}>
+													<strong>{item.contactName || item.phone || 'Destinatario'}</strong>
+													<small>
+														{item.reasonLabel}
+														{item.errorCode ? ` · ${item.errorCode}` : ''}
+														{item.normalizedPhone && item.normalizedPhone !== item.phone ? ` · sugerido ${item.normalizedPhone}` : ''}
+													</small>
+												</span>
+											))}
+										</div>
+									) : null}
+								</div>
+							) : null}
 
 							<div className="campaign-detail-actions campaign-detail-actions--spaced">
 								<button
@@ -627,6 +691,11 @@ export default function CampaignRunsPanel({
 														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
 															{normalizeRecipientStatus(recipient.status)}
 														</span>
+														{recipient.errorMessage ? (
+															<div className="campaign-recipient-error">
+																{recipient.errorCode ? `${recipient.errorCode}: ` : ''}{recipient.errorMessage}
+															</div>
+														) : null}
 													</td>
 													<td data-label="Interacción">
 														<div className="campaign-recipient-meta">

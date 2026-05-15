@@ -357,6 +357,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 			...(listCampaign || {}),
 			...(detailCampaign || {}),
 			analytics: detailPayload?.analytics || detailCampaign?.analytics || null,
+			diagnostics: detailPayload?.diagnostics || detailCampaign?.diagnostics || null,
 			recipients: detailRecipients,
 			allRecipients: detailRecipients,
 			pagination: detailPayload?.pagination || detailCampaign?.pagination || null,

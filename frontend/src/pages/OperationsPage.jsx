@@ -299,7 +299,10 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 
 function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 	const metrics = item.metrics || {};
+	const health = item.health || {};
 	const issueCount = item.issues?.length || 0;
+	const pausedFlags = Array.isArray(health.pausedFlags) ? health.pausedFlags : [];
+	const failedCampaigns = Array.isArray(health.recentFailedCampaigns) ? health.recentFailedCampaigns : [];
 
 	return (
 		<section className="operations-workspace-card">
@@ -337,6 +340,37 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 				platformAdmin={platformAdmin}
 				onNavigate={onNavigate}
 			/>
+
+			{pausedFlags.length ? (
+				<div className="operations-control-list">
+					{pausedFlags.map((flag) => (
+						<span key={flag.key}>
+							<strong>{flag.key === 'whatsapp_outbound' ? 'WhatsApp saliente pausado' : 'Campanas pausadas'}</strong>
+							<small>{flag.reason || 'Sin motivo cargado'}</small>
+						</span>
+					))}
+				</div>
+			) : null}
+
+			{failedCampaigns.length ? (
+				<div className="operations-failed-campaigns">
+					<div className="operations-mini-list-head">
+						<strong>Campanas con fallos recientes</strong>
+						<button type="button" onClick={() => onNavigate(platformAdmin ? '/admin' : '/campaigns/tracking')}>
+							Ver tracking
+						</button>
+					</div>
+					{failedCampaigns.slice(0, 3).map((campaign) => (
+						<div className="operations-failed-campaign-row" key={campaign.id}>
+							<span>
+								<strong>{campaign.name}</strong>
+								<small>{campaign.lastError || `${campaign.failedRecipients || 0} fallidos, ${campaign.pendingRecipients || 0} pendientes`}</small>
+							</span>
+							<b>{campaign.status}</b>
+						</div>
+					))}
+				</div>
+			) : null}
 		</section>
 	);
 }
@@ -438,6 +472,14 @@ export default function OperationsPage() {
 				tone: totals.failedCampaigns ? 'warning' : 'neutral',
 				href: platformAdmin ? '/admin' : '/campaigns/tracking',
 				icon: Send,
+			},
+			{
+				label: 'Campanas fallidas',
+				value: totals.failedCampaigns,
+				helper: 'Requieren diagnostico',
+				tone: totals.failedCampaigns ? 'warning' : 'neutral',
+				href: platformAdmin ? '/admin' : '/campaigns/tracking',
+				icon: AlertTriangle,
 			},
 		];
 

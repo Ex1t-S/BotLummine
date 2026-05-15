@@ -1490,6 +1490,106 @@
 	display: none;
 }
 
+.campaign-safety-panel {
+	display: grid;
+	gap: 12px;
+	margin: 14px 0;
+	padding: 14px;
+	border: 1px solid var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-sm, 8px);
+	background: var(--ui-surface-soft, #f8fafb);
+}
+
+.campaign-safety-panel--warning {
+	border-color: rgba(181, 71, 8, 0.28);
+	background: rgba(255, 250, 235, 0.82);
+}
+
+.campaign-safety-panel__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.campaign-safety-panel__head strong,
+.campaign-failure-reasons strong,
+.campaign-failure-examples strong {
+	color: var(--ui-heading, #0d151b);
+}
+
+.campaign-safety-panel__head span,
+.campaign-failure-reasons small,
+.campaign-failure-examples small {
+	display: block;
+	margin-top: 3px;
+	color: var(--ui-muted, #66737d);
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.campaign-safety-panel__head b {
+	flex: 0 0 auto;
+	padding: 6px 9px;
+	border-radius: 999px;
+	background: rgba(181, 71, 8, 0.12);
+	color: var(--ui-warning, #b54708);
+	font-size: 12px;
+}
+
+.campaign-safety-list,
+.campaign-failure-reasons,
+.campaign-failure-examples {
+	display: grid;
+	gap: 8px;
+}
+
+.campaign-safety-list {
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.campaign-safety-list span {
+	padding: 8px 10px;
+	border: 1px solid rgba(181, 71, 8, 0.24);
+	border-radius: var(--ui-radius-sm, 8px);
+	background: rgba(255, 255, 255, 0.72);
+	color: var(--ui-warning, #b54708);
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.campaign-failure-reasons {
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.campaign-failure-reasons > div,
+.campaign-failure-examples > span {
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid var(--ui-border, #d7dee5);
+	border-radius: var(--ui-radius-sm, 8px);
+	background: var(--ui-surface, #ffffff);
+}
+
+.campaign-failure-reasons span {
+	display: block;
+	color: var(--ui-heading, #0d151b);
+	font-size: 13px;
+	font-weight: 800;
+}
+
+.campaign-failure-examples {
+	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.campaign-recipient-error {
+	max-width: 260px;
+	margin-top: 6px;
+	color: var(--ui-danger, #b42318);
+	font-size: 12px;
+	line-height: 1.35;
+}
+
 @media (max-width: 980px) {
 	.campaigns-tab-nav,
 	.campaign-automation-rule-nav,
@@ -1505,6 +1605,10 @@
 
 	.campaign-detail-box--tracking-list {
 		display: none;
+	}
+
+	.campaign-safety-panel__head {
+		display: grid;
 	}
 }
 

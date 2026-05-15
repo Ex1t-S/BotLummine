@@ -12,6 +12,14 @@ function stripInternationalPrefix(value = '') {
 	return digits;
 }
 
+function hasExplicitInternationalPrefix(value = '') {
+	return String(value || '').trim().startsWith('+') || digitsOnly(value).startsWith('00');
+}
+
+function isValidE164Digits(value = '') {
+	return /^[1-9]\d{7,14}$/.test(value);
+}
+
 function removeArgentinaTrunkPrefix(value = '') {
 	let digits = stripInternationalPrefix(value);
 
@@ -34,14 +42,10 @@ function ensureArgentinaCountryCode(value = '') {
 	return `54${digits}`;
 }
 
-function removeMobile15AfterArea(value = '') {
-	const digits = ensureArgentinaCountryCode(value);
-
-	if (!digits.startsWith('54')) {
-		return digits;
+function removeDomesticMobile15(national = '') {
+	if (national.length !== 12) {
+		return national;
 	}
-
-	const national = digits.slice(2);
 
 	for (const areaLen of [2, 3, 4]) {
 		if (national.length <= areaLen + 2) continue;
@@ -50,48 +54,63 @@ function removeMobile15AfterArea(value = '') {
 		const rest = national.slice(areaLen);
 
 		if (rest.startsWith('15')) {
-			return `54${area}${rest.slice(2)}`;
+			return `${area}${rest.slice(2)}`;
 		}
 	}
 
-	return digits;
+	return national;
 }
 
-function ensureArgentinaMobileNine(value = '') {
-	const digits = removeMobile15AfterArea(value);
+function removeMobile15AfterArea(value = '') {
+	const digits = ensureArgentinaCountryCode(value);
 
 	if (!digits.startsWith('54')) {
 		return digits;
 	}
 
 	const national = digits.slice(2);
+	return `54${removeDomesticMobile15(national)}`;
+}
+
+function ensureArgentinaMobileNine(value = '') {
+	const digits = removeMobile15AfterArea(value);
+
+	if (!digits.startsWith('54')) {
+		return '';
+	}
+
+	const national = digits.slice(2);
 
 	if (national.startsWith('9')) {
-		return digits;
+		return national.slice(1).length === 10 ? digits : '';
 	}
 
-	if (/^11\d{8}$/.test(national)) {
+	if (/^\d{10}$/.test(national)) {
 		return `549${national}`;
 	}
 
-	if (/^\d{8,12}$/.test(national)) {
-		return `549${national}`;
-	}
-
-	return digits;
+	return '';
 }
 
 export function normalizeWhatsAppIdentityPhone(value = '') {
-	const digits = digitsOnly(value);
+	const digits = stripInternationalPrefix(value);
 	if (!digits) return '';
 
 	const normalized = ensureArgentinaMobileNine(value);
 
-	if (!/^54\d+$/.test(normalized)) {
+	if (/^54\d+$/.test(normalized)) {
+		return normalized;
+	}
+
+	if (digits.startsWith('54')) {
 		return '';
 	}
 
-	return normalized;
+	if (isValidE164Digits(digits) && (hasExplicitInternationalPrefix(value) || digits.length >= 11)) {
+		return digits;
+	}
+
+	return '';
 }
 
 export function normalizeWhatsAppDeliveryPhone(value = '') {

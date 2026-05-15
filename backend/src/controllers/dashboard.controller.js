@@ -16,6 +16,7 @@ import {
 	isPlatformAdmin,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
+import { WORKSPACE_FEATURE_FLAGS } from '../services/workspaces/workspace-feature-flags.service.js';
 
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
@@ -191,7 +192,7 @@ function getLatestByWorkspace(rows = [], dateField = 'createdAt') {
 	return byWorkspace;
 }
 
-function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, latestCustomerSync }) {
+function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, latestCustomerSync, pausedFlags = [] }) {
 	const issues = [];
 
 	if (workspace?.status && workspace.status !== 'ACTIVE') {
@@ -211,6 +212,26 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 			label: 'WhatsApp sin canal activo',
 			action: 'Configurar WhatsApp',
 			href: '/admin',
+		});
+	}
+
+	if (pausedFlags.includes(WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND)) {
+		issues.push({
+			type: 'whatsapp_outbound',
+			severity: 'critical',
+			label: 'Envios salientes pausados',
+			action: 'Revisar controles',
+			href: '/operations',
+		});
+	}
+
+	if (pausedFlags.includes(WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH)) {
+		issues.push({
+			type: 'campaign_dispatch',
+			severity: 'warning',
+			label: 'Campanas pausadas',
+			action: 'Revisar campanas',
+			href: '/campaigns/tracking',
 		});
 	}
 
@@ -259,6 +280,16 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 			label: 'Ultima sync de clientes con error',
 			action: 'Revisar clientes',
 			href: '/customers',
+		});
+	}
+
+	if (metrics.failedCampaigns > 0) {
+		issues.push({
+			type: 'campaigns',
+			severity: 'warning',
+			label: `${metrics.failedCampaigns} campana(s) con fallos`,
+			action: 'Ver fallidos',
+			href: '/campaigns/tracking',
 		});
 	}
 
@@ -1094,6 +1125,8 @@ export async function getOperationSummary(req, res, next) {
 			activeChannels,
 			catalogSyncRows,
 			customerSyncRows,
+			pausedFeatureFlags,
+			recentFailedCampaigns,
 		] = await Promise.all([
 			prisma.conversation.groupBy({
 				by: ['workspaceId', 'queue'],
@@ -1180,6 +1213,46 @@ export async function getOperationSummary(req, res, next) {
 				orderBy: { startedAt: 'desc' },
 				take: Math.max(workspaceIds.length * 3, 20),
 			}),
+			prisma.workspaceFeatureFlag.findMany({
+				where: {
+					...scopedWhere,
+					key: {
+						in: [
+							WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH,
+							WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND,
+						],
+					},
+					enabled: false,
+				},
+				select: {
+					workspaceId: true,
+					key: true,
+					reason: true,
+					updatedAt: true,
+				},
+			}),
+			prisma.campaign.findMany({
+				where: {
+					...scopedWhere,
+					OR: [
+						{ status: { in: ['FAILED', 'PARTIAL'] } },
+						{ failedRecipients: { gt: 0 } },
+					],
+				},
+				select: {
+					id: true,
+					workspaceId: true,
+					name: true,
+					status: true,
+					failedRecipients: true,
+					pendingRecipients: true,
+					skippedRecipients: true,
+					lastError: true,
+					updatedAt: true,
+				},
+				orderBy: { updatedAt: 'desc' },
+				take: Math.max(workspaceIds.length * 3, 20),
+			}),
 		]);
 
 		for (const row of queueRows) {
@@ -1243,12 +1316,28 @@ export async function getOperationSummary(req, res, next) {
 
 		const latestCatalogSyncByWorkspace = getLatestByWorkspace(catalogSyncRows);
 		const latestCustomerSyncByWorkspace = getLatestByWorkspace(customerSyncRows);
+		const pausedFlagsByWorkspace = new Map();
+		for (const flag of pausedFeatureFlags) {
+			if (!pausedFlagsByWorkspace.has(flag.workspaceId)) {
+				pausedFlagsByWorkspace.set(flag.workspaceId, []);
+			}
+			pausedFlagsByWorkspace.get(flag.workspaceId).push(flag);
+		}
+		const failedCampaignsByWorkspace = new Map();
+		for (const campaign of recentFailedCampaigns) {
+			if (!failedCampaignsByWorkspace.has(campaign.workspaceId)) {
+				failedCampaignsByWorkspace.set(campaign.workspaceId, []);
+			}
+			failedCampaignsByWorkspace.get(campaign.workspaceId).push(campaign);
+		}
 
 		const workspacesPayload = workspaces.map((workspace) => {
 			const metrics = metricsByWorkspace.get(workspace.id) || emptyOperationMetrics();
 			const channel = channelByWorkspace.get(workspace.id) || null;
 			const latestCatalogSync = latestCatalogSyncByWorkspace.get(workspace.id) || null;
 			const latestCustomerSync = latestCustomerSyncByWorkspace.get(workspace.id) || null;
+			const pausedFlags = pausedFlagsByWorkspace.get(workspace.id) || [];
+			const failedCampaigns = failedCampaignsByWorkspace.get(workspace.id) || [];
 
 			return {
 				workspace: {
@@ -1265,6 +1354,8 @@ export async function getOperationSummary(req, res, next) {
 					hasActiveWhatsapp: Boolean(channel),
 					latestCatalogSync,
 					latestCustomerSync,
+					pausedFlags,
+					recentFailedCampaigns: failedCampaigns,
 				},
 				issues: buildOperationIssues({
 					workspace,
@@ -1272,6 +1363,7 @@ export async function getOperationSummary(req, res, next) {
 					channel,
 					latestCatalogSync,
 					latestCustomerSync,
+					pausedFlags: pausedFlags.map((flag) => flag.key),
 				}),
 			};
 		});

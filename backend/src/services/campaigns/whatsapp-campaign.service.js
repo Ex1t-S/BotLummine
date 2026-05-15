@@ -1171,6 +1171,171 @@ function extractCampaignProviderError(sendResult = {}) {
 	};
 }
 
+function classifyCampaignFailure(recipient = {}) {
+	const message = normalizeString(recipient.errorMessage || '');
+	const normalizedMessage = message.toLowerCase();
+	const code = normalizeString(recipient.errorCode || '');
+	const phone = normalizeString(recipient.phone || recipient.waId || '');
+	const normalizedPhone = normalizeCampaignPhone(phone);
+	const phoneDigits = phone.replace(/\D+/g, '').replace(/^00/, '');
+	const hasInvalidPhoneShape = !normalizedPhone || (phoneDigits.startsWith('54') && normalizedPhone !== phoneDigits);
+
+	if (
+		hasInvalidPhoneShape ||
+		code === '100' ||
+		['131026', '131030', '131047', '131051'].includes(code) ||
+		/phone|recipient|numero|valid|undeliverable|not a whatsapp/i.test(message)
+	) {
+		return {
+			key: 'phone_or_recipient',
+			label: 'Telefono o destinatario',
+			action: 'Revisar normalizacion, 9 despues de 54 y alta del numero en WhatsApp.',
+			phoneIssue: hasInvalidPhoneShape,
+			normalizedPhone: normalizedPhone || null,
+		};
+	}
+
+	if (code === '131048' || /spam rate|rate limit/i.test(message)) {
+		return {
+			key: 'provider_rate_limit',
+			label: 'Limite de envio',
+			action: 'Pausar reintentos masivos y retomar con menor cadencia.',
+			phoneIssue: false,
+			normalizedPhone: normalizedPhone || null,
+		};
+	}
+
+	if (['130472', '131049'].includes(code) || /ecosystem|experiment/i.test(normalizedMessage)) {
+		return {
+			key: 'provider_delivery_policy',
+			label: 'Entrega limitada por Meta',
+			action: 'Evitar reintentar de inmediato; revisar cadencia, audiencia y tipo de plantilla.',
+			phoneIssue: false,
+			normalizedPhone: normalizedPhone || null,
+		};
+	}
+
+	if (code === '190' || /token|oauth|permission|access/i.test(normalizedMessage)) {
+		return {
+			key: 'provider_auth',
+			label: 'Credenciales Meta',
+			action: 'Revisar token, permisos y canal WhatsApp del workspace.',
+			phoneIssue: false,
+			normalizedPhone: normalizedPhone || null,
+		};
+	}
+
+	if (/template|parameter|component|variable/i.test(normalizedMessage)) {
+		return {
+			key: 'template_payload',
+			label: 'Template o variables',
+			action: 'Revisar variables renderizadas y estado de la plantilla.',
+			phoneIssue: false,
+			normalizedPhone: normalizedPhone || null,
+		};
+	}
+
+	return {
+		key: 'provider_other',
+		label: 'Proveedor',
+		action: 'Revisar el mensaje de Meta y logs del envio.',
+		phoneIssue: false,
+		normalizedPhone: normalizedPhone || null,
+	};
+}
+
+function incrementMapCounter(map, key, seed = {}) {
+	const current = map.get(key) || { ...seed, count: 0 };
+	current.count += 1;
+	map.set(key, current);
+	return current;
+}
+
+function buildCampaignFailureDiagnostics(recipients = []) {
+	const failedRecipients = safeArray(recipients).filter((recipient) => recipient.status === 'FAILED');
+	const byReason = new Map();
+	const byProviderCode = new Map();
+	const examples = [];
+	let possiblePhoneNormalization = 0;
+
+	for (const recipient of failedRecipients) {
+		const classification = classifyCampaignFailure(recipient);
+		const reasonBucket = incrementMapCounter(byReason, classification.key, {
+			key: classification.key,
+			label: classification.label,
+			action: classification.action,
+		});
+		if (classification.phoneIssue) {
+			possiblePhoneNormalization += 1;
+			reasonBucket.phoneIssueCount = Number(reasonBucket.phoneIssueCount || 0) + 1;
+		}
+
+		const providerCode = normalizeString(recipient.errorCode || 'sin_codigo');
+		incrementMapCounter(byProviderCode, providerCode, {
+			code: providerCode,
+			subcode: normalizeString(recipient.errorSubcode || ''),
+			message: normalizeString(recipient.errorMessage || ''),
+		});
+
+		if (examples.length < 8) {
+			examples.push({
+				id: recipient.id,
+				contactName: recipient.contactName || null,
+				phone: recipient.phone || recipient.waId || null,
+				normalizedPhone: classification.normalizedPhone,
+				errorCode: recipient.errorCode || null,
+				errorSubcode: recipient.errorSubcode || null,
+				errorMessage: recipient.errorMessage || null,
+				reasonKey: classification.key,
+				reasonLabel: classification.label,
+				failedAt: recipient.failedAt || null,
+			});
+		}
+	}
+
+	return {
+		totalFailed: failedRecipients.length,
+		possiblePhoneNormalization,
+		byReason: [...byReason.values()].sort((a, b) => b.count - a.count),
+		byProviderCode: [...byProviderCode.values()].sort((a, b) => b.count - a.count),
+		examples,
+	};
+}
+
+async function buildCampaignOperationalControls(campaign = {}) {
+	const [campaignDispatchEnabled, whatsappOutboundEnabled] = await Promise.all([
+		isWorkspaceFeatureEnabled(campaign.workspaceId, WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH),
+		isWorkspaceFeatureEnabled(campaign.workspaceId, WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND),
+	]);
+	const blockedReasons = [];
+	const status = normalizeString(campaign.status || '').toUpperCase();
+	const pending = Number(campaign.pendingRecipients || 0);
+	const failed = Number(campaign.failedRecipients || 0);
+	const skipped = Number(campaign.skippedRecipients || 0);
+
+	if (!campaignDispatchEnabled) blockedReasons.push('campaign_dispatch_paused');
+	if (!whatsappOutboundEnabled) blockedReasons.push('whatsapp_outbound_paused');
+	if (!pending && !failed && !['DRAFT', 'CANCELED', 'FAILED', 'PARTIAL'].includes(status)) {
+		blockedReasons.push('no_pending_or_failed_recipients');
+	}
+
+	const riskLevel =
+		blockedReasons.length || failed > 0
+			? 'warning'
+			: skipped > 0
+				? 'notice'
+				: 'clear';
+
+	return {
+		campaignDispatchEnabled,
+		whatsappOutboundEnabled,
+		blockedReasons,
+		riskLevel,
+		canLaunch: campaignDispatchEnabled && whatsappOutboundEnabled && pending > 0 && !['RUNNING', 'QUEUED'].includes(status),
+		canRetryFailed: campaignDispatchEnabled && whatsappOutboundEnabled && failed > 0 && !['RUNNING', 'QUEUED'].includes(status),
+	};
+}
+
 function isFatalCampaignProviderError(sendResult = {}) {
 	const providerError = extractCampaignProviderError(sendResult);
 	return providerError.code === '190';
@@ -1866,14 +2031,24 @@ export async function getCampaignDetail(campaignId, { workspaceId = DEFAULT_WORK
 				externalKey: true,
 				conversationId: true,
 				status: true,
+				errorCode: true,
+				errorSubcode: true,
+				errorMessage: true,
 				sentAt: true,
 				deliveredAt: true,
-				readAt: true
+				readAt: true,
+				failedAt: true,
+				createdAt: true,
+				updatedAt: true
 			}
 		})
 	]);
 
-	const insights = await buildCampaignRecipientInsights(allRecipientsForInsights, resolvedWorkspaceId);
+	const [insights, operationalControls] = await Promise.all([
+		buildCampaignRecipientInsights(allRecipientsForInsights, resolvedWorkspaceId),
+		buildCampaignOperationalControls(campaign),
+	]);
+	const failureDiagnostics = buildCampaignFailureDiagnostics(allRecipientsForInsights);
 	const enrichedRecipients = recipients.map((recipient) => ({
 		...recipient,
 		...(insights.recipientsById.get(recipient.id) || {})
@@ -1884,6 +2059,10 @@ export async function getCampaignDetail(campaignId, { workspaceId = DEFAULT_WORK
 		template,
 		recipients: enrichedRecipients,
 		analytics: insights.summary,
+		diagnostics: {
+			failures: failureDiagnostics,
+			controls: operationalControls,
+		},
 		pagination: {
 			page: currentPage,
 			pageSize: currentPageSize,
@@ -2050,13 +2229,16 @@ export async function createCampaignDraft({
 
 export async function launchCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const campaignDispatchEnabled = await isWorkspaceFeatureEnabled(
-		resolvedWorkspaceId,
-		WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH
-	);
+	const [campaignDispatchEnabled, whatsappOutboundEnabled] = await Promise.all([
+		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH),
+		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND),
+	]);
 
 	if (!campaignDispatchEnabled) {
 		throw new Error('El envio de campanas esta pausado para este workspace.');
+	}
+	if (!whatsappOutboundEnabled) {
+		throw new Error('Los envios salientes de WhatsApp estan pausados para este workspace.');
 	}
 
 	const campaign = await prisma.campaign.findFirst({
@@ -2161,6 +2343,18 @@ export async function deleteCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 
 export async function retryFailedCampaignRecipients(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const [campaignDispatchEnabled, whatsappOutboundEnabled] = await Promise.all([
+		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH),
+		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND),
+	]);
+
+	if (!campaignDispatchEnabled) {
+		throw new Error('El envio de campanas esta pausado para este workspace.');
+	}
+	if (!whatsappOutboundEnabled) {
+		throw new Error('Los envios salientes de WhatsApp estan pausados para este workspace.');
+	}
+
 	await prisma.campaignRecipient.updateMany({
 		where: {
 			workspaceId: resolvedWorkspaceId,
