@@ -53,6 +53,17 @@ const SHIPPING_STATUS_OPTIONS = [
 	{ value: 'cancelled', label: 'Cancelado' },
 ];
 
+const SORT_OPTIONS = [
+	{ value: 'purchase_desc', label: 'Compra mas reciente' },
+	{ value: 'purchase_asc', label: 'Compra mas antigua' },
+	{ value: 'spent_desc', label: 'Mayor monto' },
+	{ value: 'spent_asc', label: 'Menor monto' },
+	{ value: 'name_asc', label: 'Nombre A-Z' },
+	{ value: 'name_desc', label: 'Nombre Z-A' },
+	{ value: 'order_desc', label: 'Pedido descendente' },
+	{ value: 'order_asc', label: 'Pedido ascendente' },
+];
+
 function TemplateMultiSelect({
 	options,
 	selectedValues,
@@ -1181,7 +1192,7 @@ export default function CampaignComposerPanel({
 		}));
 	}
 
-		function toggleProductFilter(label) {
+	function toggleProductFilter(label) {
 		setSelectedProductFilters((current) => {
 			const next = current.includes(label)
 				? current.filter((item) => item !== label)
@@ -1235,7 +1246,7 @@ export default function CampaignComposerPanel({
 		}));
 	}
 
-		async function handleSelectAllFilteredCustomers() {
+	async function handleSelectAllFilteredCustomers() {
 		setCustomerAudience((current) => ({
 			...current,
 			loadingAll: true,
@@ -1729,7 +1740,18 @@ export default function CampaignComposerPanel({
 										))}
 									</select>
 								</label>
+							</div>
+						</div>
 
+						<div className="campaign-filter-block">
+							<div className="campaign-filter-block__head">
+								<strong>Filtros avanzados</strong>
+								<span>
+									Usa los mismos criterios de clientes para ordenar, acotar por envio y
+									filtrar calidad de contacto.
+								</span>
+							</div>
+							<div className="campaign-builder-grid campaign-builder-grid--filters">
 								<label className="field">
 									<span>Envio</span>
 									<select
@@ -1738,6 +1760,20 @@ export default function CampaignComposerPanel({
 									>
 										{SHIPPING_STATUS_OPTIONS.map((option) => (
 											<option key={option.value || 'all'} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</select>
+								</label>
+
+								<label className="field">
+									<span>Ordenar por</span>
+									<select
+										value={customerFilters.sort || 'purchase_desc'}
+										onChange={(event) => updateCustomerFilter('sort', event.target.value)}
+									>
+										{SORT_OPTIONS.map((option) => (
+											<option key={option.value} value={option.value}>
 												{option.label}
 											</option>
 										))}
@@ -1755,14 +1791,24 @@ export default function CampaignComposerPanel({
 									/>
 								</label>
 							</div>
-							<label className="campaign-toggle">
-								<input
-									type="checkbox"
-									checked={Boolean(customerFilters.hasOrders)}
-									onChange={(event) => updateCustomerFilter('hasOrders', event.target.checked)}
-								/>
-								<span>Solo clientes con al menos una compra</span>
-							</label>
+							<div className="campaign-builder-grid campaign-builder-grid--toggles">
+								<label className="campaign-toggle campaign-toggle--card">
+									<input
+										type="checkbox"
+										checked={Boolean(customerFilters.hasOrders)}
+										onChange={(event) => updateCustomerFilter('hasOrders', event.target.checked)}
+									/>
+									<span>Solo clientes con al menos una compra</span>
+								</label>
+								<label className="campaign-toggle campaign-toggle--card">
+									<input
+										type="checkbox"
+										checked={Boolean(customerFilters.hasPhoneOnly)}
+										onChange={(event) => updateCustomerFilter('hasPhoneOnly', event.target.checked)}
+									/>
+									<span>Solo clientes con telefono valido para WhatsApp</span>
+								</label>
+							</div>
 						</div>
 
 						<div className="campaign-filter-block campaign-product-filter-group">

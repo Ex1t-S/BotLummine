@@ -117,6 +117,13 @@ export function resolveConversationQueue({
 		};
 	}
 
+	if (currentConversation?.queue === 'AUTO' && currentConversation?.aiEnabled === false) {
+		return {
+			queue: 'AUTO',
+			aiEnabled: false
+		};
+	}
+
 	return {
 		queue: 'AUTO',
 		aiEnabled: true

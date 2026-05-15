@@ -39,7 +39,7 @@ function isOpenHumanConversation(conversation = null) {
 	if (!conversation) return false;
 	return Boolean(
 		conversation.queue === 'HUMAN' ||
-		conversation.aiEnabled === false ||
+		conversation.queue === 'PAYMENT_REVIEW' ||
 		conversation.state?.needsHuman === true ||
 		conversation.state?.handoffReason
 	);
@@ -970,18 +970,46 @@ async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, 
 			data: {
 				contactId: contact.id,
 				workspaceId: resolvedWorkspaceId,
-				queue: 'HUMAN',
-				aiEnabled: false,
+				queue: 'AUTO',
+				aiEnabled: true,
 				state: {
 					create: {
 						customerName: contact.name || normalizedPhone,
 						interactionCount: 0,
 						interestedProducts: [],
 						objections: [],
-						needsHuman: true,
-						handoffReason: 'campaign_reply_pending_human',
+						needsHuman: false,
+						handoffReason: null,
 					}
 				}
+			}
+		});
+	}
+
+	if (conversation.queue !== 'PAYMENT_REVIEW') {
+		await prisma.conversation.update({
+			where: { id: conversation.id },
+			data: {
+				queue: 'AUTO',
+				aiEnabled: true,
+			}
+		});
+
+		await prisma.conversationState.upsert({
+			where: { conversationId: conversation.id },
+			update: {
+				customerName: contact.name || normalizedPhone,
+				needsHuman: false,
+				handoffReason: null,
+			},
+			create: {
+				conversationId: conversation.id,
+				customerName: contact.name || normalizedPhone,
+				interactionCount: 0,
+				interestedProducts: [],
+				objections: [],
+				needsHuman: false,
+				handoffReason: null,
 			}
 		});
 	}
@@ -1026,8 +1054,8 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: true,
-			handoffReason: 'campaign_reply_pending_human',
+			needsHuman: false,
+			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		},
 		create: {
@@ -1044,8 +1072,8 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: true,
-			handoffReason: 'campaign_reply_pending_human',
+			needsHuman: false,
+			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		}
 	});
@@ -2496,7 +2524,13 @@ async function persistCampaignOutboundMessage({
 			body: recipient.renderedPreviewText || `[Plantilla ${campaign.templateName}]`,
 			provider: 'whatsapp-cloud-api',
 			model: campaign.templateName,
-			rawPayload: sendResult?.rawPayload || null
+			rawPayload: {
+				...(sendResult?.rawPayload || {}),
+				campaignMeta: {
+					campaignId: campaign.id,
+					audienceSource: campaign.audienceSource || 'manual',
+				}
+			}
 		}
 	});
 }

@@ -99,6 +99,14 @@ function isAbandonedCartCampaignMessage(message = null) {
 	);
 }
 
+function isCampaignOutboundMessage(message = null) {
+	return Boolean(
+		message?.direction === 'OUTBOUND' &&
+		message?.type === 'template' &&
+		message?.rawPayload?.campaignMeta?.campaignId
+	);
+}
+
 function looksLikeThirdPartyAutoReply(text = '') {
 	const normalized = normalizeText(text);
 	if (!normalized) return false;
@@ -106,51 +114,6 @@ function looksLikeThirdPartyAutoReply(text = '') {
 	return /(gracias\s+por\s+(comunicarte|escribir)\s+(con|a)|te\s+comunicaste\s+con|servicio\s+de\s+guardia|solo\s+llamadas\s+por\s+whatsapp|departamento\s+comercial|por\s+consultas\s+o\s+turnos|estudio\s+juridico|mi\s+nombre\s+es\s+.+\s+en\s+que\s+puedo\s+ayudarte|en\s+un\s+momento\s+te\s+respondo|dejame\s+tu\s+consulta|d[ée]jame\s+tu\s+consulta|te\s+respondo\s+para\s+ayudarte\s+con\s+tu\s+pedido|esper[o]?\s+tenga\s+un\s+buen\s+dia)/i.test(
 		normalized
 	);
-}
-
-function looksLikeCampaignPaymentIssue(text = '') {
-	const normalized = normalizeText(text);
-	if (!normalized) return false;
-
-	const hasPaymentTopic =
-		/(pago|tarjeta|cuotas|banco|mercado pago|mercadopago|transfer|alias|cbu|comprobante)/i.test(
-			normalized
-		);
-	const hasFriction =
-		/(error|no me deja|no me dejaba|no podia|problema|recargada|rechaz|no encontre|no figura|me daba|no podia pagar)/i.test(
-			normalized
-		);
-
-	return hasPaymentTopic && hasFriction;
-}
-
-function looksLikeSimplePurchaseCompletion(text = '') {
-	const normalized = normalizeText(text);
-	if (!normalized) return false;
-
-	const completedPurchase =
-		/(ya compre|ya hice la compra|ya hice el pedido|ya realice el pedido|ya realice la compra|ya finalice la compra|ya esta realizado|ya esta hecha|ya lo compre)/i.test(
-			normalized
-		);
-	const asksForFollowUp =
-		/(cuando|seguimiento|tracking|pedido|envio|llega|cuanto|donde)/i.test(normalized);
-
-	return completedPurchase && !asksForFollowUp;
-}
-
-function looksLikeGenericCampaignReply(text = '') {
-	const normalized = normalizeText(text);
-	if (!normalized) return true;
-
-	if (/^(hola+|holaa+|holis+|buen dia|buenos dias|buenas|gracias|muchas gracias|hola sofi|hola bella|hola hermosa)[!. ]*$/i.test(normalized)) {
-		return true;
-	}
-
-	if (normalized.length <= 20 && /^(si|sisi|dale|ok|oka|buenas|hola|holaa|holis|gracias)/i.test(normalized)) {
-		return true;
-	}
-
-	return false;
 }
 
 function isPaymentClarifierMessage(message = null) {
@@ -175,12 +138,8 @@ function looksLikePaymentClarifierConfirmation({ text = '', lastOutbound = null 
 
 async function maybeHandleAbandonedCartReply({
 	conversation,
-	currentState,
-	contactName,
 	messageBody,
 	messageType,
-	rawPayload,
-	transportMode,
 }) {
 	const lastOutbound = findLastOutboundBeforeCurrentInbound(conversation?.messages || []);
 	if (!isAbandonedCartCampaignMessage(lastOutbound)) {
@@ -199,41 +158,6 @@ async function maybeHandleAbandonedCartReply({
 			handled: true,
 			traceModel: 'campaign-autoreply-ignore',
 			suppressReply: true,
-		};
-	}
-
-	if (
-		messageType !== 'text' ||
-		looksLikeCampaignPaymentIssue(normalizedBody) ||
-		looksLikeSimplePurchaseCompletion(normalizedBody) ||
-		looksLikeGenericCampaignReply(normalizedBody) ||
-		normalizedBody
-	) {
-		await syncHumanHandoff({
-			conversationId: conversation.id,
-			reason: 'campaign_reply_pending_human',
-		});
-
-		await sendAndPersistOutbound({
-			conversationId: conversation.id,
-			body: buildHandoffReply({
-				contactName: contactName || conversation.contact?.name || conversation.contact?.waId || '',
-				reason: 'default',
-			}),
-			deliveryMode: transportMode,
-			aiMeta: {
-				provider: 'system',
-				model: 'campaign-human-handoff',
-				raw: {
-					source: 'abandoned_cart_reply',
-				},
-			},
-		});
-
-		return {
-			handled: true,
-			traceModel: 'campaign-human-handoff',
-			suppressReply: false,
 		};
 	}
 
@@ -504,7 +428,7 @@ export async function processInboundMessage({
 		messageType,
 		rawPayload,
 		transportMode,
-		skipMenu: isAbandonedCartCampaignMessage(lastOutbound),
+		skipMenu: isCampaignOutboundMessage(lastOutbound),
 	});
 
 	if (menuDecision?.handled) {
@@ -525,6 +449,7 @@ export async function processInboundMessage({
 	const summaryUserMessage = normalizeText(
 		menuDecision?.summaryUserMessage || effectiveMessageBody || messageBody
 	);
+	const isCampaignReply = isCampaignOutboundMessage(lastOutbound);
 	const forceIntent = menuDecision?.forceIntent || null;
 	const menuStatePatch = menuDecision?.statePatch || null;
 
@@ -554,7 +479,7 @@ export async function processInboundMessage({
 		recentMessages,
 	});
 
-	if (replyGate.action === 'suppress') {
+	if (replyGate.action === 'suppress' && !isCampaignReply) {
 		trace = {
 			...trace,
 			intent,
