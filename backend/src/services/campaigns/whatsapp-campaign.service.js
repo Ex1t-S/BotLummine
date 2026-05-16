@@ -224,12 +224,92 @@ function normalizeVariableMapping(input = {}) {
 	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
 	return Object.fromEntries(
 		Object.entries(input)
-			.map(([key, value]) => [normalizeString(key), normalizeString(value)])
+			.map(([key, value]) => [
+				normalizeString(key),
+				normalizeString(
+					value && typeof value === 'object' && !Array.isArray(value)
+						? value.source
+						: value
+				)
+			])
 			.filter(([key, value]) => key && value)
 	);
 }
 
-export function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder = null) {
+function normalizeVariableMappingEntries(input = {}) {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return [];
+
+	return Object.entries(input)
+		.map(([key, value]) => {
+			const templateKey = normalizeString(key);
+			if (!templateKey) return null;
+
+			if (value && typeof value === 'object' && !Array.isArray(value)) {
+				return [
+					templateKey,
+					{
+						source: normalizeString(value.source),
+						fixedValue: String(value.fixedValue ?? ''),
+					}
+				];
+			}
+
+			return [
+				templateKey,
+				{
+					source: normalizeString(value),
+					fixedValue: '',
+				}
+			];
+		})
+		.filter((entry) => entry?.[0] && entry?.[1]?.source);
+}
+
+function normalizeManualVariables(input = {}) {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+
+	return Object.fromEntries(
+		Object.entries(input)
+			.map(([key, value]) => [normalizeString(key), String(value ?? '').trim()])
+			.filter(([key]) => key)
+	);
+}
+
+function applyVariableMapping(baseVariables = {}, variableMapping = {}, manualVariables = {}) {
+	const variables = { ...baseVariables };
+	const manual = normalizeManualVariables(manualVariables);
+
+	for (const [templateKey, config] of normalizeVariableMappingEntries(variableMapping)) {
+		const source = normalizeString(config.source);
+
+		if (source === 'fixed') {
+			variables[templateKey] = String(config.fixedValue ?? '');
+			continue;
+		}
+
+		if (source === '__manual__') {
+			variables[templateKey] = manual[templateKey] ?? '';
+			continue;
+		}
+
+		if (source === 'empty') {
+			variables[templateKey] = '';
+			continue;
+		}
+
+		variables[templateKey] = baseVariables[source] ?? '';
+	}
+
+	return variables;
+}
+
+export function buildAbandonedCartVariables(
+	cart = {},
+	contact = null,
+	lastOrder = null,
+	variableMapping = {},
+	manualVariables = {}
+) {
 	const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 	const contactName = normalizeString(cart.contactName || contact?.name || '', normalizedPhone);
 	const firstName = contactName.split(/\s+/).filter(Boolean)[0] || contactName || 'Hola';
@@ -241,7 +321,7 @@ export function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder
 	const lastOrderId = normalizeString(lastOrder?.orderId || '');
 	const lastOrderNumber = normalizeString(lastOrder?.orderNumber || '');
 
-	return {
+	const variables = {
 		'1': firstName,
 		'2': checkoutUrl,
 		'3': primaryProductName,
@@ -268,6 +348,8 @@ export function buildAbandonedCartVariables(cart = {}, contact = null, lastOrder
 		last_order_id: lastOrderId,
 		last_order_number: lastOrderNumber
 	};
+
+	return applyVariableMapping(variables, variableMapping, manualVariables);
 }
 
 function getPendingPaymentSourceValue(baseVariables = {}, sourceKey = '') {
@@ -514,6 +596,9 @@ async function resolveLatestOrdersByPhones(normalizedPhones = [], workspaceId = 
 async function resolveRecipientsFromAbandonedCarts(input = {}) {
 	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
 	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
+	const rawFilters = input.audienceFilters || input.filters || input || {};
+	const variableMapping = rawFilters.variableMapping || input.variableMapping || {};
+	const manualVariables = rawFilters.manualVariables || input.manualVariables || {};
 	const since = new Date();
 	since.setDate(since.getDate() - filters.daysBack);
 
@@ -628,7 +713,13 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 		const normalizedPhone = normalizeCampaignPhone(cart.contactPhone || '');
 		const contact = contactByPhone.get(normalizedPhone) || null;
 		const lastOrder = latestOrderByPhone.get(normalizedPhone) || null;
-		const variables = buildAbandonedCartVariables(cart, contact, lastOrder);
+		const variables = buildAbandonedCartVariables(
+			cart,
+			contact,
+			lastOrder,
+			variableMapping,
+			manualVariables
+		);
 
 		return {
 			contactId: contact?.id || null,
@@ -813,12 +904,18 @@ async function resolveCampaignRecipients(input = {}) {
 export async function previewAbandonedCartAudience({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	templateId = null,
-	filters = {}
+	filters = {},
+	variableMapping = null,
+	manualVariables = null
 } = {}) {
 	const recipients = await resolveRecipientsFromAbandonedCarts({
 		workspaceId,
 		audienceSource: 'abandoned_carts',
-		audienceFilters: filters
+		audienceFilters: {
+			...(filters || {}),
+			...(variableMapping ? { variableMapping } : {}),
+			...(manualVariables ? { manualVariables } : {}),
+		}
 	});
 
 	let template = null;

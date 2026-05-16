@@ -207,7 +207,48 @@ function normalizeFilters(input = {}) {
 					? parsedMinTotal
 					: null,
 		productQuery: normalizeString(input.productQuery || ''),
+		variableMapping: normalizeMapping(input.variableMapping || {}),
+		manualVariables: normalizeManualVariables(input.manualVariables || {}),
 	};
+}
+
+function normalizeMapping(input = {}) {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+
+	return Object.fromEntries(
+		Object.entries(input)
+			.map(([key, value]) => {
+				const normalizedKey = normalizeString(key);
+				if (!normalizedKey) return null;
+
+				if (value && typeof value === 'object' && !Array.isArray(value)) {
+					const source = normalizeString(value.source);
+					if (!source) return null;
+
+					return [
+						normalizedKey,
+						{
+							source,
+							fixedValue: String(value.fixedValue ?? ''),
+						},
+					];
+				}
+
+				const source = normalizeString(value);
+				return source ? [normalizedKey, source] : null;
+			})
+			.filter(Boolean)
+	);
+}
+
+function normalizeManualVariables(input = {}) {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+
+	return Object.fromEntries(
+		Object.entries(input)
+			.map(([key, value]) => [normalizeString(key), String(value ?? '').trim()])
+			.filter(([key]) => key)
+	);
 }
 
 function serializeSetting(setting = null) {
@@ -218,6 +259,8 @@ function serializeSetting(setting = null) {
 		templateName: setting?.templateName || '',
 		templateLanguage: setting?.templateLanguage || 'es_AR',
 		filters,
+		variableMapping: filters.variableMapping || {},
+		manualVariables: filters.manualVariables || {},
 		intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 		minCartAgeMinutes: Number(setting?.minCartAgeMinutes || DEFAULT_MIN_CART_AGE_MINUTES),
 		lastRunAt: setting?.lastRunAt || null,
@@ -289,6 +332,8 @@ export async function updateAbandonedCartAutomationSettings({
 	enabled = false,
 	templateId = null,
 	filters = {},
+	variableMapping = undefined,
+	manualVariables = undefined,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const nextEnabled = normalizeBoolean(enabled);
@@ -309,6 +354,19 @@ export async function updateAbandonedCartAutomationSettings({
 		throw new Error('Elegi una plantilla antes de activar la automatizacion de carritos.');
 	}
 
+	const currentFilters = normalizeFilters(current?.filters || DEFAULT_FILTERS);
+	const nextFilters = normalizeFilters({
+		...filters,
+		variableMapping:
+			variableMapping === undefined
+				? filters.variableMapping || currentFilters.variableMapping
+				: variableMapping,
+		manualVariables:
+			manualVariables === undefined
+				? filters.manualVariables || currentFilters.manualVariables
+				: manualVariables,
+	});
+
 	const setting = await prisma.abandonedCartAutomationSetting.upsert({
 		where: { workspaceId: resolvedWorkspaceId },
 		create: {
@@ -317,7 +375,7 @@ export async function updateAbandonedCartAutomationSettings({
 			templateLocalId: template?.id || null,
 			templateName: template?.name || null,
 			templateLanguage: template?.language || 'es_AR',
-			filters: normalizeFilters(filters),
+			filters: nextFilters,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 			minCartAgeMinutes: DEFAULT_MIN_CART_AGE_MINUTES,
 			lastError: null,
@@ -327,7 +385,7 @@ export async function updateAbandonedCartAutomationSettings({
 			templateLocalId: template?.id || null,
 			templateName: template?.name || null,
 			templateLanguage: template?.language || 'es_AR',
-			filters: normalizeFilters(filters),
+			filters: nextFilters,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
 			minCartAgeMinutes: DEFAULT_MIN_CART_AGE_MINUTES,
 			lastError: null,
@@ -464,6 +522,8 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 			status: 'NEW',
 			checkoutIds,
 			limit: checkoutIds.length,
+			variableMapping: filters.variableMapping || {},
+			manualVariables: filters.manualVariables || {},
 		},
 		notes: 'Automatizacion horaria de carritos abandonados.',
 		launchedByUserId,

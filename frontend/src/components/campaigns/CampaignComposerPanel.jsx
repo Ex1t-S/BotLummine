@@ -1222,6 +1222,7 @@ export default function CampaignComposerPanel({
 							? null
 							: Number(nextFilters.minTotal),
 					productQuery: String(nextFilters.productQuery || '').trim(),
+					variableMapping,
 				},
 			});
 

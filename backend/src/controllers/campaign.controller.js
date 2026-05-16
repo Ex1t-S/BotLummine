@@ -165,6 +165,8 @@ export async function previewAbandonedCartAudienceController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 			templateId: req.body?.templateId || null,
 			filters: req.body?.filters || {},
+			variableMapping: req.body?.variableMapping || null,
+			manualVariables: req.body?.manualVariables || null,
 		});
 		return res.json({ ok: true, ...result });
 	} catch (error) {
@@ -399,6 +401,8 @@ export async function updateAbandonedCartAutomationSettingsController(req, res) 
 			enabled: normalizeBoolean(req.body?.enabled),
 			templateId: req.body?.templateId || null,
 			filters: req.body?.filters || {},
+			variableMapping: req.body?.variableMapping,
+			manualVariables: req.body?.manualVariables,
 		});
 		return res.json({ ok: true, settings });
 	} catch (error) {
