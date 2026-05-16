@@ -1743,20 +1743,19 @@ function getRecipientDispatchAt(recipient = {}) {
 	return recipient.sentAt || recipient.deliveredAt || recipient.readAt || null;
 }
 
-function getLatestDate(...values) {
-	const dates = values
-		.filter(Boolean)
-		.map((value) => new Date(value))
-		.filter((date) => !Number.isNaN(date.getTime()));
+function getFirstValidDate(...values) {
+	for (const value of values) {
+		if (!value) continue;
+		const date = new Date(value);
+		if (!Number.isNaN(date.getTime())) return date;
+	}
 
-	if (!dates.length) return null;
-
-	return dates.reduce((latest, date) => (date.getTime() > latest.getTime() ? date : latest), dates[0]);
+	return null;
 }
 
 function getOrderConversionAt(order = {}) {
 	if (!order) return null;
-	return getLatestDate(order.orderUpdatedAt, order.updatedAt, order.orderCreatedAt, order.createdAt);
+	return getFirstValidDate(order.orderCreatedAt, order.createdAt);
 }
 
 function getAbandonedCartCheckoutId(externalKey = '') {
@@ -1885,15 +1884,7 @@ async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEF
 					where: {
 						workspaceId: resolvedWorkspaceId,
 						normalizedPhone: { in: normalizedPhones },
-						...(earliestDispatchAt
-							? {
-									OR: [
-										{ orderCreatedAt: { gte: earliestDispatchAt } },
-										{ orderUpdatedAt: { gte: earliestDispatchAt } },
-										{ updatedAt: { gte: earliestDispatchAt } },
-									],
-							  }
-							: {}),
+						...(earliestDispatchAt ? { orderCreatedAt: { gte: earliestDispatchAt } } : {}),
 					},
 					orderBy: [{ orderCreatedAt: 'asc' }, { createdAt: 'asc' }],
 					select: {

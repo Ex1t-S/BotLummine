@@ -130,8 +130,43 @@ function getLatestDate(...values) {
 	return dates.reduce((latest, date) => (date.getTime() > latest.getTime() ? date : latest), dates[0]);
 }
 
-function getOrderConvertedAt(order = {}) {
-	return getLatestDate(order.orderUpdatedAt, order.updatedAt, order.orderCreatedAt, order.createdAt) || new Date();
+function getFirstValidDate(...values) {
+	for (const value of values) {
+		if (!value) continue;
+		const date = new Date(value);
+		if (!Number.isNaN(date.getTime())) return date;
+	}
+
+	return null;
+}
+
+function getOrderPurchaseAt(order = {}) {
+	return getFirstValidDate(order.orderCreatedAt, order.createdAt);
+}
+
+function getOrderStatusChangedAt(order = {}) {
+	return getLatestDate(order.orderUpdatedAt, order.updatedAt, order.orderCreatedAt, order.createdAt) || null;
+}
+
+function getOrderAttributionReferenceDates(order = {}) {
+	const dates = [getOrderPurchaseAt(order), getOrderStatusChangedAt(order)].filter(Boolean);
+	const uniqueDates = [];
+	const seen = new Set();
+
+	for (const date of dates) {
+		const key = date.toISOString();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		uniqueDates.push(date);
+	}
+
+	return uniqueDates.length ? uniqueDates : [new Date()];
+}
+
+function isDateAtOrAfter(value, floor) {
+	const valueTime = new Date(value || '').getTime();
+	const floorTime = new Date(floor || '').getTime();
+	return Number.isFinite(valueTime) && Number.isFinite(floorTime) && valueTime >= floorTime;
 }
 
 function getOrderMatchValues(order = {}) {
@@ -253,18 +288,20 @@ async function getOrderById({ workspaceId, orderId, storeId = null }) {
 }
 
 async function getCandidateRecipientsForOrder(order = {}) {
-	const convertedAt = getOrderConvertedAt(order);
-	const windowStart = subtractHours(convertedAt, ATTRIBUTION_WINDOW_HOURS);
+	const dispatchWindows = getOrderAttributionReferenceDates(order).flatMap((referenceAt) => {
+		const windowStart = subtractHours(referenceAt, ATTRIBUTION_WINDOW_HOURS);
+		return [
+			{ sentAt: { gte: windowStart, lte: referenceAt } },
+			{ deliveredAt: { gte: windowStart, lte: referenceAt } },
+			{ readAt: { gte: windowStart, lte: referenceAt } },
+		];
+	});
 
 	return prisma.campaignRecipient.findMany({
 		where: {
 			workspaceId: order.workspaceId,
 			status: { in: ['SENT', 'DELIVERED', 'READ'] },
-			OR: [
-				{ sentAt: { gte: windowStart, lte: convertedAt } },
-				{ deliveredAt: { gte: windowStart, lte: convertedAt } },
-				{ readAt: { gte: windowStart, lte: convertedAt } },
-			],
+			OR: dispatchWindows,
 		},
 		include: {
 			campaign: {
@@ -314,7 +351,8 @@ async function abandonedCartMatches(recipient = {}, order = {}, orderValues = {}
 	if (!cart) return null;
 
 	const cartCreatedAt = cart.checkoutCreatedAt || cart.createdAt || null;
-	const orderAt = getOrderConvertedAt(order);
+	const orderAt = getOrderPurchaseAt(order);
+	if (!orderAt) return null;
 	if (cartCreatedAt && new Date(orderAt).getTime() < new Date(cartCreatedAt).getTime()) return null;
 
 	const cartOrderRefs = getCartOrderRefs(cart);
@@ -347,9 +385,9 @@ async function abandonedCartMatches(recipient = {}, order = {}, orderValues = {}
 	return null;
 }
 
-function buildOrderConversionPayload({ source, confidence, recipient, order, matchReason, checkoutId = '', cart = null }) {
+function buildOrderConversionPayload({ source, confidence, recipient, order, matchReason, checkoutId = '', cart = null, convertedAt = null }) {
 	const sentAt = getRecipientDispatchAt(recipient);
-	const convertedAt = getOrderConvertedAt(order);
+	const resolvedConvertedAt = convertedAt || getOrderPurchaseAt(order) || getOrderStatusChangedAt(order) || new Date();
 	return {
 		workspaceId: order.workspaceId,
 		campaignId: recipient.campaignId,
@@ -374,7 +412,7 @@ function buildOrderConversionPayload({ source, confidence, recipient, order, mat
 		currency: order.currency || 'ARS',
 		paymentStatus: order.paymentStatus || null,
 		sentAt,
-		convertedAt,
+		convertedAt: resolvedConvertedAt,
 		matchReason,
 		rawPayload: {
 			orderInternalId: order.id,
@@ -389,7 +427,8 @@ export async function markRecoveredCartsForOrder(order = {}) {
 	}
 
 	const orderValues = getOrderMatchValues(order);
-	const orderAt = getOrderConvertedAt(order);
+	const orderAt = getOrderPurchaseAt(order);
+	if (!orderAt) return { recovered: 0 };
 	const candidateWhere = {
 		workspaceId: order.workspaceId,
 		storeId: order.storeId,
@@ -463,6 +502,8 @@ export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPAC
 
 	const orderValues = getOrderMatchValues(order);
 	const paidOrCompleted = isPaidOrCompletedOrder(order);
+	const purchaseAt = getOrderPurchaseAt(order);
+	const statusChangedAt = getOrderStatusChangedAt(order);
 	const conversions = [];
 	let latestMarketing = null;
 	let latestMarketingReason = '';
@@ -472,30 +513,25 @@ export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPAC
 
 		if (paidOrCompleted && audienceSource === 'pending_payment') {
 			const matchReason = pendingPaymentMatches(recipient, orderValues);
-			if (matchReason) {
+			const dispatchAt = getRecipientDispatchAt(recipient);
+			if (matchReason && isDateAtOrAfter(statusChangedAt, dispatchAt)) {
 				conversions.push(buildOrderConversionPayload({
 					source: 'PENDING_PAYMENT',
 					confidence: 'HIGH',
 					recipient,
 					order,
 					matchReason,
+					convertedAt: statusChangedAt,
 				}));
-			} else {
-				const identityMatchReason = recipientMatchesOrderIdentity(recipient, orderValues);
-				if (identityMatchReason) {
-					conversions.push(buildOrderConversionPayload({
-						source: 'PENDING_PAYMENT',
-						confidence: identityMatchReason === 'name_exact' ? 'LOW' : 'MEDIUM',
-						recipient,
-						order,
-						matchReason: `pending_payment_${identityMatchReason}`,
-					}));
-				}
 			}
 			continue;
 		}
 
 		if (paidOrCompleted && audienceSource === 'abandoned_carts') {
+			const dispatchAt = getRecipientDispatchAt(recipient);
+			if (!purchaseAt || !isDateAtOrAfter(purchaseAt, dispatchAt)) {
+				continue;
+			}
 			const cartMatch = await abandonedCartMatches(recipient, order, orderValues);
 			if (cartMatch) {
 				conversions.push(buildOrderConversionPayload({
@@ -506,16 +542,20 @@ export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPAC
 					matchReason: cartMatch.matchReason,
 					checkoutId: cartMatch.cart.checkoutId,
 					cart: cartMatch.cart,
+					convertedAt: purchaseAt,
 				}));
 			}
 			continue;
 		}
 
 		if (!['abandoned_carts', 'pending_payment'].includes(audienceSource)) {
+			const dispatchAt = getRecipientDispatchAt(recipient);
+			if (!purchaseAt || !isDateAtOrAfter(purchaseAt, dispatchAt)) {
+				continue;
+			}
 			const matchReason = recipientMatchesOrderIdentity(recipient, orderValues);
 			if (!matchReason) continue;
 
-			const dispatchAt = getRecipientDispatchAt(recipient);
 			if (!latestMarketing || new Date(dispatchAt || 0).getTime() > new Date(getRecipientDispatchAt(latestMarketing) || 0).getTime()) {
 				latestMarketing = recipient;
 				latestMarketingReason = `marketing_${matchReason}`;
@@ -530,6 +570,7 @@ export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPAC
 			recipient: latestMarketing,
 			order,
 			matchReason: latestMarketingReason,
+			convertedAt: purchaseAt,
 		}));
 	}
 
@@ -617,7 +658,7 @@ export async function filterRecoverableAbandonedCarts(carts = [], workspaceId = 
 				where: { id: cart.id },
 				data: {
 					status: 'RECOVERED',
-					recoveredAt: getOrderConvertedAt(matchingOrder),
+					recoveredAt: getOrderPurchaseAt(matchingOrder) || getOrderStatusChangedAt(matchingOrder) || new Date(),
 				},
 			});
 			continue;
