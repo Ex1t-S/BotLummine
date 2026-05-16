@@ -4,6 +4,12 @@ import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 import { lazyWithRetry } from '../../lib/lazyWithRetry.js';
 import { buildAbandonedCartFilters } from './utils.js';
+import TemplateHeaderMediaUpload from './components/TemplateHeaderMediaUpload.jsx';
+import {
+	mergeHeaderMediaVariableMapping,
+	readHeaderMediaIdFromVariableMapping,
+	templateNeedsHeaderMediaUpload,
+} from './templateHeaderMedia.js';
 import './CampaignsFeaturePage.css';
 
 const CampaignRunsPanel = lazyWithRetry(() => import('../../components/campaigns/CampaignRunsPanel.jsx'), 'CampaignRunsPanel');
@@ -907,6 +913,8 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 	const [templateId, setTemplateId] = useState(settings.templateId || '');
 	const [enabled, setEnabled] = useState(Boolean(settings.enabled));
 	const [variableMapping, setVariableMapping] = useState({});
+	const [headerMediaId, setHeaderMediaId] = useState('');
+	const [headerMediaFileName, setHeaderMediaFileName] = useState('');
 	const [form, setForm] = useState({
 		limit: filters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
 		minTotal: filters.minTotal ?? '',
@@ -933,12 +941,15 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 		setTemplateId(settings.templateId || '');
 		setEnabled(Boolean(settings.enabled));
 		setVariableMapping(settings.variableMapping || {});
+		const settingsTemplate = templates.find((template) => template.id === (settings.templateId || '')) || null;
+		setHeaderMediaId(readHeaderMediaIdFromVariableMapping(settingsTemplate, settings.variableMapping || {}));
+		setHeaderMediaFileName('');
 		setForm({
 			limit: nextFilters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
 			minTotal: nextFilters.minTotal ?? '',
 			productQuery: nextFilters.productQuery || '',
 		});
-	}, [settings.templateId, settings.enabled, settings.filters, settings.variableMapping]);
+	}, [settings.templateId, settings.enabled, settings.filters, settings.variableMapping, templates]);
 
 	function updateField(field, value) {
 		setForm((current) => ({ ...current, [field]: value }));
@@ -961,7 +972,11 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 				minTotal: form.minTotal,
 				productQuery: form.productQuery,
 			},
-			variableMapping: effectiveVariableMapping,
+			variableMapping: mergeHeaderMediaVariableMapping(
+				selectedTemplate,
+				headerMediaId,
+				effectiveVariableMapping
+			),
 		};
 	}
 
@@ -982,10 +997,15 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 						checked={enabled}
 						onChange={(event) => {
 							const nextEnabled = event.target.checked;
+							if (nextEnabled && templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId)) return;
 							setEnabled(nextEnabled);
 							save(nextEnabled);
 						}}
-						disabled={saving || !templateId}
+						disabled={
+							saving ||
+							!templateId ||
+							(!enabled && templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId))
+						}
 					/>
 					<span>
 						<strong>{enabled ? 'Automatizacion activa' : 'Automatizacion desactivada'}</strong>
@@ -1001,7 +1021,14 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 				<div className="campaign-form-grid two-columns">
 					<label className="field">
 						<span>Template para pagos pendientes</span>
-						<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+						<select
+							value={templateId}
+							onChange={(event) => {
+								setTemplateId(event.target.value);
+								setHeaderMediaId('');
+								setHeaderMediaFileName('');
+							}}
+						>
 							<option value="">Seleccionar plantilla</option>
 							{templates.map((template) => (
 								<option key={template.id} value={template.id}>
@@ -1010,6 +1037,20 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 							))}
 						</select>
 					</label>
+					<TemplateHeaderMediaUpload
+						template={selectedTemplate}
+						mediaId={headerMediaId}
+						fileName={headerMediaFileName}
+						disabled={saving || running}
+						onUploaded={(nextMediaId, nextFileName) => {
+							setHeaderMediaId(nextMediaId);
+							setHeaderMediaFileName(nextFileName);
+						}}
+						onClear={() => {
+							setHeaderMediaId('');
+							setHeaderMediaFileName('');
+						}}
+					/>
 					<label className="field">
 						<span>Ventana</span>
 						<input value="Ultimos 5 dias" readOnly />
@@ -1092,10 +1133,30 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 				</div>
 				{settings.lastError ? <div className="campaign-schedule-error">{settings.lastError}</div> : null}
 				<div className="campaign-form-actions campaign-form-actions--end">
-					<button type="button" className="button ghost" onClick={() => mutations.runPendingPaymentAutomationNow.mutate()} disabled={running || saving || !enabled || !templateId}>
+					<button
+						type="button"
+						className="button ghost"
+						onClick={() => mutations.runPendingPaymentAutomationNow.mutate()}
+						disabled={
+							running ||
+							saving ||
+							!enabled ||
+							!templateId ||
+							templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId)
+						}
+					>
 						{running ? 'Ejecutando...' : 'Ejecutar ahora'}
 					</button>
-					<button type="button" className="button primary" onClick={() => save()} disabled={saving || !templateId}>
+					<button
+						type="button"
+						className="button primary"
+						onClick={() => save()}
+						disabled={
+							saving ||
+							!templateId ||
+							(enabled && templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId))
+						}
+					>
 						{saving ? 'Guardando...' : 'Guardar configuracion'}
 					</button>
 				</div>
@@ -1113,6 +1174,8 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 	const [enabled, setEnabled] = useState(false);
 	const [selectedKeys, setSelectedKeys] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
+	const [headerMediaId, setHeaderMediaId] = useState('');
+	const [headerMediaFileName, setHeaderMediaFileName] = useState('');
 	const [currentPage, setCurrentPage] = useState(1);
 	const saving = mutations.updateShipmentSettings.isPending;
 	const sending = mutations.sendShipmentNotifications.isPending;
@@ -1134,7 +1197,10 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 		setTemplateId(settings.templateId || '');
 		setEnabled(Boolean(settings.enabled));
 		setVariableMapping(settings.variableMapping || {});
-	}, [settings.templateId, settings.enabled, settings.variableMapping]);
+		const settingsTemplate = templates.find((template) => template.id === (settings.templateId || '')) || null;
+		setHeaderMediaId(readHeaderMediaIdFromVariableMapping(settingsTemplate, settings.variableMapping || {}));
+		setHeaderMediaFileName('');
+	}, [settings.templateId, settings.enabled, settings.variableMapping, templates]);
 
 	useEffect(() => {
 		setSelectedKeys(candidates.filter((candidate) => !candidate.alreadyNotified).map((candidate) => candidate.notificationKey));
@@ -1171,7 +1237,11 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 		mutations.updateShipmentSettings.mutate({
 			enabled: nextEnabled,
 			templateId,
-			variableMapping: effectiveVariableMapping,
+			variableMapping: mergeHeaderMediaVariableMapping(
+				selectedTemplate,
+				headerMediaId,
+				effectiveVariableMapping
+			),
 			daysBack: 3,
 		});
 	}
@@ -1180,7 +1250,11 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 		mutations.sendShipmentNotifications.mutate({
 			templateId,
 			candidateKeys: selectedKeys,
-			variableMapping: effectiveVariableMapping,
+			variableMapping: mergeHeaderMediaVariableMapping(
+				selectedTemplate,
+				headerMediaId,
+				effectiveVariableMapping
+			),
 			dateFrom: range.dateFrom,
 			dateTo: range.dateTo,
 		});
@@ -1206,10 +1280,15 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 						checked={enabled}
 						onChange={(event) => {
 							const nextEnabled = event.target.checked;
+							if (nextEnabled && templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId)) return;
 							setEnabled(nextEnabled);
 							saveSettings(nextEnabled);
 						}}
-						disabled={saving || !templateId}
+						disabled={
+							saving ||
+							!templateId ||
+							(!enabled && templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId))
+						}
 					/>
 					<span>
 						<strong>{enabled ? 'Automatizacion activa' : 'Automatizacion desactivada'}</strong>
@@ -1225,7 +1304,14 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 				<div className="campaign-form-grid two-columns">
 					<label className="field">
 						<span>Template para despacho</span>
-						<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+						<select
+							value={templateId}
+							onChange={(event) => {
+								setTemplateId(event.target.value);
+								setHeaderMediaId('');
+								setHeaderMediaFileName('');
+							}}
+						>
 							<option value="">Seleccionar plantilla</option>
 							{templates.map((template) => (
 								<option key={template.id} value={template.id}>
@@ -1234,8 +1320,31 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 							))}
 						</select>
 					</label>
+					<TemplateHeaderMediaUpload
+						template={selectedTemplate}
+						mediaId={headerMediaId}
+						fileName={headerMediaFileName}
+						disabled={saving || sending}
+						onUploaded={(nextMediaId, nextFileName) => {
+							setHeaderMediaId(nextMediaId);
+							setHeaderMediaFileName(nextFileName);
+						}}
+						onClear={() => {
+							setHeaderMediaId('');
+							setHeaderMediaFileName('');
+						}}
+					/>
 					<div className="campaign-form-actions campaign-form-actions--end">
-						<button type="button" className="button primary" onClick={() => saveSettings()} disabled={saving || !templateId}>
+						<button
+							type="button"
+							className="button primary"
+							onClick={() => saveSettings()}
+							disabled={
+								saving ||
+								!templateId ||
+								(enabled && templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId))
+							}
+						>
 							{saving ? 'Guardando...' : 'Guardar configuracion'}
 						</button>
 					</div>
@@ -1330,7 +1439,12 @@ function ShipmentNotificationsPanel({ templates = [], shipmentNotifications, que
 						type="button"
 						className="button primary"
 						onClick={sendSelected}
-						disabled={sending || !templateId || !selectedKeys.length}
+						disabled={
+							sending ||
+							!templateId ||
+							!selectedKeys.length ||
+							templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId)
+						}
 					>
 						{sending ? 'Enviando...' : `Enviar seleccionados (${selectedKeys.length})`}
 					</button>

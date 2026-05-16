@@ -204,8 +204,27 @@ function normalizeMapping(value = {}) {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
 	return Object.fromEntries(
 		Object.entries(value)
-			.map(([key, source]) => [normalizeString(key), normalizeString(source)])
-			.filter(([key, source]) => key && source)
+			.map(([key, value]) => {
+				const normalizedKey = normalizeString(key);
+				if (!normalizedKey) return null;
+
+				if (value && typeof value === 'object' && !Array.isArray(value)) {
+					const source = normalizeString(value.source);
+					if (!source) return null;
+
+					return [
+						normalizedKey,
+						{
+							source,
+							fixedValue: String(value.fixedValue ?? ''),
+						},
+					];
+				}
+
+				const source = normalizeString(value);
+				return source ? [normalizedKey, source] : null;
+			})
+			.filter(Boolean)
 	);
 }
 
@@ -321,8 +340,22 @@ function buildCandidateVariables(candidate = {}, variableMapping = {}) {
 	};
 	const mapping = { ...DEFAULT_VARIABLE_MAPPING, ...normalizeMapping(variableMapping) };
 
-	for (const [templateKey, sourceKey] of Object.entries(mapping)) {
-		baseVariables[templateKey] = getCandidateSourceValue(candidate, sourceKey);
+	for (const [templateKey, sourceConfig] of Object.entries(mapping)) {
+		if (sourceConfig && typeof sourceConfig === 'object' && !Array.isArray(sourceConfig)) {
+			const source = normalizeString(sourceConfig.source);
+			if (source === 'fixed') {
+				baseVariables[templateKey] = String(sourceConfig.fixedValue ?? '');
+				continue;
+			}
+			if (source === 'empty') {
+				baseVariables[templateKey] = '';
+				continue;
+			}
+			baseVariables[templateKey] = getCandidateSourceValue(candidate, source);
+			continue;
+		}
+
+		baseVariables[templateKey] = getCandidateSourceValue(candidate, sourceConfig);
 	}
 
 	return baseVariables;

@@ -150,8 +150,27 @@ function normalizeMapping(input = {}) {
 	if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
 	return Object.fromEntries(
 		Object.entries(input)
-			.map(([key, value]) => [normalizeString(key), normalizeString(value)])
-			.filter(([key, value]) => key && value)
+			.map(([key, value]) => {
+				const normalizedKey = normalizeString(key);
+				if (!normalizedKey) return null;
+
+				if (value && typeof value === 'object' && !Array.isArray(value)) {
+					const source = normalizeString(value.source);
+					if (!source) return null;
+
+					return [
+						normalizedKey,
+						{
+							source,
+							fixedValue: String(value.fixedValue ?? ''),
+						},
+					];
+				}
+
+				const source = normalizeString(value);
+				return source ? [normalizedKey, source] : null;
+			})
+			.filter(Boolean)
 	);
 }
 

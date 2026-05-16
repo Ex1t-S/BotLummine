@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatPreviewText } from '../utils.js';
+import TemplateHeaderMediaUpload from './TemplateHeaderMediaUpload.jsx';
+import {
+	mergeHeaderMediaVariableMapping,
+	readHeaderMediaIdFromVariableMapping,
+	templateNeedsHeaderMediaUpload,
+} from '../templateHeaderMedia.js';
 
 function moneyLabel(value) {
 	if (value === null || value === undefined || value === '') return 'Sin mínimo';
@@ -139,6 +145,8 @@ function AutomationCard({
 	const [form, setForm] = useState(defaultAutomationForm);
 	const [variableMapping, setVariableMapping] = useState({});
 	const [manualVariables, setManualVariables] = useState({});
+	const [headerMediaId, setHeaderMediaId] = useState('');
+	const [headerMediaFileName, setHeaderMediaFileName] = useState('');
 	const selectedAutomationTemplate = useMemo(
 		() => templates.find((template) => template.id === form.templateId) || null,
 		[templates, form.templateId]
@@ -174,7 +182,12 @@ function AutomationCard({
 		});
 		setVariableMapping(settings?.variableMapping || {});
 		setManualVariables(settings?.manualVariables || {});
-	}, [settings, selectedTemplate?.id]);
+		const settingsTemplate =
+			templates.find((template) => template.id === (settings?.templateId || selectedTemplate?.id || '')) ||
+			null;
+		setHeaderMediaId(readHeaderMediaIdFromVariableMapping(settingsTemplate, settings?.variableMapping || {}));
+		setHeaderMediaFileName('');
+	}, [settings, selectedTemplate?.id, templates]);
 
 	function updateField(field, value) {
 		setForm((current) => ({ ...current, [field]: value }));
@@ -194,9 +207,17 @@ function AutomationCard({
 		}));
 	}
 
+	function updateTemplateId(templateId) {
+		updateField('templateId', templateId);
+		setHeaderMediaId('');
+		setHeaderMediaFileName('');
+	}
+
 	function buildPayload(overrides = {}) {
 		const nextForm = { ...form, ...overrides };
 		const templateId = nextForm.templateId || selectedTemplate?.id || settings?.templateId || '';
+		const templateForPayload =
+			templates.find((template) => template.id === templateId) || selectedAutomationTemplate || null;
 		return {
 			enabled: nextForm.enabled,
 			templateId,
@@ -207,16 +228,25 @@ function AutomationCard({
 				minTotal: nextForm.minTotal,
 				productQuery: nextForm.productQuery,
 			},
-			variableMapping: effectiveVariableMapping,
+			variableMapping: mergeHeaderMediaVariableMapping(
+				templateForPayload,
+				headerMediaId,
+				effectiveVariableMapping
+			),
 			manualVariables: effectiveManualVariables,
 		};
 	}
 
 	function handleToggle(nextEnabled) {
 		const templateId = form.templateId || selectedTemplate?.id || settings?.templateId || '';
-		updateField('enabled', nextEnabled);
 
 		if (nextEnabled && !templateId) return;
+		if (
+			nextEnabled &&
+			templateNeedsHeaderMediaUpload(selectedAutomationTemplate, headerMediaId)
+		) return;
+
+		updateField('enabled', nextEnabled);
 		onSave?.(buildPayload({ enabled: nextEnabled, templateId }));
 	}
 
@@ -245,7 +275,11 @@ function AutomationCard({
 					type="checkbox"
 					checked={form.enabled}
 					onChange={(event) => handleToggle(event.target.checked)}
-					disabled={loading || saving}
+					disabled={
+						loading ||
+						saving ||
+						(!form.enabled && templateNeedsHeaderMediaUpload(selectedAutomationTemplate, headerMediaId))
+					}
 				/>
 				<span>
 					<strong>Automatizacion {form.enabled ? 'activada' : 'desactivada'}</strong>
@@ -262,7 +296,7 @@ function AutomationCard({
 					<span>Template automatico</span>
 					<select
 						value={form.templateId}
-						onChange={(event) => updateField('templateId', event.target.value)}
+						onChange={(event) => updateTemplateId(event.target.value)}
 						disabled={loading || saving}
 					>
 						<option value="">Seleccionar template</option>
@@ -288,6 +322,21 @@ function AutomationCard({
 					</select>
 				</label>
 			</div>
+
+			<TemplateHeaderMediaUpload
+				template={selectedAutomationTemplate}
+				mediaId={headerMediaId}
+				fileName={headerMediaFileName}
+				disabled={loading || saving}
+				onUploaded={(nextMediaId, nextFileName) => {
+					setHeaderMediaId(nextMediaId);
+					setHeaderMediaFileName(nextFileName);
+				}}
+				onClear={() => {
+					setHeaderMediaId('');
+					setHeaderMediaFileName('');
+				}}
+			/>
 
 			<div className="campaign-custom-audience-grid-4">
 				<label className="field">
@@ -410,7 +459,12 @@ function AutomationCard({
 					type="button"
 					className="button primary"
 					onClick={handleSave}
-					disabled={saving || loading || (form.enabled && !buildPayload().templateId)}
+					disabled={
+						saving ||
+						loading ||
+						(form.enabled && !buildPayload().templateId) ||
+						(form.enabled && templateNeedsHeaderMediaUpload(selectedAutomationTemplate, headerMediaId))
+					}
 				>
 					{saving ? 'Guardando...' : 'Guardar automatizacion'}
 				</button>
@@ -439,6 +493,8 @@ export default function AbandonedCartCampaignPanel({
 }) {
 	const [variableMapping, setVariableMapping] = useState({});
 	const [manualVariables, setManualVariables] = useState({});
+	const [headerMediaId, setHeaderMediaId] = useState('');
+	const [headerMediaFileName, setHeaderMediaFileName] = useState('');
 	const templateVariableKeys = useMemo(
 		() => extractTemplateVariableKeys(selectedTemplate),
 		[selectedTemplate]
@@ -454,6 +510,15 @@ export default function AbandonedCartCampaignPanel({
 		() => normalizeManualVariables(manualVariables, effectiveVariableMapping),
 		[manualVariables, effectiveVariableMapping]
 	);
+	const effectiveVariableMappingWithHeaderMedia = useMemo(
+		() => mergeHeaderMediaVariableMapping(selectedTemplate, headerMediaId, effectiveVariableMapping),
+		[selectedTemplate, headerMediaId, effectiveVariableMapping]
+	);
+
+	useEffect(() => {
+		setHeaderMediaId('');
+		setHeaderMediaFileName('');
+	}, [selectedTemplate?.id]);
 
 	function updateVariableSource(variableKey, sourceKey) {
 		setVariableMapping((current) => ({
@@ -546,6 +611,21 @@ export default function AbandonedCartCampaignPanel({
 							))}
 						</select>
 					</label>
+
+					<TemplateHeaderMediaUpload
+						template={selectedTemplate}
+						mediaId={headerMediaId}
+						fileName={headerMediaFileName}
+						disabled={previewing || creating}
+						onUploaded={(nextMediaId, nextFileName) => {
+							setHeaderMediaId(nextMediaId);
+							setHeaderMediaFileName(nextFileName);
+						}}
+						onClear={() => {
+							setHeaderMediaId('');
+							setHeaderMediaFileName('');
+						}}
+					/>
 
 					<div className="campaign-form-grid two-columns">
 						<label className="field">
@@ -696,7 +776,7 @@ export default function AbandonedCartCampaignPanel({
 								onPreview({
 									templateId: selectedTemplate?.id || null,
 									filters: buildAudienceFilters(),
-									variableMapping: effectiveVariableMapping,
+									variableMapping: effectiveVariableMappingWithHeaderMedia,
 									manualVariables: effectiveManualVariables,
 								})
 							}
@@ -716,11 +796,15 @@ export default function AbandonedCartCampaignPanel({
 									templateId: selectedTemplate?.id || null,
 									languageCode: selectedTemplate?.language || 'es_AR',
 									filters: buildAudienceFilters(),
-									variableMapping: effectiveVariableMapping,
+									variableMapping: effectiveVariableMappingWithHeaderMedia,
 									manualVariables: effectiveManualVariables,
 								})
 							}
-							disabled={creating || !selectedTemplate}
+							disabled={
+								creating ||
+								!selectedTemplate ||
+								templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId)
+							}
 						>
 							{creating
 								? 'Creando campaña...'

@@ -21,6 +21,20 @@
 	background: #f8fafc;
 }
 
+.campaign-form-grid > .two-columns-span,
+.campaign-form-grid > .campaign-header-media-upload {
+	grid-column: 1 / -1;
+}
+
+.campaign-header-media-upload {
+	display: grid;
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 10px;
+	background: #ffffff;
+}
+
 .campaign-schedule-section__title {
 	display: flex;
 	justify-content: space-between;
