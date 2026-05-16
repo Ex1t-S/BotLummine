@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { prisma } from '../../lib/prisma.js';
+import { publishInboxEvent } from '../../lib/inbox-events.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
@@ -1088,7 +1089,8 @@ async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, 
 
 	return {
 		contactId: contact.id,
-		conversationId: conversation.id
+		conversationId: conversation.id,
+		queue: conversation.queue === 'PAYMENT_REVIEW' ? 'PAYMENT_REVIEW' : 'AUTO',
 	};
 }
 
@@ -2576,7 +2578,7 @@ async function persistCampaignOutboundMessage({
 	});
 
 	const workspaceConfig = await getWorkspaceRuntimeConfig(campaign.workspaceId);
-	return prisma.message.create({
+	const createdMessage = await prisma.message.create({
 		data: {
 			workspaceId: campaign.workspaceId,
 			conversationId: ensured.conversationId,
@@ -2596,6 +2598,34 @@ async function persistCampaignOutboundMessage({
 			}
 		}
 	});
+
+	await prisma.conversation.updateMany({
+		where: {
+			id: ensured.conversationId,
+			workspaceId: campaign.workspaceId,
+			OR: [
+				{ lastMessageAt: null },
+				{ lastMessageAt: { lt: createdMessage.createdAt } },
+			],
+		},
+		data: {
+			lastMessageAt: createdMessage.createdAt,
+		},
+	});
+
+	publishInboxEvent({
+		workspaceId: campaign.workspaceId,
+		scope: 'message',
+		action: 'campaign-outbound-created',
+		conversationId: ensured.conversationId,
+		queue: ensured.queue || 'AUTO',
+		direction: 'OUTBOUND',
+		messageId: createdMessage.id,
+		metaMessageId: createdMessage.metaMessageId || null,
+		createdAt: createdMessage.createdAt.toISOString(),
+	});
+
+	return createdMessage;
 }
 
 async function markAbandonedCartAsContactedFromRecipient(recipient = {}) {
