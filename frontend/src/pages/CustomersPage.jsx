@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, X } from 'lucide-react';
 import api from '../lib/api.js';
+import {
+	normalizeCustomerFilterParams,
+	serializeCustomerProductFilters,
+} from '../lib/customerFilters.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { ActionButton, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
@@ -180,23 +184,6 @@ function buildVisiblePages(currentPage, totalPages) {
 	return pages;
 }
 
-function normalizeRequestFilters(filters) {
-	return {
-		q: filters.q || '',
-		productQuery: filters.productQuery || '',
-		orderNumber: filters.orderNumber || '',
-		dateFrom: filters.dateFrom || '',
-		dateTo: filters.dateTo || '',
-		paymentStatus: filters.paymentStatus || '',
-		shippingStatus: filters.shippingStatus || '',
-		minSpent: filters.minSpent || '',
-		hasPhoneOnly: filters.hasPhoneOnly ? '1' : '',
-		sort: filters.sort || 'purchase_desc',
-		page: filters.page || 1,
-		pageSize: filters.pageSize || DEFAULT_PAGE_SIZE,
-	};
-}
-
 function formatDuration(startedAt) {
 	if (!startedAt) return '0s';
 	const seconds = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
@@ -337,7 +324,7 @@ export default function CustomersPage() {
 	const [billingVisible, setBillingVisible] = useState(true);
 	const debouncedFilters = useDebouncedValue(filters);
 	const requestFilters = useMemo(
-		() => normalizeRequestFilters(debouncedFilters),
+		() => normalizeCustomerFilterParams(debouncedFilters, { pageSize: DEFAULT_PAGE_SIZE }),
 		[debouncedFilters]
 	);
 
@@ -464,7 +451,7 @@ export default function CustomersPage() {
 			setFilters((prev) => ({
 				...prev,
 				page: 1,
-				productQuery: next.join('||'),
+				productQuery: serializeCustomerProductFilters(next),
 			}));
 
 			return next;
@@ -488,7 +475,7 @@ export default function CustomersPage() {
 		const next = {
 			...filters,
 			page: 1,
-			productQuery: selectedProducts.join('||'),
+			productQuery: serializeCustomerProductFilters(selectedProducts),
 		};
 		setFilters(next);
 	}

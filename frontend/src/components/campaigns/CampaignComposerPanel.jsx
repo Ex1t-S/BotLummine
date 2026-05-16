@@ -5,6 +5,11 @@ import {
 	uploadCampaignHeaderMedia,
 } from '../../lib/campaigns.js';
 import api from '../../lib/api.js';
+import {
+	serializeCustomerFilterList,
+	normalizeCustomerFilterParams,
+	serializeCustomerProductFilters,
+} from '../../lib/customerFilters.js';
 
 const SAFE_MAX_CUSTOMER_PAGES = 20;
 
@@ -1075,7 +1080,7 @@ export default function CampaignComposerPanel({
 	}, [totalFoundCount, contactLimitNumber]);
 	const excludedByTemplateCount = Number(customerAudience?.stats?.excludedByTemplate || 0);
 	const sentTemplateFilterNames = selectedSentTemplateFilters.filter(Boolean);
-	const sentTemplateFilterKey = sentTemplateFilterNames.join('||');
+	const sentTemplateFilterKey = serializeCustomerFilterList(sentTemplateFilterNames);
 
 	const selectionButtonLabel = useMemo(() => {
 		if (customerAudience.loadingAll) return 'Seleccionando...';
@@ -1097,42 +1102,12 @@ export default function CampaignComposerPanel({
 		totalFoundCount,
 	]);
 	function buildCustomerRequestParams(nextFilters = customerFilters) {
-		const mergedProductQuery = selectedProductFilters.length
-			? selectedProductFilters.join('||')
-			: nextFilters.productQuery || '';
-
-		return {
-			q: nextFilters.q || '',
-			productQuery: mergedProductQuery,
-			orderNumber: nextFilters.orderNumber || '',
-			dateFrom: nextFilters.dateFrom || '',
-			dateTo: nextFilters.dateTo || '',
-			paymentStatus: nextFilters.paymentStatus || '',
-			shippingStatus: nextFilters.shippingStatus || '',
-			sort: nextFilters.sort || 'purchase_desc',
-			page: nextFilters.page || 1,
-			pageSize: nextFilters.pageSize || 24,
-			minSpent:
-				nextFilters.minSpent === '' || nextFilters.minSpent === null
-					? undefined
-					: Number(nextFilters.minSpent),
-			minOrders:
-				nextFilters.minOrders === '' || nextFilters.minOrders === null
-					? undefined
-					: Number(nextFilters.minOrders),
-			hasOrders: nextFilters.hasOrders ? 'true' : 'false',
-			hasPhoneOnly: nextFilters.hasPhoneOnly ? 'true' : 'false',
-			excludeSentTemplate:
-				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length ? 'true' : 'false',
-			sentTemplateName:
-				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length
-					? sentTemplateFilterNames[0]
-					: '',
-			sentTemplateNames:
-				nextFilters.excludeSentTemplate && sentTemplateFilterNames.length
-					? sentTemplateFilterKey
-					: '',
-		};
+		return normalizeCustomerFilterParams(nextFilters, {
+			pageSize: initialCustomerFilters.pageSize,
+			selectedProducts: selectedProductFilters,
+			includeCampaignFields: true,
+			sentTemplateNames: sentTemplateFilterNames,
+		});
 	}
 
 	useEffect(() => {
@@ -1307,7 +1282,7 @@ export default function CampaignComposerPanel({
 			setCustomerFilters((prev) => ({
 				...prev,
 				page: 1,
-				productQuery: next.join('||'),
+				productQuery: serializeCustomerProductFilters(next),
 			}));
 			clearFilteredSelection();
 
@@ -1512,6 +1487,13 @@ export default function CampaignComposerPanel({
 			return;
 		}
 
+		const normalizedCustomerAudienceFilters = normalizeCustomerFilterParams(customerFilters, {
+			pageSize: initialCustomerFilters.pageSize,
+			selectedProducts: selectedProductFilters,
+			includeCampaignFields: true,
+			sentTemplateNames: sentTemplateFilterNames,
+		});
+
 		const payload = {
 			name: form.name.trim(),
 			templateId: selectedTemplate.id,
@@ -1526,23 +1508,23 @@ export default function CampaignComposerPanel({
 			audienceFilters:
 				form.audienceMode === 'customers'
 					? {
-						q: customerFilters.q || '',
-						orderNumber: customerFilters.orderNumber || '',
-						dateFrom: customerFilters.dateFrom || '',
-						dateTo: customerFilters.dateTo || '',
-						paymentStatus: customerFilters.paymentStatus || '',
-						shippingStatus: customerFilters.shippingStatus || '',
-						sort: customerFilters.sort || 'purchase_desc',
-						pageSize: customerFilters.pageSize || 24,
+						q: normalizedCustomerAudienceFilters.q,
+						productQuery: normalizedCustomerAudienceFilters.productQuery,
+						orderNumber: normalizedCustomerAudienceFilters.orderNumber,
+						dateFrom: normalizedCustomerAudienceFilters.dateFrom,
+						dateTo: normalizedCustomerAudienceFilters.dateTo,
+						paymentStatus: normalizedCustomerAudienceFilters.paymentStatus,
+						shippingStatus: normalizedCustomerAudienceFilters.shippingStatus,
+						sort: normalizedCustomerAudienceFilters.sort,
+						pageSize: normalizedCustomerAudienceFilters.pageSize,
 						minSpent:
 							customerFilters.minSpent === '' ? null : Number(customerFilters.minSpent),
 						minOrders:
 							customerFilters.minOrders === '' ? null : Number(customerFilters.minOrders),
 						hasPhoneOnly: Boolean(customerFilters.hasPhoneOnly),
 						hasOrders: Boolean(customerFilters.hasOrders),
-						productQuery: customerFilters.productQuery || '',
-						excludeSentTemplate: Boolean(customerFilters.excludeSentTemplate),
-						sentTemplateName: sentTemplateFilterNames[0] || '',
+						excludeSentTemplate: Boolean(normalizedCustomerAudienceFilters.excludeSentTemplate),
+						sentTemplateName: normalizedCustomerAudienceFilters.sentTemplateName,
 						sentTemplateNames: sentTemplateFilterNames,
 						selectedProducts: selectedProductFilters,
 						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
@@ -1884,8 +1866,8 @@ export default function CampaignComposerPanel({
 							<div className="campaign-filter-block__head">
 								<strong>Filtros avanzados</strong>
 								<span>
-									Usa los mismos criterios de clientes para ordenar, acotar por envio y
-									filtrar calidad de contacto.
+									Usa los mismos criterios de clientes para ordenar, segmentar por productos
+									comprados y filtrar calidad de contacto.
 								</span>
 							</div>
 							<div className="campaign-builder-grid campaign-builder-grid--filters">
@@ -1928,6 +1910,46 @@ export default function CampaignComposerPanel({
 									/>
 								</label>
 							</div>
+							<label className="field">
+								<span>Producto comprado</span>
+								<button
+									type="button"
+									className={`campaign-product-filter-toggle ${showProductPicker ? 'open' : ''}`}
+									onClick={() => setShowProductPicker((current) => !current)}
+								>
+									{selectedProductFilters.length
+										? `Selector de productos (${selectedProductFilters.length})`
+										: 'Selector de productos'}
+								</button>
+							</label>
+
+							{selectedProductFilters.length ? (
+								<div className="campaign-selected-products-row campaign-selected-products-row--interactive">
+									{selectedProductFilters.map((productName) => (
+										<button
+											key={productName}
+											type="button"
+											className="campaign-selected-product-chip"
+											onClick={() => toggleProductFilter(productName)}
+											title="Quitar producto"
+										>
+											<span>{productName}</span>
+											<strong>x</strong>
+										</button>
+									))}
+								</div>
+							) : null}
+
+							{showProductPicker ? (
+								<ProductMultiSelect
+									options={catalogOptions}
+									selectedValues={selectedProductFilters}
+									search={productSearch}
+									onSearchChange={setProductSearch}
+									onToggleValue={toggleProductFilter}
+									onClear={clearSelectedProducts}
+								/>
+							) : null}
 							<div className="campaign-builder-grid campaign-builder-grid--toggles">
 								<label className="campaign-toggle campaign-toggle--card">
 									<input
@@ -1950,8 +1972,8 @@ export default function CampaignComposerPanel({
 
 						<div className="campaign-filter-block campaign-product-filter-group">
 							<div className="campaign-filter-block__head">
-								<strong>Productos y exclusiones</strong>
-								<span>Marcá productos comprados o evitá repetir plantillas ya enviadas.</span>
+								<strong>Exclusiones</strong>
+								<span>Evitá repetir plantillas ya enviadas a los mismos clientes.</span>
 							</div>
 							<label className="campaign-toggle">
 								<input
@@ -2005,47 +2027,6 @@ export default function CampaignComposerPanel({
 									onSearchChange={setTemplateExclusionSearch}
 									onToggleValue={toggleSentTemplateFilter}
 									onClear={clearSentTemplateFilters}
-								/>
-							) : null}
-
-							<label className="field">
-								<span>Producto comprado</span>
-								<button
-									type="button"
-									className={`campaign-product-filter-toggle ${showProductPicker ? 'open' : ''}`}
-									onClick={() => setShowProductPicker((current) => !current)}
-								>
-									{selectedProductFilters.length
-										? `Selector de productos (${selectedProductFilters.length})`
-										: 'Selector de productos'}
-								</button>
-							</label>
-
-							{selectedProductFilters.length ? (
-								<div className="campaign-selected-products-row campaign-selected-products-row--interactive">
-									{selectedProductFilters.map((productName) => (
-										<button
-											key={productName}
-											type="button"
-											className="campaign-selected-product-chip"
-											onClick={() => toggleProductFilter(productName)}
-											title="Quitar producto"
-										>
-											<span>{productName}</span>
-											<strong>x</strong>
-										</button>
-									))}
-								</div>
-							) : null}
-
-							{showProductPicker ? (
-								<ProductMultiSelect
-									options={catalogOptions}
-									selectedValues={selectedProductFilters}
-									search={productSearch}
-									onSearchChange={setProductSearch}
-									onToggleValue={toggleProductFilter}
-									onClear={clearSelectedProducts}
 								/>
 							) : null}
 						</div>
