@@ -22,6 +22,10 @@ const UPSERT_CHUNK_SIZE = Math.max(
 	10,
 	Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CHUNK_SIZE || 100)
 );
+const UPSERT_CONCURRENCY = Math.max(
+	1,
+	Math.min(25, Number(process.env.TIENDANUBE_ABANDONED_UPSERT_CONCURRENCY || 10))
+);
 const DELETE_CHUNK_SIZE = Math.max(
 	25,
 	Number(process.env.TIENDANUBE_ABANDONED_DELETE_CHUNK_SIZE || 250)
@@ -368,41 +372,45 @@ async function replaceCartBatch(carts, storeId, workspaceId, provider = 'TIENDAN
 	for (const chunk of chunkArray(rows, UPSERT_CHUNK_SIZE)) {
 		if (!chunk.length) continue;
 
-		for (const row of chunk) {
-			await prisma.abandonedCart.upsert({
-				where: {
-					workspaceId_provider_checkoutId: {
-						workspaceId,
-						provider: normalizedProvider,
-						checkoutId: row.checkoutId
-					}
-				},
-				update: {
-					storeId: row.storeId,
-					token: row.token,
-					contactName: row.contactName,
-					contactEmail: row.contactEmail,
-					contactPhone: row.contactPhone,
-					abandonedCheckoutUrl: row.abandonedCheckoutUrl,
-					subtotal: row.subtotal,
-					totalAmount: row.totalAmount,
-					currency: row.currency,
-					gateway: row.gateway,
-					shipping: row.shipping,
-					shippingPickupType: row.shippingPickupType,
-					shippingAddress: row.shippingAddress,
-					shippingCity: row.shippingCity,
-					shippingProvince: row.shippingProvince,
-					shippingZipcode: row.shippingZipcode,
-					rawPayload: row.rawPayload,
-					products: row.products,
-					checkoutCreatedAt: row.checkoutCreatedAt
-				},
-				create: {
-					...row,
-					status: 'NEW'
-				}
-			});
+		for (const batch of chunkArray(chunk, UPSERT_CONCURRENCY)) {
+			await Promise.all(
+				batch.map((row) =>
+					prisma.abandonedCart.upsert({
+						where: {
+							workspaceId_provider_checkoutId: {
+								workspaceId,
+								provider: normalizedProvider,
+								checkoutId: row.checkoutId
+							}
+						},
+						update: {
+							storeId: row.storeId,
+							token: row.token,
+							contactName: row.contactName,
+							contactEmail: row.contactEmail,
+							contactPhone: row.contactPhone,
+							abandonedCheckoutUrl: row.abandonedCheckoutUrl,
+							subtotal: row.subtotal,
+							totalAmount: row.totalAmount,
+							currency: row.currency,
+							gateway: row.gateway,
+							shipping: row.shipping,
+							shippingPickupType: row.shippingPickupType,
+							shippingAddress: row.shippingAddress,
+							shippingCity: row.shippingCity,
+							shippingProvince: row.shippingProvince,
+							shippingZipcode: row.shippingZipcode,
+							rawPayload: row.rawPayload,
+							products: row.products,
+							checkoutCreatedAt: row.checkoutCreatedAt
+						},
+						create: {
+							...row,
+							status: 'NEW'
+						}
+					})
+				)
+			);
 		}
 	}
 
