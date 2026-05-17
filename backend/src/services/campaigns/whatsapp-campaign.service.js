@@ -165,7 +165,7 @@ function formatCurrency(value, currency = 'ARS') {
 }
 
 function normalizeAbandonedCartFilters(input = {}) {
-	const daysBack = Math.max(1, Math.min(Number(input.daysBack || 7) || 7, 90));
+	const daysBack = Math.max(1, Math.min(Number(input.daysBack || 30) || 30, 90));
 	const limit = Math.max(1, Math.min(Number(input.limit || 50) || 50, 500));
 	const rawStatus = normalizeString(input.status || 'NEW').toUpperCase();
 	const status = ['NEW', 'CONTACTED', 'ALL'].includes(rawStatus) ? rawStatus : 'NEW';

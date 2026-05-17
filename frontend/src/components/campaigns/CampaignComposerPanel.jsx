@@ -39,7 +39,7 @@ const initialCustomerFilters = {
 	excludeSentTemplate: true,
 };
 const initialAbandonedCartFilters = {
-	daysBack: 7,
+	daysBack: 30,
 	status: 'NEW',
 	limit: 50,
 	minTotal: '',
@@ -1214,7 +1214,7 @@ export default function CampaignComposerPanel({
 			const data = await previewAbandonedCartAudience({
 				templateId: selectedTemplate?.id || null,
 				filters: {
-					daysBack: Number(nextFilters.daysBack || 7),
+					daysBack: Number(nextFilters.daysBack || 30),
 					status: nextFilters.status || 'NEW',
 					limit: Number(nextFilters.limit || 50),
 					minTotal:
@@ -1534,7 +1534,7 @@ export default function CampaignComposerPanel({
 					}
 					: form.audienceMode === 'abandoned_carts'
 						? {
-							daysBack: Number(abandonedCartFilters.daysBack || 7),
+							daysBack: Number(abandonedCartFilters.daysBack || 30),
 							status: abandonedCartFilters.status || 'NEW',
 							limit: Number(abandonedCartFilters.limit || 50),
 							minTotal:

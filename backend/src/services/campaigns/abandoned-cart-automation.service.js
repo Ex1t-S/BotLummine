@@ -17,7 +17,7 @@ const DEFAULT_ACTIVE_INTERVAL_MINUTES = 10;
 const DEFAULT_IDLE_INTERVAL_MINUTES = 30;
 const DEFAULT_DEEP_IDLE_INTERVAL_MINUTES = 60;
 const DEFAULT_FILTERS = {
-	daysBack: 7,
+	daysBack: 30,
 	status: 'NEW',
 	limit: 50,
 	minTotal: null,

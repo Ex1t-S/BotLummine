@@ -47,7 +47,7 @@ import { useCampaignFeedback } from './useCampaignFeedback.js';
 const initialAbandonedCartForm = {
 	name: '',
 	notes: '',
-	daysBack: 7,
+	daysBack: 30,
 	status: 'NEW',
 	limit: 50,
 	minTotal: '',

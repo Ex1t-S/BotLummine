@@ -35,7 +35,7 @@ function formatAutomationDate(value) {
 const defaultAutomationForm = {
 	enabled: false,
 	templateId: '',
-	daysBack: 7,
+	daysBack: 30,
 	limit: 50,
 	minTotal: '',
 	productQuery: '',
@@ -175,7 +175,7 @@ function AutomationCard({
 		setForm({
 			enabled: Boolean(settings?.enabled),
 			templateId: settings?.templateId || selectedTemplate?.id || '',
-			daysBack: Number(filters.daysBack || 7),
+			daysBack: Number(filters.daysBack || 30),
 			limit: Number(filters.limit || 50),
 			minTotal: filters.minTotal ?? '',
 			productQuery: filters.productQuery || '',
@@ -536,7 +536,7 @@ export default function AbandonedCartCampaignPanel({
 
 	function buildAudienceFilters() {
 		return {
-			daysBack: Number(form.daysBack || 7),
+			daysBack: Number(form.daysBack || 30),
 			status: form.status || 'NEW',
 			limit: Number(form.limit || 50),
 			minTotal:
@@ -633,7 +633,7 @@ export default function AbandonedCartCampaignPanel({
 							<input
 								value={form.name}
 								onChange={(e) => onUpdateField('name', e.target.value)}
-								placeholder="Recuperación carritos 7 días"
+								placeholder="Recuperación carritos 30 días"
 							/>
 						</label>
 

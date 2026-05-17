@@ -59,7 +59,7 @@ export function formatPreviewText(text = '', max = 220) {
 
 export function buildAbandonedCartFilters(state = {}) {
 	return {
-		daysBack: Number(state.daysBack || 7),
+		daysBack: Number(state.daysBack || 30),
 		status: state.status || 'NEW',
 		limit: Number(state.limit || 50),
 		minTotal:
