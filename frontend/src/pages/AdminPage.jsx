@@ -253,6 +253,7 @@ function loadFacebookSdk() {
 				xfbml: true,
 				version: META_GRAPH_VERSION
 			});
+			window.FB.AppEvents?.logPageView?.();
 			resolve(window.FB);
 		};
 
