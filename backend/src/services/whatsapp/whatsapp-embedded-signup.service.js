@@ -28,8 +28,8 @@ function getMetaAppSecret() {
 	return readEnv('META_APP_SECRET', 'FACEBOOK_APP_SECRET');
 }
 
-function getCodeExchangeRedirectUri() {
-	return readEnv('META_REDIRECT_URI', 'WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI');
+function getCodeExchangeRedirectUri(redirectUri = '') {
+	return normalizeString(redirectUri) || readEnv('META_REDIRECT_URI', 'WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI');
 }
 
 function assertMetaAppConfig() {
@@ -98,7 +98,7 @@ function pickWabaIdFromDebugToken(debugToken = {}) {
 	return normalizeString(targetIds[0]);
 }
 
-async function exchangeCodeForAccessToken(code) {
+async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
 	assertMetaAppConfig();
 
 	const params = {
@@ -106,8 +106,8 @@ async function exchangeCodeForAccessToken(code) {
 		client_secret: getMetaAppSecret(),
 		code,
 	};
-	const redirectUri = getCodeExchangeRedirectUri();
-	if (redirectUri) params.redirect_uri = redirectUri;
+	const finalRedirectUri = getCodeExchangeRedirectUri(redirectUri);
+	if (finalRedirectUri) params.redirect_uri = finalRedirectUri;
 
 	try {
 		const response = await axios.get(buildGraphUrl('/oauth/access_token'), {
@@ -159,6 +159,7 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 
 export async function completeWhatsAppEmbeddedSignup({
 	code,
+	redirectUri = '',
 	wabaId = '',
 	phoneNumberId = '',
 	businessId = '',
@@ -171,7 +172,7 @@ export async function completeWhatsAppEmbeddedSignup({
 	}
 
 	const graphVersion = getEmbeddedSignupGraphVersion();
-	const tokenResponse = await exchangeCodeForAccessToken(cleanCode);
+	const tokenResponse = await exchangeCodeForAccessToken(cleanCode, { redirectUri });
 	const accessToken = normalizeString(tokenResponse.access_token);
 	const debugToken = await debugAccessToken(accessToken).catch((error) => {
 		logger.warn('whatsapp.embedded_signup.debug_token_failed', {
