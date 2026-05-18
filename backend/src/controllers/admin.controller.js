@@ -1856,6 +1856,7 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 
 		const result = await completeWhatsAppEmbeddedSignup({
 			code: req.body?.code,
+			redirectUri: req.body?.redirectUri || req.body?.redirect_uri,
 			wabaId: req.body?.wabaId || req.body?.waba_id,
 			phoneNumberId: req.body?.phoneNumberId || req.body?.phone_number_id,
 			businessId: req.body?.businessId || req.body?.business_id,

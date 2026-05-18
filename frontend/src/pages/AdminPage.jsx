@@ -87,6 +87,28 @@ function getWhatsAppEmbeddedSignupFallbackRedirectUri() {
 	return '';
 }
 
+function getWhatsAppEmbeddedSignupCallbackUri() {
+	const configured = import.meta.env.VITE_WHATSAPP_EMBEDDED_SIGNUP_CALLBACK_URI || '';
+	if (configured) return configured;
+	if (typeof window !== 'undefined') return `${window.location.origin}/meta-whatsapp-callback.html`;
+	return '';
+}
+
+function createOAuthState() {
+	if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+	return `wa-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function openCenteredPopup(url, name = 'facebook-whatsapp-signup', width = 760, height = 820) {
+	const top = typeof window !== 'undefined' ? Math.max(0, window.screenY + (window.outerHeight - height) / 2) : 0;
+	const left = typeof window !== 'undefined' ? Math.max(0, window.screenX + (window.outerWidth - width) / 2) : 0;
+	return window.open(
+		url,
+		name,
+		`width=${width},height=${height},top=${Math.round(top)},left=${Math.round(left)},resizable=yes,scrollbars=yes,status=yes`
+	);
+}
+
 const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
 	{ key: 'integrations', label: 'Integraciones' },
@@ -1234,32 +1256,69 @@ export default function AdminPage({ defaultTab = '' }) {
 
 		try {
 			window.addEventListener('message', handleEmbeddedSignupMessage);
-			const FB = await loadFacebookSdk();
+			await loadFacebookSdk();
+			const oauthState = createOAuthState();
+			const callbackUri = getWhatsAppEmbeddedSignupCallbackUri();
+			const fallbackRedirectUri = getWhatsAppEmbeddedSignupFallbackRedirectUri();
 			const authPayload = await new Promise((resolve, reject) => {
-				const fallbackRedirectUri = getWhatsAppEmbeddedSignupFallbackRedirectUri();
-				const loginOptions = {
-					config_id: WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
-					response_type: 'code',
-					override_default_response_type: true,
-					extras: {
-						setup: {}
-					}
-				};
-				if (fallbackRedirectUri) loginOptions.fallback_redirect_uri = fallbackRedirectUri;
+				const dialogUrl = new URL(`https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`);
+				dialogUrl.searchParams.set('client_id', META_APP_ID);
+				dialogUrl.searchParams.set('config_id', WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID);
+				dialogUrl.searchParams.set('display', 'popup');
+				dialogUrl.searchParams.set('response_type', 'code');
+				dialogUrl.searchParams.set('override_default_response_type', 'true');
+				dialogUrl.searchParams.set('redirect_uri', callbackUri);
+				dialogUrl.searchParams.set('state', oauthState);
+				dialogUrl.searchParams.set('extras', JSON.stringify({ setup: {} }));
+				if (fallbackRedirectUri) dialogUrl.searchParams.set('fallback_redirect_uri', fallbackRedirectUri);
 
-				FB.login((response) => {
-					const code = response?.authResponse?.code;
-					if (!code) {
-						reject(new Error('Conexion cancelada o sin autorizacion de Meta.'));
+				let popup = null;
+				let settled = false;
+				const timeout = window.setTimeout(() => {
+					if (settled) return;
+					settled = true;
+					window.removeEventListener('message', handleOAuthMessage);
+					reject(new Error('Meta no devolvio el codigo de autorizacion a tiempo.'));
+				}, 180000);
+
+				const finish = (callback) => {
+					if (settled) return;
+					settled = true;
+					window.clearTimeout(timeout);
+					window.removeEventListener('message', handleOAuthMessage);
+					callback();
+				};
+
+				const handleOAuthMessage = (event) => {
+					if (event.origin !== window.location.origin) return;
+					const payload = event.data || {};
+					if (payload.type !== 'BLADEIA_META_OAUTH_CODE') return;
+					if (payload.state !== oauthState) {
+						finish(() => reject(new Error('La respuesta de Meta no coincide con la sesion iniciada.')));
 						return;
 					}
-					resolve({
-						code,
+					if (payload.error) {
+						finish(() => reject(new Error(payload.errorDescription || payload.error || 'Conexion cancelada o sin autorizacion de Meta.')));
+						return;
+					}
+					if (!payload.code) {
+						finish(() => reject(new Error('Meta no devolvio un codigo de autorizacion valido.')));
+						return;
+					}
+					finish(() => resolve({
+						code: payload.code,
+						redirectUri: callbackUri,
 						wabaId: embeddedSignupData.waba_id || embeddedSignupData.wabaId || '',
 						phoneNumberId: embeddedSignupData.phone_number_id || embeddedSignupData.phoneNumberId || '',
 						businessId: embeddedSignupData.business_id || embeddedSignupData.businessId || ''
-					});
-				}, loginOptions);
+					}));
+				};
+
+				window.addEventListener('message', handleOAuthMessage);
+				popup = openCenteredPopup(dialogUrl.toString());
+				if (!popup) {
+					finish(() => reject(new Error('El navegador bloqueo la ventana de Meta. Habilita popups para conectar WhatsApp.')));
+				}
 			});
 
 			const res = await api.post(

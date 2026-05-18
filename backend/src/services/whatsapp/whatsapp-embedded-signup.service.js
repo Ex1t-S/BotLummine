@@ -28,8 +28,10 @@ function getMetaAppSecret() {
 	return readEnv('META_APP_SECRET', 'FACEBOOK_APP_SECRET');
 }
 
-function getCodeExchangeRedirectUriCandidates() {
+function getCodeExchangeRedirectUriCandidates(redirectUri = '') {
 	return [
+		normalizeString(redirectUri),
+		readEnv('WHATSAPP_EMBEDDED_SIGNUP_CALLBACK_URI', 'META_REDIRECT_URI', 'WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI'),
 		'https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46',
 		'https://static.xx.fbcdn.net/x/connect/xd_arbiter/?version=46',
 		'',
@@ -102,7 +104,7 @@ function pickWabaIdFromDebugToken(debugToken = {}) {
 	return normalizeString(targetIds[0]);
 }
 
-async function exchangeCodeForAccessToken(code) {
+async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
 	assertMetaAppConfig();
 
 	const baseParams = {
@@ -112,9 +114,9 @@ async function exchangeCodeForAccessToken(code) {
 	};
 	let lastError = null;
 
-	for (const redirectUri of getCodeExchangeRedirectUriCandidates()) {
+	for (const candidateRedirectUri of getCodeExchangeRedirectUriCandidates(redirectUri)) {
 		const params = { ...baseParams };
-		if (redirectUri) params.redirect_uri = redirectUri;
+		if (candidateRedirectUri) params.redirect_uri = candidateRedirectUri;
 
 		try {
 			const response = await axios.get(buildGraphUrl('/oauth/access_token'), {
@@ -174,6 +176,7 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 
 export async function completeWhatsAppEmbeddedSignup({
 	code,
+	redirectUri = '',
 	wabaId = '',
 	phoneNumberId = '',
 	businessId = '',
@@ -186,7 +189,7 @@ export async function completeWhatsAppEmbeddedSignup({
 	}
 
 	const graphVersion = getEmbeddedSignupGraphVersion();
-	const tokenResponse = await exchangeCodeForAccessToken(cleanCode);
+	const tokenResponse = await exchangeCodeForAccessToken(cleanCode, { redirectUri });
 	const accessToken = normalizeString(tokenResponse.access_token);
 	const debugToken = await debugAccessToken(accessToken).catch((error) => {
 		logger.warn('whatsapp.embedded_signup.debug_token_failed', {
