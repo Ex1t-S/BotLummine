@@ -87,15 +87,6 @@ function getWhatsAppEmbeddedSignupRedirectUri() {
 	return '';
 }
 
-function getCurrentPageUrl() {
-	if (typeof window === 'undefined') return '';
-	return `${window.location.origin}${window.location.pathname}`;
-}
-
-function uniqueValues(values = []) {
-	return values.filter((value, index, list) => value && list.indexOf(value) === index);
-}
-
 const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
 	{ key: 'integrations', label: 'Integraciones' },
@@ -1245,7 +1236,6 @@ export default function AdminPage({ defaultTab = '' }) {
 			window.addEventListener('message', handleEmbeddedSignupMessage);
 			const FB = await loadFacebookSdk();
 			const redirectUri = getWhatsAppEmbeddedSignupRedirectUri();
-			const redirectUriCandidates = uniqueValues([redirectUri, getCurrentPageUrl()]);
 			const authPayload = await new Promise((resolve, reject) => {
 				const loginOptions = {
 					config_id: WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
@@ -1266,7 +1256,6 @@ export default function AdminPage({ defaultTab = '' }) {
 					resolve({
 						code,
 						redirectUri,
-						redirectUriCandidates,
 						wabaId: embeddedSignupData.waba_id || embeddedSignupData.wabaId || '',
 						phoneNumberId: embeddedSignupData.phone_number_id || embeddedSignupData.phoneNumberId || '',
 						businessId: embeddedSignupData.business_id || embeddedSignupData.businessId || ''
