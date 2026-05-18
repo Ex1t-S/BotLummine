@@ -46,23 +46,6 @@ function normalizeSlug(value = '') {
 		.slice(0, 60);
 }
 
-function normalizeLookupValue(value = '') {
-	return normalizeString(value)
-		.toLowerCase()
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '');
-}
-
-function isVeraWorkspace(workspace = {}) {
-	const candidates = [
-		workspace?.slug,
-		workspace?.name,
-		workspace?.aiConfig?.businessName,
-	].map(normalizeLookupValue);
-
-	return candidates.some((value) => value === 'vera' || value.includes('vera'));
-}
-
 function normalizeRole(value = '') {
 	const role = normalizeString(value).toUpperCase();
 	return ['ADMIN', 'AGENT', 'PLATFORM_ADMIN'].includes(role) ? role : 'AGENT';
@@ -1869,13 +1852,7 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 		});
 		assertWorkspaceAdmin(req, workspaceId);
 
-		const workspaceRecord = await getWorkspaceOrThrow(workspaceId);
-		if (!isVeraWorkspace(workspaceRecord)) {
-			return res.status(404).json({
-				ok: false,
-				error: 'La conexion automatica de WhatsApp no esta disponible para esta marca.',
-			});
-		}
+		await getWorkspaceOrThrow(workspaceId);
 
 		const result = await completeWhatsAppEmbeddedSignup({
 			code: req.body?.code,
