@@ -80,6 +80,13 @@ const WHATSAPP_EMBEDDED_SIGNUP_FINISH_EVENTS = new Set([
 	'FINISH_GRANT_ONLY_API_ACCESS'
 ]);
 
+function getWhatsAppEmbeddedSignupFallbackRedirectUri() {
+	const configured = import.meta.env.VITE_WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI || import.meta.env.VITE_META_REDIRECT_URI || '';
+	if (configured) return configured;
+	if (typeof window !== 'undefined') return `${window.location.origin}/`;
+	return '';
+}
+
 const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
 	{ key: 'integrations', label: 'Integraciones' },
@@ -1229,6 +1236,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			window.addEventListener('message', handleEmbeddedSignupMessage);
 			const FB = await loadFacebookSdk();
 			const authPayload = await new Promise((resolve, reject) => {
+				const fallbackRedirectUri = getWhatsAppEmbeddedSignupFallbackRedirectUri();
 				const loginOptions = {
 					config_id: WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
 					response_type: 'code',
@@ -1237,6 +1245,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						setup: {}
 					}
 				};
+				if (fallbackRedirectUri) loginOptions.fallback_redirect_uri = fallbackRedirectUri;
 
 				FB.login((response) => {
 					const code = response?.authResponse?.code;
