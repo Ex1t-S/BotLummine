@@ -72,6 +72,13 @@ const EMPTY_PAYMENT_FORM = {
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || import.meta.env.VITE_FACEBOOK_APP_ID || '';
 const META_GRAPH_VERSION = import.meta.env.VITE_META_GRAPH_VERSION || import.meta.env.VITE_WHATSAPP_GRAPH_VERSION || 'v25.0';
 const WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || '';
+const WHATSAPP_EMBEDDED_SIGNUP_FINISH_EVENTS = new Set([
+	'FINISH',
+	'FINISH_ONLY_WABA',
+	'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING',
+	'FINISH_OBO_MIGRATION',
+	'FINISH_GRANT_ONLY_API_ACCESS'
+]);
 
 const platformTabs = [
 	{ key: 'workspaces', label: 'Marcas' },
@@ -1206,7 +1213,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			const payload = parseEmbeddedSignupMessage(event);
 			if (!payload) return;
 
-			if (payload.event === 'FINISH' || payload.event === 'FINISH_ONLY_WABA') {
+			if (WHATSAPP_EMBEDDED_SIGNUP_FINISH_EVENTS.has(payload.event)) {
 				embeddedSignupData = {
 					...embeddedSignupData,
 					...(payload.data || {})
@@ -1235,9 +1242,7 @@ export default function AdminPage({ defaultTab = '' }) {
 					response_type: 'code',
 					override_default_response_type: true,
 					extras: {
-						setup: {},
-						feature: 'whatsapp_embedded_signup',
-						sessionInfoVersion: '3'
+						setup: {}
 					}
 				});
 			});
