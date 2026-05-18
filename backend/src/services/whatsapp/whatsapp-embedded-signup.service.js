@@ -28,6 +28,14 @@ function getMetaAppSecret() {
 	return readEnv('META_APP_SECRET', 'FACEBOOK_APP_SECRET');
 }
 
+function getCodeExchangeRedirectUriCandidates() {
+	return [
+		'https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46',
+		'https://static.xx.fbcdn.net/x/connect/xd_arbiter/?version=46',
+		'',
+	].filter((value, index, values) => values.indexOf(value) === index);
+}
+
 function assertMetaAppConfig() {
 	if (!getMetaAppId() || !getMetaAppSecret()) {
 		const error = new Error('Faltan META_APP_ID y META_APP_SECRET para completar la conexion con Meta.');
@@ -97,27 +105,40 @@ function pickWabaIdFromDebugToken(debugToken = {}) {
 async function exchangeCodeForAccessToken(code) {
 	assertMetaAppConfig();
 
-	const params = {
+	const baseParams = {
 		client_id: getMetaAppId(),
 		client_secret: getMetaAppSecret(),
 		code,
 	};
+	let lastError = null;
 
-	try {
-		const response = await axios.get(buildGraphUrl('/oauth/access_token'), {
-			params,
-			timeout: GRAPH_TIMEOUT_MS,
-		});
-		const accessToken = normalizeString(response.data?.access_token);
-		if (!accessToken) {
-			const error = new Error('Meta no devolvio un access_token valido.');
-			error.status = 502;
-			throw error;
+	for (const redirectUri of getCodeExchangeRedirectUriCandidates()) {
+		const params = { ...baseParams };
+		if (redirectUri) params.redirect_uri = redirectUri;
+
+		try {
+			const response = await axios.get(buildGraphUrl('/oauth/access_token'), {
+				params,
+				timeout: GRAPH_TIMEOUT_MS,
+			});
+			const accessToken = normalizeString(response.data?.access_token);
+			if (!accessToken) {
+				const error = new Error('Meta no devolvio un access_token valido.');
+				error.status = 502;
+				throw error;
+			}
+			return response.data;
+		} catch (error) {
+			lastError = error;
+			const apiError = error?.response?.data?.error;
+			const message = apiError?.message || error?.message || '';
+			if (!/redirect_uri|verification code/i.test(message)) {
+				break;
+			}
 		}
-		return response.data;
-	} catch (error) {
-		throw normalizeGraphError(error, 'No se pudo canjear el codigo de Meta.');
 	}
+
+	throw normalizeGraphError(lastError, 'No se pudo canjear el codigo de Meta.');
 }
 
 async function debugAccessToken(accessToken) {
