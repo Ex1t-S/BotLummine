@@ -28,8 +28,15 @@ function getMetaAppSecret() {
 	return readEnv('META_APP_SECRET', 'FACEBOOK_APP_SECRET');
 }
 
-function getCodeExchangeRedirectUri(redirectUri = '') {
-	return normalizeString(redirectUri) || readEnv('META_REDIRECT_URI', 'WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI');
+function getCodeExchangeRedirectUriCandidates({ redirectUri = '', redirectUriCandidates = [] } = {}) {
+	return [
+		'https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46',
+		'https://static.xx.fbcdn.net/x/connect/xd_arbiter/?version=46',
+		...(Array.isArray(redirectUriCandidates) ? redirectUriCandidates.map(normalizeString) : []),
+		normalizeString(redirectUri),
+		readEnv('META_REDIRECT_URI', 'WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI'),
+		''
+	].filter((value, index, values) => values.indexOf(value) === index);
 }
 
 function assertMetaAppConfig() {
@@ -98,32 +105,44 @@ function pickWabaIdFromDebugToken(debugToken = {}) {
 	return normalizeString(targetIds[0]);
 }
 
-async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
+async function exchangeCodeForAccessToken(code, { redirectUri = '', redirectUriCandidates = [] } = {}) {
 	assertMetaAppConfig();
 
-	const params = {
+	const baseParams = {
 		client_id: getMetaAppId(),
 		client_secret: getMetaAppSecret(),
 		code,
 	};
-	const finalRedirectUri = getCodeExchangeRedirectUri(redirectUri);
-	if (finalRedirectUri) params.redirect_uri = finalRedirectUri;
+	const finalRedirectUriCandidates = getCodeExchangeRedirectUriCandidates({ redirectUri, redirectUriCandidates });
+	let lastError = null;
 
-	try {
-		const response = await axios.get(buildGraphUrl('/oauth/access_token'), {
-			params,
-			timeout: GRAPH_TIMEOUT_MS,
-		});
-		const accessToken = normalizeString(response.data?.access_token);
-		if (!accessToken) {
-			const error = new Error('Meta no devolvio un access_token valido.');
-			error.status = 502;
-			throw error;
+	for (const candidate of finalRedirectUriCandidates) {
+		const params = { ...baseParams };
+		if (candidate) params.redirect_uri = candidate;
+
+		try {
+			const response = await axios.get(buildGraphUrl('/oauth/access_token'), {
+				params,
+				timeout: GRAPH_TIMEOUT_MS,
+			});
+			const accessToken = normalizeString(response.data?.access_token);
+			if (!accessToken) {
+				const error = new Error('Meta no devolvio un access_token valido.');
+				error.status = 502;
+				throw error;
+			}
+			return response.data;
+		} catch (error) {
+			lastError = error;
+			const apiError = error?.response?.data?.error;
+			const message = apiError?.message || error?.message || '';
+			if (!/redirect_uri|verification code/i.test(message)) {
+				break;
+			}
 		}
-		return response.data;
-	} catch (error) {
-		throw normalizeGraphError(error, 'No se pudo canjear el codigo de Meta.');
 	}
+
+	throw normalizeGraphError(lastError, 'No se pudo canjear el codigo de Meta.');
 }
 
 async function debugAccessToken(accessToken) {
@@ -160,6 +179,7 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 export async function completeWhatsAppEmbeddedSignup({
 	code,
 	redirectUri = '',
+	redirectUriCandidates = [],
 	wabaId = '',
 	phoneNumberId = '',
 	businessId = '',
@@ -172,7 +192,7 @@ export async function completeWhatsAppEmbeddedSignup({
 	}
 
 	const graphVersion = getEmbeddedSignupGraphVersion();
-	const tokenResponse = await exchangeCodeForAccessToken(cleanCode, { redirectUri });
+	const tokenResponse = await exchangeCodeForAccessToken(cleanCode, { redirectUri, redirectUriCandidates });
 	const accessToken = normalizeString(tokenResponse.access_token);
 	const debugToken = await debugAccessToken(accessToken).catch((error) => {
 		logger.warn('whatsapp.embedded_signup.debug_token_failed', {
