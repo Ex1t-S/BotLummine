@@ -79,6 +79,7 @@ const WHATSAPP_EMBEDDED_SIGNUP_FINISH_EVENTS = new Set([
 	'FINISH_OBO_MIGRATION',
 	'FINISH_GRANT_ONLY_API_ACCESS'
 ]);
+const WHATSAPP_EMBEDDED_SIGNUP_DATA_GRACE_MS = 3500;
 
 function getWhatsAppEmbeddedSignupFallbackRedirectUri() {
 	const configured = import.meta.env.VITE_WHATSAPP_EMBEDDED_SIGNUP_REDIRECT_URI || import.meta.env.VITE_META_REDIRECT_URI || '';
@@ -325,6 +326,35 @@ function parseEmbeddedSignupMessage(event) {
 
 	if (payload?.type !== 'WA_EMBEDDED_SIGNUP') return null;
 	return payload;
+}
+
+function normalizeEmbeddedSignupData(payload = {}) {
+	const data = payload?.data || payload || {};
+	const phoneNumberId =
+		data.phone_number_id ||
+		data.phoneNumberId ||
+		data.phone?.id ||
+		data.phone_number?.id ||
+		'';
+	const wabaId =
+		data.waba_id ||
+		data.wabaId ||
+		data.whatsapp_business_account_id ||
+		data.whatsappBusinessAccountId ||
+		data.waba?.id ||
+		'';
+	const businessId =
+		data.business_id ||
+		data.businessId ||
+		data.business?.id ||
+		'';
+
+	return {
+		...data,
+		waba_id: wabaId,
+		phone_number_id: phoneNumberId,
+		business_id: businessId
+	};
 }
 
 function SectionIntro({ title, description }) {
@@ -1249,7 +1279,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			if (WHATSAPP_EMBEDDED_SIGNUP_FINISH_EVENTS.has(payload.event)) {
 				embeddedSignupData = {
 					...embeddedSignupData,
-					...(payload.data || {})
+					...normalizeEmbeddedSignupData(payload)
 				};
 			}
 		};
@@ -1274,6 +1304,7 @@ export default function AdminPage({ defaultTab = '' }) {
 
 				let popup = null;
 				let settled = false;
+				let signupDataWaitTimer = null;
 				const timeout = window.setTimeout(() => {
 					if (settled) return;
 					settled = true;
@@ -1285,8 +1316,32 @@ export default function AdminPage({ defaultTab = '' }) {
 					if (settled) return;
 					settled = true;
 					window.clearTimeout(timeout);
+					if (signupDataWaitTimer) window.clearTimeout(signupDataWaitTimer);
 					window.removeEventListener('message', handleOAuthMessage);
 					callback();
+				};
+
+				const resolveWithLatestSignupData = (payload) => {
+					const latestSignupData = normalizeEmbeddedSignupData(embeddedSignupData);
+					return resolve({
+						code: payload.code,
+						redirectUri: callbackUri,
+						wabaId: latestSignupData.waba_id || '',
+						phoneNumberId: latestSignupData.phone_number_id || '',
+						businessId: latestSignupData.business_id || ''
+					});
+				};
+
+				const resolveAfterSignupDataGrace = (payload) => {
+					const latestSignupData = normalizeEmbeddedSignupData(embeddedSignupData);
+					if (latestSignupData.phone_number_id || latestSignupData.waba_id) {
+						finish(() => resolveWithLatestSignupData(payload));
+						return;
+					}
+
+					signupDataWaitTimer = window.setTimeout(() => {
+						finish(() => resolveWithLatestSignupData(payload));
+					}, WHATSAPP_EMBEDDED_SIGNUP_DATA_GRACE_MS);
 				};
 
 				const handleOAuthMessage = (event) => {
@@ -1305,13 +1360,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						finish(() => reject(new Error('Meta no devolvio un codigo de autorizacion valido.')));
 						return;
 					}
-					finish(() => resolve({
-						code: payload.code,
-						redirectUri: callbackUri,
-						wabaId: embeddedSignupData.waba_id || embeddedSignupData.wabaId || '',
-						phoneNumberId: embeddedSignupData.phone_number_id || embeddedSignupData.phoneNumberId || '',
-						businessId: embeddedSignupData.business_id || embeddedSignupData.businessId || ''
-					}));
+					resolveAfterSignupDataGrace(payload);
 				};
 
 				window.addEventListener('message', handleOAuthMessage);

@@ -95,13 +95,20 @@ async function graphPost(path, { accessToken, data = {}, params = {}, graphVersi
 	}
 }
 
-function pickWabaIdFromDebugToken(debugToken = {}) {
+function uniqueNormalizedStrings(values = []) {
+	return values
+		.map((value) => normalizeString(value))
+		.filter((value, index, list) => value && list.indexOf(value) === index);
+}
+
+function getWabaIdsFromDebugToken(debugToken = {}) {
 	const granularScopes = Array.isArray(debugToken?.data?.granular_scopes)
 		? debugToken.data.granular_scopes
 		: [];
-	const whatsappScope = granularScopes.find((item) => item?.scope === 'whatsapp_business_management');
-	const targetIds = Array.isArray(whatsappScope?.target_ids) ? whatsappScope.target_ids : [];
-	return normalizeString(targetIds[0]);
+	const targetIds = granularScopes
+		.filter((item) => ['whatsapp_business_management', 'whatsapp_business_messaging'].includes(item?.scope))
+		.flatMap((item) => (Array.isArray(item?.target_ids) ? item.target_ids : []));
+	return uniqueNormalizedStrings(targetIds);
 }
 
 async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
@@ -174,6 +181,115 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 	return Array.isArray(phoneNumbers?.data) ? phoneNumbers.data[0] : null;
 }
 
+async function resolveEmbeddedSignupAssets({
+	wabaId,
+	phoneNumberId,
+	accessToken,
+	graphVersion,
+	debugToken,
+}) {
+	const cleanWabaId = normalizeString(wabaId);
+	const cleanPhoneNumberId = normalizeString(phoneNumberId);
+	const candidateWabaIds = uniqueNormalizedStrings([
+		cleanWabaId,
+		...getWabaIdsFromDebugToken(debugToken),
+	]);
+	const attemptedWabaIds = [];
+	let lastError = null;
+
+	if (cleanPhoneNumberId && cleanWabaId) {
+		const waba = await graphGet(`/${cleanWabaId}`, {
+			accessToken,
+			graphVersion,
+			params: {
+				fields: 'id,name,currency,timezone_id,message_template_namespace,account_review_status',
+			},
+		});
+		const phoneNumber = await resolvePhoneNumber({
+			wabaId: cleanWabaId,
+			phoneNumberId: cleanPhoneNumberId,
+			accessToken,
+			graphVersion,
+		});
+		return { wabaId: cleanWabaId, phoneNumberId: cleanPhoneNumberId, waba, phoneNumber, candidateWabaIds };
+	}
+
+	for (const candidateWabaId of candidateWabaIds) {
+		attemptedWabaIds.push(candidateWabaId);
+		try {
+			const waba = await graphGet(`/${candidateWabaId}`, {
+				accessToken,
+				graphVersion,
+				params: {
+					fields: 'id,name,currency,timezone_id,message_template_namespace,account_review_status',
+				},
+			});
+			const phoneNumber = await resolvePhoneNumber({
+				wabaId: candidateWabaId,
+				phoneNumberId: candidateWabaId === cleanWabaId ? cleanPhoneNumberId : '',
+				accessToken,
+				graphVersion,
+			});
+			const finalPhoneNumberId = normalizeString(phoneNumber?.id) || (candidateWabaId === cleanWabaId ? cleanPhoneNumberId : '');
+			if (finalPhoneNumberId) {
+				return {
+					wabaId: candidateWabaId,
+					phoneNumberId: finalPhoneNumberId,
+					waba,
+					phoneNumber,
+					candidateWabaIds,
+				};
+			}
+		} catch (error) {
+			lastError = error;
+			logger.warn('whatsapp.embedded_signup.resolve_waba_failed', {
+				wabaId: candidateWabaId,
+				error: error?.message || String(error),
+				metaCode: error?.metaCode || null,
+				metaSubcode: error?.metaSubcode || null,
+			});
+		}
+	}
+
+	if (cleanPhoneNumberId && candidateWabaIds.length) {
+		try {
+			const phoneNumber = await resolvePhoneNumber({
+				wabaId: candidateWabaIds[0],
+				phoneNumberId: cleanPhoneNumberId,
+				accessToken,
+				graphVersion,
+			});
+			return {
+				wabaId: candidateWabaIds[0],
+				phoneNumberId: cleanPhoneNumberId,
+				waba: null,
+				phoneNumber,
+				candidateWabaIds,
+			};
+		} catch (error) {
+			lastError = error;
+		}
+	}
+
+	logger.warn('whatsapp.embedded_signup.no_phone_number_resolved', {
+		providedWabaId: cleanWabaId || null,
+		providedPhoneNumberId: cleanPhoneNumberId || null,
+		candidateWabaIds,
+		attemptedWabaIds,
+		error: lastError?.message || null,
+		metaCode: lastError?.metaCode || null,
+		metaSubcode: lastError?.metaSubcode || null,
+	});
+
+	return {
+		wabaId: cleanWabaId || candidateWabaIds[0] || '',
+		phoneNumberId: '',
+		waba: null,
+		phoneNumber: null,
+		candidateWabaIds,
+	};
+}
+
 export async function completeWhatsAppEmbeddedSignup({
 	code,
 	redirectUri = '',
@@ -198,31 +314,36 @@ export async function completeWhatsAppEmbeddedSignup({
 		return null;
 	});
 
-	const finalWabaId = normalizeString(wabaId) || pickWabaIdFromDebugToken(debugToken);
+	const signupAssets = await resolveEmbeddedSignupAssets({
+		wabaId,
+		phoneNumberId,
+		accessToken,
+		graphVersion,
+		debugToken,
+	});
+	const finalWabaId = normalizeString(signupAssets.wabaId);
 	if (!finalWabaId) {
 		const error = new Error('Meta no devolvio un WABA para conectar.');
 		error.status = 400;
 		throw error;
 	}
 
-	const waba = await graphGet(`/${finalWabaId}`, {
+	const waba = signupAssets.waba || (await graphGet(`/${finalWabaId}`, {
 		accessToken,
 		graphVersion,
 		params: {
 			fields: 'id,name,currency,timezone_id,message_template_namespace,account_review_status',
 		},
-	});
-	const phoneNumber = await resolvePhoneNumber({
-		wabaId: finalWabaId,
-		phoneNumberId: normalizeString(phoneNumberId),
-		accessToken,
-		graphVersion,
-	});
-
-	const finalPhoneNumberId = normalizeString(phoneNumber?.id) || normalizeString(phoneNumberId);
+	}));
+	const phoneNumber = signupAssets.phoneNumber;
+	const finalPhoneNumberId = normalizeString(signupAssets.phoneNumberId) || normalizeString(phoneNumber?.id) || normalizeString(phoneNumberId);
 	if (!finalPhoneNumberId) {
 		const error = new Error('Meta no devolvio un numero de WhatsApp para conectar.');
 		error.status = 400;
+		error.details = {
+			wabaId: finalWabaId,
+			candidateWabaIds: signupAssets.candidateWabaIds,
+		};
 		throw error;
 	}
 
