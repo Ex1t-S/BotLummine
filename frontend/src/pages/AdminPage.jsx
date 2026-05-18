@@ -254,6 +254,9 @@ function loadFacebookSdk() {
 				version: META_GRAPH_VERSION
 			});
 			window.FB.AppEvents?.logPageView?.();
+			window.FB.getLoginStatus?.((response) => {
+				window.__facebookLoginStatus = response?.status || 'unknown';
+			});
 			resolve(window.FB);
 		};
 
