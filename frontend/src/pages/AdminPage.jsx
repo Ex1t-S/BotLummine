@@ -243,7 +243,7 @@ function loadFacebookSdk() {
 			window.FB.init({
 				appId: META_APP_ID,
 				cookie: true,
-				xfbml: false,
+				xfbml: true,
 				version: META_GRAPH_VERSION
 			});
 			resolve(window.FB);
@@ -1236,7 +1236,8 @@ export default function AdminPage({ defaultTab = '' }) {
 					override_default_response_type: true,
 					extras: {
 						setup: {},
-						feature: 'whatsapp_embedded_signup'
+						feature: 'whatsapp_embedded_signup',
+						sessionInfoVersion: '3'
 					}
 				});
 			});
