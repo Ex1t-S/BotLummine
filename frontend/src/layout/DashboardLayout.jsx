@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
 import {
 	BarChart3,
@@ -22,6 +23,11 @@ import { resolveApiUrl } from '../lib/api.js';
 import './DashboardLayout.css';
 import logoBladeIA from '../assets/bladeia-logo.svg';
 import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
+import {
+	getFrequentInternalPaths,
+	prefetchInternalRouteAndData,
+	scheduleIdleInternalPrefetch,
+} from '../lib/internalRoutePrefetch.js';
 
 const PAGE_META = [
 	{
@@ -92,9 +98,19 @@ function NavGroup({ label, children }) {
 	);
 }
 
-function NavItem({ to, icon: Icon, children, className }) {
+function NavItem({ to, icon: Icon, children, className, onPrepare }) {
+	function handlePrepare() {
+		onPrepare?.(to);
+	}
+
 	return (
-		<NavLink to={to} className={className || navClass}>
+		<NavLink
+			to={to}
+			className={className || navClass}
+			onFocus={handlePrepare}
+			onMouseEnter={handlePrepare}
+			onTouchStart={handlePrepare}
+		>
 			<Icon size={17} strokeWidth={2.2} aria-hidden="true" />
 			<span>{children}</span>
 			<ChevronRight className="admin-menu-link-chevron" size={15} strokeWidth={2.2} aria-hidden="true" />
@@ -105,6 +121,7 @@ function NavItem({ to, icon: Icon, children, className }) {
 export default function DashboardLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
+	const queryClient = useQueryClient();
 	const { resolvedTheme, setTheme } = useTheme();
 	const { user, logout } = useAuth();
 	const contentRef = useRef(null);
@@ -127,6 +144,10 @@ export default function DashboardLayout() {
 		}
 		: basePageMeta;
 
+	const preparePath = useCallback((path) => {
+		prefetchInternalRouteAndData(path, queryClient, { user });
+	}, [queryClient, user]);
+
 	useEffect(() => {
 		lastScrollTopRef.current = 0;
 		setTopbarHidden(false);
@@ -138,6 +159,11 @@ export default function DashboardLayout() {
 	useEffect(() => {
 		setLogoFailed(false);
 	}, [logoUrl]);
+
+	useEffect(() => {
+		const paths = getFrequentInternalPaths(user);
+		return scheduleIdleInternalPrefetch(paths, queryClient, { user });
+	}, [queryClient, user]);
 
 	function updateTopbarForScroll(scrollTop) {
 		const previousScrollTop = lastScrollTopRef.current;
@@ -205,13 +231,14 @@ export default function DashboardLayout() {
 
 				<nav className="admin-menu" aria-label="Navegación principal">
 					<NavGroup label="Operación">
-						<NavItem to="/operations" icon={LayoutDashboard}>Operación</NavItem>
+						<NavItem to="/operations" icon={LayoutDashboard} onPrepare={preparePath}>Operación</NavItem>
 
 						{!isPlatformAdmin ? (
 							<NavItem
 								to="/inbox/automatico"
 								icon={Inbox}
 								className={navClassWithPrefix(location, '/inbox')}
+								onPrepare={preparePath}
 							>
 								Inbox
 							</NavItem>
@@ -221,26 +248,26 @@ export default function DashboardLayout() {
 					{isAdmin && !isPlatformAdmin ? (
 						<>
 							<NavGroup label="Ventas">
-								<NavItem to="/catalog" icon={Boxes}>Catálogo</NavItem>
-								<NavItem to="/abandoned-carts" icon={ShoppingCart}>Carritos</NavItem>
-								<NavItem to="/customers" icon={Users}>Clientes</NavItem>
+								<NavItem to="/catalog" icon={Boxes} onPrepare={preparePath}>Catálogo</NavItem>
+								<NavItem to="/abandoned-carts" icon={ShoppingCart} onPrepare={preparePath}>Carritos</NavItem>
+								<NavItem to="/customers" icon={Users} onPrepare={preparePath}>Clientes</NavItem>
 							</NavGroup>
 
 							<NavGroup label="Marketing">
-								<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')}>Campañas</NavItem>
-								<NavItem to="/analytics" icon={BarChart3}>Estadísticas</NavItem>
+								<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')} onPrepare={preparePath}>Campañas</NavItem>
+								<NavItem to="/analytics" icon={BarChart3} onPrepare={preparePath}>Estadísticas</NavItem>
 							</NavGroup>
 						</>
 					) : null}
 
 					{isAdmin ? (
 						<NavGroup label="Configuración">
-							<NavItem to="/admin" icon={isPlatformAdmin ? Building2 : Settings}>
+							<NavItem to="/admin" icon={isPlatformAdmin ? Building2 : Settings} onPrepare={preparePath}>
 								{isPlatformAdmin ? 'Admin plataforma' : 'Configuración'}
 							</NavItem>
 
 							{!isPlatformAdmin ? (
-								<NavItem to="/whatsapp-menu" icon={MessageSquareText}>Menú</NavItem>
+								<NavItem to="/whatsapp-menu" icon={MessageSquareText} onPrepare={preparePath}>Menú</NavItem>
 							) : null}
 						</NavGroup>
 					) : null}

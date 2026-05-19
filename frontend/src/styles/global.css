@@ -109,6 +109,35 @@ body {
 	font-weight: 850;
 }
 
+.route-loader__skeleton {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(140px, 1fr));
+	gap: 10px;
+	width: min(560px, 100%);
+	margin-top: 8px;
+}
+
+.route-loader__skeleton span {
+	min-height: 72px;
+	border: 1px solid rgba(148, 163, 184, 0.22);
+	border-radius: 10px;
+	background:
+		linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0)),
+		#eef2f7;
+	background-size: 220% 100%;
+	animation: route-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes route-skeleton-shimmer {
+	0% {
+		background-position: 120% 0;
+	}
+
+	100% {
+		background-position: -120% 0;
+	}
+}
+
 .app-error-boundary {
 	min-height: 100dvh;
 	display: grid;

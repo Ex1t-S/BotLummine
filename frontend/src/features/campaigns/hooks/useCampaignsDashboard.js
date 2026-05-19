@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api.js';
 import {
 	createCampaign,
@@ -34,7 +34,7 @@ import {
 	updateShipmentNotificationSettings,
 	updateTemplate,
 } from '../../../lib/campaigns.js';
-import { queryKeys } from '../../../lib/queryClient.js';
+import { queryKeys, queryPresets } from '../../../lib/queryClient.js';
 import {
 	buildAbandonedCartFilters,
 	extractCreatedCampaignId,
@@ -239,18 +239,23 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		queryKey: queryKeys.campaigns.overview,
 		queryFn: fetchCampaignOverview,
 		enabled: false,
+		placeholderData: keepPreviousData,
 	});
 
 	const templatesQuery = useQuery({
 		queryKey: queryKeys.campaigns.templates(),
 		queryFn: () => fetchTemplates(),
 		enabled: needsTemplates,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 	});
 
 	const campaignsQuery = useQuery({
 		queryKey: queryKeys.campaigns.runs(),
 		queryFn: () => fetchCampaigns(),
 		enabled: needsCampaignRuns,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 		refetchInterval: (query) => {
 			if (!needsCampaignRuns) return false;
 			const payload = query.state.data;
@@ -267,24 +272,32 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		queryKey: queryKeys.campaigns.schedules,
 		queryFn: fetchCampaignSchedules,
 		enabled: needsSchedules,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 	});
 
 	const abandonedCartAutomationQuery = useQuery({
 		queryKey: ['campaigns', 'abandoned-cart-automation', 'settings'],
 		queryFn: fetchAbandonedCartAutomationSettings,
 		enabled: needsAbandonedAutomation,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 	});
 
 	const pendingPaymentAutomationQuery = useQuery({
 		queryKey: ['campaigns', 'pending-payment-automation', 'settings'],
 		queryFn: fetchPendingPaymentAutomationSettings,
 		enabled: needsPendingPaymentAutomation,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 	});
 
 	const shipmentSettingsQuery = useQuery({
 		queryKey: ['campaigns', 'shipment-notifications', 'settings'],
 		queryFn: fetchShipmentNotificationSettings,
 		enabled: needsShipmentNotifications,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 	});
 
 	const shipmentCandidatesQuery = useQuery({
@@ -295,6 +308,8 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 			includeNotified: true,
 		}),
 		enabled: needsShipmentNotifications,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 	});
 
 	const campaignDetailQuery = useQuery({
@@ -312,6 +327,8 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 			return response.data;
 		},
 		enabled: Boolean(selectedCampaignId),
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
 		refetchInterval: (query) => {
 			const payload = extractDetailResponsePayload(query.state.data);
 			const campaign = payload?.campaign || payload?.item || payload?.run || null;

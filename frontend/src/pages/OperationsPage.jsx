@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
 	AlertTriangle,
 	ArrowRight,
@@ -392,6 +392,7 @@ export default function OperationsPage() {
 			return res.data;
 		},
 		refetchInterval: 30000,
+		placeholderData: keepPreviousData,
 		...queryPresets.inbox,
 	});
 
@@ -399,6 +400,7 @@ export default function OperationsPage() {
 		queryKey: ['operations', 'abandoned-cart-automation', 'settings'],
 		queryFn: fetchAbandonedCartAutomationSettings,
 		enabled: brandAdmin,
+		placeholderData: keepPreviousData,
 		...queryPresets.campaigns,
 	});
 
@@ -406,6 +408,7 @@ export default function OperationsPage() {
 		queryKey: ['operations', 'shipment-notifications', 'settings'],
 		queryFn: fetchShipmentNotificationSettings,
 		enabled: brandAdmin,
+		placeholderData: keepPreviousData,
 		...queryPresets.campaigns,
 	});
 
@@ -413,6 +416,7 @@ export default function OperationsPage() {
 		queryKey: ['operations', 'pending-payment-automation', 'settings'],
 		queryFn: fetchPendingPaymentAutomationSettings,
 		enabled: brandAdmin,
+		placeholderData: keepPreviousData,
 		...queryPresets.campaigns,
 	});
 

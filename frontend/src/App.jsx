@@ -5,18 +5,19 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BrandLoader from './components/ui/BrandLoader.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { getDefaultRouteForRole, isPlatformAdminUser } from './lib/authz.js';
+import { internalRouteModules } from './lib/internalRouteModules.js';
 import { lazyWithRetry } from './lib/lazyWithRetry.js';
 
-const InboxPage = lazyWithRetry(() => import('./pages/InboxPage.jsx'), 'InboxPage');
-const CatalogPage = lazyWithRetry(() => import('./pages/CatalogPage.jsx'), 'CatalogPage');
-const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage.jsx'), 'CampaignsPage');
-const AbandonedCartsPage = lazyWithRetry(() => import('./pages/AbandonedCartsPage.jsx'), 'AbandonedCartsPage');
-const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage.jsx'), 'CustomersPage');
-const WhatsAppMenuPage = lazyWithRetry(() => import('./pages/WhatsAppMenuPage.jsx'), 'WhatsAppMenuPage');
-const AdminPage = lazyWithRetry(() => import('./pages/AdminPage.jsx'), 'AdminPage');
-const OperationsPage = lazyWithRetry(() => import('./pages/OperationsPage.jsx'), 'OperationsPage');
-const PrivateAppShell = lazyWithRetry(() => import('./layout/PrivateAppShell.jsx'), 'PrivateAppShell');
-const LoginPage = lazyWithRetry(() => import('./pages/LoginPage.jsx'), 'LoginPage');
+const InboxPage = lazyWithRetry(internalRouteModules.inbox, 'InboxPage');
+const CatalogPage = lazyWithRetry(internalRouteModules.catalog, 'CatalogPage');
+const CampaignsPage = lazyWithRetry(internalRouteModules.campaigns, 'CampaignsPage');
+const AbandonedCartsPage = lazyWithRetry(internalRouteModules.abandonedCarts, 'AbandonedCartsPage');
+const CustomersPage = lazyWithRetry(internalRouteModules.customers, 'CustomersPage');
+const WhatsAppMenuPage = lazyWithRetry(internalRouteModules.whatsappMenu, 'WhatsAppMenuPage');
+const AdminPage = lazyWithRetry(internalRouteModules.admin, 'AdminPage');
+const OperationsPage = lazyWithRetry(internalRouteModules.operations, 'OperationsPage');
+const PrivateAppShell = lazyWithRetry(internalRouteModules.privateShell, 'PrivateAppShell');
+const LoginPage = lazyWithRetry(internalRouteModules.login, 'LoginPage');
 
 function RoleHomeRedirect() {
 	const { user } = useAuth();
@@ -28,6 +29,12 @@ function PageLoader() {
 		<div className="route-loader" role="status" aria-live="polite">
 			<span className="route-loader__bar" aria-hidden="true" />
 			<strong>Cargando sección</strong>
+			<div className="route-loader__skeleton" aria-hidden="true">
+				<span />
+				<span />
+				<span />
+				<span />
+			</div>
 		</div>
 	);
 }

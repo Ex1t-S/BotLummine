@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import api from '../lib/api.js';
+import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import { ActionButton, EmptyState, PageHeader, StatusBadge } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './AbandonedCartsPage.css';
@@ -16,6 +18,20 @@ const initialFilters = {
 
 const SYNC_WINDOW_OPTIONS = [1, 3, 7, 15, 30];
 const DEFAULT_SYNC_WINDOW_DAYS = 30;
+const EMPTY_ABANDONED_CARTS_DATA = {
+	carts: [],
+	stats: {
+		total: 0,
+		totalNew: 0,
+		totalContacted: 0,
+		showingFrom: 0,
+		showingTo: 0
+	},
+	pagination: {
+		page: 1,
+		totalPages: 1
+	}
+};
 
 function getInitials(value = '') {
 	return (
@@ -142,53 +158,38 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 export default function AbandonedCartsPage() {
 	useInternalDarkOverrides();
 
-	const [loading, setLoading] = useState(true);
+	const queryClient = useQueryClient();
 	const [syncing, setSyncing] = useState(false);
 	const [filters, setFilters] = useState(initialFilters);
+	const [appliedFilters, setAppliedFilters] = useState(initialFilters);
 	const [syncSummary, setSyncSummary] = useState(null);
 	const [errorMessage, setErrorMessage] = useState('');
 	const [successMessage, setSuccessMessage] = useState('');
-	const [data, setData] = useState({
-		carts: [],
-		stats: {
-			total: 0,
-			totalNew: 0,
-			totalContacted: 0,
-			showingFrom: 0,
-			showingTo: 0
+	const abandonedCartsQuery = useQuery({
+		queryKey: queryKeys.abandonedCarts(appliedFilters),
+		queryFn: async () => {
+			const res = await api.get('/dashboard/abandoned-carts', {
+				params: appliedFilters
+			});
+			return res.data || EMPTY_ABANDONED_CARTS_DATA;
 		},
-		pagination: {
-			page: 1,
-			totalPages: 1
-		}
+		placeholderData: keepPreviousData,
+		...queryPresets.abandonedCarts,
 	});
 
-	async function loadAbandonedCarts(nextFilters = filters) {
-		setLoading(true);
-		setErrorMessage('');
-
-		try {
-			const res = await api.get('/dashboard/abandoned-carts', {
-				params: nextFilters
-			});
-
-			setData(res.data);
-
-		} catch (error) {
-			console.error(error);
-			setErrorMessage(
-				error?.response?.data?.error ||
-				error?.response?.data?.message ||
-				'No pudimos cargar los carritos abandonados. Probá nuevamente.'
-			);
-		} finally {
-			setLoading(false);
-		}
-	}
-
 	useEffect(() => {
-		loadAbandonedCarts(filters);
-	}, []);
+		if (abandonedCartsQuery.isSuccess) {
+			setErrorMessage('');
+			return;
+		}
+		if (!abandonedCartsQuery.isError) return;
+		const error = abandonedCartsQuery.error;
+		setErrorMessage(
+			error?.response?.data?.error ||
+			error?.response?.data?.message ||
+			'No pudimos cargar los carritos abandonados. Probá nuevamente.'
+		);
+	}, [abandonedCartsQuery.error, abandonedCartsQuery.isError, abandonedCartsQuery.isSuccess]);
 
 	const updateFilter = useCallback((name, value) => {
 		setFilters((prev) => ({
@@ -200,15 +201,17 @@ export default function AbandonedCartsPage() {
 	async function handleApplyFilters(e) {
 		e.preventDefault();
 		setSuccessMessage('');
+		setErrorMessage('');
 		const next = { ...filters, page: 1 };
 		setFilters(next);
-		await loadAbandonedCarts(next);
+		setAppliedFilters(next);
 	}
 
 	async function handleResetFilters() {
 		setSuccessMessage('');
+		setErrorMessage('');
 		setFilters(initialFilters);
-		await loadAbandonedCarts(initialFilters);
+		setAppliedFilters(initialFilters);
 	}
 
 	async function handleSync() {
@@ -237,7 +240,8 @@ export default function AbandonedCartsPage() {
 			};
 
 			setFilters(next);
-			await loadAbandonedCarts(next);
+			setAppliedFilters(next);
+			await queryClient.invalidateQueries({ queryKey: queryKeys.abandonedCarts(next) });
 			setSuccessMessage('Sincronización completada.');
 		} catch (error) {
 			console.error(error);
@@ -265,7 +269,7 @@ export default function AbandonedCartsPage() {
 
 		const next = { ...filters, page: nextPage };
 		setFilters(next);
-		await loadAbandonedCarts(next);
+		setAppliedFilters(next);
 
 		window.scrollTo({
 			top: 0,
@@ -273,6 +277,8 @@ export default function AbandonedCartsPage() {
 		});
 	}
 
+	const data = abandonedCartsQuery.data || EMPTY_ABANDONED_CARTS_DATA;
+	const loading = abandonedCartsQuery.isLoading;
 	const carts = Array.isArray(data.carts) ? data.carts : [];
 	const stats = data.stats || {};
 	const pagination = data.pagination || { page: 1, totalPages: 1 };

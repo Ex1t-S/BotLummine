@@ -1026,3 +1026,29 @@
 		height: 38px;
 	}
 }
+
+.admin-main {
+	grid-template-rows: 56px minmax(0, 1fr);
+}
+
+.admin-topbar {
+	min-height: 56px;
+	max-height: none;
+	will-change: opacity, transform;
+}
+
+.admin-main.topbar-hidden .admin-topbar {
+	min-height: 56px;
+	max-height: none;
+	padding-top: 8px;
+	padding-bottom: 8px;
+	border-bottom-color: #e4e7ec;
+	opacity: 0;
+	transform: translateY(-100%);
+}
+
+@media (max-width: 900px) {
+	.admin-main {
+		grid-template-rows: 56px minmax(0, 1fr);
+	}
+}
