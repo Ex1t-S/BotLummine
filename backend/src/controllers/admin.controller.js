@@ -26,7 +26,10 @@ import {
 } from '../services/workspaces/workspace-feature-flags.service.js';
 import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { getShopifyClient } from '../services/shopify/client.js';
-import { completeWhatsAppEmbeddedSignup } from '../services/whatsapp/whatsapp-embedded-signup.service.js';
+import {
+	completeWhatsAppEmbeddedSignup,
+	validateWhatsAppChannelAccess,
+} from '../services/whatsapp/whatsapp-embedded-signup.service.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -1798,6 +1801,35 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				error: 'wabaId, phoneNumberId y accessToken son obligatorios.',
 			});
 		}
+
+		let validatedAccess = null;
+		try {
+			validatedAccess = await validateWhatsAppChannelAccess({
+				wabaId: data.wabaId,
+				phoneNumberId: data.phoneNumberId,
+				accessToken: data.accessToken,
+				graphVersion: data.graphVersion || undefined,
+			});
+		} catch (error) {
+			return res.status(400).json({
+				ok: false,
+				error: 'El access token no tiene permisos para leer ese WABA/numero de WhatsApp.',
+				details: error?.message || null,
+				metaCode: error?.metaCode || null,
+				metaSubcode: error?.metaSubcode || null,
+			});
+		}
+
+		data.displayPhoneNumber =
+			normalizeString(data.displayPhoneNumber) ||
+			normalizeString(validatedAccess?.phoneNumber?.display_phone_number) ||
+			null;
+		data.rawPayload = {
+			source: 'manual',
+			validatedAt: new Date().toISOString(),
+			waba: validatedAccess?.waba || null,
+			phoneNumber: validatedAccess?.phoneNumber || null,
+		};
 
 		if (!channelId) {
 			const existingPhone = await prisma.whatsAppChannel.findUnique({

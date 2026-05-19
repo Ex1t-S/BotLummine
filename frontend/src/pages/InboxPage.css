@@ -1367,12 +1367,24 @@
 	border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
+.inbox-attachment-file-card--pending {
+	background: rgba(245, 158, 11, 0.08);
+	border-color: rgba(245, 158, 11, 0.24);
+}
+
 .inbox-attachment-file-name {
 	font-size: 13px;
 	font-weight: 700;
 	color: #0f172a;
 	margin-bottom: 6px;
 	word-break: break-word;
+}
+
+.inbox-attachment-file-status {
+	margin-bottom: 6px;
+	color: #92400e;
+	font-size: 12px;
+	font-weight: 600;
 }
 
 .inbox-attachment-file-link {
@@ -3080,7 +3092,8 @@
 
 .dark .admin-shell .admin-content .inbox-chat-subtitle,
 .dark .admin-shell .admin-content .inbox-message-meta,
-.dark .admin-shell .admin-content .inbox-selected-file-size {
+.dark .admin-shell .admin-content .inbox-selected-file-size,
+.dark .admin-shell .admin-content .inbox-attachment-file-status {
 	color: var(--ui-muted, #aab3c2) !important;
 }
 

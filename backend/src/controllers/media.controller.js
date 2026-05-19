@@ -71,6 +71,28 @@ async function findInboxMediaMessage(fileName, workspaceId) {
 	});
 }
 
+function getInboxMediaPhoneNumberId(rawPayload = null) {
+	const direct = String(rawPayload?.attachment?.phoneNumberId || '').trim();
+	if (direct) return direct;
+
+	const entries = Array.isArray(rawPayload?.webhook?.entry) ? rawPayload.webhook.entry : [];
+	for (const entry of entries) {
+		const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+		for (const change of changes) {
+			const value = change?.value || {};
+			const phoneNumberId = String(
+				value?.metadata?.phone_number_id ||
+					value?.metadata?.phoneNumberId ||
+					''
+			).trim();
+
+			if (phoneNumberId) return phoneNumberId;
+		}
+	}
+
+	return '';
+}
+
 async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
 	const safeFileName = String(fileName || '').trim();
 	if (!safeFileName) return false;
@@ -84,14 +106,19 @@ async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
 		null;
 
 	if (!attachmentId) return false;
+	const phoneNumberId = getInboxMediaPhoneNumberId(message.rawPayload);
 
 	const metadata = await getWhatsAppMediaMetadata({
 		workspaceId: message.workspaceId,
 		attachmentId,
-		mimeType: message.attachmentMimeType || ''
+		mimeType: message.attachmentMimeType || '',
+		phoneNumberId
 	});
 
-	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, { workspaceId: message.workspaceId });
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, {
+		workspaceId: message.workspaceId,
+		phoneNumberId
+	});
 	const absolutePath = resolveInboxMediaAbsolutePath(safeFileName);
 
 	await fs.mkdir(path.dirname(absolutePath), { recursive: true });

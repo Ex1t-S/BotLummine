@@ -204,6 +204,53 @@ export async function getWhatsAppChannelForWorkspace(workspaceId) {
 	return null;
 }
 
+export async function getWhatsAppChannelByPhoneNumberId(phoneNumberId = '') {
+	const normalizedPhoneNumberId = normalizeWorkspaceId(phoneNumberId);
+	if (!normalizedPhoneNumberId) return null;
+
+	const channel = await prisma.whatsAppChannel.findFirst({
+		where: {
+			phoneNumberId: normalizedPhoneNumberId,
+			status: 'ACTIVE',
+		},
+	});
+
+	if (channel?.phoneNumberId && channel?.accessToken) {
+		return {
+			source: 'database',
+			workspaceId: channel.workspaceId,
+			graphVersion: channel.graphVersion || process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
+			wabaId: channel.wabaId,
+			phoneNumberId: channel.phoneNumberId,
+			displayPhoneNumber: channel.displayPhoneNumber || null,
+			accessToken: decryptSecret(channel.accessToken),
+			verifyToken: channel.verifyToken ? decryptSecret(channel.verifyToken) : process.env.WHATSAPP_VERIFY_TOKEN || '',
+		};
+	}
+
+	if (
+		process.env.WHATSAPP_PHONE_NUMBER_ID &&
+		String(process.env.WHATSAPP_PHONE_NUMBER_ID).trim() === normalizedPhoneNumberId &&
+		process.env.WHATSAPP_ACCESS_TOKEN
+	) {
+		return {
+			source: 'env',
+			workspaceId: DEFAULT_WORKSPACE_ID,
+			graphVersion: process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
+			wabaId:
+				process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ||
+				process.env.WHATSAPP_WABA_ID ||
+				'',
+			phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+			displayPhoneNumber: null,
+			accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+			verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || '',
+		};
+	}
+
+	return null;
+}
+
 export async function resolveWorkspaceIdFromPhoneNumberId(phoneNumberId = '') {
 	const normalizedPhoneNumberId = normalizeWorkspaceId(phoneNumberId);
 	if (!normalizedPhoneNumberId) return null;

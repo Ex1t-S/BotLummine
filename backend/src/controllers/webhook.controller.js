@@ -4,7 +4,10 @@ import { decryptSecret } from '../lib/secret-crypto.js';
 import { logger, maskPhone } from '../lib/logger.js';
 import { captureException, captureSecurityEvent } from '../lib/sentry.js';
 import { processInboundMessage } from '../services/conversation/chat.service.js';
-import { saveInboundWhatsAppMedia } from '../services/whatsapp/whatsapp-media.service.js';
+import {
+	buildPendingInboundMediaReference,
+	saveInboundWhatsAppMedia
+} from '../services/whatsapp/whatsapp-media.service.js';
 import { applyCampaignMessageStatusWebhook } from '../services/campaigns/whatsapp-campaign.service.js';
 import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
 import {
@@ -109,7 +112,12 @@ function extractContactProfileImageUrl(contactInfo = {}, message = {}, value = {
 	);
 }
 
-async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, workspaceId = null) {
+async function enrichInboundAttachmentMeta(
+	message = {},
+	attachmentMeta = {},
+	workspaceId = null,
+	phoneNumberId = ''
+) {
 	if (!attachmentMeta?.attachmentId) {
 		return attachmentMeta;
 	}
@@ -122,7 +130,8 @@ async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, wo
 			attachmentName: attachmentMeta.attachmentName || '',
 			messageType: attachmentMeta.attachmentType || message.type || 'media',
 			waId: message.from || '',
-			metaMessageId: message.id || ''
+			metaMessageId: message.id || '',
+			phoneNumberId
 		});
 
 		if (!savedMedia) {
@@ -139,16 +148,46 @@ async function enrichInboundAttachmentMeta(message = {}, attachmentMeta = {}, wo
 			attachmentSha256: attachmentMeta.attachmentSha256 || savedMedia.attachmentSha256 || null
 		};
 	} catch (error) {
+		const metaError = error?.response?.data?.error || {};
+		const pendingMedia = buildPendingInboundMediaReference({
+			attachmentId: attachmentMeta.attachmentId,
+			attachmentMimeType: attachmentMeta.attachmentMimeType || '',
+			attachmentName: attachmentMeta.attachmentName || '',
+			messageType: attachmentMeta.attachmentType || message.type || 'media',
+			metaMessageId: message.id || ''
+		});
+
 		logger.warn('webhook.media_download_failed', {
 			messageId: message.id || null,
 			from: maskPhone(message.from || ''),
 			attachmentId: attachmentMeta?.attachmentId || null,
-			error: error?.message || error
+			status: error?.response?.status || null,
+			code: metaError?.code || null,
+			subcode: metaError?.error_subcode || null,
+			error: metaError?.message || error?.message || error
 		});
 
 		return {
 			...attachmentMeta,
-			attachmentDownloadError: error?.message || 'No se pudo descargar el media entrante.'
+			attachmentUrl: pendingMedia?.attachmentUrl || null,
+			attachmentMimeType:
+				attachmentMeta.attachmentMimeType ||
+				pendingMedia?.attachmentMimeType ||
+				null,
+			attachmentName:
+				attachmentMeta.attachmentName ||
+				pendingMedia?.attachmentName ||
+				null,
+			attachmentStoredFileName: pendingMedia?.storedFileName || null,
+			attachmentSize: pendingMedia?.attachmentSize || null,
+			attachmentDownloadPending: Boolean(pendingMedia?.pendingDownload),
+			attachmentDownloadError:
+				metaError?.message ||
+				error?.message ||
+				'No se pudo descargar el media entrante.',
+			attachmentDownloadErrorStatus: error?.response?.status || null,
+			attachmentDownloadErrorCode: metaError?.code || null,
+			attachmentDownloadErrorSubcode: metaError?.error_subcode || null
 		};
 	}
 }
@@ -177,7 +216,12 @@ async function processInboundMessages(req, value = {}) {
 		const contactInfo = contacts.find((contact) => contact.wa_id === message.from);
 		const profileImageUrl = extractContactProfileImageUrl(contactInfo, message, value);
 		const baseAttachmentMeta = extractAttachmentMeta(message);
-		const attachmentMeta = await enrichInboundAttachmentMeta(message, baseAttachmentMeta, workspaceId);
+		const attachmentMeta = await enrichInboundAttachmentMeta(
+			message,
+			baseAttachmentMeta,
+			workspaceId,
+			phoneNumberId
+		);
 
 		await processInboundMessage({
 			workspaceId,
@@ -199,7 +243,12 @@ async function processInboundMessages(req, value = {}) {
 					url: attachmentMeta.attachmentUrl || null,
 					storageFileName: attachmentMeta.attachmentStoredFileName || null,
 					size: attachmentMeta.attachmentSize || null,
-					downloadError: attachmentMeta.attachmentDownloadError || null
+					phoneNumberId: phoneNumberId || null,
+					downloadPending: Boolean(attachmentMeta.attachmentDownloadPending),
+					downloadError: attachmentMeta.attachmentDownloadError || null,
+					downloadErrorStatus: attachmentMeta.attachmentDownloadErrorStatus || null,
+					downloadErrorCode: attachmentMeta.attachmentDownloadErrorCode || null,
+					downloadErrorSubcode: attachmentMeta.attachmentDownloadErrorSubcode || null
 				}
 			},
 			metaMessageId: message.id || null

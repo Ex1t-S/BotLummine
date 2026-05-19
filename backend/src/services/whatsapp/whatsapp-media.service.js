@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import axios from 'axios';
 import {
 	DEFAULT_WORKSPACE_ID,
+	getWhatsAppChannelByPhoneNumberId,
 	getWhatsAppChannelForWorkspace,
 	normalizeWorkspaceId
 } from '../workspaces/workspace-context.service.js';
@@ -29,9 +30,14 @@ function getPhoneNumberId() {
 	return normalizeString(process.env.WHATSAPP_PHONE_NUMBER_ID || '');
 }
 
-async function getMediaWorkspaceConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getMediaWorkspaceConfig(workspaceId = DEFAULT_WORKSPACE_ID, { phoneNumberId = '' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const channel = await getWhatsAppChannelForWorkspace(resolvedWorkspaceId).catch(() => null);
+	const channelByPhoneNumber = phoneNumberId
+		? await getWhatsAppChannelByPhoneNumberId(phoneNumberId).catch(() => null)
+		: null;
+	const channel =
+		channelByPhoneNumber ||
+		(await getWhatsAppChannelForWorkspace(resolvedWorkspaceId).catch(() => null));
 
 	return {
 		workspaceId: resolvedWorkspaceId,
@@ -84,7 +90,7 @@ function sanitizeFileName(value, fallback = 'file') {
 }
 
 function getExtensionFromMimeType(mimeType = '', fallback = '.bin') {
-	const normalized = normalizeString(mimeType).toLowerCase();
+	const normalized = normalizeString(mimeType).toLowerCase().split(';')[0].trim();
 
 	const known = {
 		'image/jpeg': '.jpg',
@@ -466,9 +472,10 @@ export async function saveLocalInboxMediaCopy({
 export async function getWhatsAppMediaMetadata({
 	workspaceId = DEFAULT_WORKSPACE_ID,
 	attachmentId,
-	mimeType = ''
+	mimeType = '',
+	phoneNumberId = ''
 }) {
-	const mediaConfig = await getMediaWorkspaceConfig(workspaceId);
+	const mediaConfig = await getMediaWorkspaceConfig(workspaceId, { phoneNumberId });
 	const accessToken = mediaConfig.accessToken;
 
 	if (!accessToken) {
@@ -508,9 +515,9 @@ export async function getWhatsAppMediaMetadata({
 
 export async function downloadWhatsAppMediaBuffer(
 	downloadUrl,
-	{ workspaceId = DEFAULT_WORKSPACE_ID } = {}
+	{ workspaceId = DEFAULT_WORKSPACE_ID, phoneNumberId = '' } = {}
 ) {
-	const mediaConfig = await getMediaWorkspaceConfig(workspaceId);
+	const mediaConfig = await getMediaWorkspaceConfig(workspaceId, { phoneNumberId });
 	const accessToken = mediaConfig.accessToken;
 
 	if (!accessToken) {
@@ -543,7 +550,8 @@ export async function saveInboundWhatsAppMedia({
 	attachmentName = '',
 	messageType = 'media',
 	waId = '',
-	metaMessageId = ''
+	metaMessageId = '',
+	phoneNumberId = ''
 }) {
 	const safeAttachmentId = normalizeString(attachmentId);
 
@@ -554,10 +562,11 @@ export async function saveInboundWhatsAppMedia({
 	const metadata = await getWhatsAppMediaMetadata({
 		workspaceId,
 		attachmentId: safeAttachmentId,
-		mimeType: attachmentMimeType
+		mimeType: attachmentMimeType,
+		phoneNumberId
 	});
 
-	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, { workspaceId });
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, { workspaceId, phoneNumberId });
 	const storageDir = await ensureInboundMediaDir();
 
 	const effectiveMimeType = normalizeString(
@@ -592,6 +601,46 @@ export async function saveInboundWhatsAppMedia({
 		storedAbsolutePath: absolutePath,
 		downloadSourceUrl: metadata.url,
 		waId: normalizeString(waId || '')
+	};
+}
+
+export function buildPendingInboundMediaReference({
+	attachmentId,
+	attachmentMimeType = '',
+	attachmentName = '',
+	messageType = 'media',
+	metaMessageId = ''
+}) {
+	const safeAttachmentId = normalizeString(attachmentId);
+
+	if (!safeAttachmentId) {
+		return null;
+	}
+
+	const effectiveMimeType = normalizeString(
+		attachmentMimeType ||
+			(String(messageType || '').toLowerCase() === 'sticker' ? 'image/webp' : '') ||
+			'application/octet-stream'
+	);
+	const storedFileName = buildStoredInboundFileName({
+		messageType,
+		mimeType: effectiveMimeType,
+		preferredFileName: attachmentName,
+		metaMessageId: metaMessageId || safeAttachmentId
+	});
+
+	return {
+		attachmentId: safeAttachmentId,
+		attachmentUrl: buildPublicInboxMediaUrl(storedFileName),
+		attachmentMimeType: effectiveMimeType,
+		attachmentName: buildReadableAttachmentName({
+			messageType,
+			mimeType: effectiveMimeType,
+			originalName: attachmentName
+		}),
+		attachmentSize: null,
+		storedFileName,
+		pendingDownload: true
 	};
 }
 

@@ -235,6 +235,46 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 	return Array.isArray(phoneNumbers?.data) ? phoneNumbers.data[0] : null;
 }
 
+export async function validateWhatsAppChannelAccess({
+	wabaId,
+	phoneNumberId,
+	accessToken,
+	graphVersion = getEmbeddedSignupGraphVersion(),
+}) {
+	const cleanWabaId = normalizeString(wabaId);
+	const cleanPhoneNumberId = normalizeString(phoneNumberId);
+	const cleanAccessToken = normalizeString(accessToken);
+
+	if (!cleanWabaId || !cleanPhoneNumberId || !cleanAccessToken) {
+		const error = new Error('wabaId, phoneNumberId y accessToken son obligatorios.');
+		error.status = 400;
+		throw error;
+	}
+
+	const waba = await graphGet(`/${cleanWabaId}`, {
+		accessToken: cleanAccessToken,
+		graphVersion,
+		operation: 'validate_manual_waba',
+		params: {
+			fields: 'id,name,account_review_status',
+		},
+	});
+	const phoneNumber = await resolvePhoneNumber({
+		wabaId: cleanWabaId,
+		phoneNumberId: cleanPhoneNumberId,
+		accessToken: cleanAccessToken,
+		graphVersion,
+	});
+
+	if (normalizeString(phoneNumber?.id) !== cleanPhoneNumberId) {
+		const error = new Error('El access token no devolvio el numero de WhatsApp indicado.');
+		error.status = 400;
+		throw error;
+	}
+
+	return { waba, phoneNumber };
+}
+
 async function resolveEmbeddedSignupAssets({
 	wabaId,
 	phoneNumberId,

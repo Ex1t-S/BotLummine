@@ -169,6 +169,16 @@ function getMediaKind(message = {}) {
 	return null;
 }
 
+function getAttachmentDownloadState(message = {}) {
+	const attachment = message.rawPayload?.attachment || {};
+	const downloadError = String(attachment.downloadError || '').trim();
+
+	return {
+		pending: Boolean(attachment.downloadPending || downloadError),
+		error: downloadError,
+	};
+}
+
 function shouldHideBodyBecauseItIsOnlyPlaceholder(message = {}) {
 	const body = String(message.body || '').trim();
 
@@ -410,8 +420,34 @@ function AttachmentPreview({ message }) {
 	const mediaKind = getMediaKind(message);
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
 	const attachmentName = String(message.attachmentName || '').trim();
+	const downloadState = getAttachmentDownloadState(message);
 
 	if (!mediaKind || !attachmentUrl) return null;
+
+	if (downloadState.pending) {
+		return (
+			<div className="inbox-attachment-preview">
+				<div className="inbox-attachment-file-card inbox-attachment-file-card--pending">
+					<div className="inbox-attachment-file-name">
+						{attachmentName || 'Archivo adjunto'}
+					</div>
+					{downloadState.error ? (
+						<div className="inbox-attachment-file-status">
+							No se pudo descargar automaticamente.
+						</div>
+					) : null}
+					<a
+						href={attachmentUrl}
+						target="_blank"
+						rel="noreferrer"
+						className="inbox-attachment-file-link"
+					>
+						Reintentar descarga
+					</a>
+				</div>
+			</div>
+		);
+	}
 
 	if (mediaKind === 'audio') {
 		return (
