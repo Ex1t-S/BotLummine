@@ -157,6 +157,32 @@ function normalizeRecipientStatus(status = '') {
 	return normalized || 'PENDING';
 }
 
+function formatRecipientStatus(status = '') {
+	const normalized = normalizeRecipientStatus(status);
+	if (normalized === 'READ') return 'Leido';
+	if (normalized === 'DELIVERED') return 'Entregado';
+	if (normalized === 'SENT') return 'Enviado';
+	if (normalized === 'FAILED') return 'Fallido';
+	if (normalized === 'SKIPPED') return 'Omitido';
+	if (normalized === 'PENDING') return 'Pendiente';
+	return normalized;
+}
+
+function formatRecipientErrorMessage(message = '') {
+	const normalized = String(message || '').trim();
+	const key = normalized.toLowerCase();
+
+	const labels = {
+		human_or_handoff_open: 'Omitido: conversacion abierta en atencion humana.',
+		recent_support_context: 'Omitido: conversacion reciente de soporte.',
+		campaign_cooldown_24h: 'Omitido: ya recibio una campana en las ultimas 24 h.',
+		campaign_source_cooldown_7d: 'Omitido: ya recibio una campana de este tipo en los ultimos 7 dias.',
+		opted_out: 'Omitido: contacto excluido de marketing.',
+	};
+
+	return labels[key] || normalized;
+}
+
 function buildRecipientMetrics(campaign = {}) {
 	const recipients = Array.isArray(campaign?.allRecipients)
 		? campaign.allRecipients
@@ -231,6 +257,8 @@ function recipientMatchesSearch(recipient = {}, search = '') {
 		recipient.contactPhone,
 		recipient.status,
 		recipient.errorMessage,
+		formatRecipientStatus(recipient.status),
+		formatRecipientErrorMessage(recipient.errorMessage),
 	]
 		.filter(Boolean)
 		.join(' ')
@@ -638,6 +666,7 @@ export default function CampaignRunsPanel({
 										<option value="DELIVERED">Entregados</option>
 										<option value="READ">Leidos</option>
 										<option value="FAILED">Fallidos</option>
+										<option value="SKIPPED">Omitidos</option>
 									</select>
 								</div>
 
@@ -663,7 +692,7 @@ export default function CampaignRunsPanel({
 								<strong>{formatCompactNumber(filteredRecipients.length)}</strong>
 								<span>
 									destinatario{filteredRecipients.length === 1 ? '' : 's'} en la vista actual
-									{statusFilter !== 'ALL' ? ` · filtro ${statusFilter}` : ''}
+									{statusFilter !== 'ALL' ? ` · filtro ${formatRecipientStatus(statusFilter)}` : ''}
 									{purchaseFilter !== 'ALL' ? ` · ${formatPurchaseFilter(purchaseFilter)}` : ''}
 									{search ? ' · búsqueda aplicada' : ''}
 								</span>
@@ -689,11 +718,11 @@ export default function CampaignRunsPanel({
 													<td data-label="Teléfono">{recipient.phone || recipient.contactPhone || '--'}</td>
 													<td data-label="Estado">
 														<span className={badgeClass(normalizeRecipientStatus(recipient.status))}>
-															{normalizeRecipientStatus(recipient.status)}
+															{formatRecipientStatus(recipient.status)}
 														</span>
 														{recipient.errorMessage ? (
 															<div className="campaign-recipient-error">
-																{recipient.errorCode ? `${recipient.errorCode}: ` : ''}{recipient.errorMessage}
+																{recipient.errorCode ? `${recipient.errorCode}: ` : ''}{formatRecipientErrorMessage(recipient.errorMessage)}
 															</div>
 														) : null}
 													</td>
