@@ -144,7 +144,7 @@ function getScopesFromDebugToken(debugToken = {}) {
 	return uniqueNormalizedStrings([...scopes, ...granularScopes]);
 }
 
-function assertEmbeddedSignupScopes(debugToken = {}) {
+function warnAboutEmbeddedSignupScopes(debugToken = {}) {
 	if (!debugToken?.data || debugToken.data.is_valid === false) return;
 
 	const scopes = getScopesFromDebugToken(debugToken);
@@ -153,17 +153,10 @@ function assertEmbeddedSignupScopes(debugToken = {}) {
 	const missingScopes = REQUIRED_EMBEDDED_SIGNUP_SCOPES.filter((scope) => !scopes.includes(scope));
 	if (!missingScopes.length) return;
 
-	const error = new Error(
-		`Meta devolvio un token sin permisos de WhatsApp (${missingScopes.join(', ')}). Revisa App Review/Advanced Access y el Config ID de Embedded Signup antes de volver a conectar.`
-	);
-	error.status = 400;
-	error.metaCode = 200;
-	error.graphOperation = 'validate_whatsapp_permissions';
-	error.details = {
+	logger.warn('whatsapp.embedded_signup.missing_expected_scopes', {
 		missingScopes,
 		receivedScopes: scopes,
-	};
-	throw error;
+	});
 }
 
 async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
@@ -376,7 +369,7 @@ export async function completeWhatsAppEmbeddedSignup({
 		});
 		return null;
 	});
-	assertEmbeddedSignupScopes(debugToken);
+	warnAboutEmbeddedSignupScopes(debugToken);
 
 	const signupAssets = await resolveEmbeddedSignupAssets({
 		wabaId,
