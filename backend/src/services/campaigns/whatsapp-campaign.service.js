@@ -36,16 +36,6 @@ function normalizeCampaignPhone(value = '') {
 const CAMPAIGN_ANY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const CAMPAIGN_SAME_SOURCE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
-function isOpenHumanConversation(conversation = null) {
-	if (!conversation) return false;
-	return Boolean(
-		conversation.queue === 'HUMAN' ||
-		conversation.queue === 'PAYMENT_REVIEW' ||
-		conversation.state?.needsHuman === true ||
-		conversation.state?.handoffReason
-	);
-}
-
 function isComplaintLikeSummary(value = '') {
 	return /(reclamo|devolucion|cambio|cancel|seguimiento|tracking|demora|no llega|fallado|vino mal|asesora|humano|comprobante)/i.test(
 		String(value || '')
@@ -71,17 +61,8 @@ async function buildCampaignSuppressionMap({
 				waId: true,
 				conversations: {
 					select: {
-						queue: true,
-						aiEnabled: true,
 						lastSummary: true,
 						lastMessageAt: true,
-						state: {
-							select: {
-								needsHuman: true,
-								handoffReason: true,
-								updatedAt: true,
-							}
-						}
 					},
 					orderBy: { updatedAt: 'desc' },
 					take: 1,
@@ -114,10 +95,6 @@ async function buildCampaignSuppressionMap({
 	for (const contact of contacts) {
 		const phone = normalizeCampaignPhone(contact.waId || '');
 		const conversation = contact.conversations?.[0] || null;
-		if (isOpenHumanConversation(conversation)) {
-			result.set(phone, 'human_or_handoff_open');
-			continue;
-		}
 		if (
 			conversation?.lastMessageAt &&
 			Date.now() - new Date(conversation.lastMessageAt).getTime() < CAMPAIGN_ANY_COOLDOWN_MS &&
@@ -1059,38 +1036,36 @@ async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, 
 		});
 	}
 
-	if (conversation.queue !== 'PAYMENT_REVIEW') {
-		await prisma.conversation.update({
-			where: { id: conversation.id },
-			data: {
-				queue: 'AUTO',
-				aiEnabled: true,
-			}
-		});
+	await prisma.conversation.update({
+		where: { id: conversation.id },
+		data: {
+			queue: 'AUTO',
+			aiEnabled: true,
+		}
+	});
 
-		await prisma.conversationState.upsert({
-			where: { conversationId: conversation.id },
-			update: {
-				customerName: contact.name || normalizedPhone,
-				needsHuman: false,
-				handoffReason: null,
-			},
-			create: {
-				conversationId: conversation.id,
-				customerName: contact.name || normalizedPhone,
-				interactionCount: 0,
-				interestedProducts: [],
-				objections: [],
-				needsHuman: false,
-				handoffReason: null,
-			}
-		});
-	}
+	await prisma.conversationState.upsert({
+		where: { conversationId: conversation.id },
+		update: {
+			customerName: contact.name || normalizedPhone,
+			needsHuman: false,
+			handoffReason: null,
+		},
+		create: {
+			conversationId: conversation.id,
+			customerName: contact.name || normalizedPhone,
+			interactionCount: 0,
+			interestedProducts: [],
+			objections: [],
+			needsHuman: false,
+			handoffReason: null,
+		}
+	});
 
 	return {
 		contactId: contact.id,
 		conversationId: conversation.id,
-		queue: conversation.queue === 'PAYMENT_REVIEW' ? 'PAYMENT_REVIEW' : 'AUTO',
+		queue: 'AUTO',
 	};
 }
 
