@@ -3,6 +3,19 @@ import { getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { logger } from '../../lib/logger.js';
 
 const GRAPH_TIMEOUT_MS = getHttpTimeoutMs('META_GRAPH_TIMEOUT_MS', 15000);
+const REQUIRED_EMBEDDED_SIGNUP_SCOPES = [
+	'whatsapp_business_management',
+	'whatsapp_business_messaging',
+];
+const PERMISSION_ERROR_PATTERN = /(\(#200\)|permissions? error|permission denied|requires?.*permission|missing.*permission)/i;
+const GRAPH_OPERATION_LABELS = {
+	exchange_code: 'canjear el codigo de Meta',
+	debug_token: 'validar el token de Meta',
+	read_waba: 'leer la WABA autorizada',
+	read_phone_number: 'leer el numero de WhatsApp',
+	list_phone_numbers: 'listar numeros de la WABA',
+	subscribe_waba_webhooks: 'suscribir la WABA a webhooks',
+};
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
@@ -51,21 +64,33 @@ function buildGraphUrl(path, graphVersion = getEmbeddedSignupGraphVersion()) {
 	return `https://graph.facebook.com/${graphVersion}${normalizedPath}`;
 }
 
-function normalizeGraphError(error, fallbackMessage = 'No se pudo completar la operacion contra Meta.') {
+function normalizeGraphError(error, fallbackMessage = 'No se pudo completar la operacion contra Meta.', context = {}) {
 	const apiError = error?.response?.data?.error;
-	const nextError = new Error(
+	const message = (
 		apiError?.message ||
 		error?.response?.data?.message ||
 		error?.message ||
 		fallbackMessage
 	);
+	const operation = normalizeString(context.operation);
+	const operationLabel = GRAPH_OPERATION_LABELS[operation] || operation;
+	const isPermissionError = apiError?.code === 200 || PERMISSION_ERROR_PATTERN.test(message);
+	const nextError = new Error(
+		isPermissionError
+			? `Meta rechazo la conexion por permisos al ${operationLabel || 'completar la operacion'}: ${message}. Revisa que la app tenga acceso avanzado a whatsapp_business_management y whatsapp_business_messaging, que el Config ID de Embedded Signup pertenezca a la misma app, y que el usuario sea administrador del Business/WABA que esta conectando.`
+			: operationLabel
+				? `Meta no pudo ${operationLabel}: ${message}`
+				: message
+	);
 	nextError.status = error?.response?.status || 502;
 	nextError.metaCode = apiError?.code || null;
 	nextError.metaSubcode = apiError?.error_subcode || null;
+	nextError.graphOperation = operation || null;
+	nextError.graphPath = context.graphPath || null;
 	return nextError;
 }
 
-async function graphGet(path, { accessToken, params = {}, graphVersion } = {}) {
+async function graphGet(path, { accessToken, params = {}, graphVersion, operation = '' } = {}) {
 	try {
 		const response = await axios.get(buildGraphUrl(path, graphVersion), {
 			params: {
@@ -76,11 +101,11 @@ async function graphGet(path, { accessToken, params = {}, graphVersion } = {}) {
 		});
 		return response.data;
 	} catch (error) {
-		throw normalizeGraphError(error);
+		throw normalizeGraphError(error, undefined, { operation, graphPath: path });
 	}
 }
 
-async function graphPost(path, { accessToken, data = {}, params = {}, graphVersion } = {}) {
+async function graphPost(path, { accessToken, data = {}, params = {}, graphVersion, operation = '' } = {}) {
 	try {
 		const response = await axios.post(buildGraphUrl(path, graphVersion), data, {
 			params: {
@@ -91,7 +116,7 @@ async function graphPost(path, { accessToken, data = {}, params = {}, graphVersi
 		});
 		return response.data;
 	} catch (error) {
-		throw normalizeGraphError(error);
+		throw normalizeGraphError(error, undefined, { operation, graphPath: path });
 	}
 }
 
@@ -109,6 +134,36 @@ function getWabaIdsFromDebugToken(debugToken = {}) {
 		.filter((item) => ['whatsapp_business_management', 'whatsapp_business_messaging'].includes(item?.scope))
 		.flatMap((item) => (Array.isArray(item?.target_ids) ? item.target_ids : []));
 	return uniqueNormalizedStrings(targetIds);
+}
+
+function getScopesFromDebugToken(debugToken = {}) {
+	const scopes = Array.isArray(debugToken?.data?.scopes) ? debugToken.data.scopes : [];
+	const granularScopes = Array.isArray(debugToken?.data?.granular_scopes)
+		? debugToken.data.granular_scopes.map((item) => item?.scope)
+		: [];
+	return uniqueNormalizedStrings([...scopes, ...granularScopes]);
+}
+
+function assertEmbeddedSignupScopes(debugToken = {}) {
+	if (!debugToken?.data || debugToken.data.is_valid === false) return;
+
+	const scopes = getScopesFromDebugToken(debugToken);
+	if (!scopes.length) return;
+
+	const missingScopes = REQUIRED_EMBEDDED_SIGNUP_SCOPES.filter((scope) => !scopes.includes(scope));
+	if (!missingScopes.length) return;
+
+	const error = new Error(
+		`Meta devolvio un token sin permisos de WhatsApp (${missingScopes.join(', ')}). Revisa App Review/Advanced Access y el Config ID de Embedded Signup antes de volver a conectar.`
+	);
+	error.status = 400;
+	error.metaCode = 200;
+	error.graphOperation = 'validate_whatsapp_permissions';
+	error.details = {
+		missingScopes,
+		receivedScopes: scopes,
+	};
+	throw error;
 }
 
 async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
@@ -147,13 +202,17 @@ async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
 		}
 	}
 
-	throw normalizeGraphError(lastError, 'No se pudo canjear el codigo de Meta.');
+	throw normalizeGraphError(lastError, 'No se pudo canjear el codigo de Meta.', {
+		operation: 'exchange_code',
+		graphPath: '/oauth/access_token',
+	});
 }
 
 async function debugAccessToken(accessToken) {
 	const appAccessToken = `${getMetaAppId()}|${getMetaAppSecret()}`;
 	return graphGet('/debug_token', {
 		accessToken: appAccessToken,
+		operation: 'debug_token',
 		params: { input_token: accessToken },
 	});
 }
@@ -163,6 +222,7 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 		return graphGet(`/${phoneNumberId}`, {
 			accessToken,
 			graphVersion,
+			operation: 'read_phone_number',
 			params: {
 				fields: 'id,display_phone_number,verified_name,code_verification_status,quality_rating',
 			},
@@ -172,6 +232,7 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 	const phoneNumbers = await graphGet(`/${wabaId}/phone_numbers`, {
 		accessToken,
 		graphVersion,
+		operation: 'list_phone_numbers',
 		params: {
 			fields: 'id,display_phone_number,verified_name,code_verification_status,quality_rating',
 			limit: 25,
@@ -201,6 +262,7 @@ async function resolveEmbeddedSignupAssets({
 		const waba = await graphGet(`/${cleanWabaId}`, {
 			accessToken,
 			graphVersion,
+			operation: 'read_waba',
 			params: {
 				fields: 'id,name,currency,timezone_id,message_template_namespace,account_review_status',
 			},
@@ -220,6 +282,7 @@ async function resolveEmbeddedSignupAssets({
 			const waba = await graphGet(`/${candidateWabaId}`, {
 				accessToken,
 				graphVersion,
+				operation: 'read_waba',
 				params: {
 					fields: 'id,name,currency,timezone_id,message_template_namespace,account_review_status',
 				},
@@ -313,6 +376,7 @@ export async function completeWhatsAppEmbeddedSignup({
 		});
 		return null;
 	});
+	assertEmbeddedSignupScopes(debugToken);
 
 	const signupAssets = await resolveEmbeddedSignupAssets({
 		wabaId,
@@ -331,6 +395,7 @@ export async function completeWhatsAppEmbeddedSignup({
 	const waba = signupAssets.waba || (await graphGet(`/${finalWabaId}`, {
 		accessToken,
 		graphVersion,
+		operation: 'read_waba',
 		params: {
 			fields: 'id,name,currency,timezone_id,message_template_namespace,account_review_status',
 		},
@@ -350,6 +415,7 @@ export async function completeWhatsAppEmbeddedSignup({
 	const subscription = await graphPost(`/${finalWabaId}/subscribed_apps`, {
 		accessToken,
 		graphVersion,
+		operation: 'subscribe_waba_webhooks',
 		data: {},
 	});
 

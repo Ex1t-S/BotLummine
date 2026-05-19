@@ -54,6 +54,11 @@ export function sanitizeLogData(input, depth = 0) {
 			name: input.name,
 			message: input.message,
 			status: input.status || input.statusCode || null,
+			metaCode: input.metaCode || null,
+			metaSubcode: input.metaSubcode || null,
+			graphOperation: input.graphOperation || null,
+			graphPath: input.graphPath || null,
+			details: input.details ? sanitizeLogData(input.details, depth + 1) : null,
 		};
 	}
 	if (Array.isArray(input)) {

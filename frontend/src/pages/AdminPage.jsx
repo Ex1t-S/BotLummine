@@ -1299,7 +1299,11 @@ export default function AdminPage({ defaultTab = '' }) {
 				dialogUrl.searchParams.set('override_default_response_type', 'true');
 				dialogUrl.searchParams.set('redirect_uri', callbackUri);
 				dialogUrl.searchParams.set('state', oauthState);
-				dialogUrl.searchParams.set('extras', JSON.stringify({ setup: {} }));
+				dialogUrl.searchParams.set('extras', JSON.stringify({
+					setup: {},
+					feature: 'whatsapp_embedded_signup',
+					sessionInfoVersion: '3'
+				}));
 				if (fallbackRedirectUri) dialogUrl.searchParams.set('fallback_redirect_uri', fallbackRedirectUri);
 
 				let popup = null;
