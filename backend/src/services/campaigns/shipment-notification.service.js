@@ -13,7 +13,8 @@ import {
 	getShippingStatusSearchTerms,
 	isDispatchedShippingStatus,
 } from '../common/shipping-status.js';
-import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
+import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
 const DEFAULT_DAYS_BACK = 14;
 const AUTO_LIMIT = 100;
@@ -803,57 +804,74 @@ async function createAndLaunchShipmentCampaign({
 		throw new Error('No hay pedidos despachados pendientes para notificar.');
 	}
 
-	const created = await createCampaignDraft({
+	const run = await getOrCreateDailyAutomationRun({
 		workspaceId: resolvedWorkspaceId,
-		name: normalizeString(name, `Aviso de despacho ${new Date().toISOString().slice(0, 10)}`),
-		templateId: template.id,
-		languageCode: template.language || 'es_AR',
-		sendComponents: safeArray(template?.rawPayload?.components),
-		recipients: candidatesToRecipients(usableCandidates, variableMapping),
-		audienceSource: 'shipment_dispatch',
-		audienceFilters: {
-			source: 'shipment_dispatch',
-			candidateKeys: usableCandidates.map((candidate) => candidate.notificationKey),
-			variableMapping: normalizeMapping(variableMapping),
-		},
-		notes: 'Aviso de pedido despachado.',
-		launchedByUserId,
+		type: AUTOMATION_RUN_TYPES.SHIPMENT_NOTIFICATION,
 	});
-	const campaignId = created?.campaign?.id;
 
-	if (campaignId) {
-		await launchCampaign(campaignId, { workspaceId: resolvedWorkspaceId });
-		const logRows = usableCandidates.map((candidate) => ({
+	try {
+		const created = await createOrAppendAutomationCampaignDraft({
 			workspaceId: resolvedWorkspaceId,
-			notificationKey: candidate.notificationKey,
-			source: candidate.source,
-			orderId: candidate.orderId || null,
-			orderNumber: candidate.orderNumber || null,
-			shipmentId: candidate.shipmentId || null,
-			campaignId,
-			recipientPhone: candidate.phone || null,
-			rawPayload: candidate.rawPayload || null,
-		}));
-		try {
-			await prisma.shipmentNotificationLog.createMany({
-				data: logRows,
-				skipDuplicates: true,
-			});
-		} catch (error) {
-			if (!isShipmentNotificationLogMissing(error)) throw error;
-			await ensureShipmentNotificationLogTable(resolvedWorkspaceId);
-			await prisma.shipmentNotificationLog.createMany({
-				data: logRows,
-				skipDuplicates: true,
-			});
-		}
-	}
+			automationRunId: run.id,
+			name: normalizeString(name, `Aviso de despacho ${run.runKey}`),
+			templateId: template.id,
+			languageCode: template.language || 'es_AR',
+			sendComponents: safeArray(template?.rawPayload?.components),
+			recipients: candidatesToRecipients(usableCandidates, variableMapping),
+			audienceSource: 'shipment_dispatch',
+			audienceFilters: {
+				source: 'shipment_dispatch',
+				candidateKeys: usableCandidates.map((candidate) => candidate.notificationKey),
+				variableMapping: normalizeMapping(variableMapping),
+			},
+			notes: 'Aviso de pedido despachado.',
+			launchedByUserId,
+		});
+		const campaignId = created?.campaign?.id || created?.campaignId;
 
-	return {
-		campaign: created?.campaign || null,
-		campaignId,
-		selectedCount: usableCandidates.length,
-	};
+		if (campaignId) {
+			if (Number(created?.pendingRecipients || created?.campaign?.pendingRecipients || 0) > 0) {
+				await launchCampaign(campaignId, { workspaceId: resolvedWorkspaceId });
+			}
+			const logRows = usableCandidates.map((candidate) => ({
+				workspaceId: resolvedWorkspaceId,
+				notificationKey: candidate.notificationKey,
+				source: candidate.source,
+				orderId: candidate.orderId || null,
+				orderNumber: candidate.orderNumber || null,
+				shipmentId: candidate.shipmentId || null,
+				campaignId,
+				automationRunId: run.id,
+				recipientPhone: candidate.phone || null,
+				rawPayload: candidate.rawPayload || null,
+			}));
+			try {
+				await prisma.shipmentNotificationLog.createMany({
+					data: logRows,
+					skipDuplicates: true,
+				});
+			} catch (error) {
+				if (!isShipmentNotificationLogMissing(error)) throw error;
+				await ensureShipmentNotificationLogTable(resolvedWorkspaceId);
+				await prisma.shipmentNotificationLog.createMany({
+					data: logRows,
+					skipDuplicates: true,
+				});
+			}
+		}
+
+		await touchAutomationRun(run.id, { status: 'OPEN' });
+
+		return {
+			campaign: created?.campaign || null,
+			automationRunId: run.id,
+			campaignId,
+			selectedCount: Number(created?.addedRecipients || usableCandidates.length),
+		};
+	} catch (error) {
+		await markAutomationRunError(run.id, error);
+		throw error;
+	}
 }
 
 export async function sendShipmentNotifications({

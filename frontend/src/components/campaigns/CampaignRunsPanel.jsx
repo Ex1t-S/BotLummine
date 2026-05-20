@@ -76,6 +76,7 @@ function getStatusTone(status = '') {
 	if (['PARTIAL'].includes(normalized)) return 'Parcial';
 	if (['FAILED'].includes(normalized)) return 'Con fallos';
 	if (['COMPLETED', 'SENT', 'FINISHED'].includes(normalized)) return 'Finalizada';
+	if (['OPEN'].includes(normalized)) return 'Sin fallos';
 
 	return 'Borrador';
 }
@@ -84,14 +85,26 @@ function buildCampaignActionModel(campaign = {}) {
 	const status = String(campaign?.status || '').toUpperCase();
 	const failedCount = Number(campaign?.failedCount || campaign?.failedRecipients || 0);
 	const pendingCount = Number(campaign?.pendingCount || campaign?.pendingRecipients || 0);
+	const isAutomationRun = campaign?.kind === 'automation_run';
 
 	if (['RUNNING', 'QUEUED'].includes(status)) {
+		if (isAutomationRun) {
+			return {
+				primaryLabel: 'En curso',
+				primaryDisabled: true,
+				primaryAction: null,
+				secondaryLabel: null,
+				secondaryAction: null,
+				helperText: 'La automatizacion diaria esta enviando los pendientes.',
+			};
+		}
+
 		return {
 			primaryLabel: 'En curso',
 			primaryDisabled: true,
 			primaryAction: null,
 			secondaryLabel: 'Cancelar campaña',
-			secondaryAction: 'pause',
+			secondaryAction: isAutomationRun ? null : 'pause',
 			helperText: 'La campaña ya está en ejecución o en cola. Solo podés cancelarla.',
 		};
 	}
@@ -132,6 +145,20 @@ function buildCampaignActionModel(campaign = {}) {
 			secondaryLabel: null,
 			secondaryAction: null,
 			helperText: 'La campaña ya terminó. Si querés repetirla, conviene crear una nueva a partir de este mismo template.',
+		};
+	}
+
+	if (isAutomationRun) {
+		return {
+			primaryLabel: failedCount > 0 ? 'Reintentar fallidos' : 'Sin acciones',
+			primaryDisabled: failedCount === 0,
+			primaryAction: failedCount > 0 ? 'resume' : null,
+			secondaryLabel: null,
+			secondaryAction: null,
+			helperText:
+				failedCount > 0
+					? 'La automatizacion tiene fallidos para reintentar sin tocar los omitidos.'
+					: 'No hay fallidos pendientes en esta automatizacion diaria.',
 		};
 	}
 
@@ -198,6 +225,7 @@ function buildRecipientMetrics(campaign = {}) {
 			read: getMetric(campaign, ['readCount']),
 			failed: getMetric(campaign, ['failedCount']),
 			pending: getMetric(campaign, ['pendingCount']),
+			skipped: getMetric(campaign, ['skippedCount', 'skippedRecipients']),
 		};
 	}
 
@@ -206,6 +234,7 @@ function buildRecipientMetrics(campaign = {}) {
 	let read = 0;
 	let failed = 0;
 	let pending = 0;
+	let skipped = 0;
 
 	for (const recipient of recipients) {
 		const status = normalizeRecipientStatus(recipient?.status);
@@ -233,6 +262,11 @@ function buildRecipientMetrics(campaign = {}) {
 			continue;
 		}
 
+		if (status === 'SKIPPED') {
+			skipped += 1;
+			continue;
+		}
+
 		pending += 1;
 	}
 
@@ -243,6 +277,7 @@ function buildRecipientMetrics(campaign = {}) {
 		read,
 		failed,
 		pending,
+		skipped,
 	};
 }
 
@@ -329,7 +364,8 @@ export default function CampaignRunsPanel({
 	tracking = {},
 }) {
 	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
-	const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
+	const selectedIsAutomationRun = selectedCampaign?.kind === 'automation_run';
+	const canDelete = selectedCampaign && !selectedIsAutomationRun && !['RUNNING', 'QUEUED'].includes(currentStatus);
 	const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
 	const actionModel = useMemo(
 		() => buildCampaignActionModel(selectedCampaign || {}),
@@ -554,6 +590,7 @@ export default function CampaignRunsPanel({
 									</button>
 								) : null}
 
+								{!selectedIsAutomationRun ? (
 								<button
 									type="button"
 									className="button danger"
@@ -567,6 +604,7 @@ export default function CampaignRunsPanel({
 								>
 									{deleteBusy ? 'Eliminando...' : 'Eliminar'}
 								</button>
+								) : null}
 							</div>
 
 							<div className="campaign-tracking-kpis">
@@ -598,6 +636,10 @@ export default function CampaignRunsPanel({
 								<div className="campaign-tracking-kpi">
 									<span>Pendientes</span>
 									<strong>{recipientMetrics.pending}</strong>
+								</div>
+								<div className="campaign-tracking-kpi">
+									<span>Omitidos</span>
+									<strong>{recipientMetrics.skipped || 0}</strong>
 								</div>
 								<div className="campaign-tracking-kpi">
 									<span>Respondieron</span>

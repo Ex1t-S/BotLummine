@@ -1141,7 +1141,7 @@ function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentS
 	if (accepted === 0 && failed > 0) {
 		return 'FAILED';
 	}
-	if (failed > 0 || skipped > 0) {
+	if (failed > 0) {
 		return 'PARTIAL';
 	}
 	return 'FINISHED';
@@ -1791,7 +1791,7 @@ function messageSuggestsCompletedPurchase(text = '') {
 	return positivePatterns.some((pattern) => pattern.test(normalized));
 }
 
-async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEFAULT_WORKSPACE_ID) {
+export async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEFAULT_WORKSPACE_ID) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedRecipients = safeArray(recipients);
 	const recipientsWithDispatch = normalizedRecipients.filter((recipient) => Boolean(getRecipientDispatchAt(recipient)));
@@ -2153,7 +2153,8 @@ export async function createCampaignDraft({
 	audienceSource = null,
 	audienceFilters = null,
 	notes = null,
-	launchedByUserId = null
+	launchedByUserId = null,
+	automationRunId = null
 }) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const template = templateId
@@ -2273,6 +2274,7 @@ export async function createCampaignDraft({
 			audienceSource: normalizedAudienceSource,
 			notes: notes || null,
 			launchedByUserId,
+			automationRunId,
 			totalRecipients: recipientRows.length,
 			pendingRecipients,
 			skippedRecipients,
@@ -2292,6 +2294,237 @@ export async function createCampaignDraft({
 
 	return {
 		campaign
+	};
+}
+
+async function buildAdditionalCampaignRecipientRows(campaign, {
+	recipients = [],
+	contactIds = [],
+	includeAllContacts = false,
+	audienceSource = null,
+	audienceFilters = null
+} = {}) {
+	const template = campaign.templateLocalId
+		? await getTemplateOrThrow(campaign.templateLocalId, { workspaceId: campaign.workspaceId })
+		: null;
+
+	if (!template) {
+		throw new Error('La campana no tiene plantilla asociada.');
+	}
+
+	const normalizedAudienceSource = normalizeAudienceSource(campaign.audienceSource || audienceSource || 'manual');
+	const excludeSentTemplate =
+		audienceFilters?.excludeSentTemplate === true ||
+		audienceFilters?.excludeSentTemplate === 'true' ||
+		audienceFilters?.excludeSentTemplate === '1';
+	const alreadySentTemplatePhones = excludeSentTemplate
+		? await getPhonesAlreadySentTemplate({
+				workspaceId: campaign.workspaceId,
+				templateName: audienceFilters?.sentTemplateName || template.name,
+				templateNames: audienceFilters?.sentTemplateNames || []
+		  })
+		: new Set();
+	const resolvedRecipients = await resolveCampaignRecipients({
+		workspaceId: campaign.workspaceId,
+		recipients,
+		contactIds,
+		includeAllContacts,
+		audienceSource: normalizedAudienceSource,
+		audienceFilters
+	});
+
+	if (!resolvedRecipients.length) {
+		throw new Error('No hay destinatarios validos para agregar a la campana.');
+	}
+
+	const suppressionByPhone = await buildCampaignSuppressionMap({
+		workspaceId: campaign.workspaceId,
+		phones: resolvedRecipients.map((recipient) => recipient.phone || recipient.waId || ''),
+		audienceSource: normalizedAudienceSource,
+	});
+	const componentsForRender = safeArray(campaign.defaultComponents).length
+		? safeArray(campaign.defaultComponents)
+		: safeArray(template?.rawPayload?.components);
+	const recipientRows = [];
+
+	for (const recipient of resolvedRecipients) {
+		const normalizedPhone = normalizeCampaignPhone(recipient.phone || recipient.waId || '');
+		if (!normalizedPhone || alreadySentTemplatePhones.has(normalizedPhone)) continue;
+
+		const variables = buildRecipientVariables({
+			...recipient,
+			phone: normalizedPhone,
+			waId: normalizedPhone
+		});
+		const personalized = renderTemplatePreviewFromComponents(componentsForRender, variables);
+		const suppressionReason = suppressionByPhone.get(normalizedPhone) || null;
+		const shouldSkipRecipient =
+			Boolean(suppressionReason) ||
+			(normalizedAudienceSource !== 'manual' && recipient.isOptedOut);
+
+		recipientRows.push({
+			workspaceId: campaign.workspaceId,
+			campaignId: campaign.id,
+			phone: normalizedPhone,
+			waId: normalizedPhone,
+			contactId: recipient.contactId || null,
+			contactName: normalizeString(recipient.contactName || '') || normalizedPhone,
+			externalKey: recipient.externalKey || null,
+			variables,
+			renderedComponents: personalized.components,
+			renderedPreviewText: personalized.previewText,
+			status: shouldSkipRecipient ? 'SKIPPED' : 'PENDING',
+			errorMessage: shouldSkipRecipient
+				? normalizeString(suppressionReason || recipient.optOutReason, 'opted_out')
+				: null
+		});
+	}
+
+	if (!recipientRows.length) {
+		throw new Error('Despues de normalizar los contactos no quedo ningun destinatario usable.');
+	}
+
+	return recipientRows;
+}
+
+export async function appendCampaignRecipients(campaignId, {
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	recipients = [],
+	contactIds = [],
+	includeAllContacts = false,
+	audienceSource = null,
+	audienceFilters = null
+} = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const campaign = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
+	});
+
+	if (!campaign) {
+		throw new Error('No se encontro la campana.');
+	}
+	if (campaign.status === 'CANCELED') {
+		throw new Error('La campana esta cancelada y no puede recibir destinatarios.');
+	}
+
+	const recipientRows = await buildAdditionalCampaignRecipientRows(campaign, {
+		recipients,
+		contactIds,
+		includeAllContacts,
+		audienceSource,
+		audienceFilters
+	});
+	const keys = [...new Set(recipientRows.map((row) => normalizeString(row.externalKey || '')).filter(Boolean))];
+	const existingRows = keys.length
+		? await prisma.campaignRecipient.findMany({
+				where: {
+					workspaceId: resolvedWorkspaceId,
+					campaignId,
+					externalKey: { in: keys }
+				},
+				select: { externalKey: true }
+		  })
+		: [];
+	const existingKeys = new Set(existingRows.map((row) => normalizeString(row.externalKey || '')));
+	const rowsToCreate = recipientRows.filter(
+		(row) => !row.externalKey || !existingKeys.has(normalizeString(row.externalKey || ''))
+	);
+
+	let insertedCount = 0;
+	if (rowsToCreate.length) {
+		const created = await prisma.campaignRecipient.createMany({
+			data: rowsToCreate,
+			skipDuplicates: true
+		});
+		insertedCount = Number(created?.count || 0);
+	}
+
+	const refreshed = await refreshCampaignCounters(campaignId);
+
+	return {
+		campaign: refreshed || campaign,
+		addedRecipients: insertedCount,
+		duplicateRecipients: Math.max(0, recipientRows.length - insertedCount),
+		pendingRecipients: rowsToCreate.filter((row) => row.status === 'PENDING').length,
+		skippedRecipients: rowsToCreate.filter((row) => row.status === 'SKIPPED').length,
+	};
+}
+
+export async function createOrAppendAutomationCampaignDraft({
+	workspaceId = DEFAULT_WORKSPACE_ID,
+	automationRunId,
+	name,
+	templateId,
+	templateName,
+	languageCode,
+	sendComponents = [],
+	recipients = [],
+	contactIds = [],
+	includeAllContacts = false,
+	audienceSource = null,
+	audienceFilters = null,
+	notes = null,
+	launchedByUserId = null
+} = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const existingCampaign = automationRunId
+		? await prisma.campaign.findFirst({
+				where: {
+					workspaceId: resolvedWorkspaceId,
+					automationRunId,
+					status: { not: 'CANCELED' }
+				},
+				orderBy: [{ createdAt: 'asc' }]
+		  })
+		: null;
+
+	if (existingCampaign) {
+		const appended = await appendCampaignRecipients(existingCampaign.id, {
+			workspaceId: resolvedWorkspaceId,
+			recipients,
+			contactIds,
+			includeAllContacts,
+			audienceSource,
+			audienceFilters
+		});
+
+		return {
+			...appended,
+			campaignId: existingCampaign.id,
+			appended: true,
+		};
+	}
+
+	const created = await createCampaignDraft({
+		workspaceId: resolvedWorkspaceId,
+		name,
+		templateId,
+		templateName,
+		languageCode,
+		sendComponents,
+		recipients,
+		contactIds,
+		includeAllContacts,
+		audienceSource,
+		audienceFilters,
+		notes,
+		launchedByUserId,
+		automationRunId
+	});
+	const pendingRecipients = Number(created?.campaign?.pendingRecipients || 0);
+	const skippedRecipients = Number(created?.campaign?.skippedRecipients || 0);
+	const campaign = pendingRecipients
+		? created.campaign
+		: (await refreshCampaignCounters(created.campaign.id)) || created.campaign;
+
+	return {
+		campaign,
+		campaignId: campaign.id,
+		addedRecipients: Number(campaign.totalRecipients || 0),
+		duplicateRecipients: 0,
+		pendingRecipients,
+		skippedRecipients,
+		appended: false,
 	};
 }
 
@@ -2428,7 +2661,7 @@ export async function retryFailedCampaignRecipients(campaignId, { workspaceId = 
 			workspaceId: resolvedWorkspaceId,
 			campaignId,
 			status: {
-				in: ['FAILED', 'SKIPPED', 'PENDING']
+				in: ['FAILED', 'PENDING']
 			}
 		},
 		data: {

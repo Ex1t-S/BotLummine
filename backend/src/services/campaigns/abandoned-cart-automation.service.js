@@ -9,7 +9,8 @@ import {
 } from '../workspaces/workspace-feature-flags.service.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { filterRecoverableAbandonedCarts } from './campaign-attribution.service.js';
-import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
+import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
 const DEFAULT_INTERVAL_MINUTES = 30;
 const DEFAULT_MIN_CART_AGE_MINUTES = 60;
@@ -427,6 +428,7 @@ async function findAutomationCandidates(setting) {
 				where: {
 					workspaceId: setting.workspaceId,
 					checkoutId: { in: checkoutIds },
+					campaignId: { not: null },
 				},
 				select: { checkoutId: true },
 			});
@@ -437,6 +439,7 @@ async function findAutomationCandidates(setting) {
 				where: {
 					workspaceId: setting.workspaceId,
 					checkoutId: { in: checkoutIds },
+					campaignId: { not: null },
 				},
 				select: { checkoutId: true },
 			});
@@ -511,41 +514,64 @@ async function claimCandidateLogs(setting, candidates = []) {
 async function createAndLaunchAutomationCampaign(setting, carts = [], { launchedByUserId = null } = {}) {
 	const filters = normalizeFilters(setting.filters || {});
 	const checkoutIds = carts.map((cart) => normalizeString(cart.checkoutId)).filter(Boolean);
-	const created = await createCampaignDraft({
+	const run = await getOrCreateDailyAutomationRun({
 		workspaceId: setting.workspaceId,
-		name: `Automatizacion carritos ${new Date().toISOString().slice(0, 10)}`,
-		templateId: setting.templateLocalId,
-		languageCode: setting.templateLanguage || 'es_AR',
-		audienceSource: 'abandoned_carts',
-		audienceFilters: {
-			...filters,
-			status: 'NEW',
-			checkoutIds,
-			limit: checkoutIds.length,
-			variableMapping: filters.variableMapping || {},
-			manualVariables: filters.manualVariables || {},
-		},
-		notes: 'Automatizacion horaria de carritos abandonados.',
-		launchedByUserId,
+		type: AUTOMATION_RUN_TYPES.ABANDONED_CART,
 	});
-	const campaignId = created?.campaign?.id || null;
 
-	if (campaignId) {
-		await prisma.abandonedCartAutomationLog.updateMany({
+	try {
+		const created = await createOrAppendAutomationCampaignDraft({
+			workspaceId: setting.workspaceId,
+			automationRunId: run.id,
+			name: `Automatizacion carritos ${run.runKey}`,
+			templateId: setting.templateLocalId,
+			languageCode: setting.templateLanguage || 'es_AR',
+			audienceSource: 'abandoned_carts',
+			audienceFilters: {
+				...filters,
+				status: 'NEW',
+				checkoutIds,
+				limit: checkoutIds.length,
+				variableMapping: filters.variableMapping || {},
+				manualVariables: filters.manualVariables || {},
+			},
+			notes: 'Automatizacion horaria de carritos abandonados.',
+			launchedByUserId,
+		});
+		const campaignId = created?.campaign?.id || created?.campaignId || null;
+
+		if (campaignId) {
+			await prisma.abandonedCartAutomationLog.updateMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					checkoutId: { in: checkoutIds },
+					campaignId: null,
+				},
+				data: { campaignId, automationRunId: run.id },
+			});
+			if (Number(created?.pendingRecipients || created?.campaign?.pendingRecipients || 0) > 0) {
+				await launchCampaign(campaignId, { workspaceId: setting.workspaceId });
+			}
+		}
+
+		await touchAutomationRun(run.id, { status: 'OPEN' });
+
+		return {
+			automationRunId: run.id,
+			campaignId,
+			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
+		};
+	} catch (error) {
+		await prisma.abandonedCartAutomationLog.deleteMany({
 			where: {
 				workspaceId: setting.workspaceId,
 				checkoutId: { in: checkoutIds },
 				campaignId: null,
 			},
-			data: { campaignId },
 		});
-		await launchCampaign(campaignId, { workspaceId: setting.workspaceId });
+		await markAutomationRunError(run.id, error);
+		throw error;
 	}
-
-	return {
-		campaignId,
-		selectedCount: Number(created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
-	};
 }
 
 export async function runAbandonedCartAutomation({

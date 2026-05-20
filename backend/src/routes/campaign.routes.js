@@ -12,12 +12,15 @@ import {
 	renderTemplatePreviewController,
 	previewAbandonedCartAudienceController,
 	listCampaignsController,
+	listAutomationRunsController,
+	getAutomationRunController,
 	getCampaignController,
 	createCampaignController,
 	launchCampaignController,
 	cancelCampaignController,
 	deleteCampaignController,
 	retryFailedCampaignRecipientsController,
+	retryFailedAutomationRunController,
 	dispatchTickController,
 	getCampaignStatsController,
 	listCampaignSchedulesController,
@@ -71,6 +74,9 @@ router.get('/shipment-notifications/settings', getShipmentNotificationSettingsCo
 router.patch('/shipment-notifications/settings', updateShipmentNotificationSettingsController);
 router.get('/shipment-notifications/candidates', listShipmentNotificationCandidatesController);
 router.post('/shipment-notifications/send', sendShipmentNotificationsController);
+router.get('/automation-runs', listAutomationRunsController);
+router.get('/automation-runs/:runId', getAutomationRunController);
+router.post('/automation-runs/:runId/retry-failed', retryFailedAutomationRunController);
 
 router.get('/', listCampaignsController);
 router.post('/', createCampaignController);

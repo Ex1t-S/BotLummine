@@ -44,6 +44,16 @@ export async function fetchCampaigns(params = {}) {
 	return unwrap(response);
 }
 
+export async function fetchAutomationRuns(params = {}) {
+	const response = await api.get('/campaigns/automation-runs', { params });
+	return unwrap(response);
+}
+
+export async function fetchAutomationRunDetail(runId, params = {}) {
+	const response = await api.get(`/campaigns/automation-runs/${runId}`, { params });
+	return unwrap(response);
+}
+
 export async function fetchCampaignDetail(campaignId) {
 	const response = await api.get(`/campaigns/${campaignId}`);
 	return unwrap(response);
@@ -71,6 +81,11 @@ export async function pauseCampaign(campaignId) {
 
 export async function resumeCampaign(campaignId) {
 	const response = await api.post(`/campaigns/${campaignId}/retry-failed`);
+	return unwrap(response);
+}
+
+export async function resumeAutomationRun(runId) {
+	const response = await api.post(`/campaigns/automation-runs/${runId}/retry-failed`);
 	return unwrap(response);
 }
 

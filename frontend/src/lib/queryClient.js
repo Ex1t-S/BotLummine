@@ -11,7 +11,9 @@ export const queryKeys = {
 		overview: ['campaigns', 'overview'],
 		templates: (filters = {}) => ['campaigns', 'templates', filters],
 		runs: (filters = {}) => ['campaigns', 'runs', filters],
+		automationRuns: (filters = {}) => ['campaigns', 'automation-runs', filters],
 		detail: (campaignId) => ['campaigns', 'detail', campaignId],
+		automationRunDetail: (runId) => ['campaigns', 'automation-run-detail', runId],
 		schedules: ['campaigns', 'schedules'],
 	},
 };

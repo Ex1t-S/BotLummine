@@ -10,6 +10,8 @@ import {
 	deleteTemplate,
 	dispatchCampaign,
 	fetchAbandonedCartAutomationSettings,
+	fetchAutomationRunDetail,
+	fetchAutomationRuns,
 	fetchCampaignOverview,
 	fetchCampaignSchedules,
 	fetchCampaigns,
@@ -21,6 +23,7 @@ import {
 	previewAbandonedCartAudience,
 	previewCampaignSchedule,
 	purgeDeletedTemplates,
+	resumeAutomationRun,
 	resumeCampaign,
 	runAbandonedCartAutomationNow,
 	runCampaignScheduleNow,
@@ -124,6 +127,35 @@ function shouldPollCampaignStatusUpdates(campaign = {}) {
 	return sent > terminal || delivered > read;
 }
 
+function getAutomationRunCollection(data) {
+	if (Array.isArray(data)) return data;
+	return data?.runs || data?.items || [];
+}
+
+function isAutomationAudienceSource(source = '') {
+	return ['abandoned_carts', 'pending_payment', 'shipment_dispatch'].includes(
+		String(source || '').trim().toLowerCase()
+	);
+}
+
+function normalizeTrackingItem(item = {}, kind = 'campaign') {
+	return {
+		...item,
+		kind: item.kind || kind,
+	};
+}
+
+function buildTrackingItems(automationData, campaignData) {
+	const automationRuns = getAutomationRunCollection(automationData).map((run) =>
+		normalizeTrackingItem(run, 'automation_run')
+	);
+	const manualCampaigns = getCampaignCollection(campaignData)
+		.filter((campaign) => !campaign?.automationRunId && !isAutomationAudienceSource(campaign?.audienceSource))
+		.map((campaign) => normalizeTrackingItem(campaign, 'campaign'));
+
+	return [...automationRuns, ...manualCampaigns];
+}
+
 function normalizeRecipientStatus(status = '') {
 	const normalized = String(status || '').trim().toUpperCase();
 
@@ -148,6 +180,7 @@ function buildRecipientMetrics(recipients = [], fallbackCampaign = {}) {
 			read: Number(fallbackCampaign?.readCount) || 0,
 			failed: Number(fallbackCampaign?.failedCount) || 0,
 			pending: Number(fallbackCampaign?.pendingCount) || 0,
+			skipped: Number(fallbackCampaign?.skippedCount || fallbackCampaign?.skippedRecipients) || 0,
 		};
 	}
 
@@ -156,6 +189,7 @@ function buildRecipientMetrics(recipients = [], fallbackCampaign = {}) {
 	let read = 0;
 	let failed = 0;
 	let pending = 0;
+	let skipped = 0;
 
 	for (const recipient of recipients) {
 		const status = normalizeRecipientStatus(recipient?.status);
@@ -183,6 +217,11 @@ function buildRecipientMetrics(recipients = [], fallbackCampaign = {}) {
 			continue;
 		}
 
+		if (status === 'SKIPPED') {
+			skipped += 1;
+			continue;
+		}
+
 		pending += 1;
 	}
 
@@ -193,6 +232,7 @@ function buildRecipientMetrics(recipients = [], fallbackCampaign = {}) {
 		read,
 		failed,
 		pending,
+		skipped,
 	};
 }
 
@@ -268,6 +308,31 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		refetchIntervalInBackground: true,
 	});
 
+	const automationRunsQuery = useQuery({
+		queryKey: queryKeys.campaigns.automationRuns(),
+		queryFn: () => fetchAutomationRuns(),
+		enabled: needsCampaignRuns,
+		placeholderData: keepPreviousData,
+		...queryPresets.campaigns,
+		refetchInterval: (query) => {
+			if (!needsCampaignRuns) return false;
+			const runs = getAutomationRunCollection(query.state.data);
+			return runs.some((run) => shouldPollCampaignStatusUpdates(run))
+				? CAMPAIGN_POLL_INTERVAL_MS
+				: false;
+		},
+		refetchIntervalInBackground: true,
+	});
+
+	const trackingItems = useMemo(
+		() => buildTrackingItems(automationRunsQuery.data, campaignsQuery.data),
+		[automationRunsQuery.data, campaignsQuery.data]
+	);
+	const selectedTrackingItem = useMemo(
+		() => trackingItems.find((item) => item.id === selectedCampaignId) || null,
+		[trackingItems, selectedCampaignId]
+	);
+
 	const schedulesQuery = useQuery({
 		queryKey: queryKeys.campaigns.schedules,
 		queryFn: fetchCampaignSchedules,
@@ -314,19 +379,23 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 
 	const campaignDetailQuery = useQuery({
 		queryKey: [
-			...queryKeys.campaigns.detail(selectedCampaignId),
+			...(selectedTrackingItem?.kind === 'automation_run'
+				? queryKeys.campaigns.automationRunDetail(selectedCampaignId)
+				: queryKeys.campaigns.detail(selectedCampaignId)),
 			CAMPAIGN_RECIPIENT_FETCH_SIZE,
 		],
 		queryFn: async () => {
-			const response = await api.get(`/campaigns/${selectedCampaignId}`, {
-				params: {
-					page: 1,
-					pageSize: CAMPAIGN_RECIPIENT_FETCH_SIZE,
-				},
-			});
+			const params = {
+				page: 1,
+				pageSize: CAMPAIGN_RECIPIENT_FETCH_SIZE,
+			};
+			if (selectedTrackingItem?.kind === 'automation_run') {
+				return fetchAutomationRunDetail(selectedCampaignId, params);
+			}
+			const response = await api.get(`/campaigns/${selectedCampaignId}`, { params });
 			return response.data;
 		},
-		enabled: Boolean(selectedCampaignId),
+		enabled: Boolean(selectedCampaignId && selectedTrackingItem),
 		placeholderData: keepPreviousData,
 		...queryPresets.campaigns,
 		refetchInterval: (query) => {
@@ -338,7 +407,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	});
 
 	const templates = useMemo(() => getTemplateCollection(templatesQuery.data), [templatesQuery.data]);
-	const campaigns = useMemo(() => getCampaignCollection(campaignsQuery.data), [campaignsQuery.data]);
+	const campaigns = trackingItems;
 	const schedules = useMemo(() => {
 		const data = schedulesQuery.data;
 		if (Array.isArray(data)) return data;
@@ -391,6 +460,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 			readCount: metrics.read,
 			failedCount: metrics.failed,
 			pendingCount: metrics.pending,
+			skippedCount: metrics.skipped,
 		};
 	}, [campaignDetailQuery.data, campaigns, selectedCampaignId]);
 
@@ -404,7 +474,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	}, [templates, selectedTemplate]);
 
 	useEffect(() => {
-		if (!selectedCampaignId && campaigns.length) {
+		if ((!selectedCampaignId || !campaigns.some((campaign) => campaign.id === selectedCampaignId)) && campaigns.length) {
 			setSelectedCampaignId(campaigns[0].id);
 		}
 	}, [campaigns, selectedCampaignId]);
@@ -420,6 +490,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.overview });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.templates() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.runs() });
+		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.automationRuns() });
 		queryClient.invalidateQueries({ queryKey: queryKeys.campaigns.schedules });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'abandoned-cart-automation'] });
 		queryClient.invalidateQueries({ queryKey: ['campaigns', 'pending-payment-automation'] });
@@ -431,6 +502,12 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 			});
 			queryClient.invalidateQueries({
 				queryKey: queryKeys.campaigns.detail(nextCampaignId),
+			});
+			queryClient.invalidateQueries({
+				queryKey: [...queryKeys.campaigns.automationRunDetail(nextCampaignId), CAMPAIGN_RECIPIENT_FETCH_SIZE],
+			});
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.campaigns.automationRunDetail(nextCampaignId),
 			});
 		}
 	}
@@ -754,6 +831,10 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 
 	const actionMutation = useMutation({
 		mutationFn: async ({ type, campaignId }) => {
+			const item = trackingItems.find((entry) => entry.id === campaignId) || null;
+			const isAutomationRun = item?.kind === 'automation_run';
+			if (isAutomationRun && type === 'resume') return resumeAutomationRun(campaignId);
+			if (isAutomationRun) return null;
 			if (type === 'dispatch') return dispatchCampaign(campaignId);
 			if (type === 'pause') return pauseCampaign(campaignId);
 			if (type === 'resume') return resumeCampaign(campaignId);
@@ -809,6 +890,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 			overview: overviewQuery,
 			templates: templatesQuery,
 			campaigns: campaignsQuery,
+			automationRuns: automationRunsQuery,
 			campaignDetail: campaignDetailQuery,
 			schedules: schedulesQuery,
 			abandonedCartAutomation: abandonedCartAutomationQuery,

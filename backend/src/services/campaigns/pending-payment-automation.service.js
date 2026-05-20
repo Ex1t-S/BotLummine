@@ -7,7 +7,8 @@ import {
 } from '../workspaces/workspace-feature-flags.service.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
-import { createCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
+import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_MIN_ORDER_AGE_MINUTES = 120;
@@ -417,39 +418,62 @@ async function claimCandidateLogs(setting, candidates = []) {
 async function createAndLaunchAutomationCampaign(setting, orders = [], { launchedByUserId = null } = {}) {
 	const filters = normalizeFilters(setting.filters || {});
 	const orderKeys = orders.map(getOrderKey).filter(Boolean);
-	const created = await createCampaignDraft({
+	const run = await getOrCreateDailyAutomationRun({
 		workspaceId: setting.workspaceId,
-		name: `Automatizacion pagos pendientes ${new Date().toISOString().slice(0, 10)}`,
-		templateId: setting.templateLocalId,
-		languageCode: setting.templateLanguage || 'es_AR',
-		audienceSource: 'pending_payment',
-		audienceFilters: {
-			...filters,
-			variableMapping: normalizeMapping(setting.variableMapping || {}),
-			orderKeys,
-			limit: orderKeys.length,
-		},
-		notes: 'Automatizacion de pagos pendientes por edad de pedido.',
-		launchedByUserId,
+		type: AUTOMATION_RUN_TYPES.PENDING_PAYMENT,
 	});
-	const campaignId = created?.campaign?.id || null;
 
-	if (campaignId) {
-		await prisma.pendingPaymentAutomationLog.updateMany({
+	try {
+		const created = await createOrAppendAutomationCampaignDraft({
+			workspaceId: setting.workspaceId,
+			automationRunId: run.id,
+			name: `Automatizacion pagos pendientes ${run.runKey}`,
+			templateId: setting.templateLocalId,
+			languageCode: setting.templateLanguage || 'es_AR',
+			audienceSource: 'pending_payment',
+			audienceFilters: {
+				...filters,
+				variableMapping: normalizeMapping(setting.variableMapping || {}),
+				orderKeys,
+				limit: orderKeys.length,
+			},
+			notes: 'Automatizacion de pagos pendientes por edad de pedido.',
+			launchedByUserId,
+		});
+		const campaignId = created?.campaign?.id || created?.campaignId || null;
+
+		if (campaignId) {
+			await prisma.pendingPaymentAutomationLog.updateMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					orderKey: { in: orderKeys },
+					campaignId: null,
+				},
+				data: { campaignId, automationRunId: run.id },
+			});
+			if (Number(created?.pendingRecipients || created?.campaign?.pendingRecipients || 0) > 0) {
+				await launchCampaign(campaignId, { workspaceId: setting.workspaceId });
+			}
+		}
+
+		await touchAutomationRun(run.id, { status: 'OPEN' });
+
+		return {
+			automationRunId: run.id,
+			campaignId,
+			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
+		};
+	} catch (error) {
+		await prisma.pendingPaymentAutomationLog.deleteMany({
 			where: {
 				workspaceId: setting.workspaceId,
 				orderKey: { in: orderKeys },
 				campaignId: null,
 			},
-			data: { campaignId },
 		});
-		await launchCampaign(campaignId, { workspaceId: setting.workspaceId });
+		await markAutomationRunError(run.id, error);
+		throw error;
 	}
-
-	return {
-		campaignId,
-		selectedCount: Number(created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
-	};
 }
 
 export async function runPendingPaymentAutomation({

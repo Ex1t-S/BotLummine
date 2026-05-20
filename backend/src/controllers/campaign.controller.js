@@ -45,6 +45,11 @@ import {
 	runPendingPaymentAutomation,
 	updatePendingPaymentAutomationSettings,
 } from '../services/campaigns/pending-payment-automation.service.js';
+import {
+	getAutomationRunDetail,
+	listAutomationRuns,
+	retryFailedAutomationRun,
+} from '../services/campaigns/automation-run.service.js';
 import { logger } from '../lib/logger.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 import {
@@ -186,6 +191,31 @@ export async function listCampaignsController(req, res) {
 	}
 }
 
+export async function listAutomationRunsController(req, res) {
+	try {
+		const runs = await listAutomationRuns({
+			workspaceId: requireRequestWorkspaceId(req),
+			limit: req.query.limit || 30,
+		});
+		return res.json({ ok: true, runs });
+	} catch (error) {
+		return sendError(res, error, 500);
+	}
+}
+
+export async function getAutomationRunController(req, res) {
+	try {
+		const result = await getAutomationRunDetail(req.params.runId, {
+			workspaceId: requireRequestWorkspaceId(req),
+			page: req.query.page || 1,
+			pageSize: req.query.pageSize || 50,
+		});
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error, 404);
+	}
+}
+
 export async function getCampaignController(req, res) {
 	try {
 		const result = await getCampaignDetail(req.params.campaignId, {
@@ -265,6 +295,18 @@ export async function deleteCampaignController(req, res) {
 export async function retryFailedCampaignRecipientsController(req, res) {
 	try {
 		const result = await retryFailedCampaignRecipients(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+		});
+		void executeCampaignDispatcherTick();
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function retryFailedAutomationRunController(req, res) {
+	try {
+		const result = await retryFailedAutomationRun(req.params.runId, {
 			workspaceId: requireRequestWorkspaceId(req),
 		});
 		void executeCampaignDispatcherTick();
