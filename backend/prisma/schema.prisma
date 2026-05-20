@@ -290,6 +290,10 @@ model ConversationState {
   buyingIntentLevel      String?
   frictionLevel          String?
   commercialSummary      String?
+  campaignContext        Json?
+  pendingAutoReplyMessageId String?
+  pendingAutoReplyDueAt  DateTime?
+  pendingAutoReplyLockedAt DateTime?
   menuActive             Boolean   @default(false)
   menuPath               String?
   menuLastSelection      String?
@@ -875,6 +879,8 @@ model AbandonedCartAutomationSetting {
   templateName      String?
   templateLanguage  String    @default("es_AR")
   filters           Json?
+  variableMapping   Json?
+  manualVariables   Json?
   intervalMinutes   Int       @default(60)
   minCartAgeMinutes Int       @default(60)
   lastRunAt         DateTime?

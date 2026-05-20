@@ -7,6 +7,16 @@ import { handlePaymentIntent } from '../intents/payment.service.js';
 import { handleShippingIntent } from '../intents/shipping.service.js';
 import { handleSizeHelpIntent } from '../intents/size-help.service.js';
 import { handleProductRecommendationIntent } from '../intents/product-recommendation.service.js';
+import {
+	looksLikeCancellationRequest as looksLikeCancellationRequestSignal,
+	looksLikeCustomerFrustration,
+	looksLikeExplicitHumanRequest,
+	looksLikeRapidContinuation as looksLikeRapidContinuationSignal,
+	looksLikeReturnOrWrongItemRequest as looksLikeReturnOrWrongItemRequestSignal,
+	looksLikeSensitiveSupport as looksLikeSensitiveSupportSignal,
+	looksLikeSimpleClosing,
+	shouldTreatAsPreSaleObjection,
+} from './conversation-signals.service.js';
 
 export function normalizeText(value = '') {
 	return String(value || '')
@@ -63,6 +73,10 @@ export function createResetConversationState() {
 		buyingIntentLevel: null,
 		frictionLevel: null,
 		commercialSummary: null,
+		campaignContext: null,
+		pendingAutoReplyMessageId: null,
+		pendingAutoReplyDueAt: null,
+		pendingAutoReplyLockedAt: null,
 		menuActive: false,
 		menuPath: null,
 		menuLastSelection: null,
@@ -494,6 +508,7 @@ function isAiOutbound(message = null) {
 }
 
 function isSimpleClosingMessage(text = '') {
+	return looksLikeSimpleClosing(text);
 	const q = normalizeGateText(text);
 	if (!q) return false;
 
@@ -514,11 +529,13 @@ function lastAssistantAskedQuestion(message = null) {
 }
 
 function looksLikeCancellationRequest(text = '') {
+	return looksLikeCancellationRequestSignal(text);
 	const q = normalizeGateText(text);
 	return /(cancelar|cancelen|anular|anulen|dar de baja).*(compra|pedido|orden|carrito)|(?:compra|pedido|orden).*(cancelar|cancelen|anular|anulen|dar de baja)/i.test(q);
 }
 
 function looksLikeReturnOrWrongItemRequest(text = '') {
+	return looksLikeReturnOrWrongItemRequestSignal(text);
 	const q = normalizeGateText(text);
 	return /(devolucion|devolver|devuelvan|devolv|reembolso|reintegro|arrepentimiento|cambio|cambiar|me quedo chico|me quedo grande|me llego mal|vino mal|vino fallado|vino roto|me mandaron otro|no coincide|sin color|talle equivocado|color equivocado|envien.*(?:calza|producto)|dinero)/i.test(q);
 }
@@ -591,8 +608,19 @@ function looksLikeTrackingClosing(text = '') {
 }
 
 function looksLikeSensitiveSupport(text = '') {
+	return looksLikeSensitiveSupportSignal(text);
 	const q = normalizeGateText(text);
 	return /(estafa|defensa del consumidor|denuncia|reclamo|verg[uü]enza|me bloquearon|bloquearon|no responden|nadie responde|se borran|me llego mal|vino mal|devolucion|devolver|arrepentimiento)/i.test(q);
+}
+
+function looksLikeRapidContinuation(text = '') {
+	return looksLikeRapidContinuationSignal(text);
+	const q = normalizeGateText(text);
+	if (!q) return false;
+	if (looksLikeExplicitHumanRequest(q) || looksLikeCustomerFrustration(q)) return false;
+	if (/\d/.test(q) || /\b(quiero|necesito|talle|foto|imagen|cuando|hay|tenes|tienes|stock|precio)\b/i.test(q)) return false;
+	if (String(text || '').includes('?')) return false;
+	return q.length <= 80 || /^(tambien|ademas|y |ah |me |yo |pero |igual |ya |es que|xq|porque)/i.test(q);
 }
 
 export function isSupportIntent(intent = '') {
@@ -628,6 +656,8 @@ export function resolveReplyGate({
 	currentState = {},
 	lastOutbound = null,
 	recentMessages = [],
+	currentMessageAt = null,
+	campaignAssistantContext = null,
 } = {}) {
 	const text = normalizeText(messageBody);
 	const q = normalizeGateText(text);
@@ -640,10 +670,58 @@ export function resolveReplyGate({
 	}
 
 	const lastOutboundAt = lastOutbound?.createdAt ? new Date(lastOutbound.createdAt).getTime() : 0;
+	const currentAt = currentMessageAt ? new Date(currentMessageAt).getTime() : Date.now();
 	const secondsSinceLastAi =
 		lastOutboundAt && isAiOutbound(lastOutbound)
-			? (Date.now() - lastOutboundAt) / 1000
+			? (currentAt - lastOutboundAt) / 1000
 			: Number.POSITIVE_INFINITY;
+	const preSaleObjection = shouldTreatAsPreSaleObjection({
+		text,
+		campaignContext: campaignAssistantContext,
+		currentState,
+	});
+
+	if (!preSaleObjection && looksLikeExplicitHumanRequest(q)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'explicit_human_request',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'requested_human',
+			},
+			reply:
+				'Te paso con una asesora para que lo vea una persona. Dejo el chat derivado y seguimos por aca.',
+		};
+	}
+
+	if (!preSaleObjection && looksLikeCustomerFrustration(q)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'customer_frustration_needs_human',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'customer_frustration',
+			},
+			reply:
+				'Entiendo. Para no marearte con una respuesta incompleta, te paso con una asesora y dejamos este caso para revision humana.',
+		};
+	}
+
+	if (
+		secondsSinceLastAi >= 0 &&
+		secondsSinceLastAi <= 10 &&
+		looksLikeRapidContinuation(text) &&
+		!['payment', 'order_status', 'human_handoff'].includes(String(intent || ''))
+	) {
+		return {
+			action: 'suppress',
+			reason: 'rapid_customer_continuation_after_ai',
+		};
+	}
 
 	if (
 		isSimpleClosingMessage(text) &&
@@ -748,7 +826,7 @@ export function resolveReplyGate({
 		};
 	}
 
-	if (looksLikeReturnOrWrongItemRequest(q)) {
+	if (!preSaleObjection && looksLikeReturnOrWrongItemRequest(q)) {
 		return {
 			action: 'fixed_reply',
 			reason: 'return_exchange_needs_human',
@@ -763,7 +841,7 @@ export function resolveReplyGate({
 		};
 	}
 
-	if (looksLikeSensitiveSupport(q)) {
+	if (!preSaleObjection && looksLikeSensitiveSupport(q)) {
 		return {
 			action: 'fixed_reply',
 			reason: 'sensitive_support',
@@ -969,6 +1047,14 @@ function looksLikeUnsupportedOperationalPromise(text = '', responsePolicy = {}) 
 	return false;
 }
 
+function looksLikeUnsupportedMediaPromise(text = '') {
+	const normalized = normalizeGateText(text);
+	return (
+		/\[(imagen|foto|video|catalogo|cat[aá]logo)[^\]]*\]/i.test(String(text || '')) ||
+		/(te\s+(muestro|mando|paso|envio|envio)\s+(la\s+)?(foto|imagen|video)|busco\s+el\s+video|en\s+un\s+ratito\s+te\s+lo\s+paso)/i.test(normalized)
+	);
+}
+
 export function auditAssistantReply({
 	text,
 	responsePolicy,
@@ -1023,6 +1109,13 @@ export function auditAssistantReply({
 	}
 
 	if (looksLikeUnsupportedOperationalPromise(cleaned, responsePolicy)) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false,
+		};
+	}
+
+	if (looksLikeUnsupportedMediaPromise(cleaned)) {
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
@@ -1199,9 +1292,22 @@ export function buildFallbackOrderAwareReply({
 	enrichedState,
 	catalogProducts,
 	commercialPlan,
+	campaignAssistantContext = null,
 }) {
 	if (intent === 'order_status' && liveOrderContext) {
 		return buildFixedOrderReply(liveOrderContext);
+	}
+
+	if (campaignAssistantContext?.category === 'pending_payment') {
+		return 'Te ayudo con el pago pendiente. Para no duplicar nada, seguime por el mismo link o mandame el comprobante por aca si ya pagaste.';
+	}
+
+	if (campaignAssistantContext?.category === 'cart_recovery') {
+		return 'Te ayudo con el carrito. Decime que duda te frena, talle, envio, cambio o pago, y lo resolvemos antes de que finalices la compra.';
+	}
+
+	if (campaignAssistantContext?.category === 'sales' || campaignAssistantContext?.category === 'marketing') {
+		return 'Te ayudo con la promo. Decime que talle, color o producto estabas mirando y te paso una opcion concreta sin abrirte todo el catalogo.';
 	}
 
 	return buildAiFailureFallback({

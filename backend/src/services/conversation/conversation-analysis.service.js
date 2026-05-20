@@ -1,4 +1,5 @@
 import { inferCommercialFamily } from '../../data/catalog-commercial-map.js';
+import { shouldTreatAsPreSaleObjection } from './conversation-signals.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -241,7 +242,7 @@ function detectPreferredTone({ mood, intent, isReadyToBuy }) {
 	return 'amigable_directo';
 }
 
-function inferLastUserGoal(intent, text, isReadyToBuy) {
+function inferLastUserGoal(intent, text, isReadyToBuy, currentState = {}, campaignContext = null) {
 	if (
 		/(armar el pedido|armo el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|te lo compro|te compro|te quiero transferir|pasame alias)/.test(
 			text
@@ -256,6 +257,12 @@ function inferLastUserGoal(intent, text, isReadyToBuy) {
 	if (intent === 'size_help') return 'elegir_talle';
 	if (intent === 'product') return isReadyToBuy ? 'comprar' : 'evaluar_producto';
 	if (intent === 'complaint') return 'resolver_reclamo';
+	if (
+		intent === 'return_exchange' &&
+		shouldTreatAsPreSaleObjection({ text, currentState, campaignContext })
+	) {
+		return 'evaluar_producto';
+	}
 	if (intent === 'return_exchange') return 'gestionar_cambio_devolucion';
 	if (intent === 'human_handoff') return 'hablar_con_humano';
 
@@ -284,7 +291,7 @@ function wasLoopingRecentMessages(recentMessages = []) {
 	return new Set(assistantMessages).size <= 1;
 }
 
-function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState = {}, recentMessages = [] }) {
+function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState = {}, recentMessages = [], campaignContext = null }) {
 	const explicitHumanRequest =
 		/(quiero hablar con una persona|quiero hablar con alguien|quiero hablar con un humano|humano|asesor|asesora|persona real|atencion humana|atención humana|operador|agente|alguien del equipo)/.test(
 			text
@@ -297,6 +304,12 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 		};
 	}
 
+	const preSaleObjection = shouldTreatAsPreSaleObjection({
+		text,
+		campaignContext,
+		currentState,
+	});
+
 	if (intent === 'complaint' && mood === 'molesta') {
 		return {
 			needsHuman: true,
@@ -304,7 +317,7 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 		};
 	}
 
-	if (intent === 'return_exchange' && urgencyLevel === 'alta') {
+	if (!preSaleObjection && intent === 'return_exchange' && urgencyLevel === 'alta') {
 		return {
 			needsHuman: true,
 			handoffReason: 'urgent_return_exchange'
@@ -403,7 +416,8 @@ export function analyzeConversationTurn({
 	messageBody,
 	intent,
 	currentState = {},
-	recentMessages = []
+	recentMessages = [],
+	campaignContext = null
 }) {
 	const text = normalizeText(messageBody);
 	const currentProductFamily = inferCurrentProductFamily(text, currentState);
@@ -422,7 +436,8 @@ export function analyzeConversationTurn({
 		mood,
 		urgencyLevel,
 		currentState,
-		recentMessages
+		recentMessages,
+		campaignContext
 	});
 
 	const preferredTone = detectPreferredTone({
@@ -468,7 +483,7 @@ export function analyzeConversationTurn({
 		interestedProducts,
 		objections,
 		lastDetectedIntent: intent,
-		lastUserGoal: inferLastUserGoal(intent, text, isReadyToBuy),
+		lastUserGoal: inferLastUserGoal(intent, text, isReadyToBuy, currentState, campaignContext),
 		currentProductFamily,
 		requestedOfferType,
 		excludedProductKeywords,

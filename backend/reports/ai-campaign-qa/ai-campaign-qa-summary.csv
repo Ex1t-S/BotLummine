@@ -1,0 +1,7 @@
+"id","brand","category","score5","outcome","primaryFailure","turns","finalQueue","stopReason","conversationId"
+"case_001_lummine_pending_payment","lummine","pending_payment","5","payment_review","","9","PAYMENT_REVIEW","payment_review","cmpd9ohcd0003s69gz3n4zoam"
+"case_002_ruchi_pending_payment","ruchi","pending_payment","5","silent_valid","","10","AUTO","silent_valid","cmpd9q5pz002qs69gqac8cm3u"
+"case_031_lummine_cart_recovery","lummine","cart_recovery","5","silent_valid","","9","AUTO","silent_valid","cmpd9rv4k005js69g7joj1bgx"
+"case_032_ruchi_cart_recovery","ruchi","cart_recovery","5","human_handoff","","9","HUMAN","human_handoff","cmpd9tao00082s69g8jvxsaqi"
+"case_061_lummine_marketing","lummine","marketing","5","silent_valid","","9","AUTO","silent_valid","cmpd9uqq500aps69gqq2m3efg"
+"case_062_ruchi_marketing","ruchi","marketing","5","silent_valid","","8","AUTO","silent_valid","cmpd9w9m000d8s69g4f6rhkg2"

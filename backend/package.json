@@ -15,6 +15,8 @@
     "ai:test:workspace-flow": "node scripts/test-ai-workspace-flow.mjs",
     "ai:regression": "node scripts/run-ai-regression-suite.mjs",
     "ai:regression:compare": "node scripts/compare-ai-regression-suite.mjs",
+    "ai:campaign-qa": "node scripts/run-ai-campaign-qa.mjs",
+    "ai:campaign-qa:smoke": "node scripts/run-ai-campaign-qa.mjs --smoke",
     "audit:security": "npm audit --audit-level=high",
     "raw-payloads:compact:dry-run": "node scripts/compact-raw-payloads.mjs",
     "raw-payloads:compact:apply": "node scripts/compact-raw-payloads.mjs --apply",

@@ -61,6 +61,15 @@ import {
 	isWorkspaceFeatureEnabled,
 } from '../workspaces/workspace-feature-flags.service.js';
 import { persistChatConfirmationConversions } from '../campaigns/campaign-attribution.service.js';
+import {
+	looksLikeThirdPartyAutoReply as looksLikeThirdPartyAutoReplySignal,
+	shouldTreatAsPreSaleObjection,
+} from './conversation-signals.service.js';
+
+const AUTO_REPLY_COOLDOWN_MS = Number(process.env.AI_REPLY_COOLDOWN_MS || 60_000);
+const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_MS || 15_000);
+const pendingAutoReplyTimers = new Map();
+let pendingAutoReplySweepStarted = false;
 
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	const baseText = String(text || '').trim();
@@ -95,7 +104,11 @@ function isAbandonedCartCampaignMessage(message = null) {
 	return (
 		message?.direction === 'OUTBOUND' &&
 		message?.provider === 'whatsapp-cloud-api' &&
-		message?.model === 'carrito_abandonated_v2'
+		(
+			message?.model === 'carrito_abandonated_v2' ||
+			message?.rawPayload?.campaignMeta?.campaignId ||
+			message?.rawPayload?.campaignMeta?.audienceSource
+		)
 	);
 }
 
@@ -107,13 +120,102 @@ function isCampaignOutboundMessage(message = null) {
 	);
 }
 
+function normalizeCampaignSource(value = '') {
+	return String(value || '').trim().toLowerCase();
+}
+
+function getCampaignMeta(message = null) {
+	return message?.rawPayload?.campaignMeta || null;
+}
+
+function buildCampaignPromptBlock(context = {}) {
+	return [
+		`Tipo: ${context.category}`,
+		`Objetivo: ${context.objective}`,
+		context.templateName ? `Template: ${context.templateName}` : '',
+		context.previewText ? `Mensaje enviado: ${String(context.previewText).slice(0, 500)}` : '',
+		`Como responder: ${context.responseFrame}`,
+		'Si la respuesta del cliente es vaga o confirma interes, continua con este objetivo de campania.',
+		'Si el cliente cambia claramente de tema, atende el nuevo tema y no fuerces la campania.',
+		'Si el cliente trae una objecion preventa, resolvela comercialmente antes de derivar.',
+		'Si hay reclamo postventa real, frustracion o pedido humano, deriva sin insistir con venta.'
+	].filter(Boolean).join('\n');
+}
+
+function classifyCampaignContext(message = null) {
+	if (!isCampaignOutboundMessage(message)) return null;
+
+	const meta = getCampaignMeta(message) || {};
+	const source = normalizeCampaignSource(meta.audienceSource || '');
+	const templateName = normalizeText(message?.model || meta.templateName || '');
+	const templateKey = normalizeCampaignSource(templateName);
+	const previewText = normalizeText(message?.body || '');
+	let category = 'sales';
+	let objective = 'venta';
+	let responseFrame =
+		'Responder como venta consultiva sobre el producto o promocion enviados en la campania.';
+
+	if (source === 'abandoned_carts' || /carrito|abandon/.test(templateKey)) {
+		category = 'cart_recovery';
+		objective = 'recuperacion_de_carrito';
+		responseFrame =
+			'Recuperar el carrito: resolver dudas que frenan la compra, recordar beneficio o link ya enviado si aplica, y facilitar que termine la compra.';
+	} else if (source === 'pending_payment' || /pago|payment|pendiente/.test(templateKey)) {
+		category = 'pending_payment';
+		objective = 'pago_pendiente';
+		responseFrame =
+			'Ayudar a completar el pago pendiente: aclarar medios de pago, comprobante o proximo paso sin vender otro producto.';
+	} else if (source === 'customers' || source === 'manual' || source === 'marketing') {
+		category = 'sales';
+		objective = 'venta_promocionada';
+		responseFrame =
+			'Vender o explicar el producto/promocion de la campania, manteniendo foco en lo enviado.';
+	}
+
+	return {
+		category,
+		objective,
+		source: source || 'manual',
+		audienceSource: source || 'manual',
+		campaignId: meta.campaignId || null,
+		templateName,
+		previewText,
+		responseFrame,
+		detectedAt: new Date().toISOString(),
+		lastUsedAt: new Date().toISOString(),
+		promptBlock: buildCampaignPromptBlock({
+			category,
+			objective,
+			templateName,
+			previewText,
+			responseFrame,
+		})
+	};
+}
+
 function looksLikeThirdPartyAutoReply(text = '') {
 	const normalized = normalizeText(text);
 	if (!normalized) return false;
+	if (/(gracias\s+por\s+tu\s+mensaje|no\s+atendemos\s+llamadas|no\s+hacemos\s+ventas\s+online|dejanos\s+tu\s+mensaje|d[ée]janos\s+tu\s+mensaje|horarios?:|lunes\s+a\s+viernes)/i.test(normalized)) return true;
 
 	return /(gracias\s+por\s+(comunicarte|escribir)\s+(con|a)|te\s+comunicaste\s+con|servicio\s+de\s+guardia|solo\s+llamadas\s+por\s+whatsapp|departamento\s+comercial|por\s+consultas\s+o\s+turnos|estudio\s+juridico|mi\s+nombre\s+es\s+.+\s+en\s+que\s+puedo\s+ayudarte|en\s+un\s+momento\s+te\s+respondo|dejame\s+tu\s+consulta|d[ée]jame\s+tu\s+consulta|te\s+respondo\s+para\s+ayudarte\s+con\s+tu\s+pedido|esper[o]?\s+tenga\s+un\s+buen\s+dia)/i.test(
 		normalized
 	);
+}
+
+function normalizeStoredCampaignContext(value = null) {
+	if (!value || typeof value !== 'object') return null;
+	if (!value.category || !value.objective) return null;
+	return {
+		...value,
+		responseFrame: value.responseFrame || 'Responder segun el objetivo de la campania y el mensaje actual.',
+		promptBlock: buildCampaignPromptBlock(value),
+		lastUsedAt: new Date().toISOString(),
+	};
+}
+
+function getActiveCampaignContext(lastOutbound = null, currentState = {}) {
+	return classifyCampaignContext(lastOutbound) || normalizeStoredCampaignContext(currentState?.campaignContext);
 }
 
 function isPaymentClarifierMessage(message = null) {
@@ -153,7 +255,7 @@ async function maybeHandleAbandonedCartReply({
 		return { handled: false };
 	}
 
-	if (looksLikeThirdPartyAutoReply(normalizedBody)) {
+	if (looksLikeThirdPartyAutoReplySignal(normalizedBody)) {
 		return {
 			handled: true,
 			traceModel: 'campaign-autoreply-ignore',
@@ -163,6 +265,182 @@ async function maybeHandleAbandonedCartReply({
 
 	return { handled: false };
 }
+
+function clearPendingAutoReply(conversationId) {
+	const timer = pendingAutoReplyTimers.get(conversationId);
+	if (timer) {
+		clearTimeout(timer);
+		pendingAutoReplyTimers.delete(conversationId);
+	}
+}
+
+async function processPendingAutoReply(conversationId, { workspaceId = null, transportMode = 'live' } = {}) {
+	const state = await prisma.conversationState.findUnique({
+		where: { conversationId },
+		include: {
+			conversation: {
+				include: {
+					contact: true,
+				},
+			},
+		},
+	});
+	if (!state?.pendingAutoReplyMessageId || !state?.pendingAutoReplyDueAt) return false;
+	if (new Date(state.pendingAutoReplyDueAt).getTime() > Date.now()) return false;
+
+	const claimed = await prisma.conversationState.updateMany({
+		where: {
+			conversationId,
+			pendingAutoReplyMessageId: state.pendingAutoReplyMessageId,
+			pendingAutoReplyLockedAt: null,
+		},
+		data: {
+			pendingAutoReplyLockedAt: new Date(),
+		},
+	});
+	if (!claimed.count) return false;
+
+	try {
+		const inbound = await prisma.message.findFirst({
+			where: {
+				id: state.pendingAutoReplyMessageId,
+				conversationId,
+				direction: 'INBOUND',
+			},
+			include: {
+				conversation: {
+					include: {
+						contact: true,
+					},
+				},
+			},
+		});
+		if (!inbound) return false;
+
+		await processInboundMessage({
+			workspaceId: workspaceId || inbound.workspaceId,
+			waId: inbound.conversation?.contact?.waId,
+			contactName:
+				inbound.conversation?.contact?.name ||
+				inbound.senderName ||
+				inbound.conversation?.contact?.waId,
+			messageBody: inbound.body,
+			messageType: inbound.type || 'text',
+			attachmentMeta: {
+				attachmentUrl: inbound.attachmentUrl,
+				attachmentMimeType: inbound.attachmentMimeType,
+				attachmentName: inbound.attachmentName,
+			},
+			rawPayload: inbound.rawPayload,
+			metaMessageId: inbound.metaMessageId,
+			transportMode,
+			existingInboundMessageId: inbound.id,
+			bypassResponseCooldown: true,
+		});
+
+		await prisma.conversationState.updateMany({
+			where: {
+				conversationId,
+				pendingAutoReplyMessageId: inbound.id,
+			},
+			data: {
+				pendingAutoReplyMessageId: null,
+				pendingAutoReplyDueAt: null,
+				pendingAutoReplyLockedAt: null,
+			},
+		});
+		return true;
+	} catch (error) {
+		await prisma.conversationState.updateMany({
+			where: { conversationId },
+			data: { pendingAutoReplyLockedAt: null },
+		}).catch(() => {});
+		throw error;
+	}
+}
+
+function scheduleAutoReplyCooldown({
+	conversationId,
+	workspaceId,
+	messageId,
+	transportMode = 'live',
+	delayMs = AUTO_REPLY_COOLDOWN_MS,
+}) {
+	if (!conversationId || delayMs <= 0) return false;
+
+	clearPendingAutoReply(conversationId);
+	const dueAt = new Date(Date.now() + delayMs);
+	if (messageId) {
+		prisma.conversationState.updateMany({
+			where: { conversationId },
+			data: {
+				pendingAutoReplyMessageId: messageId,
+				pendingAutoReplyDueAt: dueAt,
+				pendingAutoReplyLockedAt: null,
+			},
+		}).catch((error) => {
+			logger.warn('ai.cooldown_persist_failed', { workspaceId, conversationId, error });
+		});
+	}
+
+	const timer = setTimeout(async () => {
+		pendingAutoReplyTimers.delete(conversationId);
+
+		try {
+			await processPendingAutoReply(conversationId, { workspaceId, transportMode });
+		} catch (error) {
+			logger.error('ai.cooldown_autoreply_failed', {
+				workspaceId,
+				conversationId,
+				error,
+			});
+		}
+	}, Math.max(0, dueAt.getTime() - Date.now()));
+	if (typeof timer.unref === 'function') timer.unref();
+
+	pendingAutoReplyTimers.set(conversationId, timer);
+	return true;
+}
+
+async function sweepPendingAutoReplies() {
+	const dueStates = await prisma.conversationState.findMany({
+		where: {
+			pendingAutoReplyMessageId: { not: null },
+			pendingAutoReplyDueAt: { lte: new Date() },
+			pendingAutoReplyLockedAt: null,
+		},
+		take: 25,
+		include: {
+			conversation: true,
+		},
+	});
+
+	for (const state of dueStates) {
+		processPendingAutoReply(state.conversationId, {
+			workspaceId: state.conversation?.workspaceId || null,
+			transportMode: 'live',
+		}).catch((error) => {
+			logger.error('ai.cooldown_sweep_failed', {
+				workspaceId: state.conversation?.workspaceId || null,
+				conversationId: state.conversationId,
+				error,
+			});
+		});
+	}
+}
+
+function startPendingAutoReplySweep() {
+	if (pendingAutoReplySweepStarted || AUTO_REPLY_COOLDOWN_SWEEP_MS <= 0) return;
+	pendingAutoReplySweepStarted = true;
+	const timer = setInterval(() => {
+		sweepPendingAutoReplies().catch((error) => {
+			logger.error('ai.cooldown_sweep_tick_failed', { error });
+		});
+	}, AUTO_REPLY_COOLDOWN_SWEEP_MS);
+	if (typeof timer.unref === 'function') timer.unref();
+}
+
+startPendingAutoReplySweep();
 
 export async function getOrCreateConversation({
 	workspaceId = DEFAULT_WORKSPACE_ID,
@@ -281,20 +559,59 @@ export async function processInboundMessage({
 	attachmentMeta = null,
 	rawPayload,
 	metaMessageId = null,
-	transportMode = 'live'
+	transportMode = 'live',
+	existingInboundMessageId = null,
+	bypassResponseCooldown = false,
 }) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const normalizedWaId = normalizeThreadPhone(waId);
+	let resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	let normalizedWaId = normalizeThreadPhone(waId);
+	let conversation = null;
+	let createdInboundAt = new Date();
+	let inboundMessage = null;
 
-	const conversation = await getOrCreateConversation({
-		workspaceId: resolvedWorkspaceId,
-		waId: normalizedWaId,
-		contactName,
-		profileImageUrl,
-		profileImageSource
-	});
+	if (existingInboundMessageId) {
+		inboundMessage = await prisma.message.findUnique({
+			where: { id: existingInboundMessageId },
+			include: {
+				conversation: {
+					include: {
+						contact: true,
+						state: true,
+					},
+				},
+			},
+		});
 
-	if (metaMessageId) {
+		if (!inboundMessage || inboundMessage.direction !== 'INBOUND') {
+			return { conversation: null };
+		}
+
+		conversation = inboundMessage.conversation;
+		resolvedWorkspaceId = inboundMessage.workspaceId;
+		normalizedWaId = normalizeThreadPhone(conversation?.contact?.waId || waId);
+		contactName = contactName || inboundMessage.senderName || conversation?.contact?.name || normalizedWaId;
+		messageBody = inboundMessage.body;
+		messageType = inboundMessage.type || messageType || 'text';
+		rawPayload = inboundMessage.rawPayload || rawPayload;
+		metaMessageId = inboundMessage.metaMessageId || metaMessageId;
+		attachmentMeta = {
+			attachmentUrl: inboundMessage.attachmentUrl,
+			attachmentMimeType: inboundMessage.attachmentMimeType,
+			attachmentName: inboundMessage.attachmentName,
+			...(attachmentMeta || {}),
+		};
+		createdInboundAt = inboundMessage.createdAt || createdInboundAt;
+	} else {
+		conversation = await getOrCreateConversation({
+			workspaceId: resolvedWorkspaceId,
+			waId: normalizedWaId,
+			contactName,
+			profileImageUrl,
+			profileImageSource
+		});
+	}
+
+	if (!existingInboundMessageId && metaMessageId) {
 		const existingMessage = await prisma.message.findFirst({
 			where: {
 				workspaceId: resolvedWorkspaceId,
@@ -307,62 +624,66 @@ export async function processInboundMessage({
 		}
 	}
 
-	const createdInboundAt = new Date();
-
-	const inboundMessage = await prisma.message.create({
-		data: {
-			conversationId: conversation.id,
-			workspaceId: resolvedWorkspaceId,
-			metaMessageId,
-			senderName: contactName || normalizedWaId,
-			direction: 'INBOUND',
-			type: messageType || 'text',
-			body: messageBody,
-			attachmentUrl: attachmentMeta?.attachmentUrl || null,
-			attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
-			attachmentName: attachmentMeta?.attachmentName || null,
-			rawPayload,
-			createdAt: createdInboundAt,
-		}
-	});
-	await persistChatConfirmationConversions({
-		workspaceId: resolvedWorkspaceId,
-		conversationId: conversation.id,
-		messageId: inboundMessage.id,
-		messageBody,
-		contactName,
-		phone: normalizedWaId,
-		createdAt: createdInboundAt,
-	}).catch((error) => {
-		logger.warn('campaign.attribution_chat_failed', {
-			workspaceId: resolvedWorkspaceId,
-			conversationId: conversation.id,
-			phone: maskPhone(normalizedWaId),
-			error,
+	if (!existingInboundMessageId) {
+		inboundMessage = await prisma.message.create({
+			data: {
+				conversationId: conversation.id,
+				workspaceId: resolvedWorkspaceId,
+				metaMessageId,
+				senderName: contactName || normalizedWaId,
+				direction: 'INBOUND',
+				type: messageType || 'text',
+				body: messageBody,
+				attachmentUrl: attachmentMeta?.attachmentUrl || null,
+				attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
+				attachmentName: attachmentMeta?.attachmentName || null,
+				rawPayload,
+				createdAt: createdInboundAt,
+			}
 		});
-	});
+		await persistChatConfirmationConversions({
+			workspaceId: resolvedWorkspaceId,
+			conversationId: conversation.id,
+			messageId: inboundMessage.id,
+			messageBody,
+			contactName,
+			phone: normalizedWaId,
+			createdAt: createdInboundAt,
+		}).catch((error) => {
+			logger.warn('campaign.attribution_chat_failed', {
+				workspaceId: resolvedWorkspaceId,
+				conversationId: conversation.id,
+				phone: maskPhone(normalizedWaId),
+				error,
+			});
+		});
+	}
 
-	await prisma.conversation.update({
-		where: { id: conversation.id },
-		data: {
-			lastMessageAt: createdInboundAt,
-			lastInboundMessageAt: createdInboundAt,
-			unreadCount: {
-				increment: 1,
-			},
-		}
-	});
+	if (!existingInboundMessageId) {
+		await prisma.conversation.update({
+			where: { id: conversation.id },
+			data: {
+				lastMessageAt: createdInboundAt,
+				lastInboundMessageAt: createdInboundAt,
+				unreadCount: {
+					increment: 1,
+				},
+			}
+		});
+	}
 
-	publishInboxEvent({
-		workspaceId: resolvedWorkspaceId,
-		scope: 'message',
-		action: 'inbound-created',
-		conversationId: conversation.id,
-		queue: conversation.queue,
-		direction: 'INBOUND',
-		metaMessageId,
-		createdAt: createdInboundAt.toISOString(),
-	});
+	if (!existingInboundMessageId) {
+		publishInboxEvent({
+			workspaceId: resolvedWorkspaceId,
+			scope: 'message',
+			action: 'inbound-created',
+			conversationId: conversation.id,
+			queue: conversation.queue,
+			direction: 'INBOUND',
+			metaMessageId,
+			createdAt: createdInboundAt.toISOString(),
+		});
+	}
 
 	const freshConversation = await prisma.conversation.findUnique({
 		where: { id: conversation.id },
@@ -396,6 +717,7 @@ export async function processInboundMessage({
 		liveOrderContext: null,
 		shouldReply: false,
 		menuAssistantContext: null,
+		campaignAssistantContext: null,
 	};
 
 	const abandonedCartDecision = await maybeHandleAbandonedCartReply({
@@ -450,10 +772,21 @@ export async function processInboundMessage({
 		menuDecision?.summaryUserMessage || effectiveMessageBody || messageBody
 	);
 	const isCampaignReply = isCampaignOutboundMessage(lastOutbound);
+	const campaignAssistantContext = getActiveCampaignContext(lastOutbound, currentState);
 	const forceIntent = menuDecision?.forceIntent || null;
 	const menuStatePatch = menuDecision?.statePatch || null;
 
-	const intent = forceIntent || detectIntent(effectiveMessageBody, currentState);
+	let intent = forceIntent || detectIntent(effectiveMessageBody, currentState);
+	if (
+		['complaint', 'return_exchange'].includes(String(intent || '')) &&
+		shouldTreatAsPreSaleObjection({
+			text: effectiveMessageBody,
+			campaignContext: campaignAssistantContext,
+			currentState,
+		})
+	) {
+		intent = 'product';
+	}
 	const explicitOrderNumber =
 		extractOrderNumber(effectiveMessageBody, currentState) ||
 		extractStandaloneOrderNumber(effectiveMessageBody);
@@ -477,6 +810,8 @@ export async function processInboundMessage({
 		currentState,
 		lastOutbound,
 		recentMessages,
+		currentMessageAt: bypassResponseCooldown ? new Date() : createdInboundAt,
+		campaignAssistantContext,
 	});
 
 	if (replyGate.action === 'suppress' && !isCampaignReply) {
@@ -579,6 +914,34 @@ export async function processInboundMessage({
 		return { conversation: freshConversation, trace };
 	}
 
+	if (!bypassResponseCooldown && transportMode === 'live' && AUTO_REPLY_COOLDOWN_MS > 0) {
+		scheduleAutoReplyCooldown({
+			conversationId: freshConversation.id,
+			workspaceId: resolvedWorkspaceId,
+			messageId: inboundMessage?.id || null,
+			transportMode,
+		});
+
+		trace = {
+			...trace,
+			intent,
+			provider: 'system',
+			model: 'reply-cooldown',
+			shouldReply: false,
+			responsePolicy: {
+				action: 'cooldown',
+				useAI: false,
+				allowHandoffMention: false,
+				maxChars: 0,
+				tone: 'silent',
+				reason: 'waiting_for_message_burst_to_finish',
+				cooldownMs: AUTO_REPLY_COOLDOWN_MS,
+			},
+		};
+
+		return { conversation: freshConversation, trace };
+	}
+
 	const handoffExpiredNewTopic = replyGate.reason === 'handoff_expired_new_topic';
 	const attachmentClassification = await classifyInboundAttachment({
 		messageType,
@@ -594,7 +957,8 @@ export async function processInboundMessage({
 		messageBody: effectiveMessageBody,
 		intent,
 		currentState,
-		recentMessages
+		recentMessages,
+		campaignContext: campaignAssistantContext,
 	});
 
 	if (intent === 'human_handoff') {
@@ -676,6 +1040,23 @@ export async function processInboundMessage({
 		memoryPatch,
 		menuStatePatch
 	});
+	if (campaignAssistantContext) {
+		nextStatePayload.campaignContext = {
+			category: campaignAssistantContext.category,
+			objective: campaignAssistantContext.objective,
+			campaignId: campaignAssistantContext.campaignId || null,
+			audienceSource: campaignAssistantContext.audienceSource || campaignAssistantContext.source || null,
+			templateName: campaignAssistantContext.templateName || null,
+			campaignText: campaignAssistantContext.previewText || null,
+			previewText: campaignAssistantContext.previewText || null,
+			responseFrame: campaignAssistantContext.responseFrame || null,
+			detectedAt:
+				campaignAssistantContext.detectedAt ||
+				currentState?.campaignContext?.detectedAt ||
+				createdInboundAt.toISOString(),
+			lastUsedAt: new Date().toISOString(),
+		};
+	}
 
 	await prisma.conversationState.upsert({
 		where: { conversationId: freshConversation.id },
@@ -923,6 +1304,7 @@ export async function processInboundMessage({
 	let commercialHints = [];
 	let commercialPlan = null;
 	let menuAssistantContext = null;
+	const promptCampaignAssistantContext = isSupportIntent(intent) ? null : campaignAssistantContext;
 	const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
 	const aiBrand = workspaceConfig.ai;
 
@@ -1061,6 +1443,26 @@ export async function processInboundMessage({
 			}
 		}
 
+		if (promptCampaignAssistantContext) {
+			commercialHints.unshift(
+				`La conversacion viene de una campania de ${promptCampaignAssistantContext.objective}.`
+			);
+			commercialHints.push(promptCampaignAssistantContext.responseFrame);
+			commercialHints.push(
+				'Si el cliente responde algo ambiguo, interpretalo desde la campania; si cambia de tema claramente, segui el nuevo tema.'
+			);
+			if (promptCampaignAssistantContext.category === 'cart_recovery') {
+				commercialHints.push(
+					'En carrito, dudas de talle, cambio, tela, comodidad, precio o envio son objeciones preventa: resolvelas antes de derivar.'
+				);
+			}
+			if (promptCampaignAssistantContext.category === 'pending_payment') {
+				commercialHints.push(
+					'En pago pendiente, no vendas otro producto: ayuda a completar el pago, evitar duplicacion o recibir comprobante.'
+				);
+			}
+		}
+
 		commercialHints.push('No repitas saludo si la conversación ya empezó.');
 		commercialHints.push('No derivas por una duda simple si ya la podés resolver.');
 		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
@@ -1170,6 +1572,7 @@ export async function processInboundMessage({
 		commercialHints,
 		shouldReply: true,
 		menuAssistantContext,
+		campaignAssistantContext: promptCampaignAssistantContext,
 	};
 
 	let finalReply = forcedReply || null;
@@ -1233,7 +1636,8 @@ export async function processInboundMessage({
 				commercialHints,
 				commercialPlan,
 				responsePolicy,
-				menuAssistantContext
+				menuAssistantContext,
+				campaignAssistantContext: promptCampaignAssistantContext
 			});
 
 			const aiResult = await runAssistantReply({
@@ -1253,7 +1657,8 @@ export async function processInboundMessage({
 				commercialHints,
 				commercialPlan,
 				responsePolicy,
-				menuAssistantContext
+				menuAssistantContext,
+				campaignAssistantContext: promptCampaignAssistantContext
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
@@ -1262,6 +1667,7 @@ export async function processInboundMessage({
 				enrichedState,
 				catalogProducts,
 				commercialPlan,
+				campaignAssistantContext: promptCampaignAssistantContext,
 			});
 
 			const audited = auditAssistantReply({
@@ -1301,6 +1707,7 @@ export async function processInboundMessage({
 				enrichedState,
 				catalogProducts,
 				commercialPlan,
+				campaignAssistantContext: promptCampaignAssistantContext,
 			});
 
 			aiMeta = {
