@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, MessageCircle, Rocket } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRoute, getDefaultRouteForRole } from '../lib/authz.js';
+import { getApiErrorMessage } from '../lib/api.js';
 import logoBladeIA from '../assets/app-logo-mark.png';
 import showcaseInboxAuto from '../assets/feature-carousel/showcase-inbox-auto.png';
 import showcaseInboxPayments from '../assets/feature-carousel/showcase-inbox-payments.png';
@@ -325,7 +326,7 @@ export default function LoginPage() {
 			const nextPath = resolveRedirectPath(result?.user || null, requestedPath);
 			navigate(nextPath, { replace: true });
 		} catch (err) {
-			setError(err.response?.data?.error || 'No se pudo iniciar sesion');
+			setError(getApiErrorMessage(err, 'No se pudo iniciar sesion'));
 		} finally {
 			setSubmitting(false);
 		}

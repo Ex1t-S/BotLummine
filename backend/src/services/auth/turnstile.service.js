@@ -1,5 +1,8 @@
+import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { logger } from '../../lib/logger.js';
 import { captureSecurityEvent } from '../../lib/sentry.js';
+
+const TURNSTILE_TIMEOUT_MS = getHttpTimeoutMs('TURNSTILE_TIMEOUT_MS', 10000);
 
 function isTurnstileRequired() {
 	return String(process.env.TURNSTILE_REQUIRED || 'false').trim().toLowerCase() === 'true';
@@ -31,11 +34,15 @@ export async function verifyTurnstileToken({ token, ip, requestId } = {}) {
 		body.set('response', token);
 		if (ip) body.set('remoteip', ip);
 
-		const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-			body,
-		});
+		const response = await fetchWithTimeout(
+			'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body,
+			},
+			TURNSTILE_TIMEOUT_MS
+		);
 
 		if (!response.ok) {
 			throw new Error(`Turnstile respondio ${response.status}.`);

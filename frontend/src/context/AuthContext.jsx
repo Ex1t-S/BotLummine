@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import api from '../lib/api.js';
+import api, { LOGIN_TIMEOUT_MS } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
 	}, []);
 
 	async function login(credentials) {
-		const res = await api.post('/auth/login', credentials);
+		const res = await api.post('/auth/login', credentials, { timeout: LOGIN_TIMEOUT_MS });
 		setUser(res.data.user || null);
 		return res.data;
 	}
