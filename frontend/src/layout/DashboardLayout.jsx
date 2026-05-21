@@ -23,7 +23,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { resolveApiUrl } from '../lib/api.js';
 import './DashboardLayout.css';
 import logoBladeIA from '../assets/bladeia-logo.svg';
-import { isAdminUser, isPlatformAdminUser } from '../lib/authz.js';
+import { isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from '../lib/authz.js';
 import {
 	getFrequentInternalPaths,
 	prefetchInternalRouteAndData,
@@ -137,6 +137,7 @@ export default function DashboardLayout() {
 	const darkMode = resolvedTheme === 'dark';
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
+	const aiLabOnlyWorkspace = isAiLabOnlyWorkspace(user);
 	const workspace = user?.workspace || null;
 	const brandName = isPlatformAdmin
 		? 'Admin plataforma'
@@ -153,6 +154,12 @@ export default function DashboardLayout() {
 	const preparePath = useCallback((path) => {
 		prefetchInternalRouteAndData(path, queryClient, { user });
 	}, [queryClient, user]);
+
+	useEffect(() => {
+		if (aiLabOnlyWorkspace && location.pathname !== '/ai-lab') {
+			navigate('/ai-lab', { replace: true });
+		}
+	}, [aiLabOnlyWorkspace, location.pathname, navigate]);
 
 	useEffect(() => {
 		lastScrollTopRef.current = 0;
@@ -226,7 +233,7 @@ export default function DashboardLayout() {
 
 					<div className="admin-brand-copy">
 						<h1>{brandName}</h1>
-						<p>{isPlatformAdmin ? 'Gestión multi marca' : (isAdmin ? 'Atención conversacional' : 'Inbox de atención')}</p>
+						<p>{aiLabOnlyWorkspace ? 'Pruebas de IA' : (isPlatformAdmin ? 'Gestión multi marca' : (isAdmin ? 'Atención conversacional' : 'Inbox de atención'))}</p>
 					</div>
 				</div>
 
@@ -236,50 +243,58 @@ export default function DashboardLayout() {
 				</div>
 
 				<nav className="admin-menu" aria-label="Navegación principal">
-					<NavGroup label="Operación">
-						<NavItem to="/operations" icon={LayoutDashboard} onPrepare={preparePath}>Operación</NavItem>
-
-						{!isPlatformAdmin ? (
-							<NavItem
-								to="/inbox/automatico"
-								icon={Inbox}
-								className={navClassWithPrefix(location, '/inbox')}
-								onPrepare={preparePath}
-							>
-								Inbox
-							</NavItem>
-						) : null}
-					</NavGroup>
-
-					{isAdmin && !isPlatformAdmin ? (
+					{aiLabOnlyWorkspace ? (
+						<NavGroup label="Pruebas">
+							<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
+						</NavGroup>
+					) : (
 						<>
-							<NavGroup label="Ventas">
-								<NavItem to="/catalog" icon={Boxes} onPrepare={preparePath}>Catálogo</NavItem>
-								<NavItem to="/abandoned-carts" icon={ShoppingCart} onPrepare={preparePath}>Carritos</NavItem>
-								<NavItem to="/customers" icon={Users} onPrepare={preparePath}>Clientes</NavItem>
+							<NavGroup label="Operación">
+								<NavItem to="/operations" icon={LayoutDashboard} onPrepare={preparePath}>Operación</NavItem>
+
+								{!isPlatformAdmin ? (
+									<NavItem
+										to="/inbox/automatico"
+										icon={Inbox}
+										className={navClassWithPrefix(location, '/inbox')}
+										onPrepare={preparePath}
+									>
+										Inbox
+									</NavItem>
+								) : null}
 							</NavGroup>
 
-							<NavGroup label="Marketing">
-								<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')} onPrepare={preparePath}>Campañas</NavItem>
-								<NavItem to="/analytics" icon={BarChart3} onPrepare={preparePath}>Estadísticas</NavItem>
-							</NavGroup>
-						</>
-					) : null}
-
-					{isAdmin ? (
-						<NavGroup label="Configuración">
-							<NavItem to="/admin" icon={isPlatformAdmin ? Building2 : Settings} onPrepare={preparePath}>
-								{isPlatformAdmin ? 'Admin plataforma' : 'Configuración'}
-							</NavItem>
-
-							{!isPlatformAdmin ? (
+							{isAdmin && !isPlatformAdmin ? (
 								<>
-									<NavItem to="/whatsapp-menu" icon={MessageSquareText} onPrepare={preparePath}>Menú</NavItem>
-									<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
+									<NavGroup label="Ventas">
+										<NavItem to="/catalog" icon={Boxes} onPrepare={preparePath}>Catálogo</NavItem>
+										<NavItem to="/abandoned-carts" icon={ShoppingCart} onPrepare={preparePath}>Carritos</NavItem>
+										<NavItem to="/customers" icon={Users} onPrepare={preparePath}>Clientes</NavItem>
+									</NavGroup>
+
+									<NavGroup label="Marketing">
+										<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')} onPrepare={preparePath}>Campañas</NavItem>
+										<NavItem to="/analytics" icon={BarChart3} onPrepare={preparePath}>Estadísticas</NavItem>
+									</NavGroup>
 								</>
 							) : null}
-						</NavGroup>
-					) : null}
+
+							{isAdmin ? (
+								<NavGroup label="Configuración">
+									<NavItem to="/admin" icon={isPlatformAdmin ? Building2 : Settings} onPrepare={preparePath}>
+										{isPlatformAdmin ? 'Admin plataforma' : 'Configuración'}
+									</NavItem>
+
+									{!isPlatformAdmin ? (
+										<>
+											<NavItem to="/whatsapp-menu" icon={MessageSquareText} onPrepare={preparePath}>Menú</NavItem>
+											<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
+										</>
+									) : null}
+								</NavGroup>
+							) : null}
+						</>
+					)}
 				</nav>
 
 				<button className="logout-btn" onClick={handleLogout} type="button">

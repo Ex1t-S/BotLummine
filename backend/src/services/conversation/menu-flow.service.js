@@ -1,5 +1,9 @@
 import { prisma } from '../../lib/prisma.js';
-import { normalizeText } from './conversation-helpers.service.js';
+import {
+	buildUnableToContinueHandoffReply,
+	isDkvWorkspace,
+	normalizeText,
+} from './conversation-helpers.service.js';
 import { buildHandoffReply } from './conversation-analysis.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
 import {
@@ -420,10 +424,12 @@ async function handleMenuSelection({
 			reason: option.handoffReason || 'menu_requested_human',
 		});
 
-		const handoffReply = normalizeText(option.replyBody) || buildHandoffReply({
-			contactName: contactName || '',
-			reason: option.handoffReason || 'menu_requested_human',
-		});
+		const handoffReply = isDkvWorkspace(workspaceId)
+			? buildUnableToContinueHandoffReply()
+			: normalizeText(option.replyBody) || buildHandoffReply({
+				contactName: contactName || '',
+				reason: option.handoffReason || 'menu_requested_human',
+			});
 
 		await sendMenuTextOnly({
 			conversationId,

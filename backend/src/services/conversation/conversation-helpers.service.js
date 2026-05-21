@@ -19,9 +19,19 @@ import {
 } from './conversation-signals.service.js';
 
 const DKV_WORKSPACE_IDS = new Set(['cmpevb0oq0000pd0pgp66xq6k']);
+const UNABLE_TO_CONTINUE_HANDOFF_REPLY =
+	'Dejanos tu consulta detallada y, cuando un asesor este disponible, te va a contestar la duda.';
 
-function isDkvWorkspace(workspaceId = '') {
+export function isDkvWorkspace(workspaceId = '') {
 	return DKV_WORKSPACE_IDS.has(String(workspaceId || '').trim());
+}
+
+export function buildUnableToContinueHandoffReply() {
+	return UNABLE_TO_CONTINUE_HANDOFF_REPLY;
+}
+
+export function isUnableToContinueHandoffReply(text = '') {
+	return normalizeText(text).toLowerCase() === UNABLE_TO_CONTINUE_HANDOFF_REPLY.toLowerCase();
 }
 
 function looksLikeDkvOfficeRequest(messageBody = '') {
@@ -252,19 +262,23 @@ export function buildConversationSummary({
 }
 
 export function buildAiFailureFallback({
+	workspaceId = '',
 	intent,
 	enrichedState,
 	catalogProducts = [],
 	commercialPlan = null,
 }) {
+	const useDkvHandoff = isDkvWorkspace(workspaceId);
 	const firstProduct =
 		Array.isArray(catalogProducts) && catalogProducts.length ? catalogProducts[0] : null;
 
 	if (commercialPlan?.shouldEscalate || enrichedState?.needsHuman) {
+		if (useDkvHandoff) return buildUnableToContinueHandoffReply();
 		return 'Te paso con una asesora para seguir mejor con esto.';
 	}
 
 	if (intent === 'product' && commercialPlan?.catalogAvailable === false) {
+		if (useDkvHandoff) return buildUnableToContinueHandoffReply();
 		const familyLabel =
 			commercialPlan?.productFamilyLabel ||
 			commercialPlan?.productFamily ||
@@ -314,6 +328,7 @@ export function buildAiFailureFallback({
 		}
 
 		if (commercialPlan?.recommendedAction === 'clarify_specific_product') {
+			if (useDkvHandoff) return buildUnableToContinueHandoffReply();
 			const familyLabel =
 				commercialPlan?.productFamilyLabel ||
 				commercialPlan?.productFamily ||
@@ -419,11 +434,16 @@ export function shouldForceCatalogSafetyFallback({
 }
 
 export function buildCatalogSafetyFallback({
+	workspaceId = '',
 	intent,
 	messageBody = '',
 	enrichedState = {},
 	commercialPlan = null,
 } = {}) {
+	if (isDkvWorkspace(workspaceId)) {
+		return buildUnableToContinueHandoffReply();
+	}
+
 	const familyLabel =
 		commercialPlan?.productFamilyLabel ||
 		commercialPlan?.productFamily ||
@@ -731,6 +751,7 @@ export function sanitizeStateForSupportPrompt(state = {}, intent = '') {
 }
 
 export function resolveReplyGate({
+	workspaceId = '',
 	messageBody = '',
 	messageType = 'text',
 	intent = 'general',
@@ -742,6 +763,10 @@ export function resolveReplyGate({
 } = {}) {
 	const text = normalizeText(messageBody);
 	const q = normalizeGateText(text);
+	const shouldUseDkvHandoffReply = isDkvWorkspace(workspaceId);
+	const handoffFallbackReply = shouldUseDkvHandoffReply
+		? buildUnableToContinueHandoffReply()
+		: null;
 
 	if (!text || isReactionLikeMessage(messageType, messageBody)) {
 		return {
@@ -773,6 +798,7 @@ export function resolveReplyGate({
 				handoffReason: 'requested_human',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Te paso con una asesora para que lo vea una persona. Dejo el chat derivado y seguimos por aca.',
 		};
 	}
@@ -788,7 +814,22 @@ export function resolveReplyGate({
 				handoffReason: 'customer_frustration',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Entiendo. Para no marearte con una respuesta incompleta, te paso con una asesora y dejamos este caso para revision humana.',
+		};
+	}
+
+	if (shouldUseDkvHandoffReply && looksLikeDkvSensitiveRequest(text)) {
+		return {
+			action: 'fixed_reply',
+			reason: 'sensitive_support',
+			queue: 'HUMAN',
+			aiEnabled: false,
+			statePatch: {
+				needsHuman: true,
+				handoffReason: 'sensitive_support',
+			},
+			reply: handoffFallbackReply,
 		};
 	}
 
@@ -851,6 +892,7 @@ export function resolveReplyGate({
 				handoffReason: 'tracking_followup',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Entiendo. Ya tenemos el seguimiento cargado, pero si no avanza o necesitas cambiar un dato del envio, lo tiene que revisar una asesora. Dejo el caso derivado para que lo vean por aca.',
 		};
 	}
@@ -871,6 +913,7 @@ export function resolveReplyGate({
 				handoffReason: 'return_exchange',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Gracias, ya sumo ese dato al caso. Queda derivado para que una asesora lo revise y te responda por aca. Si podes, mandanos tambien una foto del producto o de la etiqueta para acelerar la revision.',
 		};
 	}
@@ -903,6 +946,7 @@ export function resolveReplyGate({
 				handoffReason: 'cancel_request',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Puedo dejar el pedido para que lo revise una asesora, pero no te confirmo una cancelacion automatica desde aca. Te derivamos para verlo bien.',
 		};
 	}
@@ -918,6 +962,7 @@ export function resolveReplyGate({
 				handoffReason: 'return_exchange',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Entiendo, lo revisamos. Para que una asesora vea tu caso puntual, pasame el numero de pedido y una foto del producto o etiqueta si la tenes. No te confirmo una devolucion o cambio automatico desde aca, pero queda derivado para revisarlo bien.',
 		};
 	}
@@ -933,6 +978,7 @@ export function resolveReplyGate({
 				handoffReason: 'sensitive_support',
 			},
 			reply:
+				handoffFallbackReply ||
 				'Entiendo la preocupacion. Te paso con una asesora para revisar tu caso puntual y evitar darte una respuesta incompleta desde aca.',
 		};
 	}
@@ -1062,7 +1108,7 @@ export function stripBotOpenings(text = '') {
 }
 
 function responseMentionsHumanHandoff(text = '') {
-	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana)/i.test(
+	return /(te paso con una asesora|te paso con un asesor|te derivo con una asesora|te derivo con un asesor|lo revisa una asesora|lo revisa un asesor|ya lo toma una persona|te contacta el equipo|atencion humana|atención humana|cuando un asesor este disponible|cuando una asesora este disponible|asesor este disponible|asesora este disponible)/i.test(
 		String(text || '')
 	);
 }
@@ -1392,6 +1438,7 @@ export function normalizeRecentMessage(msg = {}) {
 }
 
 export function buildFallbackOrderAwareReply({
+	workspaceId = '',
 	intent,
 	liveOrderContext,
 	enrichedState,
@@ -1416,6 +1463,7 @@ export function buildFallbackOrderAwareReply({
 	}
 
 	return buildAiFailureFallback({
+		workspaceId,
 		intent,
 		enrichedState,
 		catalogProducts,

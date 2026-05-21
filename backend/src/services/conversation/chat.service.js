@@ -44,6 +44,9 @@ import {
 	resolveReplyGate,
 	sanitizeStateForSupportPrompt,
 	isSupportIntent,
+	isDkvWorkspace,
+	isUnableToContinueHandoffReply,
+	buildUnableToContinueHandoffReply,
 } from './conversation-helpers.service.js';
 import {
 	maybeHandleMenuFlow,
@@ -804,6 +807,7 @@ export async function processInboundMessage({
 	}
 
 	const replyGate = resolveReplyGate({
+		workspaceId: resolvedWorkspaceId,
 		messageBody: effectiveMessageBody,
 		messageType,
 		intent,
@@ -1212,10 +1216,12 @@ export async function processInboundMessage({
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
 
 	if (handoffJustTriggered) {
-		const handoffReply = buildHandoffReply({
-			contactName: freshConversation.contact.name || '',
-			reason: enrichedState.handoffReason
-		});
+		const handoffReply = isDkvWorkspace(resolvedWorkspaceId)
+			? buildUnableToContinueHandoffReply()
+			: buildHandoffReply({
+				contactName: freshConversation.contact.name || '',
+				reason: enrichedState.handoffReason
+			});
 
 		trace = {
 			...trace,
@@ -1584,6 +1590,7 @@ export async function processInboundMessage({
 			finalReply = buildFixedOrderReply(liveOrderContext);
 		} else {
 			finalReply = buildAiFailureFallback({
+				workspaceId: resolvedWorkspaceId,
 				intent,
 				enrichedState,
 				catalogProducts,
@@ -1603,6 +1610,7 @@ export async function processInboundMessage({
 		})
 	) {
 		finalReply = buildCatalogSafetyFallback({
+			workspaceId: resolvedWorkspaceId,
 			intent,
 			messageBody: effectiveMessageBody,
 			enrichedState,
@@ -1662,6 +1670,7 @@ export async function processInboundMessage({
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
+				workspaceId: resolvedWorkspaceId,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -1702,6 +1711,7 @@ export async function processInboundMessage({
 			});
 
 			finalReply = buildFallbackOrderAwareReply({
+				workspaceId: resolvedWorkspaceId,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -1724,8 +1734,34 @@ export async function processInboundMessage({
 		finalReply = appendMenuHintIfNeeded(finalReply, menuAssistantContext);
 	}
 
+	if (
+		isDkvWorkspace(resolvedWorkspaceId) &&
+		isUnableToContinueHandoffReply(finalReply)
+	) {
+		await syncHumanHandoff({
+			conversationId: freshConversation.id,
+			reason: 'ai_cannot_continue',
+		});
+		queueDecision = {
+			queue: 'HUMAN',
+			aiEnabled: false,
+			reason: 'ai_cannot_continue',
+		};
+		enrichedState.needsHuman = true;
+		enrichedState.handoffReason = 'ai_cannot_continue';
+		aiMeta = {
+			provider: aiMeta?.provider || 'system',
+			model: 'human-handoff-router',
+			raw: {
+				...(aiMeta?.raw || {}),
+				handoffReason: 'ai_cannot_continue',
+			},
+		};
+	}
+
 	trace = {
 		...trace,
+		queueDecision,
 		prompt,
 		assistantMessage: finalReply,
 		provider: aiMeta?.provider || (forcedReply ? 'system' : null),

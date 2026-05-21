@@ -11,7 +11,7 @@ import {
 import { normalizeCustomerFilterParams } from './customerFilters.js';
 import { prefetchInternalRoute } from './internalRouteModules.js';
 import { queryKeys, queryPresets } from './queryClient.js';
-import { isAdminUser, isPlatformAdminUser } from './authz.js';
+import { isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from './authz.js';
 
 const INBOX_PAGE_SIZE = 30;
 const CUSTOMER_PAGE_SIZE = 24;
@@ -347,6 +347,10 @@ export function scheduleIdleInternalPrefetch(paths = [], queryClient, options = 
 }
 
 export function getFrequentInternalPaths(user = null) {
+	if (isAiLabOnlyWorkspace(user)) {
+		return ['/ai-lab'];
+	}
+
 	const paths = ['/operations'];
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);

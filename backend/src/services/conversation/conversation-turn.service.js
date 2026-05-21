@@ -33,7 +33,6 @@ import {
 	normalizeText,
 	createResetConversationState,
 	buildConversationSummary,
-	buildAiFailureFallback,
 	buildCatalogSafetyFallback,
 	buildResponsePolicy,
 	auditAssistantReply,
@@ -42,6 +41,9 @@ import {
 	normalizeRecentMessage,
 	buildFallbackOrderAwareReply,
 	shouldForceCatalogSafetyFallback,
+	isDkvWorkspace,
+	isUnableToContinueHandoffReply,
+	buildUnableToContinueHandoffReply,
 } from './conversation-helpers.service.js';
 
 export async function runConversationTurn({
@@ -283,10 +285,12 @@ export async function runConversationTurn({
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
 
 	if (handoffJustTriggered) {
-		const handoffReply = buildHandoffReply({
-			contactName: customerContext?.name || contactName || normalizedWaId,
-			reason: enrichedState.handoffReason
-		});
+		const handoffReply = isDkvWorkspace(workspaceId)
+			? buildUnableToContinueHandoffReply()
+			: buildHandoffReply({
+				contactName: customerContext?.name || contactName || normalizedWaId,
+				reason: enrichedState.handoffReason
+			});
 
 		return {
 			intent,
@@ -540,6 +544,7 @@ export async function runConversationTurn({
 			finalReply = buildFixedOrderReply(liveOrderContext);
 		} else {
 			finalReply = buildFallbackOrderAwareReply({
+				workspaceId,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -560,6 +565,7 @@ export async function runConversationTurn({
 		})
 	) {
 		finalReply = buildCatalogSafetyFallback({
+			workspaceId,
 			intent,
 			messageBody,
 			enrichedState,
@@ -607,6 +613,7 @@ export async function runConversationTurn({
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
+				workspaceId,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -636,6 +643,7 @@ export async function runConversationTurn({
 				error,
 			});
 			finalReply = buildFallbackOrderAwareReply({
+				workspaceId,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -653,6 +661,39 @@ export async function runConversationTurn({
 		}
 	}
 
+	const shouldEscalateUnableFallback =
+		isDkvWorkspace(workspaceId) &&
+		isUnableToContinueHandoffReply(finalReply);
+	const finalQueueDecision = shouldEscalateUnableFallback
+		? {
+			queue: 'HUMAN',
+			aiEnabled: false,
+			reason: 'ai_cannot_continue',
+		}
+		: queueDecision;
+
+	if (shouldEscalateUnableFallback) {
+		nextStatePayload = {
+			...nextStatePayload,
+			needsHuman: true,
+			handoffReason: 'ai_cannot_continue',
+		};
+		enrichedState = {
+			...enrichedState,
+			needsHuman: true,
+			handoffReason: 'ai_cannot_continue',
+		};
+		postReplyHandoff = true;
+		aiMeta = {
+			provider: aiMeta?.provider || 'system',
+			model: 'human-handoff-router',
+			raw: {
+				...(aiMeta?.raw || {}),
+				handoffReason: 'ai_cannot_continue',
+			},
+		};
+	}
+
 	const finalSummary = buildConversationSummary({
 		intent,
 		enrichedState,
@@ -664,7 +705,7 @@ export async function runConversationTurn({
 
 	return {
 		intent,
-		queueDecision,
+		queueDecision: finalQueueDecision,
 		nextStatePayload,
 		enrichedState,
 		outbound: finalReply
@@ -678,7 +719,7 @@ export async function runConversationTurn({
 		postReplyHandoff,
 		trace: {
 			intent,
-			queueDecision,
+			queueDecision: finalQueueDecision,
 			responsePolicy,
 			commercialPlan,
 			catalogProducts,

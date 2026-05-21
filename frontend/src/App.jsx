@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BrandLoader from './components/ui/BrandLoader.jsx';
 import { useAuth } from './context/AuthContext.jsx';
-import { getDefaultRouteForRole, isPlatformAdminUser } from './lib/authz.js';
+import { getDefaultRouteForUser, isPlatformAdminUser } from './lib/authz.js';
 import { internalRouteModules } from './lib/internalRouteModules.js';
 import { lazyWithRetry } from './lib/lazyWithRetry.js';
 
@@ -22,7 +22,7 @@ const LoginPage = lazyWithRetry(internalRouteModules.login, 'LoginPage');
 
 function RoleHomeRedirect() {
 	const { user } = useAuth();
-	return <Navigate to={getDefaultRouteForRole(user?.role)} replace />;
+	return <Navigate to={getDefaultRouteForUser(user)} replace />;
 }
 
 function PageLoader() {
