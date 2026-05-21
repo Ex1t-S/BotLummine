@@ -89,7 +89,7 @@ function AiLabInteractiveMenuMessage({ message, isBusy, onSelect }) {
 export default function AiLabPage() {
 	useInternalDarkOverrides();
 
-	const messagesEndRef = useRef(null);
+	const chatBodyRef = useRef(null);
 	const didCreateSessionRef = useRef(false);
 	const [session, setSession] = useState(null);
 	const [messageText, setMessageText] = useState('');
@@ -150,7 +150,12 @@ export default function AiLabPage() {
 	}, [createSessionMutation, session?.id]);
 
 	useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+		const chatBody = chatBodyRef.current;
+		if (!chatBody) return;
+		chatBody.scrollTo({
+			top: chatBody.scrollHeight,
+			behavior: 'smooth',
+		});
 	}, [session?.messages?.length]);
 
 	const isBusy =
@@ -195,7 +200,7 @@ export default function AiLabPage() {
 					</div>
 				) : null}
 
-				<div className="ai-lab-chat-body">
+				<div className="ai-lab-chat-body" ref={chatBodyRef}>
 					{session?.messages?.length ? (
 						session.messages.map((message) => {
 							const isAssistant = message.role === 'assistant';
@@ -246,7 +251,6 @@ export default function AiLabPage() {
 							Procesando...
 						</div>
 					) : null}
-					<div ref={messagesEndRef} />
 				</div>
 
 				<form className="ai-lab-chat-form" onSubmit={handleSubmit}>
