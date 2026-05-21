@@ -528,7 +528,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 			conversationId: conversation.id,
 			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
 			menuPath: conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY,
-			bodyPrefix: 'Simulacion AI LAB: abrimos el menu comprador.'
+			bodyPrefix: 'Abrimos el menu.'
 		});
 
 		session.lastTrace = {

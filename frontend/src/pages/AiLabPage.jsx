@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { MessageSquarePlus, RotateCcw } from 'lucide-react';
+import { List, MessageSquarePlus, RotateCcw } from 'lucide-react';
 import api from '../lib/api.js';
 import { ActionButton } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
@@ -30,6 +30,123 @@ function getAssistantText(value) {
 
 function getApiError(error) {
 	return error?.response?.data?.error || error?.message || 'Error desconocido';
+}
+
+function getInteractivePayload(message = {}) {
+	if (String(message.type || '').toLowerCase() !== 'interactive') return null;
+	const payload = message.interactivePayload || null;
+	return payload && typeof payload === 'object' ? payload : null;
+}
+
+function isGenericMenuTitle(value = '') {
+	return /^(men[uú]\s+principal|marca)$/i.test(String(value || '').trim());
+}
+
+function stripMenuFallbackOptions(text = '') {
+	const normalized = String(text || '')
+		.replace(/\*\s*([^*]+?)\s*\*/g, '$1')
+		.replace(/\s+\d+\s*[-.)]\s+[^0-9\n]+(?=(\s+\d+\s*[-.)]\s+|$))/g, ' ')
+		.replace(/\bmen[uú]\s+principal\b/gi, ' ')
+		.replace(/\bescrib[ií]\s+0\s+o\s+men[uú]\s+para\s+volver[^\n]*/gi, ' ');
+	const lines = normalized.split('\n');
+	const cleanLines = [];
+
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) {
+			if (cleanLines.length && cleanLines[cleanLines.length - 1] !== '') cleanLines.push('');
+			continue;
+		}
+		if (/^\*[^*]+\*$/.test(line)) continue;
+		if (/^(\d+[-.)]|[-*•])\s+/i.test(line)) continue;
+		if (/^menu principal$/i.test(line)) continue;
+		if (/^escribi\s+0\s+o\s+menu\s+para\s+volver/i.test(line)) continue;
+		if (/^(menu_|[a-z0-9_]+)$/i.test(line)) continue;
+		cleanLines.push(rawLine);
+	}
+
+	return cleanLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function getInteractiveMenuRows(payload = {}) {
+	return (payload.sections || [])
+		.flatMap((section) =>
+			(section?.rows || []).map((row) => ({
+				id: row.id,
+				title: row.title,
+				description: row.description || section.title || '',
+			}))
+		)
+		.filter((row) => row.id && row.title);
+}
+
+function resolveInteractiveMenuDisplay(message = {}) {
+	const payload = getInteractivePayload(message) || {};
+	const fallbackBody = stripMenuFallbackOptions(message.text);
+	const bodyText = String(payload.bodyText || payload.body || '').trim() || fallbackBody;
+	const headerText = String(payload.headerText || '').trim();
+	const title =
+		(isGenericMenuTitle(headerText) ? '' : headerText) ||
+		String(message.provider || '').trim() ||
+		'BladeIA';
+	const buttonText = String(payload.buttonText || '').trim() || 'Abrir menu';
+
+	return {
+		title,
+		bodyText,
+		buttonText,
+		rows: getInteractiveMenuRows(payload),
+	};
+}
+
+function renderFormattedText(text = '') {
+	const lines = String(text || '').split('\n');
+	return lines.map((line, lineIndex) => (
+		<span key={`line-${lineIndex}`}>
+			{line}
+			{lineIndex < lines.length - 1 ? <br /> : null}
+		</span>
+	));
+}
+
+function AiLabInteractiveMenuMessage({ message, isBusy, onSelect }) {
+	const display = resolveInteractiveMenuDisplay(message);
+	const createdAtLabel = new Date(message.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+	return (
+		<div className="ai-lab-interactive-menu-card">
+			<div className="ai-lab-interactive-menu-content">
+				<div className="ai-lab-interactive-menu-title">{display.title}</div>
+				{display.bodyText ? (
+					<div className="ai-lab-interactive-menu-body">
+						{renderFormattedText(display.bodyText)}
+					</div>
+				) : null}
+				<div className="ai-lab-interactive-menu-time">{createdAtLabel}</div>
+			</div>
+			<div className="ai-lab-interactive-menu-action" aria-hidden="true">
+				<List size={18} strokeWidth={2.4} />
+				<span>{display.buttonText}</span>
+			</div>
+			{display.rows.length ? (
+				<div className="ai-lab-interactive-menu-options">
+					{display.rows.map((row, index) => (
+						<button
+							key={row.id}
+							type="button"
+							className="ai-lab-interactive-menu-option"
+							onClick={() => onSelect(row.id)}
+							disabled={isBusy}
+						>
+							<span>{index + 1}</span>
+							<strong>{row.title}</strong>
+							{row.description ? <small>{row.description}</small> : null}
+						</button>
+					))}
+				</div>
+			) : null}
+		</div>
+	);
 }
 
 export default function AiLabPage() {
@@ -127,7 +244,6 @@ export default function AiLabPage() {
 	const fixtures = fixturesQuery.data || [];
 	const activeFixture = fixtures.find((fixture) => fixture.key === fixtureKey) || session?.fixtureMeta || null;
 	const debugOffers = commercialPlan?.offerCandidates || [];
-	const menuPreview = session?.menuPreview || null;
 	const persistedRuns = session?.runs || [];
 
 	function handleSubmit(event) {
@@ -231,15 +347,41 @@ export default function AiLabPage() {
 
 				<div className="ai-lab-chat-body">
 					{session?.messages?.length ? (
-						session.messages.map((message) => (
-							<div key={message.id} className={`ai-lab-bubble ${message.role === 'assistant' ? 'assistant' : 'user'}`}>
-								<div className="ai-lab-bubble-text">{message.text}</div>
-								<div className="ai-lab-bubble-meta">
-									<span>{message.role === 'assistant' ? 'Sofi' : session?.contactName || 'Cliente'}</span>
-									<span>{new Date(message.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span>
+						session.messages.map((message) => {
+							const isAssistant = message.role === 'assistant';
+							const interactivePayload = getInteractivePayload(message);
+							const createdAtLabel = new Date(message.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+							return (
+								<div
+									key={message.id}
+									className={`ai-lab-message-row ${isAssistant ? 'ai-lab-message-row--outbound' : 'ai-lab-message-row--inbound'}`}
+								>
+									<div className="ai-lab-message-avatar" aria-hidden="true">
+										{isAssistant ? 'IA' : (session?.contactName || 'CL').slice(0, 2).toUpperCase()}
+									</div>
+									<div className="ai-lab-message-stack">
+										<div className={`ai-lab-bubble ${isAssistant ? 'assistant' : 'user'} ${interactivePayload ? 'ai-lab-bubble--interactive-menu' : ''}`}>
+											{interactivePayload ? (
+												<AiLabInteractiveMenuMessage
+													message={message}
+													isBusy={isBusy}
+													onSelect={handleMenuSelection}
+												/>
+											) : (
+												<div className="ai-lab-bubble-inner">
+													<div className="ai-lab-bubble-text">{message.text}</div>
+													<div className="ai-lab-bubble-meta">
+														<span>{isAssistant ? 'Sofi' : session?.contactName || 'Cliente'}</span>
+														<span>{createdAtLabel}</span>
+													</div>
+												</div>
+											)}
+										</div>
+									</div>
 								</div>
-							</div>
-						))
+							);
+						})
 					) : (
 						<div className="empty-state large">Cargá un escenario o arrancá desde cero.</div>
 					)}
@@ -261,40 +403,9 @@ export default function AiLabPage() {
 
 				<div className="ai-lab-inline-actions">
 					<button type="button" className="ai-lab-secondary-btn" onClick={handleOpenMenu} disabled={!session?.id || isBusy}>
-						Abrir menu comprador
+						Abrir menu
 					</button>
 				</div>
-
-				{menuPreview?.options?.length ? (
-					<div className="ai-lab-inline-menu">
-						<div className="ai-lab-inline-menu__header">
-							<div>
-								<strong>Menu comprador</strong>
-								<span>{menuPreview.menuPath || 'sin ruta'}</span>
-							</div>
-							<span className={`ai-lab-chip ${menuPreview.menuActive ? '' : 'secondary'}`}>
-								{menuPreview.menuActive ? 'Activo' : 'Ultimo menu'}
-							</span>
-						</div>
-
-						<p>{menuPreview.fallbackText || 'Sin vista previa del menu.'}</p>
-
-						<div className="ai-lab-inline-menu__options">
-							{menuPreview.options.map((option) => (
-								<button
-									key={option.id}
-									type="button"
-									className="ai-lab-inline-menu__option"
-									onClick={() => handleMenuSelection(option.id)}
-									disabled={isBusy}
-								>
-									<strong>{option.title}</strong>
-									<span>{option.description || option.sectionTitle || option.id}</span>
-								</button>
-							))}
-						</div>
-					</div>
-				) : null}
 			</section>
 
 			<aside className="ai-lab-debug-card">

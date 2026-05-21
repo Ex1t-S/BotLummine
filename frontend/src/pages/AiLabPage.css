@@ -749,8 +749,212 @@
 	color: #e5edf2;
 }
 
+.ai-lab-message-row {
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
+	width: 100%;
+}
+
+.ai-lab-message-row--outbound {
+	flex-direction: row-reverse;
+}
+
+.ai-lab-message-avatar {
+	display: grid;
+	place-items: center;
+	flex: 0 0 32px;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	border: 1px solid var(--ui-border, #d7dee5);
+	background: #ffffff;
+	color: var(--ui-muted, #66737d);
+	font-size: 11px;
+	font-weight: 800;
+}
+
+.ai-lab-message-row--outbound .ai-lab-message-avatar {
+	background: var(--ui-primary-muted, #f0fdfa);
+	color: var(--ui-primary-strong, #0a5f59);
+}
+
+.ai-lab-message-stack {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	max-width: min(76%, 740px);
+	min-width: 0;
+}
+
+.ai-lab-message-row--outbound .ai-lab-message-stack {
+	align-items: flex-end;
+}
+
+.ai-lab-bubble {
+	position: relative;
+	max-width: 100%;
+	min-width: 140px;
+	padding: 0;
+}
+
+.ai-lab-bubble-inner {
+	padding: 11px 13px 8px;
+}
+
+.ai-lab-bubble--interactive-menu {
+	width: min(352px, 78vw);
+	min-width: min(320px, 78vw);
+	overflow: hidden;
+	border-radius: 7px;
+	background: #ffffff !important;
+	border-color: rgba(15, 23, 42, 0.1) !important;
+	box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+}
+
+.ai-lab-interactive-menu-card {
+	color: #111827;
+}
+
+.ai-lab-interactive-menu-content {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-height: 96px;
+	padding: 12px 12px 8px;
+}
+
+.ai-lab-interactive-menu-title {
+	margin: 0;
+	color: #111827;
+	font-size: 16px;
+	font-weight: 800;
+	line-height: 1.2;
+}
+
+.ai-lab-interactive-menu-body {
+	color: #111827;
+	font-size: 14px;
+	font-weight: 700;
+	line-height: 1.38;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.ai-lab-interactive-menu-time {
+	align-self: flex-end;
+	margin-top: auto;
+	color: rgba(17, 24, 39, 0.58);
+	font-size: 12px;
+	line-height: 1;
+}
+
+.ai-lab-interactive-menu-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	min-height: 44px;
+	border-top: 1px solid rgba(15, 23, 42, 0.08);
+	color: #16c784;
+	font-size: 14px;
+	font-weight: 800;
+}
+
+.ai-lab-interactive-menu-options {
+	display: grid;
+	border-top: 1px solid rgba(15, 23, 42, 0.08);
+	background: #f8fafb;
+}
+
+.ai-lab-interactive-menu-option {
+	display: grid;
+	grid-template-columns: 24px minmax(0, 1fr);
+	gap: 2px 10px;
+	align-items: center;
+	width: 100%;
+	border: 0;
+	border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+	background: #ffffff;
+	padding: 10px 12px;
+	color: #111827;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ai-lab-interactive-menu-option:last-child {
+	border-bottom: 0;
+}
+
+.ai-lab-interactive-menu-option:hover:not(:disabled) {
+	background: #f0fdfa;
+}
+
+.ai-lab-interactive-menu-option:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.ai-lab-interactive-menu-option > span {
+	grid-row: span 2;
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 999px;
+	background: #ecfdf5;
+	color: #0a5f59;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.ai-lab-interactive-menu-option strong {
+	overflow: hidden;
+	color: #111827;
+	font-size: 14px;
+	line-height: 1.2;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ai-lab-interactive-menu-option small {
+	overflow: hidden;
+	color: #66737d;
+	font-size: 12px;
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.dark .admin-shell .admin-content .ai-lab-bubble--interactive-menu,
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-option {
+	background: #202524 !important;
+	border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-card,
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-title,
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-body,
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-option strong {
+	color: #f4f6f5 !important;
+}
+
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-time,
+.dark .admin-shell .admin-content .ai-lab-interactive-menu-option small {
+	color: rgba(244, 246, 245, 0.66) !important;
+}
+
 @media (max-width: 980px) {
 	.ai-lab-page {
 		min-height: auto;
+	}
+
+	.ai-lab-message-stack {
+		max-width: calc(100% - 44px);
+	}
+
+	.ai-lab-bubble--interactive-menu {
+		width: min(352px, calc(100vw - 96px));
+		min-width: min(300px, calc(100vw - 96px));
 	}
 }
