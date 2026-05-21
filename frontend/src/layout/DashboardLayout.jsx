@@ -23,7 +23,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { resolveApiUrl } from '../lib/api.js';
 import './DashboardLayout.css';
 import logoBladeIA from '../assets/bladeia-logo.svg';
-import { isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from '../lib/authz.js';
+import { canUseAiLab, isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from '../lib/authz.js';
 import {
 	getFrequentInternalPaths,
 	prefetchInternalRouteAndData,
@@ -138,6 +138,7 @@ export default function DashboardLayout() {
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
 	const aiLabOnlyWorkspace = isAiLabOnlyWorkspace(user);
+	const showAiLab = canUseAiLab(user);
 	const workspace = user?.workspace || null;
 	const brandName = isPlatformAdmin
 		? 'Admin plataforma'
@@ -288,8 +289,11 @@ export default function DashboardLayout() {
 									{!isPlatformAdmin ? (
 										<>
 											<NavItem to="/whatsapp-menu" icon={MessageSquareText} onPrepare={preparePath}>Menú</NavItem>
-											<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
 										</>
+									) : null}
+
+									{showAiLab ? (
+										<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
 									) : null}
 								</NavGroup>
 							) : null}

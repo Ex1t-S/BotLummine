@@ -11,7 +11,7 @@ import {
 import { normalizeCustomerFilterParams } from './customerFilters.js';
 import { prefetchInternalRoute } from './internalRouteModules.js';
 import { queryKeys, queryPresets } from './queryClient.js';
-import { isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from './authz.js';
+import { canUseAiLab, isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from './authz.js';
 
 const INBOX_PAGE_SIZE = 30;
 const CUSTOMER_PAGE_SIZE = 24;
@@ -360,11 +360,13 @@ export function getFrequentInternalPaths(user = null) {
 	}
 
 	if (isAdmin && !isPlatformAdmin) {
-		paths.push('/campaigns/library', '/customers', '/catalog', '/abandoned-carts', '/ai-lab');
+		paths.push('/campaigns/library', '/customers', '/catalog', '/abandoned-carts');
 	}
 
 	if (isPlatformAdmin) {
-		paths.push('/admin');
+		paths.push('/admin', '/ai-lab');
+	} else if (canUseAiLab(user)) {
+		paths.push('/ai-lab');
 	}
 
 	return paths;

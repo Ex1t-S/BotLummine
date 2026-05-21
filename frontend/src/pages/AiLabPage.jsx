@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { List, RotateCcw, Send } from 'lucide-react';
 import api from '../lib/api.js';
 import { ActionButton } from '../components/ui/InternalPage.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
+import { isPlatformAdminUser } from '../lib/authz.js';
 import './AiLabPage.css';
 
 const BLANK_FIXTURE_KEY = 'blank';
@@ -37,6 +39,14 @@ function renderFormattedText(text = '') {
 			{lineIndex < lines.length - 1 ? <br /> : null}
 		</span>
 	));
+}
+
+function getWorkspaceName(workspace = {}) {
+	return workspace?.aiConfig?.businessName || workspace?.name || workspace?.slug || 'Marca';
+}
+
+function getWorkspaceVertical(workspace = {}) {
+	return String(workspace?.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE').trim().toUpperCase();
 }
 
 function AiLabInteractiveMenuMessage({ message, isBusy, onSelect }) {
@@ -89,18 +99,51 @@ function AiLabInteractiveMenuMessage({ message, isBusy, onSelect }) {
 export default function AiLabPage() {
 	useInternalDarkOverrides();
 
+	const { user } = useAuth();
+	const isPlatformAdmin = isPlatformAdminUser(user);
 	const chatBodyRef = useRef(null);
 	const didCreateSessionRef = useRef(false);
 	const [session, setSession] = useState(null);
 	const [messageText, setMessageText] = useState('');
 	const [uiError, setUiError] = useState('');
+	const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('');
+
+	const workspaceListQuery = useQuery({
+		queryKey: ['admin', 'workspaces'],
+		queryFn: async () => {
+			const res = await api.get('/admin/workspaces');
+			return res.data;
+		},
+		enabled: isPlatformAdmin,
+		staleTime: 60_000,
+	});
+
+	const workspaceListData = workspaceListQuery.data || null;
+	const workspaceOptions = isPlatformAdmin
+		? (Array.isArray(workspaceListData) ? workspaceListData : (workspaceListData?.workspaces || []))
+		: [];
+	const selectedWorkspace = workspaceOptions.find((workspace) => workspace.id === selectedWorkspaceId) || null;
+	const activeWorkspaceId = isPlatformAdmin ? selectedWorkspaceId : '';
+	const hasWorkspaceContext = !isPlatformAdmin || Boolean(activeWorkspaceId);
+	const workspaceLoadError = isPlatformAdmin && workspaceListQuery.isError
+		? `No se pudieron cargar las marcas: ${getApiError(workspaceListQuery.error)}`
+		: '';
+
+	function buildRequestPayload(extra = {}) {
+		return {
+			...extra,
+			...(isPlatformAdmin ? { workspaceId: activeWorkspaceId } : {}),
+		};
+	}
 
 	const createSessionMutation = useMutation({
 		mutationFn: async () => {
-			const res = await api.post('/ai-lab/sessions', { fixtureKey: BLANK_FIXTURE_KEY });
+			if (!hasWorkspaceContext) return null;
+			const res = await api.post('/ai-lab/sessions', buildRequestPayload({ fixtureKey: BLANK_FIXTURE_KEY }));
 			return res.data.session;
 		},
 		onSuccess: (nextSession) => {
+			if (!nextSession) return;
 			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
@@ -110,14 +153,16 @@ export default function AiLabPage() {
 
 	const resetSessionMutation = useMutation({
 		mutationFn: async () => {
+			if (!hasWorkspaceContext) return null;
 			if (!session?.id) {
-				const res = await api.post('/ai-lab/sessions', { fixtureKey: BLANK_FIXTURE_KEY });
+				const res = await api.post('/ai-lab/sessions', buildRequestPayload({ fixtureKey: BLANK_FIXTURE_KEY }));
 				return res.data.session;
 			}
-			const res = await api.post(`/ai-lab/sessions/${session.id}/reset`, { fixtureKey: BLANK_FIXTURE_KEY });
+			const res = await api.post(`/ai-lab/sessions/${session.id}/reset`, buildRequestPayload({ fixtureKey: BLANK_FIXTURE_KEY }));
 			return res.data.session;
 		},
 		onSuccess: (nextSession) => {
+			if (!nextSession) return;
 			setUiError('');
 			setSession(nextSession);
 			setMessageText('');
@@ -127,11 +172,11 @@ export default function AiLabPage() {
 
 	const sendMessageMutation = useMutation({
 		mutationFn: async (payload = {}) => {
-			if (!session?.id) return null;
-			const res = await api.post(`/ai-lab/sessions/${session.id}/messages`, {
+			if (!session?.id || !hasWorkspaceContext) return null;
+			const res = await api.post(`/ai-lab/sessions/${session.id}/messages`, buildRequestPayload({
 				body: payload.body || '',
 				selectionId: payload.selectionId || '',
-			});
+			}));
 			return res.data.session;
 		},
 		onSuccess: (nextSession) => {
@@ -144,10 +189,28 @@ export default function AiLabPage() {
 	});
 
 	useEffect(() => {
-		if (didCreateSessionRef.current || createSessionMutation.isPending || session?.id) return;
+		if (!isPlatformAdmin) return;
+		if (workspaceListQuery.isLoading || !workspaceOptions.length) return;
+
+		const currentIsValid = workspaceOptions.some((workspace) => workspace.id === selectedWorkspaceId);
+		if (currentIsValid) return;
+
+		const activeWorkspace = workspaceOptions.find((workspace) => workspace.status === 'ACTIVE') || workspaceOptions[0];
+		setSelectedWorkspaceId(activeWorkspace?.id || '');
+	}, [isPlatformAdmin, selectedWorkspaceId, workspaceListQuery.isLoading, workspaceOptions]);
+
+	useEffect(() => {
+		didCreateSessionRef.current = false;
+		setSession(null);
+		setMessageText('');
+		setUiError('');
+	}, [activeWorkspaceId]);
+
+	useEffect(() => {
+		if (!hasWorkspaceContext || didCreateSessionRef.current || createSessionMutation.isPending || session?.id) return;
 		didCreateSessionRef.current = true;
 		createSessionMutation.mutate();
-	}, [createSessionMutation, session?.id]);
+	}, [createSessionMutation, hasWorkspaceContext, session?.id]);
 
 	useEffect(() => {
 		const chatBody = chatBodyRef.current;
@@ -161,7 +224,8 @@ export default function AiLabPage() {
 	const isBusy =
 		createSessionMutation.isPending ||
 		resetSessionMutation.isPending ||
-		sendMessageMutation.isPending;
+		sendMessageMutation.isPending ||
+		workspaceListQuery.isLoading;
 
 	function handleSubmit(event) {
 		event.preventDefault();
@@ -181,22 +245,44 @@ export default function AiLabPage() {
 				<div className="ai-lab-chat-header">
 					<div>
 						<h1>AI Lab</h1>
-						<p>Conversacion nueva de prueba</p>
+						<p>
+							{isPlatformAdmin && selectedWorkspace
+								? `${getWorkspaceName(selectedWorkspace)} - ${getWorkspaceVertical(selectedWorkspace)}`
+								: 'Conversacion nueva de prueba'}
+						</p>
 					</div>
-					<ActionButton
-						variant="secondary"
-						className="ai-lab-reset-btn"
-						onClick={() => resetSessionMutation.mutate()}
-						disabled={isBusy}
-						icon={RotateCcw}
-					>
-						Reiniciar conversacion
-					</ActionButton>
+					<div className="ai-lab-header-actions">
+						{isPlatformAdmin ? (
+							<label className="ai-lab-workspace-picker">
+								<span>Marca</span>
+								<select
+									value={selectedWorkspaceId}
+									onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+									disabled={isBusy || !workspaceOptions.length}
+								>
+									{workspaceOptions.map((workspace) => (
+										<option key={workspace.id} value={workspace.id}>
+											{getWorkspaceName(workspace)} - {getWorkspaceVertical(workspace)}
+										</option>
+									))}
+								</select>
+							</label>
+						) : null}
+						<ActionButton
+							variant="secondary"
+							className="ai-lab-reset-btn"
+							onClick={() => resetSessionMutation.mutate()}
+							disabled={isBusy || !hasWorkspaceContext}
+							icon={RotateCcw}
+						>
+							Reiniciar conversacion
+						</ActionButton>
+					</div>
 				</div>
 
-				{uiError ? (
+				{uiError || workspaceLoadError ? (
 					<div className="ai-lab-error" role="alert">
-						{uiError}
+						{uiError || workspaceLoadError}
 					</div>
 				) : null}
 
@@ -242,7 +328,11 @@ export default function AiLabPage() {
 						})
 					) : (
 						<div className="ai-lab-empty">
-							{isBusy ? 'Preparando conversacion...' : 'Escribi un mensaje para empezar la prueba.'}
+							{isBusy
+								? 'Preparando conversacion...'
+								: isPlatformAdmin && !selectedWorkspaceId
+									? 'Elegi una marca para empezar la prueba.'
+									: 'Escribi un mensaje para empezar la prueba.'}
 						</div>
 					)}
 					{isBusy && session?.messages?.length ? (

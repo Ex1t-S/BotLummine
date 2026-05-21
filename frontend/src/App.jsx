@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BrandLoader from './components/ui/BrandLoader.jsx';
 import { useAuth } from './context/AuthContext.jsx';
-import { getDefaultRouteForUser, isPlatformAdminUser } from './lib/authz.js';
+import { canUseAiLab, getDefaultRouteForUser, isPlatformAdminUser } from './lib/authz.js';
 import { internalRouteModules } from './lib/internalRouteModules.js';
 import { lazyWithRetry } from './lib/lazyWithRetry.js';
 
@@ -55,6 +55,15 @@ function BrandAnalyticsRoute() {
 	}
 
 	return <AdminPage defaultTab="analytics" />;
+}
+
+function AiLabRoute() {
+	const { user } = useAuth();
+	if (!canUseAiLab(user)) {
+		return <Navigate to={getDefaultRouteForUser(user)} replace />;
+	}
+
+	return <AiLabPage />;
 }
 
 export default function App() {
@@ -179,7 +188,7 @@ export default function App() {
 					element={
 						<ProtectedRoute allowedRoles={['ADMIN']}>
 							<Suspense fallback={<PageLoader />}>
-								<AiLabPage />
+								<AiLabRoute />
 							</Suspense>
 						</ProtectedRoute>
 					}
