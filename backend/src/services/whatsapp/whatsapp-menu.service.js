@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { DEFAULT_WORKSPACE_ID, getWorkspaceRuntimeConfig, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { getAiVerticalProfile, resolveAiVertical, usesCommerceEngine } from '../ai/vertical-profile.service.js';
 
 export const DEFAULT_MENU_PATHS = {
 	MAIN: 'MAIN_MENU',
@@ -386,6 +387,65 @@ export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 	]
 };
 
+export const INSURANCE_WHATSAPP_MENU_CONFIG = {
+	version: 1,
+	autoMenuEnabled: true,
+	mainMenuKey: DEFAULT_MAIN_MENU_KEY,
+	menus: [
+		{
+			key: DEFAULT_MENU_PATHS.MAIN,
+			title: 'Menu principal',
+			headerText: 'Seguros',
+			body: 'Elige una opcion para ayudarte:',
+			buttonText: 'Abrir menu',
+			footerText: 'Escribe 0 o menu para volver al inicio.',
+			sectionTitle: 'Menu principal',
+			sortOrder: 1,
+			options: [
+				{
+					id: 'menu_insurance_services',
+					title: 'Seguros',
+					description: 'Salud, empresa, dental y mas',
+					aliases: ['1', 'seguros', 'polizas', 'servicios'],
+					actionType: 'INTENT',
+					actionValue: 'product',
+					effectiveMessageBody: 'Quiero orientacion sobre seguros disponibles',
+					summaryUserMessage: 'Cliente eligio menu: seguros',
+					sortOrder: 1
+				},
+				{
+					id: 'menu_insurance_office',
+					title: 'Citas y oficina',
+					description: 'Direccion, horario y contacto',
+					aliases: ['2', 'cita', 'oficina', 'direccion', 'horario'],
+					actionType: 'MESSAGE',
+					replyBody: 'La oficina esta en C. Silva, 5, 35110 Vecindario, Las Palmas. Horario: lunes a viernes de 09:00 a 14:00. Tardes con cita previa.',
+					model: 'menu-insurance-office',
+					sortOrder: 2
+				},
+				{
+					id: 'menu_insurance_customer',
+					title: 'Gestion de cliente',
+					description: 'Poliza, autorizacion o reembolso',
+					aliases: ['3', 'cliente', 'poliza', 'autorizacion', 'reembolso'],
+					actionType: 'HUMAN',
+					actionValue: 'human',
+					sortOrder: 3
+				},
+				{
+					id: 'menu_insurance_human',
+					title: 'Hablar con asesor',
+					description: 'Pasar a atencion humana',
+					aliases: ['4', 'asesor', 'humano', 'persona'],
+					actionType: 'HUMAN',
+					actionValue: 'human',
+					sortOrder: 4
+				}
+			]
+		}
+	]
+};
+
 export function normalizeWhatsAppMenuConfig(inputConfig = {}) {
 	const defaultConfig = clone(DEFAULT_WHATSAPP_MENU_CONFIG);
 	const sourceConfig = typeof inputConfig === 'object' && inputConfig !== null ? inputConfig : {};
@@ -464,8 +524,19 @@ function buildRuntimePayload(settings) {
 	};
 }
 
+async function getDefaultMenuConfigForWorkspace(workspaceId = DEFAULT_WORKSPACE_ID) {
+	try {
+		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
+		const vertical = resolveAiVertical({ workspaceConfig });
+		return usesCommerceEngine(vertical) ? DEFAULT_WHATSAPP_MENU_CONFIG : INSURANCE_WHATSAPP_MENU_CONFIG;
+	} catch {
+		return DEFAULT_WHATSAPP_MENU_CONFIG;
+	}
+}
+
 export async function getOrCreateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const defaultConfig = await getDefaultMenuConfigForWorkspace(resolvedWorkspaceId);
 	let settings = await prisma.whatsAppMenuSetting.findUnique({
 		where: {
 			workspaceId_key: {
@@ -482,7 +553,7 @@ export async function getOrCreateWhatsAppMenuSettings({ workspaceId = DEFAULT_WO
 				key: SETTINGS_KEY,
 				name: 'Configuración principal',
 				isActive: true,
-				config: DEFAULT_WHATSAPP_MENU_CONFIG
+				config: defaultConfig
 			}
 		});
 	}
@@ -534,6 +605,7 @@ export async function updateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPA
 
 export async function resetWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const defaultConfig = await getDefaultMenuConfigForWorkspace(resolvedWorkspaceId);
 	const settings = await prisma.whatsAppMenuSetting.upsert({
 		where: {
 			workspaceId_key: {
@@ -544,14 +616,14 @@ export async function resetWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPAC
 		update: {
 			name: 'Configuración principal',
 			isActive: true,
-			config: DEFAULT_WHATSAPP_MENU_CONFIG
+			config: defaultConfig
 		},
 		create: {
 			workspaceId: resolvedWorkspaceId,
 			key: SETTINGS_KEY,
 			name: 'Configuración principal',
 			isActive: true,
-			config: DEFAULT_WHATSAPP_MENU_CONFIG
+			config: defaultConfig
 		}
 	});
 
@@ -650,6 +722,17 @@ export async function buildMenuAssistantContext({
 	queueDecision = null,
 } = {}) {
 	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
+	let verticalProfile = null;
+	let useCommerce = true;
+	try {
+		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
+		const vertical = resolveAiVertical({ workspaceConfig });
+		verticalProfile = getAiVerticalProfile(vertical);
+		useCommerce = usesCommerceEngine(vertical);
+	} catch {
+		verticalProfile = null;
+		useCommerce = true;
+	}
 	const relevantKeys = resolveRelevantMenuKeys(intent, currentState);
 	const collectedOptions = [];
 
@@ -673,6 +756,26 @@ export async function buildMenuAssistantContext({
 		}
 
 		if (collectedOptions.length >= 4) break;
+	}
+
+	if (!useCommerce) {
+		const bannedOptionPattern = /(producto|catalogo|cat[aá]logo|pago|envio|envío|talle|stock|carrito|promo)/i;
+		for (let index = collectedOptions.length - 1; index >= 0; index -= 1) {
+			const option = collectedOptions[index];
+			if (bannedOptionPattern.test(`${option.title} ${option.description}`)) {
+				collectedOptions.splice(index, 1);
+			}
+		}
+		for (const [index, title] of (verticalProfile?.genericMenuOptions || []).entries()) {
+			if (collectedOptions.length >= 4) break;
+			if (collectedOptions.some((option) => option.title === title)) continue;
+			collectedOptions.push({
+				id: `vertical_${index + 1}`,
+				title,
+				description: '',
+				actionType: title.toLowerCase().includes('asesor') ? 'HUMAN' : 'MESSAGE',
+			});
+		}
 	}
 
 	const allowSoftMenu =

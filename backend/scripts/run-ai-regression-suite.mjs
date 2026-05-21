@@ -6,8 +6,37 @@ const { createAiLabSession, sendAiLabMessage } = await import('../src/services/a
 const { prisma } = await import('../src/lib/prisma.js');
 
 const WORKSPACE_ID = process.env.AI_REGRESSION_WORKSPACE_ID || 'workspace_lummine';
+const INSURANCE_WORKSPACE_ID = process.env.AI_REGRESSION_INSURANCE_WORKSPACE_ID || 'cmpevb0oq0000pd0pgp66xq6k';
 
 const SCENARIOS = [
+	{
+		key: 'dkv-greeting-no-ecommerce',
+		workspaceId: INSURANCE_WORKSPACE_ID,
+		fixtureKey: 'blank',
+		turns: ['Hola'],
+		checks: ['no_ecommerce_terms', 'insurance_tone'],
+	},
+	{
+		key: 'dkv-hire-insurance',
+		workspaceId: INSURANCE_WORKSPACE_ID,
+		fixtureKey: 'blank',
+		turns: ['Quiero contratar un seguro de salud para mi familia'],
+		checks: ['no_ecommerce_terms', 'insurance_guidance', 'no_price'],
+	},
+	{
+		key: 'dkv-policy-sensitive-human',
+		workspaceId: INSURANCE_WORKSPACE_ID,
+		fixtureKey: 'blank',
+		turns: ['Ya soy cliente, necesito una autorizacion para mi poliza'],
+		checks: ['human_or_fixed', 'no_ecommerce_terms'],
+	},
+	{
+		key: 'dkv-menu-no-ecommerce',
+		workspaceId: INSURANCE_WORKSPACE_ID,
+		fixtureKey: 'blank',
+		turns: [{ action: 'open_menu' }],
+		checks: ['no_ecommerce_terms', 'insurance_menu'],
+	},
 	{
 		key: 'post-campaign-cart-later',
 		fixtureKey: 'real-cart-later',
@@ -159,6 +188,10 @@ function evaluateCheck(check, { session, beforeAssistantCount, afterAssistantCou
 		return !/(tracking|codigo de seguimiento|seguirlo aca|link de seguimiento)/i.test(combined);
 	}
 	if (check === 'no_promo') return !/(promo|oferta|3x1|5x2|2x1|calzas linfaticas|pack)/i.test(combined);
+	if (check === 'no_ecommerce_terms') return !/(stock|talle|talles|carrito|checkout|promo|promos|pack|envio|envios|cat[aá]logo general|medios de pago|bodys|calzas|indumentaria)/i.test(combined);
+	if (check === 'insurance_tone') return /(seguro|seguros|asesor|oficina|dkv|gesti[oó]n|ayudarte)/i.test(combined);
+	if (check === 'insurance_guidance') return /(salud|familia|asesor|propuesta|datos|tipo de seguro|seguro)/i.test(combined);
+	if (check === 'insurance_menu') return /(seguros|citas|oficina|gestion|gesti[oó]n|asesor)/i.test(combined);
 	if (check === 'no_payment_verified_claim') return !/(ya lo revise|estoy revisando|verificamos el pago|se acredito|se acredito)/i.test(combined);
 	if (check === 'no_unconfirmed_catalog_claim') return !/(tenemos stock|viene en xl|te confirmo xl|sin problema en xl)/i.test(combined);
 	if (check === 'asks_location') return /(decime|pasame|indicame|confirmame|mandame).*(localidad|codigo postal|cp|zona|provincia)/i.test(combined);
@@ -185,14 +218,14 @@ function evaluateCheck(check, { session, beforeAssistantCount, afterAssistantCou
 
 async function runScenario(scenario) {
 	let session = await createAiLabSession({
-		workspaceId: WORKSPACE_ID,
+		workspaceId: scenario.workspaceId || WORKSPACE_ID,
 		fixtureKey: scenario.fixtureKey,
 	});
 
 	for (const turn of scenario.turns) {
 		const beforeAssistantCount = getAssistantMessages(session).length;
 		session = await sendAiLabMessage(session.id, {
-			workspaceId: WORKSPACE_ID,
+			workspaceId: scenario.workspaceId || WORKSPACE_ID,
 			body: typeof turn === 'string' ? turn : '',
 			action: typeof turn === 'object' ? turn.action || '' : '',
 			selectionId: typeof turn === 'object' ? turn.selectionId || '' : '',
@@ -212,6 +245,7 @@ async function runScenario(scenario) {
 
 	return {
 		key: scenario.key || scenario.fixtureKey,
+		workspaceId: scenario.workspaceId || WORKSPACE_ID,
 		fixtureKey: scenario.fixtureKey,
 		sessionId: session.id,
 		conversationId: session.conversationId,

@@ -1,21 +1,11 @@
 import { getRelevantStoreFacts } from '../../data/store-style.js';
 import { buildRelevantBusinessData } from '../../data/store-business.js';
-
-const BASE_ASSISTANT_POLICY = [
-	'Responde como asesora humana de ventas por WhatsApp.',
-	'Usa solo datos confirmados por el catalogo, pedidos, pagos y contexto operativo disponible.',
-	'No inventes productos, precios, promos, stock, links, estados de pago, envios ni tracking.',
-	'Diferencia soporte de venta: si el cliente pregunta por pedido, pago o envio, resolvelo sin abrir promociones salvo pedido explicito.',
-	'Se breve, natural y comercial; no uses listas largas ni repitas saludos, links o precios ya dados.'
-].join(' ');
-
-const DKV_ASSISTANT_POLICY = [
-	'Responde como asistente de la oficina DKV Seguros Vecindario por WhatsApp.',
-	'Orienta sobre seguros, citas, datos de oficina y gestiones generales usando solo informacion confirmada.',
-	'No inventes precios, coberturas, autorizaciones, tramites completados ni estados de poliza.',
-	'Si la consulta requiere datos personales, poliza, autorizacion, reembolso o una decision operativa, deriva a un asesor.',
-	'Se breve, claro y formal, con espanol de Espana.'
-].join(' ');
+import {
+	getAiVerticalProfile,
+	isInsuranceVertical,
+	resolveAiVertical,
+	usesCommerceEngine,
+} from '../ai/vertical-profile.service.js';
 
 function formatTranscript({ businessName, contactName, recentMessages }) {
 	return recentMessages
@@ -46,7 +36,8 @@ function formatArrayField(value = [], fallback = 'ninguno') {
 	return Array.isArray(value) && value.length ? value.join(', ') : fallback;
 }
 
-function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', businessName = 'la marca', isDkv = false } = {}) {
+function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', businessName = 'la marca', profile = null } = {}) {
+	const insurance = isInsuranceVertical(profile?.vertical);
 	const lines = [
 		`- Accion permitida: ${responsePolicy.action || 'general_help'}`,
 		`- Tono: ${responsePolicy.tone || 'amigable_directo'}`,
@@ -58,7 +49,7 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 		'- Evita abrir con muletillas como claro, perfecto, genial, buenisimo o dale.',
 	];
 
-	if (isDkv) {
+	if (insurance) {
 		lines.push(
 			'- No hables de stock, talles, carrito, envios, promos de ecommerce ni productos de indumentaria.',
 			'- Si preguntan por contratar, orienta sobre el tipo de seguro y pide datos minimos para que un asesor prepare la propuesta.',
@@ -113,17 +104,6 @@ function shouldUseStoreCommerceContext({ catalogProducts = [], commercialPlan = 
 	return Array.isArray(catalogProducts) && catalogProducts.length > 0;
 }
 
-function isDkvContext({ workspaceConfig = null, businessName = '', businessContext = '' } = {}) {
-	return /dkv|vecindario|las palmas/i.test(
-		[
-			workspaceConfig?.workspaceId,
-			workspaceConfig?.workspaceName,
-			businessName,
-			businessContext,
-		].filter(Boolean).join(' ')
-	);
-}
-
 function buildStateBlock(conversationState = {}, { useStoreCommerceContext = false } = {}) {
 	const lines = [
 		`- Ultima intencion: ${conversationState.lastIntent || 'general'}`,
@@ -168,18 +148,19 @@ function buildRegionalLanguageRule({ businessName = '', businessContext = '' } =
 	return '- Usa espanol de Espana: tuteo con "tu/te", no voseo argentino y no expresiones como "vos"; evita expresiones demasiado coloquiales como genial o buenisimo.';
 }
 
-function formatCatalogProducts({ catalogProducts = [], catalogContext = '', isDkv = false } = {}) {
+function formatCatalogProducts({ catalogProducts = [], catalogContext = '', profile = null } = {}) {
 	if (!Array.isArray(catalogProducts) || !catalogProducts.length) {
 		return catalogContext || 'No se encontraron datos relevantes.';
 	}
 
+	const insurance = isInsuranceVertical(profile?.vertical);
 	return catalogProducts.slice(0, 3).map((item) => {
 		const lines = [
 			`- ${item.name}`,
 			`  familia: ${item.family || 'sin clasificar'}`,
 		];
 
-		if (isDkv) {
+		if (insurance) {
 			if (item.shortDescription) lines.push(`  detalle: ${item.shortDescription}`);
 			if (item.productUrl) lines.push(`  link: ${item.productUrl}`);
 			return lines.join('\n');
@@ -214,6 +195,24 @@ function formatCommercialHints(commercialHints = [], { isDkv = false } = {}) {
 		.join('\n');
 }
 
+function formatVerticalHints(commercialHints = [], { profile = null } = {}) {
+	if (!Array.isArray(commercialHints) || !commercialHints.length) {
+		return `- ${profile?.defaultHint || 'Guia una sola opcion principal y no abras todo el catalogo.'}`;
+	}
+
+	const bannedPattern = profile?.bannedReplyTerms?.length
+		? new RegExp(`(${profile.bannedReplyTerms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'i')
+		: null;
+	const hints = bannedPattern
+		? commercialHints.filter((hint) => !bannedPattern.test(String(hint || '')))
+		: commercialHints;
+
+	return (hints.length ? hints : [profile?.defaultHint || 'Orienta segun la consulta y deriva si requiere asesor.'])
+		.slice(0, 8)
+		.map((hint) => `- ${hint}`)
+		.join('\n');
+}
+
 export function buildPrompt({
 	businessName,
 	workspaceConfig = null,
@@ -236,28 +235,31 @@ export function buildPrompt({
 	const businessContext = aiConfig.businessContext || process.env.BUSINESS_CONTEXT || '';
 	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi';
 	const tone = aiConfig.tone || 'amigable_directo';
-	const isDkv = isDkvContext({ workspaceConfig, businessName, businessContext });
-	const systemPrompt = isDkv
-		? DKV_ASSISTANT_POLICY
-		: (process.env.GLOBAL_SYSTEM_PROMPT || process.env.SYSTEM_PROMPT || BASE_ASSISTANT_POLICY);
+	const vertical = resolveAiVertical({ workspaceConfig, businessName, businessContext });
+	const verticalProfile = getAiVerticalProfile(vertical);
+	const isInsurance = isInsuranceVertical(vertical);
+	const useCommerceContext = usesCommerceEngine(vertical);
+	const systemPrompt = useCommerceContext
+		? (process.env.GLOBAL_SYSTEM_PROMPT || process.env.SYSTEM_PROMPT || verticalProfile.basePolicy)
+		: verticalProfile.basePolicy;
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
 	const safeSystemPromptExtra =
-		isDkv && /(stock|talle|carrito|ecommerce|tiendanube|lummine|indumentaria|prenda)/i.test(systemPromptExtra)
+		isInsurance && /(stock|talle|carrito|ecommerce|tiendanube|lummine|indumentaria|prenda)/i.test(systemPromptExtra)
 			? ''
 			: systemPromptExtra;
-	const useStoreCommerceContext = !isDkv && shouldUseStoreCommerceContext({ catalogProducts, commercialPlan });
+	const useStoreCommerceContext = useCommerceContext && shouldUseStoreCommerceContext({ catalogProducts, commercialPlan });
 	const facts = useStoreCommerceContext ? getRelevantStoreFacts(recentMessages) : [];
 	const firstContact = isFirstContact(recentMessages);
 	const businessData = useStoreCommerceContext
 		? buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '')
 		: null;
-	const commercialHintsBlock = formatCommercialHints(commercialHints, { isDkv });
+	const commercialHintsBlock = formatVerticalHints(commercialHints, { profile: verticalProfile });
 	const liveOrderContextEnabled = shouldIncludeLiveOrderContext({
 		liveOrderContext,
 		responsePolicy,
 	});
 	const regionalLanguageRule = buildRegionalLanguageRule({ businessName, businessContext });
-	const compactCatalog = formatCatalogProducts({ catalogProducts, catalogContext, isDkv });
+	const compactCatalog = formatCatalogProducts({ catalogProducts, catalogContext, profile: verticalProfile });
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
@@ -269,18 +271,19 @@ export function buildPrompt({
 		`DATOS DEL CLIENTE:\n- Nombre: ${customerContext.name || contactName || 'Cliente'}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
 		buildStateBlock(conversationState, { useStoreCommerceContext }),
-		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName, isDkv })}`,
-		isDkv ? '' : `PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}`,
+		`VERTICAL: ${verticalProfile.label}`,
+		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName, profile: verticalProfile })}`,
+		useCommerceContext ? `PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}` : '',
 		liveOrderContextEnabled
 			? `PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`
 			: 'REGLA DE PEDIDO:\n- Ignora cualquier pedido previo salvo que la accion permitida sea de seguimiento de pedido.',
 		useStoreCommerceContext && facts.length ? `HECHOS UTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}` : '',
-		`${isDkv ? 'INFORMACION RELEVANTE' : 'CATALOGO RELEVANTE'}:\n${compactCatalog}`,
-		`${isDkv ? 'PISTAS DE ATENCION' : 'PISTAS COMERCIALES'}:\n${commercialHintsBlock}`,
+		`${verticalProfile.relevantInfoTitle}:\n${compactCatalog}`,
+		`${verticalProfile.hintsTitle}:\n${commercialHintsBlock}`,
 		campaignAssistantContext?.promptBlock ? `CONTEXTO DE CAMPAÑA:\n${campaignAssistantContext.promptBlock}` : '',
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',
 		useStoreCommerceContext && businessData ? `POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}` : '',
-		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podes presentarte una sola vez como ${agentName} de ${businessName}.` : `Si el cliente solo retoma con hola o buenas, podes volver a presentarte breve como ${agentName} de ${businessName}. Si no, segui el hilo sin saludar de nuevo.`}\n${regionalLanguageRule ? `${regionalLanguageRule}\n` : ''}- Si el mensaje del cliente es solo un saludo, responde breve, presentate como ${agentName} de ${businessName} y pregunta que esta buscando.\n${isDkv ? '- No uses lenguaje de tienda online: stock, talles, carrito, envio, promo, pack o checkout.\n- Si falta informacion para contratar, pide tipo de seguro y datos minimos de contacto, sin cerrar precio ni cobertura.\n- Si es cliente actual o gestion de poliza, deriva a asesor de la oficina.' : '- Si la intencion es soporte (pedido, pago, envio o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.\n- Si el catalogo local no esta disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.\n- Si el catalogo local no esta disponible o no hay productos confirmados, pedi una aclaracion breve o ofrece derivar con una asesora.\n- Si el cliente ya fijo familia o promo, respetala y no cambies de producto por tu cuenta.\n- Si el cliente excluyo una opcion, no la vuelvas a mencionar como recomendacion.\n- Si la promo exacta no existe dentro de esa familia, decilo explicitamente y ofrece la mejor alternativa dentro de la misma familia.\n- Si mostras opciones, prioriza una sola principal segun el plan comercial, salvo que este comparando.\n- Si ya se venia hablando de otro producto mas reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explicito.'}\n- Si usas el menu como guia, integralo natural solo cuando el cliente este abierto o desorientado.\n- No pegues una coletilla fija de menu al final de respuestas concretas.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenisimo o dale.\n- Si la respuesta es continuidad y no es un saludo nuevo, no repitas nombre ni saludo.`,
+		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podes presentarte una sola vez como ${agentName} de ${businessName}.` : `Si el cliente solo retoma con hola o buenas, podes volver a presentarte breve como ${agentName} de ${businessName}. Si no, segui el hilo sin saludar de nuevo.`}\n${regionalLanguageRule ? `${regionalLanguageRule}\n` : ''}- Si el mensaje del cliente es solo un saludo, responde breve, presentate como ${agentName} de ${businessName} y pregunta que esta buscando.\n${isInsurance ? '- No uses lenguaje de tienda online: stock, talles, carrito, envio, promo, pack o checkout.\n- Si falta informacion para contratar, pide tipo de seguro y datos minimos de contacto, sin cerrar precio ni cobertura.\n- Si es cliente actual o gestion de poliza, deriva a asesor de la oficina.' : '- Si la intencion es soporte (pedido, pago, envio o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.\n- Si el catalogo local no esta disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.\n- Si el catalogo local no esta disponible o no hay productos confirmados, pedi una aclaracion breve o ofrece derivar con una asesora.\n- Si el cliente ya fijo familia o promo, respetala y no cambies de producto por tu cuenta.\n- Si el cliente excluyo una opcion, no la vuelvas a mencionar como recomendacion.\n- Si la promo exacta no existe dentro de esa familia, decilo explicitamente y ofrece la mejor alternativa dentro de la misma familia.\n- Si mostras opciones, prioriza una sola principal segun el plan comercial, salvo que este comparando.\n- Si ya se venia hablando de otro producto mas reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explicito.'}\n- Si usas el menu como guia, integralo natural solo cuando el cliente este abierto o desorientado.\n- No pegues una coletilla fija de menu al final de respuestas concretas.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenisimo o dale.\n- Si la respuesta es continuidad y no es un saludo nuevo, no repitas nombre ni saludo.`,
 		`CONVERSACION RECIENTE:\n${transcript}`,
 		'Responde ahora al ultimo mensaje del cliente.'
 	].filter(Boolean).join('\n\n');

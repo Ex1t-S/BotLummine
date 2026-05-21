@@ -125,7 +125,7 @@ function hasStockKeywords(q = '') {
 }
 
 function hasProductKeywords(q = '') {
-	return /(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley|legging|leggings|pack|combo|corset|modelador|seguro|seguros|poliza|polizas|salud|medico|dental|decesos|hogar|vida|renta|autonomo|autonomos|pyme|pymes|empresa|empresas)/.test(
+	return /(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley|legging|leggings|pack|combo|corset|modelador)/.test(
 		q
 	);
 }
@@ -212,8 +212,10 @@ function shouldPreservePurchaseContext(q, currentState = {}) {
 	return false;
 }
 
-export function detectIntent(text = '', currentState = {}) {
+export function detectIntent(text = '', currentState = {}, options = {}) {
 	const q = normalizeText(text);
+	const vertical = String(options?.vertical || currentState?.aiVertical || '').toUpperCase();
+	const insuranceVertical = vertical === 'INSURANCE';
 	const orderNumber = extractOrderNumber(text, currentState) || extractStandaloneOrderNumber(text);
 	const productContext = hasProductContext(currentState);
 	const purchaseFlow = hasPurchaseKeywords(q);
@@ -256,10 +258,10 @@ export function detectIntent(text = '', currentState = {}) {
 		return 'order_status';
 	}
 
-	if (hasPaymentKeywords(q)) return 'payment';
-	if (hasShippingKeywords(q)) return 'shipping';
-	if (hasSizeKeywords(q)) return 'size_help';
-	if (hasStockKeywords(q)) return 'stock_check';
+	if (!insuranceVertical && hasPaymentKeywords(q)) return 'payment';
+	if (!insuranceVertical && hasShippingKeywords(q)) return 'shipping';
+	if (!insuranceVertical && hasSizeKeywords(q)) return 'size_help';
+	if (!insuranceVertical && hasStockKeywords(q)) return 'stock_check';
 	if (hasProductKeywords(q)) return 'product';
 
 	if (purchaseFlow) {

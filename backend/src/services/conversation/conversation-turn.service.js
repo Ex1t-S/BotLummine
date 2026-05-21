@@ -45,6 +45,13 @@ import {
 	isUnableToContinueHandoffReply,
 	buildUnableToContinueHandoffReply,
 } from './conversation-helpers.service.js';
+import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
+import {
+	buildVerticalNonCommercePlan,
+	getAiVerticalProfile,
+	resolveAiVertical,
+	usesCommerceEngine,
+} from '../ai/vertical-profile.service.js';
 
 export async function runConversationTurn({
 	contactName,
@@ -63,8 +70,12 @@ export async function runConversationTurn({
 		customerContext?.waId || currentConversation?.waId || currentConversation?.phone || ''
 	);
 	const normalizedMessages = Array.isArray(messages) ? messages.map(normalizeRecentMessage) : [];
+	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
+	const vertical = resolveAiVertical({ workspaceConfig, businessName });
+	const verticalProfile = getAiVerticalProfile(vertical);
+	const useCommerceEngine = usesCommerceEngine(vertical);
 
-	const intent = detectIntent(messageBody, currentState);
+	const intent = detectIntent(messageBody, currentState, { vertical });
 	const explicitOrderNumber =
 		extractOrderNumber(messageBody, currentState) || extractStandaloneOrderNumber(messageBody);
 
@@ -118,6 +129,7 @@ export async function runConversationTurn({
 
 	const intentResult = await resolveIntentAction({
 		workspaceId,
+		vertical,
 		intent,
 		messageBody,
 		explicitOrderNumber,
@@ -285,7 +297,7 @@ export async function runConversationTurn({
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
 
 	if (handoffJustTriggered) {
-		const handoffReply = isDkvWorkspace(workspaceId)
+		const handoffReply = isDkvWorkspace(workspaceId) || !useCommerceEngine
 			? buildUnableToContinueHandoffReply()
 			: buildHandoffReply({
 				contactName: customerContext?.name || contactName || normalizedWaId,
@@ -347,33 +359,50 @@ export async function runConversationTurn({
 	let commercialPlan = null;
 
 	try {
-		catalogProducts = await searchCatalogProducts({
+		if (!useCommerceEngine) {
+			catalogProducts = [];
+			catalogContext = '';
+			commercialPlan = buildVerticalNonCommercePlan({
+				vertical,
+				messageBody,
+				currentState: enrichedState,
+				intent,
+			});
+			commercialHints = commercialPlan.greetingOnly
+				? verticalProfile.greetingHints
+				: verticalProfile.serviceHints || [verticalProfile.defaultHint];
+		} else {
+			catalogProducts = await searchCatalogProducts({
 			query: messageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
 			limit: 5,
 			workspaceId
-		});
+			});
 
-		const catalogStatus = await getCatalogLookupStatus({ workspaceId });
+			const catalogStatus = await getCatalogLookupStatus({ workspaceId });
 
-		commercialPlan = {
-			...resolveCommercialBrainV2({
-				intent,
-				messageBody,
-				currentState: enrichedState,
-				recentMessages: fullRecentMessages,
-				catalogProducts
-			}),
-			catalogAvailable: catalogStatus.available !== false,
-			catalogStatusReason: catalogStatus.reason || 'ok',
-			catalogStatusMessage: catalogStatus.message || null
-		};
+			commercialPlan = {
+				...resolveCommercialBrainV2({
+					intent,
+					messageBody,
+					currentState: enrichedState,
+					recentMessages: fullRecentMessages,
+					catalogProducts
+				}),
+				catalogAvailable: catalogStatus.available !== false,
+				catalogStatusReason: catalogStatus.reason || 'ok',
+				catalogStatusMessage: catalogStatus.message || null
+			};
+		}
 
 		catalogProducts = commercialPlan?.rankedProducts?.length
 			? commercialPlan.rankedProducts.slice(0, 5)
 			: catalogProducts;
 
-		if (commercialPlan?.greetingOnly) {
+		if (!useCommerceEngine) {
+			catalogProducts = [];
+			catalogContext = '';
+		} else if (commercialPlan?.greetingOnly) {
 			catalogProducts = [];
 			catalogContext = '';
 			commercialHints = [
@@ -545,6 +574,7 @@ export async function runConversationTurn({
 		} else {
 			finalReply = buildFallbackOrderAwareReply({
 				workspaceId,
+				vertical,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -566,6 +596,7 @@ export async function runConversationTurn({
 	) {
 		finalReply = buildCatalogSafetyFallback({
 			workspaceId,
+			vertical,
 			intent,
 			messageBody,
 			enrichedState,
@@ -583,6 +614,7 @@ export async function runConversationTurn({
 	if (!finalReply) {
 		prompt = buildPrompt({
 			businessName,
+			workspaceConfig,
 			contactName: customerContext?.name || contactName || normalizedWaId,
 			recentMessages: fullRecentMessages,
 			conversationSummary: currentConversation?.lastSummary || '',
@@ -599,6 +631,7 @@ export async function runConversationTurn({
 		try {
 			const aiResult = await runAssistantReply({
 				businessName,
+				workspaceConfig,
 				contactName: customerContext?.name || contactName || normalizedWaId,
 				recentMessages: fullRecentMessages,
 				conversationSummary: currentConversation?.lastSummary || '',
@@ -614,6 +647,7 @@ export async function runConversationTurn({
 
 			const fallbackReply = buildFallbackOrderAwareReply({
 				workspaceId,
+				vertical,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -644,6 +678,7 @@ export async function runConversationTurn({
 			});
 			finalReply = buildFallbackOrderAwareReply({
 				workspaceId,
+				vertical,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -662,7 +697,7 @@ export async function runConversationTurn({
 	}
 
 	const shouldEscalateUnableFallback =
-		isDkvWorkspace(workspaceId) &&
+		(isDkvWorkspace(workspaceId) || !useCommerceEngine) &&
 		isUnableToContinueHandoffReply(finalReply);
 	const finalQueueDecision = shouldEscalateUnableFallback
 		? {

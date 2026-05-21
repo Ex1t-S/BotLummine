@@ -202,7 +202,11 @@ function mapWorkspaceForm(workspace) {
 			agentName: fieldValue(ai.agentName),
 			tone: fieldValue(ai.tone),
 			systemPrompt: fieldValue(ai.systemPrompt),
-			businessContext: fieldValue(ai.businessContext)
+			businessContext: fieldValue(ai.businessContext),
+			catalogConfig: {
+				...(ai.catalogConfig || {}),
+				vertical: fieldValue(ai.catalogConfig?.vertical || 'ECOMMERCE')
+			}
 		}
 	};
 }
@@ -940,7 +944,11 @@ export default function AdminPage({ defaultTab = '' }) {
 				aiConfig: {
 					businessName: workspaceForm.aiConfig?.businessName || '',
 					systemPrompt: workspaceForm.aiConfig?.systemPrompt || '',
-					businessContext: workspaceForm.aiConfig?.businessContext || ''
+					businessContext: workspaceForm.aiConfig?.businessContext || '',
+					catalogConfig: {
+						...(workspaceForm.aiConfig?.catalogConfig || {}),
+						vertical: workspaceForm.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE'
+					}
 				}
 			}, 'Marca y configuracion avanzada guardadas.');
 			return;
@@ -1582,6 +1590,19 @@ export default function AdminPage({ defaultTab = '' }) {
 											<option value="ARCHIVED">ARCHIVED</option>
 										</Select>
 										<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
+										<Select label="Rubro de IA" value={workspaceForm.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE'} onChange={(value) => setWorkspaceForm((cur) => ({
+											...cur,
+											aiConfig: {
+												...(cur.aiConfig || {}),
+												catalogConfig: {
+													...(cur.aiConfig?.catalogConfig || {}),
+													vertical: value
+												}
+											}
+										}))}>
+											<option value="ECOMMERCE">Ecommerce</option>
+											<option value="INSURANCE">Seguros</option>
+										</Select>
 										<Textarea label="Contexto comercial" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
 										<div className="tenant-admin-context-tools">
 											<button type="button" disabled={saving || loading || generatingBusinessContext || !selectedWorkspaceId} onClick={handleGenerateBusinessContext}>

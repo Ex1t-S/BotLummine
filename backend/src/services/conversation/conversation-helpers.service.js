@@ -17,13 +17,16 @@ import {
 	looksLikeSimpleClosing,
 	shouldTreatAsPreSaleObjection,
 } from './conversation-signals.service.js';
+import {
+	isInsuranceVertical,
+	isInsuranceWorkspaceId,
+} from '../ai/vertical-profile.service.js';
 
-const DKV_WORKSPACE_IDS = new Set(['cmpevb0oq0000pd0pgp66xq6k']);
 const UNABLE_TO_CONTINUE_HANDOFF_REPLY =
 	'Dejanos tu consulta detallada y, cuando un asesor este disponible, te va a contestar la duda.';
 
 export function isDkvWorkspace(workspaceId = '') {
-	return DKV_WORKSPACE_IDS.has(String(workspaceId || '').trim());
+	return isInsuranceWorkspaceId(workspaceId);
 }
 
 export function buildUnableToContinueHandoffReply() {
@@ -263,12 +266,13 @@ export function buildConversationSummary({
 
 export function buildAiFailureFallback({
 	workspaceId = '',
+	vertical = '',
 	intent,
 	enrichedState,
 	catalogProducts = [],
 	commercialPlan = null,
 }) {
-	const useDkvHandoff = isDkvWorkspace(workspaceId);
+	const useDkvHandoff = isDkvWorkspace(workspaceId) || isInsuranceVertical(vertical);
 	const firstProduct =
 		Array.isArray(catalogProducts) && catalogProducts.length ? catalogProducts[0] : null;
 
@@ -289,6 +293,10 @@ export function buildAiFailureFallback({
 	}
 
 	if (intent === 'product') {
+		if (isInsuranceVertical(vertical)) {
+			if (commercialPlan?.shouldEscalate || enrichedState?.needsHuman) return buildUnableToContinueHandoffReply();
+			return 'Te puedo orientar por tipo de seguro. Dime si lo buscas para ti o familia, autonomo o empresa, y un asesor prepara la propuesta sin inventar coberturas ni precio.';
+		}
 		if (
 			commercialPlan?.recommendedAction === 'explain_requested_offer_unavailable_keep_family' &&
 			commercialPlan?.requestedOfferType
@@ -435,12 +443,13 @@ export function shouldForceCatalogSafetyFallback({
 
 export function buildCatalogSafetyFallback({
 	workspaceId = '',
+	vertical = '',
 	intent,
 	messageBody = '',
 	enrichedState = {},
 	commercialPlan = null,
 } = {}) {
-	if (isDkvWorkspace(workspaceId)) {
+	if (isDkvWorkspace(workspaceId) || isInsuranceVertical(vertical)) {
 		return buildUnableToContinueHandoffReply();
 	}
 
@@ -1266,12 +1275,15 @@ export function auditAssistantReply({
 
 export async function resolveIntentAction({
 	workspaceId,
+	vertical = '',
 	intent,
 	messageBody,
 	explicitOrderNumber,
 	currentState,
 }) {
-	if (isDkvWorkspace(workspaceId) && looksLikeDkvCatalogRequest(messageBody)) {
+	const insurance = isDkvWorkspace(workspaceId) || isInsuranceVertical(vertical);
+
+	if (insurance && looksLikeDkvCatalogRequest(messageBody)) {
 		return {
 			handled: true,
 			forcedReply: buildDkvCatalogReply(),
@@ -1283,7 +1295,7 @@ export async function resolveIntentAction({
 		};
 	}
 
-	if (isDkvWorkspace(workspaceId) && looksLikeDkvOfficeRequest(messageBody)) {
+	if (insurance && looksLikeDkvOfficeRequest(messageBody)) {
 		return {
 			handled: true,
 			forcedReply: buildDkvOfficeReply(),
@@ -1439,6 +1451,7 @@ export function normalizeRecentMessage(msg = {}) {
 
 export function buildFallbackOrderAwareReply({
 	workspaceId = '',
+	vertical = '',
 	intent,
 	liveOrderContext,
 	enrichedState,
@@ -1464,6 +1477,7 @@ export function buildFallbackOrderAwareReply({
 
 	return buildAiFailureFallback({
 		workspaceId,
+		vertical,
 		intent,
 		enrichedState,
 		catalogProducts,

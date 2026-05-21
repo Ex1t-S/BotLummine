@@ -63,6 +63,12 @@ import {
 	WORKSPACE_FEATURE_FLAGS,
 	isWorkspaceFeatureEnabled,
 } from '../workspaces/workspace-feature-flags.service.js';
+import {
+	buildVerticalNonCommercePlan,
+	getAiVerticalProfile,
+	resolveAiVertical,
+	usesCommerceEngine,
+} from '../ai/vertical-profile.service.js';
 import { persistChatConfirmationConversions } from '../campaigns/campaign-attribution.service.js';
 import {
 	looksLikeThirdPartyAutoReply as looksLikeThirdPartyAutoReplySignal,
@@ -778,8 +784,13 @@ export async function processInboundMessage({
 	const campaignAssistantContext = getActiveCampaignContext(lastOutbound, currentState);
 	const forceIntent = menuDecision?.forceIntent || null;
 	const menuStatePatch = menuDecision?.statePatch || null;
+	const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
+	const aiBrand = workspaceConfig.ai;
+	const vertical = resolveAiVertical({ workspaceConfig });
+	const verticalProfile = getAiVerticalProfile(vertical);
+	const useCommerceEngine = usesCommerceEngine(vertical);
 
-	let intent = forceIntent || detectIntent(effectiveMessageBody, currentState);
+	let intent = forceIntent || detectIntent(effectiveMessageBody, currentState, { vertical });
 	if (
 		['complaint', 'return_exchange'].includes(String(intent || '')) &&
 		shouldTreatAsPreSaleObjection({
@@ -1016,6 +1027,7 @@ export async function processInboundMessage({
 
 	const intentResult = await resolveIntentAction({
 		workspaceId: resolvedWorkspaceId,
+		vertical,
 		intent,
 		messageBody: effectiveMessageBody,
 		explicitOrderNumber,
@@ -1216,7 +1228,7 @@ export async function processInboundMessage({
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
 
 	if (handoffJustTriggered) {
-		const handoffReply = isDkvWorkspace(resolvedWorkspaceId)
+		const handoffReply = isDkvWorkspace(resolvedWorkspaceId) || !useCommerceEngine
 			? buildUnableToContinueHandoffReply()
 			: buildHandoffReply({
 				contactName: freshConversation.contact.name || '',
@@ -1310,12 +1322,22 @@ export async function processInboundMessage({
 	let commercialHints = [];
 	let commercialPlan = null;
 	let menuAssistantContext = null;
-	const promptCampaignAssistantContext = isSupportIntent(intent) ? null : campaignAssistantContext;
-	const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
-	const aiBrand = workspaceConfig.ai;
+	const promptCampaignAssistantContext = isSupportIntent(intent) || !useCommerceEngine ? null : campaignAssistantContext;
 
 	try {
-		if (isSupportIntent(intent)) {
+		if (!useCommerceEngine) {
+			catalogProducts = [];
+			catalogContext = '';
+			commercialPlan = buildVerticalNonCommercePlan({
+				vertical,
+				messageBody: effectiveMessageBody,
+				currentState: enrichedState,
+				intent,
+			});
+			commercialHints = commercialPlan.greetingOnly
+				? verticalProfile.greetingHints
+				: verticalProfile.serviceHints || [verticalProfile.defaultHint];
+		} else if (isSupportIntent(intent)) {
 			catalogProducts = [];
 			catalogContext = '';
 			commercialPlan = {
@@ -1383,7 +1405,10 @@ export async function processInboundMessage({
 			? commercialPlan.rankedProducts.slice(0, 5)
 			: catalogProducts;
 
-		if (isSupportIntent(intent)) {
+		if (!useCommerceEngine) {
+			catalogProducts = [];
+			catalogContext = '';
+		} else if (isSupportIntent(intent)) {
 			catalogProducts = [];
 			catalogContext = '';
 		} else if (commercialPlan?.greetingOnly) {
@@ -1488,6 +1513,13 @@ export async function processInboundMessage({
 		}
 		commercialHints.push('Bajá el tono celebratorio y soná más natural.');
 
+		if (!useCommerceEngine) {
+			const bannedHintPattern = /(stock|talle|carrito|checkout|promo|promocion|pack|envio|producto|catalogo|link)/i;
+			commercialHints = commercialHints.filter((hint) => !bannedHintPattern.test(String(hint || '')));
+			commercialHints.push('No menciones stock, talles, carrito, checkout, promos ni envios.');
+			commercialHints.push('Si requiere datos personales o estado de poliza, deriva a asesor.');
+		}
+
 		const patchedStatePayload = {
 			...nextStatePayload,
 			currentProductFocus: commercialPlan?.productFocusLabel || commercialPlan?.productFocus || nextStatePayload.currentProductFocus || null,
@@ -1591,6 +1623,7 @@ export async function processInboundMessage({
 		} else {
 			finalReply = buildAiFailureFallback({
 				workspaceId: resolvedWorkspaceId,
+				vertical,
 				intent,
 				enrichedState,
 				catalogProducts,
@@ -1611,6 +1644,7 @@ export async function processInboundMessage({
 	) {
 		finalReply = buildCatalogSafetyFallback({
 			workspaceId: resolvedWorkspaceId,
+			vertical,
 			intent,
 			messageBody: effectiveMessageBody,
 			enrichedState,
@@ -1671,6 +1705,7 @@ export async function processInboundMessage({
 
 			const fallbackReply = buildFallbackOrderAwareReply({
 				workspaceId: resolvedWorkspaceId,
+				vertical,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -1712,6 +1747,7 @@ export async function processInboundMessage({
 
 			finalReply = buildFallbackOrderAwareReply({
 				workspaceId: resolvedWorkspaceId,
+				vertical,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -1735,7 +1771,7 @@ export async function processInboundMessage({
 	}
 
 	if (
-		isDkvWorkspace(resolvedWorkspaceId) &&
+		(isDkvWorkspace(resolvedWorkspaceId) || !useCommerceEngine) &&
 		isUnableToContinueHandoffReply(finalReply)
 	) {
 		await syncHumanHandoff({
