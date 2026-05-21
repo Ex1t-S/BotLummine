@@ -216,6 +216,23 @@ function buildRecipientMetrics(campaign = {}) {
 		: Array.isArray(campaign?.recipients)
 			? campaign.recipients
 			: [];
+	const totalFromServer =
+		Number(campaign?.pagination?.total) ||
+		Number(campaign?.totalRecipients) ||
+		Number(campaign?.recipientCount) ||
+		0;
+
+	if (totalFromServer > 0 && recipients.length < totalFromServer) {
+		return {
+			total: totalFromServer,
+			sent: getMetric(campaign, ['sentCount']),
+			delivered: getMetric(campaign, ['deliveredCount']),
+			read: getMetric(campaign, ['readCount']),
+			failed: getMetric(campaign, ['failedCount']),
+			pending: getMetric(campaign, ['pendingCount']),
+			skipped: getMetric(campaign, ['skippedCount', 'skippedRecipients']),
+		};
+	}
 
 	if (!recipients.length) {
 		return {

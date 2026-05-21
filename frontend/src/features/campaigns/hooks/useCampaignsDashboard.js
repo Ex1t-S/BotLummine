@@ -169,6 +169,24 @@ function normalizeRecipientStatus(status = '') {
 }
 
 function buildRecipientMetrics(recipients = [], fallbackCampaign = {}) {
+	const totalFromServer =
+		Number(fallbackCampaign?.pagination?.total) ||
+		Number(fallbackCampaign?.totalRecipients) ||
+		Number(fallbackCampaign?.recipientCount) ||
+		0;
+
+	if (totalFromServer > 0 && Array.isArray(recipients) && recipients.length < totalFromServer) {
+		return {
+			total: totalFromServer,
+			sent: Number(fallbackCampaign?.sentCount) || 0,
+			delivered: Number(fallbackCampaign?.deliveredCount) || 0,
+			read: Number(fallbackCampaign?.readCount) || 0,
+			failed: Number(fallbackCampaign?.failedCount) || 0,
+			pending: Number(fallbackCampaign?.pendingCount) || 0,
+			skipped: Number(fallbackCampaign?.skippedCount || fallbackCampaign?.skippedRecipients) || 0,
+		};
+	}
+
 	if (!Array.isArray(recipients) || recipients.length === 0) {
 		return {
 			total:

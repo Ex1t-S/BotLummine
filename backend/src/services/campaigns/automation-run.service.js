@@ -31,6 +31,7 @@ const AUTOMATION_SOURCE_ALIASES = [
 	'shipment_notifications',
 	'shipments',
 ];
+const LIVE_CAMPAIGN_STATUSES = new Set(['QUEUED', 'RUNNING']);
 
 function safeArray(value) {
 	return Array.isArray(value) ? value : [];
@@ -55,6 +56,28 @@ export function normalizeAutomationRunType(type = '') {
 	return normalized;
 }
 
+function normalizeCampaignStatus(status = '') {
+	return normalizeString(status).toUpperCase();
+}
+
+function shouldTrackCampaignInAutomationRun(campaign = {}) {
+	return !['DRAFT', 'CANCELED'].includes(normalizeCampaignStatus(campaign.status));
+}
+
+function getAutomationRunCampaigns(campaigns = []) {
+	return safeArray(campaigns)
+		.filter(shouldTrackCampaignInAutomationRun)
+		.map((campaign) => {
+			const status = normalizeCampaignStatus(campaign.status);
+			return {
+				...campaign,
+				pendingRecipients: LIVE_CAMPAIGN_STATUSES.has(status)
+					? Number(campaign.pendingRecipients || 0)
+					: 0,
+			};
+		});
+}
+
 function getLocalRunKey(date = new Date(), timezone = DEFAULT_TIMEZONE) {
 	const parts = new Intl.DateTimeFormat('en', {
 		timeZone: timezone || DEFAULT_TIMEZONE,
@@ -71,9 +94,14 @@ function pickRunName(type, runKey) {
 }
 
 function deriveRunStatus(campaigns = [], fallbackStatus = 'OPEN') {
-	if (!campaigns.length) return fallbackStatus || 'OPEN';
-	if (campaigns.some((campaign) => ['RUNNING', 'QUEUED'].includes(String(campaign.status || '').toUpperCase()))) {
+	if (!campaigns.length) {
+		return normalizeCampaignStatus(fallbackStatus) === 'ERROR' ? 'ERROR' : 'OPEN';
+	}
+	if (campaigns.some((campaign) => LIVE_CAMPAIGN_STATUSES.has(normalizeCampaignStatus(campaign.status)))) {
 		return 'RUNNING';
+	}
+	if (campaigns.every((campaign) => normalizeCampaignStatus(campaign.status) === 'CANCELED')) {
+		return 'CANCELED';
 	}
 	const pending = campaigns.reduce((sum, campaign) => sum + Number(campaign.pendingRecipients || 0), 0);
 	const failed = campaigns.reduce((sum, campaign) => sum + Number(campaign.failedRecipients || 0), 0);
@@ -138,7 +166,7 @@ async function fetchRunInsightRecipients(workspaceId, campaignIds = []) {
 }
 
 async function serializeAutomationRun(run, { includeRecipients = false, page = 1, pageSize = 50 } = {}) {
-	const campaigns = safeArray(run.campaigns);
+	const campaigns = getAutomationRunCampaigns(run.campaigns);
 	const campaignIds = campaigns.map((campaign) => campaign.id).filter(Boolean);
 	const summary = summarizeCampaigns(campaigns);
 	const [insightRecipients, totalRecipients, pageRecipients] = await Promise.all([
@@ -179,7 +207,7 @@ async function serializeAutomationRun(run, { includeRecipients = false, page = 1
 		campaigns,
 		campaignIds,
 		campaignCount: campaigns.length,
-		runCount: Number(run.runCount || campaigns.length || 0),
+		runCount: Number(campaigns.length || run.runCount || 0),
 		lastRunAt: run.lastRunAt,
 		lastError: run.lastError,
 		createdAt: run.createdAt,
@@ -280,6 +308,7 @@ export async function backfillAutomationRunsForWorkspace({
 		where: {
 			workspaceId: resolvedWorkspaceId,
 			automationRunId: null,
+			status: { notIn: ['DRAFT', 'CANCELED'] },
 			audienceSource: { in: AUTOMATION_SOURCE_ALIASES },
 		},
 		select: {
@@ -391,7 +420,7 @@ export async function listAutomationRuns({
 	});
 
 	const serialized = await Promise.all(runs.map((run) => serializeAutomationRun(run)));
-	return serialized.sort((a, b) => {
+	return serialized.filter((run) => run.campaignCount > 0).sort((a, b) => {
 		if (a.runKey !== b.runKey) return b.runKey.localeCompare(a.runKey);
 		return (AUTOMATION_TYPE_ORDER[a.type] || 99) - (AUTOMATION_TYPE_ORDER[b.type] || 99);
 	});
