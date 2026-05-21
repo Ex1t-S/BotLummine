@@ -114,7 +114,7 @@ export async function sendAndPersistOutbound({
 		});
 	}
 
-	if (!waId) {
+	if (!waId && deliveryMode !== 'lab') {
 		throw new Error('La conversación no tiene un waId válido para enviar el mensaje.');
 	}
 

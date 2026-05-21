@@ -14,6 +14,7 @@ const CampaignsPage = lazyWithRetry(internalRouteModules.campaigns, 'CampaignsPa
 const AbandonedCartsPage = lazyWithRetry(internalRouteModules.abandonedCarts, 'AbandonedCartsPage');
 const CustomersPage = lazyWithRetry(internalRouteModules.customers, 'CustomersPage');
 const WhatsAppMenuPage = lazyWithRetry(internalRouteModules.whatsappMenu, 'WhatsAppMenuPage');
+const AiLabPage = lazyWithRetry(internalRouteModules.aiLab, 'AiLabPage');
 const AdminPage = lazyWithRetry(internalRouteModules.admin, 'AdminPage');
 const OperationsPage = lazyWithRetry(internalRouteModules.operations, 'OperationsPage');
 const PrivateAppShell = lazyWithRetry(internalRouteModules.privateShell, 'PrivateAppShell');
@@ -175,7 +176,13 @@ export default function App() {
 				/>
 				<Route
 					path="ai-lab"
-					element={<Navigate to="/operations" replace />}
+					element={
+						<ProtectedRoute allowedRoles={['ADMIN']}>
+							<Suspense fallback={<PageLoader />}>
+								<AiLabPage />
+							</Suspense>
+						</ProtectedRoute>
+					}
 				/>
 			</Route>
 		</Routes>

@@ -307,6 +307,18 @@ export function prefetchInternalRouteData(pathname = '', queryClient, options = 
 
 	if (path.startsWith('/admin') || path.startsWith('/analytics')) {
 		prefetchAdminData(queryClient, options);
+		return;
+	}
+
+	if (path.startsWith('/ai-lab')) {
+		prefetchQuery(queryClient, {
+			queryKey: ['ai-lab', 'fixtures'],
+			queryFn: async () => {
+				const response = await api.get('/ai-lab/fixtures');
+				return response.data;
+			},
+			...queryPresets.catalog,
+		});
 	}
 }
 
@@ -344,7 +356,7 @@ export function getFrequentInternalPaths(user = null) {
 	}
 
 	if (isAdmin && !isPlatformAdmin) {
-		paths.push('/campaigns/library', '/customers', '/catalog', '/abandoned-carts');
+		paths.push('/campaigns/library', '/customers', '/catalog', '/abandoned-carts', '/ai-lab');
 	}
 
 	if (isPlatformAdmin) {

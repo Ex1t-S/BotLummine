@@ -7,6 +7,7 @@ import {
 	Boxes,
 	Building2,
 	ChevronRight,
+	FlaskConical,
 	Inbox,
 	LayoutDashboard,
 	LogOut,
@@ -64,6 +65,11 @@ const PAGE_META = [
 		match: (pathname) => pathname.startsWith('/whatsapp-menu'),
 		title: 'Menú de WhatsApp',
 		description: 'Opciones guiadas y respuestas iniciales.',
+	},
+	{
+		match: (pathname) => pathname.startsWith('/ai-lab'),
+		title: 'AI Lab',
+		description: 'Pruebas controladas de IA y menús guiados.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/admin'),
@@ -267,7 +273,10 @@ export default function DashboardLayout() {
 							</NavItem>
 
 							{!isPlatformAdmin ? (
-								<NavItem to="/whatsapp-menu" icon={MessageSquareText} onPrepare={preparePath}>Menú</NavItem>
+								<>
+									<NavItem to="/whatsapp-menu" icon={MessageSquareText} onPrepare={preparePath}>Menú</NavItem>
+									<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
+								</>
 							) : null}
 						</NavGroup>
 					) : null}

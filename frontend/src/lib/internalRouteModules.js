@@ -8,6 +8,7 @@ export const internalRouteModules = {
 	abandonedCarts: () => import('../pages/AbandonedCartsPage.jsx'),
 	customers: () => import('../pages/CustomersPage.jsx'),
 	whatsappMenu: () => import('../pages/WhatsAppMenuPage.jsx'),
+	aiLab: () => import('../pages/AiLabPage.jsx'),
 	login: () => import('../pages/LoginPage.jsx'),
 };
 
@@ -22,6 +23,7 @@ export function getInternalRouteKey(pathname = '') {
 	if (path.startsWith('/abandoned-carts')) return 'abandonedCarts';
 	if (path.startsWith('/customers')) return 'customers';
 	if (path.startsWith('/whatsapp-menu')) return 'whatsappMenu';
+	if (path.startsWith('/ai-lab')) return 'aiLab';
 	if (['/inicio', '/contacto', '/precios', '/login'].includes(path)) return 'login';
 
 	return '';

@@ -16,7 +16,7 @@ const SESSIONS = new Map();
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
 function buildFakeWaId() {
-	const suffix = `${Date.now()}${Math.floor(Math.random() * 900 + 100)}`.slice(-10);
+	const suffix = `${Date.now()}${Math.floor(Math.random() * 900 + 100)}`.slice(-8);
 	return `54911${suffix}`;
 }
 
