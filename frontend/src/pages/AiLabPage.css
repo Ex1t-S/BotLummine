@@ -1,21 +1,22 @@
 .ai-lab-page {
 	display: grid;
 	flex: 1 1 auto;
-	height: calc(100dvh - 88px);
-	max-height: calc(100dvh - 88px);
+	height: min(100%, calc(100dvh - 88px));
+	max-height: min(100%, calc(100dvh - 88px));
 	min-height: 0;
 	overflow: hidden;
 }
 
 .admin-content > .ai-lab-page {
 	flex: 1 1 auto;
-	height: calc(100dvh - 88px);
-	max-height: calc(100dvh - 88px);
+	height: min(100%, calc(100dvh - 88px));
+	max-height: min(100%, calc(100dvh - 88px));
 }
 
 .ai-lab-chat-card {
+	position: relative;
 	display: grid;
-	grid-template-rows: auto auto minmax(0, 1fr) auto;
+	grid-template-rows: auto auto minmax(0, 1fr);
 	max-height: 100%;
 	height: 100%;
 	min-height: 0;
@@ -73,8 +74,9 @@
 	flex-direction: column;
 	gap: 12px;
 	min-height: 0;
-	padding: 16px;
+	padding: 16px 16px 106px;
 	overflow-y: auto;
+	scroll-padding-bottom: 106px;
 	background:
 		linear-gradient(rgba(13, 21, 27, 0.025) 1px, transparent 1px),
 		var(--ui-surface-soft, #f8fafb);
@@ -300,7 +302,9 @@
 }
 
 .ai-lab-chat-form {
-	position: sticky;
+	position: absolute;
+	left: 0;
+	right: 0;
 	bottom: 0;
 	z-index: 2;
 	display: grid;
@@ -310,6 +314,7 @@
 	padding: 12px 14px;
 	border-top: 1px solid var(--ui-border, #d7dee5);
 	background: #ffffff;
+	box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .ai-lab-chat-form textarea {
@@ -413,13 +418,13 @@
 
 @media (max-width: 760px) {
 	.ai-lab-page {
-		height: calc(100dvh - 72px);
-		max-height: calc(100dvh - 72px);
+		height: min(100%, calc(100dvh - 72px));
+		max-height: min(100%, calc(100dvh - 72px));
 	}
 
 	.admin-content > .ai-lab-page {
-		height: calc(100dvh - 72px);
-		max-height: calc(100dvh - 72px);
+		height: min(100%, calc(100dvh - 72px));
+		max-height: min(100%, calc(100dvh - 72px));
 	}
 
 	.ai-lab-chat-header {
