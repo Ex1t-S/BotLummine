@@ -81,8 +81,19 @@ const CATALOG_STOPWORDS = new Set([
 	'hola', 'holi', 'buenas', 'buenos', 'dias', 'dia', 'tardes', 'noches',
 	'gracias', 'ok', 'oka', 'dale', 'joya', 'bien', 'genial', 'perfecto',
 	'buenisimo', 'entiendo', 'barbaro', 'si', 'claro',
-	'que', 'tienen', 'tiene', 'tenes', 'quiero', 'necesito'
+	'que', 'tienen', 'tiene', 'tenes', 'quiero', 'necesito',
+	'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del',
+	'al', 'sobre', 'info', 'informacion', 'mas', 'me', 'mi', 'mis', 'tu',
+	'tus', 'para', 'por', 'con', 'sin', 'como', 'cuando', 'donde',
+	'contame', 'contar', 'contas', 'saber', 'ayuda', 'ayudame', 'ver',
+	'ese', 'esa', 'eso', 'estos', 'estas', 'este', 'esta', 'producto',
+	'algo', 'alguna', 'alguno', 'algunos', 'algunas', 'lindo', 'linda',
+	'lindos', 'lindas', 'bueno', 'buena', 'buenos', 'buenas'
 ]);
+const STRONG_PRODUCT_TOKEN_MIN_LENGTH = 5;
+const FUZZY_TOKEN_MIN_LENGTH = 4;
+const FUZZY_MAX_DISTANCE = 1;
+const FUZZY_LONG_TOKEN_MAX_DISTANCE = 2;
 const GENERIC_VARIANT_VALUES = new Set([
 	'pack',
 	'cualquiera',
@@ -107,6 +118,72 @@ const GENERIC_VARIANT_VALUES = new Set([
 
 function uniqueStrings(values = []) {
 	return [...new Set(values.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];
+}
+
+function meaningfulTerms(terms = []) {
+	return uniqueStrings(terms).filter((term) => term && !CATALOG_STOPWORDS.has(term));
+}
+
+function getTokenDistance(a = '', b = '') {
+	if (a === b) return 0;
+	if (!a || !b) return Math.max(a.length, b.length);
+	const maxDistance = Math.min(a.length, b.length) >= 6 ? FUZZY_LONG_TOKEN_MAX_DISTANCE : FUZZY_MAX_DISTANCE;
+	const lengthDelta = Math.abs(a.length - b.length);
+	if (lengthDelta > maxDistance) return lengthDelta;
+
+	const rows = a.length + 1;
+	const cols = b.length + 1;
+	const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+	for (let i = 0; i < rows; i += 1) matrix[i][0] = i;
+	for (let j = 0; j < cols; j += 1) matrix[0][j] = j;
+
+	for (let i = 1; i < rows; i += 1) {
+		let rowMin = matrix[i][0];
+		for (let j = 1; j < cols; j += 1) {
+			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+			matrix[i][j] = Math.min(
+				matrix[i - 1][j] + 1,
+				matrix[i][j - 1] + 1,
+				matrix[i - 1][j - 1] + cost
+			);
+			rowMin = Math.min(rowMin, matrix[i][j]);
+		}
+		if (rowMin > maxDistance) return rowMin;
+	}
+
+	return matrix[a.length][b.length];
+}
+
+function splitSearchTokens(value = '') {
+	return splitTerms(value).filter((term) => term && !CATALOG_STOPWORDS.has(term));
+}
+
+function countTokenMatches({ fieldTokens = [], terms = [], allowFuzzy = false } = {}) {
+	const tokenSet = new Set(fieldTokens);
+	const direct = [];
+	const fuzzy = [];
+
+	for (const term of meaningfulTerms(terms)) {
+		if (tokenSet.has(term)) {
+			direct.push(term);
+			continue;
+		}
+
+		if (!allowFuzzy || term.length < FUZZY_TOKEN_MIN_LENGTH) continue;
+
+		const matched = fieldTokens.find((token) =>
+			token.length >= FUZZY_TOKEN_MIN_LENGTH &&
+			getTokenDistance(term, token) <= (Math.min(term.length, token.length) >= 6 ? FUZZY_LONG_TOKEN_MAX_DISTANCE : FUZZY_MAX_DISTANCE)
+		);
+
+		if (matched) fuzzy.push(`${term}:${matched}`);
+	}
+
+	return {
+		direct: uniqueStrings(direct),
+		fuzzy: uniqueStrings(fuzzy)
+	};
 }
 
 function looksLikeSkuCode(value = '') {
@@ -366,7 +443,7 @@ function formatPrice(value) {
 	}
 }
 
-function detectRequestedSignals(query = '', interestedProducts = []) {
+export function detectRequestedSignals(query = '', interestedProducts = []) {
 	const normalizedQuery = normalizeText(query);
 	const terms = [
 		...new Set([
@@ -396,8 +473,8 @@ function shouldSkipCatalogLookup(signals = {}) {
 	const query = String(signals.normalizedQuery || '').trim();
 	if (!query) return true;
 
-	const meaningfulTerms = (signals.terms || []).filter((term) => !CATALOG_STOPWORDS.has(term));
-	if (!meaningfulTerms.length) return true;
+	const terms = meaningfulTerms(signals.terms || []);
+	if (!terms.length) return true;
 
 	const hasCommercialSignal =
 		Boolean(signals.requestedFamily) ||
@@ -409,11 +486,12 @@ function shouldSkipCatalogLookup(signals = {}) {
 		signals.asksComparison ||
 		signals.hasVariantSpecificity;
 
-	return !hasCommercialSignal && meaningfulTerms.length < 2;
+	if (terms.some((term) => term.length >= STRONG_PRODUCT_TOKEN_MIN_LENGTH)) return false;
+	return !hasCommercialSignal && terms.length < 2;
 }
 
 function isSpecificCatalogRequest(signals = {}) {
-	const meaningfulTerms = (signals.terms || []).filter((term) => !CATALOG_STOPWORDS.has(term));
+	const terms = meaningfulTerms(signals.terms || []);
 	if (
 		signals.asksCatalog &&
 		!signals.requestedFamily &&
@@ -425,9 +503,9 @@ function isSpecificCatalogRequest(signals = {}) {
 		return false;
 	}
 	if (signals.asksComparison || signals.hasVariantSpecificity) return true;
-	if (signals.asksLink && meaningfulTerms.length >= 2) return true;
-	if (signals.asksPrice && meaningfulTerms.length >= 2) return true;
-	return meaningfulTerms.length >= 3;
+	if (signals.asksLink && terms.length >= 2) return true;
+	if (signals.asksPrice && terms.length >= 2) return true;
+	return terms.length >= 3;
 }
 
 function inferOfferType(product = {}) {
@@ -489,6 +567,36 @@ function countDirectTermMatches(product = {}, terms = []) {
 	return matches;
 }
 
+function buildProductMatchMeta(product = {}, terms = [], normalizedQuery = '') {
+	const name = normalizeText(product.name || '');
+	const handle = normalizeText(product.handle || '');
+	const tags = normalizeText(product.tags || '');
+	const description = normalizeText(product.description || '');
+	const primaryTokens = splitSearchTokens(`${name} ${handle}`);
+	const secondaryTokens = splitSearchTokens(`${tags} ${description}`);
+	const primaryMatches = countTokenMatches({ fieldTokens: primaryTokens, terms, allowFuzzy: true });
+	const secondaryMatches = countTokenMatches({ fieldTokens: secondaryTokens, terms, allowFuzzy: false });
+	const directTermMatches = uniqueStrings([...primaryMatches.direct, ...secondaryMatches.direct]).length;
+	const fuzzyTermMatches = primaryMatches.fuzzy.length;
+	const strongTokenMatch = meaningfulTerms(terms).some((term) =>
+		term.length >= STRONG_PRODUCT_TOKEN_MIN_LENGTH &&
+		(name.includes(term) || handle.includes(term))
+	);
+	const fullQueryMatch = Boolean(
+		normalizedQuery &&
+		[name, handle, tags, description].some((value) => value.includes(normalizedQuery))
+	);
+
+	return {
+		directTermMatches,
+		fuzzyTermMatches,
+		strongTokenMatch,
+		fullQueryMatch,
+		matchedTerms: uniqueStrings([...primaryMatches.direct, ...secondaryMatches.direct]),
+		fuzzyMatchedTerms: primaryMatches.fuzzy
+	};
+}
+
 function shouldFilterGiftLikeProduct(product = {}, family = null, offerType = 'single') {
 	const haystack = normalizeText([
 		product.name,
@@ -516,6 +624,7 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	const tags = normalizeText(product.tags || '');
 	const description = normalizeText(product.description || '');
 	const handle = normalizeText(product.handle || '');
+	const matchMeta = buildProductMatchMeta(product, terms, normalizedQuery);
 	const variantBlob = normalizeText([
 		JSON.stringify(product.variants || []),
 		JSON.stringify(product.attributes || []),
@@ -533,6 +642,9 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	if (description.includes(normalizedQuery)) score += 6;
 	if (handle.includes(normalizedQuery)) score += 7;
 	if (variantBlob.includes(normalizedQuery)) score += 10;
+	if (matchMeta.strongTokenMatch) score += 14;
+	score += matchMeta.directTermMatches * 6;
+	score += matchMeta.fuzzyTermMatches * 8;
 
 	for (const term of terms) {
 		if (name.includes(term)) score += 5;
@@ -597,22 +709,8 @@ export async function getCatalogLookupStatus({ workspaceId = DEFAULT_WORKSPACE_I
 	}
 }
 
-export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const signals = detectRequestedSignals(query, interestedProducts);
+export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { limit = 4 } = {}) {
 	if (shouldSkipCatalogLookup(signals)) return [];
-
-	let rawProducts = [];
-	try {
-		rawProducts = await prisma.catalogProduct.findMany({
-			where: { workspaceId: resolvedWorkspaceId, published: true },
-			orderBy: [{ updatedAt: 'desc' }],
-			take: signals.asksPromo || signals.requestedFamily ? 250 : 180
-		});
-	} catch (error) {
-		logger.error('catalog.search_failed', { workspaceId: resolvedWorkspaceId, error });
-		return [];
-	}
 
 	const ranked = rawProducts
 		.map((product) => ({
@@ -630,6 +728,7 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 			);
 			const variantMeta = extractVariantMeta(product.variants, { family, attributes: product.attributes });
 			const offerType = inferOfferType(product);
+			const matchMeta = buildProductMatchMeta(product, signals.terms, signals.normalizedQuery);
 			const profileScore = scoreProductAgainstCommercialProfile({
 				name: product.name,
 				handle: product.handle,
@@ -666,16 +765,12 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 				packCount: inferPackCount(offerType),
 				commercialProfile: getCommercialProfile(family),
 				commercialScoreBoost: profileScore,
-				fullQueryMatch: Boolean(
-					signals.normalizedQuery &&
-					[
-						product.name,
-						product.handle,
-						product.tags,
-						shortDescription
-					].some((value) => normalizeText(value || '').includes(signals.normalizedQuery))
-				),
-				directTermMatches: countDirectTermMatches(product, signals.terms),
+				fullQueryMatch: matchMeta.fullQueryMatch,
+				directTermMatches: Math.max(countDirectTermMatches(product, signals.terms), matchMeta.directTermMatches),
+				fuzzyTermMatches: matchMeta.fuzzyTermMatches,
+				strongTokenMatch: matchMeta.strongTokenMatch,
+				matchedTerms: matchMeta.matchedTerms,
+				fuzzyMatchedTerms: matchMeta.fuzzyMatchedTerms,
 				isGiftLike: shouldFilterGiftLikeProduct(product, family, offerType)
 			};
 		})
@@ -704,6 +799,9 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 			(
 				strongest.fullQueryMatch ||
 				strongest.directTermMatches >= 2 ||
+				(strongest.directTermMatches >= 1 && strongest.fuzzyTermMatches >= 1) ||
+				strongest.fuzzyTermMatches >= 2 ||
+				strongest.strongTokenMatch ||
 				strongest.score >= 26
 			)
 		);
@@ -714,6 +812,26 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 	}
 
 	return deduped.slice(0, Math.max(limit, 6));
+}
+
+export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const signals = detectRequestedSignals(query, interestedProducts);
+	if (shouldSkipCatalogLookup(signals)) return [];
+
+	let rawProducts = [];
+	try {
+		rawProducts = await prisma.catalogProduct.findMany({
+			where: { workspaceId: resolvedWorkspaceId, published: true },
+			orderBy: [{ updatedAt: 'desc' }],
+			take: signals.asksPromo || signals.requestedFamily ? 250 : 180
+		});
+	} catch (error) {
+		logger.error('catalog.search_failed', { workspaceId: resolvedWorkspaceId, error });
+		return [];
+	}
+
+	return rankCatalogProductsForSearch(rawProducts, signals, { limit });
 }
 
 export function buildCatalogContext(products = []) {

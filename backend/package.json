@@ -15,6 +15,7 @@
     "ai:test:workspace-flow": "node scripts/test-ai-workspace-flow.mjs",
     "ai:regression": "node scripts/run-ai-regression-suite.mjs",
     "ai:regression:compare": "node scripts/compare-ai-regression-suite.mjs",
+    "catalog:fuzzy-test": "node scripts/test-catalog-fuzzy-search.mjs",
     "ai:campaign-qa": "node scripts/run-ai-campaign-qa.mjs",
     "ai:campaign-qa:smoke": "node scripts/run-ai-campaign-qa.mjs --smoke",
     "audit:security": "npm audit --audit-level=high",

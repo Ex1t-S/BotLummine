@@ -19,6 +19,7 @@ backend/scripts/*
 !backend/scripts/compare-ai-regression-suite.mjs
 !backend/scripts/compact-raw-payloads.mjs
 !backend/scripts/run-ai-campaign-qa.mjs
+!backend/scripts/test-catalog-fuzzy-search.mjs
 !backend/scripts/archive-aiqa-conversations.mjs
 debug-output/
 backend/debug-output/
