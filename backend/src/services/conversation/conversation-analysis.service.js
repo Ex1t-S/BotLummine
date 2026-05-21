@@ -304,6 +304,15 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 		};
 	}
 
+	if (
+		/\b(ya soy cliente|soy cliente|mi poliza|mi p[oó]liza|autorizacion|autorizaci[oó]n|reembolso|recibo|certificado|duplicado|tarjeta sanitaria|cuadro medico|cuadro m[eé]dico|incidencia con mi seguro|datos personales)\b/.test(text)
+	) {
+		return {
+			needsHuman: true,
+			handoffReason: 'sensitive_support'
+		};
+	}
+
 	const preSaleObjection = shouldTreatAsPreSaleObjection({
 		text,
 		campaignContext,
@@ -390,6 +399,11 @@ export function buildHandoffReply({ contactName = '', reason = '' } = {}) {
 			`${prefix}para revisarlo bien te paso con una asesora del equipo.`,
 			`${prefix}esto conviene verlo con una persona del equipo para confirmártelo bien.`,
 			`${prefix}te paso con una asesora para que lo revise en detalle.`
+		],
+		sensitive_support: [
+			`${prefix}para revisar esa gestion con seguridad te paso con un asesor de la oficina.`,
+			`${prefix}esa consulta requiere revision personal, te paso con un asesor para seguir por aca.`,
+			`${prefix}para proteger tus datos, esto lo continua un asesor de la oficina.`
 		],
 		too_many_turns_without_resolution: [
 			`${prefix}para no hacerte dar más vueltas, te paso con una asesora 🙌`,

@@ -20,6 +20,13 @@ function buildFakeWaId() {
 	return `54911${suffix}`;
 }
 
+function stripAiLabContactPrefix(value = '') {
+	const raw = String(value || '').trim();
+	return raw.startsWith(AI_LAB_CONTACT_PREFIX)
+		? raw.slice(AI_LAB_CONTACT_PREFIX.length)
+		: raw;
+}
+
 function extractInteractivePayload(message = {}) {
 	const rawPayload = message?.rawPayload;
 	if (!rawPayload || typeof rawPayload !== 'object') return null;
@@ -561,7 +568,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		const result = await processInboundMessage({
 			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
 			waId: conversation.contact?.waId,
-			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: '',
 			messageType: 'reaction',
 			attachmentMeta: null,
@@ -588,7 +595,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		const result = await processInboundMessage({
 			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
 			waId: conversation.contact?.waId,
-			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: '[Imagen recibida]',
 			messageType: 'image',
 			attachmentMeta: {
@@ -627,7 +634,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		const result = await processInboundMessage({
 			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
 			waId: conversation.contact?.waId,
-			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: '[Imagen recibida]',
 			messageType: 'image',
 			attachmentMeta: {
@@ -703,7 +710,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		const result = await processInboundMessage({
 			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
 			waId: conversation.contact?.waId,
-			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
+			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: nextMessageBody,
 			messageType: nextMessageType,
 			attachmentMeta: null,

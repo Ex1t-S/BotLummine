@@ -81,7 +81,7 @@ function detectRequestedAction(messageBody = '', greetingOnly = false) {
 	if (/(cual|conviene|mejor|diferencia|compar)/i.test(text)) return 'ASK_COMPARISON';
 	if (/(precio|cuanto|sale|valor)/i.test(text)) return 'ASK_PRICE';
 	if (/(oferta|promo|promocion|pack|combo|2x1|3x1|5x2)/i.test(text)) return 'ASK_OFFER';
-	if (/(catalogo|ver opciones|que tienen|mostrame|muestrame)/i.test(text)) return 'ASK_CATALOG';
+	if (/(catalogo|ver opciones|que tienen|mostrame|muestrame|que seguros|qu[eé] seguros|polizas|p[oó]lizas|servicios)/i.test(text)) return 'ASK_CATALOG';
 	if (/(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(text)) return 'ASK_VARIANT';
 	if (/^si$/i.test(text) || /^(sí)$/i.test(text)) return 'AFFIRM_CONTINUATION';
 	if (/(transferencia|alias|pago|cuotas)/i.test(text)) return 'ASK_PAYMENT';

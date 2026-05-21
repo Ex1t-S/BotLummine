@@ -18,6 +18,57 @@ import {
 	shouldTreatAsPreSaleObjection,
 } from './conversation-signals.service.js';
 
+const DKV_WORKSPACE_IDS = new Set(['cmpevb0oq0000pd0pgp66xq6k']);
+
+function isDkvWorkspace(workspaceId = '') {
+	return DKV_WORKSPACE_IDS.has(String(workspaceId || '').trim());
+}
+
+function looksLikeDkvOfficeRequest(messageBody = '') {
+	const q = normalizeText(messageBody)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+	return /\b(cita|oficina|direccion|direccion|horario|telefono|whatsapp|vecindario|silva|atencion presencial|donde estan)\b/.test(q);
+}
+
+function looksLikeDkvSensitiveRequest(messageBody = '') {
+	const q = normalizeText(messageBody)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+	return /\b(ya soy cliente|soy cliente|mi poliza|autorizacion|reembolso|recibo|certificado|duplicado|tarjeta sanitaria|cuadro medico|incidencia|datos personales)\b/.test(q);
+}
+
+function looksLikeDkvCatalogRequest(messageBody = '') {
+	const q = normalizeText(messageBody)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+	return (
+		!looksLikeDkvSensitiveRequest(messageBody) &&
+		/\b(catalogo|servicios|opciones|que seguros|seguros tienen|que polizas|polizas tienen|polizas ofrecen|seguros ofrecen)\b/.test(q)
+	);
+}
+
+function buildDkvCatalogReply() {
+	return [
+		'En DKV Vecindario podemos orientarte sobre estos seguros:',
+		'Salud particular: DKV Integral y DKV Personal Doctor.',
+		'Empresas y autonomos: DKV Sanify Empresas, DKV Pymes, DKV Autonomos y DKV Gran Empresa.',
+		'Complementarios: DKV Dental, Decesos, Hogar, Vida y Renta.',
+		'Para recomendarte bien, dime si lo buscas para ti/familia, autonomo o empresa.'
+	].join('\n');
+}
+
+function buildDkvOfficeReply() {
+	return [
+		'La oficina DKV Vecindario esta en C. Silva, 5, 35110 Vecindario, Las Palmas.',
+		'Horario: lunes a viernes de 09:00 a 14:00. Tardes con cita previa.',
+		'Telefono oficina: 928 79 08 40. WhatsApp comercial: 617086415. Atencion cliente DKV: 960160602.'
+	].join('\n');
+}
+
 export function normalizeText(value = '') {
 	return String(value || '')
 		.replace(/\s+/g, ' ')
@@ -37,6 +88,36 @@ function buildGeneralCatalogReply() {
 	}
 
 	return 'Puedo ayudarte por acá con productos, stock, talles, pagos o envíos. Decime qué estás buscando y lo revisamos.';
+}
+
+function buildCatalogOptionsReply(catalogProducts = []) {
+	const names = Array.isArray(catalogProducts)
+		? catalogProducts.map((product) => product?.name).filter(Boolean)
+		: [];
+
+	if (!names.length) return buildGeneralCatalogReply();
+
+	const preferredOrder = [
+		'DKV Integral',
+		'DKV Personal Doctor',
+		'DKV Sanify Empresas',
+		'DKV Pymes',
+		'DKV Autonomos',
+		'DKV Gran Empresa',
+		'DKV Dental',
+		'DKV Decesos',
+		'DKV Hogar',
+		'DKV Vida',
+		'DKV Renta',
+	];
+	const cleanNames = names.filter((name) => !/^catalogo de seguros/i.test(name) && !/^gestiones de clientes/i.test(name));
+	const ordered = [
+		...preferredOrder.filter((name) => cleanNames.includes(name)),
+		...cleanNames.filter((name) => !preferredOrder.includes(name)),
+	];
+	const visible = (ordered.length ? ordered : names).slice(0, 6);
+	const suffix = names.length > visible.length ? ' y otras opciones' : '';
+	return `Tenemos estas opciones: ${visible.join(', ')}${suffix}. Decime si es para particular, autonomo o empresa y te oriento con la alternativa mas adecuada.`;
 }
 
 export function createResetConversationState() {
@@ -229,7 +310,7 @@ export function buildAiFailureFallback({
 		}
 
 		if (commercialPlan?.recommendedAction === 'send_general_catalog_first') {
-			return buildGeneralCatalogReply();
+			return buildCatalogOptionsReply(catalogProducts);
 		}
 
 		if (commercialPlan?.recommendedAction === 'clarify_specific_product') {
@@ -1144,6 +1225,30 @@ export async function resolveIntentAction({
 	explicitOrderNumber,
 	currentState,
 }) {
+	if (isDkvWorkspace(workspaceId) && looksLikeDkvCatalogRequest(messageBody)) {
+		return {
+			handled: true,
+			forcedReply: buildDkvCatalogReply(),
+			liveOrderContext: null,
+			aiGuidance: {
+				type: 'catalog_overview',
+				source: 'dkv_vecindario_context',
+			},
+		};
+	}
+
+	if (isDkvWorkspace(workspaceId) && looksLikeDkvOfficeRequest(messageBody)) {
+		return {
+			handled: true,
+			forcedReply: buildDkvOfficeReply(),
+			liveOrderContext: null,
+			aiGuidance: {
+				type: 'office_contact',
+				source: 'dkv_vecindario_context',
+			},
+		};
+	}
+
 	if (intent === 'order_status') {
 		return handleOrderStatusIntent({ explicitOrderNumber, currentState, workspaceId });
 	}

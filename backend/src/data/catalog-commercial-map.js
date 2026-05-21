@@ -8,6 +8,70 @@ function normalizeText(value = '') {
 }
 
 export const CATALOG_COMMERCIAL_MAP = {
+	dkv_salud: {
+		label: 'seguros de salud DKV',
+		introMode: 'product_first',
+		primaryOfferHints: ['dkv integral', 'seguro de salud', 'seguro medico', 'cuadro medico', 'particular', 'familia'],
+		secondaryOfferHints: ['personal doctor', 'videoconsulta', 'salud digital'],
+		fallbackHints: ['salud', 'medico', 'medico particular', 'asistencia sanitaria', 'dkv integral'],
+		avoidHints: [],
+		defaultPitch:
+			'Si preguntan por salud particular, orienta sobre DKV Integral y pide datos basicos para que un asesor prepare la propuesta.',
+		linkHint:
+			'Si hace falta avanzar, ofrece llamada, cita o contacto con asesor; no inventes primas ni coberturas no confirmadas.'
+	},
+	dkv_empresas: {
+		label: 'seguros DKV para empresas y autonomos',
+		introMode: 'product_first',
+		primaryOfferHints: ['empresa', 'empresas', 'pymes', 'autonomos', 'gran empresa', 'sanify empresas'],
+		secondaryOfferHints: ['beneficio social', 'salud equipo', 'incapacidad temporal', 'retribucion flexible'],
+		fallbackHints: ['empresa', 'pyme', 'pymes', 'autonomo', 'autonomos', 'negocio', 'gran empresa'],
+		avoidHints: [],
+		defaultPitch:
+			'Si preguntan por empresas o autonomos, separa si es pyme, autonomo o gran empresa y ofrece asesoramiento personalizado.',
+		linkHint:
+			'No cierres precios; guia a cita o llamada con la oficina para ajustar la propuesta.'
+	},
+	dkv_dental: {
+		label: 'DKV Dental',
+		introMode: 'product_first',
+		primaryOfferHints: ['dental', 'bucodental', 'odontologia'],
+		secondaryOfferHints: [],
+		fallbackHints: ['dental', 'dentista', 'boca'],
+		avoidHints: []
+	},
+	dkv_hogar: {
+		label: 'DKV Hogar',
+		introMode: 'product_first',
+		primaryOfferHints: ['hogar', 'vivienda', 'casa'],
+		secondaryOfferHints: [],
+		fallbackHints: ['hogar', 'vivienda', 'casa'],
+		avoidHints: []
+	},
+	dkv_vida: {
+		label: 'DKV Vida',
+		introMode: 'product_first',
+		primaryOfferHints: ['vida', 'fallecimiento', 'incapacidad', 'enfermedad grave'],
+		secondaryOfferHints: [],
+		fallbackHints: ['vida', 'familia', 'fallecimiento'],
+		avoidHints: []
+	},
+	dkv_decesos: {
+		label: 'DKV Decesos',
+		introMode: 'product_first',
+		primaryOfferHints: ['decesos', 'funerario', 'repatriacion'],
+		secondaryOfferHints: [],
+		fallbackHints: ['decesos', 'funerario', 'repatriacion'],
+		avoidHints: []
+	},
+	dkv_renta: {
+		label: 'DKV Renta',
+		introMode: 'product_first',
+		primaryOfferHints: ['renta', 'baja laboral', 'incapacidad temporal', 'indemnizacion diaria'],
+		secondaryOfferHints: [],
+		fallbackHints: ['renta', 'baja', 'incapacidad'],
+		avoidHints: []
+	},
 	body_modelador: {
 		label: 'bodys modeladores',
 		introMode: 'product_first',
@@ -93,6 +157,13 @@ export const CATALOG_COMMERCIAL_MAP = {
 const BODY_FAMILY_PATTERN = /\b(body|bodys|bodies|bodyus)\b|\bbodys modeladores\b|\bbody modelador\b|\bbody reductor\b/;
 
 const FAMILY_PATTERNS = [
+	{ family: 'dkv_empresas', regex: /\b(sanify|empresa|empresas|pyme|pymes|autonomo|autonomos|gran empresa|negocio|beneficio social|salud del equipo)\b/ },
+	{ family: 'dkv_salud', regex: /\b(dkv integral|seguro medico|seguro de salud|salud particular|cuadro medico|asistencia sanitaria|personal doctor|medico personal)\b/ },
+	{ family: 'dkv_dental', regex: /\b(dental|bucodental|odontologia|dentista)\b/ },
+	{ family: 'dkv_hogar', regex: /\b(hogar|vivienda|casa)\b/ },
+	{ family: 'dkv_vida', regex: /\b(vida|fallecimiento|enfermedad grave)\b/ },
+	{ family: 'dkv_decesos', regex: /\b(decesos|funerario|repatriacion)\b/ },
+	{ family: 'dkv_renta', regex: /\b(renta|baja laboral|incapacidad temporal|indemnizacion diaria)\b/ },
 	{ family: 'body_modelador', regex: BODY_FAMILY_PATTERN },
 	{ family: 'calzas_linfaticas', regex: /\b(calza|calzas)\b.*(linfat|modeladora|reductora)|\bcalzas? linfaticas?\b|\bcalzas? modeladoras?\b|\bcalzas?\b/ },
 	{ family: 'legging', regex: /\blegging\b|\bleggings\b/ },

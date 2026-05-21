@@ -125,7 +125,7 @@ function hasStockKeywords(q = '') {
 }
 
 function hasProductKeywords(q = '') {
-	return /(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley|legging|leggings|pack|combo|corset|modelador)/.test(
+	return /(body|bodies|faja|short|corpi|bombacha|musculosa|calza|conjunto|morley|legging|leggings|pack|combo|corset|modelador|seguro|seguros|poliza|polizas|salud|medico|dental|decesos|hogar|vida|renta|autonomo|autonomos|pyme|pymes|empresa|empresas)/.test(
 		q
 	);
 }

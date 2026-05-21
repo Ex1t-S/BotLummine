@@ -80,7 +80,8 @@ const COLOR_PATTERNS = /(negro|negra|blanco|blanca|beige|avellana|marron|nude|ro
 const CATALOG_STOPWORDS = new Set([
 	'hola', 'holi', 'buenas', 'buenos', 'dias', 'dia', 'tardes', 'noches',
 	'gracias', 'ok', 'oka', 'dale', 'joya', 'bien', 'genial', 'perfecto',
-	'buenisimo', 'entiendo', 'barbaro', 'si', 'claro'
+	'buenisimo', 'entiendo', 'barbaro', 'si', 'claro',
+	'que', 'tienen', 'tiene', 'tenes', 'quiero', 'necesito'
 ]);
 const GENERIC_VARIANT_VALUES = new Set([
 	'pack',
@@ -381,6 +382,8 @@ function detectRequestedSignals(query = '', interestedProducts = []) {
 		normalizedQuery,
 		terms,
 		requestedFamily,
+		asksCatalog: /(catalogo|catálogo|servicio|servicios|opciones|que tienen|qu[eé] seguros|seguros que tienen|polizas|p[oó]lizas)/i.test(normalizedQuery),
+		asksInsurance: /(seguro|seguros|poliza|p[oó]liza|polizas|p[oó]lizas|salud|medico|m[eé]dico|dental|decesos|hogar|vida|renta|autonomo|aut[oó]nomo|autonomos|aut[oó]nomos|pyme|pymes|empresa|empresas)/i.test(normalizedQuery),
 		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1|5x2|cinco por dos)/i.test(normalizedQuery),
 		asksPrice: /(precio|cuanto|sale|valor)/i.test(normalizedQuery),
 		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
@@ -398,6 +401,8 @@ function shouldSkipCatalogLookup(signals = {}) {
 
 	const hasCommercialSignal =
 		Boolean(signals.requestedFamily) ||
+		signals.asksCatalog ||
+		signals.asksInsurance ||
 		signals.asksPromo ||
 		signals.asksPrice ||
 		signals.asksLink ||
@@ -409,6 +414,16 @@ function shouldSkipCatalogLookup(signals = {}) {
 
 function isSpecificCatalogRequest(signals = {}) {
 	const meaningfulTerms = (signals.terms || []).filter((term) => !CATALOG_STOPWORDS.has(term));
+	if (
+		signals.asksCatalog &&
+		!signals.requestedFamily &&
+		!signals.asksPrice &&
+		!signals.asksLink &&
+		!signals.asksComparison &&
+		!signals.hasVariantSpecificity
+	) {
+		return false;
+	}
 	if (signals.asksComparison || signals.hasVariantSpecificity) return true;
 	if (signals.asksLink && meaningfulTerms.length >= 2) return true;
 	if (signals.asksPrice && meaningfulTerms.length >= 2) return true;

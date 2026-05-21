@@ -1170,3 +1170,101 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* Wide stacked lab layout */
+
+.ai-lab-page {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: auto minmax(560px, 1fr) auto;
+	height: auto;
+	min-height: calc(100vh - 88px);
+	overflow: visible;
+}
+
+.ai-lab-sidebar-card {
+	order: 1;
+	grid-column: 1;
+	grid-row: 1;
+	display: grid;
+	grid-template-columns: minmax(220px, 0.7fr) minmax(260px, 1fr) minmax(260px, 1fr);
+	align-items: end;
+	gap: 12px 14px;
+	max-height: none;
+	overflow: visible;
+	padding: 14px;
+}
+
+.ai-lab-sidebar-header {
+	align-self: center;
+}
+
+.ai-lab-sidebar-header h1 {
+	font-size: 20px;
+}
+
+.ai-lab-sidebar-header p {
+	margin-top: 4px;
+	font-size: 12px;
+}
+
+.ai-lab-field,
+.ai-lab-actions-row {
+	min-width: 0;
+}
+
+.ai-lab-field span {
+	margin-bottom: 5px;
+	font-size: 12px;
+}
+
+.ai-lab-field select {
+	min-height: 40px;
+	padding: 9px 12px;
+}
+
+.ai-lab-actions-row {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.ai-lab-fixture-drawer,
+.ai-lab-expectations-drawer,
+.ai-lab-sidebar-card > .ai-lab-meta-box.compact {
+	grid-column: 1 / -1;
+}
+
+.ai-lab-fixture-drawer:not([open]),
+.ai-lab-expectations-drawer:not([open]) {
+	min-height: 44px;
+}
+
+.ai-lab-chat-card {
+	order: 2;
+	grid-column: 1;
+	grid-row: 2;
+	min-height: min(720px, calc(100vh - 250px));
+}
+
+.ai-lab-debug-card {
+	order: 3;
+	grid-column: 1;
+	grid-row: 3;
+}
+
+.ai-lab-message-stack {
+	max-width: min(78%, 920px);
+}
+
+@media (max-width: 900px) {
+	.ai-lab-sidebar-card {
+		grid-template-columns: 1fr;
+		align-items: stretch;
+	}
+
+	.ai-lab-actions-row {
+		grid-template-columns: 1fr;
+	}
+
+	.ai-lab-chat-card {
+		min-height: 620px;
+	}
+}
