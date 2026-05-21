@@ -1,8 +1,13 @@
 .ai-lab-page {
 	display: grid;
-	height: calc(100dvh - 88px);
+	flex: 1 1 auto;
+	height: 100%;
 	min-height: 0;
 	overflow: hidden;
+}
+
+.admin-content > .ai-lab-page {
+	flex: 1 1 auto;
 }
 
 .ai-lab-chat-card {
@@ -90,6 +95,10 @@
 }
 
 .ai-lab-message-row--outbound {
+	flex-direction: row;
+}
+
+.ai-lab-message-row--inbound {
 	flex-direction: row-reverse;
 }
 
@@ -121,6 +130,10 @@
 }
 
 .ai-lab-message-row--outbound .ai-lab-message-stack {
+	align-items: flex-start;
+}
+
+.ai-lab-message-row--inbound .ai-lab-message-stack {
 	align-items: flex-end;
 }
 
@@ -393,7 +406,7 @@
 
 @media (max-width: 760px) {
 	.ai-lab-page {
-		height: calc(100dvh - 72px);
+		height: 100%;
 	}
 
 	.ai-lab-chat-header {
