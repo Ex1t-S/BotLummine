@@ -24,6 +24,13 @@ const AUTOMATION_TYPE_ORDER = {
 	[AUTOMATION_RUN_TYPES.SHIPMENT_NOTIFICATION]: 3,
 };
 const AUTOMATION_SOURCES = Object.values(AUTOMATION_RUN_TYPES);
+const AUTOMATION_SOURCE_ALIASES = [
+	...AUTOMATION_SOURCES,
+	'abandoned_cart',
+	'pending_payments',
+	'shipment_notifications',
+	'shipments',
+];
 
 function safeArray(value) {
 	return Array.isArray(value) ? value : [];
@@ -269,36 +276,11 @@ export async function backfillAutomationRunsForWorkspace({
 	timezone = DEFAULT_TIMEZONE,
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const [abandonedLogs, pendingLogs, shipmentLogs] = await Promise.all([
-		prisma.abandonedCartAutomationLog.findMany({
-			where: { workspaceId: resolvedWorkspaceId, campaignId: { not: null } },
-			select: { campaignId: true },
-		}),
-		prisma.pendingPaymentAutomationLog.findMany({
-			where: { workspaceId: resolvedWorkspaceId, campaignId: { not: null } },
-			select: { campaignId: true },
-		}),
-		prisma.shipmentNotificationLog.findMany({
-			where: { workspaceId: resolvedWorkspaceId, campaignId: { not: null } },
-			select: { campaignId: true },
-		}),
-	]);
-	const loggedCampaignIds = [
-		...abandonedLogs,
-		...pendingLogs,
-		...shipmentLogs,
-	].map((row) => row.campaignId).filter(Boolean);
-
-	if (!loggedCampaignIds.length) {
-		return { processed: 0, groups: 0 };
-	}
-
 	const campaigns = await prisma.campaign.findMany({
 		where: {
 			workspaceId: resolvedWorkspaceId,
-			id: { in: loggedCampaignIds },
 			automationRunId: null,
-			audienceSource: { in: AUTOMATION_SOURCES },
+			audienceSource: { in: AUTOMATION_SOURCE_ALIASES },
 		},
 		select: {
 			id: true,

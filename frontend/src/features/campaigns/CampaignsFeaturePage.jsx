@@ -1785,6 +1785,7 @@ export default function CampaignsFeaturePage() {
 							onDelete={requestDeleteCampaign}
 							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
 							deleteLoading={mutations.deleteCampaign.isPending}
+							loading={queries.campaigns.isLoading || queries.automationRuns.isLoading}
 							tracking={tracking}
 						/>
 					</CampaignSectionShell>

@@ -361,6 +361,7 @@ export default function CampaignRunsPanel({
 	onDelete,
 	actionLoading,
 	deleteLoading,
+	loading = false,
 	tracking = {},
 }) {
 	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
@@ -437,6 +438,16 @@ export default function CampaignRunsPanel({
 				</div>
 			</div>
 
+			{campaigns.length === 0 ? (
+				<div className="campaign-empty-state campaign-tracking-empty-state">
+					<strong>{loading ? 'Cargando historial...' : 'Todavia no hay historial visible.'}</strong>
+					<p>
+						{loading
+							? 'Estamos buscando automatizaciones diarias y campanas enviadas.'
+							: 'Las automatizaciones del dia y las campanas manuales van a aparecer aca, agrupadas y con sus resultados.'}
+					</p>
+				</div>
+			) : (
 			<div className="campaign-runs-grid campaign-runs-grid--balanced">
 				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-list">
 					<div className="campaign-detail-header">
@@ -878,6 +889,7 @@ export default function CampaignRunsPanel({
 					)}
 				</div>
 			</div>
+			)}
 		</section>
 	);
 }

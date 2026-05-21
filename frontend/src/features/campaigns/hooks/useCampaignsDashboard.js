@@ -425,16 +425,22 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	const overview = useMemo(() => normalizeOverview(overviewQuery.data || {}), [overviewQuery.data]);
 
 	const selectedCampaign = useMemo(() => {
+		if (!selectedCampaignId) return null;
+
 		const listCampaign = campaigns.find((campaign) => campaign.id === selectedCampaignId) || null;
 		const detailPayload = extractDetailResponsePayload(campaignDetailQuery.data);
-		const detailCampaign =
+		const rawDetailCampaign =
 			detailPayload?.campaign ||
 			detailPayload?.item ||
 			detailPayload?.run ||
 			null;
+		const detailCampaign = rawDetailCampaign?.id === selectedCampaignId ? rawDetailCampaign : null;
 
-		const detailRecipients = Array.isArray(detailPayload?.recipients)
-			? detailPayload.recipients
+		if (!listCampaign && !detailCampaign) return null;
+
+		const activeDetailPayload = detailCampaign ? detailPayload : {};
+		const detailRecipients = Array.isArray(activeDetailPayload?.recipients)
+			? activeDetailPayload.recipients
 			: Array.isArray(detailCampaign?.recipients)
 				? detailCampaign.recipients
 				: [];
@@ -442,11 +448,11 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		const merged = {
 			...(listCampaign || {}),
 			...(detailCampaign || {}),
-			analytics: detailPayload?.analytics || detailCampaign?.analytics || null,
-			diagnostics: detailPayload?.diagnostics || detailCampaign?.diagnostics || null,
+			analytics: activeDetailPayload?.analytics || detailCampaign?.analytics || listCampaign?.analytics || null,
+			diagnostics: activeDetailPayload?.diagnostics || detailCampaign?.diagnostics || listCampaign?.diagnostics || null,
 			recipients: detailRecipients,
 			allRecipients: detailRecipients,
-			pagination: detailPayload?.pagination || detailCampaign?.pagination || null,
+			pagination: activeDetailPayload?.pagination || detailCampaign?.pagination || listCampaign?.pagination || null,
 		};
 
 		const metrics = buildRecipientMetrics(detailRecipients, merged);
@@ -476,6 +482,11 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	useEffect(() => {
 		if ((!selectedCampaignId || !campaigns.some((campaign) => campaign.id === selectedCampaignId)) && campaigns.length) {
 			setSelectedCampaignId(campaigns[0].id);
+			return;
+		}
+
+		if (selectedCampaignId && campaigns.length === 0) {
+			setSelectedCampaignId(null);
 		}
 	}, [campaigns, selectedCampaignId]);
 
