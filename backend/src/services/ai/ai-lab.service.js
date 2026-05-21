@@ -5,7 +5,7 @@ import { getOrCreateConversation, processInboundMessage } from '../conversation/
 import { createResetConversationState } from '../conversation/conversation-helpers.service.js';
 import { patchConversationState } from '../conversation/menu-flow.service.js';
 import { sendAndPersistOutbound } from '../conversation/outbound-message.service.js';
-import { getAiLabFixture, AI_LAB_FIXTURES } from '../../data/ai-lab-fixtures.js';
+import { getAiLabFixture, getAiLabFixturesForWorkspace } from '../../data/ai-lab-fixtures.js';
 import {
 	getWhatsAppMenuRuntimeConfig,
 	DEFAULT_MAIN_MENU_KEY
@@ -403,8 +403,8 @@ function fixtureMetaFromFixture(fixture = {}) {
 	};
 }
 
-export function listAiLabFixtures() {
-	return AI_LAB_FIXTURES.map((fixture) => ({
+export function listAiLabFixtures({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+	return getAiLabFixturesForWorkspace({ workspaceId }).map((fixture) => ({
 		key: fixture.key,
 		name: fixture.name,
 		description: fixture.description,
@@ -418,7 +418,7 @@ export async function createAiLabSession({
 	fixtureKey = 'blank'
 } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const fixture = getAiLabFixture(fixtureKey);
+	const fixture = getAiLabFixture(fixtureKey, { workspaceId: resolvedWorkspaceId });
 	const waId = buildFakeWaId();
 	const contactName = `${AI_LAB_CONTACT_PREFIX}${fixture.contactName || 'German'}`;
 
@@ -460,7 +460,7 @@ export async function getAiLabSession(sessionId, { workspaceId = DEFAULT_WORKSPA
 	if (!session) return null;
 	const resolvedWorkspaceId = assertSessionWorkspace(session, workspaceId);
 
-	const fixture = getAiLabFixture(session.fixtureKey);
+	const fixture = getAiLabFixture(session.fixtureKey, { workspaceId: resolvedWorkspaceId });
 	const conversation = await fetchSessionConversation(session.conversationId, resolvedWorkspaceId);
 	return await serializeConversation(conversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }
@@ -474,7 +474,7 @@ export async function resetAiLabSession(sessionId, { workspaceId = DEFAULT_WORKS
 	}
 	const resolvedWorkspaceId = assertSessionWorkspace(session, workspaceId);
 
-	const fixture = getAiLabFixture(fixtureKey || session.fixtureKey);
+	const fixture = getAiLabFixture(fixtureKey || session.fixtureKey, { workspaceId: resolvedWorkspaceId });
 	session.fixtureKey = fixture.key;
 	session.lastTrace = null;
 
@@ -725,7 +725,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		});
 	}
 
-	const fixture = getAiLabFixture(session.fixtureKey);
+	const fixture = getAiLabFixture(session.fixtureKey, { workspaceId: resolvedWorkspaceId });
 	const updatedConversation = await fetchSessionConversation(session.conversationId, resolvedWorkspaceId);
 	return await serializeConversation(updatedConversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }

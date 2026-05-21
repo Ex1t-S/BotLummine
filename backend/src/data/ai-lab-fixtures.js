@@ -312,6 +312,102 @@ export const AI_LAB_FIXTURES = [
 	}
 ];
 
-export function getAiLabFixture(fixtureKey = 'blank') {
-	return AI_LAB_FIXTURES.find((fixture) => fixture.key === fixtureKey) || AI_LAB_FIXTURES[0];
+const DKV_WORKSPACE_IDS = new Set([
+	'cmpevb0oq0000pd0pgp66xq6k',
+]);
+
+const DKV_AI_LAB_FIXTURES = [
+	{
+		key: 'blank',
+		name: 'En blanco',
+		description: 'Arranca desde cero, sin historial ni estado previo.',
+		expected: [
+			'La IA debe responder con tono formal y claro de DKV Vecindario',
+			'No debe inventar precios, coberturas ni tramites completados'
+		]
+	},
+	{
+		key: 'dkv-menu-flow',
+		name: 'Menu DKV real',
+		description: 'Abre el menu principal configurado para probar selecciones reales.',
+		startWithMainMenu: true,
+		menuPath: 'MAIN_MENU',
+		menuIntroText: 'Abrimos el menu de DKV Vecindario.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Hola, soy la asesora virtual de DKV Vecindario. Te ayudo por aqui.'
+			}
+		],
+		expected: [
+			'Debe permitir tocar opciones reales del menu desde AI Lab',
+			'Contratacion debe guiar por producto sin inventar coberturas',
+			'Gestiones sensibles deben pasar a un asesor'
+		]
+	},
+	{
+		key: 'dkv-health-sale',
+		name: 'Contratar salud',
+		description: 'Consulta comercial por seguro medico particular.',
+		seedMessages: [
+			{
+				direction: 'OUTBOUND',
+				body: 'Hola, soy la asesora virtual de DKV Vecindario. En que puedo ayudarte?'
+			},
+			{
+				direction: 'INBOUND',
+				body: 'Quiero informacion para contratar un seguro de salud'
+			}
+		],
+		expected: [
+			'Debe pedir datos utiles para asesorar',
+			'Debe mencionar DKV Integral o seguro medico solo como orientacion',
+			'No debe dar precios ni coberturas no confirmadas'
+		]
+	},
+	{
+		key: 'dkv-existing-client',
+		name: 'Cliente actual',
+		description: 'Cliente pide una gestion sensible de poliza o autorizacion.',
+		seedMessages: [
+			{
+				direction: 'INBOUND',
+				body: 'Ya soy cliente y necesito consultar una autorizacion de mi poliza'
+			}
+		],
+		expected: [
+			'Debe detectar tramite sensible',
+			'Debe derivar a atencion humana',
+			'No debe pedir datos personales innecesarios en IA'
+		]
+	},
+	{
+		key: 'dkv-office-appointment',
+		name: 'Cita u oficina',
+		description: 'Consulta por direccion, horario, telefono o cita previa.',
+		seedMessages: [
+			{
+				direction: 'INBOUND',
+				body: 'Hola, quiero pedir cita en la oficina de Vecindario'
+			}
+		],
+		expected: [
+			'Debe responder con direccion y horario de la oficina',
+			'Debe indicar telefono de oficina y WhatsApp disponibles',
+			'No debe cambiar a venta si la consulta es solo cita'
+		]
+	}
+];
+
+function isDkvWorkspace(workspaceId = '') {
+	return DKV_WORKSPACE_IDS.has(String(workspaceId || '').trim());
+}
+
+export function getAiLabFixturesForWorkspace({ workspaceId = '' } = {}) {
+	return isDkvWorkspace(workspaceId) ? DKV_AI_LAB_FIXTURES : AI_LAB_FIXTURES;
+}
+
+export function getAiLabFixture(fixtureKey = 'blank', { workspaceId = '' } = {}) {
+	const fixtures = getAiLabFixturesForWorkspace({ workspaceId });
+	return fixtures.find((fixture) => fixture.key === fixtureKey) || fixtures[0];
 }

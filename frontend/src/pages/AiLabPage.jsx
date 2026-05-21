@@ -153,6 +153,7 @@ export default function AiLabPage() {
 	useInternalDarkOverrides();
 
 	const messagesEndRef = useRef(null);
+	const autoSessionFixtureRef = useRef(null);
 	const [session, setSession] = useState(null);
 	const [fixtureKey, setFixtureKey] = useState('blank');
 	const [messageText, setMessageText] = useState('');
@@ -231,8 +232,10 @@ export default function AiLabPage() {
 		const exists = fixturesQuery.data.some((fixture) => fixture.key === fixtureKey);
 		const nextFixtureKey = exists ? fixtureKey : fixturesQuery.data[0].key;
 		if (!exists) setFixtureKey(nextFixtureKey);
+		if (autoSessionFixtureRef.current === nextFixtureKey) return;
+		autoSessionFixtureRef.current = nextFixtureKey;
 		createSessionMutation.mutate(nextFixtureKey);
-	}, [fixturesQuery.data, session, fixtureKey, createSessionMutation]);
+	}, [fixturesQuery.data, session, fixtureKey, createSessionMutation.isPending]);
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -299,7 +302,12 @@ export default function AiLabPage() {
 					</ActionButton>
 				</div>
 
-				<div className="ai-lab-fixture-list">
+				<details className="ai-lab-fixture-drawer">
+					<summary>
+						<span>Escenarios de prueba</span>
+						<small>{fixtures.length} disponibles</small>
+					</summary>
+					<div className="ai-lab-fixture-list">
 					{fixtures.map((fixture) => {
 						const active = fixture.key === fixtureKey;
 						return (
@@ -310,10 +318,11 @@ export default function AiLabPage() {
 							</button>
 						);
 					})}
-				</div>
+					</div>
+				</details>
 
-				<div className="ai-lab-meta-box">
-					<h3>Expectativas del escenario</h3>
+				<details className="ai-lab-meta-box ai-lab-expectations-drawer">
+					<summary>Expectativas del escenario</summary>
 					<ul>
 						{activeFixture?.expected?.length ? (
 							activeFixture.expected.map((item) => <li key={item}>{item}</li>)
@@ -321,7 +330,7 @@ export default function AiLabPage() {
 							<li>Seleccioná un escenario para cargar sus expectativas.</li>
 						)}
 					</ul>
-				</div>
+				</details>
 			</section>
 
 			<section className="ai-lab-chat-card">
@@ -385,6 +394,12 @@ export default function AiLabPage() {
 					) : (
 						<div className="empty-state large">Cargá un escenario o arrancá desde cero.</div>
 					)}
+					{isBusy ? (
+						<div className="ai-lab-turn-status" role="status">
+							<span aria-hidden="true" />
+							Procesando turno...
+						</div>
+					) : null}
 					<div ref={messagesEndRef} />
 				</div>
 
@@ -393,22 +408,26 @@ export default function AiLabPage() {
 						value={messageText}
 						onChange={(event) => setMessageText(event.target.value)}
 						placeholder="Escribí como si fueras el cliente..."
-						rows={4}
+						rows={2}
 						disabled={!session?.id || isBusy}
 					/>
-					<button type="submit" disabled={!messageText.trim() || !session?.id || isBusy}>
-						{sendMessageMutation.isPending ? 'Probando...' : 'Enviar al lab'}
-					</button>
+					<div className="ai-lab-composer-actions">
+						<button type="submit" disabled={!messageText.trim() || !session?.id || isBusy}>
+							{sendMessageMutation.isPending ? 'Probando...' : 'Enviar'}
+						</button>
+						<button type="button" className="ai-lab-secondary-btn" onClick={handleOpenMenu} disabled={!session?.id || isBusy}>
+							Abrir menu
+						</button>
+					</div>
 				</form>
-
-				<div className="ai-lab-inline-actions">
-					<button type="button" className="ai-lab-secondary-btn" onClick={handleOpenMenu} disabled={!session?.id || isBusy}>
-						Abrir menu
-					</button>
-				</div>
 			</section>
 
-			<aside className="ai-lab-debug-card">
+			<details className="ai-lab-debug-card">
+				<summary className="ai-lab-debug-summary">
+					<span>Debug y trazas</span>
+					<small>Prompt, estado y runs persistidos</small>
+				</summary>
+				<div className="ai-lab-debug-content">
 				<div className="ai-lab-debug-header">
 					<h2>Debug</h2>
 					<div className="ai-lab-debug-toggles">
@@ -505,7 +524,8 @@ export default function AiLabPage() {
 						<pre className="ai-lab-code-block large">{trace?.prompt || 'Todavía no hay prompt para mostrar.'}</pre>
 					</div>
 				) : null}
-			</aside>
+				</div>
+			</details>
 		</div>
 	);
 }

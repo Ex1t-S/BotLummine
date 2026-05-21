@@ -346,10 +346,11 @@ export async function runConversationTurn({
 		catalogProducts = await searchCatalogProducts({
 			query: messageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
-			limit: 5
+			limit: 5,
+			workspaceId
 		});
 
-		const catalogStatus = await getCatalogLookupStatus();
+		const catalogStatus = await getCatalogLookupStatus({ workspaceId });
 
 		commercialPlan = {
 			...resolveCommercialBrainV2({

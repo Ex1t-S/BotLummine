@@ -86,6 +86,45 @@ function buildCommercialPlanBlock(commercialPlan = {}) {
 	].join('\n');
 }
 
+function shouldUseStoreCommerceContext({ catalogProducts = [], commercialPlan = {} } = {}) {
+	if (commercialPlan?.stage === 'SUPPORT') return false;
+	if (commercialPlan?.catalogAvailable === false) return false;
+	return Array.isArray(catalogProducts) && catalogProducts.length > 0;
+}
+
+function buildStateBlock(conversationState = {}, { useStoreCommerceContext = false } = {}) {
+	const lines = [
+		`- Ultima intencion: ${conversationState.lastIntent || 'general'}`,
+		`- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}`,
+		`- Animo: ${conversationState.customerMood || 'neutral'}`
+	];
+
+	if (useStoreCommerceContext) {
+		lines.push(
+			`- Familia actual: ${conversationState.currentProductFamily || 'no detectada'}`,
+			`- Producto foco: ${conversationState.currentProductFocus || 'no detectado'}`,
+			`- Promo pedida: ${conversationState.requestedOfferType || 'no detectada'}`,
+			`- Exclusiones: ${formatArrayField(conversationState.excludedProductKeywords, 'ninguna')}`,
+			`- Familia bloqueada: ${conversationState.categoryLocked ? 'Si' : 'No'}`,
+			`- Talle detectado: ${conversationState.frequentSize || 'no detectado'}`,
+			`- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}`,
+			`- Productos de interes: ${formatArrayField(conversationState.interestedProducts)}`
+		);
+	} else {
+		lines.push(
+			`- Tema actual: ${conversationState.currentProductFocus || conversationState.lastUserGoal || 'no detectado'}`,
+			`- Gestion sensible: ${conversationState.needsHuman ? 'Si' : 'No'}`
+		);
+	}
+
+	lines.push(
+		`- Resumen comercial: ${conversationState.commercialSummary || 'sin resumen especial'}`,
+		`- Necesita humano: ${conversationState.needsHuman ? 'Si' : 'No'}`
+	);
+
+	return `ESTADO ACTUAL:\n${lines.join('\n')}`;
+}
+
 function shouldIncludeLiveOrderContext({ liveOrderContext, responsePolicy }) {
 	if (!liveOrderContext) return false;
 	return /^order_status/.test(String(responsePolicy?.action || ''));
@@ -115,9 +154,12 @@ export function buildPrompt({
 	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi';
 	const tone = aiConfig.tone || 'amigable_directo';
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
-	const facts = getRelevantStoreFacts(recentMessages);
+	const useStoreCommerceContext = shouldUseStoreCommerceContext({ catalogProducts, commercialPlan });
+	const facts = useStoreCommerceContext ? getRelevantStoreFacts(recentMessages) : [];
 	const firstContact = isFirstContact(recentMessages);
-	const businessData = buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '');
+	const businessData = useStoreCommerceContext
+		? buildRelevantBusinessData([...recentMessages].reverse().find((m) => m.role === 'user')?.text || '')
+		: null;
 	const commercialHintsBlock = Array.isArray(commercialHints) && commercialHints.length
 		? commercialHints.slice(0, 8).map((hint) => `- ${hint}`).join('\n')
 		: '- Guia una sola opcion principal y no abras todo el catalogo.';
@@ -146,18 +188,18 @@ export function buildPrompt({
 		businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}` : '',
 		`DATOS DEL CLIENTE:\n- Nombre: ${customerContext.name || contactName || 'Cliente'}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
-		`ESTADO ACTUAL:\n- Ultima intencion: ${conversationState.lastIntent || 'general'}\n- Objetivo: ${conversationState.lastUserGoal || 'consulta_general'}\n- Animo: ${conversationState.customerMood || 'neutral'}\n- Familia actual: ${conversationState.currentProductFamily || 'no detectada'}\n- Producto foco: ${conversationState.currentProductFocus || 'no detectado'}\n- Promo pedida: ${conversationState.requestedOfferType || 'no detectada'}\n- Exclusiones: ${formatArrayField(conversationState.excludedProductKeywords, 'ninguna')}\n- Familia bloqueada: ${conversationState.categoryLocked ? 'Si' : 'No'}\n- Talle detectado: ${conversationState.frequentSize || 'no detectado'}\n- Pago preferido: ${conversationState.paymentPreference || 'no detectado'}\n- Productos de interes: ${formatArrayField(conversationState.interestedProducts)}\n- Resumen comercial: ${conversationState.commercialSummary || 'sin resumen especial'}\n- Necesita humano: ${conversationState.needsHuman ? 'Si' : 'No'}`,
+		buildStateBlock(conversationState, { useStoreCommerceContext }),
 		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName })}`,
 		`PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}`,
 		liveOrderContextEnabled
 			? `PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`
 			: 'REGLA DE PEDIDO:\n- Ignora cualquier pedido previo salvo que la accion permitida sea de seguimiento de pedido.',
-		`HECHOS UTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}`,
+		useStoreCommerceContext && facts.length ? `HECHOS UTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}` : '',
 		`CATALOGO RELEVANTE:\n${compactCatalog}`,
 		`PISTAS COMERCIALES:\n${commercialHintsBlock}`,
 		campaignAssistantContext?.promptBlock ? `CONTEXTO DE CAMPAÑA:\n${campaignAssistantContext.promptBlock}` : '',
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',
-		`POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}`,
+		useStoreCommerceContext && businessData ? `POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}` : '',
 		`REGLAS DE SALIDA:\n- ${firstContact ? `Si es el primer mensaje y no es solo un saludo corto, podes presentarte una sola vez como ${agentName} de ${businessName}.` : `Si el cliente solo retoma con hola o buenas, podes volver a presentarte breve como ${agentName} de ${businessName}. Si no, segui el hilo sin saludar de nuevo.`}\n- Si el mensaje del cliente es solo un saludo, responde breve, presentate como ${agentName} de ${businessName} y pregunta que esta buscando.\n- Si la intencion es soporte (pedido, pago, envio o comprobante), no metas promociones ni cambies a modo venta salvo que el cliente cambie de tema.\n- Si el catalogo local no esta disponible o no hay productos confirmados, no inventes nombres de productos, promos, precios, links ni stock.\n- Si el catalogo local no esta disponible o no hay productos confirmados, pedi una aclaracion breve o ofrece derivar con una asesora.\n- Si el cliente ya fijo familia o promo, respetala y no cambies de producto por tu cuenta.\n- Si el cliente excluyo una opcion, no la vuelvas a mencionar como recomendacion.\n- Si la promo exacta no existe dentro de esa familia, decilo explicitamente y ofrece la mejor alternativa dentro de la misma familia.\n- Si mostras opciones, prioriza una sola principal segun el plan comercial, salvo que este comparando.\n- Si ya se venia hablando de otro producto mas reciente, el link tiene que seguir ese producto reciente.\n- No repitas promo, precio ni link si ya fueron dados, salvo pedido explicito.\n- Si usas el menu como guia, integralo natural solo cuando el cliente este abierto o desorientado.\n- No pegues una coletilla fija de menu al final de respuestas concretas.\n- No uses listas largas.\n- No arranques con claro, perfecto, genial, buenisimo o dale.\n- Si la respuesta es continuidad y no es un saludo nuevo, no repitas nombre ni saludo.`,
 		`CONVERSACION RECIENTE:\n${transcript}`,
 		'Responde ahora al ultimo mensaje del cliente.'

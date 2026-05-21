@@ -8,9 +8,12 @@ import {
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
 
-export async function getAiLabFixtures(_req, res, next) {
+export async function getAiLabFixtures(req, res, next) {
 	try {
-		return res.json({ ok: true, fixtures: listAiLabFixtures() });
+		return res.json({
+			ok: true,
+			fixtures: listAiLabFixtures({ workspaceId: requireRequestWorkspaceId(req) })
+		});
 	} catch (error) {
 		next(error);
 	}
