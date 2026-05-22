@@ -126,6 +126,41 @@ function normalizeString(value, fallback = '') {
 	return normalized || fallback;
 }
 
+async function resolvePendingPaymentAutomationWorkspaceId(workspaceId = DEFAULT_WORKSPACE_ID) {
+	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+
+	if (normalizedWorkspaceId !== DEFAULT_WORKSPACE_ID) {
+		return normalizedWorkspaceId;
+	}
+
+	const defaultWorkspace = await prisma.workspace.findUnique({
+		where: { id: normalizedWorkspaceId },
+		select: { id: true },
+	});
+
+	if (defaultWorkspace?.id) {
+		return normalizedWorkspaceId;
+	}
+
+	const workspaceWithOrders = await prisma.customerOrder.findFirst({
+		where: { workspace: { status: 'ACTIVE' } },
+		select: { workspaceId: true },
+		orderBy: { updatedAt: 'desc' },
+	});
+
+	if (workspaceWithOrders?.workspaceId) {
+		return workspaceWithOrders.workspaceId;
+	}
+
+	const activeWorkspace = await prisma.workspace.findFirst({
+		where: { status: 'ACTIVE' },
+		select: { id: true },
+		orderBy: { updatedAt: 'desc' },
+	});
+
+	return activeWorkspace?.id || normalizedWorkspaceId;
+}
+
 function normalizeBoolean(value) {
 	if (typeof value === 'boolean') return value;
 	const normalized = normalizeString(value).toLowerCase();
@@ -224,7 +259,7 @@ function orderMatchesProductQuery(order = {}, productQuery = '') {
 }
 
 async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolvePendingPaymentAutomationWorkspaceId(workspaceId);
 	let existing = null;
 
 	try {
@@ -264,7 +299,7 @@ export async function updatePendingPaymentAutomationSettings({
 	filters = {},
 	variableMapping = undefined,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolvePendingPaymentAutomationWorkspaceId(workspaceId);
 	const nextEnabled = normalizeBoolean(enabled);
 	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId

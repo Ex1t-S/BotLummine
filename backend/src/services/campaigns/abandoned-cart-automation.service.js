@@ -28,7 +28,7 @@ const runtimeStateByWorkspace = new Map();
 
 function isAbandonedCartAutomationTableMissing(error) {
 	return (
-		error?.code === 'P2021' ||
+		['P2021', 'P2022'].includes(error?.code) ||
 		/AbandonedCartAutomationSetting|AbandonedCartAutomationLog|public\.AbandonedCartAutomation/i.test(
 			String(error?.message || '')
 		)
@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationSetting" (
     "templateName" TEXT,
     "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
     "filters" JSONB,
+    "variableMapping" JSONB,
+    "manualVariables" JSONB,
     "intervalMinutes" INTEGER NOT NULL DEFAULT 30,
     "minCartAgeMinutes" INTEGER NOT NULL DEFAULT 60,
     "lastRunAt" TIMESTAMP(3),
@@ -80,6 +82,10 @@ ON "AbandonedCartAutomationLog"("workspaceId", "createdAt")`);
 		await prisma.$executeRawUnsafe(`
 CREATE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_campaignId_idx"
 ON "AbandonedCartAutomationLog"("workspaceId", "campaignId")`);
+		await prisma.$executeRawUnsafe(`
+ALTER TABLE "AbandonedCartAutomationSetting" ADD COLUMN IF NOT EXISTS "variableMapping" JSONB`);
+		await prisma.$executeRawUnsafe(`
+ALTER TABLE "AbandonedCartAutomationSetting" ADD COLUMN IF NOT EXISTS "manualVariables" JSONB`);
 		await prisma.$executeRawUnsafe(`
 DO $$
 BEGIN
@@ -284,6 +290,41 @@ function getPrimaryProductName(cart = {}) {
 	return normalizeString(product?.name || product?.title || product?.productName || product?.sku || '');
 }
 
+async function resolveAbandonedCartAutomationWorkspaceId(workspaceId = DEFAULT_WORKSPACE_ID) {
+	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+
+	if (normalizedWorkspaceId !== DEFAULT_WORKSPACE_ID) {
+		return normalizedWorkspaceId;
+	}
+
+	const defaultWorkspace = await prisma.workspace.findUnique({
+		where: { id: normalizedWorkspaceId },
+		select: { id: true },
+	});
+
+	if (defaultWorkspace?.id) {
+		return normalizedWorkspaceId;
+	}
+
+	const workspaceWithCarts = await prisma.abandonedCart.findFirst({
+		where: { workspace: { status: 'ACTIVE' } },
+		select: { workspaceId: true },
+		orderBy: { updatedAt: 'desc' },
+	});
+
+	if (workspaceWithCarts?.workspaceId) {
+		return workspaceWithCarts.workspaceId;
+	}
+
+	const activeWorkspace = await prisma.workspace.findFirst({
+		where: { status: 'ACTIVE' },
+		select: { id: true },
+		orderBy: { updatedAt: 'desc' },
+	});
+
+	return activeWorkspace?.id || normalizedWorkspaceId;
+}
+
 function cartMatchesProductQuery(cart = {}, productQuery = '') {
 	const needle = normalizeString(productQuery).toLowerCase();
 	if (!needle) return true;
@@ -296,7 +337,7 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 }
 
 async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveAbandonedCartAutomationWorkspaceId(workspaceId);
 	let existing = null;
 
 	try {
@@ -336,7 +377,7 @@ export async function updateAbandonedCartAutomationSettings({
 	variableMapping = undefined,
 	manualVariables = undefined,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = await resolveAbandonedCartAutomationWorkspaceId(workspaceId);
 	const nextEnabled = normalizeBoolean(enabled);
 	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId
