@@ -225,16 +225,6 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 		});
 	}
 
-	if (pausedFlags.includes(WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH)) {
-		issues.push({
-			type: 'campaign_dispatch',
-			severity: 'warning',
-			label: 'Campanas pausadas',
-			action: 'Revisar campanas',
-			href: '/campaigns/tracking',
-		});
-	}
-
 	if (metrics.paymentReview > 0) {
 		issues.push({
 			type: 'payment',
@@ -280,16 +270,6 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 			label: 'Ultima sync de clientes con error',
 			action: 'Revisar clientes',
 			href: '/customers',
-		});
-	}
-
-	if (metrics.failedCampaigns > 0) {
-		issues.push({
-			type: 'campaigns',
-			severity: 'warning',
-			label: `${metrics.failedCampaigns} campana(s) con fallos`,
-			action: 'Ver fallidos',
-			href: '/campaigns/tracking',
 		});
 	}
 

@@ -62,6 +62,10 @@ function getMutationErrorMessage(...mutations) {
 	return mutationWithError?.error?.response?.data?.error || mutationWithError?.error?.message || '';
 }
 
+function isCampaignOperationIssue(issue = {}) {
+	return ['campaign_dispatch', 'campaigns'].includes(issue.type);
+}
+
 function mapKpiTone(tone = 'neutral') {
 	if (tone === 'warning') return 'warning';
 	if (tone === 'danger') return 'danger';
@@ -266,7 +270,9 @@ function AutomationPanel({
 }
 
 function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
-	if (!issues.length) {
+	const visibleIssues = issues.filter((issue) => !isCampaignOperationIssue(issue));
+
+	if (!visibleIssues.length) {
 		return (
 			<div className="operations-empty compact">
 				<CheckCircle2 size={18} strokeWidth={2.2} aria-hidden="true" />
@@ -278,7 +284,7 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 
 	return (
 		<div className="operations-issue-list">
-			{issues.slice(0, 5).map((issue, index) => (
+			{visibleIssues.slice(0, 5).map((issue, index) => (
 				<div className={`operations-issue severity-${issue.severity || 'info'}`} key={`${issue.type}-${index}`}>
 					<div>
 						<span>{getSeverityLabel(issue.severity)}</span>
@@ -300,9 +306,13 @@ function IssueList({ issues = [], platformAdmin = false, onNavigate }) {
 function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 	const metrics = item.metrics || {};
 	const health = item.health || {};
-	const issueCount = item.issues?.length || 0;
-	const pausedFlags = Array.isArray(health.pausedFlags) ? health.pausedFlags : [];
-	const failedCampaigns = Array.isArray(health.recentFailedCampaigns) ? health.recentFailedCampaigns : [];
+	const visibleIssues = Array.isArray(item.issues)
+		? item.issues.filter((issue) => !isCampaignOperationIssue(issue))
+		: [];
+	const issueCount = visibleIssues.length;
+	const pausedFlags = Array.isArray(health.pausedFlags)
+		? health.pausedFlags.filter((flag) => flag.key !== 'campaign_dispatch')
+		: [];
 
 	return (
 		<section className="operations-workspace-card">
@@ -336,7 +346,7 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 			</div>
 
 			<IssueList
-				issues={item.issues || []}
+				issues={visibleIssues}
 				platformAdmin={platformAdmin}
 				onNavigate={onNavigate}
 			/>
@@ -345,29 +355,9 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 				<div className="operations-control-list">
 					{pausedFlags.map((flag) => (
 						<span key={flag.key}>
-							<strong>{flag.key === 'whatsapp_outbound' ? 'WhatsApp saliente pausado' : 'Campanas pausadas'}</strong>
+							<strong>WhatsApp saliente pausado</strong>
 							<small>{flag.reason || 'Sin motivo cargado'}</small>
 						</span>
-					))}
-				</div>
-			) : null}
-
-			{failedCampaigns.length ? (
-				<div className="operations-failed-campaigns">
-					<div className="operations-mini-list-head">
-						<strong>Campanas con fallos recientes</strong>
-						<button type="button" onClick={() => onNavigate(platformAdmin ? '/admin' : '/campaigns/tracking')}>
-							Ver tracking
-						</button>
-					</div>
-					{failedCampaigns.slice(0, 3).map((campaign) => (
-						<div className="operations-failed-campaign-row" key={campaign.id}>
-							<span>
-								<strong>{campaign.name}</strong>
-								<small>{campaign.lastError || `${campaign.failedRecipients || 0} fallidos, ${campaign.pendingRecipients || 0} pendientes`}</small>
-							</span>
-							<b>{campaign.status}</b>
-						</div>
 					))}
 				</div>
 			) : null}
@@ -446,6 +436,14 @@ export default function OperationsPage() {
 	const totals = summary.totals || {};
 	const workspaces = summary.workspaces || [];
 	const primaryWorkspace = workspaces[0] || null;
+	const visibleOpenIssuesCount = useMemo(
+		() =>
+			workspaces.reduce((total, item) => {
+				const issues = Array.isArray(item.issues) ? item.issues : [];
+				return total + issues.filter((issue) => !isCampaignOperationIssue(issue)).length;
+			}, 0),
+		[workspaces]
+	);
 	const automationLoading =
 		abandonedAutomationQuery.isLoading ||
 		shipmentSettingsQuery.isLoading ||
@@ -468,22 +466,6 @@ export default function OperationsPage() {
 				tone: totals.unreadConversations ? 'info' : 'neutral',
 				href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD',
 				icon: MessageCircle,
-			},
-			{
-				label: 'Campañas activas',
-				value: totals.activeCampaigns,
-				helper: 'Envíos activos o en cola',
-				tone: totals.failedCampaigns ? 'warning' : 'neutral',
-				href: platformAdmin ? '/admin' : '/campaigns/tracking',
-				icon: Send,
-			},
-			{
-				label: 'Campanas fallidas',
-				value: totals.failedCampaigns,
-				helper: 'Requieren diagnostico',
-				tone: totals.failedCampaigns ? 'warning' : 'neutral',
-				href: platformAdmin ? '/admin' : '/campaigns/tracking',
-				icon: AlertTriangle,
 			},
 		];
 
@@ -561,7 +543,7 @@ export default function OperationsPage() {
 			</PageHeader>
 
 			<div className="operations-summary-strip">
-				<MetricCard label="Alertas" value={summary.openIssuesCount} helper="Problemas o tareas detectadas" tone={summary.openIssuesCount ? 'warning' : 'neutral'} icon={AlertTriangle} />
+				<MetricCard label="Alertas" value={visibleOpenIssuesCount} helper="Problemas o tareas detectadas" tone={visibleOpenIssuesCount ? 'warning' : 'neutral'} icon={AlertTriangle} />
 				<MetricCard label="Conversaciones 30d" value={totals.activeConversations30d} helper="Actividad reciente" icon={MessageCircle} />
 				<MetricCard label="Entrada 30d" value={totals.messages30dInbound} helper="Mensajes recibidos" icon={MessageCircle} />
 				<MetricCard label="Salida 30d" value={totals.messages30dOutbound} helper="Mensajes enviados" icon={Send} />
