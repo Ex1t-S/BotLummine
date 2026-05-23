@@ -7,6 +7,56 @@ function normalizeText(value = '') {
 		.trim();
 }
 
+const AI_PROFILE_IDS = {
+	GENERIC_ECOMMERCE: 'GENERIC_ECOMMERCE',
+	LUMMINE_BODYWEAR: 'LUMMINE_BODYWEAR',
+	DKV_INSURANCE: 'DKV_INSURANCE',
+};
+
+const BODYWEAR_FAMILIES = new Set([
+	'body_modelador',
+	'calzas_linfaticas',
+	'short_faja',
+	'faja',
+	'bombacha_modeladora',
+	'corset',
+	'corpinio',
+	'musculosa',
+	'legging',
+]);
+
+const DKV_FAMILIES = new Set([
+	'dkv_salud',
+	'dkv_empresas',
+	'dkv_dental',
+	'dkv_hogar',
+	'dkv_vida',
+	'dkv_decesos',
+	'dkv_renta',
+]);
+
+function normalizeProfileId(value = '') {
+	const normalized = String(value || '')
+		.trim()
+		.toUpperCase()
+		.replace(/[^A-Z0-9]+/g, '_')
+		.replace(/^_|_$/g, '');
+	if (normalized === 'LUMMINE' || normalized === 'BODYWEAR') return AI_PROFILE_IDS.LUMMINE_BODYWEAR;
+	if (normalized === 'DKV' || normalized === 'INSURANCE' || normalized === 'SEGUROS') return AI_PROFILE_IDS.DKV_INSURANCE;
+	if (normalized === 'GENERIC' || normalized === 'ECOMMERCE') return AI_PROFILE_IDS.GENERIC_ECOMMERCE;
+	return normalized || '';
+}
+
+export function commercialFamilyAllowedForProfile(family = null, { aiProfile = '' } = {}) {
+	const profile = normalizeProfileId(aiProfile);
+	if (!family) return false;
+	if (!profile) return true;
+	if (profile === AI_PROFILE_IDS.LUMMINE_BODYWEAR) return BODYWEAR_FAMILIES.has(family);
+	if (profile === AI_PROFILE_IDS.DKV_INSURANCE) return DKV_FAMILIES.has(family);
+	if (profile === AI_PROFILE_IDS.GENERIC_ECOMMERCE) return !BODYWEAR_FAMILIES.has(family) && !DKV_FAMILIES.has(family);
+	return true;
+}
+
 export const CATALOG_COMMERCIAL_MAP = {
 	dkv_salud: {
 		label: 'seguros de salud DKV',
@@ -175,10 +225,12 @@ const FAMILY_PATTERNS = [
 	{ family: 'faja', regex: /\bfaja\b|\bfajas\b/ }
 ];
 
-export function inferCommercialFamily(text = '') {
+export function inferCommercialFamily(text = '', options = {}) {
 	const normalized = normalizeText(text);
 	for (const item of FAMILY_PATTERNS) {
-		if (item.regex.test(normalized)) return item.family;
+		if (item.regex.test(normalized)) {
+			return commercialFamilyAllowedForProfile(item.family, options) ? item.family : null;
+		}
 	}
 	return null;
 }
@@ -202,7 +254,8 @@ function termHitScore(text, hints = []) {
 	return score;
 }
 
-export function scoreProductAgainstCommercialProfile(product = {}, family = null) {
+export function scoreProductAgainstCommercialProfile(product = {}, family = null, options = {}) {
+	if (!commercialFamilyAllowedForProfile(family, options)) return 0;
 	const profile = getCommercialProfile(family);
 	if (!profile) return 0;
 

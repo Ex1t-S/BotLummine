@@ -49,6 +49,7 @@ import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.servi
 import {
 	buildVerticalNonCommercePlan,
 	getAiVerticalProfile,
+	resolveAiProfile,
 	resolveAiVertical,
 	usesCommerceEngine,
 } from '../ai/vertical-profile.service.js';
@@ -71,9 +72,10 @@ export async function runConversationTurn({
 	);
 	const normalizedMessages = Array.isArray(messages) ? messages.map(normalizeRecentMessage) : [];
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
-	const vertical = resolveAiVertical({ workspaceConfig, businessName });
-	const verticalProfile = getAiVerticalProfile(vertical);
-	const useCommerceEngine = usesCommerceEngine(vertical);
+	const aiProfile = resolveAiProfile({ workspaceConfig, businessName, workspaceId });
+	const vertical = resolveAiVertical({ workspaceConfig, businessName, workspaceId });
+	const verticalProfile = getAiVerticalProfile(aiProfile);
+	const useCommerceEngine = usesCommerceEngine(aiProfile);
 
 	const intent = detectIntent(messageBody, currentState, { vertical });
 	const explicitOrderNumber =
@@ -84,7 +86,8 @@ export async function runConversationTurn({
 		messageBody,
 		intent,
 		currentState,
-		recentMessages
+		recentMessages,
+		aiProfile,
 	});
 
 	if (intent === 'human_handoff') {
@@ -376,7 +379,8 @@ export async function runConversationTurn({
 			query: messageBody,
 			interestedProducts: enrichedState.interestedProducts || [],
 			limit: 5,
-			workspaceId
+			workspaceId,
+			aiProfile,
 			});
 
 			const catalogStatus = await getCatalogLookupStatus({ workspaceId });
@@ -387,7 +391,8 @@ export async function runConversationTurn({
 					messageBody,
 					currentState: enrichedState,
 					recentMessages: fullRecentMessages,
-					catalogProducts
+					catalogProducts,
+					aiProfile,
 				}),
 				catalogAvailable: catalogStatus.available !== false,
 				catalogStatusReason: catalogStatus.reason || 'ok',
@@ -430,7 +435,7 @@ export async function runConversationTurn({
 			];
 		} else {
 			catalogContext = buildCatalogContext(catalogProducts, commercialPlan);
-			commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
+			commercialHints = pickCommercialHints(catalogProducts, commercialPlan, { aiProfile });
 		}
 
 		if (aiGuidance?.type === 'payment') {
@@ -575,6 +580,7 @@ export async function runConversationTurn({
 			finalReply = buildFallbackOrderAwareReply({
 				workspaceId,
 				vertical,
+				aiProfile,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -597,6 +603,7 @@ export async function runConversationTurn({
 		finalReply = buildCatalogSafetyFallback({
 			workspaceId,
 			vertical,
+			aiProfile,
 			intent,
 			messageBody,
 			enrichedState,
@@ -648,6 +655,7 @@ export async function runConversationTurn({
 			const fallbackReply = buildFallbackOrderAwareReply({
 				workspaceId,
 				vertical,
+				aiProfile,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -664,7 +672,7 @@ export async function runConversationTurn({
 				recentMessages: fullRecentMessages,
 				contactName: customerContext?.name || contactName || normalizedWaId,
 				businessName,
-				agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi'
+				agentName: workspaceConfig?.ai?.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente'
 			});
 
 			finalReply = audited.finalText;
@@ -679,6 +687,7 @@ export async function runConversationTurn({
 			finalReply = buildFallbackOrderAwareReply({
 				workspaceId,
 				vertical,
+				aiProfile,
 				intent,
 				liveOrderContext,
 				enrichedState,

@@ -1,4 +1,7 @@
-import { inferCommercialFamily } from '../../data/catalog-commercial-map.js';
+import {
+	commercialFamilyAllowedForProfile,
+	inferCommercialFamily,
+} from '../../data/catalog-commercial-map.js';
 import { shouldTreatAsPreSaleObjection } from './conversation-signals.service.js';
 
 function normalizeText(value = '') {
@@ -61,8 +64,8 @@ function detectDeliveryPreference(text) {
 const BODY_PRODUCT_PATTERN = /\b(body|bodys|bodies|bodyus)\b/;
 const BODY_ONLY_PATTERN = /\bsolo\s+(body|bodys|bodies|bodyus)\b|\b(body|bodys|bodies|bodyus)\s+solos?\b/;
 
-function extractInterestedProducts(text) {
-	const dictionary = [
+function extractInterestedProducts(text, { aiProfile = '' } = {}) {
+	const bodywearDictionary = [
 		{ key: 'body', patterns: [BODY_PRODUCT_PATTERN] },
 		{ key: 'calza', patterns: [/calza/, /calzas/] },
 		{ key: 'legging', patterns: [/legging/, /leggings/] },
@@ -75,6 +78,7 @@ function extractInterestedProducts(text) {
 		{ key: 'musculosa', patterns: [/musculosa/, /musculosas/] },
 		{ key: 'short', patterns: [/short/, /shorts/] }
 	];
+	const dictionary = commercialFamilyAllowedForProfile('body_modelador', { aiProfile }) ? bodywearDictionary : [];
 
 	return dictionary
 		.filter((item) => item.patterns.some((pattern) => pattern.test(text)))
@@ -100,9 +104,9 @@ function sanitizeExcludedKeyword(raw = '') {
 		.trim();
 }
 
-function extractImplicitExclusions(text, currentProductFamily = null) {
+function extractImplicitExclusions(text, currentProductFamily = null, { aiProfile = '' } = {}) {
 	const detected = [];
-	const normalizedFamily = currentProductFamily || inferCommercialFamily(text) || null;
+	const normalizedFamily = currentProductFamily || inferCommercialFamily(text, { aiProfile }) || null;
 
 	if (BODY_ONLY_PATTERN.test(text)) {
 		detected.push('pantymedia', 'pantymedias', 'media termica', 'medias termicas', 'boob tape');
@@ -127,7 +131,7 @@ function extractImplicitExclusions(text, currentProductFamily = null) {
 	return uniqStrings(detected);
 }
 
-function extractExcludedProductKeywords(text, currentState = {}, currentProductFamily = null) {
+function extractExcludedProductKeywords(text, currentState = {}, currentProductFamily = null, { aiProfile = '' } = {}) {
 	const existing = Array.isArray(currentState?.excludedProductKeywords)
 		? currentState.excludedProductKeywords
 		: [];
@@ -149,23 +153,25 @@ function extractExcludedProductKeywords(text, currentState = {}, currentProductF
 	return uniqStrings([
 		...existing,
 		...detected,
-		...extractImplicitExclusions(text, currentProductFamily),
+		...extractImplicitExclusions(text, currentProductFamily, { aiProfile }),
 	]);
 }
 
-function inferCurrentProductFamily(text, currentState = {}) {
+function inferCurrentProductFamily(text, currentState = {}, { aiProfile = '' } = {}) {
 	return (
-		inferCommercialFamily(text) ||
-		currentState?.currentProductFamily ||
-		inferCommercialFamily(currentState?.currentProductFocus || '') ||
-		inferCommercialFamily((Array.isArray(currentState?.interestedProducts) ? currentState.interestedProducts : []).join(' ')) ||
+		inferCommercialFamily(text, { aiProfile }) ||
+		(currentState?.currentProductFamily && commercialFamilyAllowedForProfile(currentState.currentProductFamily, { aiProfile })
+			? currentState.currentProductFamily
+			: null) ||
+		inferCommercialFamily(currentState?.currentProductFocus || '', { aiProfile }) ||
+		inferCommercialFamily((Array.isArray(currentState?.interestedProducts) ? currentState.interestedProducts : []).join(' '), { aiProfile }) ||
 		null
 	);
 }
 
-function shouldLockCategory({ intent, text, currentState = {}, currentProductFamily = null }) {
-	if (intent !== 'product') return Boolean(currentState?.categoryLocked && currentState?.currentProductFamily);
-	if (inferCommercialFamily(text)) return true;
+function shouldLockCategory({ intent, text, currentState = {}, currentProductFamily = null, aiProfile = '' }) {
+	if (intent !== 'product') return Boolean(currentState?.categoryLocked && currentProductFamily);
+	if (inferCommercialFamily(text, { aiProfile })) return true;
 	if (/(estabamos hablando de|estábamos hablando de|veniamos hablando de|veníamos hablando de)/.test(text) && (currentProductFamily || currentState?.currentProductFamily)) {
 		return true;
 	}
@@ -431,10 +437,11 @@ export function analyzeConversationTurn({
 	intent,
 	currentState = {},
 	recentMessages = [],
-	campaignContext = null
+	campaignContext = null,
+	aiProfile = ''
 }) {
 	const text = normalizeText(messageBody);
-	const currentProductFamily = inferCurrentProductFamily(text, currentState);
+	const currentProductFamily = inferCurrentProductFamily(text, currentState, { aiProfile });
 
 	const isReadyToBuy =
 		/(quiero comprar|como compro|pasame el link|me interesa comprar|lo quiero|me lo llevo|quiero ese|armar el pedido|armo el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|te lo compro|te compro|te quiero transferir|te pago por transferencia|pasame alias)/.test(
@@ -466,7 +473,7 @@ export function analyzeConversationTurn({
 
 	const interestedProducts = mergeStringArrays(
 		currentState.interestedProducts,
-		extractInterestedProducts(text)
+		extractInterestedProducts(text, { aiProfile })
 	);
 
 	const objections = mergeStringArrays(currentState.objections, extractObjections(text));
@@ -476,7 +483,7 @@ export function analyzeConversationTurn({
 			: currentState?.requestedOfferType || null;
 	const excludedProductKeywords =
 		intent === 'product'
-			? extractExcludedProductKeywords(text, currentState, currentProductFamily)
+			? extractExcludedProductKeywords(text, currentState, currentProductFamily, { aiProfile })
 			: Array.isArray(currentState?.excludedProductKeywords)
 				? currentState.excludedProductKeywords
 				: [];
@@ -485,6 +492,7 @@ export function analyzeConversationTurn({
 		text,
 		currentState,
 		currentProductFamily,
+		aiProfile,
 	});
 
 	return {

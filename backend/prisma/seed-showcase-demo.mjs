@@ -61,9 +61,15 @@ async function resetWorkspace() {
 			aiConfig: {
 				create: {
 					businessName: 'BladeIA Demo Store',
-					agentName: 'Sofi',
-					tone: 'humana, clara y comercial',
+					agentName: 'Asistente',
+					tone: 'humana, directa y util',
+					aiProfile: 'GENERIC_ECOMMERCE',
+					vertical: 'ECOMMERCE',
 					businessContext: 'Cuenta de demostracion sin clientes reales. Muestra inbox, campanas, pagos y recuperacion.',
+					catalogConfig: {
+						vertical: 'ECOMMERCE',
+						aiProfile: 'GENERIC_ECOMMERCE',
+					},
 				},
 			},
 		},
@@ -205,7 +211,7 @@ async function createInboxSample(workspaceId) {
 						{
 							workspaceId,
 							direction: 'OUTBOUND',
-							senderName: 'Sofi',
+							senderName: 'Asistente',
 							body:
 								queue === 'PAYMENT_REVIEW'
 									? 'Recibido. Lo dejamos para revision y te confirmamos por este chat.'

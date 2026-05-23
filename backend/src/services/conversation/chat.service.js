@@ -66,6 +66,7 @@ import {
 import {
 	buildVerticalNonCommercePlan,
 	getAiVerticalProfile,
+	resolveAiProfile,
 	resolveAiVertical,
 	usesCommerceEngine,
 } from '../ai/vertical-profile.service.js';
@@ -786,9 +787,10 @@ export async function processInboundMessage({
 	const menuStatePatch = menuDecision?.statePatch || null;
 	const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
 	const aiBrand = workspaceConfig.ai;
-	const vertical = resolveAiVertical({ workspaceConfig });
-	const verticalProfile = getAiVerticalProfile(vertical);
-	const useCommerceEngine = usesCommerceEngine(vertical);
+	const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId: resolvedWorkspaceId });
+	const vertical = resolveAiVertical({ workspaceConfig, workspaceId: resolvedWorkspaceId });
+	const verticalProfile = getAiVerticalProfile(aiProfile);
+	const useCommerceEngine = usesCommerceEngine(aiProfile);
 
 	let intent = forceIntent || detectIntent(effectiveMessageBody, currentState, { vertical });
 	if (
@@ -974,6 +976,7 @@ export async function processInboundMessage({
 		currentState,
 		recentMessages,
 		campaignContext: campaignAssistantContext,
+		aiProfile,
 	});
 
 	if (intent === 'human_handoff') {
@@ -1382,7 +1385,8 @@ export async function processInboundMessage({
 				query: effectiveMessageBody,
 				interestedProducts: enrichedState.interestedProducts || [],
 				limit: 5,
-				workspaceId: resolvedWorkspaceId
+				workspaceId: resolvedWorkspaceId,
+				aiProfile,
 			});
 
 			const catalogStatus = await getCatalogLookupStatus({ workspaceId: resolvedWorkspaceId });
@@ -1393,7 +1397,8 @@ export async function processInboundMessage({
 					messageBody: effectiveMessageBody,
 					currentState: enrichedState,
 					recentMessages: fullRecentMessages,
-					catalogProducts
+					catalogProducts,
+					aiProfile,
 				}),
 				catalogAvailable: catalogStatus.available !== false,
 				catalogStatusReason: catalogStatus.reason || 'ok',
@@ -1439,7 +1444,7 @@ export async function processInboundMessage({
 			];
 		} else {
 			catalogContext = buildCatalogContext(catalogProducts);
-			commercialHints = pickCommercialHints(catalogProducts, commercialPlan);
+			commercialHints = pickCommercialHints(catalogProducts, commercialPlan, { aiProfile });
 		}
 
 		if (aiGuidance?.type === 'payment') {
@@ -1645,6 +1650,7 @@ export async function processInboundMessage({
 		finalReply = buildCatalogSafetyFallback({
 			workspaceId: resolvedWorkspaceId,
 			vertical,
+			aiProfile,
 			intent,
 			messageBody: effectiveMessageBody,
 			enrichedState,
@@ -1706,6 +1712,7 @@ export async function processInboundMessage({
 			const fallbackReply = buildFallbackOrderAwareReply({
 				workspaceId: resolvedWorkspaceId,
 				vertical,
+				aiProfile,
 				intent,
 				liveOrderContext,
 				enrichedState,
@@ -1748,6 +1755,7 @@ export async function processInboundMessage({
 			finalReply = buildFallbackOrderAwareReply({
 				workspaceId: resolvedWorkspaceId,
 				vertical,
+				aiProfile,
 				intent,
 				liveOrderContext,
 				enrichedState,

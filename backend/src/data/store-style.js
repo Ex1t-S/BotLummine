@@ -41,7 +41,7 @@ const TOPIC_FACTS = {
 };
 
 export const STYLE_EXAMPLES = [
-	{ tags: ['saludo', 'inicio'], customer: 'Hola', agent: 'Hola, soy Sofi de la marca. ¿Qué estás buscando hoy?' },
+	{ tags: ['saludo', 'inicio'], customer: 'Hola', agent: 'Hola, soy la asistente de la marca. ¿Qué estás buscando hoy?' },
 	{ tags: ['continuidad', 'color'], customer: 'Tenés en negro?', agent: 'Sí, lo trabajamos en negro.' },
 	{ tags: ['continuidad', 'talle'], customer: 'Y talle XL tienen?', agent: 'Sí, tenemos XL.' },
 	{ tags: ['opciones', 'producto'], customer: 'Quiero ver opciones', agent: 'Tenemos varias opciones. Si querés, te cuento primero la principal y después vemos si te conviene otra.' },

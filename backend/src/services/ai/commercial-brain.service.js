@@ -1,4 +1,5 @@
 import {
+	commercialFamilyAllowedForProfile,
 	getCommercialFamilyLabel,
 	getCommercialProfile,
 	inferCommercialFamily,
@@ -97,20 +98,26 @@ function detectRequestedOfferType(messageBody = '', currentState = {}) {
 	return currentState?.requestedOfferType || null;
 }
 
-function resolveProductFamily({ messageBody = '', currentState = {}, products = [] }) {
-	const requested = inferCommercialFamily(messageBody);
+function resolveProductFamily({ messageBody = '', currentState = {}, products = [], aiProfile = '' }) {
+	const scope = { aiProfile };
+	const requested = inferCommercialFamily(messageBody, scope);
 	if (requested) return requested;
-	if (currentState?.currentProductFamily) return currentState.currentProductFamily;
-	const currentFocusFamily = inferCommercialFamily(currentState?.currentProductFocus || '');
+	if (
+		currentState?.currentProductFamily &&
+		commercialFamilyAllowedForProfile(currentState.currentProductFamily, scope)
+	) {
+		return currentState.currentProductFamily;
+	}
+	const currentFocusFamily = inferCommercialFamily(currentState?.currentProductFocus || '', scope);
 	if (currentFocusFamily) return currentFocusFamily;
-	if (products[0]?.family) return products[0].family;
+	if (products[0]?.family && commercialFamilyAllowedForProfile(products[0].family, scope)) return products[0].family;
 	const joinedInterest = asArray(currentState?.interestedProducts).join(' ');
-	return inferCommercialFamily(joinedInterest);
+	return inferCommercialFamily(joinedInterest, scope);
 }
 
-function shouldLockFamily({ messageBody = '', currentState = {}, productFamily = null }) {
+function shouldLockFamily({ messageBody = '', currentState = {}, productFamily = null, aiProfile = '' }) {
 	const text = normalizeText(messageBody);
-	if (inferCommercialFamily(messageBody)) return true;
+	if (inferCommercialFamily(messageBody, { aiProfile })) return true;
 	if (/(estabamos hablando de|veniamos hablando de|de ese|de esa|de eso|de esos|de esas)/i.test(text) && (productFamily || currentState?.currentProductFamily)) {
 		return true;
 	}
@@ -181,9 +188,11 @@ function rankCommercialProducts(
 		family = null,
 		requestedOfferType = null,
 		categoryLocked = false,
-		excludedKeywords = []
+		excludedKeywords = [],
+		aiProfile = ''
 	} = {}
 ) {
+	const scope = { aiProfile };
 	const text = normalizeText(messageBody);
 	const currentFocus = normalizeText(currentState?.currentProductFocus || '');
 	const interests = asArray(currentState?.interestedProducts).map((v) => normalizeText(v));
@@ -198,7 +207,10 @@ function rankCommercialProducts(
 		.map((product) => {
 			let score = Number(product.score || 0) + Number(product.commercialScoreBoost || 0);
 			const name = normalizeText(product.name || '');
-			const productFamily = product.family || inferCommercialFamily(name);
+			const productFamily =
+				product.family && commercialFamilyAllowedForProfile(product.family, scope)
+					? product.family
+					: inferCommercialFamily(name, scope);
 			const offerType = product.offerType || 'single';
 			const mentionsBoobTape = /\bboob\s*tape\b/.test(
 				normalizeText([
@@ -225,7 +237,7 @@ function rankCommercialProducts(
 			if (lastRecommendedProduct && name.includes(lastRecommendedProduct)) score += 16;
 			if (interests.some((term) => term && name.includes(term))) score += 8;
 
-			const profileScore = scoreProductAgainstCommercialProfile(product, family);
+			const profileScore = scoreProductAgainstCommercialProfile(product, family, scope);
 			if (profileScore > 0) score += profileScore;
 
 			if (requestedOfferType) {
@@ -470,13 +482,14 @@ export function resolveCommercialBrainV2({
 	messageBody,
 	currentState = {},
 	recentMessages = [],
-	catalogProducts = []
+	catalogProducts = [],
+	aiProfile = ''
 }) {
 	const greetingOnly = isGreetingOnlyMessage(messageBody, currentState);
 	const requestedAction = detectRequestedAction(messageBody, greetingOnly);
-	const productFamily = resolveProductFamily({ messageBody, currentState, products: catalogProducts });
+	const productFamily = resolveProductFamily({ messageBody, currentState, products: catalogProducts, aiProfile });
 	const productFamilyLabel = getCommercialFamilyLabel(productFamily);
-	const categoryLocked = shouldLockFamily({ messageBody, currentState, productFamily });
+	const categoryLocked = shouldLockFamily({ messageBody, currentState, productFamily, aiProfile });
 	const requestedOfferType = greetingOnly ? null : detectRequestedOfferType(messageBody, currentState);
 	const excludedKeywords = greetingOnly ? [] : normalizeExcludedKeywords(currentState);
 
@@ -489,7 +502,8 @@ export function resolveCommercialBrainV2({
 			family: productFamily,
 			requestedOfferType,
 			categoryLocked,
-			excludedKeywords
+			excludedKeywords,
+			aiProfile
 		});
 
 	const mood = detectMood(messageBody, currentState);

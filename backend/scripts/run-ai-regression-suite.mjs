@@ -6,9 +6,30 @@ const { createAiLabSession, sendAiLabMessage } = await import('../src/services/a
 const { prisma } = await import('../src/lib/prisma.js');
 
 const WORKSPACE_ID = process.env.AI_REGRESSION_WORKSPACE_ID || 'workspace_lummine';
+const GENERIC_WORKSPACE_ID = process.env.AI_REGRESSION_GENERIC_WORKSPACE_ID || '';
 const INSURANCE_WORKSPACE_ID = process.env.AI_REGRESSION_INSURANCE_WORKSPACE_ID || 'cmpevb0oq0000pd0pgp66xq6k';
 
+const GENERIC_PROFILE_SCENARIOS = GENERIC_WORKSPACE_ID
+	? [
+		{
+			key: 'generic-ecommerce-greeting-no-lummine',
+			workspaceId: GENERIC_WORKSPACE_ID,
+			fixtureKey: 'blank',
+			turns: ['Hola'],
+			checks: ['no_lummine_terms', 'no_default_sofi'],
+		},
+		{
+			key: 'generic-ecommerce-catalog-no-bodywear-default',
+			workspaceId: GENERIC_WORKSPACE_ID,
+			fixtureKey: 'blank',
+			turns: ['Que productos tienen?'],
+			checks: ['no_lummine_terms', 'no_default_sofi'],
+		},
+	]
+	: [];
+
 const SCENARIOS = [
+	...GENERIC_PROFILE_SCENARIOS,
 	{
 		key: 'dkv-greeting-no-ecommerce',
 		workspaceId: INSURANCE_WORKSPACE_ID,
@@ -189,6 +210,8 @@ function evaluateCheck(check, { session, beforeAssistantCount, afterAssistantCou
 	}
 	if (check === 'no_promo') return !/(promo|oferta|3x1|5x2|2x1|calzas linfaticas|pack)/i.test(combined);
 	if (check === 'no_ecommerce_terms') return !/(stock|talle|talles|carrito|checkout|promo|promos|pack|envio|envios|cat[aá]logo general|medios de pago|bodys|calzas|indumentaria)/i.test(combined);
+	if (check === 'no_lummine_terms') return !/(lummine|bodys|body modelador|calzas linfaticas|calzas modeladoras|bodywear|boob tape)/i.test(combined);
+	if (check === 'no_default_sofi') return !/\bsofi\b/i.test(combined);
 	if (check === 'insurance_tone') return /(seguro|seguros|asesor|oficina|dkv|gesti[oó]n|ayudarte)/i.test(combined);
 	if (check === 'insurance_guidance') return /(salud|familia|asesor|propuesta|datos|tipo de seguro|seguro)/i.test(combined);
 	if (check === 'insurance_menu') return /(seguros|citas|oficina|gestion|gesti[oó]n|asesor)/i.test(combined);

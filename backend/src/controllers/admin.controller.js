@@ -30,6 +30,12 @@ import {
 	completeWhatsAppEmbeddedSignup,
 	validateWhatsAppChannelAccess,
 } from '../services/whatsapp/whatsapp-embedded-signup.service.js';
+import {
+	AI_PROFILES,
+	AI_VERTICALS,
+	normalizeAiProfile,
+	normalizeAiVertical,
+} from '../services/ai/vertical-profile.service.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -310,6 +316,29 @@ function parseJsonObject(value, fallback = null) {
 
 function hasOwn(object = {}, key = '') {
 	return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function getDefaultVerticalForAiProfile(aiProfile = AI_PROFILES.GENERIC_ECOMMERCE) {
+	return aiProfile === AI_PROFILES.DKV_INSURANCE ? AI_VERTICALS.INSURANCE : AI_VERTICALS.ECOMMERCE;
+}
+
+function resolveAiProfileInput(ai = {}, fallback = AI_PROFILES.GENERIC_ECOMMERCE) {
+	return normalizeAiProfile(ai.aiProfile || ai.catalogConfig?.aiProfile) || fallback;
+}
+
+function resolveAiVerticalInput(ai = {}, aiProfile = AI_PROFILES.GENERIC_ECOMMERCE) {
+	return normalizeAiVertical(ai.vertical || ai.catalogConfig?.vertical) || getDefaultVerticalForAiProfile(aiProfile);
+}
+
+function buildAiCatalogConfig(ai = {}, fallback = {}) {
+	const aiProfile = resolveAiProfileInput(ai, fallback.aiProfile || AI_PROFILES.GENERIC_ECOMMERCE);
+	const vertical = resolveAiVerticalInput(ai, aiProfile);
+	return {
+		...(fallback && typeof fallback === 'object' ? fallback : {}),
+		...(parseJsonObject(ai.catalogConfig, {}) || {}),
+		vertical,
+		aiProfile,
+	};
 }
 
 async function buildWorkspacePayload(workspaceId) {
@@ -883,8 +912,14 @@ export async function syncWorkspaceBranding(req, res, next) {
 				create: {
 					workspaceId,
 					businessName: storeName,
-					agentName: 'Sofi',
-					tone: 'humana, directa y comercial',
+					agentName: 'Asistente',
+					tone: 'humana, directa y util',
+					aiProfile: AI_PROFILES.GENERIC_ECOMMERCE,
+					vertical: AI_VERTICALS.ECOMMERCE,
+					catalogConfig: {
+						vertical: AI_VERTICALS.ECOMMERCE,
+						aiProfile: AI_PROFILES.GENERIC_ECOMMERCE,
+					},
 				},
 			});
 		}
@@ -1315,6 +1350,11 @@ export async function createWorkspace(req, res, next) {
 			});
 		}
 
+		const aiInput = req.body?.aiConfig || req.body || {};
+		const aiProfile = resolveAiProfileInput(aiInput);
+		const vertical = resolveAiVerticalInput(aiInput, aiProfile);
+		const catalogConfig = buildAiCatalogConfig(aiInput, { aiProfile, vertical });
+
 		const workspace = await prisma.workspace.create({
 			data: {
 				name,
@@ -1323,10 +1363,13 @@ export async function createWorkspace(req, res, next) {
 				aiConfig: {
 					create: {
 						businessName: normalizeString(req.body?.businessName) || name,
-						agentName: normalizeString(req.body?.agentName) || 'Sofi',
-						tone: normalizeString(req.body?.tone) || 'humana, directa y comercial',
+						agentName: normalizeString(req.body?.agentName) || 'Asistente',
+						tone: normalizeString(req.body?.tone) || 'humana, directa y util',
+						aiProfile,
+						vertical,
 						systemPrompt: normalizeString(req.body?.systemPrompt) || null,
 						businessContext: normalizeString(req.body?.businessContext) || null,
+						catalogConfig,
 					},
 				},
 				branding: {
@@ -1493,12 +1536,27 @@ export async function updateWorkspace(req, res, next) {
 
 		if (req.body?.aiConfig) {
 			const ai = req.body.aiConfig || {};
+			const existingAiConfig = existingWorkspace.aiConfig || {};
+			const existingCatalogConfig = parseJsonObject(existingAiConfig.catalogConfig, {}) || {};
+			const fallbackAiProfile =
+				normalizeAiProfile(existingAiConfig.aiProfile || existingCatalogConfig.aiProfile) ||
+				AI_PROFILES.GENERIC_ECOMMERCE;
+			const fallbackVertical =
+				normalizeAiVertical(existingAiConfig.vertical || existingCatalogConfig.vertical) ||
+				getDefaultVerticalForAiProfile(fallbackAiProfile);
 			const aiUpdateData = {};
 			const aiCreateData = {
 				workspaceId,
 				businessName: existingWorkspace.name || 'Marca',
-				agentName: 'Sofi',
-				tone: 'humana, directa y comercial',
+				agentName: 'Asistente',
+				tone: 'humana, directa y util',
+				aiProfile: fallbackAiProfile,
+				vertical: fallbackVertical,
+				catalogConfig: {
+					...existingCatalogConfig,
+					vertical: fallbackVertical,
+					aiProfile: fallbackAiProfile,
+				},
 			};
 
 			if (platformAdmin && hasOwn(ai, 'businessName')) {
@@ -1508,12 +1566,12 @@ export async function updateWorkspace(req, res, next) {
 
 			if (hasOwn(ai, 'agentName')) {
 				aiUpdateData.agentName = normalizeString(ai.agentName) || undefined;
-				aiCreateData.agentName = normalizeString(ai.agentName) || 'Sofi';
+				aiCreateData.agentName = normalizeString(ai.agentName) || 'Asistente';
 			}
 
 			if (hasOwn(ai, 'tone')) {
 				aiUpdateData.tone = normalizeString(ai.tone) || undefined;
-				aiCreateData.tone = normalizeString(ai.tone) || 'humana, directa y comercial';
+				aiCreateData.tone = normalizeString(ai.tone) || 'humana, directa y util';
 			}
 
 			if (platformAdmin && hasOwn(ai, 'systemPrompt')) {
@@ -1536,9 +1594,18 @@ export async function updateWorkspace(req, res, next) {
 				aiCreateData.policyConfig = parseJsonObject(ai.policyConfig, null);
 			}
 
-			if (platformAdmin && hasOwn(ai, 'catalogConfig')) {
-				aiUpdateData.catalogConfig = parseJsonObject(ai.catalogConfig, null);
-				aiCreateData.catalogConfig = parseJsonObject(ai.catalogConfig, null);
+			if (platformAdmin && (hasOwn(ai, 'aiProfile') || hasOwn(ai, 'vertical') || hasOwn(ai, 'catalogConfig'))) {
+				const catalogConfig = buildAiCatalogConfig(ai, {
+					...existingCatalogConfig,
+					aiProfile: fallbackAiProfile,
+					vertical: fallbackVertical,
+				});
+				aiUpdateData.aiProfile = catalogConfig.aiProfile;
+				aiUpdateData.vertical = catalogConfig.vertical;
+				aiUpdateData.catalogConfig = catalogConfig;
+				aiCreateData.aiProfile = catalogConfig.aiProfile;
+				aiCreateData.vertical = catalogConfig.vertical;
+				aiCreateData.catalogConfig = catalogConfig;
 			}
 
 			if (!Object.keys(aiUpdateData).length) {

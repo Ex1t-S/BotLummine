@@ -1,7 +1,12 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { DEFAULT_WORKSPACE_ID, getWorkspaceRuntimeConfig, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
-import { getAiVerticalProfile, resolveAiVertical, usesCommerceEngine } from '../ai/vertical-profile.service.js';
+import {
+	AI_PROFILES,
+	getAiVerticalProfile,
+	resolveAiProfile,
+	usesCommerceEngine,
+} from '../ai/vertical-profile.service.js';
 
 export const DEFAULT_MENU_PATHS = {
 	MAIN: 'MAIN_MENU',
@@ -136,7 +141,179 @@ function normalizeMenu(rawMenu = {}, fallbackMenu = {}, index = 0) {
 	return menu;
 }
 
-export const DEFAULT_WHATSAPP_MENU_CONFIG = {
+export const GENERIC_WHATSAPP_MENU_CONFIG = {
+	version: 1,
+	autoMenuEnabled: true,
+	mainMenuKey: DEFAULT_MAIN_MENU_KEY,
+	menus: [
+		{
+			key: DEFAULT_MENU_PATHS.MAIN,
+			title: 'Menu principal',
+			headerText: 'Marca',
+			body: 'Elegi una opcion para ayudarte mas rapido:',
+			buttonText: 'Abrir menu',
+			footerText: 'Escribi 0 o menu para volver al inicio.',
+			sectionTitle: 'Menu principal',
+			sortOrder: 1,
+			options: [
+				{
+					id: 'menu_main_products',
+					title: 'Ver catalogo',
+					description: 'Productos y recomendaciones',
+					aliases: ['1', 'productos', 'catalogo', 'ver productos', 'ver catalogo'],
+					actionType: 'INTENT',
+					actionValue: 'product',
+					effectiveMessageBody: 'Quiero ver productos o recibir una recomendacion',
+					summaryUserMessage: 'Cliente eligio menu: catalogo',
+					sortOrder: 1
+				},
+				{
+					id: 'menu_main_orders',
+					title: 'Pedidos',
+					description: 'Estado, problema o comprobante',
+					aliases: ['2', 'pedido', 'pedidos', 'estado pedido', 'problema pedido'],
+					actionType: 'SUBMENU',
+					actionValue: DEFAULT_MENU_PATHS.ORDERS,
+					promptPrefix: 'Veamos tu pedido.',
+					sortOrder: 2
+				},
+				{
+					id: 'menu_main_support',
+					title: 'Pagos y envios',
+					description: 'Resolver dudas frecuentes',
+					aliases: ['3', 'pagos', 'envios', 'envios', 'ayuda'],
+					actionType: 'SUBMENU',
+					actionValue: DEFAULT_MENU_PATHS.SUPPORT,
+					promptPrefix: 'Te dejo ayuda rapida.',
+					sortOrder: 3
+				},
+				{
+					id: 'menu_main_human',
+					title: 'Hablar con una persona',
+					description: 'Pasar a atencion humana',
+					aliases: ['4', 'asesora', 'asesor', 'humano', 'persona'],
+					actionType: 'HUMAN',
+					actionValue: 'human',
+					sortOrder: 4
+				}
+			]
+		},
+		{
+			key: DEFAULT_MENU_PATHS.ORDERS,
+			title: 'Pedidos',
+			headerText: 'Pedidos',
+			body: 'Elegi que necesitas con tu pedido:',
+			buttonText: 'Pedidos',
+			footerText: 'Escribi 0 o menu para volver al inicio.',
+			sectionTitle: 'Pedidos',
+			sortOrder: 2,
+			options: [
+				{
+					id: 'menu_orders_status',
+					title: 'Estado de mi pedido',
+					description: 'Consultar seguimiento o estado',
+					aliases: ['1', 'estado', 'estado pedido', 'ver pedido', 'seguimiento'],
+					actionType: 'INTENT',
+					actionValue: 'order_status',
+					effectiveMessageBody: 'Quiero saber el estado de mi pedido',
+					summaryUserMessage: 'Cliente eligio menu: estado de pedido',
+					sortOrder: 1
+				},
+				{
+					id: 'menu_orders_issue',
+					title: 'Problema con mi pedido',
+					description: 'Contar lo que paso',
+					aliases: ['2', 'problema', 'reclamo', 'pedido mal', 'problema pedido'],
+					actionType: 'MESSAGE',
+					replyBody: 'Contame que paso con tu pedido y, si lo tenes, pasame tambien el numero de pedido asi lo reviso mejor.',
+					statePatch: {
+						lastUserGoal: 'Resolver un problema con su pedido'
+					},
+					model: 'menu-order-issue',
+					sortOrder: 2
+				},
+				{
+					id: 'menu_orders_payment_proof',
+					title: 'Enviar comprobante',
+					description: 'Mandar foto o archivo',
+					aliases: ['3', 'comprobante', 'pago', 'enviar comprobante'],
+					actionType: 'MESSAGE',
+					replyBody: 'Mandame el comprobante por aca en foto o archivo y lo revisamos.',
+					statePatch: {
+						lastUserGoal: 'Enviar comprobante de pago'
+					},
+					model: 'menu-payment-proof',
+					sortOrder: 3
+				},
+				{
+					id: 'menu_orders_back',
+					title: 'Volver al inicio',
+					description: 'Ir al menu principal',
+					aliases: ['0', 'volver', 'inicio', 'menu'],
+					actionType: 'SUBMENU',
+					actionValue: DEFAULT_MENU_PATHS.MAIN,
+					promptPrefix: 'Volvimos al inicio.',
+					sortOrder: 4
+				}
+			]
+		},
+		{
+			key: DEFAULT_MENU_PATHS.SUPPORT,
+			title: 'Ayuda rapida',
+			headerText: 'Ayuda rapida',
+			body: 'Elegi la consulta que queres resolver:',
+			buttonText: 'Ayuda',
+			footerText: 'Escribi 0 o menu para volver al inicio.',
+			sectionTitle: 'Ayuda',
+			sortOrder: 3,
+			options: [
+				{
+					id: 'menu_support_payments',
+					title: 'Medios de pago',
+					description: 'Ver formas de pago disponibles',
+					aliases: ['1', 'pago', 'pagos', 'medios de pago'],
+					actionType: 'INTENT',
+					actionValue: 'payment',
+					effectiveMessageBody: 'Quiero saber que medios de pago aceptan',
+					summaryUserMessage: 'Cliente eligio menu: medios de pago',
+					sortOrder: 1
+				},
+				{
+					id: 'menu_support_shipping',
+					title: 'Envios',
+					description: 'Consultar zonas y tiempos',
+					aliases: ['2', 'envio', 'envios', 'shipping'],
+					actionType: 'INTENT',
+					actionValue: 'shipping',
+					effectiveMessageBody: 'Quiero consultar sobre envios',
+					summaryUserMessage: 'Cliente eligio menu: envios',
+					sortOrder: 2
+				},
+				{
+					id: 'menu_support_human',
+					title: 'Hablar con una persona',
+					description: 'Pasar a atencion humana',
+					aliases: ['3', 'asesora', 'asesor', 'humano', 'atencion humana'],
+					actionType: 'HUMAN',
+					actionValue: 'human',
+					sortOrder: 3
+				},
+				{
+					id: 'menu_support_back',
+					title: 'Volver al inicio',
+					description: 'Ir al menu principal',
+					aliases: ['0', 'volver', 'inicio', 'menu'],
+					actionType: 'SUBMENU',
+					actionValue: DEFAULT_MENU_PATHS.MAIN,
+					promptPrefix: 'Volvimos al inicio.',
+					sortOrder: 4
+				}
+			]
+		}
+	]
+};
+
+export const LUMMINE_WHATSAPP_MENU_CONFIG = {
 	version: 1,
 	autoMenuEnabled: true,
 	mainMenuKey: DEFAULT_MAIN_MENU_KEY,
@@ -387,6 +564,8 @@ export const DEFAULT_WHATSAPP_MENU_CONFIG = {
 	]
 };
 
+export const DEFAULT_WHATSAPP_MENU_CONFIG = GENERIC_WHATSAPP_MENU_CONFIG;
+
 export const INSURANCE_WHATSAPP_MENU_CONFIG = {
 	version: 1,
 	autoMenuEnabled: true,
@@ -527,8 +706,10 @@ function buildRuntimePayload(settings) {
 async function getDefaultMenuConfigForWorkspace(workspaceId = DEFAULT_WORKSPACE_ID) {
 	try {
 		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
-		const vertical = resolveAiVertical({ workspaceConfig });
-		return usesCommerceEngine(vertical) ? DEFAULT_WHATSAPP_MENU_CONFIG : INSURANCE_WHATSAPP_MENU_CONFIG;
+		const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId });
+		if (aiProfile === AI_PROFILES.DKV_INSURANCE) return INSURANCE_WHATSAPP_MENU_CONFIG;
+		if (aiProfile === AI_PROFILES.LUMMINE_BODYWEAR) return LUMMINE_WHATSAPP_MENU_CONFIG;
+		return DEFAULT_WHATSAPP_MENU_CONFIG;
 	} catch {
 		return DEFAULT_WHATSAPP_MENU_CONFIG;
 	}
@@ -726,9 +907,9 @@ export async function buildMenuAssistantContext({
 	let useCommerce = true;
 	try {
 		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
-		const vertical = resolveAiVertical({ workspaceConfig });
-		verticalProfile = getAiVerticalProfile(vertical);
-		useCommerce = usesCommerceEngine(vertical);
+		const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId });
+		verticalProfile = getAiVerticalProfile(aiProfile);
+		useCommerce = usesCommerceEngine(aiProfile);
 	} catch {
 		verticalProfile = null;
 		useCommerce = true;

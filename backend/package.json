@@ -13,6 +13,7 @@
     "jobs:diagnose": "node src/jobs/diagnose.job.js",
     "ai:test:no-context": "node scripts/test-ai-no-context.mjs",
     "ai:test:workspace-flow": "node scripts/test-ai-workspace-flow.mjs",
+    "ai:profile-isolation": "node scripts/test-ai-profile-isolation.mjs",
     "ai:regression": "node scripts/run-ai-regression-suite.mjs",
     "ai:regression:compare": "node scripts/compare-ai-regression-suite.mjs",
     "catalog:fuzzy-test": "node scripts/test-catalog-fuzzy-search.mjs",

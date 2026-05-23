@@ -20,6 +20,7 @@ import {
 import {
 	isInsuranceVertical,
 	isInsuranceWorkspaceId,
+	isLummineBodywearProfile,
 } from '../ai/vertical-profile.service.js';
 
 const UNABLE_TO_CONTINUE_HANDOFF_REPLY =
@@ -95,20 +96,22 @@ export function summarizeText(value = '', max = 160) {
 	return `${text.slice(0, max - 1).trim()}…`;
 }
 
-function buildGeneralCatalogReply() {
-	if (STORE_LINKS.catalog) {
+function buildGeneralCatalogReply({ aiProfile = '' } = {}) {
+	if (isLummineBodywearProfile(aiProfile) && STORE_LINKS.catalog) {
 		return `Te paso el catálogo general para que veas todo: ${STORE_LINKS.catalog} Decime qué producto o promo puntual necesitás y te ayudo por acá.`;
 	}
 
-	return 'Puedo ayudarte por acá con productos, stock, talles, pagos o envíos. Decime qué estás buscando y lo revisamos.';
+	return isLummineBodywearProfile(aiProfile)
+		? 'Puedo ayudarte por acá con productos, stock, talles, pagos o envíos. Decime qué estás buscando y lo revisamos.'
+		: 'Puedo ayudarte por acá con productos, pagos o envíos. Decime qué estás buscando y lo revisamos.';
 }
 
-function buildCatalogOptionsReply(catalogProducts = []) {
+function buildCatalogOptionsReply(catalogProducts = [], { aiProfile = '' } = {}) {
 	const names = Array.isArray(catalogProducts)
 		? catalogProducts.map((product) => product?.name).filter(Boolean)
 		: [];
 
-	if (!names.length) return buildGeneralCatalogReply();
+	if (!names.length) return buildGeneralCatalogReply({ aiProfile });
 
 	const preferredOrder = [
 		'DKV Integral',
@@ -267,6 +270,7 @@ export function buildConversationSummary({
 export function buildAiFailureFallback({
 	workspaceId = '',
 	vertical = '',
+	aiProfile = '',
 	intent,
 	enrichedState,
 	catalogProducts = [],
@@ -289,7 +293,9 @@ export function buildAiFailureFallback({
 			enrichedState?.currentProductFocus ||
 			enrichedState?.currentProductFamily ||
 			'ese producto';
-		return `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar una promo o un link equivocado. Si querés, decime color o talle, o te paso con una asesora.`;
+		return isLummineBodywearProfile(aiProfile)
+			? `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar una promo o un link equivocado. Si querés, decime color o talle, o te paso con una asesora.`
+			: `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar datos ni un link equivocado. Si querés, decime el nombre exacto o te paso con una asesora.`;
 	}
 
 	if (intent === 'product') {
@@ -327,12 +333,14 @@ export function buildAiFailureFallback({
 			return `En este producto solemos tener ${brief}. Si querés, te digo cuál te conviene más.`;
 		}
 
-		if (commercialPlan?.recommendedAction === 'guide_and_discover') {
-			return 'Tenemos opción individual y también promos. Si querés, te cuento rápido las más elegidas o te paso la web para que las veas.';
+	if (commercialPlan?.recommendedAction === 'guide_and_discover') {
+			return isLummineBodywearProfile(aiProfile)
+				? 'Tenemos opción individual y también promos. Si querés, te cuento rápido las más elegidas o te paso la web para que las veas.'
+				: 'Tenemos varias opciones. Si querés, te cuento rápido las más relevantes o te paso la web para que las veas.';
 		}
 
 		if (commercialPlan?.recommendedAction === 'send_general_catalog_first') {
-			return buildCatalogOptionsReply(catalogProducts);
+			return buildCatalogOptionsReply(catalogProducts, { aiProfile });
 		}
 
 		if (commercialPlan?.recommendedAction === 'clarify_specific_product') {
@@ -444,6 +452,7 @@ export function shouldForceCatalogSafetyFallback({
 export function buildCatalogSafetyFallback({
 	workspaceId = '',
 	vertical = '',
+	aiProfile = '',
 	intent,
 	messageBody = '',
 	enrichedState = {},
@@ -469,7 +478,9 @@ export function buildCatalogSafetyFallback({
 	}
 
 	if (intent === 'general' && messageLooksLikeSpecificCatalogCheck(messageBody)) {
-		return 'No te lo quiero confirmar mal. Si me decís el nombre exacto del producto, color o talle que buscás, te lo reviso puntual.';
+		return isLummineBodywearProfile(aiProfile)
+			? 'No te lo quiero confirmar mal. Si me decís el nombre exacto del producto, color o talle que buscás, te lo reviso puntual.'
+			: 'No te lo quiero confirmar mal. Si me decís el nombre exacto del producto o me pasás el link, te lo reviso puntual.';
 	}
 
 	return 'No te lo quiero confirmar mal. Si me pasás el nombre exacto del producto, te lo reviso bien.';
@@ -1044,7 +1055,7 @@ export function stripRepeatedGreeting(text = '', recentMessages = [], contactNam
 	return next || text;
 }
 
-function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '', agentName = 'Sofi', businessName = 'la marca', preserveGreeting = false) {
+function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '', agentName = 'Asistente', businessName = 'la marca', preserveGreeting = false) {
 	if (preserveGreeting) return text;
 
 	const assistantCount = recentMessages.filter((msg) => msg.role === 'assistant').length;
@@ -1052,7 +1063,7 @@ function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '',
 
 	let next = String(text || '').trim();
 	const safeContactName = String(contactName || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const safeAgentName = String(agentName || 'Sofi').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const safeAgentName = String(agentName || 'Asistente').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	const safeBusinessName = String(businessName || 'la marca').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 	const identityPatterns = [
@@ -1078,7 +1089,7 @@ function stripRepeatedIdentity(text = '', recentMessages = [], contactName = '',
 	return next || text;
 }
 
-function ensureGeneralPresentation(text = '', { preserveGreeting = false, businessName = 'la marca', agentName = 'Sofi' } = {}) {
+function ensureGeneralPresentation(text = '', { preserveGreeting = false, businessName = 'la marca', agentName = 'Asistente' } = {}) {
 	if (!preserveGreeting) return text;
 
 	const normalized = normalizeText(text);
@@ -1086,7 +1097,7 @@ function ensureGeneralPresentation(text = '', { preserveGreeting = false, busine
 		return `Hola, soy ${agentName} de ${businessName}.`;
 	}
 
-	const safeAgentName = String(agentName || 'Sofi').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const safeAgentName = String(agentName || 'Asistente').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	const safeBusinessName = String(businessName || 'la marca').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	if (new RegExp(`soy\\s+${safeAgentName}\\s+de\\s+${safeBusinessName}`, 'i').test(normalized)) return normalized;
 
@@ -1200,7 +1211,7 @@ export function auditAssistantReply({
 	recentMessages = [],
 	contactName = '',
 	businessName = 'la marca',
-	agentName = 'Sofi',
+	agentName = 'Asistente',
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
 	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
@@ -1452,6 +1463,7 @@ export function normalizeRecentMessage(msg = {}) {
 export function buildFallbackOrderAwareReply({
 	workspaceId = '',
 	vertical = '',
+	aiProfile = '',
 	intent,
 	liveOrderContext,
 	enrichedState,
@@ -1468,16 +1480,21 @@ export function buildFallbackOrderAwareReply({
 	}
 
 	if (campaignAssistantContext?.category === 'cart_recovery') {
-		return 'Te ayudo con el carrito. Decime que duda te frena, talle, envio, cambio o pago, y lo resolvemos antes de que finalices la compra.';
+		return isLummineBodywearProfile(aiProfile)
+			? 'Te ayudo con el carrito. Decime que duda te frena, talle, envio, cambio o pago, y lo resolvemos antes de que finalices la compra.'
+			: 'Te ayudo con el carrito. Decime que duda te frena y lo resolvemos antes de que finalices la compra.';
 	}
 
 	if (campaignAssistantContext?.category === 'sales' || campaignAssistantContext?.category === 'marketing') {
-		return 'Te ayudo con la promo. Decime que talle, color o producto estabas mirando y te paso una opcion concreta sin abrirte todo el catalogo.';
+		return isLummineBodywearProfile(aiProfile)
+			? 'Te ayudo con la promo. Decime que talle, color o producto estabas mirando y te paso una opcion concreta sin abrirte todo el catalogo.'
+			: 'Te ayudo con la consulta. Decime que producto estabas mirando y te paso una opcion concreta sin abrirte todo el catalogo.';
 	}
 
 	return buildAiFailureFallback({
 		workspaceId,
 		vertical,
+		aiProfile,
 		intent,
 		enrichedState,
 		catalogProducts,

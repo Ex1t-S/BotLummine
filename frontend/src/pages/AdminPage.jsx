@@ -10,8 +10,8 @@ const EMPTY_WORKSPACE_FORM = {
 	name: '',
 	slug: '',
 	businessName: '',
-	agentName: 'Sofi',
-	tone: 'humana, directa y comercial'
+	agentName: 'Asistente',
+	tone: 'humana, directa y util'
 };
 
 const EMPTY_USER_FORM = {
@@ -129,6 +129,16 @@ const BRAND_PROVIDER_OPTIONS = [
 	{ value: 'SHOPIFY', label: 'Shopify' }
 ];
 
+const AI_PROFILE_OPTIONS = [
+	{ value: 'GENERIC_ECOMMERCE', label: 'Ecommerce generico' },
+	{ value: 'LUMMINE_BODYWEAR', label: 'Lummine / bodywear' },
+	{ value: 'DKV_INSURANCE', label: 'Seguros DKV' }
+];
+
+function getDefaultVerticalForAiProfile(aiProfile = '') {
+	return aiProfile === 'DKV_INSURANCE' ? 'INSURANCE' : 'ECOMMERCE';
+}
+
 const FALLBACK_FEATURE_FLAGS = [
 	{
 		key: 'ai_auto_replies',
@@ -167,6 +177,22 @@ function fieldValue(value) {
 	return value == null ? '' : String(value);
 }
 
+function inferAiProfileForWorkspace(workspace) {
+	const configured = workspace?.aiConfig?.aiProfile || workspace?.aiConfig?.catalogConfig?.aiProfile;
+	if (configured) return configured;
+	const vertical = String(workspace?.aiConfig?.vertical || workspace?.aiConfig?.catalogConfig?.vertical || '').toUpperCase();
+	const text = [
+		workspace?.id,
+		workspace?.slug,
+		workspace?.name,
+		workspace?.aiConfig?.businessName,
+		workspace?.aiConfig?.businessContext,
+	].filter(Boolean).join(' ').toLowerCase();
+	if (vertical === 'INSURANCE' || /\b(dkv|seguros?|polizas?|aseguradora|vecindario)\b/.test(text)) return 'DKV_INSURANCE';
+	if (/\blummine\b/.test(text) || String(workspace?.id || '') === 'workspace_lummine') return 'LUMMINE_BODYWEAR';
+	return 'GENERIC_ECOMMERCE';
+}
+
 function findCommerceConnection(workspace, provider) {
 	return workspace?.commerceConnections?.find((item) => item.provider === provider) || null;
 }
@@ -187,6 +213,7 @@ function resolveSelectedBrandProvider(workspace, tiendanubeStatus, shopifyStatus
 
 function mapWorkspaceForm(workspace) {
 	const ai = workspace?.aiConfig || {};
+	const aiProfile = inferAiProfileForWorkspace(workspace);
 	return {
 		name: fieldValue(workspace?.name),
 		slug: fieldValue(workspace?.slug),
@@ -201,11 +228,14 @@ function mapWorkspaceForm(workspace) {
 			businessName: fieldValue(ai.businessName),
 			agentName: fieldValue(ai.agentName),
 			tone: fieldValue(ai.tone),
+			aiProfile: fieldValue(ai.aiProfile || aiProfile),
+			vertical: fieldValue(ai.vertical || ai.catalogConfig?.vertical || getDefaultVerticalForAiProfile(aiProfile)),
 			systemPrompt: fieldValue(ai.systemPrompt),
 			businessContext: fieldValue(ai.businessContext),
 			catalogConfig: {
 				...(ai.catalogConfig || {}),
-				vertical: fieldValue(ai.catalogConfig?.vertical || 'ECOMMERCE')
+				vertical: fieldValue(ai.vertical || ai.catalogConfig?.vertical || getDefaultVerticalForAiProfile(aiProfile)),
+				aiProfile: fieldValue(aiProfile)
 			}
 		}
 	};
@@ -945,9 +975,12 @@ export default function AdminPage({ defaultTab = '' }) {
 					businessName: workspaceForm.aiConfig?.businessName || '',
 					systemPrompt: workspaceForm.aiConfig?.systemPrompt || '',
 					businessContext: workspaceForm.aiConfig?.businessContext || '',
+					aiProfile: workspaceForm.aiConfig?.aiProfile || workspaceForm.aiConfig?.catalogConfig?.aiProfile || 'GENERIC_ECOMMERCE',
+					vertical: workspaceForm.aiConfig?.vertical || getDefaultVerticalForAiProfile(workspaceForm.aiConfig?.aiProfile || workspaceForm.aiConfig?.catalogConfig?.aiProfile),
 					catalogConfig: {
 						...(workspaceForm.aiConfig?.catalogConfig || {}),
-						vertical: workspaceForm.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE'
+						aiProfile: workspaceForm.aiConfig?.aiProfile || workspaceForm.aiConfig?.catalogConfig?.aiProfile || 'GENERIC_ECOMMERCE',
+						vertical: workspaceForm.aiConfig?.vertical || getDefaultVerticalForAiProfile(workspaceForm.aiConfig?.aiProfile || workspaceForm.aiConfig?.catalogConfig?.aiProfile)
 					}
 				}
 			}, 'Marca y configuracion avanzada guardadas.');
@@ -1590,18 +1623,22 @@ export default function AdminPage({ defaultTab = '' }) {
 											<option value="ARCHIVED">ARCHIVED</option>
 										</Select>
 										<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
-										<Select label="Rubro de IA" value={workspaceForm.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE'} onChange={(value) => setWorkspaceForm((cur) => ({
+										<Select label="Perfil de IA" value={workspaceForm.aiConfig?.aiProfile || workspaceForm.aiConfig?.catalogConfig?.aiProfile || 'GENERIC_ECOMMERCE'} onChange={(value) => setWorkspaceForm((cur) => ({
 											...cur,
 											aiConfig: {
 												...(cur.aiConfig || {}),
+												aiProfile: value,
+												vertical: getDefaultVerticalForAiProfile(value),
 												catalogConfig: {
 													...(cur.aiConfig?.catalogConfig || {}),
-													vertical: value
+													aiProfile: value,
+													vertical: getDefaultVerticalForAiProfile(value)
 												}
 											}
 										}))}>
-											<option value="ECOMMERCE">Ecommerce</option>
-											<option value="INSURANCE">Seguros</option>
+											{AI_PROFILE_OPTIONS.map((item) => (
+												<option key={item.value} value={item.value}>{item.label}</option>
+											))}
 										</Select>
 										<Textarea label="Contexto comercial" rows={5} value={workspaceForm.aiConfig?.businessContext || ''} onChange={(value) => setNestedForm('aiConfig', 'businessContext', value)} />
 										<div className="tenant-admin-context-tools">

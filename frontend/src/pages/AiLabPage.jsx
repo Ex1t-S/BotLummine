@@ -46,7 +46,7 @@ function getWorkspaceName(workspace = {}) {
 }
 
 function getWorkspaceVertical(workspace = {}) {
-	return String(workspace?.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE').trim().toUpperCase();
+	return String(workspace?.aiConfig?.vertical || workspace?.aiConfig?.catalogConfig?.vertical || 'ECOMMERCE').trim().toUpperCase();
 }
 
 function AiLabInteractiveMenuMessage({ message, isBusy, onSelect }) {

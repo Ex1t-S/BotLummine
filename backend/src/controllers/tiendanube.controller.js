@@ -14,6 +14,7 @@ import {
 	DEFAULT_WORKSPACE_ID,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
+import { AI_PROFILES, AI_VERTICALS } from '../services/ai/vertical-profile.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const ORDER_WEBHOOK_EVENTS = [
@@ -454,8 +455,14 @@ async function syncTiendanubeBranding({ workspaceId, storeId, accessToken }) {
 			create: {
 				workspaceId,
 				businessName: storeName,
-				agentName: 'Sofi',
-				tone: 'humana, directa y comercial'
+				agentName: 'Asistente',
+				tone: 'humana, directa y util',
+				aiProfile: AI_PROFILES.GENERIC_ECOMMERCE,
+				vertical: AI_VERTICALS.ECOMMERCE,
+				catalogConfig: {
+					vertical: AI_VERTICALS.ECOMMERCE,
+					aiProfile: AI_PROFILES.GENERIC_ECOMMERCE,
+				}
 			}
 		});
 	}

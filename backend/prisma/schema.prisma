@@ -71,8 +71,10 @@ model WorkspaceAiConfig {
   id              String   @id @default(cuid())
   workspaceId     String   @unique
   businessName    String
-  agentName       String   @default("Sofi")
-  tone            String   @default("humana, directa y comercial")
+  agentName       String   @default("Asistente")
+  tone            String   @default("humana, directa y util")
+  aiProfile       String   @default("GENERIC_ECOMMERCE")
+  vertical        String   @default("ECOMMERCE")
   systemPrompt    String?
   businessContext String?
   paymentConfig   Json?

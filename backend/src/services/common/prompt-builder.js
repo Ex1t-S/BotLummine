@@ -3,7 +3,7 @@ import { buildRelevantBusinessData } from '../../data/store-business.js';
 import {
 	getAiVerticalProfile,
 	isInsuranceVertical,
-	resolveAiVertical,
+	resolveAiProfile,
 	usesCommerceEngine,
 } from '../ai/vertical-profile.service.js';
 
@@ -233,18 +233,24 @@ export function buildPrompt({
 	const aiConfig = workspaceConfig?.ai || {};
 	const systemPromptExtra = aiConfig.systemPrompt || '';
 	const businessContext = aiConfig.businessContext || process.env.BUSINESS_CONTEXT || '';
-	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi';
+	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente';
 	const tone = aiConfig.tone || 'amigable_directo';
-	const vertical = resolveAiVertical({ workspaceConfig, businessName, businessContext });
-	const verticalProfile = getAiVerticalProfile(vertical);
-	const isInsurance = isInsuranceVertical(vertical);
-	const useCommerceContext = usesCommerceEngine(vertical);
-	const systemPrompt = useCommerceContext
+	const aiProfile = resolveAiProfile({ workspaceConfig, businessName, businessContext });
+	const verticalProfile = getAiVerticalProfile(aiProfile);
+	const isInsurance = isInsuranceVertical(aiProfile);
+	const useCommerceContext = usesCommerceEngine(aiProfile);
+	const systemPrompt = useCommerceContext && verticalProfile.aiProfile === 'LUMMINE_BODYWEAR'
 		? (process.env.GLOBAL_SYSTEM_PROMPT || process.env.SYSTEM_PROMPT || verticalProfile.basePolicy)
 		: verticalProfile.basePolicy;
 	const transcript = formatTranscript({ businessName, contactName, recentMessages });
 	const safeSystemPromptExtra =
-		isInsurance && /(stock|talle|carrito|ecommerce|tiendanube|lummine|indumentaria|prenda)/i.test(systemPromptExtra)
+		(
+			isInsurance && /(stock|talle|carrito|ecommerce|tiendanube|lummine|indumentaria|prenda)/i.test(systemPromptExtra)
+		) ||
+		(
+			verticalProfile.aiProfile !== 'LUMMINE_BODYWEAR' &&
+			/(lummine|body|bodys|calza|calzas|bodywear|modelador|modeladora)/i.test(systemPromptExtra)
+		)
 			? ''
 			: systemPromptExtra;
 	const useStoreCommerceContext = useCommerceContext && shouldUseStoreCommerceContext({ catalogProducts, commercialPlan });

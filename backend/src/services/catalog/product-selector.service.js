@@ -1,4 +1,5 @@
 import {
+	commercialFamilyAllowedForProfile,
 	getCommercialProfile,
 	inferCommercialFamily,
 	scoreProductAgainstCommercialProfile
@@ -17,14 +18,15 @@ function asArray(value) {
 	return Array.isArray(value) ? value : [];
 }
 
-export function inferProductFamily({ messageBody = '', currentState = {} } = {}) {
+export function inferProductFamily({ messageBody = '', currentState = {}, aiProfile = '' } = {}) {
 	const interestedProducts = asArray(currentState?.interestedProducts).join(' ');
-	return inferCommercialFamily(`${messageBody} ${interestedProducts}`);
+	return inferCommercialFamily(`${messageBody} ${interestedProducts}`, { aiProfile });
 }
 
-export function scoreProductForSelection(product, { messageBody = '', currentState = {}, commercialPlan = null } = {}) {
-	const family = commercialPlan?.family || inferProductFamily({ messageBody, currentState });
-	const profile = family ? getCommercialProfile(family) : null;
+export function scoreProductForSelection(product, { messageBody = '', currentState = {}, commercialPlan = null, aiProfile = '' } = {}) {
+	const family = commercialPlan?.family || inferProductFamily({ messageBody, currentState, aiProfile });
+	const scopedFamily = commercialFamilyAllowedForProfile(family, { aiProfile }) ? family : null;
+	const profile = scopedFamily ? getCommercialProfile(scopedFamily) : null;
 
 	const baseText = normalizeText([
 		product?.name,
@@ -40,7 +42,7 @@ export function scoreProductForSelection(product, { messageBody = '', currentSta
 	}
 
 	if (profile) {
-		score += scoreProductAgainstCommercialProfile(product, profile) || 0;
+		score += scoreProductAgainstCommercialProfile(product, scopedFamily, { aiProfile }) || 0;
 	}
 
 	if (commercialPlan?.bestOffer?.productId && String(commercialPlan.bestOffer.productId) === String(product?.productId)) {

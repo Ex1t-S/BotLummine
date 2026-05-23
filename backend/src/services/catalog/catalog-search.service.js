@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
+	commercialFamilyAllowedForProfile,
 	getCommercialProfile,
 	inferCommercialFamily,
 	scoreProductAgainstCommercialProfile
@@ -443,7 +444,7 @@ function formatPrice(value) {
 	}
 }
 
-export function detectRequestedSignals(query = '', interestedProducts = []) {
+export function detectRequestedSignals(query = '', interestedProducts = [], { aiProfile = '' } = {}) {
 	const normalizedQuery = normalizeText(query);
 	const terms = [
 		...new Set([
@@ -453,7 +454,7 @@ export function detectRequestedSignals(query = '', interestedProducts = []) {
 				: [])
 		])
 	];
-	const requestedFamily = inferCommercialFamily([query, ...(interestedProducts || [])].join(' '));
+	const requestedFamily = inferCommercialFamily([query, ...(interestedProducts || [])].join(' '), { aiProfile });
 
 	return {
 		normalizedQuery,
@@ -613,9 +614,10 @@ function shouldFilterGiftLikeProduct(product = {}, family = null, offerType = 's
 
 function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	let score = 0;
+	const scope = { aiProfile: signals.aiProfile || '' };
 	const guessedFamily =
 		signals.requestedFamily ||
-		inferCommercialFamily([product.name, product.tags, product.handle, product.description].filter(Boolean).join(' '));
+		inferCommercialFamily([product.name, product.tags, product.handle, product.description].filter(Boolean).join(' '), scope);
 
 	const variantMeta = extractVariantMeta(product.variants, { family: guessedFamily, attributes: product.attributes });
 
@@ -661,7 +663,7 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 		if (/(oferta|promo|pack|combo|2x1|3x1|5x2)/i.test(variantBlob)) score += 14;
 	}
 
-	if (signals.requestedFamily && inferCommercialFamily(name) === signals.requestedFamily) {
+	if (signals.requestedFamily && inferCommercialFamily(name, scope) === signals.requestedFamily) {
 		score += 20;
 	}
 
@@ -709,8 +711,9 @@ export async function getCatalogLookupStatus({ workspaceId = DEFAULT_WORKSPACE_I
 	}
 }
 
-export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { limit = 4 } = {}) {
+export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { limit = 4, aiProfile = '' } = {}) {
 	if (shouldSkipCatalogLookup(signals)) return [];
+	const scope = { aiProfile: aiProfile || signals.aiProfile || '' };
 
 	const ranked = rawProducts
 		.map((product) => ({
@@ -724,7 +727,8 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 			const family = inferCommercialFamily(
 				[product.name, product.tags, product.handle, shortDescription]
 					.filter(Boolean)
-					.join(' ')
+					.join(' '),
+				scope
 			);
 			const variantMeta = extractVariantMeta(product.variants, { family, attributes: product.attributes });
 			const offerType = inferOfferType(product);
@@ -737,7 +741,7 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 				variantHints: variantMeta.variantHints,
 				colors: variantMeta.colors,
 				sizes: variantMeta.sizes
-			}, family);
+			}, family, scope);
 
 			return {
 				id: product.id,
@@ -814,9 +818,12 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 	return deduped.slice(0, Math.max(limit, 6));
 }
 
-export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId = DEFAULT_WORKSPACE_ID, aiProfile = '' } = {}) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const signals = detectRequestedSignals(query, interestedProducts);
+	const signals = {
+		...detectRequestedSignals(query, interestedProducts, { aiProfile }),
+		aiProfile,
+	};
 	if (shouldSkipCatalogLookup(signals)) return [];
 
 	let rawProducts = [];
@@ -831,7 +838,7 @@ export async function searchCatalogProducts({ query = '', interestedProducts = [
 		return [];
 	}
 
-	return rankCatalogProductsForSearch(rawProducts, signals, { limit });
+	return rankCatalogProductsForSearch(rawProducts, signals, { limit, aiProfile });
 }
 
 export function buildCatalogContext(products = []) {
@@ -858,12 +865,13 @@ export function buildCatalogContext(products = []) {
 		.join('\n\n');
 }
 
-export function pickCommercialHints(products = [], commercialPlan = null) {
+export function pickCommercialHints(products = [], commercialPlan = null, { aiProfile = '' } = {}) {
 	if (!Array.isArray(products) || !products.length) return [];
 
 	const hints = [];
 	const family = commercialPlan?.productFamily || products[0]?.family || null;
-	const profile = getCommercialProfile(family);
+	const scopedFamily = commercialFamilyAllowedForProfile(family, { aiProfile }) ? family : null;
+	const profile = getCommercialProfile(scopedFamily);
 
 	if (profile?.defaultPitch) hints.push(profile.defaultPitch);
 	if (commercialPlan?.bestOffer?.name) hints.push(`Prioriza como oferta principal ${commercialPlan.bestOffer.name}.`);

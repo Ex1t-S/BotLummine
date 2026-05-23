@@ -3,6 +3,22 @@ import { decryptSecret } from '../../lib/secret-crypto.js';
 
 export const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
 export const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'default';
+const DEFAULT_AI_PROFILE = 'GENERIC_ECOMMERCE';
+const DEFAULT_AI_VERTICAL = 'ECOMMERCE';
+
+function getDefaultVerticalForAiProfile(aiProfile = DEFAULT_AI_PROFILE) {
+	return aiProfile === 'DKV_INSURANCE' ? 'INSURANCE' : DEFAULT_AI_VERTICAL;
+}
+
+function resolveAiCatalogConfig(aiConfig = {}) {
+	const aiProfile = aiConfig.aiProfile || aiConfig.catalogConfig?.aiProfile || DEFAULT_AI_PROFILE;
+	const vertical = aiConfig.vertical || aiConfig.catalogConfig?.vertical || getDefaultVerticalForAiProfile(aiProfile);
+	return {
+		...(aiConfig.catalogConfig || {}),
+		vertical,
+		aiProfile,
+	};
+}
 
 export function normalizeWorkspaceId(value = '') {
 	return String(value || '').trim();
@@ -80,12 +96,18 @@ export async function ensureDefaultWorkspace() {
 			aiConfig: {
 				create: {
 					businessName: process.env.BUSINESS_NAME || 'Marca demo',
-					agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi',
-					tone: 'humana, directa y comercial',
+					agentName: process.env.BUSINESS_AGENT_NAME || 'Asistente',
+					tone: 'humana, directa y util',
+					aiProfile: DEFAULT_AI_PROFILE,
+					vertical: DEFAULT_AI_VERTICAL,
 					systemPrompt:
 						process.env.SYSTEM_PROMPT ||
-						'Responde como asesora humana de ventas por WhatsApp. Sona natural, directa y comercial.',
+						'Responde como asistente humana por WhatsApp. Sona natural, directa y util, usando solo informacion confirmada de esta marca.',
 					businessContext: process.env.BUSINESS_CONTEXT || '',
+					catalogConfig: {
+						vertical: DEFAULT_AI_VERTICAL,
+						aiProfile: DEFAULT_AI_PROFILE,
+					},
 				},
 			},
 			branding: {
@@ -104,12 +126,18 @@ export async function ensureDefaultWorkspace() {
 		create: {
 			workspaceId: workspace.id,
 			businessName: process.env.BUSINESS_NAME || workspace.name || 'Marca demo',
-			agentName: process.env.BUSINESS_AGENT_NAME || 'Sofi',
-			tone: 'humana, directa y comercial',
+			agentName: process.env.BUSINESS_AGENT_NAME || 'Asistente',
+			tone: 'humana, directa y util',
+			aiProfile: DEFAULT_AI_PROFILE,
+			vertical: DEFAULT_AI_VERTICAL,
 			systemPrompt:
 				process.env.SYSTEM_PROMPT ||
-				'Responde como asesora humana de ventas por WhatsApp. Sona natural, directa y comercial.',
+				'Responde como asistente humana por WhatsApp. Sona natural, directa y util, usando solo informacion confirmada de esta marca.',
 			businessContext: process.env.BUSINESS_CONTEXT || '',
+			catalogConfig: {
+				vertical: DEFAULT_AI_VERTICAL,
+				aiProfile: DEFAULT_AI_PROFILE,
+			},
 		},
 	});
 
@@ -133,6 +161,7 @@ export async function getWorkspaceRuntimeConfig(workspaceId) {
 	});
 
 	const aiConfig = workspace?.aiConfig || {};
+	const catalogConfig = resolveAiCatalogConfig(aiConfig);
 
 	return {
 		workspaceId: normalizedWorkspaceId,
@@ -144,16 +173,18 @@ export async function getWorkspaceRuntimeConfig(workspaceId) {
 				workspace?.name ||
 				process.env.BUSINESS_NAME ||
 				'Marca demo',
-			agentName: aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Sofi',
-			tone: aiConfig.tone || 'humana, directa y comercial',
+			agentName: aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente',
+			tone: aiConfig.tone || 'humana, directa y util',
+			aiProfile: catalogConfig.aiProfile,
+			vertical: catalogConfig.vertical,
 			systemPrompt:
 				aiConfig.systemPrompt ||
 				process.env.SYSTEM_PROMPT ||
-				'Responde como asesora humana de ventas por WhatsApp. Sona natural, directa y comercial.',
+				'Responde como asistente humana por WhatsApp. Sona natural, directa y util, usando solo informacion confirmada de esta marca.',
 			businessContext: aiConfig.businessContext || process.env.BUSINESS_CONTEXT || '',
 			paymentConfig: aiConfig.paymentConfig || null,
 			policyConfig: aiConfig.policyConfig || null,
-			catalogConfig: aiConfig.catalogConfig || null,
+			catalogConfig,
 		},
 	};
 }
@@ -366,11 +397,13 @@ export function getWorkspacePublicPayload(workspace = {}) {
 					businessName: workspace.aiConfig.businessName,
 					agentName: workspace.aiConfig.agentName,
 					tone: workspace.aiConfig.tone,
+					aiProfile: workspace.aiConfig.aiProfile || workspace.aiConfig.catalogConfig?.aiProfile || DEFAULT_AI_PROFILE,
+					vertical: workspace.aiConfig.vertical || workspace.aiConfig.catalogConfig?.vertical || getDefaultVerticalForAiProfile(workspace.aiConfig.aiProfile),
 					systemPrompt: workspace.aiConfig.systemPrompt || '',
 					businessContext: workspace.aiConfig.businessContext || '',
 					paymentConfig: workspace.aiConfig.paymentConfig || null,
 					policyConfig: workspace.aiConfig.policyConfig || null,
-					catalogConfig: workspace.aiConfig.catalogConfig || null,
+					catalogConfig: resolveAiCatalogConfig(workspace.aiConfig),
 			  }
 			: null,
 		commerceConnections: Array.isArray(workspace.commerceConnections)

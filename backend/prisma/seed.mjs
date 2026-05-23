@@ -26,16 +26,26 @@ async function ensureDefaultWorkspace() {
     where: { workspaceId: DEFAULT_WORKSPACE_ID },
     update: {
       businessName: process.env.BUSINESS_NAME || 'Marca demo',
-      agentName: process.env.AGENT_NAME || 'Sofi',
-      tone: process.env.BRAND_TONE || 'cercano, claro y comercial',
-      catalogMode: 'TIENDANUBE'
+      agentName: process.env.AGENT_NAME || 'Asistente',
+      tone: process.env.BRAND_TONE || 'humana, directa y util',
+      aiProfile: 'GENERIC_ECOMMERCE',
+      vertical: 'ECOMMERCE',
+      catalogConfig: {
+        vertical: 'ECOMMERCE',
+        aiProfile: 'GENERIC_ECOMMERCE'
+      }
     },
     create: {
       workspaceId: DEFAULT_WORKSPACE_ID,
       businessName: process.env.BUSINESS_NAME || 'Marca demo',
-      agentName: process.env.AGENT_NAME || 'Sofi',
-      tone: process.env.BRAND_TONE || 'cercano, claro y comercial',
-      catalogMode: 'TIENDANUBE'
+      agentName: process.env.AGENT_NAME || 'Asistente',
+      tone: process.env.BRAND_TONE || 'humana, directa y util',
+      aiProfile: 'GENERIC_ECOMMERCE',
+      vertical: 'ECOMMERCE',
+      catalogConfig: {
+        vertical: 'ECOMMERCE',
+        aiProfile: 'GENERIC_ECOMMERCE'
+      }
     }
   });
 
