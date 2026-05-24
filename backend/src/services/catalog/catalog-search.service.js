@@ -450,7 +450,7 @@ export function detectRequestedSignals(query = '', interestedProducts = [], { ai
 		...new Set([
 			...splitTerms(query),
 			...(Array.isArray(interestedProducts)
-				? interestedProducts.map((v) => normalizeText(v)).filter(Boolean)
+				? interestedProducts.flatMap((v) => splitTerms(v)).filter(Boolean)
 				: [])
 		])
 	];
@@ -465,6 +465,7 @@ export function detectRequestedSignals(query = '', interestedProducts = [], { ai
 		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1|5x2|cinco por dos)/i.test(normalizedQuery),
 		asksPrice: /(precio|cuanto|sale|valor)/i.test(normalizedQuery),
 		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
+		asksImage: /(foto|fotos|imagen|imagenes|video|ver como queda|como se ve|me lo mostras|me la mostras|tenes foto|tenes imagen)/i.test(normalizedQuery),
 		asksComparison: /(cual|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
 		hasVariantSpecificity: /(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(normalizedQuery)
 	};
@@ -484,6 +485,7 @@ function shouldSkipCatalogLookup(signals = {}) {
 		signals.asksPromo ||
 		signals.asksPrice ||
 		signals.asksLink ||
+		signals.asksImage ||
 		signals.asksComparison ||
 		signals.hasVariantSpecificity;
 
@@ -498,12 +500,14 @@ function isSpecificCatalogRequest(signals = {}) {
 		!signals.requestedFamily &&
 		!signals.asksPrice &&
 		!signals.asksLink &&
+		!signals.asksImage &&
 		!signals.asksComparison &&
 		!signals.hasVariantSpecificity
 	) {
 		return false;
 	}
 	if (signals.asksComparison || signals.hasVariantSpecificity) return true;
+	if (signals.asksImage && terms.length >= 2) return true;
 	if (signals.asksLink && terms.length >= 2) return true;
 	if (signals.asksPrice && terms.length >= 2) return true;
 	return terms.length >= 3;
@@ -895,6 +899,10 @@ export function pickCommercialHints(products = [], commercialPlan = null, { aiPr
 
 	if (commercialPlan?.requestedAction === 'ASK_OFFER') {
 		hints.push('Mostra primero la oferta principal de esta familia; si no avanza, recien ahi abri la alternativa.');
+	}
+
+	if (commercialPlan?.requestedAction === 'ASK_IMAGE') {
+		hints.push('Si pide fotos o imagenes, no prometas enviar imagenes ni inventes adjuntos; pasa solo el link real del producto foco.');
 	}
 
 	if (commercialPlan?.recommendedAction === 'present_offer_options_brief') {

@@ -267,6 +267,28 @@ export function buildConversationSummary({
 	return parts.filter(Boolean).join(' | ');
 }
 
+function isProductImageRequestAction(commercialPlan = null) {
+	return (
+		commercialPlan?.requestedAction === 'ASK_IMAGE' ||
+		[
+			'share_product_link_for_image_request',
+			'image_request_clarify_product',
+		].includes(commercialPlan?.recommendedAction)
+	);
+}
+
+function buildProductImageRequestReply({ commercialPlan = null } = {}) {
+	const productUrl = commercialPlan?.bestOffer?.productUrl || null;
+	const productName = commercialPlan?.bestOffer?.name || commercialPlan?.productFocus || null;
+
+	if (productUrl) {
+		const label = productName ? ` de ${productName}` : '';
+		return `No puedo enviarte imagenes por aca ni inventarlas. Te paso el link${label} para que veas las fotos reales: ${productUrl}`;
+	}
+
+	return 'No puedo enviarte imagenes por aca ni inventarlas. Decime de que producto queres verlo o segui con el que veniamos hablando y te paso el link real si esta cargado.';
+}
+
 export function buildAiFailureFallback({
 	workspaceId = '',
 	vertical = '',
@@ -285,6 +307,10 @@ export function buildAiFailureFallback({
 		return 'Te paso con una asesora para seguir mejor con esto.';
 	}
 
+	if (isProductImageRequestAction(commercialPlan)) {
+		return buildProductImageRequestReply({ commercialPlan });
+	}
+
 	if (intent === 'product' && commercialPlan?.catalogAvailable === false) {
 		if (useDkvHandoff) return buildUnableToContinueHandoffReply();
 		const familyLabel =
@@ -295,7 +321,7 @@ export function buildAiFailureFallback({
 			'ese producto';
 		return isLummineBodywearProfile(aiProfile)
 			? `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar una promo o un link equivocado. Si querés, decime color o talle, o te paso con una asesora.`
-			: `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar datos ni un link equivocado. Si querés, decime el nombre exacto o te paso con una asesora.`;
+			: `Ahora no estoy viendo el catálogo actualizado de ${familyLabel}, así que no te quiero inventar datos ni un link equivocado. Si querés, decime de que producto se trata o te paso con una asesora.`;
 	}
 
 	if (intent === 'product') {
@@ -350,7 +376,7 @@ export function buildAiFailureFallback({
 				commercialPlan?.productFamily ||
 				enrichedState?.currentProductFamily ||
 				'ese producto';
-			return `No quiero confundirte con una opcion que no sea. Decime el nombre exacto o pasame el link del producto de ${familyLabel} y lo reviso puntual.`;
+			return `No quiero confundirte con una opcion que no sea. Decime de que producto de ${familyLabel} hablamos o pasame el link y lo reviso puntual.`;
 		}
 
 		if (
@@ -470,20 +496,20 @@ export function buildCatalogSafetyFallback({
 		'ese producto';
 
 	if (intent === 'size_help' || intent === 'stock_check') {
-		return `No te lo quiero confirmar mal: ahora no tengo una coincidencia clara en catálogo para ${familyLabel}. Si querés, decime el nombre exacto del producto y te lo reviso puntual.`;
+		return `No te lo quiero confirmar mal: ahora no tengo una coincidencia clara en catálogo para ${familyLabel}. Si querés, decime cual producto estabas viendo y te lo reviso puntual.`;
 	}
 
 	if (intent === 'product') {
-		return `No te quiero decir que sí y pifiarle. Ahora no estoy viendo una coincidencia confirmada para ${familyLabel}. Si querés, pasame el nombre exacto o el link del producto y lo reviso bien.`;
+		return `No te quiero decir que sí y pifiarle. Ahora no estoy viendo una coincidencia confirmada para ${familyLabel}. Si querés, decime cual producto estabas viendo o pasame el link y lo reviso bien.`;
 	}
 
 	if (intent === 'general' && messageLooksLikeSpecificCatalogCheck(messageBody)) {
 		return isLummineBodywearProfile(aiProfile)
-			? 'No te lo quiero confirmar mal. Si me decís el nombre exacto del producto, color o talle que buscás, te lo reviso puntual.'
-			: 'No te lo quiero confirmar mal. Si me decís el nombre exacto del producto o me pasás el link, te lo reviso puntual.';
+			? 'No te lo quiero confirmar mal. Si me decís que producto, color o talle buscás, te lo reviso puntual.'
+			: 'No te lo quiero confirmar mal. Si me decís que producto buscás o me pasás el link, te lo reviso puntual.';
 	}
 
-	return 'No te lo quiero confirmar mal. Si me pasás el nombre exacto del producto, te lo reviso bien.';
+	return 'No te lo quiero confirmar mal. Si me decís que producto buscás, te lo reviso bien.';
 }
 
 export function buildResponsePolicy({
@@ -555,6 +581,19 @@ export function buildResponsePolicy({
 			allowHandoffMention: false,
 			maxChars: 220,
 			tone: 'amigable_directo',
+		};
+	}
+
+	if (
+		isProductImageRequestAction(commercialPlan) &&
+		['product', 'general', 'stock_check', 'size_help'].includes(String(intent || ''))
+	) {
+		return {
+			action: commercialPlan?.recommendedAction || 'image_request_clarify_product',
+			useAI: false,
+			allowHandoffMention: false,
+			maxChars: commercialPlan?.bestOffer?.productUrl ? 260 : 220,
+			tone: 'guia_comercial_directa',
 		};
 	}
 
@@ -1197,6 +1236,8 @@ function looksLikeUnsupportedOperationalPromise(text = '', responsePolicy = {}) 
 function looksLikeUnsupportedMediaPromise(text = '') {
 	const normalized = normalizeGateText(text);
 	return (
+		/!\[[^\]]*\]\([^)]+\)/i.test(String(text || '')) ||
+		/https?:\/\/\S+\.(?:png|jpe?g|webp|gif)(?:\?\S*)?/i.test(String(text || '')) ||
 		/\[(imagen|foto|video|catalogo|cat[aá]logo)[^\]]*\]/i.test(String(text || '')) ||
 		/(te\s+(muestro|mando|paso|envio|envio)\s+(la\s+)?(foto|imagen|video)|busco\s+el\s+video|en\s+un\s+ratito\s+te\s+lo\s+paso)/i.test(normalized)
 	);

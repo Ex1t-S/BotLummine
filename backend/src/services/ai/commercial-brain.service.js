@@ -57,7 +57,7 @@ function detectBuyingIntent(messageBody = '', currentState = {}) {
 	if (/(lo quiero|lo compro|pasame el link|mandame el link|como compro|como pago|guiame|quiero comprar)/i.test(text)) {
 		return 'high';
 	}
-	if (/(precio|cuanto|sale|valor|tenes|tienen|talle|color|oferta|promo)/i.test(text)) {
+	if (/(precio|cuanto|sale|valor|tenes|tienen|talle|color|oferta|promo|foto|fotos|imagen|imagenes|video)/i.test(text)) {
 		return 'medium';
 	}
 	return currentState?.buyingIntentLevel || 'low';
@@ -78,6 +78,7 @@ function detectSalesStage({ intent, messageBody, currentState = {}, greetingOnly
 function detectRequestedAction(messageBody = '', greetingOnly = false) {
 	const text = normalizeText(messageBody);
 	if (greetingOnly) return 'GREETING';
+	if (/(foto|fotos|imagen|imagenes|video|ver como queda|como se ve|me lo mostras|me la mostras|tenes foto|tenes imagen)/i.test(text)) return 'ASK_IMAGE';
 	if (/(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(text)) return 'ASK_LINK';
 	if (/(cual|conviene|mejor|diferencia|compar)/i.test(text)) return 'ASK_COMPARISON';
 	if (/(precio|cuanto|sale|valor)/i.test(text)) return 'ASK_PRICE';
@@ -250,7 +251,7 @@ function rankCommercialProducts(
 				if (offerType === '2x1') score += 12;
 			}
 
-			if (requestedAction === 'ASK_LINK' || requestedAction === 'ASK_PRICE' || requestedAction === 'ASK_VARIANT' || requestedAction === 'AFFIRM_CONTINUATION') {
+			if (requestedAction === 'ASK_LINK' || requestedAction === 'ASK_IMAGE' || requestedAction === 'ASK_PRICE' || requestedAction === 'ASK_VARIANT' || requestedAction === 'AFFIRM_CONTINUATION') {
 				if (currentState?.lastRecommendedOffer && String(currentState.lastRecommendedOffer).includes(product.name)) score += 12;
 				if (offerType === 'single') score += 8;
 			}
@@ -383,6 +384,7 @@ function chooseBestOffer(
 			null;
 	} else if (
 		(requestedAction === 'ASK_LINK' ||
+			requestedAction === 'ASK_IMAGE' ||
 			requestedAction === 'ASK_PRICE' ||
 			requestedAction === 'ASK_VARIANT' ||
 			requestedAction === 'AFFIRM_CONTINUATION') &&
@@ -412,6 +414,7 @@ function chooseBestOffer(
 function shouldShareLinkNow({ requestedAction, stage, bestOffer, alreadyShared, requestedOfferAvailable }) {
 	if (!bestOffer?.productUrl) return false;
 	if (requestedOfferAvailable === false) return false;
+	if (requestedAction === 'ASK_IMAGE') return true;
 	if (requestedAction === 'ASK_LINK') return true;
 	if (requestedAction === 'AFFIRM_CONTINUATION' && stage === 'READY_TO_BUY') {
 		return !alreadyShared.sharedLinks.includes(bestOffer.productUrl);
@@ -453,6 +456,7 @@ function buildRecommendedAction({
 }) {
 	if (shouldEscalate) return 'handoff_human';
 	if (requestedAction === 'GREETING') return 'greet_and_discover';
+	if (requestedAction === 'ASK_IMAGE' && !hasKnownProductContext) return 'image_request_clarify_product';
 	if (!hasKnownProductContext) return 'send_general_catalog_first';
 	if (requestedAction === 'ASK_CATALOG') {
 		return 'send_general_catalog_first';
@@ -460,7 +464,11 @@ function buildRecommendedAction({
 	if (requestedAction === 'GENERAL' && !bestOffer) {
 		return 'send_general_catalog_first';
 	}
+	if (!bestOffer && requestedAction === 'ASK_IMAGE') return 'image_request_clarify_product';
 	if (!bestOffer && requestedAction !== 'ASK_CATALOG') return 'clarify_specific_product';
+	if (requestedAction === 'ASK_IMAGE') {
+		return shareLinkNow ? 'share_product_link_for_image_request' : 'image_request_clarify_product';
+	}
 	if (requestedOfferType && requestedOfferAvailable === false && hasFallbackWithinFamily) {
 		return 'explain_requested_offer_unavailable_keep_family';
 	}
@@ -486,7 +494,13 @@ export function resolveCommercialBrainV2({
 	aiProfile = ''
 }) {
 	const greetingOnly = isGreetingOnlyMessage(messageBody, currentState);
-	const requestedAction = detectRequestedAction(messageBody, greetingOnly);
+	let requestedAction = detectRequestedAction(messageBody, greetingOnly);
+	if (
+		requestedAction === 'ASK_IMAGE' &&
+		['payment', 'shipping', 'order_status', 'return_exchange', 'complaint', 'human_handoff'].includes(String(intent || ''))
+	) {
+		requestedAction = 'GENERAL';
+	}
 	const productFamily = resolveProductFamily({ messageBody, currentState, products: catalogProducts, aiProfile });
 	const productFamilyLabel = getCommercialFamilyLabel(productFamily);
 	const categoryLocked = shouldLockFamily({ messageBody, currentState, productFamily, aiProfile });
@@ -528,6 +542,7 @@ export function resolveCommercialBrainV2({
 	const repeatPriceNow = shouldRepeatPriceNow({ requestedAction, bestOffer, alreadyShared, requestedOfferAvailable });
 	const escalation = shouldEscalate({ messageBody, mood, currentState });
 	const hasKnownProductContext = Boolean(
+		bestOffer ||
 		productFamily ||
 		asArray(currentState?.interestedProducts).length ||
 		currentState?.currentProductFocus ||

@@ -44,6 +44,7 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 		`- Maximo ideal: ${responsePolicy.maxChars || 220} caracteres`,
 		`- Puede mencionar derivacion humana: ${responsePolicy.allowHandoffMention ? 'Si' : 'No'}`,
 		'- Responde solo con lo confirmado.',
+		'- No prometas enviar fotos, imagenes, videos o adjuntos, y no inventes URLs directas a imagenes.',
 		'- Si la conversacion ya esta empezada, segui el hilo sin saludar de nuevo, salvo que el cliente retome solo con hola o buenas.',
 		`- Si el mensaje es solo un saludo, presenta de forma breve a ${agentName} de ${businessName} y pregunta que esta buscando.`,
 		'- Evita abrir con muletillas como claro, perfecto, genial, buenisimo o dale.',
@@ -58,7 +59,8 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 	} else {
 		lines.push(
 			'- Si no hay tracking, decilo sin inventar.',
-			'- Si la intencion no es producto, no abras promociones ni upsell salvo pedido explicito del cliente.'
+			'- Si la intencion no es producto, no abras promociones ni upsell salvo pedido explicito del cliente.',
+			'- Si piden fotos, imagenes o videos de producto, no prometas enviar imagenes ni inventes adjuntos; si hay link real, comparti solo el link del producto.'
 		);
 	}
 
@@ -280,6 +282,7 @@ export function buildPrompt({
 		`VERTICAL: ${verticalProfile.label}`,
 		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName, profile: verticalProfile })}`,
 		useCommerceContext ? `PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}` : '',
+		'REGLA GLOBAL DE IMAGENES:\n- No envies ni prometas fotos, imagenes, videos, adjuntos ni URLs directas a imagenes.\n- Si el cliente pide ver un producto, usa solamente el link real del producto confirmado. Si no hay link confirmado, pedi que aclare de que producto habla o deriva.',
 		liveOrderContextEnabled
 			? `PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`
 			: 'REGLA DE PEDIDO:\n- Ignora cualquier pedido previo salvo que la accion permitida sea de seguimiento de pedido.',

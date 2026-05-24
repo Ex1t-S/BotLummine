@@ -191,6 +191,7 @@ function shouldPreservePurchaseContext(q, currentState = {}) {
 			hasStockKeywords(q) ||
 			hasPaymentKeywords(q) ||
 			hasShippingKeywords(q) ||
+			/(foto|fotos|imagen|imagenes|video|mandame|enviame)/.test(q) ||
 			/(link|pasamelo|pasame|dale|perfecto|genial|buenisimo|buenísimo|y ese|y eso|lo quiero|me sirve|me gusto|me gustó)/.test(
 				q
 			))

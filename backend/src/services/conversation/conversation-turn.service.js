@@ -375,12 +375,20 @@ export async function runConversationTurn({
 				? verticalProfile.greetingHints
 				: verticalProfile.serviceHints || [verticalProfile.defaultHint];
 		} else {
+			const catalogInterestHints = [
+				...(Array.isArray(enrichedState.interestedProducts) ? enrichedState.interestedProducts : []),
+				enrichedState.currentProductFocus,
+				enrichedState.lastRecommendedProduct,
+				enrichedState.currentProductFamily,
+			].filter(Boolean);
+			const catalogSearchQuery = [messageBody, ...catalogInterestHints].filter(Boolean).join(' ');
+
 			catalogProducts = await searchCatalogProducts({
-			query: messageBody,
-			interestedProducts: enrichedState.interestedProducts || [],
-			limit: 5,
-			workspaceId,
-			aiProfile,
+				query: catalogSearchQuery || messageBody,
+				interestedProducts: catalogInterestHints,
+				limit: 5,
+				workspaceId,
+				aiProfile,
 			});
 
 			const catalogStatus = await getCatalogLookupStatus({ workspaceId });
