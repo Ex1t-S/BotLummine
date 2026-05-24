@@ -99,6 +99,47 @@ function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	return `${baseText}\n\n${suffix}`.trim();
 }
 
+function isCatalogFollowUpRequest(text = '') {
+	const normalized = normalizeText(text);
+	if (!normalized || normalized.length > 90) return false;
+	return /(link|url|web|comprar|foto|fotos|imagen|imagenes|video|mandame|enviame|pasame|ver|mostrame|muestrame)/i.test(normalized);
+}
+
+function buildCatalogQueryContext({
+	messageBody = '',
+	currentState = {},
+	recentMessages = [],
+} = {}) {
+	const genericStateValues = new Set([
+		'soporte de venta',
+		'consulta_general',
+		'consulta general',
+		'general',
+	]);
+	const cleanHint = (value) => {
+		const raw = String(value || '').trim();
+		const normalized = normalizeText(raw);
+		if (!normalized || normalized.length < 3 || genericStateValues.has(normalized)) return null;
+		if (/^[.,;:!?]+$/.test(raw)) return null;
+		return raw;
+	};
+	const recentUserHints = recentMessages
+		.filter((message) => message.role === 'user')
+		.map((message) => cleanHint(message.text))
+		.filter(Boolean)
+		.slice(-4);
+	const stateHints = [
+		...(Array.isArray(currentState.interestedProducts) ? currentState.interestedProducts : []),
+		currentState.currentProductFocus,
+		currentState.lastRecommendedProduct,
+		currentState.currentProductFamily,
+	]
+		.map(cleanHint)
+		.filter(Boolean);
+
+	return [messageBody, ...recentUserHints, ...stateHints].filter(Boolean).join(' ');
+}
+
 function findLastOutboundBeforeCurrentInbound(messages = []) {
 	for (let index = messages.length - 2; index >= 0; index -= 1) {
 		const message = messages[index];
@@ -1381,9 +1422,24 @@ export async function processInboundMessage({
 				'No prometas tracking, cancelaciones, devoluciones ni revisiones si no estan confirmadas.'
 			];
 		} else {
+			const catalogQueryContext = buildCatalogQueryContext({
+				messageBody: effectiveMessageBody,
+				currentState: enrichedState,
+				recentMessages: fullRecentMessages,
+			});
+			const commercialMessageBody = isCatalogFollowUpRequest(effectiveMessageBody)
+				? catalogQueryContext
+				: effectiveMessageBody;
+			const catalogInterestHints = [
+				...(Array.isArray(enrichedState.interestedProducts) ? enrichedState.interestedProducts : []),
+				enrichedState.currentProductFocus,
+				enrichedState.lastRecommendedProduct,
+				enrichedState.currentProductFamily,
+			].filter(Boolean);
+
 			catalogProducts = await searchCatalogProducts({
-				query: effectiveMessageBody,
-				interestedProducts: enrichedState.interestedProducts || [],
+				query: catalogQueryContext || effectiveMessageBody,
+				interestedProducts: catalogInterestHints,
 				limit: 5,
 				workspaceId: resolvedWorkspaceId,
 				aiProfile,
@@ -1394,7 +1450,7 @@ export async function processInboundMessage({
 			commercialPlan = {
 				...resolveCommercialBrainV2({
 					intent,
-					messageBody: effectiveMessageBody,
+					messageBody: commercialMessageBody,
 					currentState: enrichedState,
 					recentMessages: fullRecentMessages,
 					catalogProducts,
