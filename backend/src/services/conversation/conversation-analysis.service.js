@@ -383,7 +383,15 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 
 export function buildHandoffReply({ contactName = '', reason = '' } = {}) {
 	const safeName = String(contactName || '').trim();
-	const prefix = safeName ? `${safeName}, ` : '';
+	const publicName =
+		/^AIQA_/i.test(safeName) ||
+		/^AI_LAB_/i.test(safeName) ||
+		/^test[_\s-]/i.test(safeName) ||
+		/^qa[_\s-]/i.test(safeName) ||
+		/^[a-z0-9_-]{16,}$/i.test(safeName)
+			? ''
+			: safeName;
+	const prefix = publicName ? `${publicName}, ` : '';
 
 	const variantsByReason = {
 		requested_human: [

@@ -210,6 +210,58 @@ const riskMessages = [
 	['Era promo pero necesito seguimiento', 'Pedido 45678', 'No llego', 'Hace una semana', 'No quiero ofertas', 'Quiero saber donde esta', '', '', '', ''],
 ];
 
+const ruchiPendingPaymentMessages = [
+	['Hola, me llego que tengo pago pendiente por el lapiz 3D', 'Puede ser que no haya terminado?', 'Era el combo con filamentos', 'Quiero pagarlo por transferencia', 'Me pasas como sigo?', 'El link sigue sirviendo?', 'Te puedo mandar comprobante por aca?', 'Dale, lo hago ahora', 'Ya transferi', 'Gracias'],
+	['Buenas, me avisaron que falta el pago de Agua Magica', 'No me tomo la tarjeta', 'Puedo intentar con mercado pago?', 'Me da miedo pagar dos veces', 'Que hago para no duplicar?', 'Me guardan el producto?', 'Si pago ahora cuando sale?', 'Pasame el paso correcto', 'Ok avanzo', 'Listo'],
+	['Hola, tengo un pedido pendiente de pago?', 'No recuerdo si termine el tablero Montessori', 'Era para un nene de 3 anos', 'Me decis si falta pagar?', 'Quiero conservar la promo', 'Puedo pagar hoy?', 'Me interesa seguir', 'Que dato necesitas?', 'Perfecto', 'Gracias'],
+	['Me llego pago pendiente pero yo ya pague', 'Tengo comprobante del combo 3D creativo', 'Lo mando por aca?', 'No quiero que me cancelen el regalo', 'Ahi te paso la imagen', 'Es transferencia', 'Queda en revision?', 'Avisame si falta algo', 'Gracias', 'Espero'],
+	['Hola, me salio error al pagar la pizarra magica LED', 'Era con tarjeta', 'No se si entro o no', 'Me ayudas?', 'Quiero terminar la compra', 'Puedo cambiar el medio de pago?', 'Si hay link pasamelo', 'Dale', 'Ahora lo hago', 'Gracias'],
+	['Buenas, pago pendiente de que seria?', 'Yo habia elegido bloques magneticos', 'El checkout se me cerro', 'Sigue vigente?', 'Me gustaria pagarlo', 'Hay cuotas?', 'Si no, transferencia', 'Pasame el camino mas simple', 'Ok', 'Gracias'],
+	['Hola no entiendo el mensaje de pago pendiente', 'Me pueden explicar?', 'Era por la manta gimnasio de bebe', 'Quiero comprar igual', 'Me guias paso a paso?', 'No quiero perder el carrito', 'Puedo pagar por alias?', 'Listo pasamelo', 'Te aviso', 'Gracias'],
+	['Me escribieron por una compra sin pagar', 'Si, la deje porque no tenia la tarjeta', 'Ahora quiero hacerla', 'Era el set de yeso y pintura', 'El precio sigue igual?', 'Me pasas como finalizar?', 'Si tengo problema te escribo', 'Dale', 'Gracias', ''],
+	['Hola, el pago quedo pendiente porque no me llego el codigo', 'Puedo pagar de otra forma?', 'Era para regalar un juego de ingenio de madera', 'Lo necesito rapido', 'Que conviene?', 'No me mandes promo, quiero pagar esto', 'Pasame el paso', 'Ok', 'Ya lo intento', 'Gracias'],
+	['Buenas, me figura pago pendiente', 'No quiero comprar otra cosa', 'Solo terminar el pedido de la pistola de agua con luces', 'Me decis que hacer?', 'Tengo debito', 'Sirve?', 'Si falla puedo transferir?', 'Pasame instrucciones', 'Dale', 'Gracias'],
+];
+
+const ruchiCartMessages = [
+	['Hola, deje el lapiz 3D en el carrito', 'Estoy dudando si sirve para 7 anos', 'Viene con filamentos?', 'No quiero que sea dificil de usar', 'Cual me recomendas?', 'Si me sirve lo compro', 'Hay cambio si no va?', 'Pasame el link', 'Gracias', ''],
+	['Me llego lo del carrito', 'Si habia dejado los bloques magneticos', 'Me parecio caro', 'Hay alguna promo?', 'Quiero algo didactico pero divertido', 'No quiero algo fragil', 'Que opcion va mejor?', 'Dale pasame', 'Lo miro', 'Gracias'],
+	['Hola, estaba viendo Agua Magica', 'Queria saber si mancha', 'Y si trae repuestos', 'Tengo miedo de comprar algo que dure poco', 'Es para que edad?', 'Si me ayudas cierro', 'Me pasas link?', 'Ok', 'Gracias', ''],
+	['Buenas, deje una manta gimnasio en carrito', 'Me interesa pero no se si es para recien nacido', 'Trae sonido?', 'Si no hay que alternativa?', 'No quiero ropa', 'Solo juguete para bebe', 'Me pasas el correcto?', 'Dale', 'Gracias', ''],
+	['Hola, el carrito era mio', 'Me quede sin tiempo', 'Era el tablero sensorial Montessori', 'Sigue guardado?', 'La promo sigue?', 'Me conviene finalizar ahora?', 'Pasame el paso', 'Dale', 'Gracias', ''],
+	['Me escribieron del carrito', 'Si pero tengo dudas de envio', 'Soy de Cordoba', 'Cuanto tarda?', 'Y si llega fallado?', 'Quiero comprar si es seguro', 'Me orientas?', 'Pasame link', 'Ok', ''],
+	['Hola, puse varias cosas en carrito', 'No se cual conviene', 'Quiero regalo para 5 anos', 'Que sea creativo y no pantalla', 'Vi pizarra LED y kit de pulseras', 'Que me recomendas?', 'Hay descuento?', 'Dale', 'Me sirve', 'Gracias'],
+	['Buenas, abandone porque no sabia pagar', 'Puedo hacerlo por transferencia?', 'Me respetan el carrito del combo 3D creativo?', 'Era con promo', 'No quiero volver a cargar todo', 'Me pasas como sigo?', 'Ok', 'Lo hago', 'Gracias', ''],
+	['Hola, lo del carrito', 'Mi duda es si el tablero cangrejo magnetico trae piezas chicas', 'Es seguro para 4 anos?', 'Necesito algo didactico', 'Pero que no sea peligroso', 'Cual es?', 'Si me confirmas avanzo', 'Pasame link', 'Dale', 'Gracias'],
+	['Me llego recordatorio del carrito', 'Ya no quiero el lapiz 3D', 'Ahora busco algo para verano', 'Tenes pistola de agua o tobogan?', 'Que promos hay?', 'No me mandes lo anterior', 'Mostrame una opcion', 'Gracias', '', ''],
+];
+
+const ruchiMarketingMessages = [
+	['Hola, vi la promo del combo 3D', 'Que incluye exactamente?', 'Trae lapices y filamentos?', 'Sirve para 8 anos?', 'Me sirve para regalo?', 'Cual me conviene?', 'Pasame link', 'Gracias', '', ''],
+	['Buenas, me llego una oferta', 'No entendi el producto Agua Magica', 'Es para crear figuras?', 'Quiero algo creativo', 'No quiero que manche todo', 'Me explicas?', 'Precio?', 'Dale', 'Gracias', ''],
+	['Hola, tienen stock de la promo de bloques magneticos?', 'Quiero el de 64 piezas', 'Cuanto sale?', 'Hay envio?', 'Soy de Mendoza', 'Si llega rapido compro', 'Pasame link', 'Ok', '', ''],
+	['Vi el mensaje de hot sale', 'Sigue vigente?', 'Me interesa comprar dos juguetes', 'Hay descuento?', 'Cual recomendas para 4 anos?', 'No quiero algo con pantalla', 'Me pasas opciones?', 'Gracias', '', ''],
+	['Hola, la promo es para cualquier producto?', 'Queria una pizarra magica LED', 'Pero tambien vi el tablero Montessori', 'Que conviene mas?', 'Tengo dudas por edad', 'Me ayudas?', 'Pasame una sola recomendacion', 'Dale', ''],
+	['Buenas, me interesa la promocion', 'Pero no conozco Ruchi', 'Como son los cambios?', 'Y la calidad?', 'No quiero que se rompa rapido', 'Tenes referencias?', 'Si me da confianza compro', 'Precio?', 'Gracias', ''],
+	['Hola, me llego marketing pero necesito otra cosa', 'Estoy buscando cambio de un pedido', 'Me vino mal una pieza del juego', 'No quiero comprar ahora', 'Me ayudas con eso?', 'Pedido 12345', 'Quiero persona', 'Gracias', '', ''],
+	['Vi la promo de hoy', 'Hay kit de pulseras?', 'Y set de yeso para pintar?', 'Quiero para nena de 6 anos', 'Que no sea muy dificil', 'Cual seria?', 'Me pasas link y precio?', 'Dale', 'Gracias', ''],
+	['Hola, quiero aprovechar la oferta', 'Pero cobro manana', 'La puedo dejar reservada?', 'Sigue hasta cuando?', 'Si no se puede decime', 'Me interesa igual el lapiz 3D', 'Que paso sigo?', 'Ok', ''],
+	['Buenas, me llego el mensaje', 'NO ATENDEMOS LLAMADAS', 'Dejanos tu consulta y horarios', 'Gracias por comunicarte', 'Lunes a viernes de 9 a 18', '', '', '', '', ''],
+];
+
+const ruchiRiskMessages = [
+	['No me gusta hablar con IA', 'Quiero una persona', 'No me entienden con el pedido del lapiz 3D', 'Pasame con alguien', '', '', '', '', '', ''],
+	['Gracias por tu mensaje', 'No hacemos ventas online', 'Horarios: lunes a viernes', 'Dejanos tu consulta', '', '', '', '', '', ''],
+	['Me estan escribiendo de pago pendiente pero yo quiero reclamar', 'Me llego mal el tablero', 'No quiero comprar', 'Quiero cambio', 'Me responde una persona?', '', '', '', '', ''],
+	['El carrito era de bloques magneticos pero ahora busco algo para verano', 'No me mandes bloques', 'Tenes tobogan de agua?', 'Precio?', 'Link?', '', '', '', '', ''],
+	['La promo del combo 3D me parece enganosa', 'Dice una cosa y despues otra', 'No se entiende', 'Me da desconfianza', 'Quiero que me expliquen simple', '', '', '', '', ''],
+	['Ya pague Agua Magica y me siguen reclamando pago', 'Esto es molesto', 'Tengo comprobante', 'No quiero volver a pagar', 'Persona por favor', '', '', '', '', ''],
+	['Hola?', '???', 'No me entendes', 'Te estoy diciendo otra cosa', 'Humano', '', '', '', '', ''],
+	['Me interesa pero no se si es para su edad', 'Tiene 2 anos', 'Siempre compro cosas que despues no usa', 'Si no sirve no me hagan perder tiempo', 'Sirve o no sirve?', '', '', '', '', ''],
+	['Quiero comprar pero no por web', 'Me da miedo poner tarjeta', 'Solo transferencia', 'Si no se puede chau', 'Como hacemos?', '', '', '', '', ''],
+	['Era promo pero necesito seguimiento', 'Pedido 45678', 'No llego el juguete', 'Hace una semana', 'No quiero ofertas', 'Quiero saber donde esta', '', '', '', ''],
+];
+
 function buildCases(workspaces) {
 	const brands = [
 		{ key: 'lummine', workspaceId: workspaces.lummine },
@@ -221,7 +273,13 @@ function buildCases(workspaces) {
 	const pushSet = ({ category, expectedObjective, audienceSource, templateName, campaignText, messageSets, count }) => {
 		for (let i = 0; i < count; i += 1) {
 			const brand = brands[i % brands.length];
-			const messages = messageSets[i % messageSets.length].filter(Boolean).slice(0, MAX_TURNS);
+			const brandMessageSets = Array.isArray(messageSets)
+				? messageSets
+				: messageSets[brand.key] || messageSets.default || [];
+			const messages = brandMessageSets[i % brandMessageSets.length].filter(Boolean).slice(0, MAX_TURNS);
+			const brandCampaignText = typeof campaignText === 'object'
+				? campaignText[brand.key] || campaignText.default || ''
+				: campaignText;
 			definitions.push({
 				id: `case_${String(index).padStart(3, '0')}_${brand.key}_${category}`,
 				index,
@@ -231,7 +289,7 @@ function buildCases(workspaces) {
 				expectedObjective,
 				audienceSource,
 				templateName,
-				campaignText,
+				campaignText: brandCampaignText,
 				messages,
 			});
 			index += 1;
@@ -243,8 +301,11 @@ function buildCases(workspaces) {
 		expectedObjective: 'pago_pendiente',
 		audienceSource: 'pending_payment',
 		templateName: 'qa_pago_pendiente_v1',
-		campaignText: 'Tu compra quedo con pago pendiente. Si queres finalizarla, respondeme y te ayudo con el proximo paso.',
-		messageSets: pendingPaymentMessages,
+		campaignText: {
+			lummine: 'Tu compra de Lummine quedo con pago pendiente. Si queres finalizar tus prendas o packs modeladores, respondeme y te ayudo con el proximo paso.',
+			ruchi: 'Tu compra de Ruchi quedo con pago pendiente. Si queres finalizar tu juguete, combo creativo o producto didactico, respondeme y te ayudo con el proximo paso.',
+		},
+		messageSets: { lummine: pendingPaymentMessages, ruchi: ruchiPendingPaymentMessages },
 		count: 30,
 	});
 	pushSet({
@@ -252,8 +313,11 @@ function buildCases(workspaces) {
 		expectedObjective: 'recuperacion_de_carrito',
 		audienceSource: 'abandoned_carts',
 		templateName: 'qa_carrito_abandonado_v1',
-		campaignText: 'Vimos que dejaste productos en tu carrito. Si tenes dudas, respondeme y te ayudo a finalizar la compra.',
-		messageSets: cartMessages,
+		campaignText: {
+			lummine: 'Vimos que dejaste productos Lummine en tu carrito. Si tenes dudas sobre talle, comodidad o promo, respondeme y te ayudo a finalizar la compra.',
+			ruchi: 'Vimos que dejaste productos Ruchi en tu carrito. Si tenes dudas sobre edad, uso, envio o promo, respondeme y te ayudo a finalizar la compra.',
+		},
+		messageSets: { lummine: cartMessages, ruchi: ruchiCartMessages },
 		count: 30,
 	});
 	pushSet({
@@ -261,8 +325,11 @@ function buildCases(workspaces) {
 		expectedObjective: 'venta_promocionada',
 		audienceSource: 'marketing',
 		templateName: 'qa_marketing_promo_v1',
-		campaignText: 'Tenemos una promo especial por tiempo limitado. Respondeme y te cuento cual opcion te conviene.',
-		messageSets: marketingMessages,
+		campaignText: {
+			lummine: 'Tenemos una promo especial de Lummine por tiempo limitado. Respondeme y te cuento que prenda, pack o modelador te conviene.',
+			ruchi: 'Tenemos una promo especial de Ruchi por tiempo limitado. Respondeme y te cuento que juguete, combo creativo o producto didactico te conviene.',
+		},
+		messageSets: { lummine: marketingMessages, ruchi: ruchiMarketingMessages },
 		count: 30,
 	});
 	pushSet({
@@ -270,8 +337,11 @@ function buildCases(workspaces) {
 		expectedObjective: 'venta_promocionada',
 		audienceSource: 'marketing',
 		templateName: 'qa_mixta_riesgo_v1',
-		campaignText: 'Campania de prueba con contexto comercial para evaluar cambios de tema y escalamiento.',
-		messageSets: riskMessages,
+		campaignText: {
+			lummine: 'Campania de prueba Lummine con contexto comercial para evaluar cambios de tema y escalamiento.',
+			ruchi: 'Campania de prueba Ruchi con contexto comercial para evaluar cambios de tema y escalamiento.',
+		},
+		messageSets: { lummine: riskMessages, ruchi: ruchiRiskMessages },
 		count: 10,
 	});
 

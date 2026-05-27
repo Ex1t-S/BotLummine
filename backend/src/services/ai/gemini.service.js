@@ -16,7 +16,8 @@ export function isRetryableGeminiError(error) {
 		message.includes('rate limit') ||
 		message.includes('429') ||
 		message.includes('timeout') ||
-		message.includes('deadline')
+		message.includes('deadline') ||
+		message.includes('sin texto util')
 	);
 }
 
@@ -60,8 +61,13 @@ function getGeminiText(response = {}) {
 }
 
 export async function runGeminiContent(contents, options = {}) {
-	const apiKey = process.env.GEMINI_API_KEY;
-	const modelName = options.model || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+	const apiKey = process.env.GEMINI_API_KEY || process.env.gemini_api_key;
+	const modelName =
+		options.model ||
+		process.env.GEMINI_MODEL ||
+		process.env.MODEL_NAME ||
+		process.env.model_name ||
+		"gemini-2.5-flash";
 	const maxRetries = Number(process.env.GEMINI_MAX_RETRIES || 2);
 	const timeoutMs = getHttpTimeoutMs('AI_PROVIDER_TIMEOUT_MS', 30000);
 
@@ -96,10 +102,19 @@ export async function runGeminiContent(contents, options = {}) {
 				throw new Error(`Gemini respondio ${response.status}: ${payload?.error?.message || response.statusText}`);
 			}
 
+			const text = getGeminiText(payload);
+			if (!text) {
+				const finishReasons = (payload?.candidates || [])
+					.map((candidate) => candidate?.finishReason)
+					.filter(Boolean)
+					.join(', ');
+				throw new Error(`Gemini respondio sin texto util${finishReasons ? ` (${finishReasons})` : ''}.`);
+			}
+
 			return {
 				provider: "gemini",
 				model: modelName,
-				text: getGeminiText(payload),
+				text,
 				usage: {
 					inputTokens: payload?.usageMetadata?.promptTokenCount || 0,
 					outputTokens: payload?.usageMetadata?.candidatesTokenCount || 0,

@@ -2802,6 +2802,25 @@ async function persistCampaignOutboundMessage({
 				campaignMeta: {
 					campaignId: campaign.id,
 					audienceSource: campaign.audienceSource || 'manual',
+					templateName: campaign.templateName,
+					variables: recipient.variables || {},
+					productName:
+						recipient.variables?.product_name ||
+						recipient.variables?.first_product_name ||
+						null,
+					checkoutUrl:
+						recipient.variables?.checkout_url ||
+						recipient.variables?.abandoned_checkout_url ||
+						null,
+					paymentLink:
+						recipient.variables?.payment_link ||
+						recipient.variables?.gateway_link ||
+						null,
+					orderNumber:
+						recipient.variables?.order_number ||
+						recipient.variables?.last_order_number ||
+						null,
+					totalAmount: recipient.variables?.total_amount || null,
 				}
 			}
 		}
