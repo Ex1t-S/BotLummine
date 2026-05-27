@@ -36,6 +36,23 @@ function formatArrayField(value = [], fallback = 'ninguno') {
 	return Array.isArray(value) && value.length ? value.join(', ') : fallback;
 }
 
+function buildReturnsPolicyBlock(policyConfig = {}) {
+	const returnsPolicy = String(policyConfig?.returns || '').trim();
+	if (!returnsPolicy) {
+		return [
+			'- No hay politica puntual cargada para esta marca.',
+			'- No prometas devolucion, cambio ni reintegro automatico.',
+			'- Pedi el dato faltante y ofrece revision humana si hace falta.'
+		].join('\n');
+	}
+
+	return [
+		`- Politica vigente de la marca: ${returnsPolicy}`,
+		'- Si preguntan por devolucion, cambio, reintegro, defecto o talle/color equivocado, responde segun este texto.',
+		'- No contradigas esta politica ni prometas excepciones no confirmadas.'
+	].join('\n');
+}
+
 function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', businessName = 'la marca', profile = null } = {}) {
 	const insurance = isInsuranceVertical(profile?.vertical);
 	const lines = [
@@ -237,6 +254,7 @@ export function buildPrompt({
 	const businessContext = aiConfig.businessContext || process.env.BUSINESS_CONTEXT || '';
 	const agentName = aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente';
 	const tone = aiConfig.tone || 'amigable_directo';
+	const returnsPolicyBlock = buildReturnsPolicyBlock(aiConfig.policyConfig || {});
 	const aiProfile = resolveAiProfile({ workspaceConfig, businessName, businessContext });
 	const verticalProfile = getAiVerticalProfile(aiProfile);
 	const isInsurance = isInsuranceVertical(aiProfile);
@@ -279,6 +297,7 @@ export function buildPrompt({
 		`DATOS DEL CLIENTE:\n- Nombre: ${customerContext.name || contactName || 'Cliente'}\n- WhatsApp: ${customerContext.waId || 'No informado'}`,
 		conversationSummary ? `RESUMEN DEL CHAT:\n${conversationSummary}` : '',
 		buildStateBlock(conversationState, { useStoreCommerceContext }),
+		`CAMBIOS Y DEVOLUCIONES:\n${returnsPolicyBlock}`,
 		`VERTICAL: ${verticalProfile.label}`,
 		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName, profile: verticalProfile })}`,
 		useCommerceContext ? `PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}` : '',

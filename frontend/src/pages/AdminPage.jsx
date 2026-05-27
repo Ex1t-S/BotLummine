@@ -69,6 +69,10 @@ const EMPTY_PAYMENT_FORM = {
 	transferExtra: ''
 };
 
+const EMPTY_POLICY_FORM = {
+	returns: ''
+};
+
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || import.meta.env.VITE_FACEBOOK_APP_ID || '';
 const META_GRAPH_VERSION = import.meta.env.VITE_META_GRAPH_VERSION || import.meta.env.VITE_WHATSAPP_GRAPH_VERSION || 'v25.0';
 const WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || '';
@@ -249,6 +253,12 @@ function mapPaymentForm(workspace) {
 		transferAlias: fieldValue(transfer.alias),
 		transferCbu: fieldValue(transfer.cbu),
 		transferExtra: fieldValue(transfer.extra)
+	};
+}
+
+function mapPolicyForm(workspace) {
+	return {
+		returns: fieldValue(workspace?.aiConfig?.policyConfig?.returns)
 	};
 }
 
@@ -631,6 +641,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [workspaceForm, setWorkspaceForm] = useState(mapWorkspaceForm(user?.workspace || null));
 	const [workspaceCreateForm, setWorkspaceCreateForm] = useState(EMPTY_WORKSPACE_FORM);
 	const [paymentForm, setPaymentForm] = useState(EMPTY_PAYMENT_FORM);
+	const [policyForm, setPolicyForm] = useState(EMPTY_POLICY_FORM);
 	const [users, setUsers] = useState([]);
 	const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
 	const [channelForm, setChannelForm] = useState(EMPTY_CHANNEL_FORM);
@@ -710,6 +721,7 @@ export default function AdminPage({ defaultTab = '' }) {
 		setWorkspace(nextWorkspace);
 		setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 		setPaymentForm(mapPaymentForm(nextWorkspace));
+		setPolicyForm(mapPolicyForm(nextWorkspace));
 		setUsers(usersRes.data.users || []);
 		setCatalogStatus(catalogRes?.data?.catalog || null);
 		setFeatureFlags(featureFlagsRes?.data?.flags || FALLBACK_FEATURE_FLAGS);
@@ -926,6 +938,9 @@ export default function AdminPage({ defaultTab = '' }) {
 					extra: paymentForm.transferExtra
 				}
 			},
+			policyConfig: {
+				returns: policyForm.returns
+			},
 			...extra
 		};
 	}
@@ -938,6 +953,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			setWorkspace(nextWorkspace);
 			setWorkspaceForm(mapWorkspaceForm(nextWorkspace));
 			setPaymentForm(mapPaymentForm(nextWorkspace));
+			setPolicyForm(mapPolicyForm(nextWorkspace));
 			await refreshMe();
 			showNotice(successMessage);
 		} catch (err) {
@@ -998,6 +1014,11 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function handleSavePayment(event) {
 		event.preventDefault();
 		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Datos de pago guardados.');
+	}
+
+	async function handleSaveReturnsPolicy(event) {
+		event.preventDefault();
+		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Politica de devolucion guardada.');
 	}
 
 	async function handleSaveAutoMenu(event) {
@@ -1785,6 +1806,24 @@ export default function AdminPage({ defaultTab = '' }) {
 							<Input label="CBU / CVU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
 							<Textarea label="Texto extra para transferencia" value={paymentForm.transferExtra} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferExtra: value }))} />
 							<button type="submit" disabled={saving}>Guardar datos de pago</button>
+						</form>
+					</section>
+				) : null}
+
+				{activeTab === 'content' ? (
+					<section className="tenant-admin-panel">
+						<SectionIntro
+							title="Politica de devolucion"
+							description="Carga como funciona la devolucion o cambio en esta marca para que la asesora responda con ese criterio."
+						/>
+						<form className="tenant-admin-grid" onSubmit={handleSaveReturnsPolicy}>
+							<Textarea
+								label="Cambios y devoluciones"
+								value={policyForm.returns}
+								rows={5}
+								onChange={(value) => setPolicyForm((cur) => ({ ...cur, returns: value }))}
+							/>
+							<button type="submit" disabled={saving}>Guardar politica de devolucion</button>
 						</form>
 					</section>
 				) : null}

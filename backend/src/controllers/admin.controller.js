@@ -1589,7 +1589,7 @@ export async function updateWorkspace(req, res, next) {
 				aiCreateData.paymentConfig = parseJsonObject(ai.paymentConfig, null);
 			}
 
-			if (platformAdmin && hasOwn(ai, 'policyConfig')) {
+			if (hasOwn(ai, 'policyConfig')) {
 				aiUpdateData.policyConfig = parseJsonObject(ai.policyConfig, null);
 				aiCreateData.policyConfig = parseJsonObject(ai.policyConfig, null);
 			}
