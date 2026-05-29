@@ -66,7 +66,8 @@ const EMPTY_PAYMENT_FORM = {
 	transferHolder: '',
 	transferAlias: '',
 	transferCbu: '',
-	transferExtra: ''
+	transferExtra: '',
+	paymentProofForwardPhone: ''
 };
 
 const EMPTY_POLICY_FORM = {
@@ -252,7 +253,8 @@ function mapPaymentForm(workspace) {
 		transferHolder: fieldValue(transfer.holder),
 		transferAlias: fieldValue(transfer.alias),
 		transferCbu: fieldValue(transfer.cbu),
-		transferExtra: fieldValue(transfer.extra)
+		transferExtra: fieldValue(transfer.extra),
+		paymentProofForwardPhone: fieldValue(transfer.paymentProofForwardPhone)
 	};
 }
 
@@ -935,7 +937,8 @@ export default function AdminPage({ defaultTab = '' }) {
 					holder: paymentForm.transferHolder,
 					alias: paymentForm.transferAlias,
 					cbu: paymentForm.transferCbu,
-					extra: paymentForm.transferExtra
+					extra: paymentForm.transferExtra,
+					paymentProofForwardPhone: paymentForm.paymentProofForwardPhone
 				}
 			},
 			policyConfig: {
@@ -1804,6 +1807,7 @@ export default function AdminPage({ defaultTab = '' }) {
 							<Input label="Titular de la cuenta" value={paymentForm.transferHolder} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferHolder: value }))} />
 							<Input label="Alias" value={paymentForm.transferAlias} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferAlias: value }))} />
 							<Input label="CBU / CVU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
+							<Input label="Reenviar comprobantes a" value={paymentForm.paymentProofForwardPhone} placeholder="54911..." onChange={(value) => setPaymentForm((cur) => ({ ...cur, paymentProofForwardPhone: value }))} />
 							<Textarea label="Texto extra para transferencia" value={paymentForm.transferExtra} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferExtra: value }))} />
 							<button type="submit" disabled={saving}>Guardar datos de pago</button>
 						</form>

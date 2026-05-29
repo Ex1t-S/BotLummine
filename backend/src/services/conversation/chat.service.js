@@ -53,6 +53,7 @@ import {
 	syncHumanHandoff,
 } from './menu-flow.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
+import { maybeForwardPaymentProof } from './payment-proof-forwarding.service.js';
 import { buildMenuAssistantContext } from '../whatsapp/whatsapp-menu.service.js';
 import {
 	DEFAULT_WORKSPACE_ID,
@@ -1259,11 +1260,38 @@ export async function processInboundMessage({
 
 	if (detectedPaymentProof) {
 		const ack = PAYMENT_REVIEW_ACK;
+		const paymentProofForward = await maybeForwardPaymentProof({
+			workspaceId: resolvedWorkspaceId,
+			transportMode,
+			messageType,
+			rawPayload,
+			attachmentMeta,
+			customerPhone: normalizedWaId,
+			customerName: contactName || freshConversation.contact?.name || '',
+			orderNumber:
+				explicitOrderNumber ||
+				liveOrderContext?.orderNumber ||
+				enrichedState?.lastOrderNumber ||
+				currentState?.lastOrderNumber ||
+				'',
+		}).catch((error) => {
+			logger.warn('payment_proof.forward_unhandled_error', {
+				workspaceId: resolvedWorkspaceId,
+				conversationId: freshConversation.id,
+				waId: maskPhone(normalizedWaId),
+				error: error?.message || error,
+			});
+			return {
+				ok: false,
+				error: error?.message || String(error || ''),
+			};
+		});
 		trace = {
 			...trace,
 			assistantMessage: ack,
 			provider: 'system',
 			model: 'payment-proof-router',
+			paymentProofForward,
 			shouldReply: false,
 		};
 
@@ -1274,7 +1302,7 @@ export async function processInboundMessage({
 			aiMeta: {
 				provider: 'system',
 				model: 'payment-proof-router',
-				raw: { detectedPaymentProof: true }
+				raw: { detectedPaymentProof: true, paymentProofForward }
 			}
 		});
 
