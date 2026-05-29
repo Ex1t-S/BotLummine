@@ -32,6 +32,15 @@ function attachmentLooksLikeFile({ messageType = 'text', rawPayload = null } = {
 	return typeLooksLikeAttachment || mime.includes('pdf') || mime.includes('image');
 }
 
+function isOnlyAttachmentPlaceholder(text = '') {
+	return /^\[(imagen|documento|archivo)\s+recibid[oa]/i.test(String(text || '').trim());
+}
+
+function attachmentClassificationRejectsPaymentProof(attachmentClassification = null) {
+	const kind = String(attachmentClassification?.kind || '').trim();
+	return ['return_evidence', 'shipping_label', 'product_photo', 'other'].includes(kind);
+}
+
 export const PAYMENT_REVIEW_ACK =
 	'Gracias, ya recibimos el comprobante. Lo dejamos para revision de pago y seguimos por aca cuando este verificado.';
 
@@ -44,6 +53,10 @@ export function isPaymentProofMessage({
 	attachmentClassification = null
 } = {}) {
 	const text = normalizeText(body);
+	const hasAttachment = attachmentLooksLikeFile({ messageType, rawPayload });
+	const paymentContext = recentConversationLooksLikePayment(recentMessages, currentState);
+	const classificationKind = String(attachmentClassification?.kind || '').trim();
+	const classificationConfidence = Number(attachmentClassification?.confidence || 0);
 
 	const textLooksLikeProof =
 		/(ya transferi|ya transferí|te transferi|te transferí|te adjunto comprobante|te mando comprobante|te paso comprobante|adjunto el comprobante|ahi te mande el comprobante|ahí te mandé el comprobante|comprobante de pago|ticket de pago|acuse de transferencia)/.test(
@@ -55,8 +68,17 @@ export function isPaymentProofMessage({
 	}
 
 	if (
-		attachmentClassification?.kind === 'payment_proof' &&
-		Number(attachmentClassification?.confidence || 0) >= 0.72
+		classificationKind === 'payment_proof' &&
+		classificationConfidence >= (paymentContext ? 0.55 : 0.72)
+	) {
+		return true;
+	}
+
+	if (
+		hasAttachment &&
+		paymentContext &&
+		isOnlyAttachmentPlaceholder(text) &&
+		!attachmentClassificationRejectsPaymentProof(attachmentClassification)
 	) {
 		return true;
 	}

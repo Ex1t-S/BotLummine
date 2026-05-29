@@ -76,8 +76,8 @@ import {
 	shouldTreatAsPreSaleObjection,
 } from './conversation-signals.service.js';
 
-const AUTO_REPLY_COOLDOWN_MS = Number(process.env.AI_REPLY_COOLDOWN_MS || 60_000);
-const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_MS || 15_000);
+const AUTO_REPLY_COOLDOWN_MS = Number(process.env.AI_REPLY_COOLDOWN_MS || 10_000);
+const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_MS || 5_000);
 const pendingAutoReplyTimers = new Map();
 let pendingAutoReplySweepStarted = false;
 
