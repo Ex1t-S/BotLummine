@@ -41,6 +41,17 @@ function attachmentClassificationRejectsPaymentProof(attachmentClassification = 
 	return ['return_evidence', 'shipping_label', 'product_photo', 'other'].includes(kind);
 }
 
+function conversationIsActiveNonPaymentSupportCase(currentState = {}) {
+	if (!currentState?.needsHuman) return false;
+	const reason = normalizeText(currentState.handoffReason || '');
+	return [
+		'return_exchange',
+		'requested_human',
+		'unable_to_continue',
+		'complaint',
+	].includes(reason);
+}
+
 export const PAYMENT_REVIEW_ACK =
 	'Gracias, ya recibimos el comprobante. Lo dejamos para revision de pago y seguimos por aca cuando este verificado.';
 
@@ -71,6 +82,14 @@ export function isPaymentProofMessage({
 		classificationKind === 'payment_proof' &&
 		classificationConfidence >= (paymentContext ? 0.55 : 0.72)
 	) {
+		if (
+			!paymentContext &&
+			conversationIsActiveNonPaymentSupportCase(currentState) &&
+			isOnlyAttachmentPlaceholder(text)
+		) {
+			return false;
+		}
+
 		return true;
 	}
 
