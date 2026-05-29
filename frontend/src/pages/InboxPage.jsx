@@ -15,7 +15,7 @@ import {
 	RotateCcw,
 	UserRound,
 } from 'lucide-react';
-import api, { createApiEventSource, resolveApiUrl } from '../lib/api.js';
+import api, { buildApiUrl, createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
 import AiChatInput from '../components/ui/ai-chat-input';
 import MessageConversation from '../components/ui/messaging-conversation';
@@ -257,6 +257,10 @@ function resolveMessageAttachmentUrl(message = {}) {
 			resolved,
 			typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
 		);
+
+		if (url.pathname.startsWith('/api/media/inbox/')) {
+			return buildApiUrl(`${url.pathname.replace(/^\/api\/+/, '')}${url.search || ''}`);
+		}
 
 		return url.toString();
 	} catch {
