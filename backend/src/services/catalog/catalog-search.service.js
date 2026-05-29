@@ -446,6 +446,9 @@ function formatPrice(value) {
 
 export function detectRequestedSignals(query = '', interestedProducts = [], { aiProfile = '' } = {}) {
 	const normalizedQuery = normalizeText(query);
+	const attachmentPlaceholder = /^\[(imagen|documento|audio|video|sticker|archivo)\s+recibid[oa]/i.test(
+		String(query || '').trim()
+	);
 	const terms = [
 		...new Set([
 			...splitTerms(query),
@@ -465,7 +468,7 @@ export function detectRequestedSignals(query = '', interestedProducts = [], { ai
 		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1|5x2|cinco por dos)/i.test(normalizedQuery),
 		asksPrice: /(precio|cuanto|sale|valor)/i.test(normalizedQuery),
 		asksLink: /(pasame|mandame|enviame).*(link|url)|\b(link|url|web|tienda|comprar)\b/i.test(normalizedQuery),
-		asksImage: /(foto|fotos|imagen|imagenes|video|ver como queda|como se ve|me lo mostras|me la mostras|tenes foto|tenes imagen)/i.test(normalizedQuery),
+		asksImage: !attachmentPlaceholder && /(foto|fotos|imagen|imagenes|video|ver como queda|como se ve|me lo mostras|me la mostras|tenes foto|tenes imagen)/i.test(normalizedQuery),
 		asksComparison: /(cual|conviene|mejor|diferencia|compar)/i.test(normalizedQuery),
 		hasVariantSpecificity: /(talle|medida|size|xl|xxl|xxxl|color|negro|blanco|beige|nude|rosa|gris|azul|verde|bordo)/i.test(normalizedQuery)
 	};

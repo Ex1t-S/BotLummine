@@ -15,6 +15,12 @@ function normalizeText(value = '') {
 		.trim();
 }
 
+function isInboundAttachmentPlaceholder(messageBody = '') {
+	return /^\[(imagen|documento|audio|video|sticker|archivo)\s+recibid[oa]/i.test(
+		String(messageBody || '').trim()
+	);
+}
+
 function asArray(value) {
 	return Array.isArray(value) ? value : [];
 }
@@ -53,6 +59,10 @@ function detectMood(messageBody = '', currentState = {}) {
 }
 
 function detectBuyingIntent(messageBody = '', currentState = {}) {
+	if (isInboundAttachmentPlaceholder(messageBody)) {
+		return currentState?.buyingIntentLevel || 'low';
+	}
+
 	const text = normalizeText(messageBody);
 	if (/(lo quiero|lo compro|pasame el link|mandame el link|como compro|como pago|guiame|quiero comprar)/i.test(text)) {
 		return 'high';
@@ -76,6 +86,8 @@ function detectSalesStage({ intent, messageBody, currentState = {}, greetingOnly
 }
 
 function detectRequestedAction(messageBody = '', greetingOnly = false) {
+	if (isInboundAttachmentPlaceholder(messageBody)) return 'GENERAL';
+
 	const text = normalizeText(messageBody);
 	if (greetingOnly) return 'GREETING';
 	if (/(foto|fotos|imagen|imagenes|video|ver como queda|como se ve|me lo mostras|me la mostras|tenes foto|tenes imagen)/i.test(text)) return 'ASK_IMAGE';

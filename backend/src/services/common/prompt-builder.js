@@ -301,7 +301,7 @@ export function buildPrompt({
 		`VERTICAL: ${verticalProfile.label}`,
 		`POLITICA DE RESPUESTA:\n${buildPolicyBlock(responsePolicy, { agentName, businessName, profile: verticalProfile })}`,
 		useCommerceContext ? `PLAN COMERCIAL:\n${buildCommercialPlanBlock(commercialPlan)}` : '',
-		'REGLA GLOBAL DE IMAGENES:\n- No envies ni prometas fotos, imagenes, videos, adjuntos ni URLs directas a imagenes.\n- Si el cliente pide ver un producto, usa solamente el link real del producto confirmado. Si no hay link confirmado, pedi que aclare de que producto habla o deriva.',
+		'REGLA GLOBAL DE IMAGENES:\n- No envies ni prometas fotos, imagenes, videos, adjuntos ni URLs directas a imagenes.\n- Si el cliente pide ver un producto, usa solamente el link real del producto confirmado. Si no hay link confirmado, pedi que aclare de que producto habla o deriva.\n- Si el ultimo mensaje es un marcador como [Imagen recibida], [Documento recibido], [Audio recibido], [Video recibido] o [Sticker recibido], significa que el cliente envio un adjunto: no respondas como si hubiera pedido imagenes.',
 		liveOrderContextEnabled
 			? `PEDIDO REAL / TRACKING:\n${formatLiveOrderContext(liveOrderContext)}`
 			: 'REGLA DE PEDIDO:\n- Ignora cualquier pedido previo salvo que la accion permitida sea de seguimiento de pedido.',

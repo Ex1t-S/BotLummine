@@ -102,6 +102,7 @@ function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 function isCatalogFollowUpRequest(text = '') {
 	const normalized = normalizeText(text);
 	if (!normalized || normalized.length > 90) return false;
+	if (/^\[(imagen|documento|audio|video|sticker|archivo)\s+recibid[oa]/i.test(normalized)) return false;
 	return /(link|url|web|comprar|foto|fotos|imagen|imagenes|video|mandame|enviame|pasame|ver|mostrame|muestrame)/i.test(normalized);
 }
 
