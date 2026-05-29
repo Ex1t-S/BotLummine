@@ -258,10 +258,6 @@ function resolveMessageAttachmentUrl(message = {}) {
 			typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
 		);
 
-		if (typeof window !== 'undefined' && url.pathname.startsWith('/api/media/inbox/')) {
-			return `${window.location.origin}${url.pathname}`;
-		}
-
 		return url.toString();
 	} catch {
 		return resolved;
@@ -963,6 +959,19 @@ export default function InboxPage() {
 			const eventQueue = payload?.queue || null;
 			const activeConversationId = selectedConversationIdRef.current;
 			const eventConversationId = payload?.conversationId || null;
+
+			if (payload?.action === 'queue-updated' && eventConversationId) {
+				queryClient.invalidateQueries({
+					queryKey: ['dashboard', 'inbox'],
+				});
+
+				if (activeConversationId === eventConversationId) {
+					queryClient.invalidateQueries({
+						queryKey: queryKeys.conversation(activeConversationId),
+					});
+				}
+				return;
+			}
 
 			if (payload?.action === 'read' && eventConversationId) {
 				updateInboxContactCache(eventConversationId, {

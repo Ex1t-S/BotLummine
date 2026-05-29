@@ -860,6 +860,58 @@ export async function processInboundMessage({
 		};
 	}
 
+	const attachmentClassification = await classifyInboundAttachment({
+		messageType,
+		messageBody: effectiveMessageBody,
+		rawPayload,
+		attachmentMeta,
+		currentState,
+		recentMessages,
+		waId: normalizedWaId,
+	});
+
+	const memoryPatch = analyzeConversationTurn({
+		messageBody: effectiveMessageBody,
+		intent,
+		currentState,
+		recentMessages,
+		campaignContext: campaignAssistantContext,
+		aiProfile,
+	});
+
+	if (intent === 'human_handoff') {
+		memoryPatch.needsHuman = true;
+		memoryPatch.handoffReason = 'requested_human';
+	}
+
+	const detectedPaymentProof = isPaymentProofMessage({
+		messageType,
+		body: effectiveMessageBody,
+		rawPayload,
+		currentState,
+		recentMessages,
+		attachmentClassification
+	}) || looksLikePaymentClarifierConfirmation({
+		text: effectiveMessageBody,
+		lastOutbound,
+	});
+
+	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
+		messageType,
+		body: effectiveMessageBody,
+		rawPayload,
+		currentState,
+		recentMessages,
+		attachmentClassification
+	});
+
+	let queueDecision = resolveConversationQueue({
+		currentConversation: freshConversation,
+		memoryPatch,
+		detectedPaymentProof,
+		aiDeclaredHandoff: false
+	});
+
 	const replyGate = resolveReplyGate({
 		workspaceId: resolvedWorkspaceId,
 		messageBody: effectiveMessageBody,
@@ -872,7 +924,27 @@ export async function processInboundMessage({
 		campaignAssistantContext,
 	});
 
-	if (replyGate.action === 'suppress' && !isCampaignReply) {
+	const handoffExpiredNewTopic = replyGate.reason === 'handoff_expired_new_topic';
+
+	if (handoffExpiredNewTopic && !detectedPaymentProof) {
+		memoryPatch.needsHuman = false;
+		memoryPatch.handoffReason = null;
+		queueDecision = {
+			queue: 'AUTO',
+			aiEnabled: true,
+		};
+	}
+
+	if (menuDecision?.queueDecisionOverride && !detectedPaymentProof) {
+		queueDecision = menuDecision.queueDecisionOverride;
+	}
+
+	if (
+		!detectedPaymentProof &&
+		!ambiguousPaymentAttachment &&
+		replyGate.action === 'suppress' &&
+		!isCampaignReply
+	) {
 		trace = {
 			...trace,
 			intent,
@@ -892,7 +964,7 @@ export async function processInboundMessage({
 		return { conversation: freshConversation, trace };
 	}
 
-	if (replyGate.action === 'fixed_reply') {
+	if (!detectedPaymentProof && !ambiguousPaymentAttachment && replyGate.action === 'fixed_reply') {
 		const gateStatePatch = {
 			customerName: contactName || normalizedWaId,
 			lastIntent: intent,
@@ -972,7 +1044,13 @@ export async function processInboundMessage({
 		return { conversation: freshConversation, trace };
 	}
 
-	if (!bypassResponseCooldown && transportMode === 'live' && AUTO_REPLY_COOLDOWN_MS > 0) {
+	if (
+		!detectedPaymentProof &&
+		!ambiguousPaymentAttachment &&
+		!bypassResponseCooldown &&
+		transportMode === 'live' &&
+		AUTO_REPLY_COOLDOWN_MS > 0
+	) {
 		scheduleAutoReplyCooldown({
 			conversationId: freshConversation.id,
 			workspaceId: resolvedWorkspaceId,
@@ -998,75 +1076,6 @@ export async function processInboundMessage({
 		};
 
 		return { conversation: freshConversation, trace };
-	}
-
-	const handoffExpiredNewTopic = replyGate.reason === 'handoff_expired_new_topic';
-	const attachmentClassification = await classifyInboundAttachment({
-		messageType,
-		messageBody: effectiveMessageBody,
-		rawPayload,
-		attachmentMeta,
-		currentState,
-		recentMessages,
-		waId: normalizedWaId,
-	});
-
-	const memoryPatch = analyzeConversationTurn({
-		messageBody: effectiveMessageBody,
-		intent,
-		currentState,
-		recentMessages,
-		campaignContext: campaignAssistantContext,
-		aiProfile,
-	});
-
-	if (intent === 'human_handoff') {
-		memoryPatch.needsHuman = true;
-		memoryPatch.handoffReason = 'requested_human';
-	}
-
-	if (handoffExpiredNewTopic) {
-		memoryPatch.needsHuman = false;
-		memoryPatch.handoffReason = null;
-	}
-
-	const detectedPaymentProof = isPaymentProofMessage({
-		messageType,
-		body: effectiveMessageBody,
-		rawPayload,
-		currentState,
-		recentMessages,
-		attachmentClassification
-	}) || looksLikePaymentClarifierConfirmation({
-		text: effectiveMessageBody,
-		lastOutbound,
-	});
-
-	const ambiguousPaymentAttachment = isAmbiguousPaymentAttachment({
-		messageType,
-		body: effectiveMessageBody,
-		rawPayload,
-		currentState,
-		recentMessages,
-		attachmentClassification
-	});
-
-	let queueDecision = resolveConversationQueue({
-		currentConversation: freshConversation,
-		memoryPatch,
-		detectedPaymentProof,
-		aiDeclaredHandoff: false
-	});
-
-	if (handoffExpiredNewTopic && !detectedPaymentProof) {
-		queueDecision = {
-			queue: 'AUTO',
-			aiEnabled: true,
-		};
-	}
-
-	if (menuDecision?.queueDecisionOverride && !detectedPaymentProof) {
-		queueDecision = menuDecision.queueDecisionOverride;
 	}
 
 	const intentResult = await resolveIntentAction({
@@ -1135,6 +1144,21 @@ export async function processInboundMessage({
 			lastMessageAt: new Date()
 		}
 	});
+
+	if (
+		freshConversation.queue !== queueDecision.queue ||
+		freshConversation.aiEnabled !== queueDecision.aiEnabled
+	) {
+		publishInboxEvent({
+			workspaceId: resolvedWorkspaceId,
+			scope: 'conversation',
+			action: 'queue-updated',
+			conversationId: freshConversation.id,
+			queue: queueDecision.queue,
+			previousQueue: freshConversation.queue,
+			aiEnabled: queueDecision.aiEnabled,
+		});
+	}
 
 	const enrichedState = {
 		...currentState,
