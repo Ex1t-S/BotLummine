@@ -67,7 +67,7 @@ Schedules sugeridos:
 - Compactacion de payloads crudos: manual o cron controlado con `npm --prefix backend run raw-payloads:compact:apply`.
 
 Para Neon serverless, no dejar un scheduler residente haciendo polling desde el web server. Mantener
-`CAMPAIGN_DISPATCHER_ENABLED=false` en el servicio web cuando exista un cron, y ejecutar
+`CAMPAIGN_DISPATCHER_ENABLED=false` o sin definir en el servicio web, y ejecutar
 `npm run jobs:campaign-dispatch` como Railway Cron cada 1 hora si se necesitan campanias,
 carritos, pagos pendientes o notificaciones automaticas. Esto evita que `/api/health` y el proceso web
 mantengan compute de Postgres activo cuando no hay trafico real.
@@ -146,10 +146,36 @@ Seguridad y observabilidad:
 
 Campanias:
 
-- `CAMPAIGN_DISPATCHER_ENABLED=true` o sin definir hasta crear Railway Cron; luego usar `false` en el servicio web.
+- `CAMPAIGN_DISPATCHER_ENABLED=false` o sin definir en el servicio web; usar `true` solo si se acepta polling permanente.
 - `CAMPAIGN_DISPATCHER_INTERVAL_MS`
 - `CAMPAIGN_HEADER_MEDIA_MAX_BYTES`
 - `OUTBOUND_MEDIA_MAX_BYTES`
+
+## Railway Cron Para Automatizaciones
+
+Crear un servicio Cron separado apuntando al mismo repositorio y usar:
+
+```bash
+npm run jobs:campaign-dispatch
+```
+
+Frecuencia recomendada:
+
+```txt
+0 * * * *
+```
+
+Variables en el servicio web:
+
+- `CAMPAIGN_DISPATCHER_ENABLED=false` o sin definir.
+- `HEALTHCHECK_DB=false` o sin definir.
+- `AI_REPLY_COOLDOWN_SWEEP_MS=0` o sin definir.
+
+Variables en el servicio Cron:
+
+- Usar la misma `DATABASE_URL` y secretos del backend.
+- No definir `PORT`; el job termina solo.
+- No definir `CAMPAIGN_DISPATCHER_ENABLED`; el cron ejecuta el job una vez y sale.
 
 ## Seguridad Operativa
 

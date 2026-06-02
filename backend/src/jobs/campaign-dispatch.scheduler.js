@@ -22,7 +22,7 @@ function normalizeIntervalMs(value) {
 
 function shouldStartScheduler() {
 	if (process.env.NODE_ENV === 'test') return false;
-	return normalizeBoolean(process.env.CAMPAIGN_DISPATCHER_ENABLED, true);
+	return normalizeBoolean(process.env.CAMPAIGN_DISPATCHER_ENABLED, false);
 }
 
 async function runScheduledTick() {
