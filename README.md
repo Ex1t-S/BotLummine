@@ -67,7 +67,7 @@ Schedules sugeridos:
 - Compactacion de payloads crudos: manual o cron controlado con `npm --prefix backend run raw-payloads:compact:apply`.
 
 Para Neon serverless, no dejar un scheduler residente haciendo polling desde el web server. Mantener
-`CAMPAIGN_DISPATCHER_ENABLED=false` o sin definir en el servicio web, y ejecutar
+`CAMPAIGN_DISPATCHER_ENABLED=true` o sin definir en el servicio web hasta crear el cron, y ejecutar
 `npm run jobs:campaign-dispatch` como Railway Cron cada 1 hora si se necesitan campanias,
 carritos, pagos pendientes o notificaciones automaticas. Esto evita que `/api/health` y el proceso web
 mantengan compute de Postgres activo cuando no hay trafico real.
@@ -146,7 +146,7 @@ Seguridad y observabilidad:
 
 Campanias:
 
-- `CAMPAIGN_DISPATCHER_ENABLED=false` o sin definir en el servicio web; usar `true` solo si se acepta polling permanente.
+- `CAMPAIGN_DISPATCHER_ENABLED=true` o sin definir temporalmente; cambiar a `false` cuando exista Railway Cron.
 - `CAMPAIGN_DISPATCHER_INTERVAL_MS`
 - `CAMPAIGN_HEADER_MEDIA_MAX_BYTES`
 - `OUTBOUND_MEDIA_MAX_BYTES`
@@ -167,7 +167,7 @@ Frecuencia recomendada:
 
 Variables en el servicio web:
 
-- `CAMPAIGN_DISPATCHER_ENABLED=false` o sin definir.
+- `CAMPAIGN_DISPATCHER_ENABLED=true` o sin definir hasta crear el cron; luego cambiar a `false`.
 - `HEALTHCHECK_DB=false` o sin definir.
 - `AI_REPLY_COOLDOWN_SWEEP_MS=0` o sin definir.
 
