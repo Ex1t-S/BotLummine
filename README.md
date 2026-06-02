@@ -61,10 +61,20 @@ npm run jobs:diagnose
 
 Schedules sugeridos:
 
-- Campanias: cada 5 minutos.
+- Campanias, carritos, pagos pendientes y envios: cada 1 hora.
 - Enbox sync: cada 30 minutos.
 - Diagnostico: cada 6 horas.
 - Compactacion de payloads crudos: manual o cron controlado con `npm --prefix backend run raw-payloads:compact:apply`.
+
+Para Neon serverless, no dejar un scheduler residente haciendo polling desde el web server. Mantener
+`CAMPAIGN_DISPATCHER_ENABLED=false` en el servicio web cuando exista un cron, y ejecutar
+`npm run jobs:campaign-dispatch` como Railway Cron cada 1 hora si se necesitan campanias,
+carritos, pagos pendientes o notificaciones automaticas. Esto evita que `/api/health` y el proceso web
+mantengan compute de Postgres activo cuando no hay trafico real.
+
+Tambien mantener `AI_REPLY_COOLDOWN_SWEEP_MS=0` o sin definir en el servicio web. Las respuestas con
+cooldown siguen funcionando con timers en memoria cuando entra un webhook; el sweep solo sirve para
+recuperar respuestas pendientes despues de reinicios, y si queda activo consulta Postgres en bucle.
 
 ## Variables De Entorno
 
@@ -92,6 +102,7 @@ IA:
 - `OPENAI_MODEL`
 - `MAX_CONTEXT_MESSAGES`
 - `AI_AUTOREPLY_ENABLED`
+- `AI_REPLY_COOLDOWN_SWEEP_MS=0` para evitar polling permanente en Neon; usar un valor positivo solo si se acepta compute continuo.
 
 WhatsApp / Meta:
 
@@ -135,7 +146,7 @@ Seguridad y observabilidad:
 
 Campanias:
 
-- `CAMPAIGN_DISPATCHER_ENABLED=true`
+- `CAMPAIGN_DISPATCHER_ENABLED=true` o sin definir hasta crear Railway Cron; luego usar `false` en el servicio web.
 - `CAMPAIGN_DISPATCHER_INTERVAL_MS`
 - `CAMPAIGN_HEADER_MEDIA_MAX_BYTES`
 - `OUTBOUND_MEDIA_MAX_BYTES`

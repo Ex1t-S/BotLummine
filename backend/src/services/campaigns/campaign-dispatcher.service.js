@@ -44,18 +44,18 @@ export async function executeCampaignDispatcherTick() {
 	try {
 		const schedules = await runTaskIfDue(
 			'schedules',
-			normalizeIntervalMs('CAMPAIGN_SCHEDULE_INTERVAL_MINUTES', 5, 5),
+			normalizeIntervalMs('CAMPAIGN_SCHEDULE_INTERVAL_MINUTES', 60, 60),
 			() => processDueCampaignSchedules()
 		);
 		const abandonedCartAutomations = await processAutomaticAbandonedCartAutomations();
 		const pendingPaymentAutomations = await runTaskIfDue(
 			'pending_payments',
-			normalizeIntervalMs('PENDING_PAYMENT_AUTOMATION_INTERVAL_MINUTES', 15, 5),
+			normalizeIntervalMs('PENDING_PAYMENT_AUTOMATION_INTERVAL_MINUTES', 60, 60),
 			() => processAutomaticPendingPaymentAutomations()
 		);
 		const shipmentNotifications = await runTaskIfDue(
 			'shipment_notifications',
-			normalizeIntervalMs('SHIPMENT_NOTIFICATION_INTERVAL_MINUTES', 30, 5),
+			normalizeIntervalMs('SHIPMENT_NOTIFICATION_INTERVAL_MINUTES', 60, 60),
 			() => processAutomaticShipmentNotifications()
 		);
 		const campaigns = await runCampaignDispatchTick();

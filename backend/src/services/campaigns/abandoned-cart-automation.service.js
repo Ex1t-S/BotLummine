@@ -12,10 +12,10 @@ import { filterRecoverableAbandonedCarts } from './campaign-attribution.service.
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
-const DEFAULT_INTERVAL_MINUTES = 30;
+const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_MIN_CART_AGE_MINUTES = 60;
-const DEFAULT_ACTIVE_INTERVAL_MINUTES = 10;
-const DEFAULT_IDLE_INTERVAL_MINUTES = 30;
+const DEFAULT_ACTIVE_INTERVAL_MINUTES = 60;
+const DEFAULT_IDLE_INTERVAL_MINUTES = 60;
 const DEFAULT_DEEP_IDLE_INTERVAL_MINUTES = 60;
 const DEFAULT_FILTERS = {
 	daysBack: 30,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationSetting" (
     "filters" JSONB,
     "variableMapping" JSONB,
     "manualVariables" JSONB,
-    "intervalMinutes" INTEGER NOT NULL DEFAULT 30,
+    "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
     "minCartAgeMinutes" INTEGER NOT NULL DEFAULT 60,
     "lastRunAt" TIMESTAMP(3),
     "lastCampaignId" TEXT,
@@ -152,20 +152,20 @@ function resolveNextIntervalMs(setting = {}, runtimeState = {}) {
 	const activeMinutes = normalizeIntervalMinutes(
 		process.env.ABANDONED_CART_ACTIVE_INTERVAL_MINUTES || setting.intervalMinutes,
 		DEFAULT_ACTIVE_INTERVAL_MINUTES,
-		5,
-		10
+		60,
+		24 * 60
 	);
 	const idleMinutes = normalizeIntervalMinutes(
 		process.env.ABANDONED_CART_IDLE_INTERVAL_MINUTES,
 		DEFAULT_IDLE_INTERVAL_MINUTES,
-		30,
-		60
+		60,
+		24 * 60
 	);
 	const deepIdleMinutes = normalizeIntervalMinutes(
 		process.env.ABANDONED_CART_DEEP_IDLE_INTERVAL_MINUTES,
 		DEFAULT_DEEP_IDLE_INTERVAL_MINUTES,
-		30,
-		120
+		60,
+		24 * 60
 	);
 
 	if (Number(runtimeState.lastProcessed || 0) > 0 || Number(runtimeState.emptyRuns || 0) === 0) {
@@ -631,10 +631,10 @@ export async function runAbandonedCartAutomation({
 	}
 
 	const intervalMs = normalizeIntervalMinutes(
-		process.env.ABANDONED_CART_ACTIVE_INTERVAL_MINUTES || Math.min(Number(setting.intervalMinutes || DEFAULT_ACTIVE_INTERVAL_MINUTES), DEFAULT_ACTIVE_INTERVAL_MINUTES),
+		process.env.ABANDONED_CART_ACTIVE_INTERVAL_MINUTES || setting.intervalMinutes || DEFAULT_ACTIVE_INTERVAL_MINUTES,
 		DEFAULT_ACTIVE_INTERVAL_MINUTES,
-		5,
-		10
+		60,
+		24 * 60
 	) * 60 * 1000;
 	if (!force && setting.lastRunAt && Date.now() - new Date(setting.lastRunAt).getTime() < intervalMs) {
 		return { workspaceId: setting.workspaceId, processed: 0, skipped: true, reason: 'interval' };
