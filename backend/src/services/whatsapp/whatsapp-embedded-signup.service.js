@@ -217,7 +217,7 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 			graphVersion,
 			operation: 'read_phone_number',
 			params: {
-				fields: 'id,display_phone_number,verified_name,code_verification_status,quality_rating',
+				fields: 'id,display_phone_number,verified_name,code_verification_status,quality_rating,whatsapp_business_account{id,name}',
 			},
 		});
 	}
@@ -233,6 +233,20 @@ async function resolvePhoneNumber({ wabaId, phoneNumberId, accessToken, graphVer
 	});
 
 	return Array.isArray(phoneNumbers?.data) ? phoneNumbers.data[0] : null;
+}
+
+async function listPhoneNumbersForWaba({ wabaId, accessToken, graphVersion }) {
+	const phoneNumbers = await graphGet(`/${wabaId}/phone_numbers`, {
+		accessToken,
+		graphVersion,
+		operation: 'list_phone_numbers',
+		params: {
+			fields: 'id,display_phone_number,verified_name,code_verification_status,quality_rating',
+			limit: 200,
+		},
+	});
+
+	return Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : [];
 }
 
 export async function validateWhatsAppChannelAccess({
@@ -251,28 +265,76 @@ export async function validateWhatsAppChannelAccess({
 		throw error;
 	}
 
-	const waba = await graphGet(`/${cleanWabaId}`, {
-		accessToken: cleanAccessToken,
-		graphVersion,
-		operation: 'validate_manual_waba',
-		params: {
-			fields: 'id,name,account_review_status',
-		},
-	});
-	const phoneNumber = await resolvePhoneNumber({
-		wabaId: cleanWabaId,
-		phoneNumberId: cleanPhoneNumberId,
-		accessToken: cleanAccessToken,
-		graphVersion,
-	});
+	let waba = null;
+	let lastError = null;
 
-	if (normalizeString(phoneNumber?.id) !== cleanPhoneNumberId) {
-		const error = new Error('El access token no devolvio el numero de WhatsApp indicado.');
-		error.status = 400;
-		throw error;
+	try {
+		waba = await graphGet(`/${cleanWabaId}`, {
+			accessToken: cleanAccessToken,
+			graphVersion,
+			operation: 'validate_manual_waba',
+			params: {
+				fields: 'id,name,account_review_status',
+			},
+		});
+	} catch (error) {
+		lastError = error;
 	}
 
-	return { waba, phoneNumber };
+	try {
+		const phoneNumbers = await listPhoneNumbersForWaba({
+			wabaId: cleanWabaId,
+			accessToken: cleanAccessToken,
+			graphVersion,
+		});
+		const matchingPhoneNumber =
+			phoneNumbers.find((item) => normalizeString(item?.id) === cleanPhoneNumberId) || null;
+
+		if (matchingPhoneNumber) {
+			return {
+				waba: waba || { id: cleanWabaId },
+				phoneNumber: matchingPhoneNumber,
+			};
+		}
+
+		const error = new Error('El WABA no devolvio el phoneNumberId indicado en /phone_numbers.');
+		error.status = 400;
+		throw error;
+	} catch (error) {
+		lastError = error;
+	}
+
+	try {
+		const phoneNumber = await resolvePhoneNumber({
+			wabaId: cleanWabaId,
+			phoneNumberId: cleanPhoneNumberId,
+			accessToken: cleanAccessToken,
+			graphVersion,
+		});
+		const resolvedPhoneNumberId = normalizeString(phoneNumber?.id);
+		const resolvedWabaId = normalizeString(phoneNumber?.whatsapp_business_account?.id);
+
+		if (resolvedPhoneNumberId !== cleanPhoneNumberId) {
+			const error = new Error('El access token no devolvio el numero de WhatsApp indicado.');
+			error.status = 400;
+			throw error;
+		}
+
+		if (resolvedWabaId && resolvedWabaId !== cleanWabaId) {
+			const error = new Error('El numero de WhatsApp pertenece a otra WABA.');
+			error.status = 400;
+			throw error;
+		}
+
+		return {
+			waba: waba || (resolvedWabaId ? { id: resolvedWabaId } : { id: cleanWabaId }),
+			phoneNumber,
+		};
+	} catch (error) {
+		lastError = error;
+	}
+
+	throw lastError || new Error('No se pudo validar el acceso al canal de WhatsApp.');
 }
 
 async function resolveEmbeddedSignupAssets({
