@@ -7,6 +7,7 @@ import {
 } from '../workspaces/workspace-feature-flags.service.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 
@@ -126,39 +127,8 @@ function normalizeString(value, fallback = '') {
 	return normalized || fallback;
 }
 
-async function resolvePendingPaymentAutomationWorkspaceId(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-
-	if (normalizedWorkspaceId !== DEFAULT_WORKSPACE_ID) {
-		return normalizedWorkspaceId;
-	}
-
-	const defaultWorkspace = await prisma.workspace.findUnique({
-		where: { id: normalizedWorkspaceId },
-		select: { id: true },
-	});
-
-	if (defaultWorkspace?.id) {
-		return normalizedWorkspaceId;
-	}
-
-	const workspaceWithOrders = await prisma.customerOrder.findFirst({
-		where: { workspace: { status: 'ACTIVE' } },
-		select: { workspaceId: true },
-		orderBy: { updatedAt: 'desc' },
-	});
-
-	if (workspaceWithOrders?.workspaceId) {
-		return workspaceWithOrders.workspaceId;
-	}
-
-	const activeWorkspace = await prisma.workspace.findFirst({
-		where: { status: 'ACTIVE' },
-		select: { id: true },
-		orderBy: { updatedAt: 'desc' },
-	});
-
-	return activeWorkspace?.id || normalizedWorkspaceId;
+function resolvePendingPaymentAutomationWorkspaceId(workspaceId) {
+	return requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 }
 
 function normalizeBoolean(value) {
@@ -258,8 +228,8 @@ function orderMatchesProductQuery(order = {}, productQuery = '') {
 	);
 }
 
-async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = await resolvePendingPaymentAutomationWorkspaceId(workspaceId);
+async function ensureSetting(workspaceId) {
+	const resolvedWorkspaceId = resolvePendingPaymentAutomationWorkspaceId(workspaceId);
 	let existing = null;
 
 	try {
@@ -288,18 +258,18 @@ async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
 	});
 }
 
-export async function getPendingPaymentAutomationSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getPendingPaymentAutomationSettings({ workspaceId } = {}) {
 	return serializeSetting(await ensureSetting(workspaceId));
 }
 
 export async function updatePendingPaymentAutomationSettings({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	enabled = false,
 	templateId = null,
 	filters = {},
 	variableMapping = undefined,
 } = {}) {
-	const resolvedWorkspaceId = await resolvePendingPaymentAutomationWorkspaceId(workspaceId);
+	const resolvedWorkspaceId = resolvePendingPaymentAutomationWorkspaceId(workspaceId);
 	const nextEnabled = normalizeBoolean(enabled);
 	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId
@@ -512,7 +482,7 @@ async function createAndLaunchAutomationCampaign(setting, orders = [], { launche
 }
 
 export async function runPendingPaymentAutomation({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	force = false,
 	launchedByUserId = null,
 } = {}) {

@@ -15,6 +15,7 @@ import {
 } from '../common/shipping-status.js';
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 
 const DEFAULT_DAYS_BACK = 14;
 const AUTO_LIMIT = 100;
@@ -174,31 +175,8 @@ function normalizeDaysBack(value) {
 	return Math.max(1, Math.min(Number(value || DEFAULT_DAYS_BACK) || DEFAULT_DAYS_BACK, 14));
 }
 
-async function resolveShipmentNotificationWorkspaceId(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-
-	if (normalizedWorkspaceId !== DEFAULT_WORKSPACE_ID) {
-		return normalizedWorkspaceId;
-	}
-
-	const hasDefaultData = await prisma.customerOrder.count({
-		where: { workspaceId: normalizedWorkspaceId },
-		take: 1,
-	});
-
-	if (hasDefaultData) {
-		return normalizedWorkspaceId;
-	}
-
-	const workspaceWithOrders = await prisma.customerOrder.findFirst({
-		where: {
-			workspace: { status: 'ACTIVE' },
-		},
-		select: { workspaceId: true },
-		orderBy: { updatedAt: 'desc' },
-	});
-
-	return workspaceWithOrders?.workspaceId || normalizedWorkspaceId;
+function resolveShipmentNotificationWorkspaceId(workspaceId) {
+	return requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 }
 
 function normalizeMapping(value = {}) {
@@ -378,8 +356,8 @@ function serializeSetting(setting = null) {
 	};
 }
 
-async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
+async function ensureSetting(workspaceId) {
+	const resolvedWorkspaceId = resolveShipmentNotificationWorkspaceId(workspaceId);
 	let existing = null;
 
 	try {
@@ -405,18 +383,18 @@ async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
 	});
 }
 
-export async function getShipmentNotificationSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getShipmentNotificationSettings({ workspaceId } = {}) {
 	return serializeSetting(await ensureSetting(workspaceId));
 }
 
 export async function updateShipmentNotificationSettings({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	enabled = false,
 	templateId = null,
 	variableMapping = {},
 	daysBack = DEFAULT_DAYS_BACK,
 } = {}) {
-	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
+	const resolvedWorkspaceId = resolveShipmentNotificationWorkspaceId(workspaceId);
 	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId
 		? {
@@ -694,14 +672,14 @@ function buildDispatchedOrderWhere({ workspaceId, range, dispatchedOrderRefs = n
 }
 
 export async function listShipmentNotificationCandidates({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	daysBack = DEFAULT_DAYS_BACK,
 	dateFrom = null,
 	dateTo = null,
 	includeNotified = true,
 	limit = 250,
 } = {}) {
-	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
+	const resolvedWorkspaceId = resolveShipmentNotificationWorkspaceId(workspaceId);
 	const range = resolveDateRange({ daysBack, dateFrom, dateTo });
 
 	const shipments = await prisma.enboxShipment.findMany({
@@ -796,7 +774,7 @@ async function createAndLaunchShipmentCampaign({
 	name = null,
 	launchedByUserId = null,
 } = {}) {
-	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
+	const resolvedWorkspaceId = resolveShipmentNotificationWorkspaceId(workspaceId);
 	const template = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 	const usableCandidates = safeArray(candidates).filter((candidate) => !candidate.alreadyNotified);
 
@@ -875,7 +853,7 @@ async function createAndLaunchShipmentCampaign({
 }
 
 export async function sendShipmentNotifications({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateId,
 	candidateKeys = [],
 	variableMapping = null,
@@ -883,7 +861,7 @@ export async function sendShipmentNotifications({
 	dateTo = null,
 	launchedByUserId = null,
 } = {}) {
-	const resolvedWorkspaceId = await resolveShipmentNotificationWorkspaceId(workspaceId);
+	const resolvedWorkspaceId = resolveShipmentNotificationWorkspaceId(workspaceId);
 	if (!(await isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.AUTOMATION_DISPATCH))) {
 		throw new Error('Las automatizaciones estan pausadas para este workspace.');
 	}

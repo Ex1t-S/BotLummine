@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 
 function cleanString(value) {
 	const text = String(value ?? '').trim();
@@ -16,10 +17,10 @@ export function normalizeContactName(value) {
 	return cleanString(value);
 }
 
-export async function findContactByWaId(waId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function findContactByWaId(waId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedWaId = normalizeContactPhone(waId);
 	if (!normalizedWaId) return null;
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 
 	return prisma.contact.findFirst({
 		where: {
@@ -29,9 +30,9 @@ export async function findContactByWaId(waId, { workspaceId = DEFAULT_WORKSPACE_
 	});
 }
 
-export async function findOrCreateContactByWaId({ workspaceId = DEFAULT_WORKSPACE_ID, waId, name = null, phone = null } = {}) {
+export async function findOrCreateContactByWaId({ workspaceId, waId, name = null, phone = null } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedWaId = normalizeContactPhone(waId || phone);
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	if (!normalizedWaId) {
 		throw new Error('findOrCreateContactByWaId requiere waId o phone válido.');
 	}
@@ -41,7 +42,7 @@ export async function findOrCreateContactByWaId({ workspaceId = DEFAULT_WORKSPAC
 		const nextName = normalizeContactName(name) || existing.name;
 		if (nextName !== existing.name) {
 			return prisma.contact.update({
-				where: { id: existing.id },
+				where: workspaceOwnedWhere({ id: existing.id, workspaceId: resolvedWorkspaceId }),
 				data: { name: nextName }
 			});
 		}

@@ -2,11 +2,11 @@
 
 Fecha de inicio: 2026-07-17  
 Rama: `audit/general-improvements-20260717`  
-Estado: iteración P0 local cerrada y validada; producción permanece en modo solo lectura.
+Estado: iteración P0 local de hardening en progreso; producción permanece en modo solo lectura.
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La validación final consolidada dejó Prisma válido, build raíz verde, 45/45 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 49/49 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -642,6 +642,21 @@ flowchart TD
 - Pruebas: Axe pasó de 1 violación seria a 0 en Inicio/Precios/Contacto/Login; 2/2 teclado público y captura 390x844 revisada.
 - Riesgo de deployment: bajo; cambio CSS local al formulario.
 
+### FIND-P0-033
+
+- Título: contactos y automatizaciones inferían un workspace cuando faltaba el scope
+- Área: Backend/Seguridad/Multitenancy
+- Ambiente: local
+- Severidad: High
+- Evidencia: el directorio de contactos usaba `workspace_default` y actualizaba por `id`; pagos pendientes, carritos abandonados y avisos de despacho buscaban datos de cualquier workspace activo cuando el caller no enviaba `workspaceId`.
+- Impacto: un caller incompleto podía leer/crear contactos o ejecutar/configurar una automatización sobre un tenant inferido por actividad reciente.
+- Causa: compatibilidad legacy basada en `DEFAULT_WORKSPACE_ID` dentro de servicios compartidos.
+- Solución: workspace explícito obligatorio antes de Prisma, eliminación de la inferencia global y update de contacto con `id + workspaceId`.
+- Estado: resuelto localmente; los controllers ya pasan el scope autenticado y los jobs enumeran settings por workspace.
+- Archivos: `contact-directory.service.js`, tres servicios de automatización y prueba negativa dedicada.
+- Pruebas: 4/4 negativas específicas, 49/49 unitarias, 140 archivos con sintaxis válida y build raíz verde.
+- Riesgo de deployment: medio; falla cerrado para callers legacy incompletos, por lo que staging debe ejecutar settings/run-now y un tick sintético por workspace.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -664,7 +679,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 140 archivos JS/MJS pasan el chequeo de sintaxis.
-- 45 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios y caché privada de adjuntos.
+- 49 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -696,7 +711,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 140/140 | incluido en build |
-| unit tests | 45/45 | 0,90 s |
+| unit tests | 49/49 | 0,98 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -774,7 +789,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 22. Backlog
 
-P0 local seguro de esta iteración: cerrado. Pendientes condicionados: ampliar el inventario multitenant cuando se coordinen módulos con cambios concurrentes; activar/validar retención de trazas sólo en staging aislado; incorporar lint reproducible y resolver el security audit frontend sin pisar manifests locales del usuario.
+P0 local seguro: build/IA/inbound/outbound/schedules/templates/contactos y automatizaciones prioritarias están endurecidos. Pendientes: continuar el inventario por entidad, eliminar reparaciones DDL en runtime, activar/validar retención de trazas sólo en staging aislado, incorporar lint reproducible y resolver el security audit frontend sin pisar manifests locales del usuario.
 
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
 

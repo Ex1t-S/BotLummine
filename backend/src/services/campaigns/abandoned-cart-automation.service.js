@@ -8,6 +8,7 @@ import {
 	isWorkspaceFeatureEnabled,
 } from '../workspaces/workspace-feature-flags.service.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { filterRecoverableAbandonedCarts } from './campaign-attribution.service.js';
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
@@ -290,39 +291,8 @@ function getPrimaryProductName(cart = {}) {
 	return normalizeString(product?.name || product?.title || product?.productName || product?.sku || '');
 }
 
-async function resolveAbandonedCartAutomationWorkspaceId(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-
-	if (normalizedWorkspaceId !== DEFAULT_WORKSPACE_ID) {
-		return normalizedWorkspaceId;
-	}
-
-	const defaultWorkspace = await prisma.workspace.findUnique({
-		where: { id: normalizedWorkspaceId },
-		select: { id: true },
-	});
-
-	if (defaultWorkspace?.id) {
-		return normalizedWorkspaceId;
-	}
-
-	const workspaceWithCarts = await prisma.abandonedCart.findFirst({
-		where: { workspace: { status: 'ACTIVE' } },
-		select: { workspaceId: true },
-		orderBy: { updatedAt: 'desc' },
-	});
-
-	if (workspaceWithCarts?.workspaceId) {
-		return workspaceWithCarts.workspaceId;
-	}
-
-	const activeWorkspace = await prisma.workspace.findFirst({
-		where: { status: 'ACTIVE' },
-		select: { id: true },
-		orderBy: { updatedAt: 'desc' },
-	});
-
-	return activeWorkspace?.id || normalizedWorkspaceId;
+function resolveAbandonedCartAutomationWorkspaceId(workspaceId) {
+	return requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 }
 
 function cartMatchesProductQuery(cart = {}, productQuery = '') {
@@ -336,8 +306,8 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 	);
 }
 
-async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = await resolveAbandonedCartAutomationWorkspaceId(workspaceId);
+async function ensureSetting(workspaceId) {
+	const resolvedWorkspaceId = resolveAbandonedCartAutomationWorkspaceId(workspaceId);
 	let existing = null;
 
 	try {
@@ -365,19 +335,19 @@ async function ensureSetting(workspaceId = DEFAULT_WORKSPACE_ID) {
 	});
 }
 
-export async function getAbandonedCartAutomationSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getAbandonedCartAutomationSettings({ workspaceId } = {}) {
 	return serializeSetting(await ensureSetting(workspaceId));
 }
 
 export async function updateAbandonedCartAutomationSettings({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	enabled = false,
 	templateId = null,
 	filters = {},
 	variableMapping = undefined,
 	manualVariables = undefined,
 } = {}) {
-	const resolvedWorkspaceId = await resolveAbandonedCartAutomationWorkspaceId(workspaceId);
+	const resolvedWorkspaceId = resolveAbandonedCartAutomationWorkspaceId(workspaceId);
 	const nextEnabled = normalizeBoolean(enabled);
 	const current = await ensureSetting(resolvedWorkspaceId);
 	let template = current?.templateLocalId
@@ -616,7 +586,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 }
 
 export async function runAbandonedCartAutomation({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	force = false,
 	launchedByUserId = null,
 } = {}) {
