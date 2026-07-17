@@ -1867,6 +1867,107 @@
 	color: #ffffff;
 }
 
+.inbox-payment-review-history {
+	margin: 0 18px 12px;
+	border: 1px solid rgba(15, 118, 110, 0.18);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.8);
+	overflow: hidden;
+}
+
+.inbox-payment-review-history summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 42px;
+	padding: 0 12px;
+	color: #0f172a;
+	font-size: 12px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.inbox-payment-review-history summary:focus-visible {
+	outline: 3px solid rgba(15, 118, 110, 0.24);
+	outline-offset: -3px;
+}
+
+.inbox-payment-review-history-count {
+	display: inline-grid;
+	min-width: 22px;
+	height: 22px;
+	place-items: center;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: #ccfbf1;
+	color: #115e59;
+	font-size: 11px;
+}
+
+.inbox-payment-review-history-body {
+	padding: 0 12px 12px;
+	border-top: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.inbox-payment-review-history-state {
+	display: grid;
+	gap: 8px;
+	padding: 12px 0 2px;
+	color: #64748b;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.inbox-payment-review-history-state--error {
+	color: #991b1b;
+}
+
+.inbox-payment-review-history-state .inbox-state-action {
+	justify-self: start;
+	min-height: 34px;
+	margin-top: 0;
+	padding: 0 12px;
+	font-size: 12px;
+}
+
+.inbox-payment-review-history-list {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	padding: 12px 0 0 18px;
+	color: #334155;
+	font-size: 12px;
+}
+
+.inbox-payment-review-history-list li {
+	padding-left: 3px;
+}
+
+.inbox-payment-review-history-list li > div {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.inbox-payment-review-history-list strong {
+	color: #0f172a;
+}
+
+.inbox-payment-review-history-list li span,
+.inbox-payment-review-history-list time {
+	color: #64748b;
+	font-size: 11px;
+}
+
+.inbox-payment-review-history-list p {
+	margin: 4px 0 0;
+	color: #475569;
+	line-height: 1.45;
+	word-break: break-word;
+}
+
 @media (max-width: 520px) {
 	.inbox-payment-review-dialog-backdrop {
 		align-items: end;

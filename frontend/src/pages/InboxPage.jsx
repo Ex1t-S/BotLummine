@@ -81,6 +81,13 @@ const QUEUE_SUCCESS_MESSAGES = {
 	PAYMENT_REVIEW: 'Conversación enviada a revisión de comprobantes.',
 };
 
+const PAYMENT_REVIEW_ACTION_LABELS = {
+	APPROVE: 'Validación registrada',
+	REJECT: 'Comprobante rechazado',
+	REQUEST_NEW_PROOF: 'Nuevo comprobante solicitado',
+	HANDOFF: 'Derivación a atención humana',
+};
+
 function getQueueLabel(queueKey = '') {
 	return QUEUE_LABELS[queueKey] || queueKey || 'Bandeja';
 }
@@ -1094,6 +1101,19 @@ export default function InboxPage() {
 		...queryPresets.conversation,
 	});
 
+	const paymentReviewActionsQuery = useQuery({
+		queryKey: ['dashboard', 'payment-review-actions', selectedConversationId],
+		queryFn: async () => {
+			const res = await api.get(
+				`/dashboard/conversations/${selectedConversationId}/payment-review/actions`
+			);
+			return res.data;
+		},
+		enabled: Boolean(selectedConversationId),
+		staleTime: 10 * 1000,
+		gcTime: 5 * 60 * 1000,
+	});
+
 	const conversation = conversationQuery.data?.conversation || null;
 	const conversationMessages = conversation?.messages || [];
 	const displayedMessages = useMemo(() => {
@@ -1324,6 +1344,9 @@ export default function InboxPage() {
 		if (conversationId) {
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.conversation(conversationId),
+			});
+			await queryClient.invalidateQueries({
+				queryKey: ['dashboard', 'payment-review-actions', conversationId],
 			});
 		}
 	};
@@ -1680,6 +1703,7 @@ export default function InboxPage() {
 		.join(' ');
 	const currentQueue = conversation?.queue || activeContact?.queue || queue;
 	const currentQueueLabel = getQueueLabel(currentQueue);
+	const paymentReviewActions = paymentReviewActionsQuery.data?.actions || [];
 	const isBusyWithConversationAction =
 		moveQueueMutation.isPending ||
 		paymentReviewMutation.isPending ||
@@ -2145,6 +2169,54 @@ export default function InboxPage() {
 								/>
 							)}
 						>
+							<details className="inbox-payment-review-history">
+								<summary>
+									<span>Historial de comprobantes</span>
+									<span className="inbox-payment-review-history-count">
+										{paymentReviewActions.length}
+									</span>
+								</summary>
+								<div className="inbox-payment-review-history-body">
+									{paymentReviewActionsQuery.isLoading ? (
+										<div className="inbox-payment-review-history-state" role="status" aria-live="polite">
+											Cargando acciones registradas...
+										</div>
+									) : null}
+									{paymentReviewActionsQuery.isError ? (
+										<div className="inbox-payment-review-history-state inbox-payment-review-history-state--error" role="alert">
+											<span>No pudimos cargar el historial de comprobantes.</span>
+											<button
+												type="button"
+												className="inbox-state-action"
+												disabled={paymentReviewActionsQuery.isFetching}
+												onClick={() => paymentReviewActionsQuery.refetch()}
+											>
+												{paymentReviewActionsQuery.isFetching ? 'Reintentando...' : 'Reintentar historial'}
+											</button>
+										</div>
+									) : null}
+									{!paymentReviewActionsQuery.isLoading && !paymentReviewActionsQuery.isError && paymentReviewActions.length === 0 ? (
+										<div className="inbox-payment-review-history-state">
+											Todavía no hay acciones registradas sobre comprobantes.
+										</div>
+									) : null}
+									{!paymentReviewActionsQuery.isLoading && !paymentReviewActionsQuery.isError && paymentReviewActions.length > 0 ? (
+										<ol className="inbox-payment-review-history-list">
+											{paymentReviewActions.map((action) => (
+												<li key={action.id}>
+													<div>
+														<strong>{PAYMENT_REVIEW_ACTION_LABELS[action.action] || 'Acción registrada'}</strong>
+														<span>{action.actorUserId ? 'Operador registrado' : 'Sistema'}</span>
+													</div>
+													<time dateTime={action.createdAt}>{formatArgentinaDateTime(action.createdAt)}</time>
+													{action.reason ? <p>{action.reason}</p> : null}
+												</li>
+											))}
+										</ol>
+									) : null}
+								</div>
+							</details>
+
 							{conversationQuery.isLoading ? (
 								<div className="inbox-empty" role="status" aria-live="polite" aria-busy="true">
 									<strong>Cargando mensajes</strong>

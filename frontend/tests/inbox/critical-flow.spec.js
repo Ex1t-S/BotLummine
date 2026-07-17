@@ -153,6 +153,26 @@ async function installInboxApi(page, {
 
 		if (
 			pathname === '/dashboard/conversations/conversation-demo-1/payment-review/actions' &&
+			request.method() === 'GET'
+		) {
+			await route.fulfill(json({
+				ok: true,
+				actions: [{
+					id: 'payment-review-action-demo-1',
+					conversationId: conversation.id,
+					action: 'REJECT',
+					previousQueue: 'PAYMENT_REVIEW',
+					resultQueue: 'HUMAN',
+					reason: 'El comprobante necesita una imagen más nítida.',
+					actorUserId: 'user-demo',
+					createdAt: '2026-07-17T15:20:00.000Z',
+				}],
+			}));
+			return;
+		}
+
+		if (
+			pathname === '/dashboard/conversations/conversation-demo-1/payment-review/actions' &&
 			request.method() === 'POST'
 		) {
 			const payload = request.postDataJSON();
@@ -325,6 +345,9 @@ test('revisión de comprobantes exige motivo para rechazar y registra la acción
 	await installInboxApi(page, { queueControl });
 	await page.goto('/inbox/comprobantes');
 
+	await page.getByText('Historial de comprobantes').click();
+	await expect(page.getByText('Comprobante rechazado')).toBeVisible();
+	await expect(page.getByText('El comprobante necesita una imagen más nítida.')).toBeVisible();
 	await page.getByRole('button', { name: 'Acciones de conversacion' }).press('Enter');
 	await page.getByRole('menuitem', { name: 'Rechazar comprobante' }).press('Enter');
 
