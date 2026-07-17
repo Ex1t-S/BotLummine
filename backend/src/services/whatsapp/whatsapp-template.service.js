@@ -181,7 +181,7 @@ function deepPersonalize(value, variables = {}) {
 	return value;
 }
 
-function localTemplateWhere(metaOrLocalId, workspaceId = DEFAULT_WORKSPACE_ID) {
+function localTemplateWhere(metaOrLocalId, workspaceId) {
 	return {
 		workspaceId,
 		OR: [
@@ -191,13 +191,27 @@ function localTemplateWhere(metaOrLocalId, workspaceId = DEFAULT_WORKSPACE_ID) {
 	};
 }
 
-async function getTemplateMetaConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const channel = await getWhatsAppChannelForWorkspace(workspaceId).catch(() => null);
+async function getTemplateMetaConfig(workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const channel = await getWhatsAppChannelForWorkspace(resolvedWorkspaceId).catch(() => null);
+	const allowEnvironmentFallback = resolvedWorkspaceId === DEFAULT_WORKSPACE_ID;
 
 	return {
-		wabaId: normalizeString(channel?.wabaId || getWhatsAppBusinessAccountId()),
+		wabaId: normalizeString(
+			channel?.wabaId || (allowEnvironmentFallback ? getWhatsAppBusinessAccountId() : '')
+		),
 		accessToken: normalizeString(channel?.accessToken || '')
 	};
+}
+
+function requireTemplateMetaConfig(config = {}, { requireAccessToken = true } = {}) {
+	if (!normalizeString(config.wabaId) || (requireAccessToken && !normalizeString(config.accessToken))) {
+		const error = new Error('Configurá un canal de WhatsApp válido para administrar plantillas.');
+		error.code = 'WHATSAPP_TEMPLATE_CHANNEL_NOT_CONFIGURED';
+		error.status = 400;
+		throw error;
+	}
+	return config;
 }
 
 function resolveTemplateWebhookWhere(payload = {}, { wabaId: envelopeWabaId = '' } = {}) {
@@ -223,8 +237,8 @@ function resolveTemplateWebhookWhere(payload = {}, { wabaId: envelopeWabaId = ''
 function buildTemplateUpsertPayload(
 	metaTemplate,
 	rawPayloadOverride = null,
-	workspaceId = DEFAULT_WORKSPACE_ID,
-	wabaId = getWhatsAppBusinessAccountId()
+	workspaceId,
+	wabaId
 ) {
 	const components = Array.isArray(metaTemplate?.components)
 		? metaTemplate.components
@@ -264,9 +278,12 @@ export function renderTemplatePreviewFromComponents(components = [], variables =
 	};
 }
 
-export async function upsertLocalTemplate(metaTemplate, rawPayloadOverride = null, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+export async function upsertLocalTemplate(metaTemplate, rawPayloadOverride = null, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const metaConfig = requireTemplateMetaConfig(
+		await getTemplateMetaConfig(resolvedWorkspaceId),
+		{ requireAccessToken: false },
+	);
 	const payload = buildTemplateUpsertPayload(
 		metaTemplate,
 		rawPayloadOverride,
@@ -289,7 +306,7 @@ export async function upsertLocalTemplate(metaTemplate, rawPayloadOverride = nul
 }
 
 export async function listLocalTemplates({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	q = '',
 	status = '',
 	category = '',
@@ -297,7 +314,7 @@ export async function listLocalTemplates({
 	includeDeleted = false,
 	limit = 100
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const where = {
 		workspaceId: resolvedWorkspaceId,
 		deletedAt: includeDeleted ? undefined : null,
@@ -336,13 +353,13 @@ export async function getTemplateOrThrow(templateId, { workspaceId } = {}) {
 }
 
 export async function syncTemplatesFromMeta({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	pageLimit = 10,
 	pageSize = 100,
 	purgeDeleted = true
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const metaConfig = requireTemplateMetaConfig(await getTemplateMetaConfig(resolvedWorkspaceId));
 	const wabaId = metaConfig.wabaId;
 	const syncLog = await prisma.templateSyncLog.create({
 		data: {
@@ -451,6 +468,7 @@ export async function syncTemplatesFromMeta({
 		if (staleTemplateIds.length) {
 			const result = await prisma.whatsAppTemplate.updateMany({
 				where: {
+					workspaceId: resolvedWorkspaceId,
 					id: {
 						in: staleTemplateIds
 					}
@@ -471,7 +489,7 @@ export async function syncTemplatesFromMeta({
 		}
 
 		await prisma.templateSyncLog.update({
-			where: { id: syncLog.id },
+			where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				status: 'FINISHED',
 				finishedAt: new Date(),
@@ -501,7 +519,7 @@ export async function syncTemplatesFromMeta({
 		errorCount += 1;
 
 		await prisma.templateSyncLog.update({
-			where: { id: syncLog.id },
+			where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				status: 'FAILED',
 				finishedAt: new Date(),
@@ -519,8 +537,8 @@ export async function syncTemplatesFromMeta({
 	}
 }
 
-export async function purgeDeletedLocalTemplates({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function purgeDeletedLocalTemplates({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const deletedTemplates = await prisma.whatsAppTemplate.findMany({
 		where: {
 			workspaceId: resolvedWorkspaceId,
@@ -557,15 +575,15 @@ export async function purgeDeletedLocalTemplates({ workspaceId = DEFAULT_WORKSPA
 }
 
 export async function createTemplate({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	name,
 	category,
 	language = 'es_AR',
 	parameterFormat = 'POSITIONAL',
 	components = []
 }) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const metaConfig = requireTemplateMetaConfig(await getTemplateMetaConfig(resolvedWorkspaceId));
 	const normalizedParameterFormat = ensureParameterFormat(parameterFormat);
 
 	const payload = {
@@ -603,13 +621,13 @@ export async function createTemplate({
 }
 
 export async function updateTemplate(templateId, {
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	category,
 	parameterFormat,
 	components = []
-}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
-	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+} = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const metaConfig = requireTemplateMetaConfig(await getTemplateMetaConfig(resolvedWorkspaceId));
 	const localTemplate = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 
 	if (!localTemplate.metaTemplateId) {
@@ -663,7 +681,7 @@ export async function deleteTemplate(templateId, {
 	deleteAllLanguages = false
 } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
-	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
+	const metaConfig = requireTemplateMetaConfig(await getTemplateMetaConfig(resolvedWorkspaceId));
 	const localTemplate = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 
 	const deletePayload = deleteAllLanguages
