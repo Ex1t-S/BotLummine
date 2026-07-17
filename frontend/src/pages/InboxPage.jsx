@@ -1428,7 +1428,7 @@ export default function InboxPage() {
 			setPaymentReviewReason('');
 			setActionFeedbackTone('status');
 			const successMessages = {
-				APPROVE: 'Aprobación registrada. La conversación pasó a atención humana para seguimiento.',
+				APPROVE: 'Validación del comprobante registrada. La conversación pasó a atención humana para seguimiento.',
 				REJECT: 'Rechazo registrado. La conversación pasó a atención humana para seguimiento.',
 				REQUEST_NEW_PROOF: 'Solicitud de nuevo comprobante registrada y derivada a atención humana.',
 				HANDOFF: 'Revisión finalizada. La conversación pasó a atención humana.',
@@ -2054,7 +2054,7 @@ export default function InboxPage() {
 										icon: ArchiveRestore,
 									}, {
 										id: 'payment-approve',
-										label: 'Registrar aprobación',
+										label: 'Registrar validación',
 										disabled: moveQueueMutation.isPending || paymentReviewMutation.isPending,
 										onClick: () => handlePaymentReviewAction('APPROVE'),
 										icon: CheckCheck,
