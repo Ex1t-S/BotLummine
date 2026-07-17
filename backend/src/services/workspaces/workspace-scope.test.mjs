@@ -4,6 +4,7 @@ import {
 	conversationStateForWorkspaceWhere,
 	findConversationForWorkspace,
 	findInboundMessageForWorkspace,
+	findWorkspaceOwnedRecord,
 	whatsAppTemplateWebhookWhere,
 	workspaceIdsWhere,
 	workspaceOwnedWhere,
@@ -41,6 +42,28 @@ describe('workspace-owned record lookups', () => {
 			id: 'message-a',
 			workspaceId: 'workspace-a',
 			direction: 'INBOUND',
+		});
+	});
+
+	it('queries generic workspace-owned records without a global ID fallback', async () => {
+		let receivedQuery = null;
+		const modelDelegate = {
+			findFirst: async (query) => {
+				receivedQuery = query;
+				return { id: 'connection-a' };
+			},
+		};
+
+		const record = await findWorkspaceOwnedRecord(modelDelegate, {
+			id: 'connection-a',
+			workspaceId: 'workspace-a',
+			select: { id: true },
+		});
+
+		assert.deepEqual(record, { id: 'connection-a' });
+		assert.deepEqual(receivedQuery, {
+			where: { id: 'connection-a', workspaceId: 'workspace-a' },
+			select: { id: true },
 		});
 	});
 

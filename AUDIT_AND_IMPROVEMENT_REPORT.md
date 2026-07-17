@@ -417,6 +417,21 @@ flowchart TD
 - Pruebas: 35/35 unitarias, tipo Prisma verificado y build backend verde.
 - Riesgo de deployment: bajo; todos los callers actuales ya suministran el workspace correcto.
 
+### FIND-P0-018
+
+- Título: selección de conexión comercial primaria aceptaba un ID global
+- Área: seguridad/multitenancy/comercio
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: `markPrimaryCommerceConnection` desactivaba conexiones del workspace solicitado y luego ejecutaba `update({ id: connectionId })` sin comprobar pertenencia.
+- Impacto: un ID incorrecto podía modificar otro tenant y además dejar al workspace legítimo sin conexión primaria.
+- Causa: el caller era considerado confiable y la precondición no formaba parte de la transacción.
+- Solución: lookup canónico por `id + workspaceId` al inicio de la transacción; ante ausencia se aborta antes de cualquier escritura.
+- Estado: resuelto.
+- Archivos: `active-commerce.service.js`, `workspace-scope.js` y prueba negativa genérica.
+- Pruebas: 36/36 unitarias y build backend con 138 archivos válidos.
+- Riesgo de deployment: bajo; callers válidos usan conexiones del workspace esperado.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -439,7 +454,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 138 archivos JS/MJS pasan el chequeo de sintaxis.
-- 35 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, aislamiento de workspace/WABA/analytics/estado y caché privada de adjuntos.
+- 36 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, aislamiento de workspace/WABA/analytics/estado/comercio y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -471,7 +486,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 138/138 | incluido en build |
-| unit tests | 35/35 | 1,2 s |
+| unit tests | 36/36 | 1,1 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -499,6 +514,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Scope restrictivo en agregaciones de analytics, incluso con lista vacía.
 - Adjuntos autenticados fuera de caches públicas o persistentes.
 - Cooldown/reproceso automático acotado por la relación conversación-workspace.
+- Selección de conexión comercial primaria validada dentro de la transacción.
 
 ## 18. Comparación antes/después
 

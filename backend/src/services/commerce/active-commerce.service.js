@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { findWorkspaceOwnedRecord } from '../workspaces/workspace-scope.js';
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
@@ -143,12 +144,24 @@ export async function markPrimaryCommerceConnection(connectionId, { workspaceId 
 	if (!connectionId) return null;
 
 	return prisma.$transaction(async (tx) => {
+		const target = await findWorkspaceOwnedRecord(tx.commerceConnection, {
+			id: connectionId,
+			workspaceId: resolvedWorkspaceId,
+			select: { id: true },
+		});
+		if (!target) {
+			const error = new Error('La conexión comercial no pertenece al workspace solicitado.');
+			error.status = 404;
+			error.code = 'COMMERCE_CONNECTION_NOT_FOUND';
+			throw error;
+		}
+
 		await tx.commerceConnection.updateMany({
 			where: { workspaceId: resolvedWorkspaceId },
 			data: { isPrimary: false },
 		});
 		return tx.commerceConnection.update({
-			where: { id: connectionId },
+			where: { id: target.id },
 			data: { isPrimary: true },
 		});
 	});

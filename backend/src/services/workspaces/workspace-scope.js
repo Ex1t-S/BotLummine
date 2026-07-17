@@ -16,6 +16,21 @@ export function workspaceOwnedWhere({ id, workspaceId, ...constraints } = {}) {
 	};
 }
 
+export async function findWorkspaceOwnedRecord(
+	modelDelegate,
+	{ id, workspaceId, select, include } = {},
+) {
+	if (!modelDelegate?.findFirst) {
+		throw new TypeError('A Prisma-compatible model delegate is required');
+	}
+
+	return modelDelegate.findFirst({
+		where: workspaceOwnedWhere({ id, workspaceId }),
+		...(select ? { select } : {}),
+		...(include ? { include } : {}),
+	});
+}
+
 export function whatsAppTemplateWebhookWhere({ metaTemplateId, wabaId } = {}) {
 	return {
 		metaTemplateId: requiredIdentifier(metaTemplateId, 'metaTemplateId'),
