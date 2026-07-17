@@ -2,11 +2,11 @@
 
 Fecha de inicio: 2026-07-17  
 Rama: `audit/general-improvements-20260717`  
-Estado: en progreso; producción permanece en modo solo lectura.
+Estado: iteración P0 local cerrada y validada; producción permanece en modo solo lectura.
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La primera iteración cerró los P0 de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores y arranque local accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La validación final consolidada dejó Prisma válido, build raíz verde, 45/45 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -648,11 +648,11 @@ flowchart TD
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
 - Estados: Inbox/Comprobantes y Clientes separan carga, vacío, error y datos; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
-- Pendiente: recorrido visual completo de las vistas privadas restantes, teclado integral y axe.
+- Pendiente: recorrido visual y de teclado completo de las vistas privadas restantes, más Axe reproducible dentro de CI.
 
 ## 9. Auditoría frontend
 
-- Build exitoso en 894 ms en la validación final de esta iteración.
+- Build frontend exitoso en 985 ms en la validación final consolidada.
 - `vendor-three`: eliminado del build (baseline 505,81 kB minificado) al reemplazar WebGL decorativo por CSS; la dependencia declarada queda para coordinar cuando los manifests concurrentes estén libres.
 - CSS de campañas: 100,63 kB; CSS global principal: 140,17 kB; Clientes: 28,97 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
@@ -696,17 +696,17 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 140/140 | incluido en build |
-| unit tests | 45/45 | 0,80 s |
+| unit tests | 45/45 | 0,90 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
-| frontend build | OK; sin chunks >500 kB | 0,94 s |
+| frontend build | OK; sin chunks >500 kB | 0,99 s |
 | frontend typecheck | OK; 0 errores | 3,8 s |
-| root build | OK; backend + frontend | 10,3 s |
-| Playwright Chromium | 14/14; 10 rutas de performance | 17,7 s |
+| root build | OK; backend + frontend | incluido en validación consolidada |
+| Playwright Chromium | 14/14; 10 rutas de performance | 23,2 s |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
-Durante el refactor de prefetch, una primera corrida privada falló porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
+La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
 
 ## 17. Cambios implementados
 
@@ -763,7 +763,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 21. Riesgos pendientes
 
-- Auditoría exhaustiva de aislamiento multitenant por entidad aún incompleta.
+- La revisión cubrió las fronteras multitenant de mayor riesgo identificadas, pero el inventario exhaustivo por cada entidad sigue abierto.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
 - Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
@@ -774,7 +774,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 22. Backlog
 
-P0: completar auditoría multitenant, activar/validar retención de trazas en staging, lint reproducible y security audit frontend.
+P0 local seguro de esta iteración: cerrado. Pendientes condicionados: ampliar el inventario multitenant cuando se coordinen módulos con cambios concurrentes; activar/validar retención de trazas sólo en staging aislado; incorporar lint reproducible y resolver el security audit frontend sin pisar manifests locales del usuario.
 
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
 
@@ -784,7 +784,7 @@ P3: analytics, personalización y detalles cosméticos.
 
 ## 23. Ejecución local
 
-Hasta preparar una base descartable, sólo ejecutar comandos sin conexión. No usar `backend/.env` para seed, migrate o tests integrados. El guard bloquea el arranque local remoto salvo override explícito. Comandos comprobados: instalación, `npm run build`, `npm run prisma:validate`, `npm run test:unit` y Playwright con API mockeada.
+Hasta preparar una base descartable, sólo ejecutar comandos sin conexión. No usar `backend/.env` para seed, migrate o tests integrados. El guard bloquea el arranque local remoto salvo override explícito. Comandos comprobados: instalación, `npm run build`, `npm run prisma:validate`, `npm run test:unit`, `npm --prefix frontend exec tsc -b` y Playwright con API mockeada. La última corrida consolidada terminó verde con código 0.
 
 ## 24. Validación en staging
 
