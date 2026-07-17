@@ -6,7 +6,7 @@ Estado: P0 local de hardening cerrado para el inventario estático actual; produ
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 85/85 unitarias, TypeScript sin errores y 14/14 Playwright consolidados más 5/5 de Inbox y 3/3 de Operaciones en las corridas actuales. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 85/85 unitarias, TypeScript sin errores y 12/12 Playwright en la corrida consolidada (6 Inbox, 3 Operaciones y 3 Carritos). El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -1140,7 +1140,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
 | root build | OK; backend + frontend | 9,2 s en la última corrida |
-| Playwright Chromium | 14/14 consolidada previa; 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos actuales | 10,4 s + 4,9 s + 8,1 s; APIs sintéticas, sin delivery |
+| Playwright Chromium | 12/12 actuales: 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos | 11,4 s Inbox; 10,5 s consolidada; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
