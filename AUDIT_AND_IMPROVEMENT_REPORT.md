@@ -1057,9 +1057,9 @@ flowchart TD
 - Impacto: el equipo no podía completar el flujo de revisión del archivo desde la interfaz ni dejar una explicación estructurada para rechazo o nuevo comprobante.
 - Causa: el backend durable se incorporó antes que el recorrido visual y el diálogo de motivo.
 - Solución: agregar acciones de registrar validación, rechazar y pedir otro comprobante; diálogo `role=dialog` con label, `aria-modal`, foco inicial, Escape, validación de motivo y clave idempotente por conversación/acción. El feedback aclara que las acciones quedan derivadas a HUMAN.
-- Estado: resuelto localmente para el flujo UI; consulta visual del historial auditable y una política de cola distinta de HUMAN continúan pendientes de staging.
-- Archivos: `frontend/src/pages/InboxPage.jsx/css`, `frontend/tests/inbox/critical-flow.spec.js` y captura sintética de diálogo.
-- Pruebas: TypeScript/build frontend verdes; 6/6 E2E de Inbox en 10,4 s; rechazo con motivo y reintento idempotente verificados.
+- Estado: resuelto localmente para el flujo UI y la consulta visual del historial; una política de cola distinta de HUMAN y el smoke integrado continúan pendientes de staging.
+- Archivos: `frontend/src/pages/InboxPage.jsx/css`, `frontend/tests/inbox/critical-flow.spec.js` y capturas sintéticas de diálogo/historial.
+- Pruebas: TypeScript/build frontend verdes; 6/6 E2E de Inbox en 11,4 s; historial, rechazo con motivo y reintento idempotente verificados.
 - Riesgo de deployment: medio; usa los endpoints/migración nuevos y debe desplegarse sólo después de `PaymentReviewAction` en staging.
 
 ### FIND-P1-061
@@ -1213,7 +1213,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 - El inventario estático actual no conserva parámetros ni normalizaciones que inventen `workspace_default`; una prueba global bloquea su regresión. La validación dinámica de todas las entidades con dos tenants sintéticos continúa pendiente de staging aislado.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
 - Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica. Campañas conserva una deuda de semántica ARIA/foco documentada en FIND-P1-061.
-- La API de revisión modela APPROVE/REJECT/REQUEST_NEW_PROOF/HANDOFF y conserva auditoría de comprobantes; la UI ya expone esas acciones, pero faltan lectura del historial y smoke integrado sobre la migración en staging. No hay integración de cobro.
+- La API de revisión modela APPROVE/REJECT/REQUEST_NEW_PROOF/HANDOFF y conserva auditoría de comprobantes; la UI expone esas acciones y el historial visual. Falta el smoke integrado sobre la migración en staging. No hay integración de cobro.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
 - Staging no representativo.
@@ -1224,7 +1224,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: Inbox base, acciones durables sobre comprobantes, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: historial visual de acciones sobre comprobantes, selección/acciones masivas de carritos, semántica ARIA/foco de Campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
+P1: Inbox base, acciones durables e historial visual sobre comprobantes, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: selección/acciones masivas de carritos, semántica ARIA/foco de Campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 
