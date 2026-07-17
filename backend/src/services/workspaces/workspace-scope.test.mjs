@@ -4,6 +4,7 @@ import {
 	findConversationForWorkspace,
 	findInboundMessageForWorkspace,
 	whatsAppTemplateWebhookWhere,
+	workspaceIdsWhere,
 	workspaceOwnedWhere,
 } from './workspace-scope.js';
 
@@ -84,5 +85,14 @@ describe('workspace-owned record lookups', () => {
 				wabaId: 'waba-a',
 			},
 		);
+	});
+
+	it('keeps analytics queries scoped when no workspace is accessible', () => {
+		assert.deepEqual(workspaceIdsWhere([]), {
+			workspaceId: { in: [] },
+		});
+		assert.deepEqual(workspaceIdsWhere([' workspace-a ', '', 'workspace-a', 'workspace-b']), {
+			workspaceId: { in: ['workspace-a', 'workspace-b'] },
+		});
 	});
 });

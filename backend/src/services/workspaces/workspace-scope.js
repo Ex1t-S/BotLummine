@@ -23,6 +23,18 @@ export function whatsAppTemplateWebhookWhere({ metaTemplateId, wabaId } = {}) {
 	};
 }
 
+export function workspaceIdsWhere(workspaceIds = []) {
+	const normalizedIds = [
+		...new Set(
+			(Array.isArray(workspaceIds) ? workspaceIds : [])
+				.map((workspaceId) => String(workspaceId || '').trim())
+				.filter(Boolean),
+		),
+	];
+
+	return { workspaceId: { in: normalizedIds } };
+}
+
 export async function findInboundMessageForWorkspace(prismaClient, { id, workspaceId } = {}) {
 	if (!prismaClient?.message?.findFirst) {
 		throw new TypeError('A Prisma-compatible message client is required');

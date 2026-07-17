@@ -372,6 +372,21 @@ flowchart TD
 - Pruebas: 31/31 unitarias, 136 archivos con sintaxis válida y build raíz verde.
 - Riesgo de deployment: bajo; los webhooks válidos de Meta incluyen el WABA en `entry.id`.
 
+### FIND-P0-015
+
+- Título: analytics eliminaba el scope cuando no había workspaces accesibles
+- Área: seguridad/multitenancy/analytics
+- Ambiente: todos
+- Severidad: High
+- Evidencia: ocho agregaciones reemplazaban el filtro por `undefined` o sólo por fecha cuando `workspaceIds` estaba vacío.
+- Impacto: el endpoint consultaba datos de todos los tenants aunque el mapeo posterior descartara las filas; aumentaba costo y dejaba una futura fuga a un cambio de serialización.
+- Causa: se interpretó una lista vacía como ausencia de filtro en vez de ausencia de acceso.
+- Solución: constructor canónico que siempre produce `workspaceId: { in: [...] }`; una lista vacía permanece restrictiva.
+- Estado: resuelto.
+- Archivos: `admin.controller.js`, `workspace-scope.js` y prueba negativa.
+- Pruebas: 32/32 unitarias y build backend con 136 archivos válidos.
+- Riesgo de deployment: bajo; no cambia resultados válidos y evita lecturas innecesarias.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -394,7 +409,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 136 archivos JS/MJS pasan el chequeo de sintaxis.
-- 31 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace/WABA.
+- 32 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace/WABA/analytics.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -404,7 +419,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID, el servicio outbound exige `id + workspaceId` y los webhooks de plantillas exigen `metaTemplateId + wabaId`. Persisten como backlog la auditoría exhaustiva de otras queries por ID, archivos y analytics.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID, el servicio outbound exige `id + workspaceId`, los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Persisten como backlog la auditoría exhaustiva de otras queries por ID y archivos.
 
 ## 13. Railway y despliegues
 
@@ -426,7 +441,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 136/136 | incluido en build |
-| unit tests | 31/31 | 1,1 s |
+| unit tests | 32/32 | 1,1 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -451,6 +466,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Menú público móvil y formulario de login cubiertos con pruebas de teclado.
 - Scope obligatorio de workspace en todo envío outbound.
 - Scope WABA obligatorio en webhooks de plantillas de WhatsApp.
+- Scope restrictivo en agregaciones de analytics, incluso con lista vacía.
 
 ## 18. Comparación antes/después
 

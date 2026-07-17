@@ -36,6 +36,7 @@ import {
 	normalizeAiProfile,
 	normalizeAiVertical,
 } from '../services/ai/vertical-profile.service.js';
+import { workspaceIdsWhere } from '../services/workspaces/workspace-scope.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -1128,6 +1129,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 		});
 
 		const workspaceIds = workspaces.map((workspace) => workspace.id);
+		const analyticsScope = workspaceIdsWhere(workspaceIds);
 		const [
 			campaignRows,
 			recipientRows,
@@ -1142,44 +1144,38 @@ export async function getWorkspaceAnalytics(req, res, next) {
 		] = await Promise.all([
 			prisma.campaign.groupBy({
 				by: ['workspaceId', 'status'],
-				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				where: analyticsScope,
 				_count: { _all: true },
 			}),
 			prisma.campaignRecipient.groupBy({
 				by: ['workspaceId', 'status', 'billable'],
-				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				where: analyticsScope,
 				_count: { _all: true },
 			}),
 			prisma.customerProfile.groupBy({
 				by: ['workspaceId'],
-				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				where: analyticsScope,
 				_count: { _all: true },
 			}),
 			prisma.customerOrder.groupBy({
 				by: ['workspaceId', 'currency'],
-				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				where: analyticsScope,
 				_count: { _all: true },
 				_sum: { totalAmount: true },
 			}),
 			prisma.message.groupBy({
 				by: ['workspaceId', 'direction'],
-				where: workspaceIds.length
-					? { workspaceId: { in: workspaceIds }, createdAt: { gte: activitySince } }
-					: { createdAt: { gte: activitySince } },
+				where: { ...analyticsScope, createdAt: { gte: activitySince } },
 				_count: { _all: true },
 			}),
 			prisma.conversation.groupBy({
 				by: ['workspaceId'],
-				where: workspaceIds.length
-					? { workspaceId: { in: workspaceIds }, lastMessageAt: { gte: activitySince } }
-					: { lastMessageAt: { gte: activitySince } },
+				where: { ...analyticsScope, lastMessageAt: { gte: activitySince } },
 				_count: { _all: true },
 			}),
 			prisma.conversation.groupBy({
 				by: ['workspaceId'],
-				where: workspaceIds.length
-					? { workspaceId: { in: workspaceIds }, unreadCount: { gt: 0 }, archivedAt: null }
-					: { unreadCount: { gt: 0 }, archivedAt: null },
+				where: { ...analyticsScope, unreadCount: { gt: 0 }, archivedAt: null },
 				_count: { _all: true },
 				_sum: { unreadCount: true },
 			}),
@@ -1192,7 +1188,7 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			getDetectedRecoveredCartsByWorkspace(workspaceIds),
 			prisma.abandonedCart.groupBy({
 				by: ['workspaceId', 'status'],
-				where: workspaceIds.length ? { workspaceId: { in: workspaceIds } } : undefined,
+				where: analyticsScope,
 				_count: { _all: true },
 				_sum: { totalAmount: true },
 			}),
