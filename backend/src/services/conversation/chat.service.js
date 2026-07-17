@@ -19,7 +19,7 @@ import {
 	getCatalogLookupStatus
 } from '../catalog/catalog-search.service.js';
 import { resolveCommercialBrainV2 } from '../ai/commercial-brain.service.js';
-import { buildPrompt } from '../common/prompt-builder.js';
+import { compilePrompt } from '../common/prompt-builder.js';
 import {
 	isPaymentProofMessage,
 	isAmbiguousPaymentAttachment,
@@ -1776,7 +1776,7 @@ export async function processInboundMessage({
 
 	if (!finalReply) {
 		try {
-			prompt = buildPrompt({
+			const compiledPrompt = compilePrompt({
 				businessName: aiBrand.businessName,
 				workspaceConfig,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
@@ -1796,26 +1796,10 @@ export async function processInboundMessage({
 				menuAssistantContext,
 				campaignAssistantContext: promptCampaignAssistantContext
 			});
+			prompt = compiledPrompt.text;
 
 			const aiResult = await runAssistantReply({
-				businessName: aiBrand.businessName,
-				workspaceConfig,
-				contactName: freshConversation.contact.name || freshConversation.contact.waId,
-				recentMessages: fullRecentMessages,
-				conversationSummary: freshConversation.lastSummary || '',
-				customerContext: {
-					name: freshConversation.contact.name || freshConversation.contact.waId,
-					waId: freshConversation.contact.waId
-				},
-				conversationState: promptState,
-				liveOrderContext,
-				catalogProducts,
-				catalogContext,
-				commercialHints,
-				commercialPlan,
-				responsePolicy,
-				menuAssistantContext,
-				campaignAssistantContext: promptCampaignAssistantContext
+				compiledPrompt,
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
@@ -1916,6 +1900,9 @@ export async function processInboundMessage({
 		...trace,
 		queueDecision,
 		prompt,
+		promptVersion: aiMeta?.promptVersion || null,
+		promptHash: aiMeta?.promptHash || null,
+		factsUsed: aiMeta?.factsUsed || [],
 		assistantMessage: finalReply,
 		provider: aiMeta?.provider || (forcedReply ? 'system' : null),
 		model: aiMeta?.model || (forcedReply ? 'rule-based-forced-reply' : null),

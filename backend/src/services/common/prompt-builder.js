@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { getRelevantStoreFacts } from '../../data/store-style.js';
 import { buildRelevantBusinessData } from '../../data/store-business.js';
 import {
@@ -6,6 +7,8 @@ import {
 	resolveAiProfile,
 	usesCommerceEngine,
 } from '../ai/vertical-profile.service.js';
+
+export const PROMPT_VERSION = 'conversation-v1';
 
 function formatTranscript({ businessName, contactName, recentMessages }) {
 	return recentMessages
@@ -315,4 +318,33 @@ export function buildPrompt({
 		`CONVERSACION RECIENTE:\n${transcript}`,
 		'Responde ahora al ultimo mensaje del cliente.'
 	].filter(Boolean).join('\n\n');
+}
+
+function listFactSources({
+	liveOrderContext = null,
+	catalogProducts = [],
+	catalogContext = '',
+	commercialHints = [],
+	menuAssistantContext = null,
+	campaignAssistantContext = null,
+} = {}) {
+	return [
+		liveOrderContext ? 'live_order' : '',
+		Array.isArray(catalogProducts) && catalogProducts.length ? `catalog_products:${catalogProducts.length}` : '',
+		catalogContext ? 'catalog_context' : '',
+		Array.isArray(commercialHints) && commercialHints.length ? `commercial_hints:${commercialHints.length}` : '',
+		menuAssistantContext?.promptBlock ? 'whatsapp_menu' : '',
+		campaignAssistantContext?.promptBlock ? 'campaign_context' : '',
+	].filter(Boolean);
+}
+
+export function compilePrompt(input = {}) {
+	const text = buildPrompt(input);
+
+	return Object.freeze({
+		text,
+		promptVersion: PROMPT_VERSION,
+		promptHash: createHash('sha256').update(text, 'utf8').digest('hex'),
+		factsUsed: Object.freeze(listFactSources(input)),
+	});
 }

@@ -1,5 +1,5 @@
 import { runAssistantReply } from '../ai/index.js';
-import { buildPrompt } from '../common/prompt-builder.js';
+import { compilePrompt } from '../common/prompt-builder.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { logger } from '../../lib/logger.js';
 import {
@@ -627,7 +627,7 @@ export async function runConversationTurn({
 	}
 
 	if (!finalReply) {
-		prompt = buildPrompt({
+		const compiledPrompt = compilePrompt({
 			businessName,
 			workspaceConfig,
 			contactName: customerContext?.name || contactName || normalizedWaId,
@@ -642,22 +642,11 @@ export async function runConversationTurn({
 			commercialPlan,
 			responsePolicy
 		});
+		prompt = compiledPrompt.text;
 
 		try {
 			const aiResult = await runAssistantReply({
-				businessName,
-				workspaceConfig,
-				contactName: customerContext?.name || contactName || normalizedWaId,
-				recentMessages: fullRecentMessages,
-				conversationSummary: currentConversation?.lastSummary || '',
-				customerContext,
-				conversationState: enrichedState,
-				liveOrderContext,
-				catalogProducts,
-				catalogContext,
-				commercialHints,
-				commercialPlan,
-				responsePolicy
+				compiledPrompt,
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
@@ -777,6 +766,9 @@ export async function runConversationTurn({
 			catalogProducts,
 			commercialHints,
 			prompt,
+			promptVersion: aiMeta?.promptVersion || null,
+			promptHash: aiMeta?.promptHash || null,
+			factsUsed: aiMeta?.factsUsed || [],
 			assistantMessage: finalReply,
 			provider: aiMeta?.provider || null,
 			model: aiMeta?.model || null,
