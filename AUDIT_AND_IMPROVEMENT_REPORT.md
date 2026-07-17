@@ -1062,6 +1062,21 @@ flowchart TD
 - Pruebas: TypeScript/build frontend verdes; 6/6 E2E de Inbox en 10,4 s; rechazo con motivo y reintento idempotente verificados.
 - Riesgo de deployment: medio; usa los endpoints/migración nuevos y debe desplegarse sólo después de `PaymentReviewAction` en staging.
 
+### FIND-P1-061
+
+- Título: navegación interna de Campañas deja paneles con referencias ARIA incompletas
+- Área: UI/UX/Accesibilidad/Campañas
+- Ambiente: local (auditoría read-only)
+- Severidad: Medium
+- Evidencia: `CampaignSectionShell` siempre genera `role="tabpanel"` con `aria-labelledby="campaigns-tab-${tabId}"`, pero `builder`, `schedules` y `shipments` están ocultos de la navegación principal; sus botones secundarios no tienen `role=tab` ni IDs equivalentes. `CampaignConfirmDialog` declara `role=dialog` pero no gestiona Escape, foco inicial ni retorno de foco.
+- Impacto: lectores de pantalla pueden anunciar un panel sin tab asociado y el teclado puede quedar fuera de contexto al abrir una confirmación destructiva.
+- Causa: la navegación visual se separó en tabs principales y reglas internas sin actualizar el contrato semántico común.
+- Solución propuesta: usar `aria-labelledby` al botón real de la regla activa o un heading estable; implementar foco inicial, Escape, retorno de foco y bloqueo de interacción detrás del diálogo; agregar E2E de teclado para builder/schedules y confirmaciones.
+- Estado: pendiente; no se modificaron `CampaignsFeaturePage.jsx/css` ni sus componentes porque contienen cambios locales concurrentes preservados.
+- Archivos: `frontend/src/features/campaigns/CampaignsFeaturePage.jsx`, `CampaignsFeaturePage.css`.
+- Pruebas: inspección estática; no se ejecutó una suite Campaigns mutante para evitar alterar integraciones/fixtures concurrentes.
+- Riesgo de deployment: bajo/medio; cambio limitado a semántica y foco, pero requiere validar cada ruta interna y modal.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío. Los cambios de cola conservan selección/URL y la revisión expone HANDOFF, aprobación registrada, rechazo con motivo y pedido de nuevo comprobante, todos auditables e idempotentes.
@@ -1142,6 +1157,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Operaciones: estado vacío sin error boundary, retry de resumen y loading anunciado.
 - Carritos: tabla desktop operativa, cards mobile, filtros alineados y estados loading/error/empty/data mutuamente excluyentes.
 - Pagos: acciones de aprobar/rechazar/pedir comprobante con motivo, foco y feedback accesible; sigue pendiente visualizar el historial de acciones.
+- Campañas: se conserva navegación por URL, pero queda pendiente corregir referencias ARIA y focus management de tabs internos/confirmaciones.
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
@@ -1196,7 +1212,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 - El inventario estático actual no conserva parámetros ni normalizaciones que inventen `workspace_default`; una prueba global bloquea su regresión. La validación dinámica de todas las entidades con dos tenants sintéticos continúa pendiente de staging aislado.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
-- Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica.
+- Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica. Campañas conserva una deuda de semántica ARIA/foco documentada en FIND-P1-061.
 - La API de revisión ya modela APPROVE/REJECT/REQUEST_NEW_PROOF/HANDOFF y conserva auditoría, pero la UI sólo expone HANDOFF; faltan diálogo de motivo, lectura del historial y smoke integrado sobre la migración en staging.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
@@ -1208,7 +1224,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: Inbox base, acciones durables de pagos, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: historial visual de acciones, selección/acciones masivas de carritos, campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
+P1: Inbox base, acciones durables de pagos, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: historial visual de acciones, selección/acciones masivas de carritos, semántica ARIA/foco de Campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 
