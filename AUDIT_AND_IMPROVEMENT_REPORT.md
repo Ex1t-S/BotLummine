@@ -477,19 +477,34 @@ flowchart TD
 - Pruebas: 2/2 E2E específicos y 10/10 Playwright completo; recuperación de ambas APIs verificada.
 - Riesgo de deployment: bajo; no cambia endpoints ni persistencia.
 
+### FIND-P1-022
+
+- Título: filtros de Clientes no tenían nombres accesibles ni error de datos exclusivo
+- Área: UI/UX/Accesibilidad/Clientes
+- Ambiente: todos
+- Severidad: High
+- Evidencia: los labels visuales no estaban asociados a inputs/selects, el selector no exponía `aria-expanded`, la página activa sólo se distinguía por color y un fallo de `/dashboard/customers` mostraba simultáneamente el empty.
+- Impacto: navegación deficiente con lector de pantalla/teclado y riesgo de interpretar una indisponibilidad como ausencia de compras.
+- Causa: controles construidos como grupos visuales sin contratos semánticos y error copiado a un banner ajeno al estado de la lista.
+- Solución: formulario semántico operable con Enter, labels asociados, selector y paginación anunciados, progreso/errores con roles, targets táctiles medidos y estado de carga/error/empty/data exclusivo con retry.
+- Estado: resuelto.
+- Archivos: `CustomersPage.jsx/css`, `tests/accessibility/customers-keyboard.spec.js` y captura mobile.
+- Pruebas: 2/2 E2E específicos y 12/12 Playwright completo; sin overflow a 390 px y target efectivo >=44 px.
+- Riesgo de deployment: bajo; cambios de presentación y refetch únicamente.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
-- Estados: Inbox/Comprobantes separa carga, vacío, error y datos tanto en lista como historial; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
+- Estados: Inbox/Comprobantes y Clientes separan carga, vacío, error y datos; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
 - Pendiente: recorrido visual completo de las vistas privadas restantes, teclado integral y axe.
 
 ## 9. Auditoría frontend
 
-- Build exitoso en 954 ms en la validación final de esta iteración.
+- Build exitoso en 898 ms en la validación final de esta iteración.
 - `vendor-three`: 505,81 kB minificado; warning >500 kB.
-- CSS de campañas: 100,63 kB; CSS global principal: 138,47 kB.
+- CSS de campañas: 100,63 kB; CSS global principal: 140,17 kB; Clientes: 28,97 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
 - No hay scripts de lint ni typecheck configurados; sigue como deuda P0/P1 de calidad.
 - Se añadieron tokens semánticos base, foco visible global y reducción de movimiento.
@@ -517,11 +532,11 @@ Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables
 
 ## 14. Accesibilidad
 
-Se incorporaron labels del composer/búsqueda, estados `alert`/`status`, `aria-pressed`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
+Se incorporaron labels del composer/búsqueda y filtros de Clientes, estados `alert`/`status`, `aria-pressed`, `aria-expanded`, `aria-current`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. Clientes permite operar filtros/selector con teclado y mantiene targets táctiles >=44 px a 390 px. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
 
 ## 15. Rendimiento
 
-Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landing pública 531 ms y quiet 1.098 ms. La suite ahora bloquea errores. Sigue abierto `vendor-three` con 505,81 kB minificado y carga anticipada de CSS/JS de campañas e Inbox por prefetch.
+Medición mock final: rutas internas críticas listas entre 212 y 455 ms. La landing pública llegó a 3.989 ms en la última corrida por recursos externos, principalmente la fuente remota; la suite registra el desvío y sólo aplica presupuesto bloqueante en modo estricto. Sigue abierto `vendor-three` con 505,81 kB minificado y carga anticipada de CSS/JS de campañas e Inbox por prefetch.
 
 ## 16. Pruebas
 
@@ -537,7 +552,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,90 s |
 | root build | OK; backend + frontend | 10,3 s |
-| Playwright Chromium | 10/10; 10 rutas de performance | 22,8 s |
+| Playwright Chromium | 12/12; 10 rutas de performance | 22,9 s |
 
 ## 17. Cambios implementados
 
@@ -563,18 +578,19 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Helpers de menú, handoff y estado de conversación con workspace obligatorio.
 - Errores y reintentos explícitos en lista/historial de Inbox y Operaciones.
 - Estados de marcas y Analytics mutuamente excluyentes, con reintentos locales y evidencia visual.
+- Clientes: formulario/labels semánticos, selector y paginación accesibles, targets mobile y error recuperable.
 
 ## 18. Comparación antes/después
 
 - Root build: de falso verde (sólo Prisma) a validación de ambos productos.
 - Unitarias: de 7 casos localizados a 36 pruebas ejecutadas.
-- E2E: de una suite que ocultaba fallos a 10 pruebas bloqueantes.
+- E2E: de una suite que ocultaba fallos a 12 pruebas bloqueantes.
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; revisión de pagos, errores de lista/historial, error de marcas y error de Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector en 390x844; revisión de pagos, errores de lista/historial, error de marcas y error de Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 

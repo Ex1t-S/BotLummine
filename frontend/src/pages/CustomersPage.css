@@ -1182,6 +1182,10 @@
 	letter-spacing: 0.04em;
 }
 
+.customers-product-toggle[aria-expanded="true"]::after {
+	content: "Cerrar";
+}
+
 .customers-product-toggle-label {
 	font-size: 12px;
 	font-weight: 650;
@@ -1796,4 +1800,32 @@
 	background: var(--ui-surface-soft, #192234) !important;
 	border-color: var(--ui-border, #29354a) !important;
 	color: var(--ui-muted, #a5b0c3) !important;
+}
+
+@media (max-width: 760px) {
+	.admin-shell .admin-content .customers-page .customers-filter-group input,
+	.admin-shell .admin-content .customers-page .customers-filter-group select,
+	.admin-shell .admin-content .customers-page .product-multiselect-search,
+	.admin-shell .admin-content .customers-page .customers-product-toggle,
+	.admin-shell .admin-content .customers-page .customers-apply-btn,
+	.admin-shell .admin-content .customers-page .selected-product-chip,
+	.admin-shell .admin-content .customers-page .product-option-row,
+	.admin-shell .admin-content .customers-page .pagination-btn,
+	.admin-shell .admin-content .customers-page .pagination-page-btn {
+		min-height: 46px;
+	}
+
+	.customers-filter-group input,
+	.customers-filter-group select,
+	.product-multiselect-search {
+		font-size: 16px;
+	}
+
+	.admin-shell .admin-content .customers-page .pagination-page-btn {
+		min-width: 46px;
+	}
+
+	.pagination-pages {
+		justify-content: center;
+	}
 }

@@ -7,7 +7,7 @@ import {
 	serializeCustomerProductFilters,
 } from '../lib/customerFilters.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
-import { ActionButton, PageHeader } from '../components/ui/InternalPage.jsx';
+import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './CustomersPage.css';
 
@@ -226,6 +226,7 @@ function buildCatalogProducts(rawCatalog = []) {
 }
 
 function ProductMultiSelect({
+	id,
 	options,
 	selectedValues,
 	search,
@@ -242,16 +243,17 @@ function ProductMultiSelect({
 	}, [options, search]);
 
 	return (
-		<div className="product-multiselect">
+		<div className="product-multiselect" id={id}>
 			<input
 				type="text"
 				className="product-multiselect-search"
 				placeholder="Buscar productos del catálogo..."
+				aria-label="Buscar productos del catalogo"
 				value={search}
 				onChange={(event) => onSearchChange(event.target.value)}
 			/>
 
-			<div className="product-multiselect-list">
+			<div className="product-multiselect-list" role="group" aria-label="Productos disponibles">
 				{filtered.length ? (
 					filtered.map((option) => {
 						const checked = selectedValues.includes(option.label);
@@ -400,19 +402,15 @@ export default function CustomersPage() {
 		queryClient.invalidateQueries({ queryKey: ['dashboard', 'customers'] });
 	}, [queryClient, syncStatusQuery.data?.ordersUpserted, syncStatusQuery.data?.running]);
 
-	useEffect(() => {
-		if (!customersQuery.isError) return;
-		setErrorMessage(
-			customersQuery.error?.response?.data?.message || 'No se pudieron cargar las compras.'
-		);
-	}, [customersQuery.error, customersQuery.isError]);
-
 	const data = customersQuery.data || {
 		customers: [],
 		stats: {},
 		pagination: { page: 1, totalPages: 1, totalItems: 0, pageSize: DEFAULT_PAGE_SIZE },
 	};
 	const loading = customersQuery.isLoading;
+	const customerLoadError = customersQuery.isError
+		? customersQuery.error?.response?.data?.message || 'No se pudieron cargar las compras.'
+		: '';
 	const syncStatus = syncStatusQuery.data || initialSyncStatus;
 	const syncing = syncMutation.isPending || Boolean(syncStatus.running);
 	const catalogOptions = catalogOptionsQuery.data || [];
@@ -526,7 +524,7 @@ export default function CustomersPage() {
 				</div>
 			</PageHeader>
 
-			{errorMessage ? <div className="customers-feedback customers-feedback--error">{errorMessage}</div> : null}
+			{errorMessage ? <div className="customers-feedback customers-feedback--error" role="alert">{errorMessage}</div> : null}
 
 			<div className={`customers-sync-panel ${syncStatus.running ? 'is-running' : ''}`}>
 				<div className="customers-sync-top">
@@ -548,7 +546,15 @@ export default function CustomersPage() {
 					</div>
 				</div>
 
-				<div className="customers-progress-track">
+				<div
+					className="customers-progress-track"
+					role="progressbar"
+					aria-label="Progreso de sincronizacion de pedidos"
+					aria-valuemin="0"
+					aria-valuemax="100"
+					aria-valuenow={syncStatus.running ? undefined : syncStatus.ordersFetched ? 100 : 0}
+					aria-valuetext={syncStatus.running ? 'Sincronizacion en curso' : syncStatus.ordersFetched ? 'Sincronizacion completa' : 'Sin iniciar'}
+				>
 					<div
 						className="customers-progress-bar"
 						style={{ width: syncStatus.running ? '58%' : syncStatus.ordersFetched ? '100%' : '0%' }}
@@ -563,7 +569,7 @@ export default function CustomersPage() {
 				) : null}
 
 				{syncStatus.warnings?.length ? (
-					<div className="customers-sync-notes">
+					<div className="customers-sync-notes" role="status" aria-live="polite">
 						{syncStatus.warnings.slice(-2).map((warning) => (
 							<div
 								key={`${warning.at}-${warning.message}`}
@@ -576,7 +582,7 @@ export default function CustomersPage() {
 				) : null}
 
 				{syncStatus.errors?.length ? (
-					<div className="customers-sync-notes">
+					<div className="customers-sync-notes" role="alert">
 						{syncStatus.errors.slice(-2).map((item) => (
 							<div
 								key={`${item.at}-${item.message}`}
@@ -597,14 +603,20 @@ export default function CustomersPage() {
 				<div className="customers-stat-card"><span className="customers-stat-label">Facturación</span><strong>{displayTotalSpentLabel}</strong></div>
 			</div>
 
-			<div className="customers-filters-card">
+			<form
+				className="customers-filters-card"
+				onSubmit={(event) => {
+					event.preventDefault();
+					handleApplyFilters();
+				}}
+			>
 				<div className="customers-list-topbar">
 					<div>
 						<h3>Filtros comerciales</h3>
 						<p>Filtrá por cliente, pedido, monto y productos reales del catálogo.</p>
 					</div>
 					{activeFilterCount ? (
-						<span className="customers-active-filter-badge">
+						<span className="customers-active-filter-badge" role="status">
 							{activeFilterCount} filtros activos
 						</span>
 					) : null}
@@ -612,8 +624,9 @@ export default function CustomersPage() {
 
 				<div className="customers-filter-grid">
 					<div className="customers-filter-group customers-filter-group--grow">
-						<label>Buscar general</label>
+						<label htmlFor="customers-search">Buscar general</label>
 						<input
+							id="customers-search"
 							type="text"
 							name="q"
 							placeholder="Nombre, email, teléfono, SKU o nro. de pedido"
@@ -623,11 +636,14 @@ export default function CustomersPage() {
 					</div>
 
 					<div className="customers-filter-group customers-filter-group--wide">
-						<label>Producto comprado</label>
+						<label id="customers-product-filter-label">Producto comprado</label>
 						<button
 							type="button"
 							className="customers-product-toggle"
 							onClick={() => setShowProductFilter((current) => !current)}
+							aria-labelledby="customers-product-filter-label"
+							aria-expanded={showProductFilter}
+							aria-controls="customers-product-options"
 						>
 							<span className="customers-product-toggle-label">Selector de productos</span>
 						</button>
@@ -640,10 +656,10 @@ export default function CustomersPage() {
 										type="button"
 										className="selected-product-chip"
 										onClick={() => handleRemoveSelectedProduct(productName)}
-										title="Quitar producto"
+										aria-label={`Quitar producto ${productName}`}
 									>
 										<span>{productName}</span>
-										<strong>×</strong>
+										<strong aria-hidden="true">×</strong>
 									</button>
 								))}
 							</div>
@@ -651,6 +667,7 @@ export default function CustomersPage() {
 
 						{showProductFilter ? (
 							<ProductMultiSelect
+								id="customers-product-options"
 								options={catalogOptions}
 								selectedValues={selectedProducts}
 								search={productSearch}
@@ -662,8 +679,9 @@ export default function CustomersPage() {
 					</div>
 
 					<div className="customers-filter-group">
-						<label>Nro. pedido</label>
+						<label htmlFor="customers-order-number">Nro. pedido</label>
 						<input
+							id="customers-order-number"
 							type="text"
 							name="orderNumber"
 							placeholder="Ej: 23621"
@@ -673,17 +691,18 @@ export default function CustomersPage() {
 					</div>
 
 					<div className="customers-filter-group">
-						<label>Compra desde</label>
-						<input type="date" name="dateFrom" value={filters.dateFrom} onChange={handleFilterChange} />
+						<label htmlFor="customers-date-from">Compra desde</label>
+						<input id="customers-date-from" type="date" name="dateFrom" value={filters.dateFrom} onChange={handleFilterChange} />
 					</div>
 
 					<div className="customers-filter-group">
-						<label>Compra hasta</label>
-						<input type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
+						<label htmlFor="customers-date-to">Compra hasta</label>
+						<input id="customers-date-to" type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
 					</div>
 					<div className="customers-filter-group">
-						<label>Pago</label>
+						<label htmlFor="customers-payment-status">Pago</label>
 						<select
+							id="customers-payment-status"
 							name="paymentStatus"
 							value={filters.paymentStatus}
 							onChange={handleFilterChange}
@@ -700,8 +719,9 @@ export default function CustomersPage() {
 						</select>
 					</div>
 					<div className="customers-filter-group">
-						<label>Envío</label>
+						<label htmlFor="customers-shipping-status">Envío</label>
 						<select
+							id="customers-shipping-status"
 							name="shippingStatus"
 							value={filters.shippingStatus}
 							onChange={handleFilterChange}
@@ -712,8 +732,9 @@ export default function CustomersPage() {
 						</select>
 					</div>
 					<div className="customers-filter-group">
-						<label>Total mínimo</label>
+						<label htmlFor="customers-min-spent">Total mínimo</label>
 						<input
+							id="customers-min-spent"
 							type="number"
 							name="minSpent"
 							placeholder="50000"
@@ -723,8 +744,8 @@ export default function CustomersPage() {
 					</div>
 
 					<div className="customers-filter-group">
-						<label>Ordenar por</label>
-						<select name="sort" value={filters.sort} onChange={handleFilterChange}>
+						<label htmlFor="customers-sort">Ordenar por</label>
+						<select id="customers-sort" name="sort" value={filters.sort} onChange={handleFilterChange}>
 							<option value="purchase_desc">Compra más reciente</option>
 							<option value="purchase_asc">Compra más antigua</option>
 							<option value="spent_desc">Mayor monto</option>
@@ -749,12 +770,12 @@ export default function CustomersPage() {
 					</label>
 
 					<div className="customers-filter-actions">
-						<button type="button" className="customers-apply-btn" onClick={handleApplyFilters}>
+						<button type="submit" className="customers-apply-btn">
 							Aplicar filtros
 						</button>
 					</div>
 				</div>
-			</div>
+			</form>
 
 			<div className="customers-list-card">
 				<div className="customers-list-topbar">
@@ -767,15 +788,31 @@ export default function CustomersPage() {
 					</div>
 				</div>
 
-				{loading ? <div className="customers-empty-state">Cargando compras...</div> : null}
-
-				{!loading && !data.customers?.length ? (
-					<div className="customers-empty-state">
-						No hay compras para esos filtros. Probá ampliar la búsqueda o dejar que la sync avance un poco más.
-					</div>
-				) : null}
-
-				{!loading && data.customers?.length ? (
+				{loading ? (
+					<EmptyState
+						tone="loading"
+						title="Cargando compras"
+						description="Estamos reuniendo clientes, pedidos y productos."
+						className="customers-empty-state"
+					/>
+				) : customerLoadError ? (
+					<EmptyState
+						tone="error"
+						title="No pudimos cargar las compras"
+						description={customerLoadError}
+						className="customers-empty-state"
+					>
+						<button type="button" onClick={() => customersQuery.refetch()} disabled={customersQuery.isFetching}>
+							{customersQuery.isFetching ? 'Reintentando' : 'Reintentar'}
+						</button>
+					</EmptyState>
+				) : !data.customers?.length ? (
+					<EmptyState
+						title="No hay compras para esos filtros"
+						description="Proba ampliar la busqueda o deja que la sincronizacion avance un poco mas."
+						className="customers-empty-state"
+					/>
+				) : (
 					<div className="customers-grid">
 						{data.customers.map((customer) => (
 							<article key={customer.id} className="customer-card">
@@ -845,13 +882,14 @@ export default function CustomersPage() {
 							</article>
 						))}
 					</div>
-				) : null}
+				)}
 
 				{totalPages > 1 ? (
-					<div className="pagination-row compact-pagination">
+					<nav className="pagination-row compact-pagination" aria-label="Paginacion de clientes">
 						<button
 							type="button"
 							className="pagination-btn"
+							aria-label="Ir a la pagina anterior"
 							disabled={currentPage === 1}
 							onClick={() => handlePageChange(currentPage - 1)}
 						>
@@ -861,12 +899,14 @@ export default function CustomersPage() {
 						<div className="pagination-pages">
 							{visiblePages.map((page) =>
 								String(page).includes('ellipsis') ? (
-									<span key={page} className="pagination-ellipsis">...</span>
+									<span key={page} className="pagination-ellipsis" aria-hidden="true">...</span>
 								) : (
 									<button
 										key={page}
 										type="button"
 										className={`pagination-page-btn ${page === currentPage ? 'is-active' : ''}`}
+										aria-label={`Ir a la pagina ${page}`}
+										aria-current={page === currentPage ? 'page' : undefined}
 										onClick={() => handlePageChange(page)}
 									>
 										{page}
@@ -878,12 +918,13 @@ export default function CustomersPage() {
 						<button
 							type="button"
 							className="pagination-btn"
+							aria-label="Ir a la pagina siguiente"
 							disabled={currentPage === totalPages}
 							onClick={() => handlePageChange(currentPage + 1)}
 						>
 							Siguiente
 						</button>
-					</div>
+					</nav>
 				) : null}
 			</div>
 		</section>
