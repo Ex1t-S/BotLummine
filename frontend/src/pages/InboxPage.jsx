@@ -738,6 +738,7 @@ export default function InboxPage() {
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
 	const [composerError, setComposerError] = useState('');
+	const [composerDrafts, setComposerDrafts] = useState({});
 	const [actionFeedback, setActionFeedback] = useState('');
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -878,13 +879,14 @@ export default function InboxPage() {
 	}, [selectedConversationId]);
 
 	useEffect(() => {
-		if (!routeConversationId) return;
+		if (routeConversationId) return;
 		if (readFilter === 'UNREAD' && !selectedConversationId) {
 			return;
 		}
 
 		if (selectedConversationId) return;
 		if (inboxQuery.isPlaceholderData) return;
+		if (isCompactInboxViewport()) return;
 
 		if (!visibleContacts.length) {
 			return;
@@ -1475,15 +1477,29 @@ export default function InboxPage() {
 		}
 	}
 
-	function handleSendComposerMessage(message = '') {
+	async function handleSendComposerMessage(message = '') {
 		const body = String(message || '').trim();
-		if (!selectedConversationId || (!body && !selectedFile)) return;
+		if (!selectedConversationId || (!body && !selectedFile)) return false;
 		setComposerError('');
-		sendMessageMutation.mutate({
-			conversationId: selectedConversationId,
-			body,
-			file: selectedFile,
-		});
+
+		try {
+			await sendMessageMutation.mutateAsync({
+				conversationId: selectedConversationId,
+				body,
+				file: selectedFile,
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	function handleComposerDraftChange(value) {
+		if (!selectedConversationId) return;
+		setComposerDrafts((current) => ({
+			...current,
+			[selectedConversationId]: value,
+		}));
 	}
 
 	function handleSelectFile(file) {
@@ -1603,6 +1619,7 @@ export default function InboxPage() {
 						type="text"
 						className="inbox-search-input"
 						placeholder="Buscar por nombre, teléfono o mensaje..."
+						aria-label="Buscar conversaciones"
 						value={searchTerm}
 						onChange={(event) => setSearchTerm(event.target.value)}
 					/>
@@ -1617,6 +1634,7 @@ export default function InboxPage() {
 							className={`inbox-read-filter-btn ${
 								readFilter === item.key ? 'inbox-read-filter-btn--active' : ''
 							}`}
+							aria-pressed={readFilter === item.key}
 						>
 							{item.label}
 						</button>
@@ -1890,6 +1908,8 @@ export default function InboxPage() {
 									disabled={!selectedConversationId}
 									error={composerError}
 									placeholder="Escribi un mensaje"
+									value={composerDrafts[selectedConversationId] || ''}
+									onValueChange={handleComposerDraftChange}
 								/>
 							)}
 						>

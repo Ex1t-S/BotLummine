@@ -29,7 +29,7 @@ function formatFileSize(bytes = 0) {
 }
 
 type AiChatInputProps = {
-	onSendMessage: (message: string) => void;
+	onSendMessage: (message: string) => boolean | void | Promise<boolean | void>;
 	onUploadFile?: (file: File) => void;
 	onClearFile?: () => void;
 	selectedFile?: File | null;
@@ -37,6 +37,8 @@ type AiChatInputProps = {
 	disabled?: boolean;
 	error?: string;
 	placeholder?: string;
+	value?: string;
+	onValueChange?: (value: string) => void;
 };
 
 export default function AiChatInput({
@@ -48,21 +50,37 @@ export default function AiChatInput({
 	disabled = false,
 	error = "",
 	placeholder = "Escribí un mensaje...",
+	value,
+	onValueChange,
 }: AiChatInputProps) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [input, setInput] = useState("");
+	const submissionInFlightRef = useRef(false);
+	const [internalInput, setInternalInput] = useState("");
 	const [selectedCommands, setSelectedCommands] = useState<string[]>([]);
 	const [emojiOpen, setEmojiOpen] = useState(false);
 	const [commandOpen, setCommandOpen] = useState(false);
 
-	const canSubmit = Boolean(input.trim() || selectedFile) && !disabled;
+	const input = value ?? internalInput;
+	const setInput = (nextValue: string | ((current: string) => string)) => {
+		const resolvedValue = typeof nextValue === "function" ? nextValue(input) : nextValue;
+		if (value === undefined) setInternalInput(resolvedValue);
+		onValueChange?.(resolvedValue);
+	};
+	const canSubmit = Boolean(input.trim() || selectedFile) && !disabled && !isLoading;
 
-	const handleSubmit = () => {
-		if (!canSubmit || isLoading) return;
-		onSendMessage(input.trim());
-		setInput("");
-		setSelectedCommands([]);
-		setCommandOpen(false);
+	const handleSubmit = async () => {
+		if (!canSubmit || submissionInFlightRef.current) return;
+		submissionInFlightRef.current = true;
+
+		try {
+			const sent = await onSendMessage(input.trim());
+			if (sent === false) return;
+			setInput("");
+			setSelectedCommands([]);
+			setCommandOpen(false);
+		} finally {
+			submissionInFlightRef.current = false;
+		}
 	};
 
 	const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -107,8 +125,8 @@ export default function AiChatInput({
 
 	return (
 		<div className="ai-chat-input w-full bg-background">
-			{error ? <div className="inbox-composer-feedback inbox-composer-feedback--error">{error}</div> : null}
-			{isLoading ? <div className="inbox-composer-feedback inbox-composer-feedback--sending">Enviando mensaje...</div> : null}
+			{error ? <div role="alert" className="inbox-composer-feedback inbox-composer-feedback--error">{error}</div> : null}
+			{isLoading ? <div role="status" aria-live="polite" className="inbox-composer-feedback inbox-composer-feedback--sending">Enviando mensaje...</div> : null}
 
 			{selectedFile ? (
 				<div className="inbox-selected-file">
@@ -125,6 +143,7 @@ export default function AiChatInput({
 						onClick={onClearFile}
 						disabled={isLoading}
 						title="Quitar archivo"
+						aria-label="Quitar archivo"
 					>
 						<X size={14} strokeWidth={2.4} aria-hidden="true" />
 					</button>
@@ -184,6 +203,7 @@ export default function AiChatInput({
 								onKeyDown={handleKeyDown}
 								onPaste={handlePaste}
 								placeholder={placeholder}
+								aria-label="Mensaje"
 								disabled={disabled || isLoading}
 								className="inbox-textarea min-h-[44px] max-h-[160px] resize-none rounded-xl px-3 py-2 text-sm"
 								rows={1}
@@ -221,6 +241,7 @@ export default function AiChatInput({
 									type="button"
 									onClick={() => addEmoji(emoji)}
 									className="rounded-md p-1 text-lg transition hover:bg-accent"
+									aria-label={`Agregar ${emoji}`}
 								>
 									{emoji}
 								</button>
