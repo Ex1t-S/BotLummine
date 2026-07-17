@@ -2,6 +2,7 @@ import axios from 'axios';
 import { prisma } from '../../lib/prisma.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
@@ -16,7 +17,7 @@ function normalizeShopDomain(value = '') {
 	return normalized;
 }
 
-function getEnvShopifyConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
+function getEnvShopifyConfig(workspaceId) {
 	if (workspaceId !== DEFAULT_WORKSPACE_ID) return null;
 
 	const shopDomain = normalizeShopDomain(process.env.SHOPIFY_SHOP_DOMAIN || '');
@@ -37,7 +38,7 @@ function getEnvShopifyConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 	};
 }
 
-async function getStoredShopifyConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getStoredShopifyConfig(workspaceId) {
 	const connection = await prisma.commerceConnection.findFirst({
 		where: {
 			workspaceId,
@@ -67,8 +68,8 @@ async function getStoredShopifyConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 	};
 }
 
-export async function getShopifyConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getShopifyConfig({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const stored = await getStoredShopifyConfig(resolvedWorkspaceId);
 	if (stored) return stored;
 
@@ -78,7 +79,7 @@ export async function getShopifyConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 	throw new Error('Faltan credenciales de Shopify. Configura CommerceConnection SHOPIFY o SHOPIFY_SHOP_DOMAIN/SHOPIFY_ACCESS_TOKEN.');
 }
 
-export async function getShopifyClient({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getShopifyClient({ workspaceId } = {}) {
 	const config = await getShopifyConfig({ workspaceId });
 	const client = axios.create({
 		baseURL: `https://${config.shopDomain}/admin/api/${config.apiVersion}`,

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { prisma } from '../../lib/prisma.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 
 function buildHeaders(accessToken) {
 	return {
@@ -19,7 +20,7 @@ function buildBaseUrl(storeId) {
 	return `https://api.tiendanube.com/${apiVersion}/${storeId}`;
 }
 
-function getEnvTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
+function getEnvTiendanubeConfig(workspaceId) {
 	const storeId = process.env.TIENDANUBE_STORE_ID || null;
 	const accessToken = process.env.TIENDANUBE_ACCESS_TOKEN || null;
 
@@ -35,10 +36,10 @@ function getEnvTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 	};
 }
 
-async function getStoredTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getStoredTiendanubeConfig(workspaceId) {
 	const installation = await prisma.storeInstallation.findFirst({
 		where: {
-			workspaceId: normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID,
+			workspaceId,
 			provider: 'TIENDANUBE',
 		},
 		orderBy: { installedAt: 'desc' }
@@ -60,8 +61,8 @@ async function getStoredTiendanubeConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 	};
 }
 
-export async function getTiendanubeConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getTiendanubeConfig({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const stored = await getStoredTiendanubeConfig(resolvedWorkspaceId);
 	if (stored) return stored;
 
@@ -72,7 +73,7 @@ export async function getTiendanubeConfig({ workspaceId = DEFAULT_WORKSPACE_ID }
 }
 
 export function createTiendanubeClient(config = null) {
-	const resolved = config || getEnvTiendanubeConfig();
+	const resolved = config;
 
 	if (!resolved?.storeId || !resolved?.accessToken) {
 		throw new Error('Faltan TIENDANUBE_STORE_ID o TIENDANUBE_ACCESS_TOKEN en el .env');
@@ -85,7 +86,7 @@ export function createTiendanubeClient(config = null) {
 	});
 }
 
-export async function getTiendanubeClient({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getTiendanubeClient({ workspaceId } = {}) {
 	const installation = await getTiendanubeConfig({ workspaceId });
 
 	return {
