@@ -100,7 +100,7 @@ test('operations comunica loading y luego muestra prioridades', async ({ page })
 
 	await expect(page.getByRole('status')).toContainText('Cargando prioridades operativas');
 	releaseSummary();
-	await expect(page.getByRole('heading', { name: 'Marca Operativa' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Marca Operativa', level: 1 })).toBeVisible();
 	await expect(page.getByText('Revisar comprobantes')).toBeVisible();
 });
 
@@ -114,7 +114,7 @@ test('operations separa error de empty y permite reintentar', async ({ page }) =
 	await expect(page.getByText('No hay marcas para mostrar')).toHaveCount(0);
 	errorControl.allow = true;
 	await errorState.getByRole('button', { name: 'Reintentar' }).click();
-	await expect(page.getByRole('heading', { name: 'Marca Operativa' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Marca Operativa', level: 1 })).toBeVisible();
 });
 
 test('operations ofrece empty explícito sin inventar prioridades', async ({ page }) => {
