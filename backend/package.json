@@ -20,6 +20,7 @@
     "ai:regression": "node scripts/run-ai-regression-suite.mjs",
     "ai:regression:compare": "node scripts/compare-ai-regression-suite.mjs",
     "ai:eval:offline": "node scripts/run-agent-eval-offline.mjs",
+    "ai:traces:prune": "node scripts/prune-ai-turn-traces.mjs",
     "catalog:fuzzy-test": "node scripts/test-catalog-fuzzy-search.mjs",
     "ai:campaign-qa": "node scripts/run-ai-campaign-qa.mjs",
     "ai:campaign-qa:smoke": "node scripts/run-ai-campaign-qa.mjs --smoke",

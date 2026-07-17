@@ -16,53 +16,54 @@ model Workspace {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  users               User[]
-  branding            WorkspaceBranding?
-  aiConfig            WorkspaceAiConfig?
-  commerceConnections CommerceConnection[]
-  logisticsConnections LogisticsConnection[]
-  whatsappChannels    WhatsAppChannel[]
-  contacts            Contact[]
-  conversations       Conversation[]
-  aiLabRuns           AiLabRun[]
-  menuSettings        WhatsAppMenuSetting[]
-  messages            Message[]
-  storeInstallations  StoreInstallation[]
-  catalogProducts     CatalogProduct[]
-  catalogSyncLogs     CatalogSyncLog[]
-  abandonedCarts      AbandonedCart[]
-  customerProfiles    CustomerProfile[]
-  customerOrders      CustomerOrder[]
-  customerOrderItems  CustomerOrderItem[]
-  customerSyncLogs    CustomerSyncLog[]
-  enboxShipments      EnboxShipment[]
-  enboxSyncLogs       EnboxSyncLog[]
-  whatsAppTemplates   WhatsAppTemplate[]
-  templateSyncLogs    TemplateSyncLog[]
-  campaigns           Campaign[]
-  campaignRecipients  CampaignRecipient[]
-  campaignConversions CampaignConversion[]
-  campaignSchedules   CampaignSchedule[]
-  automationRuns      AutomationRun[]
-  featureFlags        WorkspaceFeatureFlag[]
-  abandonedCartAutomationSetting AbandonedCartAutomationSetting?
-  abandonedCartAutomationLogs    AbandonedCartAutomationLog[]
+  users                           User[]
+  branding                        WorkspaceBranding?
+  aiConfig                        WorkspaceAiConfig?
+  commerceConnections             CommerceConnection[]
+  logisticsConnections            LogisticsConnection[]
+  whatsappChannels                WhatsAppChannel[]
+  contacts                        Contact[]
+  conversations                   Conversation[]
+  aiLabRuns                       AiLabRun[]
+  aiTurnTraces                    AiTurnTrace[]
+  menuSettings                    WhatsAppMenuSetting[]
+  messages                        Message[]
+  storeInstallations              StoreInstallation[]
+  catalogProducts                 CatalogProduct[]
+  catalogSyncLogs                 CatalogSyncLog[]
+  abandonedCarts                  AbandonedCart[]
+  customerProfiles                CustomerProfile[]
+  customerOrders                  CustomerOrder[]
+  customerOrderItems              CustomerOrderItem[]
+  customerSyncLogs                CustomerSyncLog[]
+  enboxShipments                  EnboxShipment[]
+  enboxSyncLogs                   EnboxSyncLog[]
+  whatsAppTemplates               WhatsAppTemplate[]
+  templateSyncLogs                TemplateSyncLog[]
+  campaigns                       Campaign[]
+  campaignRecipients              CampaignRecipient[]
+  campaignConversions             CampaignConversion[]
+  campaignSchedules               CampaignSchedule[]
+  automationRuns                  AutomationRun[]
+  featureFlags                    WorkspaceFeatureFlag[]
+  abandonedCartAutomationSetting  AbandonedCartAutomationSetting?
+  abandonedCartAutomationLogs     AbandonedCartAutomationLog[]
   pendingPaymentAutomationSetting PendingPaymentAutomationSetting?
   pendingPaymentAutomationLogs    PendingPaymentAutomationLog[]
-  shipmentNotificationSetting ShipmentNotificationSetting?
-  shipmentNotificationLogs    ShipmentNotificationLog[]
+  shipmentNotificationSetting     ShipmentNotificationSetting?
+  shipmentNotificationLogs        ShipmentNotificationLog[]
 }
 
 model WorkspaceBranding {
-  id                  String    @id @default(cuid())
-  workspaceId         String    @unique
+  id                  String   @id @default(cuid())
+  workspaceId         String   @unique
   logoUrl             String?
   primaryColor        String?
   secondaryColor      String?
   accentColor         String?
   rawProviderBranding Json?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
@@ -104,7 +105,7 @@ model WorkspaceFeatureFlag {
 }
 
 model CommerceConnection {
-  id              String             @id @default(cuid())
+  id              String           @id @default(cuid())
   workspaceId     String
   provider        CommerceProvider
   externalStoreId String
@@ -112,13 +113,13 @@ model CommerceConnection {
   accessToken     String
   refreshToken    String?
   scope           String?
-  status          ConnectionStatus   @default(ACTIVE)
-  isPrimary       Boolean            @default(false)
+  status          ConnectionStatus @default(ACTIVE)
+  isPrimary       Boolean          @default(false)
   storeName       String?
   storeUrl        String?
   rawPayload      Json?
-  installedAt     DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  installedAt     DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -129,15 +130,15 @@ model CommerceConnection {
 }
 
 model LogisticsConnection {
-  id          String             @id @default(cuid())
+  id          String            @id @default(cuid())
   workspaceId String
   provider    LogisticsProvider
   username    String
   password    String
-  status      ConnectionStatus   @default(ACTIVE)
+  status      ConnectionStatus  @default(ACTIVE)
   config      Json?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -176,7 +177,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  workspace          Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   featureFlagUpdates WorkspaceFeatureFlag[]
 
   @@index([workspaceId, role])
@@ -205,26 +206,27 @@ model Contact {
 }
 
 model Conversation {
-  id            String             @id @default(cuid())
-  workspaceId   String
-  contactId     String
-  status        ConversationStatus @default(OPEN)
-  queue         ConversationQueue  @default(AUTO)
-  aiEnabled     Boolean            @default(true)
-  lastSummary   String?
-  lastMessageAt DateTime?
+  id                   String             @id @default(cuid())
+  workspaceId          String
+  contactId            String
+  status               ConversationStatus @default(OPEN)
+  queue                ConversationQueue  @default(AUTO)
+  aiEnabled            Boolean            @default(true)
+  lastSummary          String?
+  lastMessageAt        DateTime?
   lastInboundMessageAt DateTime?
-  lastReadAt    DateTime?
-  unreadCount   Int                @default(0)
-  archivedAt    DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  lastReadAt           DateTime?
+  unreadCount          Int                @default(0)
+  archivedAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact  Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  state    ConversationState?
-  messages Message[]
-  aiLabRuns AiLabRun[]
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact      Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  state        ConversationState?
+  messages     Message[]
+  aiLabRuns    AiLabRun[]
+  aiTurnTraces AiTurnTrace[]
 
   @@unique([workspaceId, contactId])
   @@index([workspaceId, lastMessageAt])
@@ -235,20 +237,20 @@ model Conversation {
 }
 
 model AiLabRun {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  sessionId       String
-  fixtureKey      String
-  conversationId  String
-  action          String?
-  selectionId     String?
-  userMessage     String?
+  id               String   @id @default(cuid())
+  workspaceId      String
+  sessionId        String
+  fixtureKey       String
+  conversationId   String
+  action           String?
+  selectionId      String?
+  userMessage      String?
   assistantMessage String?
-  intent          String?
-  provider        String?
-  model           String?
-  tracePayload    Json?
-  createdAt       DateTime @default(now())
+  intent           String?
+  provider         String?
+  model            String?
+  tracePayload     Json?
+  createdAt        DateTime @default(now())
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -258,64 +260,97 @@ model AiLabRun {
   @@index([workspaceId, fixtureKey, createdAt])
 }
 
+model AiTurnTrace {
+  id               String   @id @default(cuid())
+  traceId          String   @unique
+  workspaceId      String
+  conversationId   String
+  inboundMessageId String?
+  promptVersion    String?
+  promptHash       String?
+  route            String
+  intentName       String?
+  intentConfidence Float    @default(0)
+  retrievedFacts   Json
+  provider         String?
+  model            String?
+  latencyMs        Int      @default(0)
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  auditPassed      Boolean  @default(true)
+  auditFlags       Json
+  handoffReason    String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  inboundMessage Message?     @relation(fields: [inboundMessageId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, conversationId, createdAt])
+  @@index([inboundMessageId])
+  @@index([expiresAt])
+}
+
 model ConversationState {
-  id                     String    @id @default(cuid())
-  conversationId         String    @unique
-  customerName           String?
-  lastIntent             String?
-  lastDetectedIntent     String?
-  lastUserGoal           String?
-  lastOrderNumber        String?
-  lastOrderId            String?
-  preferredTone          String?
-  customerMood           String?
-  urgencyLevel           String?
-  frequentSize           String?
-  paymentPreference      String?
-  deliveryPreference     String?
-  interestedProducts     Json?
-  objections             Json?
-  needsHuman             Boolean   @default(false)
-  handoffReason          String?
-  interactionCount       Int       @default(0)
-  notes                  String?
-  currentProductFocus    String?
-  currentProductFamily   String?
-  requestedOfferType     String?
-  excludedProductKeywords Json?
-  categoryLocked         Boolean   @default(false)
-  salesStage             String?
-  shownOffers            Json?
-  shownPrices            Json?
-  sharedLinks            Json?
-  lastRecommendedProduct String?
-  lastRecommendedOffer   String?
-  buyingIntentLevel      String?
-  frictionLevel          String?
-  commercialSummary      String?
-  campaignContext        Json?
+  id                        String    @id @default(cuid())
+  conversationId            String    @unique
+  customerName              String?
+  lastIntent                String?
+  lastDetectedIntent        String?
+  lastUserGoal              String?
+  lastOrderNumber           String?
+  lastOrderId               String?
+  preferredTone             String?
+  customerMood              String?
+  urgencyLevel              String?
+  frequentSize              String?
+  paymentPreference         String?
+  deliveryPreference        String?
+  interestedProducts        Json?
+  objections                Json?
+  needsHuman                Boolean   @default(false)
+  handoffReason             String?
+  interactionCount          Int       @default(0)
+  notes                     String?
+  currentProductFocus       String?
+  currentProductFamily      String?
+  requestedOfferType        String?
+  excludedProductKeywords   Json?
+  categoryLocked            Boolean   @default(false)
+  salesStage                String?
+  shownOffers               Json?
+  shownPrices               Json?
+  sharedLinks               Json?
+  lastRecommendedProduct    String?
+  lastRecommendedOffer      String?
+  buyingIntentLevel         String?
+  frictionLevel             String?
+  commercialSummary         String?
+  campaignContext           Json?
   pendingAutoReplyMessageId String?
-  pendingAutoReplyDueAt  DateTime?
-  pendingAutoReplyLockedAt DateTime?
-  menuActive             Boolean   @default(false)
-  menuPath               String?
-  menuLastSelection      String?
-  menuLastPromptAt       DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  pendingAutoReplyDueAt     DateTime?
+  pendingAutoReplyLockedAt  DateTime?
+  menuActive                Boolean   @default(false)
+  menuPath                  String?
+  menuLastSelection         String?
+  menuLastPromptAt          DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model WhatsAppMenuSetting {
-  id        String   @id @default(cuid())
+  id          String   @id @default(cuid())
   workspaceId String
-  key       String
-  name      String   @default("Configuración principal")
-  isActive  Boolean  @default(true)
-  config    Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  key         String
+  name        String   @default("Configuración principal")
+  isActive    Boolean  @default(true)
+  config      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -343,8 +378,9 @@ model Message {
   rawPayload         Json?
   createdAt          DateTime         @default(now())
 
-  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  aiTurnTraces AiTurnTrace[]
 
   @@unique([workspaceId, metaMessageId])
   @@index([workspaceId, conversationId, createdAt])
@@ -352,16 +388,16 @@ model Message {
 }
 
 model StoreInstallation {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   workspaceId String
   provider    CommerceProvider @default(TIENDANUBE)
-  storeId     String   @unique
+  storeId     String           @unique
   accessToken String
   scope       String?
   storeName   String?
   storeUrl    String?
-  installedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  installedAt DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -369,7 +405,7 @@ model StoreInstallation {
 }
 
 model CatalogProduct {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   workspaceId    String
   provider       CommerceProvider @default(TIENDANUBE)
   storeId        String
@@ -378,9 +414,9 @@ model CatalogProduct {
   handle         String?
   description    String?
   brand          String?
-  price          Decimal? @db.Decimal(10, 2)
-  compareAtPrice Decimal? @db.Decimal(10, 2)
-  published      Boolean  @default(true)
+  price          Decimal?         @db.Decimal(10, 2)
+  compareAtPrice Decimal?         @db.Decimal(10, 2)
+  published      Boolean          @default(true)
   tags           String?
   featuredImage  String?
   productUrl     String?
@@ -389,9 +425,9 @@ model CatalogProduct {
   categories     Json?
   attributes     Json?
   rawPayload     Json?
-  syncedAt       DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  syncedAt       DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -401,16 +437,16 @@ model CatalogProduct {
 }
 
 model CatalogSyncLog {
-  id                String    @id @default(cuid())
+  id                String           @id @default(cuid())
   workspaceId       String
   provider          CommerceProvider @default(TIENDANUBE)
   storeId           String?
   status            String
-  startedAt         DateTime  @default(now())
+  startedAt         DateTime         @default(now())
   finishedAt        DateTime?
-  productsProcessed Int       @default(0)
+  productsProcessed Int              @default(0)
   message           String?
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime         @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -418,7 +454,7 @@ model CatalogSyncLog {
 }
 
 model AbandonedCart {
-  id                   String    @id @default(cuid())
+  id                   String           @id @default(cuid())
   workspaceId          String
   provider             CommerceProvider @default(TIENDANUBE)
   storeId              String?
@@ -428,8 +464,8 @@ model AbandonedCart {
   contactEmail         String?
   contactPhone         String?
   abandonedCheckoutUrl String?
-  subtotal             Decimal?  @db.Decimal(10, 2)
-  totalAmount          Decimal?  @db.Decimal(10, 2)
+  subtotal             Decimal?         @db.Decimal(10, 2)
+  totalAmount          Decimal?         @db.Decimal(10, 2)
   currency             String?
   gateway              String?
   shipping             String?
@@ -438,14 +474,14 @@ model AbandonedCart {
   shippingCity         String?
   shippingProvince     String?
   shippingZipcode      String?
-  status               String    @default("NEW")
+  status               String           @default("NEW")
   contactedAt          DateTime?
   recoveredAt          DateTime?
   lastMessageSentAt    DateTime?
   rawPayload           Json?
   products             Json?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
   checkoutCreatedAt    DateTime?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -458,7 +494,7 @@ model AbandonedCart {
 }
 
 model CustomerProfile {
-  id                        String    @id @default(cuid())
+  id                        String           @id @default(cuid())
   workspaceId               String
   provider                  CommerceProvider @default(TIENDANUBE)
   storeId                   String
@@ -483,11 +519,11 @@ model CustomerProfile {
   billingProvince           String?
   billingCountry            String?
   billingPhone              String?
-  orderCount                Int       @default(0)
-  paidOrderCount            Int       @default(0)
-  distinctProductsCount     Int       @default(0)
-  totalUnitsPurchased       Int       @default(0)
-  totalSpent                Decimal?  @db.Decimal(12, 2)
+  orderCount                Int              @default(0)
+  paidOrderCount            Int              @default(0)
+  distinctProductsCount     Int              @default(0)
+  totalUnitsPurchased       Int              @default(0)
+  totalSpent                Decimal?         @db.Decimal(12, 2)
   currency                  String?
   firstOrderAt              DateTime?
   lastOrderAt               DateTime?
@@ -498,9 +534,9 @@ model CustomerProfile {
   productSummary            Json?
   rawCustomerPayload        Json?
   rawLastOrderPayload       Json?
-  syncedAt                  DateTime  @default(now())
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  syncedAt                  DateTime         @default(now())
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
 
   orders     CustomerOrder[]
   orderItems CustomerOrderItem[]
@@ -520,7 +556,7 @@ model CustomerProfile {
 }
 
 model CustomerOrder {
-  id                    String    @id @default(cuid())
+  id                    String           @id @default(cuid())
   workspaceId           String
   provider              CommerceProvider @default(TIENDANUBE)
   customerProfileId     String
@@ -537,8 +573,8 @@ model CustomerOrder {
   status                String?
   paymentStatus         String?
   shippingStatus        String?
-  subtotal              Decimal?  @db.Decimal(12, 2)
-  totalAmount           Decimal?  @db.Decimal(12, 2)
+  subtotal              Decimal?         @db.Decimal(12, 2)
+  totalAmount           Decimal?         @db.Decimal(12, 2)
   currency              String?
   gateway               String?
   gatewayId             String?
@@ -548,8 +584,8 @@ model CustomerOrder {
   rawPayload            Json?
   orderCreatedAt        DateTime?
   orderUpdatedAt        DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   customerProfile CustomerProfile     @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
@@ -566,7 +602,7 @@ model CustomerOrder {
 }
 
 model CustomerOrderItem {
-  id                String    @id @default(cuid())
+  id                String           @id @default(cuid())
   workspaceId       String
   provider          CommerceProvider @default(TIENDANUBE)
   customerOrderId   String
@@ -582,14 +618,14 @@ model CustomerOrderItem {
   name              String
   normalizedName    String
   variantName       String?
-  quantity          Int       @default(1)
-  unitPrice         Decimal?  @db.Decimal(12, 2)
-  lineTotal         Decimal?  @db.Decimal(12, 2)
+  quantity          Int              @default(1)
+  unitPrice         Decimal?         @db.Decimal(12, 2)
+  lineTotal         Decimal?         @db.Decimal(12, 2)
   imageUrl          String?
   rawPayload        Json?
   orderCreatedAt    DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   customerOrder   CustomerOrder   @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
@@ -603,20 +639,20 @@ model CustomerOrderItem {
 }
 
 model CustomerSyncLog {
-  id               String    @id @default(cuid())
+  id               String           @id @default(cuid())
   workspaceId      String
   provider         CommerceProvider @default(TIENDANUBE)
   storeId          String?
   status           String
-  fullSync         Boolean   @default(true)
-  startedAt        DateTime  @default(now())
+  fullSync         Boolean          @default(true)
+  startedAt        DateTime         @default(now())
   finishedAt       DateTime?
-  pagesFetched     Int       @default(0)
-  ordersFetched    Int       @default(0)
-  ordersUpserted   Int       @default(0)
-  customersTouched Int       @default(0)
+  pagesFetched     Int              @default(0)
+  ordersFetched    Int              @default(0)
+  ordersUpserted   Int              @default(0)
+  customersTouched Int              @default(0)
   message          String?
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime         @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -664,18 +700,18 @@ model EnboxShipment {
 }
 
 model EnboxSyncLog {
-  id               String   @id @default(cuid())
-  workspaceId      String
-  status           String
-  mode             String
-  startedAt        DateTime @default(now())
-  finishedAt       DateTime?
-  shipmentsChecked Int      @default(0)
-  shipmentsUpserted Int     @default(0)
-  ordersScanned    Int      @default(0)
-  ordersMatched    Int      @default(0)
-  message          String?
-  createdAt        DateTime @default(now())
+  id                String    @id @default(cuid())
+  workspaceId       String
+  status            String
+  mode              String
+  startedAt         DateTime  @default(now())
+  finishedAt        DateTime?
+  shipmentsChecked  Int       @default(0)
+  shipmentsUpserted Int       @default(0)
+  ordersScanned     Int       @default(0)
+  ordersMatched     Int       @default(0)
+  message           String?
+  createdAt         DateTime  @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -762,8 +798,8 @@ model Campaign {
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
-  workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  automationRun AutomationRun?      @relation(fields: [automationRunId], references: [id], onDelete: SetNull)
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automationRun AutomationRun?       @relation(fields: [automationRunId], references: [id], onDelete: SetNull)
   recipients    CampaignRecipient[]
   conversions   CampaignConversion[]
 
@@ -801,8 +837,8 @@ model CampaignRecipient {
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   conversions CampaignConversion[]
 
   @@unique([workspaceId, waMessageId])
@@ -812,7 +848,7 @@ model CampaignRecipient {
 }
 
 model CampaignConversion {
-  id                     String   @id @default(cuid())
+  id                     String    @id @default(cuid())
   workspaceId            String
   campaignId             String
   recipientId            String?
@@ -826,19 +862,19 @@ model CampaignConversion {
   contactName            String?
   phone                  String?
   email                  String?
-  amount                 Decimal? @db.Decimal(12, 2)
+  amount                 Decimal?  @db.Decimal(12, 2)
   currency               String?
   paymentStatus          String?
   sentAt                 DateTime?
   convertedAt            DateTime
-  attributionWindowHours Int      @default(168)
+  attributionWindowHours Int       @default(168)
   matchReason            String?
   rawPayload             Json?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   recipient CampaignRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, conversionKey])
@@ -986,20 +1022,20 @@ model PendingPaymentAutomationLog {
 }
 
 model ShipmentNotificationSetting {
-  id             String    @id @default(cuid())
-  workspaceId    String    @unique
-  enabled        Boolean   @default(false)
-  templateLocalId String?
-  templateName   String?
-  templateLanguage String  @default("es_AR")
-  variableMapping Json?
-  daysBack       Int       @default(3)
-  lastRunAt      DateTime?
-  lastCampaignId String?
-  lastError      String?
-  runCount       Int       @default(0)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  workspaceId      String    @unique
+  enabled          Boolean   @default(false)
+  templateLocalId  String?
+  templateName     String?
+  templateLanguage String    @default("es_AR")
+  variableMapping  Json?
+  daysBack         Int       @default(3)
+  lastRunAt        DateTime?
+  lastCampaignId   String?
+  lastError        String?
+  runCount         Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

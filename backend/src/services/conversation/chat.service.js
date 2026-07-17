@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { createAiTurnTrace, logAiTurnTrace } from '../ai/turn-trace.js';
+import { persistAiTurnTrace } from '../ai/turn-trace-store.js';
 import { validateAssistantOutput } from '../ai/assistant-output.js';
 import {
 	conversationStateForWorkspaceWhere,
@@ -632,7 +633,7 @@ export async function processInboundMessage({
 	let createdInboundAt = new Date();
 	let inboundMessage = null;
 
-	function finalizeInboundResult({ conversation: resultConversation = null, trace: legacyTrace = null }) {
+	async function finalizeInboundResult({ conversation: resultConversation = null, trace: legacyTrace = null }) {
 		const route = legacyTrace?.queueDecision?.queue || resultConversation?.queue || 'AUTO';
 		const handoffReason = legacyTrace?.queueDecision?.reason
 			|| (route === 'HUMAN' ? 'human_route' : null);
@@ -652,6 +653,19 @@ export async function processInboundMessage({
 			handoff: handoffReason ? { reason: handoffReason } : null,
 		});
 		logAiTurnTrace(turnTrace);
+		if (inboundMessage?.id && turnTrace.workspaceId && turnTrace.conversationId) {
+			await persistAiTurnTrace({
+				trace: turnTrace,
+				inboundMessageId: inboundMessage.id,
+			}).catch((error) => {
+				logger.warn('ai.turn.persistence_failed', {
+					traceId: turnTrace.traceId,
+					workspaceId: turnTrace.workspaceId,
+					conversationId: turnTrace.conversationId,
+					error,
+				});
+			});
+		}
 
 		return {
 			conversation: resultConversation,

@@ -507,6 +507,21 @@ flowchart TD
 - Pruebas: 2/2 E2E específicos y 14/14 Playwright completo; AI Lab usa pipeline mock sin delivery externo.
 - Riesgo de deployment: bajo; no modifica contratos ni proveedores.
 
+### FIND-P1-024
+
+- Título: la traza canónica IA sólo existía en logs sin retención verificable
+- Área: IA/Observabilidad/Backend
+- Ambiente: todos
+- Severidad: High
+- Evidencia: `finalizeInboundResult` emitía `ai.turn.completed`, pero no existía almacenamiento consultable ni fecha de expiración; `AiLabRun.tracePayload` no es una traza productiva y contiene datos de laboratorio.
+- Impacto: no era posible correlacionar turnos históricos ni aplicar una política de minimización/retención comprobable.
+- Causa: la primera iteración priorizó redacción y logging antes de introducir un cambio de schema.
+- Solución: tabla aditiva `AiTurnTrace` sólo con metadata canónica, scope de workspace/conversación, expiración configurable, persistencia tolerante a migración gradual y job de poda dry-run por defecto.
+- Estado: implementado y validado localmente; migración preparada, no aplicada.
+- Archivos: schema/migración Prisma, `turn-trace-store.js`, integración en chat, script de poda y pruebas.
+- Pruebas: 39/39 unitarias, 140 archivos con sintaxis válida, Prisma validate/generate y SQL generado inspeccionado.
+- Riesgo de deployment: medio; requiere migración aditiva previa y configurar retención/cron en staging antes de producción.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -528,14 +543,14 @@ flowchart TD
 
 ## 10. Auditoría backend
 
-- 138 archivos JS/MJS pasan el chequeo de sintaxis.
-- 36 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, aislamiento de workspace/WABA/analytics/estado/comercio y caché privada de adjuntos.
+- 140 archivos JS/MJS pasan el chequeo de sintaxis.
+- 39 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento de workspace/WABA/analytics/estado/comercio y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
 ## 11. Auditoría del agente de IA
 
-Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. La respuesta se normaliza y valida contra el schema interno (`reply`, `needsHuman`, `handoffReason`, `detectedIntent`, `confidence`, `usedFacts`, `riskFlags`) y se revalida tras la auditoría antes del delivery. Cada salida de `processInboundMessage` emite una traza canónica acotada. AI Lab anuncia el historial como log y su E2E usa el pipeline simulado sin delivery. Persistencia/retención de trazas y generación nativa estructurada del proveedor siguen pendientes.
+Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. La respuesta se normaliza y valida contra el schema interno (`reply`, `needsHuman`, `handoffReason`, `detectedIntent`, `confidence`, `usedFacts`, `riskFlags`) y se revalida tras la auditoría antes del delivery. Cada salida de `processInboundMessage` emite una traza canónica acotada y, cuando existe inbound, prepara su persistencia sin prompt/mensaje con expiración (30 días por defecto, rango 1-365). AI Lab anuncia el historial como log y su E2E usa el pipeline simulado sin delivery. La activación de persistencia espera migración en staging; generación nativa estructurada del proveedor sigue pendiente.
 
 ## 12. Seguridad y multitenancy
 
@@ -560,8 +575,8 @@ Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. L
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
-| backend syntax | 138/138 | incluido en build |
-| unit tests | 36/36 | 1,1 s |
+| backend syntax | 140/140 | incluido en build |
+| unit tests | 39/39 | 0,44 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -595,6 +610,7 @@ Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. L
 - Estados de marcas y Analytics mutuamente excluyentes, con reintentos locales y evidencia visual.
 - Clientes: formulario/labels semánticos, selector y paginación accesibles, targets mobile y error recuperable.
 - Catálogo: búsqueda etiquetada, paginación y retry; AI Lab: historial anunciado, composer accesible y reduced motion.
+- Persistencia redactada de trazas IA con expiración y poda segura, preparada mediante migración aditiva.
 
 ## 18. Comparación antes/después
 
@@ -615,7 +631,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 ## 21. Riesgos pendientes
 
 - Auditoría exhaustiva de aislamiento multitenant por entidad aún incompleta.
-- Salida estructurada, persistencia y política de retención de trace IA aún parciales.
+- La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
 - Sin lint, typecheck ni axe configurados.
 - Bundle `vendor-three` >500 kB y prefetch costoso.
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
@@ -624,7 +640,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 22. Backlog
 
-P0: completar auditoría multitenant, persistencia/retención de trazas, lint/typecheck y security audit.
+P0: completar auditoría multitenant, activar/validar retención de trazas en staging, lint/typecheck y security audit.
 
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.  
 P2: plantillas, catálogo, clientes, AI Lab, rendimiento y responsive amplio.  
@@ -641,7 +657,7 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 ## 25. Plan de deployment
 
 1. CI verde y revisión del diff.
-2. Documentar migraciones/variables (idealmente ninguna en el primer lote).
+2. Aplicar en staging la migración aditiva `20260717170000_add_ai_turn_traces`; configurar por nombre `AI_TRACE_RETENTION_DAYS`, `AI_TRACE_PRUNE_BATCH_SIZE` y `AI_TRACE_PRUNE_MAX_BATCHES`, sin registrar valores secretos.
 3. Desplegar a staging aislado.
 4. Smoke de health/auth/inbox con datos sintéticos y delivery deshabilitado.
 5. Autorización explícita.
@@ -652,4 +668,5 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 - Mantener commit e imagen Railway previos identificados.
 - Cambios de aplicación compatibles hacia atrás y sin migración destructiva.
 - Ante error: detener rollout, redeploy del commit previo y verificar `/api/health`.
+- La nueva app tolera temporalmente la ausencia de `AiTurnTrace`; para rollback completo, volver primero al commit previo y luego, sólo si se decide eliminar metadata, ejecutar `DROP TABLE "AiTurnTrace"` en una ventana autorizada.
 - Si una migración futura fuera necesaria, preparar rollback SQL probado sobre copia descartable; no usar `db push` ni `migrate reset`.
