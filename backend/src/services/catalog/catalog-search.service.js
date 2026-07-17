@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import {
 	commercialFamilyAllowedForProfile,
 	getCommercialProfile,
@@ -686,8 +687,8 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 	return score;
 }
 
-export async function getCatalogLookupStatus({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getCatalogLookupStatus({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	try {
 		const [totalProducts, totalPublished] = await Promise.all([
 			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId } }),
@@ -825,8 +826,8 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 	return deduped.slice(0, Math.max(limit, 6));
 }
 
-export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId = DEFAULT_WORKSPACE_ID, aiProfile = '' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function searchCatalogProducts({ query = '', interestedProducts = [], limit = 4, workspaceId, aiProfile = '' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const signals = {
 		...detectRequestedSignals(query, interestedProducts, { aiProfile }),
 		aiProfile,

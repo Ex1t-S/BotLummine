@@ -2,7 +2,8 @@ import { prisma } from '../../lib/prisma.js';
 import { getTiendanubeClient } from '../tiendanube/client.js';
 import { getShopifyClient } from '../shopify/client.js';
 import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 import {
 	getSkuVariantMeta,
 	isGenericSkuColor,
@@ -271,8 +272,8 @@ function normalizeProduct(product, installation) {
 	};
 }
 
-export async function syncCatalogFromTiendanube({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function syncCatalogFromTiendanube({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const syncLog = await prisma.catalogSyncLog.create({
 		data: {
 			workspaceId: resolvedWorkspaceId,
@@ -330,7 +331,7 @@ export async function syncCatalogFromTiendanube({ workspaceId = DEFAULT_WORKSPAC
 		}
 
 		await prisma.catalogSyncLog.update({
-			where: { id: syncLog.id },
+			where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				storeId,
 				status: 'SUCCESS',
@@ -347,7 +348,7 @@ export async function syncCatalogFromTiendanube({ workspaceId = DEFAULT_WORKSPAC
 		};
 	} catch (error) {
 		await prisma.catalogSyncLog.update({
-			where: { id: syncLog.id },
+			where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				status: 'ERROR',
 				finishedAt: new Date(),
@@ -359,8 +360,8 @@ export async function syncCatalogFromTiendanube({ workspaceId = DEFAULT_WORKSPAC
 	}
 }
 
-export async function syncCatalogFromShopify({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function syncCatalogFromShopify({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const syncLog = await prisma.catalogSyncLog.create({
 		data: {
 			workspaceId: resolvedWorkspaceId,
@@ -422,7 +423,7 @@ export async function syncCatalogFromShopify({ workspaceId = DEFAULT_WORKSPACE_I
 		}
 
 		await prisma.catalogSyncLog.update({
-			where: { id: syncLog.id },
+			where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				storeId,
 				status: 'SUCCESS',
@@ -439,7 +440,7 @@ export async function syncCatalogFromShopify({ workspaceId = DEFAULT_WORKSPACE_I
 		};
 	} catch (error) {
 		await prisma.catalogSyncLog.update({
-			where: { id: syncLog.id },
+			where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				status: 'ERROR',
 				finishedAt: new Date(),
@@ -452,22 +453,24 @@ export async function syncCatalogFromShopify({ workspaceId = DEFAULT_WORKSPACE_I
 }
 
 export async function syncCatalogFromProvider({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	provider = ''
 } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedProvider = String(provider || '').trim().toUpperCase() ||
-		(await resolveActiveCommerceConnection({ workspaceId })).provider;
+		(await resolveActiveCommerceConnection({ workspaceId: resolvedWorkspaceId })).provider;
 
 	if (normalizedProvider === 'SHOPIFY') {
-		return syncCatalogFromShopify({ workspaceId });
+		return syncCatalogFromShopify({ workspaceId: resolvedWorkspaceId });
 	}
 
-	return syncCatalogFromTiendanube({ workspaceId });
+	return syncCatalogFromTiendanube({ workspaceId: resolvedWorkspaceId });
 }
 
-export async function syncCatalogForWorkspace({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const connection = await resolveActiveCommerceConnection({ workspaceId });
-	const result = await syncCatalogFromProvider({ workspaceId, provider: connection.provider });
+export async function syncCatalogForWorkspace({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const connection = await resolveActiveCommerceConnection({ workspaceId: resolvedWorkspaceId });
+	const result = await syncCatalogFromProvider({ workspaceId: resolvedWorkspaceId, provider: connection.provider });
 	return {
 		...result,
 		provider: connection.provider,
@@ -475,8 +478,8 @@ export async function syncCatalogForWorkspace({ workspaceId = DEFAULT_WORKSPACE_
 	};
 }
 
-export async function getCatalogPage({ q = '', page = 1, pageSize = 24, workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getCatalogPage({ q = '', page = 1, pageSize = 24, workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const where = {
 		workspaceId: resolvedWorkspaceId,
 		...(q
@@ -535,8 +538,8 @@ export async function getCatalogPage({ q = '', page = 1, pageSize = 24, workspac
 		lastSync
 	};
 }
-export async function getCatalogSummary({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getCatalogSummary({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	try {
 		const [totalProducts, totalPublished, lastSync] = await Promise.all([
 			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId } }),
