@@ -10,6 +10,7 @@ import {
 	getShopifyClient,
 	getShopifyConfig,
 } from '../src/services/shopify/client.js';
+import { getOrderByNumber } from '../src/services/commerce/orders.service.js';
 
 describe('commerce client workspace boundary', () => {
 	it('rejects provider credential resolution without an explicit workspace', async () => {
@@ -31,5 +32,14 @@ describe('commerce client workspace boundary', () => {
 			() => createTiendanubeClient(),
 			/Faltan TIENDANUBE_STORE_ID o TIENDANUBE_ACCESS_TOKEN/,
 		);
+	});
+
+	it('rejects commerce order lookup without workspace even with an explicit provider', async () => {
+		for (const provider of ['TIENDANUBE', 'SHOPIFY']) {
+			await assert.rejects(
+				() => getOrderByNumber('order-a', { provider }),
+				(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+			);
+		}
 	});
 });

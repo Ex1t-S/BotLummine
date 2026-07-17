@@ -1,4 +1,5 @@
-import { DEFAULT_WORKSPACE_ID } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { getOrderByNumber as getTiendanubeOrderByNumber } from '../tiendanube/orders.service.js';
 import { getShopifyClient } from '../shopify/client.js';
 import { resolveActiveCommerceConnection } from './active-commerce.service.js';
@@ -71,11 +72,11 @@ function normalizeShopifyOrderContext(order = {}) {
 	};
 }
 
-async function getActiveCommerceProvider(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getActiveCommerceProvider(workspaceId) {
 	return (await resolveActiveCommerceConnection({ workspaceId })).provider;
 }
 
-async function getShopifyOrderByNumber(orderNumber, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+async function getShopifyOrderByNumber(orderNumber, { workspaceId } = {}) {
 	const wanted = cleanString(orderNumber);
 	if (!wanted) return null;
 
@@ -114,9 +115,11 @@ async function getShopifyOrderByNumber(orderNumber, { workspaceId = DEFAULT_WORK
 }
 
 export async function getOrderByNumber(orderNumber, options = {}) {
-	const provider = String(options.provider || await getActiveCommerceProvider(options.workspaceId)).toUpperCase();
+	const workspaceId = requireWorkspaceScope(normalizeWorkspaceId(options.workspaceId));
+	const scopedOptions = { ...options, workspaceId };
+	const provider = String(options.provider || await getActiveCommerceProvider(workspaceId)).toUpperCase();
 	if (provider === 'SHOPIFY') {
-		return getShopifyOrderByNumber(orderNumber, options);
+		return getShopifyOrderByNumber(orderNumber, scopedOptions);
 	}
-	return getTiendanubeOrderByNumber(orderNumber, options);
+	return getTiendanubeOrderByNumber(orderNumber, scopedOptions);
 }

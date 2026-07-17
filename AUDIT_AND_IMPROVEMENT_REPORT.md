@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 63/63 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 64/64 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -777,6 +777,21 @@ flowchart TD
 - Pruebas: 2/2 específicas, prueba negativa del job con exit code 1 esperado, 63/63 unitarias, Prisma válido, 142 archivos con sintaxis válida y build raíz verde en 14,38 s.
 - Riesgo de deployment: medio/alto; antes de habilitar el cron hay que definir `ENBOX_SYNC_WORKSPACE_ID` por servicio y hacer smoke secuencial con dos workspaces sintéticos. La serialización global entre tenants permanece como límite operativo, pero ya no filtra estado.
 
+### FIND-P0-042
+
+- Título: lookup unificado de órdenes elegía proveedor con tenant implícito
+- Área: Backend/Comercio/Pedidos/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: `getOrderByNumber` podía resolver la conexión activa con `workspace_default`; si el caller forzaba proveedor tampoco validaba la frontera antes de entrar al cliente específico.
+- Impacto: un caller incompleto podía consultar una orden en la tienda ambiental/default equivocada y usar ese dato dentro de respuestas automáticas o sincronización logística.
+- Causa: wrapper multiproveedor conservaba defaults anteriores al endurecimiento de los clientes Tiendanube/Shopify.
+- Solución: resolver y exigir workspace en el entry point, propagar opciones ya acotadas y eliminar defaults de los helpers internos.
+- Estado: resuelto localmente; no se consultó ningún proveedor.
+- Archivos: `commerce/orders.service.js` y prueba de clientes comerciales.
+- Pruebas: 3/3 específicas cubriendo ambos proveedores, 64/64 unitarias y build raíz verde en una validación de 15,38 s.
+- Riesgo de deployment: bajo/medio; smoke sandbox de consulta por número en dos workspaces con números homónimos.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -799,7 +814,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 142 archivos JS/MJS pasan el chequeo de sintaxis.
-- 63 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
+- 64 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -831,7 +846,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 142/142 | incluido en build |
-| unit tests | 63/63 | 1,27 s |
+| unit tests | 64/64 | 1,44 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
