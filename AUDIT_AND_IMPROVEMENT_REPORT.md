@@ -1124,7 +1124,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
-| root build | OK; backend + frontend | 12,9 s en la última corrida |
+| root build | OK; backend + frontend | 9,2 s en la última corrida |
 | Playwright Chromium | 14/14 consolidada previa; 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos actuales | 10,4 s + 4,9 s + 8,1 s; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
