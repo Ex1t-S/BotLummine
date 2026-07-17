@@ -1,21 +1,26 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
+import { resolveCreateUserScope } from './lib/create-user-scope.js';
 
 const prisma = new PrismaClient();
-const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
 
 async function main() {
   const name = process.argv[2];
   const email = process.argv[3];
   const password = process.argv[4];
-  const role = (process.argv[5] || 'AGENT').toUpperCase();
-  const workspaceId = process.argv[6] || (role === 'PLATFORM_ADMIN' ? null : DEFAULT_WORKSPACE_ID);
+  const requestedRole = process.argv[5] || 'AGENT';
+  const requestedWorkspaceId = process.argv[6] || '';
 
-  if (!name || !email || !password) {
-    console.log('Uso: node scripts/create-user.mjs "Nombre" "mail@dominio.com" "Password123!" "PLATFORM_ADMIN|ADMIN|AGENT" "workspaceId"');
-    process.exit(1);
-  }
+	if (!name || !email || !password) {
+		console.log('Uso: node src/create-user.mjs "Nombre" "mail@dominio.com" "Password123!" "PLATFORM_ADMIN|ADMIN|AGENT" "workspaceId"');
+		process.exit(1);
+	}
+
+	const { role, workspaceId } = resolveCreateUserScope({
+		role: requestedRole,
+		workspaceId: requestedWorkspaceId,
+	});
 
   const passwordHash = await bcrypt.hash(password, 10);
 

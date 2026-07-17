@@ -2,7 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { syncAbandonedCarts } from '../carts/abandoned-cart.service.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	WORKSPACE_FEATURE_FLAGS,
 	isWorkspaceFeatureEnabled,
@@ -55,7 +55,7 @@ function normalizeIntervalMinutes(value, fallback, min = 5, max = 24 * 60) {
 }
 
 function getRuntimeState(workspaceId) {
-	const key = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const key = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const current = runtimeStateByWorkspace.get(key) || {
 		lastCheckedAt: null,
 		emptyRuns: 0,
@@ -108,12 +108,13 @@ function shouldSkipRuntimeInterval(setting = {}) {
 }
 
 function recordRuntimeResult(workspaceId, processed = 0) {
-	const runtimeState = getRuntimeState(workspaceId);
+	const key = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const runtimeState = getRuntimeState(key);
 	const count = Number(processed || 0);
 	runtimeState.lastCheckedAt = new Date();
 	runtimeState.lastProcessed = count;
 	runtimeState.emptyRuns = count > 0 ? 0 : Number(runtimeState.emptyRuns || 0) + 1;
-	runtimeStateByWorkspace.set(normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID, runtimeState);
+	runtimeStateByWorkspace.set(key, runtimeState);
 }
 
 function normalizeFilters(input = {}) {

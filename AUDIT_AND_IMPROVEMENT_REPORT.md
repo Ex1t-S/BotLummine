@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 68/68 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 70/70 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -837,6 +837,21 @@ flowchart TD
 - Pruebas: 4/4 específicas del archivo de frontera, 68/68 unitarias y build raíz verde en una validación de 14,28 s.
 - Riesgo de deployment: medio; smoke sandbox por proveedor y dos workspaces, con carritos homónimos y limpieza de retención acotada.
 
+### FIND-P0-046
+
+- Título: CLI de usuarios asignaba workspace default por omisión
+- Área: Backend/Operación/Usuarios/Multitenancy
+- Ambiente: local
+- Severidad: High
+- Evidencia: `create-user.mjs` convertía cualquier ADMIN/AGENT sin sexto argumento en un usuario de `workspace_default`; el estado runtime de carritos también normalizaba scope ausente al mismo tenant.
+- Impacto: un error humano en aprovisionamiento podía crear o mover una identidad al tenant equivocado, y un caller interno incompleto podía compartir throttling de automatización entre marcas.
+- Causa: defaults operativos monomarca y validación posterior a la resolución de scope.
+- Solución: helper puro que valida roles y exige workspace para ADMIN/AGENT antes de Prisma; PLATFORM_ADMIN siempre global; estado runtime obligado a usar scope explícito.
+- Estado: resuelto localmente; no se creó ni modificó ningún usuario.
+- Archivos: `create-user.mjs`, `create-user-scope.js`, automatización de carritos y prueba de aprovisionamiento.
+- Pruebas: 2/2 específicas de aprovisionamiento, 4/4 de automatizaciones, 70/70 unitarias y build raíz verde en una validación de 14,12 s.
+- Riesgo de deployment: bajo; actualizar runbooks para incluir workspace y probar el CLI contra una base local descartable.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -858,8 +873,8 @@ flowchart TD
 
 ## 10. Auditoría backend
 
-- 142 archivos JS/MJS pasan el chequeo de sintaxis.
-- 68 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
+- 143 archivos JS/MJS pasan el chequeo de sintaxis.
+- 70 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -890,8 +905,8 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
-| backend syntax | 142/142 | incluido en build |
-| unit tests | 68/68 | 1,51 s |
+| backend syntax | 143/143 | incluido en build |
+| unit tests | 70/70 | 1,41 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
