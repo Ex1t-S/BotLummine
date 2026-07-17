@@ -987,13 +987,28 @@ flowchart TD
 - Pruebas: 3/3 específicas; suite completa 83/83 en 1,29 s; build raíz verde en 12,05 s.
 - Riesgo de deployment: bajo/medio; validar en staging callbacks válido, inválido y error del proveedor sin conectar una tienda real.
 
+### FIND-P1-056
+
+- Título: revisión de pagos prometía una aprobación inexistente y ocultaba su feedback detrás del menú
+- Área: UI/UX/Accesibilidad/Inbox/Pagos
+- Ambiente: local
+- Severidad: High
+- Evidencia: la acción “Comprobante verificado” únicamente enviaba `queue=HUMAN`; no persistía una decisión de pago. Además, los items del menú cancelaban su cierre con `preventDefault`, por lo que el error/éxito quedaba detrás de una capa modal y fuera del árbol accesible.
+- Impacto: el operador podía interpretar un cambio de cola como una aprobación auditable; usuarios de teclado o lector de pantalla no recibían el resultado de la acción y la selección se perdía al mover la conversación.
+- Causa: microcopy desacoplado del contrato backend, feedback sin tono semántico y comportamiento manual del menú contrario al patrón de Radix.
+- Solución: renombrar la acción a “Finalizar revisión y derivar”, describir el resultado exacto por cola, cerrar el menú tras seleccionar, anunciar error como `alert` y éxito/progreso como `status`, conservar conversación y URL en la cola destino y exponer selección/no leídos/filtros con semántica accesible.
+- Estado: resuelto para el flujo real disponible; aprobar/rechazar/pedir otro comprobante con motivo y auditoría durable continúa pendiente de contrato y persistencia backend.
+- Archivos: `frontend/src/pages/InboxPage.jsx/css`, `frontend/src/components/ui/messaging-conversation.tsx`, `frontend/src/styles/internal-dark-overrides.css`, `frontend/tests/inbox/critical-flow.spec.js` y captura sintética 768x1024.
+- Pruebas: 4/4 flujos críticos de Inbox en 5,8 s; caso de pagos 1/1 en 2,2 s; TypeScript 0 errores; build frontend 589 ms y build raíz 10,52 s.
+- Riesgo de deployment: bajo; no cambia API ni datos, pero conviene smoke de teclado en staging antes del rollout.
+
 ## 8. Auditoría UI/UX
 
-- Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
+- Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío. Los cambios de cola conservan selección/URL y revisión de pagos comunica su resultado real sin simular una aprobación.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
 - Estados: Inbox/Comprobantes y Clientes separan carga, vacío, error y datos; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
-- Pendiente: recorrido visual y de teclado completo de las vistas privadas restantes, más Axe reproducible dentro de CI.
+- Pendiente: decisión de pago durable (aprobar/rechazar/pedir otro comprobante con motivo y auditoría), recorrido visual/teclado de las vistas privadas restantes y Axe reproducible dentro de CI.
 
 ## 9. Auditoría frontend
 
@@ -1009,9 +1024,9 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 143 archivos JS/MJS pasan el chequeo de sintaxis.
-- 76 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/corridas de automatización/caché privada.
+- 83 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/corridas de automatización/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
-- Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
+- La prueba transversal impide reintroducir workspaces implícitos; la comprobación dinámica de aislamiento y callbacks queda para staging con dos tenants sintéticos.
 
 ## 11. Auditoría del agente de IA
 
@@ -1027,7 +1042,7 @@ Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables
 
 ## 14. Accesibilidad
 
-Se incorporaron labels del composer/búsqueda y filtros de Clientes/Catálogo, estados `alert`/`status`, `role=log`, `aria-pressed`, `aria-expanded`, `aria-current`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. Clientes permite operar filtros/selector con teclado y mantiene targets táctiles >=44 px a 390 px; AI Lab anuncia los nuevos turnos y evita scroll suave con reduced motion. Axe público WCAG 2.2 pasó de una violación seria de target a 0 en cuatro rutas. Sigue pendiente integrar Axe de forma reproducible y auditar todas las vistas privadas.
+Se incorporaron labels del composer/búsqueda y filtros de Clientes/Catálogo, estados `alert`/`status`, `role=log`, `aria-pressed`, `aria-expanded`, `aria-current`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. En Inbox, el menú de acciones vuelve a cerrar tras una selección, la cola activa y el chat seleccionado se anuncian, los no leídos tienen nombre accesible y los resultados de revisión distinguen error, progreso y éxito. Clientes permite operar filtros/selector con teclado y mantiene targets táctiles >=44 px a 390 px; AI Lab anuncia los nuevos turnos y evita scroll suave con reduced motion. Axe público WCAG 2.2 pasó de una violación seria de target a 0 en cuatro rutas. La integración reproducible está bloqueada localmente por la ausencia de `axe-core` y se difiere para no pisar manifests concurrentes.
 
 ## 15. Rendimiento
 
@@ -1046,9 +1061,9 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK; sin chunks >500 kB | 0,99 s |
-| frontend typecheck | OK; 0 errores | 4,7 s en la última corrida |
-| root build | OK; backend + frontend | incluido en validación consolidada |
-| Playwright Chromium | 14/14; 10 rutas de performance | 23,2 s |
+| frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
+| root build | OK; backend + frontend | 10,52 s en la última corrida |
+| Playwright Chromium | 14/14 consolidada previa; 4/4 Inbox actual | 5,8 s para Inbox sin regenerar capturas concurrentes |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
@@ -1060,7 +1075,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Build raíz real, CI, syntax check, Prisma y E2E estricto.
 - Compiler canónico de prompt, hash/version/facts y taxonomía/fallback de proveedores.
 - Guard contra base remota en desarrollo y pruebas negativas de workspace.
-- Inbox: selección/URL, borradores, error/retry, doble envío y flujo móvil.
+- Inbox: selección/URL, borradores, error/retry, doble envío, flujo móvil y cambio de cola sin perder contexto; feedback de revisión accesible y honesto.
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
@@ -1097,12 +1112,13 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Unitarias: de 7 casos localizados a 36 pruebas ejecutadas.
 - E2E: de una suite que ocultaba fallos a 14 pruebas bloqueantes.
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
+- Revisión de pagos: de una falsa “verificación” sin feedback accesible y pérdida de selección a una derivación explícita, error recuperable y URL conversacional persistida.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 - Bundle: de `vendor-three` 505,81 kB a ningún chunk Three.js; landing mock de 1.598-3.989 ms a 351-478 ms.
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector, Catálogo y AI Lab en 390x844; revisión de pagos, errores de lista/historial, error de marcas y error de Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector, Catálogo y AI Lab en 390x844; revisión de pagos y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 
@@ -1113,6 +1129,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 - El inventario estático actual no conserva parámetros ni normalizaciones que inventen `workspace_default`; una prueba global bloquea su regresión. La validación dinámica de todas las entidades con dos tenants sintéticos continúa pendiente de staging aislado.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
 - Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica.
+- Revisión de pagos aún no tiene entidad/endpoint para aprobar, rechazar con motivo, pedir otro comprobante o consultar auditoría durable; el cambio de cola no debe interpretarse como decisión financiera.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
 - Staging no representativo.
@@ -1123,7 +1140,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
+P1: Inbox base y feedback accesible de revisión avanzados. Pendientes: workflow durable de pagos, operaciones, campañas/carritos, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 

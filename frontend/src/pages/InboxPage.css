@@ -1789,6 +1789,12 @@
 	color: #991b1b;
 }
 
+.inbox-action-feedback--error {
+	border: 1px solid #fecaca;
+	background: #fef2f2;
+	color: #991b1b;
+}
+
 .inbox-send-btn {
 	min-width: 64px;
 	width: auto;

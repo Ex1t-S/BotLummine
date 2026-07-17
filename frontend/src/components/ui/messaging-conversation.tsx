@@ -37,9 +37,8 @@ export type ConversationAction = {
 function StatusBadge({ status }: { status: StatusType }) {
 	return (
 		<span
-			aria-label={status}
+			aria-hidden="true"
 			className={cn("inline-block size-3 rounded-full border-2 border-background", STATUS_COLORS[status])}
-			title={status.charAt(0).toUpperCase() + status.slice(1)}
 		/>
 	);
 }
@@ -56,10 +55,8 @@ function ConversationMenuItems({ actions }: { actions: ConversationAction[] }) {
 					action.danger && "text-destructive focus:text-destructive",
 				)}
 				disabled={action.disabled}
-				onSelect={(event) => {
-					event.preventDefault();
-					action.onClick?.();
-				}}
+				aria-current={action.active ? "true" : undefined}
+				onSelect={() => action.onClick?.()}
 			>
 				{Icon ? <Icon aria-hidden="true" className="size-4" /> : null}
 				<span className="min-w-0 flex-1 truncate">{action.label}</span>
@@ -111,6 +108,7 @@ type MessageConversationProps = {
 	actions?: ConversationAction[];
 	moreActions?: ConversationAction[];
 	feedback?: string;
+	feedbackTone?: "status" | "error";
 	isBusy?: boolean;
 	children?: ReactNode;
 	emptyState?: ReactNode;
@@ -134,6 +132,7 @@ export default function MessageConversation({
 	actions = [],
 	moreActions = [],
 	feedback = "",
+	feedbackTone = "status",
 	isBusy = false,
 	children,
 	emptyState = null,
@@ -158,7 +157,7 @@ export default function MessageConversation({
 							<AvatarFallback>{avatarFallback}</AvatarFallback>
 						</Avatar>
 						<div className="min-w-0">
-							<div className="inbox-chat-title">{contactName}</div>
+							<h2 className="inbox-chat-title">{contactName}</h2>
 							<div className="inbox-chat-subtitle">
 								<StatusBadge status={status} />
 								<span>{contactSubtitle}</span>
@@ -176,14 +175,31 @@ export default function MessageConversation({
 				</div>
 
 				{feedback || isBusy ? (
-					<div className={cn("inbox-action-feedback", isBusy && "inbox-action-feedback--busy")}>
+					<div
+						className={cn(
+							"inbox-action-feedback",
+							isBusy && "inbox-action-feedback--busy",
+							!isBusy && feedbackTone === "error" && "inbox-action-feedback--error",
+						)}
+						role={!isBusy && feedbackTone === "error" ? "alert" : "status"}
+						aria-live={!isBusy && feedbackTone === "error" ? "assertive" : "polite"}
+						aria-busy={isBusy}
+					>
 						{isBusy ? "Procesando accion..." : feedback}
 					</div>
 				) : null}
 			</CardHeader>
 
 			<CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-				<div ref={messagesContainerRef} className="inbox-messages" onScroll={onMessagesScroll} role="log" aria-label="Historial de conversacion">
+				<div
+					ref={messagesContainerRef}
+					className="inbox-messages"
+					onScroll={onMessagesScroll}
+					role="log"
+					aria-label="Historial de conversacion"
+					aria-live="polite"
+					aria-relevant="additions text"
+				>
 					<div className="inbox-messages-list">
 						{loadOlderControl}
 						{children || emptyState}

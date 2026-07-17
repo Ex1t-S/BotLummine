@@ -75,6 +75,12 @@ const QUEUE_LABELS = {
 	PAYMENT_REVIEW: 'Comprobantes',
 };
 
+const QUEUE_SUCCESS_MESSAGES = {
+	AUTO: 'Conversación asignada al modo automático.',
+	HUMAN: 'Conversación derivada a atención humana.',
+	PAYMENT_REVIEW: 'Conversación enviada a revisión de comprobantes.',
+};
+
 function getQueueLabel(queueKey = '') {
 	return QUEUE_LABELS[queueKey] || queueKey || 'Bandeja';
 }
@@ -740,6 +746,7 @@ export default function InboxPage() {
 	const [composerError, setComposerError] = useState('');
 	const [composerDrafts, setComposerDrafts] = useState({});
 	const [actionFeedback, setActionFeedback] = useState('');
+	const [actionFeedbackTone, setActionFeedbackTone] = useState('status');
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	useEffect(() => {
@@ -1262,6 +1269,7 @@ export default function InboxPage() {
 		setIsLoadingOlderMessages(false);
 		setComposerError('');
 		setActionFeedback('');
+		setActionFeedbackTone('status');
 	}, [selectedConversationId]);
 
 	useEffect(() => {
@@ -1338,7 +1346,7 @@ export default function InboxPage() {
 	});
 
 	const moveQueueMutation = useMutation({
-		mutationFn: async (nextQueue) => {
+		mutationFn: async ({ nextQueue, successMessage = '' }) => {
 			if (!selectedConversationId) return null;
 
 			const res = await api.patch(
@@ -1346,11 +1354,14 @@ export default function InboxPage() {
 				{ queue: nextQueue }
 			);
 
-			return { nextQueue, data: res.data };
+			return { nextQueue, successMessage, data: res.data };
 		},
 		onSuccess: async (result) => {
 			if (!result) return;
-			setActionFeedback('Bandeja actualizada.');
+			setActionFeedbackTone('status');
+			setActionFeedback(
+				result.successMessage || QUEUE_SUCCESS_MESSAGES[result.nextQueue] || 'Bandeja actualizada.'
+			);
 
 			await queryClient.invalidateQueries({
 				queryKey: ['dashboard', 'inbox'],
@@ -1361,11 +1372,16 @@ export default function InboxPage() {
 			});
 
 			if (result.nextQueue !== queue) {
-				clearSelectedConversation();
+				setQueue(result.nextQueue);
+				navigate(
+					buildInboxPath(result.nextQueue, selectedConversationId, readFilter),
+					{ replace: false }
+				);
 			}
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedbackTone('error');
 			setActionFeedback(getRequestErrorMessage(error, 'No se pudo cambiar la bandeja.'));
 		},
 	});
@@ -1378,11 +1394,13 @@ export default function InboxPage() {
 			);
 		},
 		onSuccess: async () => {
+			setActionFeedbackTone('status');
 			setActionFeedback('Contexto de IA reiniciado.');
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedbackTone('error');
 			setActionFeedback(getRequestErrorMessage(error, 'No se pudo reiniciar la IA.'));
 		},
 	});
@@ -1393,11 +1411,13 @@ export default function InboxPage() {
 			await api.delete(`/dashboard/conversations/${selectedConversationId}/history`);
 		},
 		onSuccess: async () => {
+			setActionFeedbackTone('status');
 			setActionFeedback('Historial borrado.');
 			await invalidateInboxAndConversation();
 		},
 		onError: (error) => {
 			console.error(error);
+			setActionFeedbackTone('error');
 			setActionFeedback(getRequestErrorMessage(error, 'No se pudo borrar el historial.'));
 		},
 	});
@@ -1511,13 +1531,16 @@ export default function InboxPage() {
 		setSelectedFile(null);
 	}
 
-	function handleMoveQueue(nextQueue) {
-		moveQueueMutation.mutate(nextQueue);
+	function handleMoveQueue(nextQueue, successMessage = '') {
+		moveQueueMutation.mutate({ nextQueue, successMessage });
 	}
 
-	function handlePaymentVerified() {
+	function handleCompletePaymentReview() {
 		if (!selectedConversationId || moveQueueMutation.isPending) return;
-		moveQueueMutation.mutate('HUMAN');
+		handleMoveQueue(
+			'HUMAN',
+			'Revisión finalizada. La conversación pasó a atención humana.'
+		);
 	}
 
 	function handleMarkUnread() {
@@ -1625,7 +1648,11 @@ export default function InboxPage() {
 					/>
 				</div>
 
-				<div className="inbox-read-filters">
+				<div
+					className="inbox-read-filters"
+					role="group"
+					aria-label="Filtrar conversaciones por estado de lectura"
+				>
 					{READ_FILTERS.map((item) => (
 						<button
 							key={item.key}
@@ -1695,6 +1722,7 @@ export default function InboxPage() {
 								className={`inbox-contact-card ${
 									isSelected ? 'inbox-contact-card--selected' : ''
 								} ${hasUnread ? 'inbox-contact-card--unread' : ''}`}
+								aria-current={isSelected ? 'true' : undefined}
 							>
 								<div className="inbox-contact-row">
 									<div
@@ -1716,7 +1744,7 @@ export default function InboxPage() {
 											url={avatarUrl}
 											fallback={contact.avatar?.initials || '?'}
 										/>
-										{hasUnread ? <span className="inbox-contact-dot" /> : null}
+										{hasUnread ? <span className="inbox-contact-dot" aria-hidden="true" /> : null}
 									</div>
 
 									<div className="inbox-contact-content">
@@ -1727,10 +1755,13 @@ export default function InboxPage() {
 												</div>
 
 												{hasUnread ? (
-													<span className="inbox-contact-unread-badge">
-														{unreadCount}
-													</span>
-												) : null}
+												<span
+													className="inbox-contact-unread-badge"
+													aria-label={`${unreadCount} mensajes sin leer`}
+												>
+													{unreadCount}
+												</span>
+											) : null}
 											</div>
 
 											<div className="inbox-contact-time">
@@ -1851,9 +1882,9 @@ export default function InboxPage() {
 								...(conversation?.queue === 'PAYMENT_REVIEW'
 									? [{
 										id: 'payment-verified',
-										label: 'Comprobante verificado',
+										label: 'Finalizar revisión y derivar',
 										disabled: moveQueueMutation.isPending,
-										onClick: handlePaymentVerified,
+										onClick: handleCompletePaymentReview,
 										icon: ArchiveRestore,
 									}]
 									: []),
@@ -1893,6 +1924,7 @@ export default function InboxPage() {
 								},
 							] : []}
 							feedback={actionFeedback}
+							feedbackTone={actionFeedbackTone}
 							isBusy={isBusyWithConversationAction}
 							messagesContainerRef={messagesContainerRef}
 							onMessagesScroll={handleMessagesScroll}

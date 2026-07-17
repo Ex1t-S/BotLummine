@@ -86,6 +86,7 @@ async function installInboxApi(page, {
 	failInboxAttempts = 0,
 	failConversationAttempts = 0,
 	failureControl = null,
+	queueControl = null,
 } = {}) {
 	let sendAttempts = 0;
 	let inboxAttempts = 0;
@@ -150,6 +151,24 @@ async function installInboxApi(page, {
 			return;
 		}
 
+		if (pathname === '/dashboard/conversations/conversation-demo-1/queue' && request.method() === 'PATCH') {
+			const payload = request.postDataJSON();
+			queueControl?.requests?.push(payload);
+			if (queueControl?.failNext) {
+				queueControl.failNext = false;
+				await route.fulfill(json({ ok: false, error: 'No pudimos actualizar la revisión.' }, 503));
+				return;
+			}
+			activeQueue = payload.queue;
+			await route.fulfill(json({
+				ok: true,
+				conversationId: conversation.id,
+				queue: payload.queue,
+				aiEnabled: payload.queue === 'AUTO',
+			}));
+			return;
+		}
+
 		if (pathname === '/dashboard/conversations/conversation-demo-1/messages' && request.method() === 'POST') {
 			sendAttempts += 1;
 			if (sendAttempts === 1) {
@@ -189,6 +208,9 @@ test('selecciona la primera conversación en desktop y conserva el borrador si f
 
 	await expect(page).toHaveURL(/conversation=conversation-demo-1/);
 	await expect(page.locator('.inbox-chat-workspace')).toBeVisible();
+	await expect(
+		page.locator('.inbox-contact-card').filter({ hasText: 'Cliente Demo' })
+	).toHaveAttribute('aria-current', 'true');
 
 	const composer = page.getByLabel('Mensaje', { exact: true });
 	await composer.fill('Borrador que no debe perderse');
@@ -227,6 +249,44 @@ test('separa errores de lista e historial y permite reintentar sin perder el flu
 
 	await expect(page.getByText('Hola, necesito ayuda con mi pedido.')).toBeVisible();
 	await expect(page.getByLabel('Mensaje', { exact: true })).toBeEnabled();
+});
+
+test('revisión de pagos comunica errores y conserva la conversación al derivarla', async ({ page }) => {
+	const queueControl = { failNext: true, requests: [] };
+	await installInboxApi(page, { queueControl });
+	await page.setViewportSize({ width: 768, height: 1024 });
+	await page.goto('/inbox/comprobantes');
+
+	const selectedContact = page.locator('.inbox-contact-card').filter({ hasText: 'Cliente Demo' });
+	await expect(selectedContact.getByLabel('2 mensajes sin leer')).toBeVisible();
+	await expect(page.getByRole('group', { name: 'Filtrar conversaciones por estado de lectura' })).toBeVisible();
+	await selectedContact.click();
+	await expect(page).toHaveURL(/\/inbox\/comprobantes\?conversation=conversation-demo-1/);
+	await expect(page.locator('.inbox-chat-workspace')).toBeVisible();
+
+	const actionsTrigger = page.getByRole('button', { name: 'Acciones de conversacion' });
+	await actionsTrigger.focus();
+	await actionsTrigger.press('Enter');
+	await expect(page.getByRole('menuitem', { name: 'Comprobantes' })).toHaveAttribute('aria-current', 'true');
+	await expect(page.getByRole('menuitem', { name: 'Comprobante verificado' })).toHaveCount(0);
+	await page.getByRole('menuitem', { name: 'Finalizar revisión y derivar' }).press('Enter');
+
+	const actionError = page.getByRole('alert').filter({ hasText: 'No pudimos actualizar la revisión.' });
+	await expect(actionError).toBeVisible();
+	await expect(page).toHaveURL(/\/inbox\/comprobantes\?conversation=conversation-demo-1/);
+	await page.screenshot({
+		path: 'audit-artifacts/screenshots/after/inbox-payment-review-error-768x1024.png',
+		fullPage: true,
+	});
+
+	await actionsTrigger.press('Enter');
+	await page.getByRole('menuitem', { name: 'Finalizar revisión y derivar' }).press('Enter');
+
+	await expect(page).toHaveURL(/\/inbox\/atencion-humana\?conversation=conversation-demo-1/);
+	await expect(page.getByRole('status')).toContainText(
+		'Revisión finalizada. La conversación pasó a atención humana.'
+	);
+	expect(queueControl.requests).toEqual([{ queue: 'HUMAN' }, { queue: 'HUMAN' }]);
 });
 
 test.describe('inbox móvil progresivo', () => {
