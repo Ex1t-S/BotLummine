@@ -76,7 +76,7 @@ function AiLabInteractiveMenuMessage({ message, isBusy, onSelect }) {
 				<span>{buttonText}</span>
 			</div>
 			{rows.length ? (
-				<div className="ai-lab-interactive-menu-options">
+				<div className="ai-lab-interactive-menu-options" role="group" aria-label="Opciones del menu interactivo">
 					{rows.map((row, index) => (
 						<button
 							key={row.id}
@@ -215,9 +215,10 @@ export default function AiLabPage() {
 	useEffect(() => {
 		const chatBody = chatBodyRef.current;
 		if (!chatBody) return;
+		const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 		chatBody.scrollTo({
 			top: chatBody.scrollHeight,
-			behavior: 'smooth',
+			behavior: reduceMotion ? 'auto' : 'smooth',
 		});
 	}, [session?.messages?.length]);
 
@@ -241,10 +242,10 @@ export default function AiLabPage() {
 
 	return (
 		<div className="ai-lab-page">
-			<section className="ai-lab-chat-card">
+			<section className="ai-lab-chat-card" aria-labelledby="ai-lab-title">
 				<div className="ai-lab-chat-header">
 					<div>
-						<h1>AI Lab</h1>
+						<h1 id="ai-lab-title">AI Lab</h1>
 						<p>
 							{isPlatformAdmin && selectedWorkspace
 								? `${getWorkspaceName(selectedWorkspace)} - ${getWorkspaceVertical(selectedWorkspace)}`
@@ -282,11 +283,24 @@ export default function AiLabPage() {
 
 				{uiError || workspaceLoadError ? (
 					<div className="ai-lab-error" role="alert">
-						{uiError || workspaceLoadError}
+						<span>{uiError || workspaceLoadError}</span>
+						{workspaceLoadError ? (
+							<button type="button" onClick={() => workspaceListQuery.refetch()} disabled={workspaceListQuery.isFetching}>
+								{workspaceListQuery.isFetching ? 'Reintentando' : 'Reintentar marcas'}
+							</button>
+						) : null}
 					</div>
 				) : null}
 
-				<div className="ai-lab-chat-body" ref={chatBodyRef}>
+				<div
+					className="ai-lab-chat-body"
+					ref={chatBodyRef}
+					role="log"
+					aria-label="Conversacion de prueba con la IA"
+					aria-live="polite"
+					aria-relevant="additions text"
+					aria-busy={isBusy}
+				>
 					{session?.messages?.length ? (
 						session.messages.map((message) => {
 							const isAssistant = message.role === 'assistant';
@@ -345,6 +359,7 @@ export default function AiLabPage() {
 
 				<form className="ai-lab-chat-form" onSubmit={handleSubmit}>
 					<textarea
+						aria-label="Mensaje de prueba"
 						value={messageText}
 						onChange={(event) => setMessageText(event.target.value)}
 						placeholder="Escribi como si fueras el cliente..."

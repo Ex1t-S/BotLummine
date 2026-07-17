@@ -91,15 +91,18 @@ export default function CatalogPage() {
 			</PageHeader>
 
 			<form onSubmit={handleSearch} className="catalog-search-form">
-				<input
-					type="text"
-					value={query}
-					onChange={(event) => {
-						setQuery(event.target.value);
-						setPage(1);
-					}}
-					placeholder="Buscar producto, marca, SKU o etiqueta"
-				/>
+				<label className="catalog-search-field">
+					<span>Buscar en el catalogo</span>
+					<input
+						type="text"
+						value={query}
+						onChange={(event) => {
+							setQuery(event.target.value);
+							setPage(1);
+						}}
+						placeholder="Producto, marca, SKU o etiqueta"
+					/>
+				</label>
 				<ActionButton type="submit" icon={Search}>Buscar productos</ActionButton>
 			</form>
 
@@ -118,7 +121,11 @@ export default function CatalogPage() {
 					title="No pudimos cargar el catálogo"
 					description="Probá nuevamente en unos segundos o verificá la integración activa."
 					className="catalog-state catalog-state--error"
-				/>
+				>
+					<button type="button" onClick={() => catalogQuery.refetch()} disabled={catalogQuery.isFetching}>
+						{catalogQuery.isFetching ? 'Reintentando' : 'Reintentar'}
+					</button>
+				</EmptyState>
 			) : null}
 
 			{hasItems ? (
@@ -151,27 +158,29 @@ export default function CatalogPage() {
 			) : null}
 
 			{data.totalPages > 1 ? (
-				<div className="pagination-row compact-pagination">
+				<nav className="pagination-row compact-pagination" aria-label="Paginacion del catalogo">
 					<button
 						type="button"
 						className="pagination-btn"
+						aria-label="Ir a la pagina anterior del catalogo"
 						disabled={data.page <= 1 || catalogQuery.isFetching}
 						onClick={() => setPage((current) => Math.max(1, current - 1))}
 					>
 						Anterior
 					</button>
-					<span>
+					<span aria-live="polite">
 						Página {data.page} de {data.totalPages}
 					</span>
 					<button
 						type="button"
 						className="pagination-btn"
+						aria-label="Ir a la pagina siguiente del catalogo"
 						disabled={data.page >= data.totalPages || catalogQuery.isFetching}
 						onClick={() => setPage((current) => Math.min(data.totalPages, current + 1))}
 					>
 						Siguiente
 					</button>
-				</div>
+				</nav>
 			) : null}
 		</section>
 	);

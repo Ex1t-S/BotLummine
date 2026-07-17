@@ -492,6 +492,21 @@ flowchart TD
 - Pruebas: 2/2 E2E específicos y 12/12 Playwright completo; sin overflow a 390 px y target efectivo >=44 px.
 - Riesgo de deployment: bajo; cambios de presentación y refetch únicamente.
 
+### FIND-P1-023
+
+- Título: Catálogo y AI Lab carecían de contratos accesibles en búsqueda y conversación
+- Área: UI/UX/Accesibilidad/Catálogo/AI Lab
+- Ambiente: todos
+- Severidad: Medium
+- Evidencia: la búsqueda de Catálogo dependía del placeholder, su error no ofrecía retry; el textarea de AI Lab no tenía nombre accesible y el historial no exponía semántica de conversación viva.
+- Impacto: usuarios de teclado/lector no podían identificar controles o recibir nuevos turnos con claridad; los fallos de catálogo exigían recargar toda la vista.
+- Causa: componentes visuales implementados sin label/log y estados de recuperación locales.
+- Solución: label visible, paginación semántica y retry en Catálogo; `role=log`, `aria-busy/live`, composer etiquetado, retry de workspaces y respeto de reduced-motion en AI Lab.
+- Estado: resuelto.
+- Archivos: `CatalogPage.jsx/css`, `AiLabPage.jsx/css`, E2E accesible y capturas mobile.
+- Pruebas: 2/2 E2E específicos y 14/14 Playwright completo; AI Lab usa pipeline mock sin delivery externo.
+- Riesgo de deployment: bajo; no modifica contratos ni proveedores.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -502,7 +517,7 @@ flowchart TD
 
 ## 9. Auditoría frontend
 
-- Build exitoso en 898 ms en la validación final de esta iteración.
+- Build exitoso en 894 ms en la validación final de esta iteración.
 - `vendor-three`: 505,81 kB minificado; warning >500 kB.
 - CSS de campañas: 100,63 kB; CSS global principal: 140,17 kB; Clientes: 28,97 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
@@ -520,7 +535,7 @@ flowchart TD
 
 ## 11. Auditoría del agente de IA
 
-Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. La respuesta se normaliza y valida contra el schema interno (`reply`, `needsHuman`, `handoffReason`, `detectedIntent`, `confidence`, `usedFacts`, `riskFlags`) y se revalida tras la auditoría antes del delivery. Cada salida de `processInboundMessage` emite una traza canónica acotada. Persistencia/retención de trazas y generación nativa estructurada del proveedor siguen pendientes.
+Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. La respuesta se normaliza y valida contra el schema interno (`reply`, `needsHuman`, `handoffReason`, `detectedIntent`, `confidence`, `usedFacts`, `riskFlags`) y se revalida tras la auditoría antes del delivery. Cada salida de `processInboundMessage` emite una traza canónica acotada. AI Lab anuncia el historial como log y su E2E usa el pipeline simulado sin delivery. Persistencia/retención de trazas y generación nativa estructurada del proveedor siguen pendientes.
 
 ## 12. Seguridad y multitenancy
 
@@ -532,11 +547,11 @@ Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables
 
 ## 14. Accesibilidad
 
-Se incorporaron labels del composer/búsqueda y filtros de Clientes, estados `alert`/`status`, `aria-pressed`, `aria-expanded`, `aria-current`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. Clientes permite operar filtros/selector con teclado y mantiene targets táctiles >=44 px a 390 px. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
+Se incorporaron labels del composer/búsqueda y filtros de Clientes/Catálogo, estados `alert`/`status`, `role=log`, `aria-pressed`, `aria-expanded`, `aria-current`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. Clientes permite operar filtros/selector con teclado y mantiene targets táctiles >=44 px a 390 px; AI Lab anuncia los nuevos turnos y evita scroll suave con reduced motion. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
 
 ## 15. Rendimiento
 
-Medición mock final: rutas internas críticas listas entre 212 y 455 ms. La landing pública llegó a 3.989 ms en la última corrida por recursos externos, principalmente la fuente remota; la suite registra el desvío y sólo aplica presupuesto bloqueante en modo estricto. Sigue abierto `vendor-three` con 505,81 kB minificado y carga anticipada de CSS/JS de campañas e Inbox por prefetch.
+Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. La landing pública osciló entre 1.598 y 3.989 ms por recursos externos, principalmente la fuente remota; la suite registra el desvío y sólo aplica presupuesto bloqueante en modo estricto. Sigue abierto `vendor-three` con 505,81 kB minificado y carga anticipada de CSS/JS de campañas e Inbox por prefetch.
 
 ## 16. Pruebas
 
@@ -552,7 +567,7 @@ Medición mock final: rutas internas críticas listas entre 212 y 455 ms. La lan
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,90 s |
 | root build | OK; backend + frontend | 10,3 s |
-| Playwright Chromium | 12/12; 10 rutas de performance | 22,9 s |
+| Playwright Chromium | 14/14; 10 rutas de performance | 21,2 s |
 
 ## 17. Cambios implementados
 
@@ -579,18 +594,19 @@ Medición mock final: rutas internas críticas listas entre 212 y 455 ms. La lan
 - Errores y reintentos explícitos en lista/historial de Inbox y Operaciones.
 - Estados de marcas y Analytics mutuamente excluyentes, con reintentos locales y evidencia visual.
 - Clientes: formulario/labels semánticos, selector y paginación accesibles, targets mobile y error recuperable.
+- Catálogo: búsqueda etiquetada, paginación y retry; AI Lab: historial anunciado, composer accesible y reduced motion.
 
 ## 18. Comparación antes/después
 
 - Root build: de falso verde (sólo Prisma) a validación de ambos productos.
 - Unitarias: de 7 casos localizados a 36 pruebas ejecutadas.
-- E2E: de una suite que ocultaba fallos a 12 pruebas bloqueantes.
+- E2E: de una suite que ocultaba fallos a 14 pruebas bloqueantes.
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector en 390x844; revisión de pagos, errores de lista/historial, error de marcas y error de Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector, Catálogo y AI Lab en 390x844; revisión de pagos, errores de lista/historial, error de marcas y error de Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 

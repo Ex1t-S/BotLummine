@@ -95,6 +95,10 @@
 }
 
 .ai-lab-error {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
 	margin: 12px 16px 0;
 	padding: 10px 12px;
 	border: 1px solid #fecaca;
@@ -103,6 +107,17 @@
 	color: #991b1b;
 	font-size: 13px;
 	font-weight: 650;
+}
+
+.ai-lab-error button {
+	flex: 0 0 auto;
+	min-height: 36px;
+	border: 1px solid currentColor;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	padding: 7px 10px;
 }
 
 .ai-lab-chat-body {
@@ -489,6 +504,16 @@
 
 	.ai-lab-chat-form button {
 		width: 100%;
+		min-height: 46px;
+	}
+
+	.ai-lab-error {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.ai-lab-error button {
+		min-height: 46px;
 	}
 
 	.ai-lab-message-stack {
