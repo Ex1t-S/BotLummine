@@ -348,6 +348,12 @@ test('revisión de comprobantes exige motivo para rechazar y registra la acción
 	await page.getByText('Historial de comprobantes').click();
 	await expect(page.getByText('Comprobante rechazado')).toBeVisible();
 	await expect(page.getByText('El comprobante necesita una imagen más nítida.')).toBeVisible();
+	await page.setViewportSize({ width: 1440, height: 960 });
+	await page.screenshot({
+		path: 'audit-artifacts/screenshots/after/inbox-payment-review-history-1440x960.png',
+		fullPage: true,
+	});
+	await page.setViewportSize({ width: 768, height: 1024 });
 	await page.getByRole('button', { name: 'Acciones de conversacion' }).press('Enter');
 	await page.getByRole('menuitem', { name: 'Rechazar comprobante' }).press('Enter');
 
