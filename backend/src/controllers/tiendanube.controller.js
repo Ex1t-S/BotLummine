@@ -14,6 +14,7 @@ import {
 	DEFAULT_WORKSPACE_ID,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../services/workspaces/workspace-scope.js';
 import { AI_PROFILES, AI_VERTICALS } from '../services/ai/vertical-profile.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
@@ -92,9 +93,6 @@ function verifyTiendanubeState(value = '') {
 
 	const [body, signature] = String(value || '').trim().split('.');
 	if (!body || !signature) {
-		if (process.env.NODE_ENV !== 'production' && value) {
-			return { workspaceId: String(value).trim() };
-		}
 		throw new Error('State Tiendanube invalido.');
 	}
 
@@ -120,14 +118,15 @@ function verifyTiendanubeState(value = '') {
 }
 
 function resolveTiendanubeStateWorkspaceId(value = '') {
-	return String(verifyTiendanubeState(value)?.workspaceId || DEFAULT_WORKSPACE_ID).trim() || DEFAULT_WORKSPACE_ID;
+	return requireWorkspaceScope(verifyTiendanubeState(value)?.workspaceId);
 }
 
 function isAuthorizedAdminRequest(req) {
 	return Boolean(req.user);
 }
 
-function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
+function buildInstallUrl(workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(workspaceId);
 	const appId = process.env.TIENDANUBE_APP_ID;
 	const redirectUri = normalizeTiendanubeRedirectUri(process.env.TIENDANUBE_REDIRECT_URI);
 
@@ -138,7 +137,7 @@ function buildInstallUrl(workspaceId = DEFAULT_WORKSPACE_ID) {
 	const url = new URL(`https://www.tiendanube.com/apps/${appId}/authorize`);
 	url.searchParams.set('redirect_uri', redirectUri);
 	url.searchParams.set('response_type', 'code');
-	url.searchParams.set('state', signTiendanubeState({ workspaceId, ts: Date.now(), nonce: crypto.randomUUID() }));
+	url.searchParams.set('state', signTiendanubeState({ workspaceId: resolvedWorkspaceId, ts: Date.now(), nonce: crypto.randomUUID() }));
 	url.searchParams.set(
 		'scope',
 		process.env.TIENDANUBE_APP_SCOPES || 'read_orders read_products'
@@ -506,12 +505,13 @@ async function ensureTiendanubeOrderWebhooks({ storeId, accessToken, webhookUrl 
 	};
 }
 
-async function resolveInstallationForWebhook(requestedStoreId = null, workspaceId = DEFAULT_WORKSPACE_ID) {
+async function resolveInstallationForWebhook(requestedStoreId = null, workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(workspaceId);
 	const requested = requestedStoreId ? String(requestedStoreId).trim() : null;
 
 	if (requested) {
 		const byStore = await prisma.storeInstallation.findFirst({
-			where: { storeId: requested, workspaceId }
+			where: { storeId: requested, workspaceId: resolvedWorkspaceId }
 		});
 
 		if (byStore?.storeId && byStore?.accessToken) {
@@ -526,7 +526,7 @@ async function resolveInstallationForWebhook(requestedStoreId = null, workspaceI
 	}
 
 	const latestInstallation = await prisma.storeInstallation.findFirst({
-		where: { workspaceId, provider: 'TIENDANUBE' },
+		where: { workspaceId: resolvedWorkspaceId, provider: 'TIENDANUBE' },
 		orderBy: { installedAt: 'desc' }
 	});
 
@@ -549,11 +549,11 @@ async function resolveInstallationForWebhook(requestedStoreId = null, workspaceI
 		);
 	}
 
-	if (workspaceId === DEFAULT_WORKSPACE_ID && envStoreId && envAccessToken) {
+	if (resolvedWorkspaceId === DEFAULT_WORKSPACE_ID && envStoreId && envAccessToken) {
 		return {
 			storeId: envStoreId,
 			accessToken: envAccessToken,
-			workspaceId,
+			workspaceId: resolvedWorkspaceId,
 			scope: null,
 			source: 'env'
 		};
@@ -773,7 +773,7 @@ export async function registerTiendanubeWebhooks(req, res) {
 			});
 		}
 
-		const workspaceId = req.user ? requireRequestWorkspaceId(req) : String(req.body?.workspaceId || req.query?.workspaceId || DEFAULT_WORKSPACE_ID);
+		const workspaceId = requireRequestWorkspaceId(req);
 		const installation = await resolveInstallationForWebhook(
 			req.body?.storeId || req.query?.storeId,
 			workspaceId
@@ -812,7 +812,7 @@ export async function runTiendanubeCatalogSync(req, res) {
 			});
 		}
 
-		const workspaceId = req.user ? requireRequestWorkspaceId(req) : String(req.body?.workspaceId || req.query?.workspaceId || DEFAULT_WORKSPACE_ID);
+		const workspaceId = requireRequestWorkspaceId(req);
 		await resolveInstallationForWebhook(req.body?.storeId || req.query?.storeId, workspaceId);
 
 		const result = await syncCatalogFromTiendanube({
@@ -839,7 +839,7 @@ export async function getTiendanubeCatalogStatus(req, res) {
 			});
 		}
 
-		const workspaceId = req.user ? requireRequestWorkspaceId(req) : String(req.query?.workspaceId || DEFAULT_WORKSPACE_ID);
+		const workspaceId = requireRequestWorkspaceId(req);
 		const summary = await getCatalogSummary({ workspaceId });
 		return res.json({ ok: true, ...summary });
 	} catch (error) {
@@ -858,7 +858,7 @@ export async function getTiendanubeCatalogProducts(req, res) {
 		}
 
 		const result = await getCatalogPage({
-			workspaceId: req.user ? requireRequestWorkspaceId(req) : String(req.query?.workspaceId || DEFAULT_WORKSPACE_ID),
+			workspaceId: requireRequestWorkspaceId(req),
 			q: req.query?.q || '',
 			page: req.query?.page,
 			pageSize: req.query?.pageSize,

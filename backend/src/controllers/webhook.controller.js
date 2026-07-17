@@ -20,8 +20,7 @@ import {
 	fetchTiendanubeOrderById,
 	fetchShopifyOrderById,
 	upsertShopifyOrder,
-	upsertTiendanubeOrder,
-	resolveStoreCredentials
+	upsertTiendanubeOrder
 } from '../services/customers/customer.service.js';
 import { attributeOrderConversions } from '../services/campaigns/campaign-attribution.service.js';
 import {
@@ -385,7 +384,9 @@ function isSupportedTiendanubeOrderEvent(event = '') {
 async function resolveWebhookStoreCredentials(storeId) {
 	const normalizedStoreId = String(storeId || '').trim();
 	if (!normalizedStoreId) {
-		return resolveStoreCredentials();
+		const error = new Error('store_id es obligatorio para resolver el workspace del webhook.');
+		error.code = 'WORKSPACE_SCOPE_REQUIRED';
+		throw error;
 	}
 
 	const installation = await prisma.storeInstallation.findFirst({

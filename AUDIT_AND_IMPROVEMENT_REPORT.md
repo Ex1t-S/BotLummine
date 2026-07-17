@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 70/70 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 72/72 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -852,6 +852,21 @@ flowchart TD
 - Pruebas: 2/2 específicas de aprovisionamiento, 4/4 de automatizaciones, 70/70 unitarias y build raíz verde en una validación de 14,12 s.
 - Riesgo de deployment: bajo; actualizar runbooks para incluir workspace y probar el CLI contra una base local descartable.
 
+### FIND-P0-047
+
+- Título: OAuth Tiendanube aceptaba state sin firma y handlers conservaban tenant controlable por request
+- Área: Backend/OAuth/Webhooks/Comercio/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: en cualquier `NODE_ENV` no productivo, `state` podía ser un workspace en texto plano; cuatro handlers autenticados mantenían fallback a `body/query.workspaceId`; el resolver del webhook podía llamar credenciales default sin `store_id`.
+- Impacto: un staging mal configurado o un montaje alternativo de rutas podía asociar una instalación/sync al tenant elegido por cliente; un webhook incompleto podía caer en credenciales ambientales.
+- Causa: atajos de desarrollo y compatibilidad legacy que sobrevivieron al middleware/auth y al state HMAC.
+- Solución: state firmado obligatorio en todos los ambientes, scope exclusivo de `requireRequestWorkspaceId`, workspace obligatorio en instalación y rechazo temprano de webhook sin tienda.
+- Estado: resuelto localmente; Shopify ya estaba correctamente ligado a sesión + state + HMAC y no requirió cambios; no se inició OAuth ni se llamó a proveedores.
+- Archivos: controllers Tiendanube/webhook y prueba arquitectónica OAuth.
+- Pruebas: 2/2 específicas, 72/72 unitarias y build raíz verde en una validación de 13,60 s.
+- Riesgo de deployment: medio; staging debe configurar el secret de state, probar callback válido/alterado/vencido y confirmar que body/query no cambia el workspace autenticado.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -874,7 +889,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 143 archivos JS/MJS pasan el chequeo de sintaxis.
-- 70 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
+- 72 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -906,7 +921,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 70/70 | 1,41 s |
+| unit tests | 72/72 | 1,33 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
