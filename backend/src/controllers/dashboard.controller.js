@@ -1634,7 +1634,7 @@ export async function getConversationMessagesJson(req, res, next) {
 export async function getEnboxSyncStatusJson(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req);
-		const status = getEnboxSyncStatus();
+		const status = getEnboxSyncStatus(workspaceId);
 		const [latestLog, latestShipments] = await Promise.all([
 			prisma.enboxSyncLog.findMany({
 				where: { workspaceId },

@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 
 const DEFAULT_PANEL_BASE_URL = 'https://enbox.lightdata.com.ar';
 const DEFAULT_PUBLIC_BASE_URL = 'https://enbox.lightdata.com.ar';
@@ -55,8 +56,8 @@ function getEnvEnboxConfig() {
 	};
 }
 
-export async function getEnboxConfig({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getEnboxConfig({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const connection = await prisma.logisticsConnection.findFirst({
 		where: {
 			workspaceId: resolvedWorkspaceId,
@@ -284,8 +285,9 @@ async function fetchShipmentDetail(sessionCookie, did, config = {}) {
 	}
 }
 
-export async function fetchEnboxShipmentDetailByDid(didEnvio, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const config = await getEnboxConfig({ workspaceId });
+export async function fetchEnboxShipmentDetailByDid(didEnvio, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const config = await getEnboxConfig({ workspaceId: resolvedWorkspaceId });
 	if (!hasEnboxCredentials(config)) return null;
 
 	const normalizedDid = Number(didEnvio || 0);
@@ -426,8 +428,9 @@ async function findBestShipmentMatch(order = {}, sessionCookie, config = {}) {
 	return candidates.sort((a, b) => b._score - a._score)[0] || null;
 }
 
-export async function resolveEnboxTracking(order = {}, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const config = await getEnboxConfig({ workspaceId });
+export async function resolveEnboxTracking(order = {}, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const config = await getEnboxConfig({ workspaceId: resolvedWorkspaceId });
 	if (!hasEnboxCredentials(config)) return null;
 
 	const sessionCookie = await loginToEnbox(config);

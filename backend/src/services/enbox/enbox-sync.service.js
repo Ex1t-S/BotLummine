@@ -1,7 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { getOrderByNumber } from '../commerce/orders.service.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 import {
 	buildPublicTrackingUrl,
 	fetchEnboxShipmentDetailByDid,
@@ -30,7 +31,7 @@ const syncState = {
 	ordersScanned: 0,
 	ordersMatched: 0,
 	errors: [],
-	workspaceId: DEFAULT_WORKSPACE_ID,
+	workspaceId: null,
 };
 
 function pushError(message) {
@@ -43,7 +44,7 @@ function pushError(message) {
 	});
 }
 
-function resetSyncState(mode, workspaceId = DEFAULT_WORKSPACE_ID) {
+function resetSyncState(mode, workspaceId) {
 	syncState.running = true;
 	syncState.lastMode = mode;
 	syncState.workspaceId = workspaceId;
@@ -181,8 +182,8 @@ function normalizeShipmentRecord(source = {}, config = null) {
 	};
 }
 
-async function upsertEnboxShipment(source = {}, workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function upsertEnboxShipment(source = {}, workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const config = await getEnboxConfig({ workspaceId: resolvedWorkspaceId });
 	const data = normalizeShipmentRecord(source, config);
 	if (!data.didEnvio) return null;
@@ -212,7 +213,7 @@ async function upsertEnboxShipment(source = {}, workspaceId = DEFAULT_WORKSPACE_
 	return record;
 }
 
-async function refreshKnownShipments(limit = REFRESH_BATCH_SIZE, workspaceId = DEFAULT_WORKSPACE_ID) {
+async function refreshKnownShipments(limit = REFRESH_BATCH_SIZE, workspaceId) {
 	logger.debug('enbox.refresh_started', { workspaceId, limit });
 	const rows = await prisma.enboxShipment.findMany({
 		where: { workspaceId },
@@ -234,7 +235,7 @@ async function refreshKnownShipments(limit = REFRESH_BATCH_SIZE, workspaceId = D
 	}
 }
 
-async function getDiscoverySeedDid(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getDiscoverySeedDid(workspaceId) {
 	const latestKnown = await prisma.enboxShipment.findFirst({
 		where: { workspaceId },
 		orderBy: [{ updatedAt: 'desc' }, { didEnvio: 'desc' }],
@@ -260,7 +261,7 @@ function buildDidRange(seedDid, mode = 'incremental') {
 	return dids;
 }
 
-async function crawlDidWindow(mode = 'incremental', workspaceId = DEFAULT_WORKSPACE_ID) {
+async function crawlDidWindow(mode = 'incremental', workspaceId) {
 	const seedDid = await getDiscoverySeedDid(workspaceId);
 	const dids = buildDidRange(seedDid, mode);
 
@@ -294,7 +295,7 @@ async function crawlDidWindow(mode = 'incremental', workspaceId = DEFAULT_WORKSP
 	);
 }
 
-async function getCandidateOrders(mode = 'incremental', workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getCandidateOrders(mode = 'incremental', workspaceId) {
 	const since = subtractDays(mode === 'backfill' ? BACKFILL_LOOKBACK_DAYS : RECENT_LOOKBACK_DAYS);
 	const take = mode === 'backfill' ? BACKFILL_BATCH_SIZE : INCREMENTAL_BATCH_SIZE;
 
@@ -319,7 +320,7 @@ async function getCandidateOrders(mode = 'incremental', workspaceId = DEFAULT_WO
 	return orders;
 }
 
-async function discoverRecentShipments(mode = 'incremental', workspaceId = DEFAULT_WORKSPACE_ID) {
+async function discoverRecentShipments(mode = 'incremental', workspaceId) {
 	const candidates = await getCandidateOrders(mode, workspaceId);
 	logger.debug('enbox.candidates_loaded', { workspaceId, mode, total: candidates.length });
 
@@ -384,7 +385,7 @@ async function discoverRecentShipments(mode = 'incremental', workspaceId = DEFAU
 
 function safeSyncLogData(data = {}) {
 	return {
-		workspaceId: data.workspaceId || DEFAULT_WORKSPACE_ID,
+		workspaceId: requireWorkspaceScope(normalizeWorkspaceId(data.workspaceId)),
 		status: data.status,
 		mode: data.mode,
 		startedAt: data.startedAt,
@@ -397,12 +398,28 @@ function safeSyncLogData(data = {}) {
 	};
 }
 
-export function getEnboxSyncStatus() {
+export function getEnboxSyncStatus(workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	if (syncState.workspaceId !== resolvedWorkspaceId) {
+		return {
+			running: false,
+			lastMode: null,
+			startedAt: null,
+			finishedAt: null,
+			message: 'Sin sincronizaciones de Enbox todavia.',
+			shipmentsChecked: 0,
+			shipmentsUpserted: 0,
+			ordersScanned: 0,
+			ordersMatched: 0,
+			errors: [],
+			workspaceId: resolvedWorkspaceId,
+		};
+	}
 	return { ...syncState, errors: syncState.errors.slice(-10) };
 }
 
-export async function findCachedEnboxShipment(orderNumber, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function findCachedEnboxShipment(orderNumber, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedOrderNumber = cleanString(orderNumber);
 	if (!normalizedOrderNumber) return null;
 
@@ -420,10 +437,18 @@ export async function findCachedEnboxShipment(orderNumber, { workspaceId = DEFAU
 	});
 }
 
-export async function syncEnboxShipments({ mode = 'incremental', workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function syncEnboxShipments({ mode = 'incremental', workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (syncState.running) {
-		return { ok: true, started: false, ...getEnboxSyncStatus() };
+		if (syncState.workspaceId === resolvedWorkspaceId) {
+			return { ok: true, started: false, ...getEnboxSyncStatus(resolvedWorkspaceId) };
+		}
+		return {
+			ok: false,
+			started: false,
+			workspaceId: resolvedWorkspaceId,
+			message: 'Hay otra sincronizacion de Enbox en progreso.',
+		};
 	}
 
 	const config = await getEnboxConfig({ workspaceId: resolvedWorkspaceId });
@@ -473,7 +498,7 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 
 		if (syncLog?.id) {
 			await prisma.enboxSyncLog.update({
-				where: { id: syncLog.id },
+				where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 				data: safeSyncLogData({
 					workspaceId: resolvedWorkspaceId,
 					status: 'SUCCESS',
@@ -488,7 +513,7 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 			});
 		}
 
-		return { ok: true, started: true, ...getEnboxSyncStatus() };
+		return { ok: true, started: true, ...getEnboxSyncStatus(resolvedWorkspaceId) };
 	} catch (error) {
 		pushError(error?.message || 'Error sincronizando envíos de Enbox.');
 		finishSyncState(syncState.message);
@@ -496,7 +521,7 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 		if (syncLog?.id) {
 			try {
 				await prisma.enboxSyncLog.update({
-					where: { id: syncLog.id },
+					where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 					data: safeSyncLogData({
 						workspaceId: resolvedWorkspaceId,
 						status: 'ERROR',
@@ -514,7 +539,7 @@ export async function syncEnboxShipments({ mode = 'incremental', workspaceId = D
 			}
 		}
 
-		return { ok: false, started: true, ...getEnboxSyncStatus() };
+		return { ok: false, started: true, ...getEnboxSyncStatus(resolvedWorkspaceId) };
 	}
 }
 

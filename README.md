@@ -60,9 +60,13 @@ Jobs operativos recomendados:
 
 ```bash
 npm run jobs:campaign-dispatch
-npm run jobs:enbox-sync
+ENBOX_SYNC_WORKSPACE_ID=<workspace-id> npm run jobs:enbox-sync
 npm run jobs:diagnose
 ```
+
+El job de Enbox exige `ENBOX_SYNC_WORKSPACE_ID` para impedir que una ejecucion programada
+use credenciales, cache o estado de otro workspace por omision. En PowerShell se puede definir
+temporalmente con `$env:ENBOX_SYNC_WORKSPACE_ID='<workspace-id>'` antes de ejecutar el comando.
 
 Schedules sugeridos:
 

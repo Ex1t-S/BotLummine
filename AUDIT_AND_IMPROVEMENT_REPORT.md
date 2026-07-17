@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 61/61 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 63/63 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -762,6 +762,21 @@ flowchart TD
 - Pruebas: 2/2 específicas, 61/61 unitarias, 142 archivos con sintaxis válida y build raíz verde.
 - Riesgo de deployment: medio; smoke de lectura sandbox por dos workspaces y confirmación de que el workspace default explícito conserva su fallback env sólo cuando corresponde.
 
+### FIND-P0-041
+
+- Título: Enbox aceptaba tenant implícito y exponía estado global de sincronización
+- Área: Backend/Logística/Jobs/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: configuración, tracking, caché y sincronización reemplazaban un scope ausente por `workspace_default`; `getEnboxSyncStatus()` devolvía un singleton global sin comprobar el workspace del request y el job programado ejecutaba sin tenant explícito.
+- Impacto: un caller incompleto podía resolver credenciales o envíos del tenant default y un panel podía observar progreso, errores o métricas de la sincronización de otra marca.
+- Causa: contrato legacy monomarca y estado de proceso único sin frontera de lectura.
+- Solución: workspace obligatorio antes de Prisma/credenciales, estado visible sólo para su tenant, logs actualizados con `id + workspaceId`, controller propagando el scope y job obligado a recibir `ENBOX_SYNC_WORKSPACE_ID`.
+- Estado: resuelto localmente; no se consultó Enbox, no se ejecutó una sincronización y Railway no fue modificado.
+- Archivos: servicios Enbox, controller de dashboard, job, README y prueba negativa.
+- Pruebas: 2/2 específicas, prueba negativa del job con exit code 1 esperado, 63/63 unitarias, Prisma válido, 142 archivos con sintaxis válida y build raíz verde en 14,38 s.
+- Riesgo de deployment: medio/alto; antes de habilitar el cron hay que definir `ENBOX_SYNC_WORKSPACE_ID` por servicio y hacer smoke secuencial con dos workspaces sintéticos. La serialización global entre tenants permanece como límite operativo, pero ya no filtra estado.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -784,7 +799,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 142 archivos JS/MJS pasan el chequeo de sintaxis.
-- 61 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
+- 63 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -816,7 +831,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 142/142 | incluido en build |
-| unit tests | 61/61 | 1,18 s |
+| unit tests | 63/63 | 1,27 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |

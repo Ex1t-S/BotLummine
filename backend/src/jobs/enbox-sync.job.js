@@ -14,9 +14,13 @@ function resolveMode() {
 
 async function main() {
 	const mode = resolveMode();
-	logger.info('enbox.sync_job_started', { mode });
+	const workspaceId = String(process.env.ENBOX_SYNC_WORKSPACE_ID || '').trim();
+	if (!workspaceId) {
+		throw new Error('ENBOX_SYNC_WORKSPACE_ID es obligatoria para ejecutar el job de Enbox.');
+	}
+	logger.info('enbox.sync_job_started', { mode, workspaceId });
 
-	const result = await syncEnboxShipments({ mode });
+	const result = await syncEnboxShipments({ mode, workspaceId });
 
 	logger.info('enbox.sync_job_finished', {
 		ok: result.ok,
