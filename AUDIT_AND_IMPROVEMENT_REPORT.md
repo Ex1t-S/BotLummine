@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 81/81 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 82/82 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -957,6 +957,21 @@ flowchart TD
 - Pruebas: 2/2 específicas, suite completa 81/81 en 1,30 s y build raíz verde en 9,62 s.
 - Riesgo de deployment: medio/alto; requiere staging sintético con draft, launch, retry, dispatch y status webhook en dos workspaces, sin delivery real.
 
+### FIND-P0-054
+
+- Título: generador de contexto de negocio no exigía workspace en su frontera de servicio
+- Área: Backend/IA/Workspace/Multitenancy
+- Ambiente: local
+- Severidad: High
+- Evidencia: `generateWorkspaceBusinessContextDraft` consultaba workspace, branding, catálogo e integraciones con el argumento recibido sin validarlo; el controller era seguro, pero una llamada interna directa no fallaba con la taxonomía común.
+- Impacto: nuevos callers podían omitir el tenant y degradar a errores de Prisma o usar un ID sin contrato explícito antes de compilar contexto sensible.
+- Causa: autorización en controller sin defensa equivalente en el servicio.
+- Solución: `requireWorkspaceScope` al inicio y uso exclusivo del ID resuelto.
+- Estado: resuelto localmente.
+- Archivos: `backend/src/services/workspaces/workspace-context-draft.service.js`, `backend/test/brand-neutral-shared-services.test.js`.
+- Pruebas: 1/1 específica, suite completa 82/82 en 1,80 s y build raíz verde en 10,25 s.
+- Riesgo de deployment: bajo.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -1011,7 +1026,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 81/81 | 1,30 s |
+| unit tests | 82/82 | 1,80 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |

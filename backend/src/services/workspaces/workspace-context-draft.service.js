@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { runGeminiReply, isRetryableGeminiError } from '../ai/gemini.service.js';
 import { runOpenAIReply } from '../ai/openai.service.js';
+import { requireWorkspaceScope } from './workspace-scope.js';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 
@@ -621,8 +622,9 @@ async function runDraftWithAvailableProvider(prompt) {
 }
 
 export async function generateWorkspaceBusinessContextDraft(workspaceId, options = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(workspaceId);
 	const workspace = await prisma.workspace.findUnique({
-		where: { id: workspaceId },
+		where: { id: resolvedWorkspaceId },
 		include: {
 			branding: true,
 			aiConfig: true,

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
+import { generateWorkspaceBusinessContextDraft } from '../src/services/workspaces/workspace-context-draft.service.js';
+
 async function readSource(relativePath) {
 	return readFile(new URL(relativePath, import.meta.url), 'utf8');
 }
@@ -19,5 +21,12 @@ describe('shared brand neutrality', () => {
 
 		assert.doesNotMatch(source, /String\(message\.senderName \|\| ''\)\.trim\(\) \|\|\s*['"]Lummine['"]/);
 		assert.match(source, /String\(message\.senderName \|\| ''\)\.trim\(\) \|\|\s*['"]Marca['"]/);
+	});
+
+	it('rejects workspace context generation without an explicit workspace', async () => {
+		await assert.rejects(
+			() => generateWorkspaceBusinessContextDraft(),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
 	});
 });
