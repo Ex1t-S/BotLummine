@@ -3119,16 +3119,16 @@ body:has(.login-page),
 }
 
 .login-page--login .login-password-control input {
-	padding-right: 50px;
+	padding-right: 86px;
 }
 
 .login-page--login .login-password-toggle {
-	right: 14px;
-	min-width: auto;
-	height: auto;
-	padding: 4px 0;
+	right: 4px;
+	min-width: 72px;
+	height: 44px;
+	padding: 0 10px;
 	border: 0;
-	border-radius: 0;
+	border-radius: 10px;
 	background: transparent;
 	color: rgba(255, 255, 255, 0.42);
 	font-size: 0.76rem;
