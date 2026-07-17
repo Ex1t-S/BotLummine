@@ -1002,9 +1002,25 @@ flowchart TD
 - Pruebas: 4/4 flujos críticos de Inbox en 5,8 s; caso de pagos 1/1 en 2,2 s; TypeScript 0 errores; build frontend 589 ms y build raíz 10,52 s.
 - Riesgo de deployment: bajo; no cambia API ni datos, pero conviene smoke de teclado en staging antes del rollout.
 
+### FIND-P1-057
+
+- Título: Operaciones rompía el estado vacío cuando no existían marcas
+- Área: UI/UX/Robustez/Operaciones
+- Ambiente: local
+- Severidad: High
+- Evidencia: con `workspaces: []`, `primaryWorkspace` era `null` y `getWorkspaceName` accedía a `item.workspace` sin guard; la vista terminaba en el error boundary en lugar de mostrar “No hay marcas para mostrar”.
+- Impacto: una cuenta sin workspaces activos no podía consultar el centro de prioridades ni distinguir un sistema vacío de una falla de runtime.
+- Causa: default parameter insuficiente para argumentos explícitamente `null`.
+- Solución: normalizar `item?.workspace || item || {}` antes de resolver nombre y agregar cobertura E2E de loading, error con retry y empty explícito.
+- Estado: resuelto localmente.
+- Archivos: `frontend/src/pages/OperationsPage.jsx`, `frontend/tests/operations/priority-states.spec.js`.
+- Pruebas: 3/3 E2E específicos en 4,9 s; build frontend verde en 1,24 s.
+- Riesgo de deployment: bajo; guard defensivo y tests mockeados, sin cambios de API.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío. Los cambios de cola conservan selección/URL y revisión de pagos comunica su resultado real sin simular una aprobación.
+- Operaciones: loading, error recuperable y empty sin marcas quedan separados; el centro vuelve a mostrar prioridades después de retry.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
 - Estados: Inbox/Comprobantes y Clientes separan carga, vacío, error y datos; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
@@ -1063,7 +1079,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | frontend build | OK; sin chunks >500 kB | 0,99 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
 | root build | OK; backend + frontend | 10,52 s en la última corrida |
-| Playwright Chromium | 14/14 consolidada previa; 4/4 Inbox actual | 5,8 s para Inbox sin regenerar capturas concurrentes |
+| Playwright Chromium | 14/14 consolidada previa; 4/4 Inbox + 3/3 Operaciones actuales | 5,8 s + 4,9 s sin regenerar capturas concurrentes |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
@@ -1076,6 +1092,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Compiler canónico de prompt, hash/version/facts y taxonomía/fallback de proveedores.
 - Guard contra base remota en desarrollo y pruebas negativas de workspace.
 - Inbox: selección/URL, borradores, error/retry, doble envío, flujo móvil y cambio de cola sin perder contexto; feedback de revisión accesible y honesto.
+- Operaciones: estado vacío sin error boundary, retry de resumen y loading anunciado.
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
@@ -1113,6 +1130,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - E2E: de una suite que ocultaba fallos a 14 pruebas bloqueantes.
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
 - Revisión de pagos: de una falsa “verificación” sin feedback accesible y pérdida de selección a una derivación explícita, error recuperable y URL conversacional persistida.
+- Operaciones: de error boundary ante cero marcas a empty state accionable y comprobable.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 - Bundle: de `vendor-three` 505,81 kB a ningún chunk Three.js; landing mock de 1.598-3.989 ms a 351-478 ms.
 
@@ -1140,7 +1158,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: Inbox base y feedback accesible de revisión avanzados. Pendientes: workflow durable de pagos, operaciones, campañas/carritos, estados compartidos, Axe reproducible y accesibilidad privada restante.
+P1: Inbox base, feedback accesible de revisión y estados de Operaciones avanzados. Pendientes: workflow durable de pagos, campañas/carritos, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 

@@ -40,7 +40,8 @@ function getSeverityLabel(severity = '') {
 }
 
 function getWorkspaceName(item = {}) {
-	return item.workspace?.displayName || item.workspace?.name || item.workspace?.slug || 'Marca';
+	const workspace = item?.workspace || item || {};
+	return workspace.displayName || workspace.name || workspace.slug || 'Marca';
 }
 
 function formatOperationDate(value) {
