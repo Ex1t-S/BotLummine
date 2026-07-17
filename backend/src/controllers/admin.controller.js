@@ -39,6 +39,7 @@ import {
 import {
 	adminManagedUserWhere,
 	workspaceIdsWhere,
+	workspaceOwnedWhere,
 } from '../services/workspaces/workspace-scope.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
@@ -1916,7 +1917,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 
 		const channel = channelId
 			? await prisma.whatsAppChannel.update({
-					where: { id: channelId },
+					where: workspaceOwnedWhere({ id: channelId, workspaceId }),
 					data: {
 						...data,
 						accessToken: encryptSecret(data.accessToken),
@@ -2000,7 +2001,7 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 		const channel = await prisma.$transaction(async (tx) => {
 			const connectedChannel = existingPhone?.id
 				? await tx.whatsAppChannel.update({
-						where: { id: existingPhone.id },
+						where: workspaceOwnedWhere({ id: existingPhone.id, workspaceId }),
 						data: channelData,
 				  })
 				: await tx.whatsAppChannel.create({

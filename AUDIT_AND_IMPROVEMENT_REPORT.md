@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 74/74 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 75/75 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -882,6 +882,21 @@ flowchart TD
 - Pruebas: 2/2 específicas, 74/74 unitarias, build raíz verde y `npx tsc -b` sin errores.
 - Riesgo de deployment: bajo; revisión visual de mensajes interactivos sin sender en dos marcas.
 
+### FIND-P0-049
+
+- Título: updates de canales WhatsApp perdían scope en la escritura final
+- Área: Backend/Administración/WhatsApp/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: alta/edición manual y embedded signup verificaban el canal por workspace, pero luego ejecutaban `whatsAppChannel.update` únicamente por ID.
+- Impacto: una condición de carrera o un cambio de ownership concurrente podía alterar credenciales/configuración de un canal fuera del tenant validado.
+- Causa: frontera aplicada sólo al lookup previo, no al predicado inmutable del update.
+- Solución: ambos updates usan `workspaceOwnedWhere({ id, workspaceId })` hasta la escritura final.
+- Estado: resuelto localmente; no se validaron tokens ni se conectó ningún canal.
+- Archivos: controller admin y prueba arquitectónica de canales.
+- Pruebas: 1/1 específica, 75/75 unitarias y build raíz verde en una validación de 14,41 s.
+- Riesgo de deployment: bajo/medio; smoke sandbox de edición y embedded signup en dos workspaces, incluyendo ID cruzado esperado 404/conflicto.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -904,7 +919,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 143 archivos JS/MJS pasan el chequeo de sintaxis.
-- 74 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
+- 75 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -936,7 +951,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 74/74 | 1,44 s |
+| unit tests | 75/75 | 1,41 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
