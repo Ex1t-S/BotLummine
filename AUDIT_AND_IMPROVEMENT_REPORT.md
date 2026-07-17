@@ -537,6 +537,21 @@ flowchart TD
 - Pruebas: build sin `vendor-three`, 3/3 pruebas públicas y performance 10/10 rutas; captura landing 1440x960 inspeccionada.
 - Riesgo de deployment: bajo; el fondo es decorativo y el prefetch de interacción sigue activo.
 
+### FIND-P0-026
+
+- Título: CI no ejecutaba el typecheck existente ni validaba el comando raíz como contrato único
+- Área: CI/CD/DX
+- Ambiente: CI
+- Severidad: High
+- Evidencia: `tsconfig` y TypeScript estaban instalados, pero `quality.yml` compilaba productos por separado y omitía `tsc`; performance corría sin presupuesto bloqueante y los diagnósticos no se conservaban al fallar.
+- Impacto: una regresión de tipos o del orquestador raíz podía llegar a revisión y los fallos E2E perdían evidencia útil.
+- Causa: la workflow creció por pasos aislados sin consolidar el contrato de producto.
+- Solución: `npx tsc -b`, `npm run build` raíz, `PERF_STRICT=1` y upload de report/trace/screenshot sólo ante fallo por siete días.
+- Estado: implementado; pendiente observar la primera ejecución remota del PR.
+- Archivos: `.github/workflows/quality.yml`.
+- Pruebas: typecheck local 0 errores en 3,8 s, build raíz verde y 14/14 Playwright; sintaxis YAML revisada por diff, action runner pendiente.
+- Riesgo de deployment: bajo; sólo afecta validación de PR y no publica artefactos de producción.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -551,7 +566,7 @@ flowchart TD
 - `vendor-three`: eliminado del build (baseline 505,81 kB minificado) al reemplazar WebGL decorativo por CSS; la dependencia declarada queda para coordinar cuando los manifests concurrentes estén libres.
 - CSS de campañas: 100,63 kB; CSS global principal: 140,17 kB; Clientes: 28,97 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
-- No hay scripts de lint ni typecheck configurados; sigue como deuda P0/P1 de calidad.
+- El typecheck estricto existente ahora bloquea CI mediante `tsc -b`; sigue sin haber un lint reproducible configurado.
 - Se añadieron tokens semánticos base, foco visible global y reducción de movimiento.
 - Se detectó y eliminó un bloque legacy de estilos globales en `CatalogPage.css`.
 - Auditoría frontend: 5 vulnerabilidades productivas reportadas (2 high en Vite/esbuild); no se modificaron manifests sucios del usuario.
@@ -595,7 +610,8 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
-| frontend build | OK con warning de chunk | 0,90 s |
+| frontend build | OK; sin chunks >500 kB | 0,94 s |
+| frontend typecheck | OK; 0 errores | 3,8 s |
 | root build | OK; backend + frontend | 10,3 s |
 | Playwright Chromium | 14/14; 10 rutas de performance | 17,7 s |
 
@@ -629,6 +645,7 @@ Durante el refactor de prefetch, una primera corrida privada falló porque falta
 - Catálogo: búsqueda etiquetada, paginación y retry; AI Lab: historial anunciado, composer accesible y reduced motion.
 - Persistencia redactada de trazas IA con expiración y poda segura, preparada mediante migración aditiva.
 - Fondo público sin Three.js y prefetch privado acotado para evitar trabajo especulativo masivo.
+- CI con typecheck, build raíz, presupuesto de performance y diagnósticos Playwright en fallos.
 
 ## 18. Comparación antes/después
 
@@ -651,7 +668,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 - Auditoría exhaustiva de aislamiento multitenant por entidad aún incompleta.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
-- Sin lint, typecheck ni axe configurados.
+- Sin lint ni axe reproducibles configurados; typecheck ya bloquea CI.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
 - Staging no representativo.
@@ -659,7 +676,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 22. Backlog
 
-P0: completar auditoría multitenant, activar/validar retención de trazas en staging, lint/typecheck y security audit.
+P0: completar auditoría multitenant, activar/validar retención de trazas en staging, lint reproducible y security audit frontend.
 
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
 
