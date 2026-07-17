@@ -327,6 +327,21 @@ flowchart TD
 - Pruebas: `npm audit --omit=dev --audit-level=high` devuelve 0 vulnerabilidades; build y unitarias verdes.
 - Riesgo de deployment: medio; revisar smoke de uploads/Sentry en staging.
 
+### FIND-P1-012
+
+- Título: menú móvil sin gestión de foco y label de contraseña contaminado
+- Área: accesibilidad/frontend
+- Ambiente: todos
+- Severidad: High
+- Evidencia: el overlay no enfocaba contenido ni respondía a Escape; el botón “Mostrar” estaba dentro del `<label>` y pasaba a formar parte del nombre del input.
+- Impacto: navegación confusa o bloqueante para teclado y lectores de pantalla.
+- Causa: estado visual/ARIA sin ciclo de foco y label envolviendo un control interactivo.
+- Solución: diálogo modal con foco inicial, trap, Escape/restauración; labels por `htmlFor/id` y focus ring visible.
+- Estado: resuelto.
+- Archivos: `LoginPage.jsx`, `LoginPage.css`, prueba Playwright de teclado.
+- Pruebas: 2/2 escenarios críticos de accesibilidad.
+- Riesgo de deployment: bajo.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -367,7 +382,7 @@ Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables
 
 ## 14. Accesibilidad
 
-Se incorporaron labels del composer/búsqueda, estados `alert`/`status`, `aria-pressed`, foco visible y `prefers-reduced-motion`. Sigue pendiente la auditoría WCAG 2.2 AA completa con teclado y axe.
+Se incorporaron labels del composer/búsqueda, estados `alert`/`status`, `aria-pressed`, foco visible y `prefers-reduced-motion`. El menú público móvil ahora gestiona foco inicial, trap, Escape y restauración; el login separa labels de controles interactivos. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
 
 ## 15. Rendimiento
 
@@ -387,7 +402,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,60 s |
 | root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
-| Playwright Chromium | 5/5; 10 rutas de performance | 14,7 s |
+| Playwright Chromium | 7/7; 10 rutas de performance | 17,5 s |
 
 ## 17. Cambios implementados
 
@@ -403,6 +418,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Schema interno validado antes de delivery y fallback por `INVALID_OUTPUT`.
 - Scope inmutable `id + workspaceId` para reproceso de mensajes inbound.
 - Dependencias backend parcheadas y audit high agregado a CI.
+- Menú público móvil y formulario de login cubiertos con pruebas de teclado.
 
 ## 18. Comparación antes/después
 

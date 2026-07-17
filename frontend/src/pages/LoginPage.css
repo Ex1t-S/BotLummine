@@ -847,7 +847,7 @@ body:has(.login-page),
 	gap: 9px;
 }
 
-.login-field > span {
+.login-field > label {
 	color: rgba(237, 237, 238, 0.86);
 	font-family: var(--login-font-ui);
 	font-size: 0.82rem;
@@ -3067,7 +3067,7 @@ body:has(.login-page),
 	gap: 0;
 }
 
-.login-page--login .login-field > span {
+.login-page--login .login-field > label {
 	position: absolute;
 	width: 1px;
 	height: 1px;
@@ -3098,7 +3098,13 @@ body:has(.login-page),
 .login-page--login .login-input-shell:focus-within,
 .login-page--login .login-password-control:focus-within {
 	border-color: rgba(255, 255, 255, 0.3);
-	box-shadow: none;
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28);
+}
+
+.login-page--login .login-input-shell:has(input:focus-visible),
+.login-page--login .login-password-control:has(input:focus-visible) {
+	outline: 2px solid #38bdf8;
+	outline-offset: 2px;
 }
 
 .login-page--login .login-field input {

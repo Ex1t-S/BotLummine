@@ -214,10 +214,11 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 				</div>
 			</div>
 
-			<label className="login-field">
-				<span>Email</span>
+			<div className="login-field">
+				<label htmlFor="login-email">Email</label>
 				<div className="login-input-shell">
 					<input
+						id="login-email"
 						type="email"
 						autoComplete="email"
 						placeholder="nombre@empresa.com"
@@ -227,12 +228,13 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 						required
 					/>
 				</div>
-			</label>
+			</div>
 
-			<label className="login-field">
-				<span>Contraseña</span>
+			<div className="login-field">
+				<label htmlFor="login-password">Contraseña</label>
 				<div className="login-password-control">
 					<input
+						id="login-password"
 						type={showPassword ? 'text' : 'password'}
 						autoComplete="current-password"
 						placeholder="********"
@@ -250,7 +252,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 						{showPassword ? 'Ocultar' : 'Mostrar'}
 					</button>
 				</div>
-			</label>
+			</div>
 
 			{error ? (
 				<p className="login-error" role="alert">
@@ -279,6 +281,8 @@ export default function LoginPage() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [navScrolled, setNavScrolled] = useState(false);
 	const [mobileNavOpen, setMobileNavOpen] = useState(false);
+	const mobileNavButtonRef = useRef(null);
+	const mobileNavRef = useRef(null);
 	const pointerFrameRef = useRef(0);
 	const pointerPositionRef = useRef({ x: '50%', y: '42%' });
 
@@ -307,6 +311,45 @@ export default function LoginPage() {
 	useEffect(() => {
 		setMobileNavOpen(false);
 	}, [publicPath]);
+
+	useEffect(() => {
+		if (!mobileNavOpen) return undefined;
+
+		const mobileNav = mobileNavRef.current;
+		const focusFirstLinkFrame = window.requestAnimationFrame(() => {
+			mobileNav?.querySelector('.login-mobile-nav__link')?.focus();
+		});
+
+		function handleMobileNavKeyDown(event) {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				setMobileNavOpen(false);
+				window.requestAnimationFrame(() => mobileNavButtonRef.current?.focus());
+				return;
+			}
+
+			if (event.key !== 'Tab' || !mobileNav) return;
+			const focusable = [...mobileNav.querySelectorAll('a[href], button:not([disabled])')]
+				.filter((element) => element.tabIndex >= 0);
+			if (!focusable.length) return;
+
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			if (event.shiftKey && document.activeElement === first) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && document.activeElement === last) {
+				event.preventDefault();
+				first.focus();
+			}
+		}
+
+		document.addEventListener('keydown', handleMobileNavKeyDown);
+		return () => {
+			window.cancelAnimationFrame(focusFirstLinkFrame);
+			document.removeEventListener('keydown', handleMobileNavKeyDown);
+		};
+	}, [mobileNavOpen]);
 
 	useEffect(() => {
 		return () => {
@@ -408,6 +451,7 @@ export default function LoginPage() {
 						</div>
 
 						<button
+							ref={mobileNavButtonRef}
 							className="login-nav__menu"
 							type="button"
 							aria-expanded={mobileNavOpen}
@@ -420,7 +464,15 @@ export default function LoginPage() {
 					</div>
 				</div>
 
-				<div id="mobile-nav" className={`login-mobile-nav${mobileNavOpen ? ' is-open' : ''}`} aria-hidden={!mobileNavOpen}>
+				<div
+					ref={mobileNavRef}
+					id="mobile-nav"
+					className={`login-mobile-nav${mobileNavOpen ? ' is-open' : ''}`}
+					role="dialog"
+					aria-modal="true"
+					aria-label="Navegación móvil"
+					aria-hidden={!mobileNavOpen}
+				>
 					<button
 						type="button"
 						className="login-mobile-nav__backdrop"
