@@ -16,6 +16,13 @@ export function workspaceOwnedWhere({ id, workspaceId, ...constraints } = {}) {
 	};
 }
 
+export function whatsAppTemplateWebhookWhere({ metaTemplateId, wabaId } = {}) {
+	return {
+		metaTemplateId: requiredIdentifier(metaTemplateId, 'metaTemplateId'),
+		wabaId: requiredIdentifier(wabaId, 'wabaId'),
+	};
+}
+
 export async function findInboundMessageForWorkspace(prismaClient, { id, workspaceId } = {}) {
 	if (!prismaClient?.message?.findFirst) {
 		throw new TypeError('A Prisma-compatible message client is required');

@@ -4,6 +4,7 @@ import {
 	getWhatsAppChannelForWorkspace,
 	normalizeWorkspaceId
 } from '../workspaces/workspace-context.service.js';
+import { whatsAppTemplateWebhookWhere } from '../workspaces/workspace-scope.js';
 import {
 	graphDelete,
 	graphGet,
@@ -193,6 +194,26 @@ async function getTemplateMetaConfig(workspaceId = DEFAULT_WORKSPACE_ID) {
 		wabaId: normalizeString(channel?.wabaId || getWhatsAppBusinessAccountId()),
 		accessToken: normalizeString(channel?.accessToken || '')
 	};
+}
+
+function resolveTemplateWebhookWhere(payload = {}, { wabaId: envelopeWabaId = '' } = {}) {
+	const metaTemplateId = normalizeString(
+		payload?.message_template_id ||
+		payload?.template_id ||
+		payload?.id ||
+		''
+	);
+	const payloadWabaId = normalizeString(
+		payload?.waba_id || payload?.whatsapp_business_account_id || ''
+	);
+	const scopedWabaId = normalizeString(envelopeWabaId || payloadWabaId);
+
+	if (!metaTemplateId || !scopedWabaId) return null;
+	if (envelopeWabaId && payloadWabaId && String(envelopeWabaId) !== payloadWabaId) {
+		return null;
+	}
+
+	return whatsAppTemplateWebhookWhere({ metaTemplateId, wabaId: scopedWabaId });
 }
 
 function buildTemplateUpsertPayload(
@@ -687,24 +708,11 @@ export async function deleteTemplate(templateId, {
 	};
 }
 
-export async function applyTemplateStatusWebhook(payload = {}) {
-	const metaTemplateId = normalizeString(
-		payload?.message_template_id ||
-		payload?.template_id ||
-		payload?.id ||
-		''
-	);
-
-	if (!metaTemplateId) {
-		return null;
-	}
-
-	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
+export async function applyTemplateStatusWebhook(payload = {}, scope = {}) {
+	const where = resolveTemplateWebhookWhere(payload, scope);
+	if (!where) return null;
 	const template = await prisma.whatsAppTemplate.findFirst({
-		where: {
-			metaTemplateId,
-			...(wabaId ? { wabaId } : {}),
-		}
+		where
 	});
 
 	if (!template) {
@@ -722,24 +730,11 @@ export async function applyTemplateStatusWebhook(payload = {}) {
 	});
 }
 
-export async function applyTemplateQualityWebhook(payload = {}) {
-	const metaTemplateId = normalizeString(
-		payload?.message_template_id ||
-		payload?.template_id ||
-		payload?.id ||
-		''
-	);
-
-	if (!metaTemplateId) {
-		return null;
-	}
-
-	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
+export async function applyTemplateQualityWebhook(payload = {}, scope = {}) {
+	const where = resolveTemplateWebhookWhere(payload, scope);
+	if (!where) return null;
 	const template = await prisma.whatsAppTemplate.findFirst({
-		where: {
-			metaTemplateId,
-			...(wabaId ? { wabaId } : {}),
-		}
+		where
 	});
 
 	if (!template) {
@@ -756,24 +751,11 @@ export async function applyTemplateQualityWebhook(payload = {}) {
 	});
 }
 
-export async function applyTemplateCategoryWebhook(payload = {}) {
-	const metaTemplateId = normalizeString(
-		payload?.message_template_id ||
-		payload?.template_id ||
-		payload?.id ||
-		''
-	);
-
-	if (!metaTemplateId) {
-		return null;
-	}
-
-	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
+export async function applyTemplateCategoryWebhook(payload = {}, scope = {}) {
+	const where = resolveTemplateWebhookWhere(payload, scope);
+	if (!where) return null;
 	const template = await prisma.whatsAppTemplate.findFirst({
-		where: {
-			metaTemplateId,
-			...(wabaId ? { wabaId } : {}),
-		}
+		where
 	});
 
 	if (!template) {
@@ -790,24 +772,11 @@ export async function applyTemplateCategoryWebhook(payload = {}) {
 	});
 }
 
-export async function applyTemplateComponentsWebhook(payload = {}) {
-	const metaTemplateId = normalizeString(
-		payload?.message_template_id ||
-		payload?.template_id ||
-		payload?.id ||
-		''
-	);
-
-	if (!metaTemplateId) {
-		return null;
-	}
-
-	const wabaId = normalizeString(payload?.waba_id || payload?.whatsapp_business_account_id || '');
+export async function applyTemplateComponentsWebhook(payload = {}, scope = {}) {
+	const where = resolveTemplateWebhookWhere(payload, scope);
+	if (!where) return null;
 	const template = await prisma.whatsAppTemplate.findFirst({
-		where: {
-			metaTemplateId,
-			...(wabaId ? { wabaId } : {}),
-		}
+		where
 	});
 
 	if (!template) {

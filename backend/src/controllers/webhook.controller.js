@@ -280,24 +280,25 @@ async function processOutboundStatuses(req, value = {}) {
 	}
 }
 
-async function processTemplateWebhook(change = {}) {
+async function processTemplateWebhook(change = {}, { wabaId = '' } = {}) {
 	const field = String(change?.field || '').trim();
 	const value = change?.value || {};
+	const scope = { wabaId };
 
 	if (field === 'message_template_status_update') {
-		await applyTemplateStatusWebhook(value);
+		await applyTemplateStatusWebhook(value, scope);
 	}
 
 	if (field === 'message_template_quality_update') {
-		await applyTemplateQualityWebhook(value);
+		await applyTemplateQualityWebhook(value, scope);
 	}
 
 	if (field === 'template_category_update') {
-		await applyTemplateCategoryWebhook(value);
+		await applyTemplateCategoryWebhook(value, scope);
 	}
 
 	if (field === 'message_template_components_update') {
-		await applyTemplateComponentsWebhook(value);
+		await applyTemplateComponentsWebhook(value, scope);
 	}
 }
 
@@ -501,7 +502,7 @@ export async function receiveWhatsappWebhook(req, res) {
 					await processOutboundStatuses(req, value);
 				}
 
-				await processTemplateWebhook(change);
+				await processTemplateWebhook(change, { wabaId: entry?.id || '' });
 			}
 		}
 	} catch (error) {

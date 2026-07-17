@@ -357,6 +357,21 @@ flowchart TD
 - Pruebas: query exacto cubierto; 30/30 unitarias y build raíz verdes.
 - Riesgo de deployment: bajo; los flujos válidos ya conocen el workspace de la conversación.
 
+### FIND-P0-014
+
+- Título: webhooks de plantillas descartaban la frontera WABA del sobre
+- Área: seguridad/multitenancy/WhatsApp
+- Ambiente: todos
+- Severidad: High
+- Evidencia: `processTemplateWebhook` omitía `entry.id`; si `value` no incluía `waba_id`, los cuatro handlers buscaban sólo por `metaTemplateId`.
+- Impacto: una actualización de plantilla podía resolverse sin delimitar la cuenta de WhatsApp Business asociada al workspace.
+- Causa: el sobre y el payload interno se procesaban por separado y el scope externo era opcional.
+- Solución: propagar `entry.id`, exigir `metaTemplateId + wabaId` y rechazar scopes ausentes o inconsistentes.
+- Estado: resuelto.
+- Archivos: `webhook.controller.js`, `whatsapp-template.service.js`, `workspace-scope.js` y prueba negativa.
+- Pruebas: 31/31 unitarias, 136 archivos con sintaxis válida y build raíz verde.
+- Riesgo de deployment: bajo; los webhooks válidos de Meta incluyen el WABA en `entry.id`.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -379,7 +394,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 136 archivos JS/MJS pasan el chequeo de sintaxis.
-- 30 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace.
+- 31 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace/WABA.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -389,7 +404,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID y el servicio outbound exige `id + workspaceId` en todas las llamadas. Persisten como backlog la auditoría exhaustiva de otras queries por ID, archivos y analytics.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID, el servicio outbound exige `id + workspaceId` y los webhooks de plantillas exigen `metaTemplateId + wabaId`. Persisten como backlog la auditoría exhaustiva de otras queries por ID, archivos y analytics.
 
 ## 13. Railway y despliegues
 
@@ -411,12 +426,12 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 136/136 | incluido en build |
-| unit tests | 30/30 | 1,1 s |
+| unit tests | 31/31 | 1,1 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
-| frontend build | OK con warning de chunk | 0,71 s |
-| root build | OK; backend + frontend | 9,4 s |
+| frontend build | OK con warning de chunk | 0,90 s |
+| root build | OK; backend + frontend | 10,3 s |
 | Playwright Chromium | 7/7; 10 rutas de performance | 17,5 s |
 
 ## 17. Cambios implementados
@@ -435,6 +450,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Dependencias backend parcheadas y audit high agregado a CI.
 - Menú público móvil y formulario de login cubiertos con pruebas de teclado.
 - Scope obligatorio de workspace en todo envío outbound.
+- Scope WABA obligatorio en webhooks de plantillas de WhatsApp.
 
 ## 18. Comparación antes/después
 

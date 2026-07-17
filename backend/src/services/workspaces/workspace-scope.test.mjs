@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
 	findConversationForWorkspace,
 	findInboundMessageForWorkspace,
+	whatsAppTemplateWebhookWhere,
 	workspaceOwnedWhere,
 } from './workspace-scope.js';
 
@@ -66,5 +67,22 @@ describe('workspace-owned record lookups', () => {
 			},
 			include,
 		});
+	});
+
+	it('requires the WABA boundary for template webhook lookups', () => {
+		assert.throws(
+			() => whatsAppTemplateWebhookWhere({ metaTemplateId: 'template-a' }),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
+		assert.deepEqual(
+			whatsAppTemplateWebhookWhere({
+				metaTemplateId: 'template-a',
+				wabaId: 'waba-a',
+			}),
+			{
+				metaTemplateId: 'template-a',
+				wabaId: 'waba-a',
+			},
+		);
 	});
 });
