@@ -33,12 +33,12 @@ export function getEmbeddedSignupGraphVersion() {
 	return readEnv('WHATSAPP_GRAPH_VERSION', 'META_GRAPH_VERSION') || 'v25.0';
 }
 
-function getMetaAppId() {
-	return readEnv('META_APP_ID', 'FACEBOOK_APP_ID');
+function getMetaAppId(appConfig = {}) {
+	return normalizeString(appConfig.metaAppId) || readEnv('META_APP_ID', 'FACEBOOK_APP_ID');
 }
 
-function getMetaAppSecret() {
-	return readEnv('META_APP_SECRET', 'FACEBOOK_APP_SECRET');
+function getMetaAppSecret(appConfig = {}) {
+	return normalizeString(appConfig.appSecret) || readEnv('META_APP_SECRET', 'FACEBOOK_APP_SECRET');
 }
 
 function getCodeExchangeRedirectUriCandidates(redirectUri = '') {
@@ -51,8 +51,8 @@ function getCodeExchangeRedirectUriCandidates(redirectUri = '') {
 	].filter((value, index, values) => values.indexOf(value) === index);
 }
 
-function assertMetaAppConfig() {
-	if (!getMetaAppId() || !getMetaAppSecret()) {
+function assertMetaAppConfig(appConfig = {}) {
+	if (!getMetaAppId(appConfig) || !getMetaAppSecret(appConfig)) {
 		const error = new Error('Faltan META_APP_ID y META_APP_SECRET para completar la conexion con Meta.');
 		error.status = 500;
 		throw error;
@@ -159,12 +159,12 @@ function warnAboutEmbeddedSignupScopes(debugToken = {}) {
 	});
 }
 
-async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
-	assertMetaAppConfig();
+async function exchangeCodeForAccessToken(code, { redirectUri = '', appConfig = {} } = {}) {
+	assertMetaAppConfig(appConfig);
 
 	const baseParams = {
-		client_id: getMetaAppId(),
-		client_secret: getMetaAppSecret(),
+		client_id: getMetaAppId(appConfig),
+		client_secret: getMetaAppSecret(appConfig),
 		code,
 	};
 	let lastError = null;
@@ -201,8 +201,8 @@ async function exchangeCodeForAccessToken(code, { redirectUri = '' } = {}) {
 	});
 }
 
-async function debugAccessToken(accessToken) {
-	const appAccessToken = `${getMetaAppId()}|${getMetaAppSecret()}`;
+async function debugAccessToken(accessToken, appConfig = {}) {
+	const appAccessToken = `${getMetaAppId(appConfig)}|${getMetaAppSecret(appConfig)}`;
 	return graphGet('/debug_token', {
 		accessToken: appAccessToken,
 		operation: 'debug_token',
@@ -454,6 +454,7 @@ export async function completeWhatsAppEmbeddedSignup({
 	wabaId = '',
 	phoneNumberId = '',
 	businessId = '',
+	appConfig = {},
 }) {
 	const cleanCode = normalizeString(code);
 	if (!cleanCode) {
@@ -462,10 +463,10 @@ export async function completeWhatsAppEmbeddedSignup({
 		throw error;
 	}
 
-	const graphVersion = getEmbeddedSignupGraphVersion();
-	const tokenResponse = await exchangeCodeForAccessToken(cleanCode, { redirectUri });
+	const graphVersion = normalizeString(appConfig.graphVersion) || getEmbeddedSignupGraphVersion();
+	const tokenResponse = await exchangeCodeForAccessToken(cleanCode, { redirectUri, appConfig });
 	const accessToken = normalizeString(tokenResponse.access_token);
-	const debugToken = await debugAccessToken(accessToken).catch((error) => {
+	const debugToken = await debugAccessToken(accessToken, appConfig).catch((error) => {
 		logger.warn('whatsapp.embedded_signup.debug_token_failed', {
 			error: error?.message || String(error),
 		});

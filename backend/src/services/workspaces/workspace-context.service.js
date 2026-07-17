@@ -189,28 +189,46 @@ export async function getWorkspaceRuntimeConfig(workspaceId) {
 	};
 }
 
-export async function getWhatsAppChannelForWorkspace(workspaceId) {
+function buildWhatsAppChannelRuntime(channel, normalizedWorkspaceId = '') {
+	if (!channel?.phoneNumberId || !channel?.accessToken) return null;
+
+	const app = channel.whatsappApp || null;
+	return {
+		source: 'database',
+		workspaceId: channel.workspaceId || normalizedWorkspaceId,
+		channelId: channel.id || null,
+		whatsappAppId: channel.whatsappAppId || app?.id || null,
+		metaAppId: app?.metaAppId || null,
+		callbackKey: app?.callbackKey || null,
+		appSecret: app?.appSecret ? decryptSecret(app.appSecret) : '',
+		graphVersion: channel.graphVersion || app?.graphVersion || process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
+		wabaId: channel.wabaId,
+		phoneNumberId: channel.phoneNumberId,
+		displayPhoneNumber: channel.displayPhoneNumber || null,
+		accessToken: decryptSecret(channel.accessToken),
+		verifyToken: channel.verifyToken
+			? decryptSecret(channel.verifyToken)
+			: app?.verifyToken
+				? decryptSecret(app.verifyToken)
+				: process.env.WHATSAPP_VERIFY_TOKEN || '',
+	};
+}
+
+export async function getWhatsAppChannelForWorkspace(workspaceId, { channelId = '' } = {}) {
 	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const channel = await prisma.whatsAppChannel.findFirst({
 		where: {
 			workspaceId: normalizedWorkspaceId,
 			status: 'ACTIVE',
+			...(normalizeWorkspaceId(channelId) ? { id: normalizeWorkspaceId(channelId) } : {}),
 		},
-		orderBy: { updatedAt: 'desc' },
+		include: { whatsappApp: true },
+		orderBy: [{ isPrimary: 'desc' }, { updatedAt: 'desc' }],
 	});
 
-	if (channel?.phoneNumberId && channel?.accessToken) {
-		return {
-			source: 'database',
-			workspaceId: normalizedWorkspaceId,
-			graphVersion: channel.graphVersion || process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
-			wabaId: channel.wabaId,
-			phoneNumberId: channel.phoneNumberId,
-			displayPhoneNumber: channel.displayPhoneNumber || null,
-			accessToken: decryptSecret(channel.accessToken),
-			verifyToken: channel.verifyToken ? decryptSecret(channel.verifyToken) : process.env.WHATSAPP_VERIFY_TOKEN || '',
-		};
-	}
+	const runtimeChannel = buildWhatsAppChannelRuntime(channel, normalizedWorkspaceId);
+	if (runtimeChannel) return runtimeChannel;
+	if (normalizeWorkspaceId(channelId)) return null;
 
 	if (
 		normalizedWorkspaceId === DEFAULT_WORKSPACE_ID &&
@@ -220,6 +238,11 @@ export async function getWhatsAppChannelForWorkspace(workspaceId) {
 		return {
 			source: 'env',
 			workspaceId: normalizedWorkspaceId,
+			channelId: null,
+			whatsappAppId: null,
+			metaAppId: process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || null,
+			callbackKey: null,
+			appSecret: process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || '',
 			graphVersion: process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
 			wabaId:
 				process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ||
@@ -244,20 +267,11 @@ export async function getWhatsAppChannelByPhoneNumberId(phoneNumberId = '') {
 			phoneNumberId: normalizedPhoneNumberId,
 			status: 'ACTIVE',
 		},
+		include: { whatsappApp: true },
 	});
 
-	if (channel?.phoneNumberId && channel?.accessToken) {
-		return {
-			source: 'database',
-			workspaceId: channel.workspaceId,
-			graphVersion: channel.graphVersion || process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
-			wabaId: channel.wabaId,
-			phoneNumberId: channel.phoneNumberId,
-			displayPhoneNumber: channel.displayPhoneNumber || null,
-			accessToken: decryptSecret(channel.accessToken),
-			verifyToken: channel.verifyToken ? decryptSecret(channel.verifyToken) : process.env.WHATSAPP_VERIFY_TOKEN || '',
-		};
-	}
+	const runtimeChannel = buildWhatsAppChannelRuntime(channel);
+	if (runtimeChannel) return runtimeChannel;
 
 	if (
 		process.env.WHATSAPP_PHONE_NUMBER_ID &&
@@ -267,6 +281,11 @@ export async function getWhatsAppChannelByPhoneNumberId(phoneNumberId = '') {
 		return {
 			source: 'env',
 			workspaceId: DEFAULT_WORKSPACE_ID,
+			channelId: null,
+			whatsappAppId: null,
+			metaAppId: process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || null,
+			callbackKey: null,
+			appSecret: process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || '',
 			graphVersion: process.env.WHATSAPP_GRAPH_VERSION || 'v25.0',
 			wabaId:
 				process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ||
@@ -378,6 +397,22 @@ export function sanitizeWhatsAppChannel(channel = {}) {
 	};
 }
 
+export function sanitizeWhatsAppApp(app = {}, { backendPublicUrl = '' } = {}) {
+	const {
+		appSecret: _appSecret,
+		verifyToken: _verifyToken,
+		...safeApp
+	} = app || {};
+	const baseUrl = String(backendPublicUrl || process.env.BACKEND_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+
+	return {
+		...safeApp,
+		callbackUrl: safeApp.callbackKey && baseUrl
+			? `${baseUrl}/api/webhook/whatsapp/${safeApp.callbackKey}`
+			: null,
+	};
+}
+
 export function getWorkspacePublicPayload(workspace = {}) {
 	return {
 		id: workspace.id,
@@ -417,6 +452,9 @@ export function getWorkspacePublicPayload(workspace = {}) {
 			: [],
 		whatsappChannels: Array.isArray(workspace.whatsappChannels)
 			? workspace.whatsappChannels.map(sanitizeWhatsAppChannel)
+			: [],
+		whatsappApps: Array.isArray(workspace.whatsappApps)
+			? workspace.whatsappApps.map((app) => sanitizeWhatsAppApp(app))
 			: [],
 		createdAt: workspace.createdAt,
 		updatedAt: workspace.updatedAt,

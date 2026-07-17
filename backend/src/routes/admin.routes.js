@@ -20,6 +20,7 @@ import {
 	updateWorkspaceUser,
 	upsertCommerceConnection,
 	upsertLogisticsConnection,
+	upsertWhatsAppApp,
 	upsertWhatsAppChannel,
 } from '../controllers/admin.controller.js';
 
@@ -43,6 +44,8 @@ router.patch('/workspaces/:workspaceId/feature-flags/:key', requirePlatformAdmin
 router.post('/workspaces/:workspaceId/catalog/sync', requirePlatformAdmin, runWorkspaceCatalogSync);
 router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspaceBranding);
 router.post('/workspaces/:workspaceId/whatsapp/embedded-signup/complete', requireAdmin, completeWhatsAppEmbeddedSignupForWorkspace);
+router.put('/workspaces/:workspaceId/whatsapp-apps', requireAdmin, upsertWhatsAppApp);
+router.put('/workspaces/:workspaceId/whatsapp-apps/:appId', requireAdmin, upsertWhatsAppApp);
 router.put('/workspaces/:workspaceId/whatsapp-channel', requirePlatformAdmin, upsertWhatsAppChannel);
 router.put('/workspaces/:workspaceId/commerce-connections/:provider', requirePlatformAdmin, upsertCommerceConnection);
 router.put('/workspaces/:workspaceId/logistics-connections/:provider', requirePlatformAdmin, upsertLogisticsConnection);

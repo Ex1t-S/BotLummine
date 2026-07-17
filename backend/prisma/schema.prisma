@@ -21,6 +21,7 @@ model Workspace {
   aiConfig            WorkspaceAiConfig?
   commerceConnections CommerceConnection[]
   logisticsConnections LogisticsConnection[]
+  whatsappApps        WhatsAppApp[]
   whatsappChannels    WhatsAppChannel[]
   contacts            Contact[]
   conversations       Conversation[]
@@ -148,6 +149,7 @@ model LogisticsConnection {
 model WhatsAppChannel {
   id                 String           @id @default(cuid())
   workspaceId        String
+  whatsappAppId      String?
   name               String           @default("Canal principal")
   wabaId             String
   phoneNumberId      String           @unique
@@ -155,15 +157,41 @@ model WhatsAppChannel {
   accessToken        String
   verifyToken        String?
   graphVersion       String?
+  isPrimary          Boolean          @default(false)
   status             ConnectionStatus @default(ACTIVE)
   rawPayload         Json?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  whatsappApp WhatsAppApp? @relation(fields: [whatsappAppId], references: [id], onDelete: SetNull)
+  conversations Conversation[]
+  messages      Message[]
 
   @@index([workspaceId, status])
   @@index([wabaId])
+  @@index([whatsappAppId, status])
+}
+
+model WhatsAppApp {
+  id                    String           @id @default(cuid())
+  workspaceId           String
+  name                  String
+  businessManagerId     String?
+  metaAppId             String           @unique
+  embeddedSignupConfigId String
+  callbackKey           String           @unique
+  appSecret             String
+  verifyToken           String
+  graphVersion          String?
+  status                ConnectionStatus @default(ACTIVE)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  whatsappChannels WhatsAppChannel[]
+
+  @@index([workspaceId, status])
 }
 
 model User {
@@ -208,6 +236,8 @@ model Conversation {
   id            String             @id @default(cuid())
   workspaceId   String
   contactId     String
+  whatsappChannelId String?
+  routingKey    String             @unique
   status        ConversationStatus @default(OPEN)
   queue         ConversationQueue  @default(AUTO)
   aiEnabled     Boolean            @default(true)
@@ -222,11 +252,12 @@ model Conversation {
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contact  Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  whatsappChannel WhatsAppChannel? @relation(fields: [whatsappChannelId], references: [id], onDelete: SetNull)
   state    ConversationState?
   messages Message[]
   aiLabRuns AiLabRun[]
 
-  @@unique([workspaceId, contactId])
+  @@index([workspaceId, contactId, whatsappChannelId])
   @@index([workspaceId, lastMessageAt])
   @@index([workspaceId, unreadCount, lastMessageAt])
   @@index([workspaceId, archivedAt, lastMessageAt])
@@ -327,6 +358,7 @@ model Message {
   id                 String           @id @default(cuid())
   workspaceId        String
   conversationId     String
+  whatsappChannelId  String?
   metaMessageId      String?
   senderName         String?
   direction          MessageDirection
@@ -345,6 +377,7 @@ model Message {
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  whatsappChannel WhatsAppChannel? @relation(fields: [whatsappChannelId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, metaMessageId])
   @@index([workspaceId, conversationId, createdAt])

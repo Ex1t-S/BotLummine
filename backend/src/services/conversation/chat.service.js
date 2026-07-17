@@ -497,6 +497,7 @@ startPendingAutoReplySweep();
 
 export async function getOrCreateConversation({
 	workspaceId = DEFAULT_WORKSPACE_ID,
+	whatsappChannelId = null,
 	waId,
 	contactName,
 	profileImageUrl,
@@ -507,6 +508,7 @@ export async function getOrCreateConversation({
 }) {
 	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const normalizedWaId = normalizeThreadPhone(waId);
+	const normalizedChannelId = normalizeWorkspaceId(whatsappChannelId) || null;
 	const normalizedProfileImageUrl = String(profileImageUrl || '').trim();
 	const hasProfileImageUrl = Boolean(normalizedProfileImageUrl);
 	const profileImageData = hasProfileImageUrl
@@ -538,8 +540,9 @@ export async function getOrCreateConversation({
 		}
 	});
 
-	let conversation = await prisma.conversation.findFirst({
-		where: { workspaceId: resolvedWorkspaceId, contactId: contact.id },
+	const routingKey = `${resolvedWorkspaceId}:${normalizedChannelId || 'legacy'}:${contact.id}`;
+	let conversation = await prisma.conversation.findUnique({
+		where: { routingKey },
 		include: { contact: true, state: true }
 	});
 
@@ -548,6 +551,8 @@ export async function getOrCreateConversation({
 			data: {
 				contactId: contact.id,
 				workspaceId: resolvedWorkspaceId,
+				whatsappChannelId: normalizedChannelId,
+				routingKey,
 				queue,
 				aiEnabled,
 				lastMessageAt: new Date(),
@@ -603,6 +608,7 @@ export async function getOrCreateConversation({
 
 export async function processInboundMessage({
 	workspaceId = DEFAULT_WORKSPACE_ID,
+	whatsappChannelId = null,
 	waId,
 	contactName,
 	profileImageUrl,
@@ -629,7 +635,8 @@ export async function processInboundMessage({
 				conversation: {
 					include: {
 						contact: true,
-						state: true,
+					state: true,
+					whatsappChannel: true,
 					},
 				},
 			},
@@ -647,6 +654,7 @@ export async function processInboundMessage({
 		messageType = inboundMessage.type || messageType || 'text';
 		rawPayload = inboundMessage.rawPayload || rawPayload;
 		metaMessageId = inboundMessage.metaMessageId || metaMessageId;
+		whatsappChannelId = inboundMessage.whatsappChannelId || inboundMessage.conversation?.whatsappChannelId || whatsappChannelId;
 		attachmentMeta = {
 			attachmentUrl: inboundMessage.attachmentUrl,
 			attachmentMimeType: inboundMessage.attachmentMimeType,
@@ -657,6 +665,7 @@ export async function processInboundMessage({
 	} else {
 		conversation = await getOrCreateConversation({
 			workspaceId: resolvedWorkspaceId,
+			whatsappChannelId,
 			waId: normalizedWaId,
 			contactName,
 			profileImageUrl,
@@ -668,6 +677,7 @@ export async function processInboundMessage({
 		const existingMessage = await prisma.message.findFirst({
 			where: {
 				workspaceId: resolvedWorkspaceId,
+				whatsappChannelId: normalizeWorkspaceId(whatsappChannelId) || conversation.whatsappChannelId || null,
 				metaMessageId
 			}
 		});

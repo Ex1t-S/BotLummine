@@ -177,6 +177,23 @@ Variables en el servicio Cron:
 - No definir `PORT`; el job termina solo.
 - No definir `CAMPAIGN_DISPATCHER_ENABLED`; el cron ejecuta el job una vez y sale.
 
+## WhatsApp Multi-App / Multi-WABA
+
+Cada App de Meta se registra desde Admin de plataforma en la marca correspondiente. El panel genera una
+callback URL independiente por App:
+
+```txt
+https://<BACKEND_PUBLIC_URL>/api/webhook/whatsapp/<callbackKey>
+```
+
+En Meta, configurar esa URL y el Verify Token de la App, suscribir el campo `messages` y conectar cada WABA
+desde Embedded Signup. El backend ejecuta la suscripcion de la WABA a la App y resuelve cada evento por
+`metadata.phone_number_id`, sin agregar una variable de Railway por cada numero.
+
+Las variables `META_APP_ID`, `META_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN` y
+`WHATSAPP_PHONE_NUMBER_ID` se mantienen como fallback legacy durante la migracion. Las Apps nuevas guardan
+sus secretos cifrados en PostgreSQL.
+
 ## Seguridad Operativa
 
 Estado actual cubierto por el codigo:

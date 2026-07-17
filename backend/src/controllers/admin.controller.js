@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import axios from 'axios';
+import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-crypto.js';
 import {
@@ -10,6 +11,7 @@ import {
 	requireRequestWorkspaceId,
 	sanitizeCommerceConnection,
 	sanitizeLogisticsConnection,
+	sanitizeWhatsAppApp,
 	sanitizeWhatsAppChannel,
 } from '../services/workspaces/workspace-context.service.js';
 import {
@@ -389,10 +391,27 @@ async function buildWorkspacePayload(workspaceId) {
 			whatsappChannels: {
 				select: {
 					id: true,
+					whatsappAppId: true,
 					name: true,
 					wabaId: true,
 					phoneNumberId: true,
 					displayPhoneNumber: true,
+					graphVersion: true,
+					status: true,
+					isPrimary: true,
+					createdAt: true,
+					updatedAt: true,
+				},
+				orderBy: { updatedAt: 'desc' },
+			},
+			whatsappApps: {
+				select: {
+					id: true,
+					name: true,
+					businessManagerId: true,
+					metaAppId: true,
+					embeddedSignupConfigId: true,
+					callbackKey: true,
 					graphVersion: true,
 					status: true,
 					createdAt: true,
@@ -1823,14 +1842,77 @@ export async function upsertLogisticsConnection(req, res, next) {
 	}
 }
 
+export async function upsertWhatsAppApp(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const appId = normalizeString(req.params.appId || req.body?.id);
+		const existingApp = appId
+			? await prisma.whatsAppApp.findFirst({ where: { id: appId, workspaceId } })
+			: null;
+
+		if (appId && !existingApp) {
+			return res.status(404).json({ ok: false, error: 'App de WhatsApp no encontrada para este workspace.' });
+		}
+
+		const metaAppId = normalizeString(req.body?.metaAppId);
+		const embeddedSignupConfigId = normalizeString(req.body?.embeddedSignupConfigId);
+		const appSecret = normalizeString(req.body?.appSecret);
+		const verifyToken = normalizeString(req.body?.verifyToken);
+
+		if (!metaAppId || !embeddedSignupConfigId || (!existingApp && (!appSecret || !verifyToken))) {
+			return res.status(400).json({
+				ok: false,
+				error: 'metaAppId, embeddedSignupConfigId, appSecret y verifyToken son obligatorios al crear la App.',
+			});
+		}
+
+		const duplicate = await prisma.whatsAppApp.findFirst({
+			where: { metaAppId, ...(appId ? { id: { not: appId } } : {}) },
+			select: { id: true, workspaceId: true },
+		});
+		if (duplicate) {
+			return res.status(409).json({ ok: false, error: 'Ese Meta App ID ya esta registrado.' });
+		}
+
+		const data = {
+			workspaceId,
+			name: normalizeString(req.body?.name) || 'App WhatsApp',
+			businessManagerId: normalizeString(req.body?.businessManagerId) || null,
+			metaAppId,
+			embeddedSignupConfigId,
+			callbackKey: existingApp?.callbackKey || crypto.randomBytes(24).toString('base64url'),
+			appSecret: appSecret ? encryptSecret(appSecret) : existingApp.appSecret,
+			verifyToken: verifyToken ? encryptSecret(verifyToken) : existingApp.verifyToken,
+			graphVersion: normalizeString(req.body?.graphVersion) || existingApp?.graphVersion || 'v25.0',
+			status: normalizeString(req.body?.status || existingApp?.status || 'ACTIVE').toUpperCase(),
+		};
+
+		const app = existingApp
+			? await prisma.whatsAppApp.update({ where: { id: existingApp.id }, data })
+			: await prisma.whatsAppApp.create({ data });
+
+		return res.json({ ok: true, app: sanitizeWhatsAppApp(app) });
+	} catch (error) {
+		next(error);
+	}
+}
+
 export async function upsertWhatsAppChannel(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req);
 		assertWorkspaceAdmin(req, workspaceId);
 
 		const channelId = normalizeString(req.params.channelId || req.body?.id);
+		const whatsappAppId = normalizeString(req.body?.whatsappAppId);
+		const existingChannel = channelId
+			? await prisma.whatsAppChannel.findFirst({
+					where: { id: channelId, workspaceId },
+			  })
+			: null;
 		const data = {
 			workspaceId,
+			whatsappAppId: whatsappAppId || existingChannel?.whatsappAppId || null,
 			name: normalizeString(req.body?.name) || 'Canal principal',
 			wabaId: normalizeString(req.body?.wabaId),
 			phoneNumberId: normalizeString(req.body?.phoneNumberId),
@@ -1839,13 +1921,8 @@ export async function upsertWhatsAppChannel(req, res, next) {
 			verifyToken: normalizeString(req.body?.verifyToken) || null,
 			graphVersion: normalizeString(req.body?.graphVersion) || null,
 			status: normalizeString(req.body?.status || 'ACTIVE').toUpperCase(),
+			isPrimary: hasOwn(req.body, 'isPrimary') ? Boolean(req.body?.isPrimary) : Boolean(existingChannel?.isPrimary),
 		};
-
-		const existingChannel = channelId
-			? await prisma.whatsAppChannel.findFirst({
-					where: { id: channelId, workspaceId },
-			  })
-			: null;
 
 		if (channelId && !existingChannel) {
 			return res.status(404).json({
@@ -1867,6 +1944,11 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				ok: false,
 				error: 'wabaId, phoneNumberId y accessToken son obligatorios.',
 			});
+		}
+
+		if (whatsappAppId) {
+			const app = await prisma.whatsAppApp.findFirst({ where: { id: whatsappAppId, workspaceId, status: 'ACTIVE' } });
+			if (!app) return res.status(400).json({ ok: false, error: 'La App de WhatsApp no pertenece a este workspace o esta inactiva.' });
 		}
 
 		let validatedAccess = null;
@@ -1935,6 +2017,13 @@ export async function upsertWhatsAppChannel(req, res, next) {
 					},
 			  });
 
+		if (data.isPrimary) {
+			await prisma.whatsAppChannel.updateMany({
+				where: { workspaceId, id: { not: channel.id } },
+				data: { isPrimary: false },
+			});
+		}
+
 		return res.json({
 			ok: true,
 			channel: sanitizeWhatsAppChannel(channel),
@@ -1952,8 +2041,21 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 		assertWorkspaceAdmin(req, workspaceId);
 
 		await getWorkspaceOrThrow(workspaceId);
+		const whatsappAppId = normalizeString(req.body?.whatsappAppId || req.body?.appId);
+		const whatsappApp = whatsappAppId
+			? await prisma.whatsAppApp.findFirst({ where: { id: whatsappAppId, workspaceId, status: 'ACTIVE' } })
+			: null;
+
+		if (!whatsappApp) {
+			return res.status(400).json({ ok: false, error: 'Selecciona una App de Meta activa para conectar este numero.' });
+		}
 
 		const result = await completeWhatsAppEmbeddedSignup({
+			appConfig: {
+				metaAppId: whatsappApp.metaAppId,
+				appSecret: decryptSecret(whatsappApp.appSecret),
+				graphVersion: whatsappApp.graphVersion || undefined,
+			},
 			code: req.body?.code,
 			redirectUri: req.body?.redirectUri || req.body?.redirect_uri,
 			wabaId: req.body?.wabaId || req.body?.waba_id,
@@ -1975,6 +2077,7 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 
 		const channelData = {
 			workspaceId,
+			whatsappAppId: whatsappApp.id,
 			name: result.phoneNumber?.verified_name || result.waba?.name || 'Canal principal',
 			wabaId: result.wabaId,
 			phoneNumberId: result.phoneNumberId,
@@ -1982,6 +2085,7 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 			accessToken: encryptSecret(result.accessToken),
 			verifyToken: null,
 			graphVersion: result.graphVersion,
+			isPrimary: false,
 			status: 'ACTIVE',
 			rawPayload: {
 				source: 'embedded_signup',
@@ -1996,6 +2100,11 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 		};
 
 		const channel = await prisma.$transaction(async (tx) => {
+			const hasPrimary = await tx.whatsAppChannel.findFirst({
+				where: { workspaceId, status: 'ACTIVE', isPrimary: true, id: { not: existingPhone?.id || '' } },
+				select: { id: true },
+			});
+			channelData.isPrimary = !hasPrimary;
 			const connectedChannel = existingPhone?.id
 				? await tx.whatsAppChannel.update({
 						where: { id: existingPhone.id },
@@ -2005,14 +2114,12 @@ export async function completeWhatsAppEmbeddedSignupForWorkspace(req, res, next)
 						data: channelData,
 				  });
 
-			await tx.whatsAppChannel.updateMany({
-				where: {
-					workspaceId,
-					id: { not: connectedChannel.id },
-					status: 'ACTIVE',
-				},
-				data: { status: 'DISABLED' },
-			});
+			if (channelData.isPrimary) {
+				await tx.whatsAppChannel.updateMany({
+					where: { workspaceId, id: { not: connectedChannel.id } },
+					data: { isPrimary: false },
+				});
+			}
 
 			return connectedChannel;
 		});
