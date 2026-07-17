@@ -1101,7 +1101,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 144 archivos JS/MJS pasan el chequeo de sintaxis.
-- 85 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, revisión de pagos, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/corridas de automatización/caché privada.
+- 85 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, revisión de comprobantes, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/corridas de automatización/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - La prueba transversal impide reintroducir workspaces implícitos; la comprobación dinámica de aislamiento y callbacks queda para staging con dos tenants sintéticos.
 
@@ -1202,7 +1202,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; diálogo de rechazo de pagos en 768x1024; Clientes/selector, Catálogo, AI Lab y Carritos en 390x844; tabla de Carritos en 1440x960; revisión de pagos y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; diálogo de rechazo de comprobante en 768x1024; Clientes/selector, Catálogo, AI Lab y Carritos en 390x844; tabla de Carritos en 1440x960; revisión de comprobantes y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 
