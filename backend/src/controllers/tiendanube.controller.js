@@ -226,7 +226,7 @@ function resolveFrontendAppBaseUrl() {
 }
 
 function buildTiendanubeInstallResultUrl({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId = '',
 	status = 'connected',
 	storeId = '',
 	message = '',
@@ -237,7 +237,9 @@ function buildTiendanubeInstallResultUrl({
 
 	const url = new URL('/admin', `${frontendBaseUrl}/`);
 	url.searchParams.set('tab', 'integrations');
-	url.searchParams.set('workspaceId', workspaceId);
+	if (workspaceId) {
+		url.searchParams.set('workspaceId', workspaceId);
+	}
 	url.searchParams.set('tiendanube', status);
 	if (storeId) {
 		url.searchParams.set('storeId', storeId);
@@ -254,13 +256,14 @@ function buildTiendanubeInstallResultUrl({
 function buildTiendanubeFallbackHtml({
 	title = 'Integracion Tiendanube',
 	message = 'La integracion termino.',
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId = '',
 	status = 'info'
 }) {
 	const safeTitle = String(title || 'Integracion Tiendanube');
 	const safeMessage = String(message || 'La integracion termino.');
 	const variant = status === 'error' ? '#b91c1c' : status === 'warning' ? '#b45309' : '#0f766e';
-	const adminUrl = `/admin?tab=integrations&workspaceId=${encodeURIComponent(workspaceId)}`;
+	const workspaceQuery = workspaceId ? `&workspaceId=${encodeURIComponent(workspaceId)}` : '';
+	const adminUrl = `/admin?tab=integrations${workspaceQuery}`;
 	return `<!doctype html>
 <html lang="es">
 <head>
@@ -713,37 +716,15 @@ export async function handleTiendanubeCallback(req, res) {
 					? `La tienda ${String(data.user_id)} se conecto, pero quedaron tareas pendientes de sincronizacion.`
 					: `Tienda Nube conectada. Store ID ${String(data.user_id)}.`
 		});
-
-		const resultUrl = buildTiendanubeInstallResultUrl({
-			workspaceId,
-			status: webhookError || catalogError ? 'partial' : 'connected',
-			storeId: String(data.user_id)
-		});
-
-		if (resultUrl) {
-			return res.redirect(resultUrl);
-		}
-
-		return res.send(`
-			<h2>Integración Tiendanube OK</h2>
-			<p><b>store_id:</b> ${data.user_id}</p>
-			<p><b>scope:</b> ${data.scope || ''}</p>
-			<p>El token quedó guardado en StoreInstallation.</p>
-			<p><b>Webhooks:</b> ${
-				webhookResult
-					? `ok · creados ${webhookResult.created.length} · reutilizados ${webhookResult.reused.length}`
-					: `pendiente (${webhookError || 'sin detalle'})`
-			}</p>
-		`);
 	} catch (error) {
 		logger.error('tiendanube.callback_failed', {
 			error: error.response?.data || error,
 		});
-		let workspaceId = DEFAULT_WORKSPACE_ID;
+		let workspaceId = '';
 		try {
 			workspaceId = resolveTiendanubeStateWorkspaceId(req.query?.state || '');
 		} catch {
-			workspaceId = DEFAULT_WORKSPACE_ID;
+			workspaceId = '';
 		}
 		const rawMessage =
 			error.response?.data?.error_description ||
@@ -756,10 +737,6 @@ export async function handleTiendanubeCallback(req, res) {
 				error.response?.data?.error || error.code || 'callback_error',
 				rawMessage
 			)
-		});
-		return res.status(500).json({
-			ok: false,
-			error: error.response?.data || error.message
 		});
 	}
 }

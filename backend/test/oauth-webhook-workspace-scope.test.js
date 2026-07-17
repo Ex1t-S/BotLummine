@@ -14,6 +14,14 @@ describe('OAuth and commerce webhook workspace boundaries', () => {
 		assert.doesNotMatch(source, /req\.(?:body|query)\?\.workspaceId\s*\|\|\s*DEFAULT_WORKSPACE_ID/);
 		assert.match(source, /resolveTiendanubeStateWorkspaceId[\s\S]*requireWorkspaceScope/);
 		assert.match(source, /function buildInstallUrl\(workspaceId\)/);
+		assert.doesNotMatch(source, /workspaceId\s*=\s*DEFAULT_WORKSPACE_ID/);
+		assert.match(source, /if \(workspaceId\) \{\s*url\.searchParams\.set\('workspaceId', workspaceId\)/);
+		const callbackStart = source.indexOf('export async function handleTiendanubeCallback');
+		const callbackEnd = source.indexOf('export async function registerTiendanubeWebhooks', callbackStart);
+		const callbackSource = source.slice(callbackStart, callbackEnd);
+		assert.ok(callbackSource);
+		assert.doesNotMatch(callbackSource, /const resultUrl = buildTiendanubeInstallResultUrl/);
+		assert.doesNotMatch(callbackSource, /return res\.send\(`/);
 	});
 
 	it('does not infer Tiendanube webhook credentials when store_id is missing', async () => {

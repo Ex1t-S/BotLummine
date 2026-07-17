@@ -2,11 +2,11 @@
 
 Fecha de inicio: 2026-07-17  
 Rama: `audit/general-improvements-20260717`  
-Estado: iteración P0 local de hardening en progreso; producción permanece en modo solo lectura.
+Estado: P0 local de hardening cerrado para el inventario estático actual; producción permanece en modo solo lectura.
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 82/82 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 83/83 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -972,6 +972,21 @@ flowchart TD
 - Pruebas: 1/1 específica, suite completa 82/82 en 1,80 s y build raíz verde en 10,25 s.
 - Riesgo de deployment: bajo.
 
+### FIND-P0-055
+
+- Título: callback OAuth de Tiendanube propagaba un workspace no verificado y retenía respuestas inalcanzables
+- Área: Backend/OAuth/Tiendanube/Multitenancy
+- Ambiente: local
+- Severidad: High
+- Evidencia: ante un `state` inválido, el handler de error caía en `workspace_default` y lo incluía en la redirección al frontend; tanto el camino exitoso como el de error conservaban respuestas posteriores a un `return res.redirect(...)` que nunca podían ejecutarse.
+- Impacto: la UI podía recibir un tenant inventado después de un callback no verificable y el código muerto duplicaba contratos de respuesta, incluyendo detalles de tienda que no debían formar parte de una alternativa inalcanzable.
+- Causa: fallback heredado de la etapa mono-workspace y migración incompleta de HTML directo a redirecciones frontend.
+- Solución: omitir `workspaceId` salvo que el `state` firmado lo resuelva, mantener el error fail-closed y retirar las ramas muertas posteriores al redirect.
+- Estado: resuelto localmente.
+- Archivos: `backend/src/controllers/tiendanube.controller.js`, `backend/test/oauth-webhook-workspace-scope.test.js`, `backend/test/no-implicit-workspace-defaults.test.js`.
+- Pruebas: 3/3 específicas; suite completa 83/83 en 1,29 s; build raíz verde en 12,05 s.
+- Riesgo de deployment: bajo/medio; validar en staging callbacks válido, inválido y error del proveedor sin conectar una tienda real.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -1026,7 +1041,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 82/82 | 1,80 s |
+| unit tests | 83/83 | 1,29 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -1095,7 +1110,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 21. Riesgos pendientes
 
-- La revisión cubrió las fronteras multitenant de mayor riesgo identificadas, pero el inventario exhaustivo por cada entidad sigue abierto.
+- El inventario estático actual no conserva parámetros ni normalizaciones que inventen `workspace_default`; una prueba global bloquea su regresión. La validación dinámica de todas las entidades con dos tenants sintéticos continúa pendiente de staging aislado.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
 - Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
@@ -1106,7 +1121,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 22. Backlog
 
-P0 local seguro: build/IA/inbound/outbound/schedules/templates/contactos y automatizaciones prioritarias están endurecidos; no queda DDL en runtime. Pendientes: continuar el inventario por entidad, activar/validar retención de trazas sólo en staging aislado, incorporar lint reproducible y resolver el security audit frontend sin pisar manifests locales del usuario.
+P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
 
