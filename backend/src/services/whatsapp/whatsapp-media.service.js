@@ -8,6 +8,7 @@ import {
 	getWhatsAppChannelForWorkspace,
 	normalizeWorkspaceId
 } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -30,19 +31,33 @@ function getPhoneNumberId() {
 	return normalizeString(process.env.WHATSAPP_PHONE_NUMBER_ID || '');
 }
 
-async function getMediaWorkspaceConfig(workspaceId = DEFAULT_WORKSPACE_ID, { phoneNumberId = '' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function getMediaWorkspaceConfig(workspaceId, { phoneNumberId = '' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const channelByPhoneNumber = phoneNumberId
 		? await getWhatsAppChannelByPhoneNumberId(phoneNumberId).catch(() => null)
 		: null;
+	if (
+		channelByPhoneNumber?.workspaceId &&
+		normalizeWorkspaceId(channelByPhoneNumber.workspaceId) !== resolvedWorkspaceId
+	) {
+		const error = new Error('El canal de WhatsApp no pertenece al workspace solicitado.');
+		error.code = 'WHATSAPP_CHANNEL_WORKSPACE_MISMATCH';
+		error.status = 404;
+		throw error;
+	}
 	const channel =
 		channelByPhoneNumber ||
 		(await getWhatsAppChannelForWorkspace(resolvedWorkspaceId).catch(() => null));
+	const allowEnvironmentFallback = resolvedWorkspaceId === DEFAULT_WORKSPACE_ID;
 
 	return {
 		workspaceId: resolvedWorkspaceId,
-		accessToken: normalizeString(channel?.accessToken || getAccessToken()),
-		phoneNumberId: normalizeString(channel?.phoneNumberId || getPhoneNumberId()),
+		accessToken: normalizeString(
+			channel?.accessToken || (allowEnvironmentFallback ? getAccessToken() : '')
+		),
+		phoneNumberId: normalizeString(
+			channel?.phoneNumberId || (allowEnvironmentFallback ? getPhoneNumberId() : '')
+		),
 		graphVersion: normalizeString(channel?.graphVersion || getGraphVersion())
 	};
 }
@@ -323,13 +338,14 @@ async function uploadTemplateHeaderAsset({
 }
 
 export async function uploadWhatsAppMedia({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	filePath,
 	fileName,
 	mimeType,
 	generateHeaderHandle = false
 }) {
-	const mediaConfig = await getMediaWorkspaceConfig(workspaceId);
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const mediaConfig = await getMediaWorkspaceConfig(resolvedWorkspaceId);
 	const accessToken = mediaConfig.accessToken;
 	const phoneNumberId = mediaConfig.phoneNumberId;
 
@@ -470,12 +486,13 @@ export async function saveLocalInboxMediaCopy({
 }
 
 export async function getWhatsAppMediaMetadata({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	attachmentId,
 	mimeType = '',
 	phoneNumberId = ''
 }) {
-	const mediaConfig = await getMediaWorkspaceConfig(workspaceId, { phoneNumberId });
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const mediaConfig = await getMediaWorkspaceConfig(resolvedWorkspaceId, { phoneNumberId });
 	const accessToken = mediaConfig.accessToken;
 
 	if (!accessToken) {
@@ -515,9 +532,10 @@ export async function getWhatsAppMediaMetadata({
 
 export async function downloadWhatsAppMediaBuffer(
 	downloadUrl,
-	{ workspaceId = DEFAULT_WORKSPACE_ID, phoneNumberId = '' } = {}
+	{ workspaceId, phoneNumberId = '' } = {}
 ) {
-	const mediaConfig = await getMediaWorkspaceConfig(workspaceId, { phoneNumberId });
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const mediaConfig = await getMediaWorkspaceConfig(resolvedWorkspaceId, { phoneNumberId });
 	const accessToken = mediaConfig.accessToken;
 
 	if (!accessToken) {
@@ -544,7 +562,7 @@ export async function downloadWhatsAppMediaBuffer(
 }
 
 export async function saveInboundWhatsAppMedia({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	attachmentId,
 	attachmentMimeType = '',
 	attachmentName = '',
@@ -553,6 +571,7 @@ export async function saveInboundWhatsAppMedia({
 	metaMessageId = '',
 	phoneNumberId = ''
 }) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const safeAttachmentId = normalizeString(attachmentId);
 
 	if (!safeAttachmentId) {
@@ -560,13 +579,16 @@ export async function saveInboundWhatsAppMedia({
 	}
 
 	const metadata = await getWhatsAppMediaMetadata({
-		workspaceId,
+		workspaceId: resolvedWorkspaceId,
 		attachmentId: safeAttachmentId,
 		mimeType: attachmentMimeType,
 		phoneNumberId
 	});
 
-	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, { workspaceId, phoneNumberId });
+	const buffer = await downloadWhatsAppMediaBuffer(metadata.url, {
+		workspaceId: resolvedWorkspaceId,
+		phoneNumberId
+	});
 	const storageDir = await ensureInboundMediaDir();
 
 	const effectiveMimeType = normalizeString(
