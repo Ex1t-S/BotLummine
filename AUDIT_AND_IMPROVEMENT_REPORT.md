@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 67/67 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 68/68 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -822,6 +822,21 @@ flowchart TD
 - Pruebas: 3/3 específicas cubriendo ocho entry points y reglas arquitectónicas, 67/67 unitarias y build raíz verde en una validación de 14,17 s.
 - Riesgo de deployment: medio; smoke sandbox de listar/crear/sincronizar/eliminar en dos WABA, más error esperado para un workspace sin canal.
 
+### FIND-P0-045
+
+- Título: sincronización de carritos abandonados aceptaba tienda default implícita
+- Área: Backend/Carritos/Comercio/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: resolver de conexión/credenciales, limpieza por lotes y entry point de sync reemplazaban workspace ausente por `workspace_default`.
+- Impacto: un caller incompleto podía leer checkouts de Tiendanube/Shopify y escribir o limpiar carritos dentro de la tienda default equivocada.
+- Causa: compatibilidad monomarca mantenida en la capa de sincronización.
+- Solución: exigir workspace antes de credenciales/proveedor, propagar el scope resuelto y conservarlo también en cada `deleteMany` por lote.
+- Estado: resuelto localmente; los dos callers activos pasan workspace; no se consultaron tiendas ni se borraron datos.
+- Archivos: `carts/abandoned-cart.service.js` y prueba de plantillas/carritos.
+- Pruebas: 4/4 específicas del archivo de frontera, 68/68 unitarias y build raíz verde en una validación de 14,28 s.
+- Riesgo de deployment: medio; smoke sandbox por proveedor y dos workspaces, con carritos homónimos y limpieza de retención acotada.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -844,7 +859,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 142 archivos JS/MJS pasan el chequeo de sintaxis.
-- 67 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
+- 68 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -876,7 +891,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 142/142 | incluido en build |
-| unit tests | 67/67 | 1,47 s |
+| unit tests | 68/68 | 1,51 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |

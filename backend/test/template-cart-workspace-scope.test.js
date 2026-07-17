@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import { filterRecoverableAbandonedCarts } from '../src/services/campaigns/campaign-attribution.service.js';
+import { syncAbandonedCarts } from '../src/services/carts/abandoned-cart.service.js';
 import {
 	createTemplate,
 	deleteTemplate,
@@ -36,6 +37,13 @@ describe('template and cart workspace boundaries', () => {
 	it('rejects recoverability checks without an explicit workspace', async () => {
 		await assert.rejects(
 			() => filterRecoverableAbandonedCarts([{ id: 'cart-a' }]),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
+	});
+
+	it('rejects abandoned-cart synchronization without an explicit workspace', async () => {
+		await assert.rejects(
+			() => syncAbandonedCarts(),
 			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
 		);
 	});

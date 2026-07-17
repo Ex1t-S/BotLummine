@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
 import { getShopifyClient } from '../shopify/client.js';
 
@@ -113,8 +114,8 @@ function isLastPageResponse(status, bodyText = '') {
 	}
 }
 
-async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function resolveStoreCredentials({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const installation = await prisma.storeInstallation.findFirst({
 		where: {
 			workspaceId: resolvedWorkspaceId,
@@ -138,8 +139,8 @@ async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID } = 
 	return { workspaceId: resolvedWorkspaceId, storeId: String(storeId), accessToken };
 }
 
-async function resolveSyncConnection({ workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function resolveSyncConnection({ workspaceId, provider = '' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (provider) {
 		const normalizedProvider = normalizeProvider(provider);
 		if (normalizedProvider === 'SHOPIFY') {
@@ -458,14 +459,15 @@ async function fetchShopifyCheckoutsPage({ client, sinceId = 0, limit = CHECKOUT
 	};
 }
 
-async function deleteCartIdsInChunks(ids = [], workspaceId = DEFAULT_WORKSPACE_ID) {
+async function deleteCartIdsInChunks(ids = [], workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	let deletedCount = 0;
 
 	for (const chunk of chunkArray(ids, DELETE_CHUNK_SIZE)) {
 		if (!chunk.length) continue;
 		const removed = await prisma.abandonedCart.deleteMany({
 			where: {
-				workspaceId,
+				workspaceId: resolvedWorkspaceId,
 				id: { in: chunk }
 			}
 		});
@@ -475,8 +477,8 @@ async function deleteCartIdsInChunks(ids = [], workspaceId = DEFAULT_WORKSPACE_I
 	return deletedCount;
 }
 
-export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function syncAbandonedCarts(daysBack = DEFAULT_DAYS_BACK, { workspaceId, provider = '' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedDaysBack = normalizeDaysBack(daysBack);
 
 	const connection = await resolveSyncConnection({ workspaceId: resolvedWorkspaceId, provider });
