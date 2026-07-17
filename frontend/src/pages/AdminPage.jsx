@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api, { buildApiUrl, resolveApiUrl } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isPlatformAdminUser } from '../lib/authz.js';
-import { PageHeader } from '../components/ui/InternalPage.jsx';
+import { EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import './AdminPage.css';
 
@@ -659,6 +659,10 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [menuSettings, setMenuSettings] = useState(DEFAULT_MENU_SETTINGS_STATE);
 	const [analytics, setAnalytics] = useState(null);
 	const [analyticsLoading, setAnalyticsLoading] = useState(false);
+	const [analyticsError, setAnalyticsError] = useState('');
+	const [workspaceListLoading, setWorkspaceListLoading] = useState(true);
+	const [workspaceListError, setWorkspaceListError] = useState('');
+	const [workspaceListReloadKey, setWorkspaceListReloadKey] = useState(0);
 	const [generatingBusinessContext, setGeneratingBusinessContext] = useState(false);
 	const [uploadingLogo, setUploadingLogo] = useState(false);
 	const [whatsappConnecting, setWhatsappConnecting] = useState(false);
@@ -777,11 +781,15 @@ export default function AdminPage({ defaultTab = '' }) {
 
 	async function loadAnalytics(workspaceId = selectedWorkspaceId) {
 		setAnalyticsLoading(true);
+		setAnalyticsError('');
 		try {
 			const res = await api.get('/admin/analytics/workspaces', {
 				params: workspaceId ? { workspaceId } : {}
 			});
 			setAnalytics(res.data || null);
+		} catch (err) {
+			setAnalytics(null);
+			setAnalyticsError(err.response?.data?.error || err.message || 'No se pudieron cargar las estadisticas.');
 		} finally {
 			setAnalyticsLoading(false);
 		}
@@ -790,17 +798,22 @@ export default function AdminPage({ defaultTab = '' }) {
 	useEffect(() => {
 		let mounted = true;
 		setLoading(true);
+		setWorkspaceListLoading(true);
+		setWorkspaceListError('');
 		loadWorkspaces()
 			.catch((err) => {
-				if (mounted) setError(err.response?.data?.error || err.message);
+				if (mounted) setWorkspaceListError(err.response?.data?.error || err.message || 'No se pudieron cargar las marcas.');
 			})
 			.finally(() => {
-				if (mounted) setLoading(false);
+				if (mounted) {
+					setLoading(false);
+					setWorkspaceListLoading(false);
+				}
 			});
 		return () => {
 			mounted = false;
 		};
-	}, [platformAdmin]);
+	}, [platformAdmin, workspaceListReloadKey]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -898,7 +911,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	}, [selectedWorkspaceId]);
 
 	useEffect(() => {
-		loadAnalytics(selectedWorkspaceId).catch((err) => setError(err.response?.data?.error || err.message));
+		loadAnalytics(selectedWorkspaceId);
 	}, [selectedWorkspaceId]);
 
 	useEffect(() => {
@@ -1562,7 +1575,23 @@ export default function AdminPage({ defaultTab = '' }) {
 							title="Marcas creadas"
 							description="Elegí una marca para editarla. La selección solo afecta a los bloques de edición y configuración."
 						/>
-						{workspaces.length ? (
+						{workspaceListLoading ? (
+							<EmptyState
+								tone="loading"
+								title="Cargando marcas"
+								description="Estamos preparando la administracion de la plataforma."
+							/>
+						) : workspaceListError ? (
+							<EmptyState
+								tone="error"
+								title="No pudimos cargar las marcas"
+								description={workspaceListError}
+							>
+								<button type="button" onClick={() => setWorkspaceListReloadKey((current) => current + 1)}>
+									Reintentar
+								</button>
+							</EmptyState>
+						) : workspaces.length ? (
 							<div className="tenant-admin-workspace-grid">
 								{workspaces.map((item) => {
 									const selected = item.id === selectedWorkspaceId;
@@ -2056,30 +2085,52 @@ export default function AdminPage({ defaultTab = '' }) {
 								<span>Últimos {formatNumber(analytics.activityWindowDays)} días</span>
 							) : null}
 						</div>
-						<div className="tenant-admin-metrics">
-							<StatusPill>Campañas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
-							<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
-							<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
-							<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
-							<StatusPill>Facturacion: {formatCurrency(analytics?.totals?.revenueTotal, analytics?.totals?.currency)}</StatusPill>
-							<StatusPill>Conversaciones 30d: {formatNumber(analytics?.totals?.activeConversations30d)}</StatusPill>
-							<StatusPill>Carritos recuperados: {formatNumber(analytics?.totals?.recoveredCartsCount)}</StatusPill>
-							<StatusPill>Costo estimado: {formatUsd(analytics?.totals?.estimatedCampaignCostUsd)}</StatusPill>
-						</div>
-						<div className="workspace-analytics-grid">
-							{(analytics?.workspaces || []).map((item) => (
-								<WorkspaceAnalyticsCard
-									key={item.workspace.id}
-									item={item}
-									selected={analytics?.detail?.workspaceId === item.workspace.id}
-									onSelect={() => setSelectedWorkspaceId(item.workspace.id)}
-								/>
-							))}
-						</div>
-						{!analyticsLoading && !(analytics?.workspaces || []).length ? (
-							<div className="tenant-admin-empty">No hay marcas para mostrar.</div>
-						) : null}
-						{analyticsLoading ? <StatusPill>Cargando estadísticas...</StatusPill> : null}
+						{analyticsLoading ? (
+							<EmptyState
+								tone="loading"
+								title="Cargando estadisticas"
+								description="Estamos reuniendo actividad, ventas y conversaciones."
+							/>
+						) : analyticsError ? (
+							<EmptyState
+								tone="error"
+								title="No pudimos cargar las estadisticas"
+								description={analyticsError}
+							>
+								<button type="button" onClick={() => loadAnalytics(selectedWorkspaceId)}>
+									Reintentar
+								</button>
+							</EmptyState>
+						) : (
+							<>
+								<div className="tenant-admin-metrics">
+									<StatusPill>Campañas: {formatNumber(analytics?.totals?.campaignsCount)}</StatusPill>
+									<StatusPill>Activas: {formatNumber(analytics?.totals?.activeCampaignsCount)}</StatusPill>
+									<StatusPill>Destinatarios: {formatNumber(analytics?.totals?.recipientsCount)}</StatusPill>
+									<StatusPill>Clientes: {formatNumber(analytics?.totals?.customersCount)}</StatusPill>
+									<StatusPill>Facturacion: {formatCurrency(analytics?.totals?.revenueTotal, analytics?.totals?.currency)}</StatusPill>
+									<StatusPill>Conversaciones 30d: {formatNumber(analytics?.totals?.activeConversations30d)}</StatusPill>
+									<StatusPill>Carritos recuperados: {formatNumber(analytics?.totals?.recoveredCartsCount)}</StatusPill>
+									<StatusPill>Costo estimado: {formatUsd(analytics?.totals?.estimatedCampaignCostUsd)}</StatusPill>
+								</div>
+								<div className="workspace-analytics-grid">
+									{(analytics?.workspaces || []).map((item) => (
+										<WorkspaceAnalyticsCard
+											key={item.workspace.id}
+											item={item}
+											selected={analytics?.detail?.workspaceId === item.workspace.id}
+											onSelect={() => setSelectedWorkspaceId(item.workspace.id)}
+										/>
+									))}
+								</div>
+								{!(analytics?.workspaces || []).length ? (
+									<EmptyState
+										title="No hay marcas para mostrar"
+										description="Cuando exista actividad de una marca, su resumen aparecera aca."
+									/>
+								) : null}
+							</>
+						)}
 					</section>
 				) : null}
 

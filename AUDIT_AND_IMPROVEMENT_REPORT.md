@@ -462,17 +462,32 @@ flowchart TD
 - Pruebas: 8/8 E2E; el caso agota retries automáticos y recupera lista/historial manualmente.
 - Riesgo de deployment: bajo.
 
+### FIND-P1-021
+
+- Título: Administración confundía fallas de carga con resultados vacíos
+- Área: UI/UX/Administración/Analytics
+- Ambiente: todos
+- Severidad: High
+- Evidencia: la lista de marcas mostraba el empty durante su request y Analytics renderizaba métricas en cero junto con un error global cuando fallaba su endpoint.
+- Impacto: un administrador podía interpretar una indisponibilidad como ausencia de marcas o actividad y no tenía una recuperación contextual.
+- Causa: lista, detalle, acciones y Analytics compartían estados parciales; el error de consulta terminaba en el banner genérico.
+- Solución: estados loading/error/empty/data mutuamente excluyentes para marcas y Analytics, errores locales anunciados y reintento de la consulta exacta.
+- Estado: resuelto.
+- Archivos: `AdminPage.jsx`, `tests/admin/async-states.spec.js` y capturas deterministas.
+- Pruebas: 2/2 E2E específicos y 10/10 Playwright completo; recuperación de ambas APIs verificada.
+- Riesgo de deployment: bajo; no cambia endpoints ni persistencia.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
-- Estados: Inbox/Comprobantes separa carga, vacío, error y datos tanto en lista como historial; Operaciones ofrece reintento. Queda pendiente extender el patrón a campañas y administración.
+- Estados: Inbox/Comprobantes separa carga, vacío, error y datos tanto en lista como historial; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
 - Pendiente: recorrido visual completo de las vistas privadas restantes, teclado integral y axe.
 
 ## 9. Auditoría frontend
 
-- Build exitoso en 600 ms en la validación final de esta iteración.
+- Build exitoso en 954 ms en la validación final de esta iteración.
 - `vendor-three`: 505,81 kB minificado; warning >500 kB.
 - CSS de campañas: 100,63 kB; CSS global principal: 138,47 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
@@ -522,7 +537,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,90 s |
 | root build | OK; backend + frontend | 10,3 s |
-| Playwright Chromium | 8/8; 10 rutas de performance | 22,4 s |
+| Playwright Chromium | 10/10; 10 rutas de performance | 22,8 s |
 
 ## 17. Cambios implementados
 
@@ -547,18 +562,19 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Selección de conexión comercial primaria validada dentro de la transacción.
 - Helpers de menú, handoff y estado de conversación con workspace obligatorio.
 - Errores y reintentos explícitos en lista/historial de Inbox y Operaciones.
+- Estados de marcas y Analytics mutuamente excluyentes, con reintentos locales y evidencia visual.
 
 ## 18. Comparación antes/después
 
 - Root build: de falso verde (sólo Prisma) a validación de ambos productos.
-- Unitarias: de 7 casos localizados a 22 pruebas ejecutadas.
-- E2E: de una suite que ocultaba fallos a 5 pruebas bloqueantes.
+- Unitarias: de 7 casos localizados a 36 pruebas ejecutadas.
+- E2E: de una suite que ocultaba fallos a 10 pruebas bloqueantes.
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; revisión de pagos y errores de lista/historial en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; revisión de pagos, errores de lista/historial, error de marcas y error de Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 
