@@ -387,6 +387,21 @@ flowchart TD
 - Pruebas: 32/32 unitarias y build backend con 136 archivos válidos.
 - Riesgo de deployment: bajo; no cambia resultados válidos y evita lecturas innecesarias.
 
+### FIND-P0-016
+
+- Título: adjuntos autenticados permitían caché pública compartida
+- Área: seguridad/archivos
+- Ambiente: todos
+- Severidad: High
+- Evidencia: `/api/media/inbox/:fileName` requiere autenticación y scope, pero respondía `Cache-Control: public, max-age=31536000, immutable`.
+- Impacto: proxies o caches compartidos podían conservar documentos, imágenes o comprobantes privados durante un año fuera del control de sesión.
+- Causa: se reutilizó una política apropiada para assets públicos en contenido sensible del Inbox.
+- Solución: política canónica `private, no-store`, compatibilidad anti-cache y `X-Content-Type-Options: nosniff`.
+- Estado: resuelto.
+- Archivos: `media.controller.js`, `http-cache-policy.js` y prueba unitaria.
+- Pruebas: 34/34 unitarias y build backend con 138 archivos válidos.
+- Riesgo de deployment: bajo; aumenta requests de adjuntos a cambio de evitar persistencia no controlada.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -408,8 +423,8 @@ flowchart TD
 
 ## 10. Auditoría backend
 
-- 136 archivos JS/MJS pasan el chequeo de sintaxis.
-- 32 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace/WABA/analytics.
+- 138 archivos JS/MJS pasan el chequeo de sintaxis.
+- 34 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, aislamiento de workspace/WABA/analytics y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -440,8 +455,8 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
-| backend syntax | 136/136 | incluido en build |
-| unit tests | 32/32 | 1,1 s |
+| backend syntax | 138/138 | incluido en build |
+| unit tests | 34/34 | 1,0 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -467,6 +482,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Scope obligatorio de workspace en todo envío outbound.
 - Scope WABA obligatorio en webhooks de plantillas de WhatsApp.
 - Scope restrictivo en agregaciones de analytics, incluso con lista vacía.
+- Adjuntos autenticados fuera de caches públicas o persistentes.
 
 ## 18. Comparación antes/después
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { logger, fingerprint } from '../lib/logger.js';
+import { applyPrivateMediaCachePolicy } from '../lib/http-cache-policy.js';
 import {
 	uploadWhatsAppMedia,
 	resolveInboxMediaAbsolutePath,
@@ -177,7 +178,7 @@ export async function serveInboxMediaController(req, res) {
 			message.attachmentMimeType ||
 			(message?.rawPayload?.attachment?.type === 'sticker' ? 'image/webp' : '');
 
-		res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+		applyPrivateMediaCachePolicy(res);
 		if (inferredMimeType) {
 			res.type(inferredMimeType);
 		}
