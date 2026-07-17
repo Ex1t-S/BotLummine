@@ -5,6 +5,7 @@ import {
 	findConversationForWorkspace,
 	findInboundMessageForWorkspace,
 	findWorkspaceOwnedRecord,
+	requireWorkspaceScope,
 	whatsAppTemplateWebhookWhere,
 	workspaceIdsWhere,
 	workspaceOwnedWhere,
@@ -20,6 +21,14 @@ describe('workspace-owned record lookups', () => {
 			() => workspaceOwnedWhere({ workspaceId: 'workspace-a' }),
 			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
 		);
+	});
+
+	it('rejects implicit default workspaces and normalizes explicit scope', () => {
+		assert.throws(
+			() => requireWorkspaceScope(''),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
+		assert.equal(requireWorkspaceScope(' workspace-a '), 'workspace-a');
 	});
 
 	it('queries an inbound message with an immutable workspace boundary', async () => {

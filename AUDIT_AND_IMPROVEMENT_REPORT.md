@@ -552,6 +552,21 @@ flowchart TD
 - Pruebas: typecheck local 0 errores en 3,8 s, build raíz verde y 14/14 Playwright; sintaxis YAML revisada por diff, action runner pendiente.
 - Riesgo de deployment: bajo; sólo afecta validación de PR y no publica artefactos de producción.
 
+### FIND-P0-027
+
+- Título: las programaciones de campaña aceptaban un workspace implícito y mutaban sólo por ID
+- Área: Backend/Seguridad/Multitenancy
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: las seis funciones públicas de `campaign-schedule.service.js` resolvían un workspace ausente como `DEFAULT_WORKSPACE_ID`; update/delete y el dispatcher reusaban luego sólo el ID global. Recuperación manual de carrito repetía la mutación global para carrito y conversación.
+- Impacto: un caller interno incompleto podía operar silenciosamente sobre el tenant por defecto; una regresión futura perdía la frontera de workspace entre lectura y escritura.
+- Causa: compatibilidad legacy con tenant único y confianza en IDs obtenidos previamente.
+- Solución: workspace explícito obligatorio, helper común que falla cerrado y `id + workspaceId` en update/delete/claim del scheduler y recuperación de carrito.
+- Estado: resuelto localmente; no se ejecutaron campañas ni mensajes externos.
+- Archivos: `campaign-schedule.service.js`, `abandoned-cart.controller.js`, `workspace-scope.js` y prueba negativa.
+- Pruebas: 40/40 unitarias, 140 archivos con sintaxis válida; el caso negativo rechaza workspace vacío y normaliza sólo scope explícito.
+- Riesgo de deployment: bajo/medio; los controllers actuales ya envían workspace, pero jobs/callers externos no inventariados deben validarse en staging.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -574,7 +589,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 140 archivos JS/MJS pasan el chequeo de sintaxis.
-- 39 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento de workspace/WABA/analytics/estado/comercio y caché privada de adjuntos.
+- 40 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento de workspace/WABA/analytics/estado/comercio/schedules y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -584,7 +599,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Persisten como backlog las queries de módulos concurrentemente modificados.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito hace lo mismo. Persisten como backlog las queries de módulos concurrentemente modificados.
 
 ## 13. Railway y despliegues
 
@@ -606,7 +621,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 140/140 | incluido en build |
-| unit tests | 39/39 | 0,44 s |
+| unit tests | 40/40 | 0,45 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -646,6 +661,7 @@ Durante el refactor de prefetch, una primera corrida privada falló porque falta
 - Persistencia redactada de trazas IA con expiración y poda segura, preparada mediante migración aditiva.
 - Fondo público sin Three.js y prefetch privado acotado para evitar trabajo especulativo masivo.
 - CI con typecheck, build raíz, presupuesto de performance y diagnósticos Playwright en fallos.
+- Programaciones de campaña y recuperación de carrito sin fallback de tenant y con mutaciones acotadas por workspace.
 
 ## 18. Comparación antes/después
 

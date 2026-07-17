@@ -18,6 +18,7 @@ import {
 	getWorkspaceRuntimeConfig,
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
+import { workspaceOwnedWhere } from '../services/workspaces/workspace-scope.js';
 
 const DEFAULT_SYNC_WINDOW_DAYS = 30;
 const ALLOWED_SYNC_WINDOWS = new Set([1, 3, 7, 15, 30]);
@@ -359,7 +360,7 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 		});
 
 		await prisma.abandonedCart.update({
-			where: { id },
+			where: workspaceOwnedWhere({ id, workspaceId }),
 			data: {
 				status: 'CONTACTED',
 				contactedAt: new Date(),
@@ -369,7 +370,7 @@ export async function postSendAbandonedCartMessage(req, res, next) {
 		});
 
 		await prisma.conversation.update({
-			where: { id: conversation.id },
+			where: workspaceOwnedWhere({ id: conversation.id, workspaceId }),
 			data: {
 				queue: 'HUMAN',
 				aiEnabled: false,

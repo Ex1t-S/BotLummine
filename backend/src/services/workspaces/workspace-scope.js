@@ -8,10 +8,14 @@ function requiredIdentifier(value, fieldName) {
 	return normalized;
 }
 
+export function requireWorkspaceScope(workspaceId) {
+	return requiredIdentifier(workspaceId, 'workspaceId');
+}
+
 export function workspaceOwnedWhere({ id, workspaceId, ...constraints } = {}) {
 	return {
 		id: requiredIdentifier(id, 'id'),
-		workspaceId: requiredIdentifier(workspaceId, 'workspaceId'),
+		workspaceId: requireWorkspaceScope(workspaceId),
 		...constraints,
 	};
 }

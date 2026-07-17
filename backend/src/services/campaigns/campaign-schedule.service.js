@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 import { createCampaignDraft, launchCampaign, previewCampaignAudience } from './whatsapp-campaign.service.js';
 
 const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires';
@@ -205,8 +206,12 @@ function buildScheduleData(input = {}, template) {
 	};
 }
 
-export async function listCampaignSchedules({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+function resolveScheduleWorkspaceId(workspaceId) {
+	return requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+}
+
+export async function listCampaignSchedules({ workspaceId } = {}) {
+	const resolvedWorkspaceId = resolveScheduleWorkspaceId(workspaceId);
 	const schedules = await prisma.campaignSchedule.findMany({
 		where: { workspaceId: resolvedWorkspaceId },
 		orderBy: [{ status: 'asc' }, { nextRunAt: 'asc' }, { createdAt: 'desc' }],
@@ -216,11 +221,11 @@ export async function listCampaignSchedules({ workspaceId = DEFAULT_WORKSPACE_ID
 }
 
 export async function createCampaignSchedule({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateId,
 	...input
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = resolveScheduleWorkspaceId(workspaceId);
 	const template = await resolveTemplate(resolvedWorkspaceId, templateId);
 	const data = buildScheduleData(input, template);
 
@@ -235,12 +240,12 @@ export async function createCampaignSchedule({
 }
 
 export async function previewCampaignSchedule({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateId,
 	audienceSource = 'abandoned_carts',
 	audienceFilters = {},
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = resolveScheduleWorkspaceId(workspaceId);
 	const template = await resolveTemplate(resolvedWorkspaceId, templateId);
 	const preview = await previewCampaignAudience({
 		workspaceId: resolvedWorkspaceId,
@@ -253,11 +258,11 @@ export async function previewCampaignSchedule({
 }
 
 export async function updateCampaignSchedule(scheduleId, {
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateId = null,
 	...input
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = resolveScheduleWorkspaceId(workspaceId);
 	const current = await prisma.campaignSchedule.findFirst({
 		where: { id: scheduleId, workspaceId: resolvedWorkspaceId },
 	});
@@ -284,15 +289,15 @@ export async function updateCampaignSchedule(scheduleId, {
 	);
 
 	const schedule = await prisma.campaignSchedule.update({
-		where: { id: scheduleId },
+		where: workspaceOwnedWhere({ id: scheduleId, workspaceId: resolvedWorkspaceId }),
 		data,
 	});
 
 	return serializeSchedule(schedule);
 }
 
-export async function deleteCampaignSchedule(scheduleId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function deleteCampaignSchedule(scheduleId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = resolveScheduleWorkspaceId(workspaceId);
 	const current = await prisma.campaignSchedule.findFirst({
 		where: { id: scheduleId, workspaceId: resolvedWorkspaceId },
 		select: { id: true },
@@ -302,15 +307,17 @@ export async function deleteCampaignSchedule(scheduleId, { workspaceId = DEFAULT
 		throw new Error('No se encontro la programacion.');
 	}
 
-	await prisma.campaignSchedule.delete({ where: { id: scheduleId } });
+	await prisma.campaignSchedule.delete({
+		where: workspaceOwnedWhere({ id: scheduleId, workspaceId: resolvedWorkspaceId }),
+	});
 	return { deleted: true };
 }
 
 export async function runCampaignScheduleNow(scheduleId, {
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	launchedByUserId = null,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = resolveScheduleWorkspaceId(workspaceId);
 	const schedule = await prisma.campaignSchedule.findFirst({
 		where: { id: scheduleId, workspaceId: resolvedWorkspaceId },
 	});
@@ -340,7 +347,7 @@ export async function runCampaignScheduleNow(scheduleId, {
 		}
 
 		await prisma.campaignSchedule.update({
-			where: { id: schedule.id },
+			where: workspaceOwnedWhere({ id: schedule.id, workspaceId: schedule.workspaceId }),
 			data: {
 				lastRunAt: new Date(),
 				lastRunKey: runKey,
@@ -358,7 +365,7 @@ export async function runCampaignScheduleNow(scheduleId, {
 		};
 	} catch (error) {
 		await prisma.campaignSchedule.update({
-			where: { id: schedule.id },
+			where: workspaceOwnedWhere({ id: schedule.id, workspaceId: schedule.workspaceId }),
 			data: {
 				lastRunAt: new Date(),
 				lastError: error.message || 'Error ejecutando la programacion.',
@@ -385,6 +392,7 @@ export async function processDueCampaignSchedules({ limit = 5 } = {}) {
 		const claimed = await prisma.campaignSchedule.updateMany({
 			where: {
 				id: schedule.id,
+				workspaceId: schedule.workspaceId,
 				status: 'ACTIVE',
 				nextRunAt: { lte: now },
 				OR: [{ lastRunKey: null }, { lastRunKey: { not: runKey } }],
@@ -424,7 +432,7 @@ export async function processDueCampaignSchedules({ limit = 5 } = {}) {
 			}
 
 			await prisma.campaignSchedule.update({
-				where: { id: schedule.id },
+				where: workspaceOwnedWhere({ id: schedule.id, workspaceId: schedule.workspaceId }),
 				data: {
 					nextRunAt,
 					lastCampaignId: campaignId || null,
@@ -436,7 +444,7 @@ export async function processDueCampaignSchedules({ limit = 5 } = {}) {
 			results.push({ scheduleId: schedule.id, ok: true, campaignId });
 		} catch (error) {
 			await prisma.campaignSchedule.update({
-				where: { id: schedule.id },
+				where: workspaceOwnedWhere({ id: schedule.id, workspaceId: schedule.workspaceId }),
 				data: {
 					nextRunAt,
 					lastError: error.message || 'Error ejecutando la programacion.',
