@@ -36,7 +36,7 @@ const routesToMeasure = [
 	{ name: 'customers', path: '/customers', readySelector: '.customers-page' },
 	{ name: 'catalog', path: '/catalog', readySelector: '.catalog-search-form' },
 	{ name: 'admin', path: '/admin', readySelector: '.tenant-admin-page' },
-	{ name: 'whatsapp-menu', path: '/whatsapp-menu', readySelector: 'text=Editor de menú' },
+	{ name: 'whatsapp-menu', path: '/whatsapp-menu', readySelector: '.wam-hero' },
 ];
 
 function json(payload) {
@@ -164,23 +164,25 @@ function apiPayload(pathname, authenticated = true) {
 
 	if (pathname === '/whatsapp-menu') {
 		return {
-			config: {
-				id: 'perf-menu',
+			settings: {
 				name: 'Menú Perf',
-				initialMenuKey: 'MAIN',
-				menus: [
-					{
-						key: 'MAIN',
-						title: 'Menú principal',
-						headerText: 'Hola',
-						body: 'Elegí una opción:',
-						buttonText: 'Ver opciones',
-						footerText: '',
-						isActive: true,
-						sortOrder: 1,
-						options: [],
-					},
-				],
+				config: {
+					version: 1,
+					mainMenuKey: 'MAIN',
+					menus: [
+						{
+							key: 'MAIN',
+							title: 'Menú principal',
+							headerText: 'Hola',
+							body: 'Elegí una opción:',
+							buttonText: 'Ver opciones',
+							footerText: '',
+							isActive: true,
+							sortOrder: 1,
+							options: [],
+						},
+					],
+				},
 			},
 		};
 	}
@@ -353,6 +355,9 @@ test.describe('performance de carga por pantalla', () => {
 		const outputDir = path.resolve(process.cwd(), 'test-results', 'performance');
 		await mkdir(outputDir, { recursive: true });
 		await writeFile(path.join(outputDir, 'load-times.json'), JSON.stringify(report, null, 2));
+
+		const failedRoutes = report.filter((metrics) => metrics.error);
+		expect(failedRoutes, 'Todas las rutas medidas deben alcanzar su estado listo').toEqual([]);
 
 		if (strictMode) {
 			for (const metrics of report) {

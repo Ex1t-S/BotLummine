@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "scripts": {
     "audit:security": "npm --prefix backend run audit:security && npm --prefix frontend run audit:security",
-    "build": "npm --prefix backend run prisma:generate",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "prisma:validate": "npm --prefix backend run prisma:validate",
+    "test:unit": "npm --prefix backend run test:unit",
+    "test:e2e": "npm --prefix frontend run test:e2e",
     "jobs:campaign-dispatch": "npm --prefix backend run jobs:campaign-dispatch",
     "jobs:enbox-sync": "npm --prefix backend run jobs:enbox-sync",
     "jobs:diagnose": "npm --prefix backend run jobs:diagnose",
