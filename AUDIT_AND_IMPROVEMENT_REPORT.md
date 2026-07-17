@@ -1140,7 +1140,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
 | root build | OK; backend + frontend | 9,2 s en la última corrida |
-| Playwright Chromium | 12/12 actuales: 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos | 11,4 s Inbox; 10,5 s consolidada; APIs sintéticas, sin delivery |
+| Playwright Chromium | 12/12 actuales: 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos | 11,8 s consolidada; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
