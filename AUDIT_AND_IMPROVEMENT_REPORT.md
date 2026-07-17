@@ -312,6 +312,21 @@ flowchart TD
 - Pruebas: rechazo de scopes incompletos y aserción exacta del filtro Prisma.
 - Riesgo de deployment: bajo; los reprocesos válidos ya disponen de workspace.
 
+### FIND-P0-011
+
+- Título: vulnerabilidades high en dependencias productivas backend
+- Área: seguridad/DevOps
+- Ambiente: local/todos
+- Severidad: High
+- Evidencia: npm audit inicial reportó 11 vulnerabilidades (3 high), incluyendo CRLF injection, DoS de uploads y DoS/memory disclosure en WebSocket.
+- Impacto: superficie evitable en uploads, multipart y dependencias del proveedor OpenAI.
+- Causa: lockfile con versiones anteriores a los parches disponibles.
+- Solución: upgrades compatibles y audit high bloqueante en CI.
+- Estado: resuelto backend; frontend conserva 2 high pendientes para no pisar manifests del usuario.
+- Archivos: `backend/package.json`, lockfile y workflow.
+- Pruebas: `npm audit --omit=dev --audit-level=high` devuelve 0 vulnerabilidades; build y unitarias verdes.
+- Riesgo de deployment: medio; revisar smoke de uploads/Sentry en staging.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -329,6 +344,7 @@ flowchart TD
 - No hay scripts de lint ni typecheck configurados; sigue como deuda P0/P1 de calidad.
 - Se añadieron tokens semánticos base, foco visible global y reducción de movimiento.
 - Se detectó y eliminó un bloque legacy de estilos globales en `CatalogPage.css`.
+- Auditoría frontend: 5 vulnerabilidades productivas reportadas (2 high en Vite/esbuild); no se modificaron manifests sucios del usuario.
 
 ## 10. Auditoría backend
 
@@ -367,6 +383,8 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | backend syntax | 129/129 | incluido en build |
 | unit tests | 29/29 | 0,34 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
+| npm audit backend prod | 0 vulnerabilidades | 1,2 s |
+| npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,60 s |
 | root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
 | Playwright Chromium | 5/5; 10 rutas de performance | 14,7 s |
@@ -384,6 +402,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Corpus sintético de 36 casos y runner offline bloqueante en CI.
 - Schema interno validado antes de delivery y fallback por `INVALID_OUTPUT`.
 - Scope inmutable `id + workspaceId` para reproceso de mensajes inbound.
+- Dependencias backend parcheadas y audit high agregado a CI.
 
 ## 18. Comparación antes/después
 
@@ -407,6 +426,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 - Salida estructurada, persistencia y política de retención de trace IA aún parciales.
 - Sin lint, typecheck ni axe configurados.
 - Bundle `vendor-three` >500 kB y prefetch costoso.
+- Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
 - Staging no representativo.
 - Cron productivo sin evidencia operativa.
 

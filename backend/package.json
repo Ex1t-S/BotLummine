@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "@sentry/node": "^10.53.1",
+    "@sentry/node": "^10.66.0",
     "axios": "^1.16.1",
     "bcryptjs": "^3.0.2",
     "cookie": "^1.1.1",
@@ -45,10 +45,10 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
-    "form-data": "^4.0.5",
+    "form-data": "^4.0.6",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "multer": "^2.1.1",
+    "morgan": "^1.11.0",
+    "multer": "^2.2.0",
     "openai": "^5.12.2",
     "prisma": "^6.19.3"
   },
