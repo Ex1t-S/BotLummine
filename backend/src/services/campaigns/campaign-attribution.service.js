@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 
 export const ATTRIBUTION_WINDOW_HOURS = Math.max(
 	1,
@@ -594,8 +595,8 @@ export async function attributeOrdersByIds({ workspaceId = DEFAULT_WORKSPACE_ID,
 	return { conversions, recoveredCarts };
 }
 
-export async function filterRecoverableAbandonedCarts(carts = [], workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function filterRecoverableAbandonedCarts(carts = [], workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const output = [];
 
 	for (const cart of carts) {
@@ -655,7 +656,7 @@ export async function filterRecoverableAbandonedCarts(carts = [], workspaceId = 
 		const matchingOrder = directOrder || order || nameOrder;
 		if (matchingOrder && isPaidOrCompletedOrder(matchingOrder)) {
 			await prisma.abandonedCart.update({
-				where: { id: cart.id },
+				where: workspaceOwnedWhere({ id: cart.id, workspaceId: resolvedWorkspaceId }),
 				data: {
 					status: 'RECOVERED',
 					recoveredAt: getOrderPurchaseAt(matchingOrder) || getOrderStatusChangedAt(matchingOrder) || new Date(),

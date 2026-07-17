@@ -4,7 +4,11 @@ import {
 	getWhatsAppChannelForWorkspace,
 	normalizeWorkspaceId
 } from '../workspaces/workspace-context.service.js';
-import { whatsAppTemplateWebhookWhere } from '../workspaces/workspace-scope.js';
+import {
+	requireWorkspaceScope,
+	whatsAppTemplateWebhookWhere,
+	workspaceOwnedWhere,
+} from '../workspaces/workspace-scope.js';
 import {
 	graphDelete,
 	graphGet,
@@ -318,8 +322,8 @@ export async function listLocalTemplates({
 	});
 }
 
-export async function getTemplateOrThrow(templateId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getTemplateOrThrow(templateId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const template = await prisma.whatsAppTemplate.findFirst({
 		where: localTemplateWhere(templateId, resolvedWorkspaceId)
 	});
@@ -655,10 +659,10 @@ export async function updateTemplate(templateId, {
 }
 
 export async function deleteTemplate(templateId, {
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	deleteAllLanguages = false
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const metaConfig = await getTemplateMetaConfig(resolvedWorkspaceId);
 	const localTemplate = await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId });
 
@@ -691,7 +695,10 @@ export async function deleteTemplate(templateId, {
 		});
 	} else {
 		await prisma.whatsAppTemplate.update({
-			where: { id: localTemplate.id },
+			where: workspaceOwnedWhere({
+				id: localTemplate.id,
+				workspaceId: resolvedWorkspaceId,
+			}),
 			data: {
 				status: 'DELETED',
 				deletedAt: new Date(),
@@ -720,7 +727,7 @@ export async function applyTemplateStatusWebhook(payload = {}, scope = {}) {
 	}
 
 	return prisma.whatsAppTemplate.update({
-		where: { id: template.id },
+		where: workspaceOwnedWhere({ id: template.id, workspaceId: template.workspaceId }),
 		data: {
 			status: normalizeString(payload?.event || payload?.status || template.status),
 			rejectedReason: normalizeString(payload?.reason || payload?.rejected_reason || '') || template.rejectedReason,
@@ -742,7 +749,7 @@ export async function applyTemplateQualityWebhook(payload = {}, scope = {}) {
 	}
 
 	return prisma.whatsAppTemplate.update({
-		where: { id: template.id },
+		where: workspaceOwnedWhere({ id: template.id, workspaceId: template.workspaceId }),
 		data: {
 			qualityScore: normalizeString(payload?.new_quality_score || payload?.quality_score || '') || template.qualityScore,
 			lastSyncedAt: new Date(),
@@ -763,7 +770,7 @@ export async function applyTemplateCategoryWebhook(payload = {}, scope = {}) {
 	}
 
 	return prisma.whatsAppTemplate.update({
-		where: { id: template.id },
+		where: workspaceOwnedWhere({ id: template.id, workspaceId: template.workspaceId }),
 		data: {
 			category: ensureTemplateCategory(payload?.new_category || payload?.category || template.category),
 			lastSyncedAt: new Date(),
@@ -790,7 +797,7 @@ export async function applyTemplateComponentsWebhook(payload = {}, scope = {}) {
 			: [];
 
 	return prisma.whatsAppTemplate.update({
-		where: { id: template.id },
+		where: workspaceOwnedWhere({ id: template.id, workspaceId: template.workspaceId }),
 		data: {
 			headerFormat: extractHeaderFormat(components),
 			previewText: buildTemplatePreviewText(components),

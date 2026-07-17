@@ -612,6 +612,21 @@ flowchart TD
 - Pruebas: 43/43 unitarias y 140 archivos con sintaxis válida; dos casos negativos verifican rechazo antes de DB.
 - Riesgo de deployment: medio; callers inventariados pasan workspace, pero staging debe cubrir webhook, AI Lab y job QA antes del rollout.
 
+### FIND-P0-031
+
+- Título: templates y recuperación de carritos perdían el scope entre lookup y update
+- Área: Backend/WhatsApp/Comercio/Multitenancy
+- Ambiente: todos
+- Severidad: High
+- Evidencia: `getTemplateOrThrow`, delete y recoverability aceptaban `workspace_default`; cuatro handlers de webhook y el cierre de carrito actualizaban sólo por ID después de una lectura acotada.
+- Impacto: callers incompletos o datos inconsistentes podían aplicar estados de Meta/recuperación fuera del tenant esperado.
+- Causa: frontera validada sólo en la lectura y fallbacks legacy en servicios compartidos.
+- Solución: workspace obligatorio en template lookup/delete y recoverability; updates conservan `id + workspaceId` hasta persistencia.
+- Estado: resuelto localmente; no se llamó Meta ni se enviaron mensajes.
+- Archivos: `whatsapp-template.service.js`, `campaign-attribution.service.js`, prueba negativa.
+- Pruebas: 45/45 unitarias y 140 archivos con sintaxis válida; lookup/delete/recoverability rechazan scope ausente antes de DB.
+- Riesgo de deployment: bajo/medio; callers inventariados ya pasan workspace, staging debe simular webhooks firmados.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -634,7 +649,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 140 archivos JS/MJS pasan el chequeo de sintaxis.
-- 43 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/analytics/estado/comercio/schedules/usuarios y caché privada de adjuntos.
+- 45 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -666,7 +681,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 140/140 | incluido en build |
-| unit tests | 43/43 | 0,73 s |
+| unit tests | 45/45 | 0,80 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -710,6 +725,7 @@ Durante el refactor de prefetch, una primera corrida privada falló porque falta
 - Edición de usuarios de marca con lookup/mutación dentro del workspace y acceso global exclusivo de plataforma.
 - Deduplicación de Inbox y selección de comercio con scope propagado a toda la transacción.
 - Entry points inbound/AI sin tenant por defecto y conversaciones acotadas durante todo el turno.
+- Templates/webhooks y recuperación de carritos con scope obligatorio hasta el update final.
 
 ## 18. Comparación antes/después
 
