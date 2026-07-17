@@ -76,6 +76,52 @@ function getVisiblePages(currentPage, totalPages) {
 	return pages;
 }
 
+function formatCartAge(value) {
+	const createdAt = new Date(value || '');
+	if (Number.isNaN(createdAt.getTime())) return 'Sin fecha';
+
+	const elapsedMs = Math.max(0, Date.now() - createdAt.getTime());
+	const elapsedHours = Math.floor(elapsedMs / (1000 * 60 * 60));
+	if (elapsedHours < 24) return elapsedHours <= 1 ? 'Hace 1 hora' : `Hace ${elapsedHours} horas`;
+
+	const elapsedDays = Math.floor(elapsedHours / 24);
+	return elapsedDays === 1 ? 'Hace 1 día' : `Hace ${elapsedDays} días`;
+}
+
+function CartStatusBadge({ cart }) {
+	return (
+		<StatusBadge
+			tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
+			className={`status-badge ${
+				cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
+			}`}
+		>
+			{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
+		</StatusBadge>
+	);
+}
+
+function CartPrimaryAction({ cart }) {
+	if (!cart.canOpenCart) {
+		return (
+			<button type="button" className="secondary-link-btn" disabled>
+				Falta link
+			</button>
+		);
+	}
+
+	return (
+		<a
+			href={cart.abandonedCheckoutUrl}
+			target="_blank"
+			rel="noreferrer"
+			className="secondary-link-btn"
+		>
+			Abrir carrito
+		</a>
+	);
+}
+
 const AbandonedCartCard = memo(function AbandonedCartCard({
 	cart,
 }) {
@@ -90,14 +136,7 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 					{cart.contactEmail ? <p>{cart.contactEmail}</p> : null}
 				</div>
 
-				<StatusBadge
-					tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
-					className={`status-badge ${
-						cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
-					}`}
-				>
-					{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
-				</StatusBadge>
+				<CartStatusBadge cart={cart} />
 			</div>
 
 			<div className="abandoned-card-focus">
@@ -107,20 +146,7 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 				</div>
 
 				<div className="abandoned-card-actions">
-					{cart.canOpenCart ? (
-						<a
-							href={cart.abandonedCheckoutUrl}
-							target="_blank"
-							rel="noreferrer"
-							className="secondary-link-btn"
-						>
-							Abrir carrito
-						</a>
-					) : (
-						<button type="button" className="secondary-link-btn" disabled>
-							Falta link
-						</button>
-					)}
+					<CartPrimaryAction cart={cart} />
 				</div>
 			</div>
 
@@ -283,6 +309,7 @@ export default function AbandonedCartsPage() {
 	const stats = data.stats || {};
 	const pagination = data.pagination || { page: 1, totalPages: 1 };
 	const visiblePages = getVisiblePages(pagination.page || 1, pagination.totalPages || 1);
+	const hasInitialLoadError = abandonedCartsQuery.isError && carts.length === 0;
 
 	return (
 		<div className="abandoned-carts-page">
@@ -298,12 +325,12 @@ export default function AbandonedCartsPage() {
 				</div>
 			</PageHeader>
 
-			{errorMessage ? (
-				<div className="abandoned-feedback abandoned-feedback--error">{errorMessage}</div>
+			{errorMessage && !hasInitialLoadError ? (
+				<div className="abandoned-feedback abandoned-feedback--error" role="alert">{errorMessage}</div>
 			) : null}
 
 			{successMessage ? (
-				<div className="abandoned-feedback abandoned-feedback--success">{successMessage}</div>
+				<div className="abandoned-feedback abandoned-feedback--success" role="status" aria-live="polite">{successMessage}</div>
 			) : null}
 
 			{syncSummary ? (
@@ -406,6 +433,21 @@ export default function AbandonedCartsPage() {
 					description="Estamos actualizando la lista con los últimos carritos."
 					className="abandoned-empty-state"
 				/>
+			) : hasInitialLoadError ? (
+				<EmptyState
+					tone="error"
+					title="No pudimos cargar los carritos"
+					description={errorMessage || 'Revisá la conexión e intentá nuevamente. Tus filtros se mantienen.'}
+					className="abandoned-empty-state"
+				>
+					<ActionButton
+						variant="secondary"
+						onClick={() => abandonedCartsQuery.refetch()}
+						disabled={abandonedCartsQuery.isFetching}
+					>
+						{abandonedCartsQuery.isFetching ? 'Reintentando...' : 'Reintentar'}
+					</ActionButton>
+				</EmptyState>
 			) : carts.length === 0 ? (
 				<EmptyState
 					title="No hay carritos para mostrar"
@@ -413,14 +455,49 @@ export default function AbandonedCartsPage() {
 					className="abandoned-empty-state"
 				/>
 			) : (
-				<div className="abandoned-carts-grid">
-					{carts.map((cart) => (
-						<AbandonedCartCard
-							key={cart.id}
-							cart={cart}
-						/>
-					))}
-				</div>
+				<>
+					<div className="abandoned-carts-table-wrap">
+						<table className="abandoned-carts-table">
+							<caption>Carritos abandonados ordenados desde el más reciente</caption>
+							<thead>
+								<tr>
+									<th scope="col">Cliente</th>
+									<th scope="col">Importe</th>
+									<th scope="col">Antigüedad</th>
+									<th scope="col">Estado</th>
+									<th scope="col">Último contacto</th>
+									<th scope="col">Responsable</th>
+									<th scope="col">Próxima acción</th>
+								</tr>
+							</thead>
+							<tbody>
+								{carts.map((cart) => (
+									<tr key={cart.id}>
+										<td>
+											<strong>{cart.contactName || 'Cliente sin nombre'}</strong>
+											<span>{cart.contactPhone || cart.contactEmail || 'Sin contacto'}</span>
+										</td>
+										<td><strong>{cart.totalLabel || '-'}</strong></td>
+										<td>{formatCartAge(cart.checkoutCreatedAt || cart.createdAt)}</td>
+										<td><CartStatusBadge cart={cart} /></td>
+										<td>{cart.lastMessageSentLabel || 'Nunca'}</td>
+										<td>{cart.responsibleName || 'Sin asignar'}</td>
+										<td><CartPrimaryAction cart={cart} /></td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+
+					<div className="abandoned-carts-grid">
+						{carts.map((cart) => (
+							<AbandonedCartCard
+								key={cart.id}
+								cart={cart}
+							/>
+						))}
+					</div>
+				</>
 			)}
 
 			{(pagination.totalPages || 1) > 1 ? (

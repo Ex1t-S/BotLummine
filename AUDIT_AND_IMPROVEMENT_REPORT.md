@@ -1032,12 +1032,28 @@ flowchart TD
 - Pruebas: Prisma format/validate/generate verdes; syntax 144/144; suite 85/85; TypeScript y build frontend verdes; Inbox 5/5 en 12,6 s; build raíz verde en 12,9 s. La primera corrida del caso E2E falló por mojibake en el fixture, se corrigió el dato sintético y la repetición completa pasó.
 - Riesgo de deployment: medio; migración sólo aditiva y no aplicada. `prisma migrate diff --from-migrations` no pudo generarse sin shadow database; el SQL manual fue revisado, pero debe compararse y ejecutarse primero sobre una base descartable/staging autorizada.
 
+### FIND-P1-059
+
+- Título: Carritos mezclaba error inicial con vacío y dificultaba comparar oportunidades en desktop
+- Área: UI/UX/Carritos/Responsive
+- Ambiente: local
+- Severidad: Medium
+- Evidencia: ante un 503 inicial se renderizaban a la vez el banner de error y “No hay carritos para mostrar”; con datos, desktop repetía cards sin columnas comparables y el formulario de filtros enviaba “Limpiar filtros” a una fila aislada.
+- Impacto: el operador no podía distinguir ausencia real de datos de una falla de red y debía recorrer visualmente cada card para comparar importe, antigüedad, contacto y responsable.
+- Causa: un único `errorMessage` compartido sin estado terminal explícito y layout card-first aplicado a todos los viewports.
+- Solución: separar loading/error/empty/data, agregar retry conservando filtros, usar tabla semántica operativa en desktop y cards en móvil, corregir el grid de filtros y anunciar feedback con `alert`/`status`.
+- Estado: resuelto localmente; selección múltiple y acciones masivas requieren contrato backend y continúan pendientes.
+- Archivos: `frontend/src/pages/AbandonedCartsPage.jsx/css`, `frontend/tests/carts/operational-states.spec.js` y dos capturas sintéticas.
+- Pruebas: TypeScript y build frontend verdes; 3/3 E2E en 8,1 s cubriendo loading→datos, error→retry y card móvil sin overflow; capturas 1440x960 y 390x844 inspeccionadas.
+- Riesgo de deployment: bajo; sólo presentación/estado cliente y requests existentes, sin cambio de API.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío. Los cambios de cola conservan selección/URL y “Finalizar revisión” usa una acción HANDOFF durable e idempotente sin simular una aprobación.
 - Operaciones: loading, error recuperable y empty sin marcas quedan separados; el centro vuelve a mostrar prioridades después de retry.
+- Carritos: tabla operativa en desktop con cliente/importe/antigüedad/estado/contacto/responsable/acción; cards en móvil y error inicial separado del vacío.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
-- Estados: Inbox/Comprobantes y Clientes separan carga, vacío, error y datos; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
+- Estados: Inbox/Comprobantes, Clientes y Carritos separan carga, vacío, error y datos; Operaciones, Administración y Analytics ofrecen recuperación contextual. Queda pendiente extender el patrón a campañas, cuyos archivos tienen cambios locales concurrentes preservados.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
 - Pendiente: exponer en UI aprobar/rechazar/pedir otro comprobante con motivo y consultar auditoría; recorrido visual/teclado de las vistas privadas restantes y Axe reproducible dentro de CI.
 
@@ -1094,7 +1110,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
 | root build | OK; backend + frontend | 12,9 s en la última corrida |
-| Playwright Chromium | 14/14 consolidada previa; 5/5 Inbox + 3/3 Operaciones actuales | 12,6 s + 4,9 s; APIs sintéticas, sin delivery |
+| Playwright Chromium | 14/14 consolidada previa; 5/5 Inbox + 3/3 Operaciones + 3/3 Carritos actuales | 12,6 s + 4,9 s + 8,1 s; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
@@ -1109,6 +1125,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Inbox: selección/URL, borradores, error/retry, doble envío, flujo móvil y cambio de cola sin perder contexto; feedback de revisión accesible y honesto.
 - Revisión de pagos: entidad y migración aditivas, API GET/POST scoped, actor/motivo/idempotencia y HANDOFF conectado al Inbox.
 - Operaciones: estado vacío sin error boundary, retry de resumen y loading anunciado.
+- Carritos: tabla desktop operativa, cards mobile, filtros alineados y estados loading/error/empty/data mutuamente excluyentes.
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
@@ -1147,12 +1164,13 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
 - Revisión de pagos: de una falsa “verificación” sin auditoría a HANDOFF durable, scoped e idempotente, con error recuperable y URL conversacional persistida.
 - Operaciones: de error boundary ante cero marcas a empty state accionable y comprobable.
+- Carritos: de cards difíciles de comparar y error+empty simultáneos a tabla desktop, card móvil y retry explícito.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 - Bundle: de `vendor-three` 505,81 kB a ningún chunk Three.js; landing mock de 1.598-3.989 ms a 351-478 ms.
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector, Catálogo y AI Lab en 390x844; revisión de pagos y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector, Catálogo, AI Lab y Carritos en 390x844; tabla de Carritos en 1440x960; revisión de pagos y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 
@@ -1174,7 +1192,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: Inbox base, HANDOFF durable de pagos y estados de Operaciones avanzados. Pendientes: UI de aprobar/rechazar/pedir comprobante e historial, campañas/carritos, estados compartidos, Axe reproducible y accesibilidad privada restante.
+P1: Inbox base, HANDOFF durable de pagos, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: UI de aprobar/rechazar/pedir comprobante e historial, selección/acciones masivas de carritos, campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 
