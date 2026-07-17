@@ -10,7 +10,8 @@ import {
 	getWhatsAppMenuRuntimeConfig,
 	DEFAULT_MAIN_MENU_KEY
 } from '../whatsapp/whatsapp-menu.service.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 
 const SESSIONS = new Map();
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
@@ -53,9 +54,9 @@ function buildTracePayload(trace = null) {
 	};
 }
 
-async function listPersistedRuns(conversationId, sessionId, workspaceId = DEFAULT_WORKSPACE_ID) {
+async function listPersistedRuns(conversationId, sessionId, workspaceId) {
 	if (!conversationId || !sessionId) return [];
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 
 	const runs = await prisma.aiLabRun.findMany({
 		where: {
@@ -86,7 +87,7 @@ async function listPersistedRuns(conversationId, sessionId, workspaceId = DEFAUL
 
 async function persistAiLabRun({
 	sessionId,
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	fixtureKey,
 	conversationId,
 	action = '',
@@ -97,7 +98,7 @@ async function persistAiLabRun({
 	if (!sessionId || !fixtureKey || !conversationId) return null;
 
 	const tracePayload = buildTracePayload(trace);
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 
 	return prisma.aiLabRun.create({
 		data: {
@@ -122,8 +123,8 @@ async function persistAiLabRun({
 	});
 }
 
-function assertSessionWorkspace(session, workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+function assertSessionWorkspace(session, workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!session || normalizeWorkspaceId(session.workspaceId) !== resolvedWorkspaceId) {
 		const error = new Error('Sesion de AI Lab no encontrada.');
 		error.status = 404;
@@ -132,8 +133,8 @@ function assertSessionWorkspace(session, workspaceId = DEFAULT_WORKSPACE_ID) {
 	return resolvedWorkspaceId;
 }
 
-async function fetchSessionConversation(conversationId, workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function fetchSessionConversation(conversationId, workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	return prisma.conversation.findFirst({
 		where: { id: conversationId, workspaceId: resolvedWorkspaceId },
 		include: {
@@ -150,7 +151,7 @@ async function buildMenuPreview(conversation = null) {
 	if (!conversation?.messages?.length) return null;
 
 	const runtime = await getWhatsAppMenuRuntimeConfig({
-		workspaceId: conversation.workspaceId || DEFAULT_WORKSPACE_ID
+		workspaceId: requireWorkspaceScope(normalizeWorkspaceId(conversation.workspaceId))
 	});
 	const runtimeMenuPath = conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY;
 	const runtimeMenu =
@@ -223,11 +224,12 @@ async function buildMenuPreview(conversation = null) {
 }
 
 async function resolveRuntimeMenuOption({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	menuPath = DEFAULT_MAIN_MENU_KEY,
 	selectionId = ''
 } = {}) {
-	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId: resolvedWorkspaceId });
 	const activeMenu =
 		runtime?.menusByKey?.[menuPath] ||
 		runtime?.menusByKey?.[runtime?.mainMenuKey] ||
@@ -240,13 +242,13 @@ async function resolveRuntimeMenuOption({
 }
 
 async function openAiLabMenu({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	conversationId,
 	contactName = '',
 	menuPath = DEFAULT_MAIN_MENU_KEY,
 	bodyPrefix = ''
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId: resolvedWorkspaceId });
 	const menu =
 		runtime?.menusByKey?.[menuPath] ||
@@ -301,7 +303,7 @@ async function serializeConversation(conversation, fixtureMeta, lastTrace = null
 	const runs = await listPersistedRuns(
 		conversation.id,
 		sessionId,
-		conversation.workspaceId || DEFAULT_WORKSPACE_ID
+		requireWorkspaceScope(normalizeWorkspaceId(conversation.workspaceId))
 	);
 
 	return {
@@ -334,8 +336,8 @@ async function serializeConversation(conversation, fixtureMeta, lastTrace = null
 	};
 }
 
-async function resetConversationForFixture(conversationId, fixture, workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function resetConversationForFixture(conversationId, fixture, workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const baseState = {
 		...createResetConversationState(),
 		...(fixture.stateOverrides || {})
@@ -411,8 +413,9 @@ function fixtureMetaFromFixture(fixture = {}) {
 	};
 }
 
-export function listAiLabFixtures({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	return getAiLabFixturesForWorkspace({ workspaceId }).map((fixture) => ({
+export function listAiLabFixtures({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	return getAiLabFixturesForWorkspace({ workspaceId: resolvedWorkspaceId }).map((fixture) => ({
 		key: fixture.key,
 		name: fixture.name,
 		description: fixture.description,
@@ -422,10 +425,10 @@ export function listAiLabFixtures({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
 }
 
 export async function createAiLabSession({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	fixtureKey = 'blank'
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const fixture = getAiLabFixture(fixtureKey, { workspaceId: resolvedWorkspaceId });
 	const waId = buildFakeWaId();
 	const contactName = `${AI_LAB_CONTACT_PREFIX}${fixture.contactName || 'German'}`;
@@ -463,24 +466,26 @@ export async function createAiLabSession({
 	return await serializeConversation(hydrated, fixtureMetaFromFixture(fixture), null, sessionId);
 }
 
-export async function getAiLabSession(sessionId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getAiLabSession(sessionId, { workspaceId } = {}) {
+	const requestedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) return null;
-	const resolvedWorkspaceId = assertSessionWorkspace(session, workspaceId);
+	const resolvedWorkspaceId = assertSessionWorkspace(session, requestedWorkspaceId);
 
 	const fixture = getAiLabFixture(session.fixtureKey, { workspaceId: resolvedWorkspaceId });
 	const conversation = await fetchSessionConversation(session.conversationId, resolvedWorkspaceId);
 	return await serializeConversation(conversation, fixtureMetaFromFixture(fixture), session.lastTrace, session.sessionId);
 }
 
-export async function resetAiLabSession(sessionId, { workspaceId = DEFAULT_WORKSPACE_ID, fixtureKey } = {}) {
+export async function resetAiLabSession(sessionId, { workspaceId, fixtureKey } = {}) {
+	const requestedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) {
 		const error = new Error('Sesion de AI Lab no encontrada.');
 		error.status = 404;
 		throw error;
 	}
-	const resolvedWorkspaceId = assertSessionWorkspace(session, workspaceId);
+	const resolvedWorkspaceId = assertSessionWorkspace(session, requestedWorkspaceId);
 
 	const fixture = getAiLabFixture(fixtureKey || session.fixtureKey, { workspaceId: resolvedWorkspaceId });
 	session.fixtureKey = fixture.key;
@@ -510,14 +515,15 @@ export async function resetAiLabSession(sessionId, { workspaceId = DEFAULT_WORKS
 	return await serializeConversation(conversation, fixtureMetaFromFixture(fixture), null, session.sessionId);
 }
 
-export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSPACE_ID, body, selectionId = '', action = '' }) {
+export async function sendAiLabMessage(sessionId, { workspaceId, body, selectionId = '', action = '' } = {}) {
+	const requestedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const session = SESSIONS.get(String(sessionId || ''));
 	if (!session) {
 		const error = new Error('Sesion de AI Lab no encontrada.');
 		error.status = 404;
 		throw error;
 	}
-	const resolvedWorkspaceId = assertSessionWorkspace(session, workspaceId);
+	const resolvedWorkspaceId = assertSessionWorkspace(session, requestedWorkspaceId);
 
 	const conversation = await fetchSessionConversation(session.conversationId, resolvedWorkspaceId);
 	if (!conversation) {
@@ -532,7 +538,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 	if (cleanAction === 'open_menu') {
 		await openAiLabMenu({
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			conversationId: conversation.id,
 			contactName: conversation.contact?.name || `${AI_LAB_CONTACT_PREFIX}German`,
 			menuPath: conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY,
@@ -558,7 +564,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 		await persistAiLabRun({
 			sessionId: session.sessionId,
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			fixtureKey: session.fixtureKey,
 			conversationId: conversation.id,
 			action: 'open_menu',
@@ -567,7 +573,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		});
 	} else if (cleanAction === 'simulate_empty_signal') {
 		const result = await processInboundMessage({
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			waId: conversation.contact?.waId,
 			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: '',
@@ -585,7 +591,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 		await persistAiLabRun({
 			sessionId: session.sessionId,
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			fixtureKey: session.fixtureKey,
 			conversationId: conversation.id,
 			action: 'simulate_empty_signal',
@@ -594,7 +600,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		});
 	} else if (cleanAction === 'simulate_payment_image') {
 		const result = await processInboundMessage({
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			waId: conversation.contact?.waId,
 			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: '[Imagen recibida]',
@@ -624,7 +630,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 		await persistAiLabRun({
 			sessionId: session.sessionId,
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			fixtureKey: session.fixtureKey,
 			conversationId: conversation.id,
 			action: 'simulate_payment_image',
@@ -633,7 +639,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		});
 	} else if (cleanAction === 'simulate_return_image') {
 		const result = await processInboundMessage({
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			waId: conversation.contact?.waId,
 			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: '[Imagen recibida]',
@@ -663,7 +669,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 		await persistAiLabRun({
 			sessionId: session.sessionId,
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			fixtureKey: session.fixtureKey,
 			conversationId: conversation.id,
 			action: 'simulate_return_image',
@@ -686,7 +692,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 		if (cleanSelectionId) {
 			const { activeMenu, option } = await resolveRuntimeMenuOption({
-				workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+				workspaceId: resolvedWorkspaceId,
 				menuPath: conversation.state?.menuPath || DEFAULT_MAIN_MENU_KEY,
 				selectionId: cleanSelectionId
 			});
@@ -709,7 +715,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 		}
 
 		const result = await processInboundMessage({
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			waId: conversation.contact?.waId,
 			contactName: stripAiLabContactPrefix(conversation.contact?.name) || 'German',
 			messageBody: nextMessageBody,
@@ -723,7 +729,7 @@ export async function sendAiLabMessage(sessionId, { workspaceId = DEFAULT_WORKSP
 
 		await persistAiLabRun({
 			sessionId: session.sessionId,
-			workspaceId: session.workspaceId || conversation.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: resolvedWorkspaceId,
 			fixtureKey: session.fixtureKey,
 			conversationId: conversation.id,
 			action: cleanSelectionId ? 'selection' : 'message',
