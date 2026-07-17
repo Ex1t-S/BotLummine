@@ -432,6 +432,21 @@ flowchart TD
 - Pruebas: 36/36 unitarias y build backend con 138 archivos válidos.
 - Riesgo de deployment: bajo; callers válidos usan conexiones del workspace esperado.
 
+### FIND-P0-019
+
+- Título: helpers compartidos de menú y handoff mutaban conversaciones por ID global
+- Área: seguridad/multitenancy/conversación
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: `patchConversationState`, `syncHumanHandoff` y `enableAutomaticConversation` no recibían workspace y usaban `upsert/update({ id })`.
+- Impacto: un caller interno con ID incorrecto podía alterar queue, estado de IA o memoria de otra conversación.
+- Causa: los helpers nacieron como utilidades internas antes de consolidar el límite multitenant.
+- Solución: workspace obligatorio, validación transaccional de pertenencia y propagación en menú, chat y AI Lab.
+- Estado: resuelto.
+- Archivos: `menu-flow.service.js`, `chat.service.js`, `ai-lab.service.js` y helper de scope.
+- Pruebas: 36/36 unitarias, todos los callers inspeccionados y build backend verde.
+- Riesgo de deployment: medio-bajo; agrega consultas de validación y todos los callers activos suministran workspace.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -464,7 +479,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound y su cooldown usan scope inmutable, el servicio outbound exige `id + workspaceId`, los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Persisten como backlog la auditoría exhaustiva de otras queries por ID.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Persisten como backlog las queries de módulos concurrentemente modificados.
 
 ## 13. Railway y despliegues
 
@@ -515,6 +530,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Adjuntos autenticados fuera de caches públicas o persistentes.
 - Cooldown/reproceso automático acotado por la relación conversación-workspace.
 - Selección de conexión comercial primaria validada dentro de la transacción.
+- Helpers de menú, handoff y estado de conversación con workspace obligatorio.
 
 ## 18. Comparación antes/después
 

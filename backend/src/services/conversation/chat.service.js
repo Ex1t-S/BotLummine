@@ -1880,6 +1880,7 @@ export async function processInboundMessage({
 			if (audited.triggerHumanHandoff) {
 				await syncHumanHandoff({
 					conversationId: freshConversation.id,
+					workspaceId: freshConversation.workspaceId,
 					reason: commercialPlan?.handoffReason || 'ai_declared_handoff'
 				});
 			}
@@ -1922,6 +1923,7 @@ export async function processInboundMessage({
 	) {
 		await syncHumanHandoff({
 			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
 			reason: 'ai_cannot_continue',
 		});
 		queueDecision = {

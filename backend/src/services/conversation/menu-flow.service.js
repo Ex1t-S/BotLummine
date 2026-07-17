@@ -11,6 +11,7 @@ import {
 	DEFAULT_MAIN_MENU_KEY,
 	DEFAULT_MENU_PATHS,
 } from '../whatsapp/whatsapp-menu.service.js';
+import { findWorkspaceOwnedRecord } from '../workspaces/workspace-scope.js';
 
 const MENU_PATHS = DEFAULT_MENU_PATHS;
 
@@ -192,56 +193,82 @@ async function getMenuOptionDefinition({ menuPath, selectionId, workspaceId }) {
 	return menuConfig?.optionById?.[selectionId] || null;
 }
 
-export async function patchConversationState(conversationId, patch = {}) {
+export async function patchConversationState(conversationId, patch = {}, { workspaceId } = {}) {
 	const safePatch = Object.fromEntries(
 		Object.entries(patch).filter(([, value]) => value !== undefined)
 	);
 
-	return prisma.conversationState.upsert({
-		where: { conversationId },
-		update: safePatch,
-		create: {
-			conversationId,
-			interactionCount: 0,
-			interestedProducts: [],
-			objections: [],
-			...safePatch,
-		},
+	return prisma.$transaction(async (tx) => {
+		const conversation = await findWorkspaceOwnedRecord(tx.conversation, {
+			id: conversationId,
+			workspaceId,
+			select: { id: true },
+		});
+		if (!conversation) {
+			const error = new Error('Conversación no encontrada para este workspace.');
+			error.status = 404;
+			error.code = 'CONVERSATION_NOT_FOUND';
+			throw error;
+		}
+
+		return tx.conversationState.upsert({
+			where: { conversationId: conversation.id },
+			update: safePatch,
+			create: {
+				conversationId: conversation.id,
+				interactionCount: 0,
+				interestedProducts: [],
+				objections: [],
+				...safePatch,
+			},
+		});
 	});
 }
 
-export async function syncHumanHandoff({ conversationId, reason = 'ai_declared_handoff' }) {
-	await prisma.conversation.update({
-		where: { id: conversationId },
+export async function syncHumanHandoff({ conversationId, workspaceId, reason = 'ai_declared_handoff' }) {
+	const updated = await prisma.conversation.updateMany({
+		where: { id: conversationId, workspaceId },
 		data: {
 			queue: 'HUMAN',
 			aiEnabled: false,
 			lastMessageAt: new Date(),
 		},
 	});
+	if (!updated.count) {
+		const error = new Error('Conversación no encontrada para este workspace.');
+		error.status = 404;
+		error.code = 'CONVERSATION_NOT_FOUND';
+		throw error;
+	}
 
 	await patchConversationState(conversationId, {
 		needsHuman: true,
 		handoffReason: reason,
 		menuActive: false,
 		menuPath: null,
-	});
+	}, { workspaceId });
 }
 
-async function enableAutomaticConversation({ conversationId }) {
-	await prisma.conversation.update({
-		where: { id: conversationId },
+async function enableAutomaticConversation({ conversationId, workspaceId }) {
+	const updated = await prisma.conversation.updateMany({
+		where: { id: conversationId, workspaceId },
 		data: {
 			queue: 'AUTO',
 			aiEnabled: true,
 			lastMessageAt: new Date(),
 		},
 	});
+	if (!updated.count) {
+		const error = new Error('Conversación no encontrada para este workspace.');
+		error.status = 404;
+		error.code = 'CONVERSATION_NOT_FOUND';
+		throw error;
+	}
 
 	await patchConversationState(conversationId, {
 		needsHuman: false,
 		handoffReason: null,
-	});
+	}, { workspaceId });
 }
 
 async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliveryMode = 'live', workspaceId }) {
@@ -401,7 +428,7 @@ async function handleMenuSelection({
 	const safeStatePatch = sanitizeMenuStatePatch(option.statePatch || {}, currentState);
 
 	if (option.actionType === 'SUBMENU') {
-		await enableAutomaticConversation({ conversationId });
+		await enableAutomaticConversation({ conversationId, workspaceId });
 
 		const targetMenuPath = option.actionValue || DEFAULT_MAIN_MENU_KEY;
 
@@ -413,7 +440,7 @@ async function handleMenuSelection({
 			customerName: contactName || currentState.customerName || waId,
 			needsHuman: false,
 			handoffReason: null,
-		});
+		}, { workspaceId });
 
 		await sendMenuPrompt({
 			conversationId,
@@ -429,6 +456,7 @@ async function handleMenuSelection({
 	if (option.actionType === 'HUMAN') {
 		await syncHumanHandoff({
 			conversationId,
+			workspaceId,
 			reason: option.handoffReason || 'menu_requested_human',
 		});
 
@@ -451,7 +479,7 @@ async function handleMenuSelection({
 	}
 
 	if (option.actionType === 'MESSAGE') {
-		await enableAutomaticConversation({ conversationId });
+		await enableAutomaticConversation({ conversationId, workspaceId });
 
 		await patchConversationState(conversationId, {
 			menuActive: false,
@@ -460,7 +488,7 @@ async function handleMenuSelection({
 			needsHuman: false,
 			handoffReason: null,
 			...safeStatePatch,
-		});
+		}, { workspaceId });
 
 		await sendMenuTextOnly({
 			conversationId,
@@ -474,7 +502,7 @@ async function handleMenuSelection({
 	}
 
 	if (option.actionType === 'INTENT') {
-		await enableAutomaticConversation({ conversationId });
+		await enableAutomaticConversation({ conversationId, workspaceId });
 
 		await patchConversationState(conversationId, {
 			menuActive: false,
@@ -483,7 +511,7 @@ async function handleMenuSelection({
 			needsHuman: false,
 			handoffReason: null,
 			...safeStatePatch,
-		});
+		}, { workspaceId });
 
 		return {
 			handled: false,
@@ -611,9 +639,9 @@ export async function maybeHandleMenuFlow({
 			customerName: contactName || currentState.customerName || waId,
 			needsHuman: false,
 			handoffReason: null,
-		});
+		}, { workspaceId });
 
-		await enableAutomaticConversation({ conversationId: conversation.id });
+		await enableAutomaticConversation({ conversationId: conversation.id, workspaceId });
 
 		await sendMenuPrompt({
 			conversationId: conversation.id,
@@ -636,9 +664,9 @@ export async function maybeHandleMenuFlow({
 			customerName: contactName || currentState.customerName || waId,
 			needsHuman: false,
 			handoffReason: null,
-		});
+		}, { workspaceId });
 
-		await enableAutomaticConversation({ conversationId: conversation.id });
+		await enableAutomaticConversation({ conversationId: conversation.id, workspaceId });
 
 		await sendMenuPrompt({
 			conversationId: conversation.id,
@@ -674,7 +702,7 @@ export async function maybeHandleMenuFlow({
 					menuActive: false,
 					menuPath: null,
 					menuLastPromptAt: new Date(),
-				});
+				}, { workspaceId });
 
 				return {
 					handled: false,
@@ -695,7 +723,7 @@ export async function maybeHandleMenuFlow({
 
 			await patchConversationState(conversation.id, {
 				menuLastPromptAt: new Date(),
-			});
+			}, { workspaceId });
 
 			await sendMenuPrompt({
 				conversationId: conversation.id,

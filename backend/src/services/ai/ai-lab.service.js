@@ -261,7 +261,7 @@ async function openAiLabMenu({
 		menuActive: true,
 		menuPath: menu.path || menu.key || menuPath,
 		menuLastPromptAt: new Date()
-	});
+	}, { workspaceId: resolvedWorkspaceId });
 
 	const body = [String(bodyPrefix || '').trim(), menu.body].filter(Boolean).join('\n\n');
 
