@@ -176,8 +176,11 @@ export default function DashboardLayout() {
 
 	useEffect(() => {
 		const paths = getFrequentInternalPaths(user);
-		return scheduleIdleInternalPrefetch(paths, queryClient, { user });
-	}, [queryClient, user]);
+		return scheduleIdleInternalPrefetch(paths, {
+			user,
+			currentPath: location.pathname,
+		});
+	}, [location.pathname, user]);
 
 	function updateTopbarForScroll(scrollTop) {
 		const previousScrollTop = lastScrollTopRef.current;

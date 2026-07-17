@@ -522,6 +522,21 @@ flowchart TD
 - Pruebas: 39/39 unitarias, 140 archivos con sintaxis válida, Prisma validate/generate y SQL generado inspeccionado.
 - Riesgo de deployment: medio; requiere migración aditiva previa y configurar retención/cron en staging antes de producción.
 
+### FIND-P1-025
+
+- Título: una decoración pública cargaba Three.js completo y el shell precargaba todas las rutas privadas
+- Área: Frontend/Rendimiento
+- Ambiente: local
+- Severidad: High
+- Evidencia: el build generaba `vendor-three` de 505,81 kB minificado y el reporte de Operaciones descargaba también chunks/CSS de Inbox y Campañas durante el idle inicial.
+- Impacto: mayor transferencia, inicialización WebGL continua y competencia de red con la pantalla activa, especialmente costosa en equipos móviles.
+- Causa: la grilla decorativa usaba Three.js para puntos simples y `scheduleIdleInternalPrefetch` recorría todas las rutas frecuentes con módulo y datos.
+- Solución: superficie CSS decorativa con reduced motion y prefetch idle limitado a un único módulo probable; hover, foco y touch conservan el prefetch explícito de módulo y datos.
+- Estado: resuelto y medido localmente.
+- Archivos: `dotted-surface.tsx/css`, `internalRoutePrefetch.js`, `DashboardLayout.jsx`.
+- Pruebas: build sin `vendor-three`, 3/3 pruebas públicas y performance 10/10 rutas; captura landing 1440x960 inspeccionada.
+- Riesgo de deployment: bajo; el fondo es decorativo y el prefetch de interacción sigue activo.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -533,7 +548,7 @@ flowchart TD
 ## 9. Auditoría frontend
 
 - Build exitoso en 894 ms en la validación final de esta iteración.
-- `vendor-three`: 505,81 kB minificado; warning >500 kB.
+- `vendor-three`: eliminado del build (baseline 505,81 kB minificado) al reemplazar WebGL decorativo por CSS; la dependencia declarada queda para coordinar cuando los manifests concurrentes estén libres.
 - CSS de campañas: 100,63 kB; CSS global principal: 140,17 kB; Clientes: 28,97 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
 - No hay scripts de lint ni typecheck configurados; sigue como deuda P0/P1 de calidad.
@@ -566,7 +581,7 @@ Se incorporaron labels del composer/búsqueda y filtros de Clientes/Catálogo, e
 
 ## 15. Rendimiento
 
-Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. La landing pública osciló entre 1.598 y 3.989 ms por recursos externos, principalmente la fuente remota; la suite registra el desvío y sólo aplica presupuesto bloqueante en modo estricto. Sigue abierto `vendor-three` con 505,81 kB minificado y carga anticipada de CSS/JS de campañas e Inbox por prefetch.
+Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing pública osciló entre 1.598 y 3.989 ms y el build contenía `vendor-three` de 505,81 kB. Después: landing lista en 351-478 ms en corridas aisladas y 1.052 ms bajo la concurrencia de la suite completa; rutas internas entre 170 y 327 ms, sin chunk Three.js ni warning >500 kB. El idle de Operaciones ya no trae Campañas: sólo calienta el siguiente módulo probable; datos y demás rutas se preparan por interacción. La fuente remota y el carrusel de 131,47 kB siguen como oportunidades medidas.
 
 ## 16. Pruebas
 
@@ -582,7 +597,9 @@ Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. L
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,90 s |
 | root build | OK; backend + frontend | 10,3 s |
-| Playwright Chromium | 14/14; 10 rutas de performance | 21,2 s |
+| Playwright Chromium | 14/14; 10 rutas de performance | 17,7 s |
+
+Durante el refactor de prefetch, una primera corrida privada falló porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
 
 ## 17. Cambios implementados
 
@@ -611,6 +628,7 @@ Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. L
 - Clientes: formulario/labels semánticos, selector y paginación accesibles, targets mobile y error recuperable.
 - Catálogo: búsqueda etiquetada, paginación y retry; AI Lab: historial anunciado, composer accesible y reduced motion.
 - Persistencia redactada de trazas IA con expiración y poda segura, preparada mediante migración aditiva.
+- Fondo público sin Three.js y prefetch privado acotado para evitar trabajo especulativo masivo.
 
 ## 18. Comparación antes/después
 
@@ -619,6 +637,7 @@ Mediciones mock recientes: rutas internas críticas listas entre 212 y 474 ms. L
 - E2E: de una suite que ocultaba fallos a 14 pruebas bloqueantes.
 - Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
 - Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
+- Bundle: de `vendor-three` 505,81 kB a ningún chunk Three.js; landing mock de 1.598-3.989 ms a 351-478 ms.
 
 ## 19. Capturas
 
@@ -633,7 +652,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 - Auditoría exhaustiva de aislamiento multitenant por entidad aún incompleta.
 - La persistencia/retención de trazas requiere migrar y programar la poda en staging; producción aún sólo registra logs.
 - Sin lint, typecheck ni axe configurados.
-- Bundle `vendor-three` >500 kB y prefetch costoso.
+- Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
 - Staging no representativo.
 - Cron productivo sin evidencia operativa.
@@ -642,8 +661,10 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0: completar auditoría multitenant, activar/validar retención de trazas en staging, lint/typecheck y security audit.
 
-P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.  
-P2: plantillas, catálogo, clientes, AI Lab, rendimiento y responsive amplio.  
+P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
+
+P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
+
 P3: analytics, personalización y detalles cosméticos.
 
 ## 23. Ejecución local

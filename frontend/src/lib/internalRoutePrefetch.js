@@ -9,7 +9,7 @@ import {
 	fetchTemplates,
 } from './campaigns.js';
 import { normalizeCustomerFilterParams } from './customerFilters.js';
-import { prefetchInternalRoute } from './internalRouteModules.js';
+import { getInternalRouteKey, prefetchInternalRoute } from './internalRouteModules.js';
 import { queryKeys, queryPresets } from './queryClient.js';
 import { canUseAiLab, isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from './authz.js';
 
@@ -327,22 +327,26 @@ export function prefetchInternalRouteAndData(pathname = '', queryClient, options
 	prefetchInternalRouteData(pathname, queryClient, options);
 }
 
-export function scheduleIdleInternalPrefetch(paths = [], queryClient, options = {}) {
+export function scheduleIdleInternalPrefetch(paths = [], options = {}) {
 	if (typeof window === 'undefined' || !paths.length) return () => {};
 
 	const uniquePaths = [...new Set(paths.filter(Boolean))];
+	const currentRouteKey = getInternalRouteKey(options.currentPath || window.location.pathname);
+	const nextPath = uniquePaths.find((path) => getInternalRouteKey(path) !== currentRouteKey);
+	if (!nextPath) return () => {};
+
 	const run = () => {
-		for (const path of uniquePaths) {
-			prefetchInternalRouteAndData(path, queryClient, options);
-		}
+		// Keep idle work bounded: interaction prefetches module + data, while idle
+		// only warms one likely route without competing for bandwidth or stale data.
+		void prefetchInternalRoute(nextPath);
 	};
 
 	if (typeof window.requestIdleCallback === 'function') {
-		const id = window.requestIdleCallback(run, { timeout: 2000 });
+		const id = window.requestIdleCallback(run, { timeout: 3000 });
 		return () => window.cancelIdleCallback?.(id);
 	}
 
-	const id = window.setTimeout(run, 900);
+	const id = window.setTimeout(run, 1500);
 	return () => window.clearTimeout(id);
 }
 
