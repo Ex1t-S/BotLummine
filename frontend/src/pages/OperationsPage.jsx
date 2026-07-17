@@ -509,7 +509,11 @@ export default function OperationsPage() {
 					title="No pudimos cargar la operación"
 					description="Probá nuevamente en unos segundos. Si sigue pasando, revisá la conexión del backend."
 					className="operations-empty error"
-				/>
+				>
+					<ActionButton onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching} icon={RefreshCw}>
+						{summaryQuery.isFetching ? 'Reintentando' : 'Reintentar'}
+					</ActionButton>
+				</EmptyState>
 			</section>
 		);
 	}

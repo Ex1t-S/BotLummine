@@ -447,11 +447,26 @@ flowchart TD
 - Pruebas: 36/36 unitarias, todos los callers inspeccionados y build backend verde.
 - Riesgo de deployment: medio-bajo; agrega consultas de validación y todos los callers activos suministran workspace.
 
+### FIND-P1-020
+
+- Título: Inbox mostraba estados vacíos durante errores de lista e historial
+- Área: UI/UX/Inbox/pagos
+- Ambiente: todos
+- Severidad: High
+- Evidencia: al fallar `inboxQuery` o `conversationQuery`, las condiciones de empty seguían activas y el composer permanecía habilitado con historial no disponible.
+- Impacto: el operador interpretaba un fallo como ausencia de trabajo y podía intentar responder sin contexto.
+- Causa: loading y empty estaban separados, pero error no participaba en las condiciones de render/disabled.
+- Solución: errores explícitos con reintento, empty mutuamente excluyente, composer bloqueado y borrador preservado.
+- Estado: resuelto.
+- Archivos: `InboxPage.jsx/css`, `OperationsPage.jsx`, `InternalPage.jsx` y Playwright.
+- Pruebas: 8/8 E2E; el caso agota retries automáticos y recupera lista/historial manualmente.
+- Riesgo de deployment: bajo.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
-- Estados: el Inbox separa carga, vacío, error y datos; queda pendiente extender el patrón compartido a pagos, campañas y administración.
+- Estados: Inbox/Comprobantes separa carga, vacío, error y datos tanto en lista como historial; Operaciones ofrece reintento. Queda pendiente extender el patrón a campañas y administración.
 - Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
 - Pendiente: recorrido visual completo de las vistas privadas restantes, teclado integral y axe.
 
@@ -487,7 +502,7 @@ Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables
 
 ## 14. Accesibilidad
 
-Se incorporaron labels del composer/búsqueda, estados `alert`/`status`, `aria-pressed`, foco visible y `prefers-reduced-motion`. El menú público móvil ahora gestiona foco inicial, trap, Escape y restauración; el login separa labels de controles interactivos. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
+Se incorporaron labels del composer/búsqueda, estados `alert`/`status`, `aria-pressed`, foco visible y `prefers-reduced-motion`. Loading/error compartidos anuncian `aria-live`/`aria-busy`; el menú público móvil gestiona foco inicial, trap, Escape y restauración. Sigue pendiente la auditoría WCAG 2.2 AA completa y axe.
 
 ## 15. Rendimiento
 
@@ -507,7 +522,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK con warning de chunk | 0,90 s |
 | root build | OK; backend + frontend | 10,3 s |
-| Playwright Chromium | 7/7; 10 rutas de performance | 17,5 s |
+| Playwright Chromium | 8/8; 10 rutas de performance | 22,4 s |
 
 ## 17. Cambios implementados
 
@@ -531,6 +546,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Cooldown/reproceso automático acotado por la relación conversación-workspace.
 - Selección de conexión comercial primaria validada dentro de la transacción.
 - Helpers de menú, handoff y estado de conversación con workspace obligatorio.
+- Errores y reintentos explícitos en lista/historial de Inbox y Operaciones.
 
 ## 18. Comparación antes/después
 
@@ -542,7 +558,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; revisión de pagos en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; revisión de pagos y errores de lista/historial en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 

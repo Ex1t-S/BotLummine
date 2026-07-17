@@ -75,7 +75,12 @@ export function EmptyState({
 	const StateIcon = Icon || FallbackIcon;
 
 	return (
-		<div className={`internal-empty-state tone-${tone} ${className}`.trim()}>
+		<div
+			className={`internal-empty-state tone-${tone} ${className}`.trim()}
+			role={tone === 'error' ? 'alert' : tone === 'loading' ? 'status' : undefined}
+			aria-live={tone === 'error' ? 'assertive' : tone === 'loading' ? 'polite' : undefined}
+			aria-busy={tone === 'loading' ? 'true' : undefined}
+		>
 			<StateIcon
 				size={22}
 				strokeWidth={2.2}

@@ -1647,13 +1647,28 @@ export default function InboxPage() {
 					onScroll={handleContactsScroll}
 				>
 					{inboxQuery.isLoading ? (
-						<div className="inbox-empty">
+						<div className="inbox-empty" role="status" aria-live="polite" aria-busy="true">
 							<strong>Cargando conversaciones</strong>
 							<span>Estamos actualizando la bandeja con los últimos mensajes.</span>
 						</div>
 					) : null}
 
-					{!inboxQuery.isLoading && !visibleContacts.length ? (
+					{inboxQuery.isError && !contacts.length ? (
+						<div className="inbox-empty inbox-empty--error" role="alert">
+							<strong>No pudimos cargar las conversaciones</strong>
+							<span>Revisá la conexión e intentá nuevamente. Tus filtros se mantienen.</span>
+							<button
+								type="button"
+								className="inbox-state-action"
+								disabled={inboxQuery.isFetching}
+								onClick={() => inboxQuery.refetch()}
+							>
+								{inboxQuery.isFetching ? 'Reintentando...' : 'Reintentar'}
+							</button>
+						</div>
+					) : null}
+
+					{!inboxQuery.isLoading && !inboxQuery.isError && !visibleContacts.length ? (
 						<div className="inbox-empty">
 							<strong>No hay conversaciones en esta vista</strong>
 							<span>
@@ -1905,7 +1920,7 @@ export default function InboxPage() {
 									selectedFile={selectedFile}
 									onClearFile={handleClearSelectedFile}
 									isLoading={sendMessageMutation.isPending}
-									disabled={!selectedConversationId}
+									disabled={!selectedConversationId || conversationQuery.isLoading || conversationQuery.isError}
 									error={composerError}
 									placeholder="Escribi un mensaje"
 									value={composerDrafts[selectedConversationId] || ''}
@@ -1914,21 +1929,36 @@ export default function InboxPage() {
 							)}
 						>
 							{conversationQuery.isLoading ? (
-								<div className="inbox-empty">
+								<div className="inbox-empty" role="status" aria-live="polite" aria-busy="true">
 									<strong>Cargando mensajes</strong>
 									<span>Estamos preparando el historial de esta conversacion.</span>
 								</div>
 							) : null}
 
-							{!conversationQuery.isLoading && displayedMessages.length === 0 ? (
+							{conversationQuery.isError ? (
+								<div className="inbox-empty inbox-empty--error" role="alert">
+									<strong>No pudimos cargar el historial</strong>
+									<span>El borrador sigue guardado. Reintentá antes de enviar.</span>
+									<button
+										type="button"
+										className="inbox-state-action"
+										disabled={conversationQuery.isFetching}
+										onClick={() => conversationQuery.refetch()}
+									>
+										{conversationQuery.isFetching ? 'Reintentando...' : 'Reintentar historial'}
+									</button>
+								</div>
+							) : null}
+
+							{!conversationQuery.isLoading && !conversationQuery.isError && displayedMessages.length === 0 ? (
 								<div className="inbox-empty">
 									Todavia no hay mensajes. Cuando el cliente escriba, el historial va a aparecer aca.
 								</div>
 							) : null}
 
-							{displayedMessages.map((msg) => (
+							{!conversationQuery.isError ? displayedMessages.map((msg) => (
 								<MessageBubble key={msg.id} message={msg} conversation={conversation} />
-							))}
+							)) : null}
 						</MessageConversation>
 
 					</div>

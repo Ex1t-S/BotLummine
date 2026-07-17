@@ -82,8 +82,14 @@ function json(body, status = 200) {
 	};
 }
 
-async function installInboxApi(page) {
+async function installInboxApi(page, {
+	failInboxAttempts = 0,
+	failConversationAttempts = 0,
+	failureControl = null,
+} = {}) {
 	let sendAttempts = 0;
+	let inboxAttempts = 0;
+	let conversationAttempts = 0;
 	let activeQueue = 'AUTO';
 
 	await page.route('**/api/**', async (route) => {
@@ -101,6 +107,11 @@ async function installInboxApi(page) {
 		}
 
 		if (pathname === '/dashboard/inbox') {
+			inboxAttempts += 1;
+			if (failureControl ? !failureControl.allowInbox : inboxAttempts <= failInboxAttempts) {
+				await route.fulfill(json({ ok: false, error: 'Bandeja temporalmente no disponible.' }, 503));
+				return;
+			}
 			activeQueue = String(new URL(request.url()).searchParams.get('queue') || 'AUTO').toUpperCase();
 			const queueContacts = contacts.map((contact) => ({
 				...contact,
@@ -118,6 +129,11 @@ async function installInboxApi(page) {
 		}
 
 		if (pathname === '/dashboard/conversations/conversation-demo-1/messages' && request.method() === 'GET') {
+			conversationAttempts += 1;
+			if (failureControl ? !failureControl.allowConversation : conversationAttempts <= failConversationAttempts) {
+				await route.fulfill(json({ ok: false, error: 'Historial temporalmente no disponible.' }, 503));
+				return;
+			}
 			await route.fulfill(json({
 				ok: true,
 				conversation: {
@@ -184,6 +200,33 @@ test('selecciona la primera conversación en desktop y conserva el borrador si f
 
 	await expect(composer).toHaveValue('');
 	expect(getSendAttempts()).toBe(2);
+});
+
+test('separa errores de lista e historial y permite reintentar sin perder el flujo', async ({ page }) => {
+	const failureControl = { allowInbox: false, allowConversation: false };
+	await installInboxApi(page, { failureControl });
+	await page.goto('/inbox/automatico');
+
+	const listError = page.getByRole('alert').filter({ hasText: 'No pudimos cargar las conversaciones' });
+	await expect(listError).toBeVisible();
+	await expect(page.getByText('No hay conversaciones en esta vista')).toHaveCount(0);
+	await page.screenshot({ path: 'audit-artifacts/screenshots/after/inbox-list-error-1440x960.png', fullPage: true });
+	failureControl.allowInbox = true;
+	await listError.getByRole('button', { name: 'Reintentar' }).click();
+
+	await expect(page.locator('.inbox-contact-card')).toHaveCount(2);
+	await expect(page).toHaveURL(/conversation=conversation-demo-1/);
+
+	const historyError = page.getByRole('alert').filter({ hasText: 'No pudimos cargar el historial' });
+	await expect(historyError).toBeVisible();
+	await expect(page.getByText('Todavia no hay mensajes.')).toHaveCount(0);
+	await expect(page.getByLabel('Mensaje', { exact: true })).toBeDisabled();
+	await page.screenshot({ path: 'audit-artifacts/screenshots/after/inbox-history-error-1440x960.png', fullPage: true });
+	failureControl.allowConversation = true;
+	await historyError.getByRole('button', { name: 'Reintentar historial' }).click();
+
+	await expect(page.getByText('Hola, necesito ayuda con mi pedido.')).toBeVisible();
+	await expect(page.getByLabel('Mensaje', { exact: true })).toBeEnabled();
 });
 
 test.describe('inbox móvil progresivo', () => {
