@@ -2,6 +2,7 @@ import { runGeminiReply } from './gemini.service.js';
 import { runOpenAIReply } from './openai.service.js';
 import { compilePrompt } from '../common/prompt-builder.js';
 import { logger } from '../../lib/logger.js';
+import { normalizeProviderOutput, validateAssistantOutput } from './assistant-output.js';
 
 export const AI_PROVIDER_ERROR = Object.freeze({
 	SAFETY_BLOCK: 'SAFETY_BLOCK',
@@ -84,8 +85,11 @@ export async function runProviderChain({ providers = [], prompt, providerRunners
 
 		try {
 			const result = await runner(prompt);
+			const output = normalizeProviderOutput(result);
 			return {
 				...result,
+				text: output.reply,
+				output,
 				providerErrors,
 			};
 		} catch (error) {
@@ -118,6 +122,8 @@ export async function runAssistantReply({
 	menuAssistantContext = null,
 	campaignAssistantContext = null,
 	compiledPrompt = null,
+	detectedIntent = 'UNKNOWN',
+	confidence = 0,
 }) {
 	const promptArtifact = compiledPrompt?.text
 		? compiledPrompt
@@ -143,9 +149,17 @@ export async function runAssistantReply({
 		providers: buildProviderChain(),
 		prompt: promptArtifact.text,
 	});
+	const output = validateAssistantOutput({
+		...result.output,
+		detectedIntent,
+		confidence,
+		usedFacts: promptArtifact.factsUsed,
+	});
 
 	return {
 		...result,
+		text: output.reply,
+		output,
 		promptVersion: promptArtifact.promptVersion,
 		promptHash: promptArtifact.promptHash,
 		factsUsed: promptArtifact.factsUsed,

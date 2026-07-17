@@ -1,5 +1,6 @@
 import { runAssistantReply } from '../ai/index.js';
 import { compilePrompt } from '../common/prompt-builder.js';
+import { validateAssistantOutput } from '../ai/assistant-output.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { logger } from '../../lib/logger.js';
 import {
@@ -647,6 +648,7 @@ export async function runConversationTurn({
 		try {
 			const aiResult = await runAssistantReply({
 				compiledPrompt,
+				detectedIntent: intent,
 			});
 
 			const fallbackReply = buildFallbackOrderAwareReply({
@@ -672,8 +674,16 @@ export async function runConversationTurn({
 				agentName: workspaceConfig?.ai?.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente'
 			});
 
-			finalReply = audited.finalText;
-			aiMeta = aiResult;
+			const output = validateAssistantOutput({
+				...aiResult.output,
+				reply: audited.finalText,
+				needsHuman: audited.triggerHumanHandoff,
+				handoffReason: audited.triggerHumanHandoff
+					? commercialPlan?.handoffReason || 'ai_declared_handoff'
+					: null,
+			});
+			finalReply = output.reply;
+			aiMeta = { ...aiResult, text: output.reply, output };
 			postReplyHandoff = audited.triggerHumanHandoff;
 		} catch (error) {
 			logger.error('ai.conversation_turn_failed', {
