@@ -267,6 +267,21 @@ flowchart TD
 - Pruebas: composer dentro del viewport a 390x844 y captura real validada.
 - Riesgo de deployment: bajo.
 
+### FIND-P1-008
+
+- Título: trazas de IA legacy contienen payloads amplios y carecen de esquema canónico
+- Área: IA/observabilidad
+- Ambiente: todos
+- Severidad: High
+- Evidencia: la traza legacy incluye prompt, respuesta y objetos de contexto, pero no garantiza `traceId`, latencia, tokens ni límites de tamaño.
+- Impacto: menor correlación operativa y riesgo de registrar contenido sensible o payloads excesivos.
+- Causa: la traza evolucionó como objeto de depuración del AI Lab.
+- Solución: traza canónica separada, acotada y sin contenidos, emitida una vez al finalizar cada inbound.
+- Estado: resuelto para `processInboundMessage`; persiste la migración de consumidores legacy.
+- Archivos: `turn-trace.js`, `chat.service.js`, `ai-turn-trace.test.js`.
+- Pruebas: 2 casos verifican límites, hash, normalización y ausencia de prompt/mensaje.
+- Riesgo de deployment: bajo; sólo agrega metadata/log estructurado.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -294,7 +309,7 @@ flowchart TD
 
 ## 11. Auditoría del agente de IA
 
-Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt ahora se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. La salida estructurada completa y la traza persistida objetivo siguen pendientes.
+Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt ahora se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. Cada salida de `processInboundMessage` emite una traza canónica acotada con correlación, ruta, intención, proveedor, tokens, latencia, auditoría y handoff, sin prompt ni mensaje. La salida estructurada completa y persistencia/retención de trazas siguen pendientes.
 
 ## 12. Seguridad y multitenancy
 
@@ -320,7 +335,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 129/129 | incluido en build |
-| unit tests | 22/22 | 0,25 s |
+| unit tests | 24/24 | 0,24 s |
 | frontend build | OK con warning de chunk | 0,60 s |
 | root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
 | Playwright Chromium | 5/5; 10 rutas de performance | 14,7 s |
@@ -334,6 +349,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
+- Traza canónica redactada por inbound, con límites y cobertura unitaria.
 
 ## 18. Comparación antes/después
 
@@ -354,7 +370,7 @@ Baseline disponible en las secciones 3, 15 y 16. No hay métricas confiables de 
 ## 21. Riesgos pendientes
 
 - Auditoría exhaustiva de aislamiento multitenant por entidad aún incompleta.
-- Salida estructurada y persistencia de trace IA aún parciales.
+- Salida estructurada, persistencia y política de retención de trace IA aún parciales.
 - Sin lint, typecheck ni axe configurados.
 - Bundle `vendor-three` >500 kB y prefetch costoso.
 - Staging no representativo.

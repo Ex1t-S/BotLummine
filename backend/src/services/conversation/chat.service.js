@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
+import { createAiTurnTrace, logAiTurnTrace } from '../ai/turn-trace.js';
 import { runAssistantReply } from '../ai/index.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
@@ -616,11 +617,40 @@ export async function processInboundMessage({
 	existingInboundMessageId = null,
 	bypassResponseCooldown = false,
 }) {
+	const turnStartedAt = Date.now();
 	let resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	let normalizedWaId = normalizeThreadPhone(waId);
 	let conversation = null;
 	let createdInboundAt = new Date();
 	let inboundMessage = null;
+
+	function finalizeInboundResult({ conversation: resultConversation = null, trace: legacyTrace = null }) {
+		const route = legacyTrace?.queueDecision?.queue || resultConversation?.queue || 'AUTO';
+		const handoffReason = legacyTrace?.queueDecision?.reason
+			|| (route === 'HUMAN' ? 'human_route' : null);
+		const turnTrace = createAiTurnTrace({
+			workspaceId: resolvedWorkspaceId,
+			conversationId: resultConversation?.id || conversation?.id || null,
+			promptVersion: legacyTrace?.promptVersion,
+			promptHash: legacyTrace?.promptHash,
+			route,
+			intent: legacyTrace?.intent,
+			retrievedFacts: legacyTrace?.factsUsed,
+			provider: legacyTrace?.provider,
+			model: legacyTrace?.model,
+			latencyMs: Date.now() - turnStartedAt,
+			usage: legacyTrace?.usage,
+			audit: legacyTrace?.audit,
+			handoff: handoffReason ? { reason: handoffReason } : null,
+		});
+		logAiTurnTrace(turnTrace);
+
+		return {
+			conversation: resultConversation,
+			trace: legacyTrace ? { ...legacyTrace, turnTrace } : null,
+			turnTrace,
+		};
+	}
 
 	if (existingInboundMessageId) {
 		inboundMessage = await prisma.message.findUnique({
@@ -636,7 +666,7 @@ export async function processInboundMessage({
 		});
 
 		if (!inboundMessage || inboundMessage.direction !== 'INBOUND') {
-			return { conversation: null };
+			return finalizeInboundResult({ conversation: null });
 		}
 
 		conversation = inboundMessage.conversation;
@@ -673,7 +703,7 @@ export async function processInboundMessage({
 		});
 
 		if (existingMessage) {
-			return { conversation };
+			return finalizeInboundResult({ conversation });
 		}
 	}
 
@@ -750,7 +780,7 @@ export async function processInboundMessage({
 	});
 
 	if (!freshConversation) {
-		return { conversation };
+		return finalizeInboundResult({ conversation });
 	}
 
 	const currentState = freshConversation.state || {};
@@ -792,7 +822,7 @@ export async function processInboundMessage({
 			model: abandonedCartDecision.traceModel || 'campaign-reply-router',
 			shouldReply: !abandonedCartDecision.suppressReply,
 		};
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	const menuDecision = await maybeHandleMenuFlow({
@@ -815,7 +845,7 @@ export async function processInboundMessage({
 			model: 'menu-flow',
 			shouldReply: false,
 		};
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	const effectiveMessageBody = normalizeText(
@@ -963,7 +993,7 @@ export async function processInboundMessage({
 			},
 		};
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	if (!detectedPaymentProof && !ambiguousPaymentAttachment && replyGate.action === 'fixed_reply') {
@@ -1043,7 +1073,7 @@ export async function processInboundMessage({
 			shouldReply: false,
 		};
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	if (
@@ -1077,7 +1107,7 @@ export async function processInboundMessage({
 			},
 		};
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	const intentResult = await resolveIntentAction({
@@ -1217,7 +1247,7 @@ export async function processInboundMessage({
 			},
 		});
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	if (ambiguousPaymentAttachment && !detectedPaymentProof) {
@@ -1255,7 +1285,7 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	if (detectedPaymentProof) {
@@ -1319,7 +1349,7 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	const handoffJustTriggered = enrichedState.needsHuman && !currentState.needsHuman;
@@ -1364,7 +1394,7 @@ export async function processInboundMessage({
 			}
 		});
 
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	const isAiEnabledGlobal =
@@ -1397,7 +1427,7 @@ export async function processInboundMessage({
 			...trace,
 			shouldReply: false,
 		};
-		return { conversation: freshConversation, trace };
+		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
 	const maxContext = Number(process.env.MAX_CONTEXT_MESSAGES || 12);
@@ -1906,6 +1936,7 @@ export async function processInboundMessage({
 		assistantMessage: finalReply,
 		provider: aiMeta?.provider || (forcedReply ? 'system' : null),
 		model: aiMeta?.model || (forcedReply ? 'rule-based-forced-reply' : null),
+		usage: aiMeta?.usage || null,
 	};
 
 	await sendAndPersistOutbound({
@@ -1929,5 +1960,5 @@ export async function processInboundMessage({
 		}
 	});
 
-	return { conversation: freshConversation, trace };
+	return finalizeInboundResult({ conversation: freshConversation, trace });
 }
