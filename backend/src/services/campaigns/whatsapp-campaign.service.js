@@ -7,10 +7,10 @@ import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js
 import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
 import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import {
-	DEFAULT_WORKSPACE_ID,
 	getWorkspaceRuntimeConfig,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 import {
 	WORKSPACE_FEATURE_FLAGS,
 	isWorkspaceFeatureEnabled,
@@ -43,10 +43,11 @@ function isComplaintLikeSummary(value = '') {
 }
 
 async function buildCampaignSuppressionMap({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	phones = [],
 	audienceSource = 'manual',
 } = {}) {
+	workspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedPhones = [...new Set(phones.map(normalizeCampaignPhone).filter(Boolean))];
 	const result = new Map();
 	if (!normalizedPhones.length) return result;
@@ -380,10 +381,11 @@ function dedupeRecipients(recipients = []) {
 }
 
 async function getPhonesAlreadySentTemplate({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateName = '',
 	templateNames = []
 } = {}) {
+	workspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedTemplateNames = Array.from(
 		new Set(
 			[
@@ -437,7 +439,8 @@ async function getPhonesAlreadySentTemplate({
 	);
 }
 
-async function resolveRecipientsFromContacts(contactIds = [], workspaceId = DEFAULT_WORKSPACE_ID) {
+async function resolveRecipientsFromContacts(contactIds = [], workspaceId) {
+	workspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!Array.isArray(contactIds) || !contactIds.length) {
 		return [];
 	}
@@ -470,7 +473,8 @@ async function resolveRecipientsFromContacts(contactIds = [], workspaceId = DEFA
 	}));
 }
 
-async function resolveRecipientsFromAllContacts(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function resolveRecipientsFromAllContacts(workspaceId) {
+	workspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const contacts = await prisma.contact.findMany({
 		where: { workspaceId },
 		select: {
@@ -497,7 +501,8 @@ async function resolveRecipientsFromAllContacts(workspaceId = DEFAULT_WORKSPACE_
 	}));
 }
 
-async function resolveLatestOrdersByPhones(normalizedPhones = [], workspaceId = DEFAULT_WORKSPACE_ID) {
+async function resolveLatestOrdersByPhones(normalizedPhones = [], workspaceId) {
+	workspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const uniquePhones = [...new Set(
 		safeArray(normalizedPhones)
 			.map((phone) => normalizeCampaignPhone(phone))
@@ -546,7 +551,7 @@ async function resolveLatestOrdersByPhones(normalizedPhones = [], workspaceId = 
 }
 
 async function resolveRecipientsFromAbandonedCarts(input = {}) {
-	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
+	const workspaceId = requireWorkspaceScope(normalizeWorkspaceId(input.workspaceId));
 	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
 	const rawFilters = input.audienceFilters || input.filters || input || {};
 	const variableMapping = rawFilters.variableMapping || input.variableMapping || {};
@@ -687,7 +692,7 @@ async function resolveRecipientsFromAbandonedCarts(input = {}) {
 }
 
 async function resolveRecipientsFromPendingPayments(input = {}) {
-	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
+	const workspaceId = requireWorkspaceScope(normalizeWorkspaceId(input.workspaceId));
 	const filters = normalizeAbandonedCartFilters(input.audienceFilters || input.filters || input || {});
 	const rawFilters = input.audienceFilters || input.filters || input || {};
 	const selectedOrderKeys = safeArray(rawFilters.orderKeys || rawFilters.orderIds || rawFilters.orderNumbers)
@@ -822,7 +827,7 @@ async function resolveRecipientsFromPendingPayments(input = {}) {
 }
 
 async function resolveCampaignRecipients(input = {}) {
-	const workspaceId = normalizeWorkspaceId(input.workspaceId) || DEFAULT_WORKSPACE_ID;
+	const workspaceId = requireWorkspaceScope(normalizeWorkspaceId(input.workspaceId));
 	const audienceSource = normalizeAudienceSource(input.audienceSource || 'manual');
 
 	if (audienceSource === 'abandoned_carts') {
@@ -855,12 +860,13 @@ async function resolveCampaignRecipients(input = {}) {
 }
 
 export async function previewAbandonedCartAudience({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateId = null,
 	filters = {},
 	variableMapping = null,
 	manualVariables = null
 } = {}) {
+	workspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const recipients = await resolveRecipientsFromAbandonedCarts({
 		workspaceId,
 		audienceSource: 'abandoned_carts',
@@ -911,12 +917,12 @@ export async function previewAbandonedCartAudience({
 }
 
 export async function previewCampaignAudience({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	templateId = null,
 	audienceSource = 'abandoned_carts',
 	audienceFilters = {}
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || 'abandoned_carts');
 	const recipients = await resolveCampaignRecipients({
 		workspaceId: resolvedWorkspaceId,
@@ -971,8 +977,8 @@ export async function previewCampaignAudience({
 	};
 }
 
-async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, phone, contactId = null, contactName = null }) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function ensureCampaignConversation({ workspaceId, phone, contactId = null, contactName = null } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedPhone = normalizeCampaignPhone(phone);
 
 	if (!normalizedPhone) {
@@ -1037,7 +1043,7 @@ async function ensureCampaignConversation({ workspaceId = DEFAULT_WORKSPACE_ID, 
 	}
 
 	await prisma.conversation.update({
-		where: { id: conversation.id },
+		where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
 		data: {
 			queue: 'AUTO',
 			aiEnabled: true,
@@ -1671,8 +1677,8 @@ export function buildSendComponentsFromTemplate({
 	return sendComponents;
 }
 
-export async function listCampaigns({ workspaceId = DEFAULT_WORKSPACE_ID, limit = 50 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function listCampaigns({ workspaceId, limit = 50 } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const campaigns = await prisma.campaign.findMany({
 		where: { workspaceId: resolvedWorkspaceId },
 		orderBy: [{ createdAt: 'desc' }],
@@ -1791,8 +1797,8 @@ function messageSuggestsCompletedPurchase(text = '') {
 	return positivePatterns.some((pattern) => pattern.test(normalized));
 }
 
-export async function buildCampaignRecipientInsights(recipients = [], workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function buildCampaignRecipientInsights(recipients = [], workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedRecipients = safeArray(recipients);
 	const recipientsWithDispatch = normalizedRecipients.filter((recipient) => Boolean(getRecipientDispatchAt(recipient)));
 
@@ -2060,8 +2066,8 @@ export async function buildCampaignRecipientInsights(recipients = [], workspaceI
 	};
 }
 
-export async function getCampaignDetail(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID, page = 1, pageSize = 50 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getCampaignDetail(campaignId, { workspaceId, page = 1, pageSize = 50 } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const campaign = await prisma.campaign.findFirst({
 		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
 	});
@@ -2141,7 +2147,7 @@ export async function getCampaignDetail(campaignId, { workspaceId = DEFAULT_WORK
 }
 
 export async function createCampaignDraft({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	name,
 	templateId,
 	templateName,
@@ -2156,7 +2162,7 @@ export async function createCampaignDraft({
 	launchedByUserId = null,
 	automationRunId = null
 }) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const template = templateId
 		? await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId })
 		: await prisma.whatsAppTemplate.findFirst({
@@ -2388,14 +2394,14 @@ async function buildAdditionalCampaignRecipientRows(campaign, {
 }
 
 export async function appendCampaignRecipients(campaignId, {
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	recipients = [],
 	contactIds = [],
 	includeAllContacts = false,
 	audienceSource = null,
 	audienceFilters = null
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const campaign = await prisma.campaign.findFirst({
 		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
 	});
@@ -2451,7 +2457,7 @@ export async function appendCampaignRecipients(campaignId, {
 }
 
 export async function createOrAppendAutomationCampaignDraft({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	automationRunId,
 	name,
 	templateId,
@@ -2466,7 +2472,7 @@ export async function createOrAppendAutomationCampaignDraft({
 	notes = null,
 	launchedByUserId = null
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const existingCampaign = automationRunId
 		? await prisma.campaign.findFirst({
 				where: {
@@ -2528,8 +2534,8 @@ export async function createOrAppendAutomationCampaignDraft({
 	};
 }
 
-export async function launchCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function launchCampaign(campaignId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const [campaignDispatchEnabled, whatsappOutboundEnabled] = await Promise.all([
 		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH),
 		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND),
@@ -2573,7 +2579,7 @@ export async function launchCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 	}
 
 	const updated = await prisma.campaign.update({
-		where: { id: campaignId },
+		where: workspaceOwnedWhere({ id: campaignId, workspaceId: resolvedWorkspaceId }),
 		data: {
 			status: 'QUEUED',
 			lastError: null,
@@ -2587,8 +2593,8 @@ export async function launchCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 	};
 }
 
-export async function cancelCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function cancelCampaign(campaignId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const existing = await prisma.campaign.findFirst({
 		where: { id: campaignId, workspaceId: resolvedWorkspaceId },
 		select: { id: true },
@@ -2597,7 +2603,7 @@ export async function cancelCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 		throw new Error('No se encontrÃ³ la campaÃ±a.');
 	}
 	return prisma.campaign.update({
-		where: { id: campaignId },
+		where: workspaceOwnedWhere({ id: campaignId, workspaceId: resolvedWorkspaceId }),
 		data: {
 			status: 'CANCELED',
 			dispatchLockedAt: null,
@@ -2607,8 +2613,8 @@ export async function cancelCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 	});
 }
 
-export async function deleteCampaign(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function deleteCampaign(campaignId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const campaign = await prisma.campaign.findFirst({
 		where: { id: campaignId, workspaceId: resolvedWorkspaceId },
 		select: {
@@ -2631,7 +2637,7 @@ export async function deleteCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 			where: { workspaceId: resolvedWorkspaceId, campaignId }
 		}),
 		prisma.campaign.delete({
-			where: { id: campaignId }
+			where: workspaceOwnedWhere({ id: campaignId, workspaceId: resolvedWorkspaceId })
 		})
 	]);
 
@@ -2642,8 +2648,8 @@ export async function deleteCampaign(campaignId, { workspaceId = DEFAULT_WORKSPA
 	};
 }
 
-export async function retryFailedCampaignRecipients(campaignId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function retryFailedCampaignRecipients(campaignId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const [campaignDispatchEnabled, whatsappOutboundEnabled] = await Promise.all([
 		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.CAMPAIGN_DISPATCH),
 		isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.WHATSAPP_OUTBOUND),
@@ -2674,7 +2680,7 @@ export async function retryFailedCampaignRecipients(campaignId, { workspaceId = 
 	});
 
 	const updated = await prisma.campaign.update({
-		where: { id: campaignId },
+		where: workspaceOwnedWhere({ id: campaignId, workspaceId: resolvedWorkspaceId }),
 		data: {
 			status: 'QUEUED',
 			lastError: null,
@@ -2723,6 +2729,7 @@ export async function claimNextCampaignForDispatch() {
 		const claimed = await prisma.campaign.updateMany({
 			where: {
 				id: candidate.id,
+				workspaceId: candidate.workspaceId,
 				status: {
 					in: ['QUEUED', 'RUNNING']
 				},
@@ -2763,9 +2770,7 @@ async function persistCampaignOutboundMessage({
 	});
 
 	await prisma.campaignRecipient.update({
-		where: {
-			id: recipient.id
-		},
+		where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
 		data: {
 			contactId: ensured.contactId || recipient.contactId,
 			conversationId: ensured.conversationId || recipient.conversationId
@@ -2870,7 +2875,7 @@ async function markAbandonedCartAsContactedFromRecipient(recipient = {}) {
 
 	return prisma.abandonedCart.updateMany({
 		where: {
-			workspaceId: recipient.workspaceId || DEFAULT_WORKSPACE_ID,
+			workspaceId: requireWorkspaceScope(normalizeWorkspaceId(recipient.workspaceId)),
 			checkoutId
 		},
 		data: {
@@ -2908,7 +2913,7 @@ async function dispatchSingleRecipient(campaign, recipient) {
 		});
 
 		return prisma.campaignRecipient.update({
-			where: { id: recipient.id },
+			where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
 			data: {
 				status: 'SKIPPED',
 				errorMessage: suppressionReason,
@@ -2958,7 +2963,7 @@ async function dispatchSingleRecipient(campaign, recipient) {
 		});
 
 		const failedRecipient = await prisma.campaignRecipient.update({
-			where: { id: recipient.id },
+			where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
 			data: {
 				status: 'FAILED',
 				errorCode: providerError.code,
@@ -2980,7 +2985,7 @@ async function dispatchSingleRecipient(campaign, recipient) {
 	}
 
 	const updatedRecipient = await prisma.campaignRecipient.update({
-		where: { id: recipient.id },
+		where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
 		data: {
 			status: 'SENT',
 			waMessageId: sendResult?.rawPayload?.messages?.[0]?.id || null,
@@ -3029,6 +3034,7 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 
 	const recipients = await prisma.campaignRecipient.findMany({
 		where: {
+			workspaceId: campaign.workspaceId,
 			campaignId,
 			status: 'PENDING'
 		},
@@ -3042,6 +3048,7 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 		await prisma.campaign.updateMany({
 			where: {
 				id: campaignId,
+				workspaceId: campaign.workspaceId,
 				dispatchLockId: lockId
 			},
 			data: {
@@ -3075,7 +3082,7 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 
 			if (!error?.recipientHandled) {
 				await prisma.campaignRecipient.update({
-					where: { id: recipient.id },
+					where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
 					data: {
 						status: 'FAILED',
 						errorMessage: error.message,
@@ -3087,7 +3094,7 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 			const isFatal = error instanceof CampaignDispatchFatalError;
 
 			await prisma.campaign.update({
-				where: { id: campaignId },
+				where: workspaceOwnedWhere({ id: campaignId, workspaceId: campaign.workspaceId }),
 				data: {
 					lastError: error.message,
 					...(isFatal ? { status: 'FAILED' } : {})
@@ -3109,6 +3116,7 @@ export async function dispatchCampaignBatch(campaignId, lockId) {
 	await prisma.campaign.updateMany({
 		where: {
 			id: campaignId,
+			workspaceId: campaign.workspaceId,
 			dispatchLockId: lockId
 		},
 		data: {
@@ -3142,6 +3150,7 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 		await prisma.campaign.updateMany({
 			where: {
 				id: campaignId,
+				workspaceId: campaign.workspaceId,
 				dispatchLockId: lockId
 			},
 			data: {
@@ -3178,6 +3187,7 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 
 		const recipients = await prisma.campaignRecipient.findMany({
 			where: {
+				workspaceId: campaign.workspaceId,
 				campaignId,
 				status: 'PENDING'
 			},
@@ -3203,7 +3213,7 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 
 				if (!error?.recipientHandled) {
 					await prisma.campaignRecipient.update({
-						where: { id: recipient.id },
+						where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
 						data: {
 							status: 'FAILED',
 							errorMessage: error.message,
@@ -3215,7 +3225,7 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 				const isFatal = error instanceof CampaignDispatchFatalError;
 
 				await prisma.campaign.update({
-					where: { id: campaignId },
+					where: workspaceOwnedWhere({ id: campaignId, workspaceId: campaign.workspaceId }),
 					data: {
 						lastError: error.message,
 						...(isFatal ? { status: 'FAILED' } : {})
@@ -3248,6 +3258,7 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 	await prisma.campaign.updateMany({
 		where: {
 			id: campaignId,
+			workspaceId: campaign.workspaceId,
 			dispatchLockId: lockId
 		},
 		data: {
@@ -3320,7 +3331,8 @@ function shouldApplyCampaignDeliveryStatus(currentStatus = '', nextStatus = '') 
 	return nextRank >= currentRank;
 }
 
-export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { workspaceId = null } = {}) {
+export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const waMessageId = normalizeString(statusPayload?.id || statusPayload?.message_id || '');
 
 	if (!waMessageId) {
@@ -3329,7 +3341,7 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 
 	const recipient = await prisma.campaignRecipient.findFirst({
 		where: {
-			...(workspaceId ? { workspaceId } : {}),
+			workspaceId: resolvedWorkspaceId,
 			waMessageId
 		}
 	});
@@ -3338,7 +3350,7 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 		logger.debug('campaign.status_unmatched', {
 			waMessageId,
 			status: statusPayload?.status || null,
-			workspaceId: workspaceId || null
+			workspaceId: resolvedWorkspaceId
 		});
 		return null;
 	}
@@ -3394,12 +3406,12 @@ export async function applyCampaignMessageStatusWebhook(statusPayload = {}, { wo
 		logger.debug('campaign.status_ignored', {
 			waMessageId,
 			status: statusPayload?.status || null,
-			workspaceId: workspaceId || null
+			workspaceId: resolvedWorkspaceId
 		});
 	}
 
 	await prisma.campaignRecipient.update({
-		where: { id: recipient.id },
+		where: workspaceOwnedWhere({ id: recipient.id, workspaceId: resolvedWorkspaceId }),
 		data: updateData
 	});
 

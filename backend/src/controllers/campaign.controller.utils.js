@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { workspaceOwnedWhere } from '../services/workspaces/workspace-scope.js';
 
 export function normalizeBoolean(value) {
 	return ['1', 'true', 'yes', 'si'].includes(String(value || '').trim().toLowerCase());
@@ -138,7 +139,7 @@ export async function persistTemplateBuilderMetadata(template = null, reqBody = 
 	);
 
 	return prisma.whatsAppTemplate.update({
-		where: { id: template.id },
+		where: workspaceOwnedWhere({ id: template.id, workspaceId: template.workspaceId }),
 		data: {
 			rawPayload: nextRawPayload,
 			headerFormat: normalizeString(nextHeader?.format || template.headerFormat || '') || null,

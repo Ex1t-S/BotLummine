@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 
 import { filterRecoverableAbandonedCarts } from '../src/services/campaigns/campaign-attribution.service.js';
 import { syncAbandonedCarts } from '../src/services/carts/abandoned-cart.service.js';
+import { persistTemplateBuilderMetadata } from '../src/controllers/campaign.controller.utils.js';
 import {
 	createTemplate,
 	deleteTemplate,
@@ -32,6 +33,13 @@ describe('template and cart workspace boundaries', () => {
 				(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
 			);
 		}
+	});
+
+	it('rejects template metadata persistence without an owning workspace', async () => {
+		await assert.rejects(
+			() => persistTemplateBuilderMetadata({ id: 'template-a' }),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
 	});
 
 	it('rejects recoverability checks without an explicit workspace', async () => {

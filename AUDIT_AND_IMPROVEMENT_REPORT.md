@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 78/78 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 81/81 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -927,6 +927,36 @@ flowchart TD
 - Pruebas: 2/2 específicas, 78/78 unitarias y build raíz verde en una validación consolidada de 13,63 s.
 - Riesgo de deployment: medio; smoke sintético paralelo con Tiendanube/Shopify sandbox en dos workspaces y verificación de estados independientes.
 
+### FIND-P0-052
+
+- Título: metadata local de templates se persistía sólo por ID
+- Área: Backend/Templates/Multitenancy
+- Ambiente: local
+- Severidad: High
+- Evidencia: el helper posterior a create/update ejecutaba `whatsAppTemplate.update({ where: { id } })` sin conservar el tenant ya verificado por el controller.
+- Impacto: un template object incompleto o cruzado podía alterar metadata de otra marca.
+- Causa: persistencia auxiliar separada del servicio canónico de templates.
+- Solución: exigir `template.workspaceId` y actualizar con `id + workspaceId` mediante el helper compartido.
+- Estado: resuelto localmente.
+- Archivos: `backend/src/controllers/campaign.controller.utils.js`, `backend/test/template-cart-workspace-scope.test.js`.
+- Pruebas: 1/1 específica dentro del bloque de templates; suite consolidada 81/81.
+- Riesgo de deployment: bajo.
+
+### FIND-P0-053
+
+- Título: servicio central de campañas inventaba un tenant y mutaba por ID
+- Área: Backend/Campañas/WhatsApp/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: previews, audiencias, drafts, list/detail, launch/cancel/delete/retry y webhooks caían en `workspace_default`; varias escrituras de campaña/destinatario/conversación usaban sólo `id`.
+- Impacto: callers incompletos podían operar la marca default; IDs cruzados o estados de delivery podían mutar recursos fuera del tenant esperado.
+- Causa: servicio de campañas originado como módulo mono-workspace, con el dispatcher endurecido sólo parcialmente.
+- Solución: workspace obligatorio en 13 operaciones públicas y helpers de audiencia, mutaciones `id + workspaceId`, destinatarios/locks acotados y webhook de delivery fail-closed.
+- Estado: resuelto localmente; cambios concurrentes de clasificación de errores y pagos se preservan fuera del stage.
+- Archivos: `backend/src/services/campaigns/whatsapp-campaign.service.js`, `backend/test/campaign-workspace-scope.test.js`.
+- Pruebas: 2/2 específicas, suite completa 81/81 en 1,30 s y build raíz verde en 9,62 s.
+- Riesgo de deployment: medio/alto; requiere staging sintético con draft, launch, retry, dispatch y status webhook en dos workspaces, sin delivery real.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -981,7 +1011,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 78/78 | 1,53 s |
+| unit tests | 81/81 | 1,30 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
