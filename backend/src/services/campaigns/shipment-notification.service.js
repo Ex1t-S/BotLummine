@@ -741,7 +741,7 @@ async function createAndLaunchShipmentCampaign({
 			}
 		}
 
-		await touchAutomationRun(run.id, { status: 'OPEN' });
+		await touchAutomationRun(run.id, { workspaceId: resolvedWorkspaceId, status: 'OPEN' });
 
 		return {
 			campaign: created?.campaign || null,
@@ -750,7 +750,7 @@ async function createAndLaunchShipmentCampaign({
 			selectedCount: Number(created?.addedRecipients || usableCandidates.length),
 		};
 	} catch (error) {
-		await markAutomationRunError(run.id, error);
+		await markAutomationRunError(run.id, error, { workspaceId: resolvedWorkspaceId });
 		throw error;
 	}
 }

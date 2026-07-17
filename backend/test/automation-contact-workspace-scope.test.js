@@ -18,6 +18,15 @@ import {
 	updateShipmentNotificationSettings,
 } from '../src/services/campaigns/shipment-notification.service.js';
 import {
+	backfillAutomationRunsForWorkspace,
+	getAutomationRunDetail,
+	getOrCreateDailyAutomationRun,
+	listAutomationRuns,
+	markAutomationRunError,
+	retryFailedAutomationRun,
+	touchAutomationRun,
+} from '../src/services/campaigns/automation-run.service.js';
+import {
 	findContactByWaId,
 	findOrCreateContactByWaId,
 } from '../src/services/contacts/contact-directory.service.js';
@@ -52,5 +61,19 @@ describe('automation and contact workspace boundaries', () => {
 		await rejectsMissingWorkspace(() => updateShipmentNotificationSettings());
 		await rejectsMissingWorkspace(() => listShipmentNotificationCandidates());
 		await rejectsMissingWorkspace(() => sendShipmentNotifications());
+	});
+
+	it('rejects automation run reads and writes without an explicit workspace', async () => {
+		for (const operation of [
+			() => getOrCreateDailyAutomationRun({ type: 'abandoned_carts' }),
+			() => touchAutomationRun('run-a'),
+			() => markAutomationRunError('run-a', new Error('synthetic')),
+			() => backfillAutomationRunsForWorkspace(),
+			() => listAutomationRuns(),
+			() => getAutomationRunDetail('run-a'),
+			() => retryFailedAutomationRun('run-a'),
+		]) {
+			await rejectsMissingWorkspace(operation);
+		}
 	});
 });

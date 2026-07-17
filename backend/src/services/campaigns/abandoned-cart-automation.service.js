@@ -467,7 +467,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 			}
 		}
 
-		await touchAutomationRun(run.id, { status: 'OPEN' });
+		await touchAutomationRun(run.id, { workspaceId: setting.workspaceId, status: 'OPEN' });
 
 		return {
 			automationRunId: run.id,
@@ -482,7 +482,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 				campaignId: null,
 			},
 		});
-		await markAutomationRunError(run.id, error);
+		await markAutomationRunError(run.id, error, { workspaceId: setting.workspaceId });
 		throw error;
 	}
 }

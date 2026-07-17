@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 75/75 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 76/76 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -897,6 +897,21 @@ flowchart TD
 - Pruebas: 1/1 específica, 75/75 unitarias y build raíz verde en una validación de 14,41 s.
 - Riesgo de deployment: bajo/medio; smoke sandbox de edición y embedded signup en dos workspaces, incluyendo ID cruzado esperado 404/conflicto.
 
+### FIND-P0-050
+
+- Título: corridas de automatización aceptaban tenant default y mutaban sólo por ID
+- Área: Backend/Automatizaciones/Campañas/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: crear/backfill/listar/detallar/reintentar caían en `workspace_default`; `touchAutomationRun` y `markAutomationRunError` recibían sólo runId y actualizaban sin workspace.
+- Impacto: un caller incompleto o ID cruzado podía leer corridas de otra marca o alterar contadores/estado/error de una automatización ajena.
+- Causa: modelo inicialmente global y helpers de escritura sin contrato de tenant.
+- Solución: workspace obligatorio en siete operaciones, updates con `id + workspaceId` y propagación desde carritos, pagos, despachos y retry.
+- Estado: resuelto localmente; se preservó sin stagear el cambio concurrente del usuario sobre conteo de reintentos.
+- Archivos: automation-run, tres automatizaciones caller y prueba de fronteras.
+- Pruebas: 5/5 específicas, 76/76 unitarias y build raíz verde en una validación de 15,35 s.
+- Riesgo de deployment: medio; smoke con run IDs cruzados y retry sintético en dos workspaces.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -919,7 +934,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 143 archivos JS/MJS pasan el chequeo de sintaxis.
-- 75 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
+- 76 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/corridas de automatización/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -951,7 +966,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 75/75 | 1,41 s |
+| unit tests | 76/76 | 1,55 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |

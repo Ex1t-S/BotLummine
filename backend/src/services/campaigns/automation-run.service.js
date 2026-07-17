@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 import {
 	buildCampaignRecipientInsights,
 	retryFailedCampaignRecipients,
@@ -244,12 +245,12 @@ async function serializeAutomationRun(run, { includeRecipients = false, page = 1
 }
 
 export async function getOrCreateDailyAutomationRun({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	type,
 	timezone = DEFAULT_TIMEZONE,
 	date = new Date(),
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedType = normalizeAutomationRunType(type);
 	const runKey = getLocalRunKey(date, timezone);
 
@@ -274,10 +275,11 @@ export async function getOrCreateDailyAutomationRun({
 	});
 }
 
-export async function touchAutomationRun(runId, { status = null, error = null } = {}) {
+export async function touchAutomationRun(runId, { workspaceId, status = null, error = null } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!runId) return null;
 	return prisma.automationRun.update({
-		where: { id: runId },
+		where: workspaceOwnedWhere({ id: runId, workspaceId: resolvedWorkspaceId }),
 		data: {
 			lastRunAt: new Date(),
 			lastError: error,
@@ -287,10 +289,11 @@ export async function touchAutomationRun(runId, { status = null, error = null } 
 	});
 }
 
-export async function markAutomationRunError(runId, error) {
+export async function markAutomationRunError(runId, error, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!runId) return null;
 	return prisma.automationRun.update({
-		where: { id: runId },
+		where: workspaceOwnedWhere({ id: runId, workspaceId: resolvedWorkspaceId }),
 		data: {
 			lastRunAt: new Date(),
 			lastError: error?.message || String(error || 'Error en automatizacion.'),
@@ -300,10 +303,10 @@ export async function markAutomationRunError(runId, error) {
 }
 
 export async function backfillAutomationRunsForWorkspace({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	timezone = DEFAULT_TIMEZONE,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const campaigns = await prisma.campaign.findMany({
 		where: {
 			workspaceId: resolvedWorkspaceId,
@@ -391,11 +394,11 @@ async function loadAutomationRun(runId, workspaceId) {
 }
 
 export async function listAutomationRuns({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	limit = 30,
 	timezone = DEFAULT_TIMEZONE,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	try {
 		await backfillAutomationRunsForWorkspace({ workspaceId: resolvedWorkspaceId, timezone });
 	} catch (error) {
@@ -427,11 +430,11 @@ export async function listAutomationRuns({
 }
 
 export async function getAutomationRunDetail(runId, {
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	page = 1,
 	pageSize = 50,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const currentPage = Math.max(1, Number(page) || 1);
 	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || 50, 1000));
 	const run = await loadAutomationRun(runId, resolvedWorkspaceId);
@@ -456,8 +459,8 @@ export async function getAutomationRunDetail(runId, {
 	};
 }
 
-export async function retryFailedAutomationRun(runId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function retryFailedAutomationRun(runId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const run = await loadAutomationRun(runId, resolvedWorkspaceId);
 	if (!run) {
 		throw new Error('No se encontro la corrida de automatizacion.');
@@ -472,7 +475,10 @@ export async function retryFailedAutomationRun(runId, { workspaceId = DEFAULT_WO
 		results.push(await retryFailedCampaignRecipients(campaign.id, { workspaceId: resolvedWorkspaceId }));
 	}
 
-	await touchAutomationRun(run.id, { status: retryableCampaigns.length ? 'QUEUED' : run.status });
+	await touchAutomationRun(run.id, {
+		workspaceId: resolvedWorkspaceId,
+		status: retryableCampaigns.length ? 'QUEUED' : run.status,
+	});
 	return {
 		runId: run.id,
 		retriedCampaigns: retryableCampaigns.length,
