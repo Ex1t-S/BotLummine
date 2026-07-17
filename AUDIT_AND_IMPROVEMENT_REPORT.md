@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 76/76 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 78/78 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -912,6 +912,21 @@ flowchart TD
 - Pruebas: 5/5 específicas, 76/76 unitarias y build raíz verde en una validación de 15,35 s.
 - Riesgo de deployment: medio; smoke con run IDs cruzados y retry sintético en dos workspaces.
 
+### FIND-P0-051
+
+- Título: sincronización de clientes compartía estado global y aceptaba tenant implícito
+- Área: Backend/Clientes/Comercio/Multitenancy
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: credenciales, upserts y jobs caían en `workspace_default`; `syncState` era un singleton leído por todos los administradores y los updates de perfiles, pedidos y logs usaban sólo `id`.
+- Impacto: una corrida podía bloquear a otras marcas, exponer progreso/errores cruzados o actualizar registros mediante un ID de otro tenant si un caller omitía el contexto.
+- Causa: el sincronizador nació como proceso mono-marca y su estado operativo no evolucionó junto al modelo multitenant.
+- Solución: tenant obligatorio en todas las entradas, mapa de estado por workspace, status controller ligado a la sesión y escrituras acotadas por `id + workspaceId`.
+- Estado: resuelto localmente.
+- Archivos: `backend/src/services/customers/customer.service.js`, `backend/src/controllers/customer.controller.js`, `backend/test/customer-sync-workspace-scope.test.js`.
+- Pruebas: 2/2 específicas, 78/78 unitarias y build raíz verde en una validación consolidada de 13,63 s.
+- Riesgo de deployment: medio; smoke sintético paralelo con Tiendanube/Shopify sandbox en dos workspaces y verificación de estados independientes.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -966,7 +981,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 76/76 | 1,55 s |
+| unit tests | 78/78 | 1,53 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |

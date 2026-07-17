@@ -841,7 +841,9 @@ export async function postSyncCustomers(req, res) {
 
 export async function getCustomersSyncStatus(req, res) {
 	try {
-		const status = getCustomerSyncStatusService();
+		const status = getCustomerSyncStatusService({
+			workspaceId: requireRequestWorkspaceId(req),
+		});
 		return res.json({
 			ok: true,
 			...status,

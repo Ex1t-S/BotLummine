@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { fetchWithTimeout, getHttpTimeoutMs } from '../../lib/http-timeout.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 import { attributeOrdersByIds } from '../campaigns/campaign-attribution.service.js';
 import { deriveShippingStatus } from '../common/shipping-status.js';
 import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
@@ -42,25 +43,37 @@ const CUSTOMER_ORDER_LIST_FIELDS = [
 	'products'
 ].join(',');
 
-const syncState = {
-	running: false,
-	startedAt: null,
-	finishedAt: null,
-	phase: 'idle',
-	message: 'Sin sincronizaciones todavía.',
-	pagesFetched: 0,
-	ordersFetched: 0,
-	ordersUpserted: 0,
-	itemsUpserted: 0,
-	customersTouched: 0,
-	warnings: [],
-	errors: [],
-	hasMoreHistory: false,
-	recentFrom: null,
-	activeWindow: null,
-	localOrdersBefore: 0,
-	localOrdersAfter: 0,
-};
+function createSyncState() {
+	return {
+		running: false,
+		startedAt: null,
+		finishedAt: null,
+		phase: 'idle',
+		message: 'Sin sincronizaciones todavía.',
+		pagesFetched: 0,
+		ordersFetched: 0,
+		ordersUpserted: 0,
+		itemsUpserted: 0,
+		customersTouched: 0,
+		warnings: [],
+		errors: [],
+		hasMoreHistory: false,
+		recentFrom: null,
+		activeWindow: null,
+		localOrdersBefore: 0,
+		localOrdersAfter: 0,
+	};
+}
+
+const syncStatesByWorkspace = new Map();
+
+function getSyncState(workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	if (!syncStatesByWorkspace.has(resolvedWorkspaceId)) {
+		syncStatesByWorkspace.set(resolvedWorkspaceId, createSyncState());
+	}
+	return syncStatesByWorkspace.get(resolvedWorkspaceId);
+}
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -207,7 +220,7 @@ function sanitizeWindow(window) {
 	};
 }
 
-function resetSyncState() {
+function resetSyncState(syncState) {
 	syncState.pagesFetched = 0;
 	syncState.ordersFetched = 0;
 	syncState.ordersUpserted = 0;
@@ -222,7 +235,8 @@ function resetSyncState() {
 	syncState.localOrdersAfter = 0;
 }
 
-export function getCustomerSyncStatus() {
+export function getCustomerSyncStatus({ workspaceId } = {}) {
+	const syncState = getSyncState(workspaceId);
 	return {
 		running: syncState.running,
 		startedAt: syncState.startedAt,
@@ -244,18 +258,18 @@ export function getCustomerSyncStatus() {
 	};
 }
 
-function pushWarning(message) {
+function pushWarning(syncState, message) {
 	syncState.warnings.push({ message, at: new Date().toISOString() });
 	syncState.message = message;
 }
 
-function pushError(message) {
+function pushError(syncState, message) {
 	syncState.errors.push({ message, at: new Date().toISOString() });
 	syncState.message = message;
 }
 
-export async function resolveStoreCredentials({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function resolveStoreCredentials({ workspaceId, provider = 'TIENDANUBE' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedProvider = normalizeProvider(provider);
 	if (normalizedProvider === 'SHOPIFY') {
 		const config = await getShopifyConfig({ workspaceId: resolvedWorkspaceId });
@@ -394,7 +408,7 @@ async function upsertCustomerProfiles(customers, storeId, workspaceId, provider 
 
 		if (existing?.id) {
 			await prisma.customerProfile.update({
-				where: { id: existing.id },
+				where: workspaceOwnedWhere({ id: existing.id, workspaceId }),
 				data,
 			});
 		} else {
@@ -451,6 +465,7 @@ async function fetchJson(url, accessToken, resourceLabel) {
 async function fetchOrdersPage({
 	storeId,
 	accessToken,
+	syncState,
 	page,
 	createdAtMin = null,
 	createdAtMax = null,
@@ -477,8 +492,8 @@ async function fetchOrdersPage({
 		const bodyText = String(error?.body || error?.message || '');
 
 		if (error?.status === 422 && perPage > 50) {
-			pushWarning(`Paginación 422 en página ${page}. Reintentando con per_page=50.`);
-			return fetchOrdersPage({ storeId, accessToken, page, createdAtMin, createdAtMax, perPage: 50 });
+			pushWarning(syncState, `Paginación 422 en página ${page}. Reintentando con per_page=50.`);
+			return fetchOrdersPage({ storeId, accessToken, syncState, page, createdAtMin, createdAtMax, perPage: 50 });
 		}
 
 		const isEmptyPagination404 =
@@ -706,8 +721,8 @@ function buildOrderItems(order, storeId, customerOrderId, customerProfileId, wor
 	});
 }
 
-async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE') {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function upsertOrdersAndItems(orders, storeId, workspaceId, provider = 'TIENDANUBE') {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedProvider = normalizeProvider(provider);
 	if (!orders.length) return { ordersUpserted: 0, itemsUpserted: 0 };
 
@@ -749,7 +764,7 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKS
 		await prisma.$transaction(
 			batch.map((item) =>
 				prisma.customerOrder.update({
-					where: { id: item.id },
+					where: workspaceOwnedWhere({ id: item.id, workspaceId: resolvedWorkspaceId }),
 					data: item.data,
 				})
 			)
@@ -764,7 +779,10 @@ async function upsertOrdersAndItems(orders, storeId, workspaceId = DEFAULT_WORKS
 
 	if (savedOrders.length) {
 		await prisma.customerOrderItem.deleteMany({
-			where: { customerOrderId: { in: savedOrders.map((row) => row.id) } },
+			where: {
+				workspaceId: resolvedWorkspaceId,
+				customerOrderId: { in: savedOrders.map((row) => row.id) },
+			},
 		});
 	}
 
@@ -810,21 +828,23 @@ export async function fetchTiendanubeOrderById({ storeId, accessToken, orderId }
 	return payload;
 }
 
-export async function upsertTiendanubeOrder(order, storeId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function upsertTiendanubeOrder(order, storeId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!order || !order.id) {
 		throw new Error('No se pudo guardar la orden de Tiendanube porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([order], storeId, workspaceId, 'TIENDANUBE');
+	return upsertOrdersAndItems([order], storeId, resolvedWorkspaceId, 'TIENDANUBE');
 }
 
-export async function fetchShopifyOrderById({ workspaceId = DEFAULT_WORKSPACE_ID, orderId }) {
+export async function fetchShopifyOrderById({ workspaceId, orderId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedOrderId = String(orderId || '').trim();
 	if (!normalizedOrderId) {
 		throw new Error('fetchShopifyOrderById requiere orderId.');
 	}
 
-	const { client } = await getShopifyClient({ workspaceId });
+	const { client } = await getShopifyClient({ workspaceId: resolvedWorkspaceId });
 	const response = await client.get(`/orders/${normalizedOrderId}.json`, {
 		params: {
 			fields: [
@@ -860,15 +880,16 @@ export async function fetchShopifyOrderById({ workspaceId = DEFAULT_WORKSPACE_ID
 	return order;
 }
 
-export async function upsertShopifyOrder(order, storeId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function upsertShopifyOrder(order, storeId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!order || !order.id) {
 		throw new Error('No se pudo guardar la orden de Shopify porque el payload no trae id.');
 	}
 
-	return upsertOrdersAndItems([normalizeShopifyOrder(order)], storeId, workspaceId, 'SHOPIFY');
+	return upsertOrdersAndItems([normalizeShopifyOrder(order)], storeId, resolvedWorkspaceId, 'SHOPIFY');
 }
 
-async function processWindow({ storeId, accessToken, workspaceId, from, to, label }) {
+async function processWindow({ storeId, accessToken, workspaceId, syncState, from, to, label }) {
 	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
 	syncState.activeWindow = { from, to, label };
 	syncState.message = `Sincronizando ${label === 'recent' ? 'recientes' : 'histórico'} ${label}.`;
@@ -882,10 +903,10 @@ async function processWindow({ storeId, accessToken, workspaceId, from, to, labe
 	while (page <= MAX_PAGES_PER_WINDOW) {
 		let orders;
 		try {
-			orders = await fetchOrdersPage({ storeId, accessToken, page, createdAtMin: from, createdAtMax: to });
+			orders = await fetchOrdersPage({ storeId, accessToken, syncState, page, createdAtMin: from, createdAtMax: to });
 		} catch (error) {
 			if (error?.status === 422) {
-				pushWarning(`Ventana ${label}: paginación interrumpida en página ${page}. Se continúa con la siguiente ventana.`);
+				pushWarning(syncState, `Ventana ${label}: paginación interrumpida en página ${page}. Se continúa con la siguiente ventana.`);
 				break;
 			}
 			throw error;
@@ -905,7 +926,7 @@ async function processWindow({ storeId, accessToken, workspaceId, from, to, labe
 			storeId,
 			orderIds: saved.orderIds || orders.map((order) => String(order.id)),
 		}).catch((error) => {
-			pushWarning(`No se pudo atribuir conversiones de campaÃ±a: ${error?.message || error}`);
+			pushWarning(syncState, `No se pudo atribuir conversiones de campaÃ±a: ${error?.message || error}`);
 		});
 		syncState.ordersUpserted += saved.ordersUpserted;
 		syncState.itemsUpserted += saved.itemsUpserted;
@@ -920,7 +941,7 @@ async function processWindow({ storeId, accessToken, workspaceId, from, to, labe
 	}
 
 	if (page > MAX_PAGES_PER_WINDOW) {
-		pushWarning(`Ventana ${label}: se alcanzó el límite de ${MAX_PAGES_PER_WINDOW} páginas en una sola corrida.`);
+		pushWarning(syncState, `Ventana ${label}: se alcanzó el límite de ${MAX_PAGES_PER_WINDOW} páginas en una sola corrida.`);
 	}
 
 	return {
@@ -932,7 +953,7 @@ async function processWindow({ storeId, accessToken, workspaceId, from, to, labe
 	};
 }
 
-async function fetchShopifyOrdersPage({ client, page, createdAtMin = null, createdAtMax = null, sinceId = 0 }) {
+async function fetchShopifyOrdersPage({ client, syncState, page, createdAtMin = null, createdAtMax = null, sinceId = 0 }) {
 	const params = {
 		limit: SHOPIFY_ORDERS_PER_PAGE,
 		status: 'any',
@@ -1000,7 +1021,7 @@ async function fetchShopifyCustomersPage({ client, sinceId = 0 }) {
 	return Array.isArray(response.data?.customers) ? response.data.customers : [];
 }
 
-async function syncShopifyCustomerProfiles({ client, storeId, workspaceId }) {
+async function syncShopifyCustomerProfiles({ client, storeId, workspaceId, syncState }) {
 	let sinceId = 0;
 	let pages = 0;
 	let touched = 0;
@@ -1022,7 +1043,7 @@ async function syncShopifyCustomerProfiles({ client, storeId, workspaceId }) {
 	return { pagesFetched: pages, customersTouched: touched };
 }
 
-async function processShopifyWindow({ client, storeId, workspaceId, from, to, label }) {
+async function processShopifyWindow({ client, storeId, workspaceId, syncState, from, to, label }) {
 	syncState.phase = label === 'recent' ? 'recent_sync' : 'historical_backfill';
 	syncState.activeWindow = { from, to, label };
 	syncState.message = `Sincronizando Shopify ${label}.`;
@@ -1034,7 +1055,7 @@ async function processShopifyWindow({ client, storeId, workspaceId, from, to, la
 	let windowItems = 0;
 
 	while (page <= MAX_PAGES_PER_WINDOW) {
-		const rawOrders = await fetchShopifyOrdersPage({ client, page, createdAtMin: from, createdAtMax: to, sinceId });
+		const rawOrders = await fetchShopifyOrdersPage({ client, syncState, page, createdAtMin: from, createdAtMax: to, sinceId });
 		if (!rawOrders.length) break;
 
 		const orders = rawOrders.map(normalizeShopifyOrder).filter((order) => order.id);
@@ -1047,7 +1068,7 @@ async function processShopifyWindow({ client, storeId, workspaceId, from, to, la
 			storeId,
 			orderIds: saved.orderIds || orders.map((order) => String(order.id)),
 		}).catch((error) => {
-			pushWarning(`No se pudo atribuir conversiones Shopify: ${error?.message || error}`);
+			pushWarning(syncState, `No se pudo atribuir conversiones Shopify: ${error?.message || error}`);
 		});
 
 		syncState.ordersUpserted += saved.ordersUpserted;
@@ -1088,8 +1109,9 @@ function safeSyncLogData(data) {
 	};
 }
 
-async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIENDANUBE' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+async function runSyncJob({ workspaceId, provider = 'TIENDANUBE' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const syncState = getSyncState(resolvedWorkspaceId);
 	const normalizedProvider = normalizeProvider(provider);
 	const startedAt = Date.now();
 	let syncLog = null;
@@ -1109,7 +1131,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 				}),
 			});
 		} catch (logError) {
-			pushWarning(`No se pudo crear customerSyncLog: ${logError?.message || 'error desconocido'}`);
+			pushWarning(syncState, `No se pudo crear customerSyncLog: ${logError?.message || 'error desconocido'}`);
 		}
 
 		const boundsBefore = await getLocalOrderBounds(storeId, resolvedWorkspaceId, normalizedProvider);
@@ -1128,6 +1150,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 					client,
 					storeId,
 					workspaceId: resolvedWorkspaceId,
+					syncState,
 				})),
 				ordersFetched: 0,
 				ordersUpserted: 0,
@@ -1138,6 +1161,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 					client,
 					storeId,
 					workspaceId: resolvedWorkspaceId,
+					syncState,
 					from: recentFrom,
 					to: new Date(),
 					label: 'recent',
@@ -1149,6 +1173,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 				storeId,
 				accessToken,
 				workspaceId: resolvedWorkspaceId,
+				syncState,
 				from: recentFrom,
 				to: new Date(),
 				label: 'recent',
@@ -1173,6 +1198,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 					client: (await getShopifyClient({ workspaceId: resolvedWorkspaceId })).client,
 					storeId,
 					workspaceId: resolvedWorkspaceId,
+					syncState,
 					from: monthStart,
 					to: monthEnd,
 					label,
@@ -1181,6 +1207,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 					storeId,
 					accessToken,
 					workspaceId: resolvedWorkspaceId,
+					syncState,
 					from: monthStart,
 					to: monthEnd,
 					label,
@@ -1215,7 +1242,7 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 
 		if (syncLog?.id) {
 			await prisma.customerSyncLog.update({
-				where: { id: syncLog.id },
+				where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 				data: safeSyncLogData({
 					status: 'SUCCESS',
 					workspaceId: resolvedWorkspaceId,
@@ -1236,14 +1263,14 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 			durationMs: Date.now() - startedAt,
 		};
 	} catch (error) {
-		pushError(error?.message || 'Error sincronizando pedidos.');
+		pushError(syncState, error?.message || 'Error sincronizando pedidos.');
 		syncState.phase = 'error';
 		syncState.finishedAt = new Date().toISOString();
 
 		if (syncLog?.id) {
 			try {
 				await prisma.customerSyncLog.update({
-					where: { id: syncLog.id },
+					where: workspaceOwnedWhere({ id: syncLog.id, workspaceId: resolvedWorkspaceId }),
 					data: safeSyncLogData({
 						status: 'ERROR',
 						workspaceId: resolvedWorkspaceId,
@@ -1267,8 +1294,9 @@ async function runSyncJob({ workspaceId = DEFAULT_WORKSPACE_ID, provider = 'TIEN
 	}
 }
 
-export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provider = '' } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function syncCustomers({ workspaceId, provider = '' } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const syncState = getSyncState(resolvedWorkspaceId);
 	const normalizedProvider = provider
 		? normalizeProvider(provider)
 		: (await resolveActiveCommerceConnection({ workspaceId: resolvedWorkspaceId })).provider;
@@ -1276,11 +1304,11 @@ export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provid
 		return {
 			ok: true,
 			started: false,
-			...getCustomerSyncStatus(),
+			...getCustomerSyncStatus({ workspaceId: resolvedWorkspaceId }),
 		};
 	}
 
-	resetSyncState();
+	resetSyncState(syncState);
 	syncState.running = true;
 	syncState.startedAt = new Date().toISOString();
 	syncState.finishedAt = null;
@@ -1289,7 +1317,7 @@ export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provid
 
 	setTimeout(() => {
 		runSyncJob({ workspaceId: resolvedWorkspaceId, provider: normalizedProvider }).catch((error) => {
-			pushError(error?.message || 'Error sincronizando pedidos.');
+			pushError(syncState, error?.message || 'Error sincronizando pedidos.');
 			syncState.running = false;
 			syncState.phase = 'error';
 			syncState.finishedAt = new Date().toISOString();
@@ -1299,6 +1327,6 @@ export async function syncCustomers({ workspaceId = DEFAULT_WORKSPACE_ID, provid
 	return {
 		ok: true,
 		started: true,
-		...getCustomerSyncStatus(),
+		...getCustomerSyncStatus({ workspaceId: resolvedWorkspaceId }),
 	};
 }
