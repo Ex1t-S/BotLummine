@@ -272,7 +272,7 @@ test('separa errores de lista e historial y permite reintentar sin perder el flu
 	await expect(page.getByLabel('Mensaje', { exact: true })).toBeEnabled();
 });
 
-test('revisión de pagos comunica errores y conserva la conversación al derivarla', async ({ page }) => {
+test('revisión de comprobantes comunica errores y conserva la conversación al derivarla', async ({ page }) => {
 	const queueControl = { allowAction: false, requests: [] };
 	await installInboxApi(page, { queueControl });
 	await page.setViewportSize({ width: 768, height: 1024 });
@@ -320,7 +320,7 @@ test('revisión de pagos comunica errores y conserva la conversación al derivar
 	expect(queueControl.requests[1].idempotencyKey).toBe(queueControl.requests[0].idempotencyKey);
 });
 
-test('revisión de pagos exige motivo para rechazar y registra la acción', async ({ page }) => {
+test('revisión de comprobantes exige motivo para rechazar y registra la acción', async ({ page }) => {
 	const queueControl = { allowAction: true, requests: [] };
 	await installInboxApi(page, { queueControl });
 	await page.goto('/inbox/comprobantes');
