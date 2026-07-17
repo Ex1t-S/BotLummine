@@ -336,6 +336,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 129/129 | incluido en build |
 | unit tests | 24/24 | 0,24 s |
+| AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | frontend build | OK con warning de chunk | 0,60 s |
 | root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
 | Playwright Chromium | 5/5; 10 rutas de performance | 14,7 s |
@@ -350,6 +351,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
 - Traza canónica redactada por inbound, con límites y cobertura unitaria.
+- Corpus sintético de 36 casos y runner offline bloqueante en CI.
 
 ## 18. Comparación antes/después
 
@@ -365,7 +367,7 @@ Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, co
 
 ## 20. Métricas
 
-Baseline disponible en las secciones 3, 15 y 16. No hay métricas confiables de tokens/costo por turno todavía.
+Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intención: 25/28 inicial y 28/28 después de corregir dos falsos negativos de handoff y un falso positivo de prompt injection. Ocho casos de candidato quedan pendientes de sandbox; no hay métricas confiables de costo/calidad generativa todavía.
 
 ## 21. Riesgos pendientes
 
@@ -378,7 +380,8 @@ Baseline disponible en las secciones 3, 15 y 16. No hay métricas confiables de 
 
 ## 22. Backlog
 
-P0: build/CI, smoke tests, multitenancy, compiler IA, taxonomía/fallback, trazas.  
+P0: completar auditoría multitenant, salida estructurada IA, persistencia/retención de trazas, lint/typecheck y security audit.
+
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.  
 P2: plantillas, catálogo, clientes, AI Lab, rendimiento y responsive amplio.  
 P3: analytics, personalización y detalles cosméticos.
