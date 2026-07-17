@@ -6,7 +6,7 @@ Estado: en progreso; producción permanece en modo solo lectura.
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia y el frontend compila, pero el baseline inicial encontró riesgos P0: el comando raíz `build` no valida el producto, el único E2E puede finalizar verde aunque una pantalla falle, el prompt de IA se compila dos veces por turno y la cadena de proveedores puede cortar el fallback disponible. El `.env` local apunta a la base de producción; por seguridad no se inició el backend ni se ejecutaron seeds, migraciones o pruebas con conexión.
+La aplicación tiene una base funcional amplia. La primera iteración cerró los P0 de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores y arranque local accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -172,7 +172,7 @@ flowchart TD
 - Impacto: un PR puede pasar sin compilar frontend ni revisar backend.
 - Causa: script raíz reducido a una tarea de generación.
 - Solución: comando de verificación reproducible para ambos paquetes.
-- Estado: pendiente.
+- Estado: resuelto en `cc54042`; el build raíz valida backend y frontend.
 - Archivos: `package.json`, workflow de CI.
 - Pruebas: baseline confirmó falso positivo.
 - Riesgo de deployment: bajo.
@@ -187,7 +187,7 @@ flowchart TD
 - Impacto: regresiones de pantallas críticas no bloquean cambios.
 - Causa: el test captura excepciones por ruta y no afirma que el reporte esté libre de errores.
 - Solución: smoke E2E determinista y aserción de cero errores.
-- Estado: pendiente.
+- Estado: resuelto en `cc54042`; el test ahora falla si alguna ruta falla.
 - Archivos: `frontend/tests/performance/load-times.spec.js` y nueva suite smoke.
 - Pruebas: ejecución de 32,8 s con error registrado y exit code 0.
 - Riesgo de deployment: bajo.
@@ -202,7 +202,7 @@ flowchart TD
 - Impacto: divergencia de trazas, costo de CPU, hashes no canónicos y mayor riesgo de inconsistencias.
 - Causa: contrato de generación recibe contexto crudo y no el prompt compilado.
 - Solución: compiler canónico y proveedor que reciba un artefacto compilado.
-- Estado: pendiente.
+- Estado: resuelto en `d9b31fc`; existe un artefacto canónico versionado y hasheado.
 - Archivos: servicios de IA y conversación.
 - Pruebas: unitarias con contador de compilación y metadata.
 - Riesgo de deployment: medio.
@@ -217,7 +217,7 @@ flowchart TD
 - Impacto: handoff/fallback evitable y menor disponibilidad.
 - Causa: retry y provider fallback comparten una clasificación binaria.
 - Solución: taxonomía explícita y decisión separada de retry/fallback/handoff.
-- Estado: pendiente.
+- Estado: resuelto en `d9b31fc`; retry y fallback usan taxonomía explícita.
 - Archivos: `backend/src/services/ai/*`.
 - Pruebas: unitarias por clase de error.
 - Riesgo de deployment: medio.
@@ -232,37 +232,73 @@ flowchart TD
 - Impacto: un seed, test o servidor local puede leer/escribir datos reales.
 - Causa: ausencia de separación local por defecto.
 - Solución: guard de entorno y base local descartable; nunca versionar el secreto.
-- Estado: mitigado operativamente; no se ejecutan comandos con conexión.
+- Estado: resuelto preventivamente en `744341b`; el arranque local remoto falla antes de abrir puerto o consultar la base.
 - Archivos: documentación y scripts seguros futuros.
 - Pruebas: comparación de URL redaccionada.
 - Riesgo de deployment: ninguno para la mitigación documental.
 
+### FIND-P1-006
+
+- Título: CSS de Catálogo altera el shell de otras rutas
+- Área: frontend/responsive
+- Ambiente: local/todos
+- Severidad: High
+- Evidencia: al precargar Catálogo, `CatalogPage.css` inyectaba `.admin-shell { grid-template-columns: 280px 1fr }`; en 768 px sidebar y main quedaban en 280 px.
+- Impacto: Inbox móvil inutilizable, contenido cortado y navegación fuera de contexto.
+- Causa: estilos de layout global dentro del CSS de una feature lazy.
+- Solución: eliminar los selectores globales del feature y proteger el shell móvil con ancho verificable.
+- Estado: resuelto.
+- Archivos: `CatalogPage.css`, `DashboardLayout.css`, `critical-flow.spec.js`.
+- Pruebas: sidebar/main ocupan el ancho disponible y no existe overflow a 768 y 390 px.
+- Riesgo de deployment: bajo.
+
+### FIND-P1-007
+
+- Título: composer del Inbox fuera del viewport móvil
+- Área: Inbox/UI
+- Ambiente: local/todos
+- Severidad: High
+- Evidencia: a 390x844 el textarea comenzaba en y=879; el contenedor imponía 726 px aunque sólo había 597 px disponibles.
+- Impacto: el agente humano no podía responder sin un scroll interno no visible.
+- Causa: resta rígida `100dvh - 118px` incompatible con la altura dinámica de navegación.
+- Solución: dimensionar el chat activo desde su contenedor real y mantener el scroll en mensajes.
+- Estado: resuelto.
+- Archivos: `InboxPage.css`, `critical-flow.spec.js`.
+- Pruebas: composer dentro del viewport a 390x844 y captura real validada.
+- Riesgo de deployment: bajo.
+
 ## 8. Auditoría UI/UX
 
-Pendiente de capturas reales. Baseline técnico: el bundle carga recursos de campañas e inbox en rutas que no los necesitan; la pantalla WhatsApp Menu no alcanzó su selector esperado en el E2E.
+- Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
+- Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
+- Estados: el Inbox separa carga, vacío, error y datos; queda pendiente extender el patrón compartido a pagos, campañas y administración.
+- Evidencia: capturas deterministas en 1440x960, 1280x800, 768x1024 y 390x844 con datos sintéticos.
+- Pendiente: recorrido visual completo de las vistas privadas restantes, teclado integral y axe.
 
 ## 9. Auditoría frontend
 
-- Build exitoso en 776 ms.
+- Build exitoso en 600 ms en la validación final de esta iteración.
 - `vendor-three`: 505,81 kB minificado; warning >500 kB.
 - CSS de campañas: 100,63 kB; CSS global principal: 138,47 kB.
 - `InboxPage.jsx`: ~1.680 líneas; `AdminPage.jsx`: ~1.965; `CampaignsFeaturePage.jsx`: ~1.774.
-- No hay scripts de lint ni typecheck configurados.
+- No hay scripts de lint ni typecheck configurados; sigue como deuda P0/P1 de calidad.
+- Se añadieron tokens semánticos base, foco visible global y reducción de movimiento.
+- Se detectó y eliminó un bloque legacy de estilos globales en `CatalogPage.css`.
 
 ## 10. Auditoría backend
 
-- 124 archivos JS/MJS pasan `node --check`.
-- Un único test unitario localizado: 7/7 casos pasan.
+- 129 archivos JS/MJS pasan el chequeo de sintaxis.
+- 22 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
 ## 11. Auditoría del agente de IA
 
-Pipeline preliminar: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. Se confirmó doble compilación y fallback acoplado a retry. La salida aún no está normalizada al schema objetivo ni existe traza canónica completa por turno.
+Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/contacto -> historia/estado -> intención/route -> catálogo/pedido/campaña -> prompt -> proveedor -> auditoría -> handoff -> persistencia/delivery. El prompt ahora se compila una vez, con `promptVersion`, SHA-256 y `factsUsed`; los proveedores reciben el mismo artefacto y el fallback continúa según taxonomía. La salida estructurada completa y la traza persistida objetivo siguen pendientes.
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Existen helpers `requireRequestWorkspaceId`, pero también defaults `DEFAULT_WORKSPACE_ID` y queries por `id` que requieren análisis contextual. No se afirmará aislamiento hasta contar con pruebas negativas.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Persisten como backlog la auditoría exhaustiva de queries por ID, archivos y analytics.
 
 ## 13. Railway y despliegues
 
@@ -270,11 +306,11 @@ Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables
 
 ## 14. Accesibilidad
 
-Pendiente de auditoría WCAG 2.2 AA con teclado y axe sobre vistas críticas.
+Se incorporaron labels del composer/búsqueda, estados `alert`/`status`, `aria-pressed`, foco visible y `prefers-reduced-motion`. Sigue pendiente la auditoría WCAG 2.2 AA completa con teclado y axe.
 
 ## 15. Rendimiento
 
-Medición mock inicial: rutas internas listas entre 136 y 406 ms; landing pública 3.067 ms por carga de fuentes/assets. La suite no es estricta por defecto y una ruta falló sin bloquear.
+Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landing pública 531 ms y quiet 1.098 ms. La suite ahora bloquea errores. Sigue abierto `vendor-three` con 505,81 kB minificado y carga anticipada de CSS/JS de campañas e Inbox por prefetch.
 
 ## 16. Pruebas
 
@@ -282,25 +318,34 @@ Medición mock inicial: rutas internas listas entre 136 y 406 ms; landing públi
 |---|---:|---:|
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
-| `prisma validate` | OK | 2,0 s |
-| backend `node --check` | 124/124 | 4,3 s |
-| unit test existente | 7/7 | 0,15 s |
-| frontend build | OK con warning de chunk | 1,66 s |
-| root build | falso positivo: solo Prisma | 2,38 s |
-| Playwright | 1 passed; 1 ruta interna falló | 32,8 s |
+| `prisma validate` | OK | 2,5 s |
+| backend syntax | 129/129 | incluido en build |
+| unit tests | 22/22 | 0,25 s |
+| frontend build | OK con warning de chunk | 0,60 s |
+| root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
+| Playwright Chromium | 5/5; 10 rutas de performance | 14,7 s |
 
 ## 17. Cambios implementados
 
-- Creación de rama segura.
-- Creación del presente reporte. El código todavía no fue alterado al registrar este baseline.
+- Build raíz real, CI, syntax check, Prisma y E2E estricto.
+- Compiler canónico de prompt, hash/version/facts y taxonomía/fallback de proveedores.
+- Guard contra base remota en desarrollo y pruebas negativas de workspace.
+- Inbox: selección/URL, borradores, error/retry, doble envío y flujo móvil.
+- Tokens semánticos, foco visible, reduced motion y contención responsive.
+- Eliminación de fuga CSS de Catálogo.
+- Capturas deterministas públicas e Inbox con datos sintéticos.
 
 ## 18. Comparación antes/después
 
-Se completará por iteración con tiempos, tamaños, cobertura y capturas.
+- Root build: de falso verde (sólo Prisma) a validación de ambos productos.
+- Unitarias: de 7 casos localizados a 22 pruebas ejecutadas.
+- E2E: de una suite que ocultaba fallos a 5 pruebas bloqueantes.
+- Inbox 390 px: de sidebar/contenido de 280 px y composer fuera de pantalla a ancho completo, sin overflow y composer visible.
+- Prompt: de dos compilaciones por turno a un artefacto determinista compartido.
 
 ## 19. Capturas
 
-Pendientes. Se usarán datos sintéticos y viewports 1440x960, 1280x800, 768x1024 y 390x844.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; revisión de pagos en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 
@@ -308,10 +353,10 @@ Baseline disponible en las secciones 3, 15 y 16. No hay métricas confiables de 
 
 ## 21. Riesgos pendientes
 
-- Conexión local accidental a producción.
-- Falsos verdes de CI/E2E.
-- Aislamiento multitenant sin cobertura negativa suficiente.
-- Doble compilación del prompt y fallback incompleto.
+- Auditoría exhaustiva de aislamiento multitenant por entidad aún incompleta.
+- Salida estructurada y persistencia de trace IA aún parciales.
+- Sin lint, typecheck ni axe configurados.
+- Bundle `vendor-three` >500 kB y prefetch costoso.
 - Staging no representativo.
 - Cron productivo sin evidencia operativa.
 
@@ -324,7 +369,7 @@ P3: analytics, personalización y detalles cosméticos.
 
 ## 23. Ejecución local
 
-Hasta preparar una base descartable, solo ejecutar comandos sin conexión. No usar `backend/.env` para servidor, seed, migrate o tests integrados. Comandos seguros comprobados: instalación, `prisma validate`, `prisma generate`, `node --check`, unit tests puros y build frontend.
+Hasta preparar una base descartable, sólo ejecutar comandos sin conexión. No usar `backend/.env` para seed, migrate o tests integrados. El guard bloquea el arranque local remoto salvo override explícito. Comandos comprobados: instalación, `npm run build`, `npm run prisma:validate`, `npm run test:unit` y Playwright con API mockeada.
 
 ## 24. Validación en staging
 

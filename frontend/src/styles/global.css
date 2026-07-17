@@ -1,5 +1,49 @@
 @import "tailwindcss";
 
+:root {
+	--surface-page: #f4f7fb;
+	--surface-panel: #ffffff;
+	--surface-elevated: #ffffff;
+	--surface-hover: #eef4fa;
+	--text-primary: #0f172a;
+	--text-secondary: #475467;
+	--text-muted: #667085;
+	--border-subtle: #dbe3ee;
+	--border-strong: #98a2b3;
+	--action-primary: #0369a1;
+	--action-primary-hover: #075985;
+	--action-danger: #b42318;
+	--status-success-bg: #ecfdf3;
+	--status-success-text: #067647;
+	--status-warning-bg: #fffaeb;
+	--status-warning-text: #b54708;
+	--status-danger-bg: #fef3f2;
+	--status-danger-text: #b42318;
+	--focus-ring: #0284c7;
+}
+
+.dark .admin-shell {
+	--surface-page: var(--ui-bg, #05070b);
+	--surface-panel: var(--ui-surface, #0d0f14);
+	--surface-elevated: var(--ui-surface-soft, #14171f);
+	--surface-hover: var(--ui-surface-muted, #1b202a);
+	--text-primary: var(--ui-heading, #ffffff);
+	--text-secondary: var(--ui-text, #e7e7ea);
+	--text-muted: var(--ui-muted, #aaaab3);
+	--border-subtle: var(--ui-border, #292f3a);
+	--border-strong: var(--ui-border-strong, #3a4352);
+	--action-primary: var(--ui-primary, #38bdf8);
+	--action-primary-hover: var(--ui-primary-strong, #7dd3fc);
+	--action-danger: var(--ui-danger, #ff8d85);
+	--status-success-bg: var(--ui-success-soft, #123426);
+	--status-success-text: var(--ui-success, #5bd8a0);
+	--status-warning-bg: var(--ui-warning-soft, #372712);
+	--status-warning-text: var(--ui-warning, #ffc46b);
+	--status-danger-bg: var(--ui-danger-soft, #3b1d22);
+	--status-danger-text: var(--ui-danger, #ff8d85);
+	--focus-ring: var(--ui-primary, #38bdf8);
+}
+
 /* =========================================================
    RESET / BASE GLOBAL
    - Reglas base generales del sitio
@@ -17,11 +61,27 @@ body,
 	height: 100%;
 	min-height: 100%;
 	font-family: Inter, Arial, sans-serif;
-	background: #f4f7fb;
-	color: #0f172a;
+	background: var(--surface-page);
+	color: var(--text-primary);
 }
 body {
 	margin: 0;
+}
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+	outline: 3px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 
 .brand-loader {

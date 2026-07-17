@@ -3136,3 +3136,18 @@
 		align-items: flex-end;
 	}
 }
+
+/* The dashboard header height is dynamic on mobile; size the active chat from
+   its real container instead of subtracting a hard-coded viewport offset. */
+@media (max-width: 900px) {
+	.inbox-page--contacts-hidden {
+		height: 100%;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.inbox-page--contacts-hidden .inbox-chat-panel {
+		height: 100%;
+		min-height: 0;
+	}
+}

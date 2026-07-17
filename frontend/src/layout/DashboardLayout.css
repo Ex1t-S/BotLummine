@@ -1052,3 +1052,37 @@
 		grid-template-rows: 56px minmax(0, 1fr);
 	}
 }
+
+/* Final mobile containment: feature content must never expand the app shell. */
+@media (max-width: 900px) {
+	.admin-shell {
+		width: 100%;
+		max-width: 100vw;
+		grid-template-columns: minmax(0, 1fr);
+		overflow: hidden;
+	}
+
+	.admin-sidebar,
+	.admin-main,
+	.admin-content {
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.admin-sidebar,
+	.admin-main {
+		grid-column: 1;
+	}
+
+	.admin-menu {
+		min-width: 0;
+		max-width: calc(100vw - 20px);
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+	}
+
+	.admin-content {
+		overflow-x: hidden;
+	}
+}
