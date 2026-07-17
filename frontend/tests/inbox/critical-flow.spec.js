@@ -151,6 +151,27 @@ async function installInboxApi(page, {
 			return;
 		}
 
+		if (
+			pathname === '/dashboard/conversations/conversation-demo-1/payment-review/actions' &&
+			request.method() === 'POST'
+		) {
+			const payload = request.postDataJSON();
+			queueControl?.requests?.push(payload);
+			if (queueControl?.allowAction === false) {
+				await route.fulfill(json({ ok: false, error: 'No pudimos actualizar la revisión.' }, 503));
+				return;
+			}
+			activeQueue = 'HUMAN';
+			await route.fulfill(json({
+				ok: true,
+				action: { action: payload.action, resultQueue: 'HUMAN', replayed: false },
+				conversationId: conversation.id,
+				queue: 'HUMAN',
+				replayed: false,
+			}, 201));
+			return;
+		}
+
 		if (pathname === '/dashboard/conversations/conversation-demo-1/queue' && request.method() === 'PATCH') {
 			const payload = request.postDataJSON();
 			queueControl?.requests?.push(payload);
@@ -252,7 +273,7 @@ test('separa errores de lista e historial y permite reintentar sin perder el flu
 });
 
 test('revisión de pagos comunica errores y conserva la conversación al derivarla', async ({ page }) => {
-	const queueControl = { failNext: true, requests: [] };
+	const queueControl = { allowAction: false, requests: [] };
 	await installInboxApi(page, { queueControl });
 	await page.setViewportSize({ width: 768, height: 1024 });
 	await page.goto('/inbox/comprobantes');
@@ -279,6 +300,7 @@ test('revisión de pagos comunica errores y conserva la conversación al derivar
 		fullPage: true,
 	});
 
+	queueControl.allowAction = true;
 	await actionsTrigger.press('Enter');
 	await page.getByRole('menuitem', { name: 'Finalizar revisión y derivar' }).press('Enter');
 
@@ -286,7 +308,16 @@ test('revisión de pagos comunica errores y conserva la conversación al derivar
 	await expect(page.getByRole('status')).toContainText(
 		'Revisión finalizada. La conversación pasó a atención humana.'
 	);
-	expect(queueControl.requests).toEqual([{ queue: 'HUMAN' }, { queue: 'HUMAN' }]);
+	expect(queueControl.requests).toHaveLength(2);
+	expect(queueControl.requests[0]).toMatchObject({
+		action: 'HANDOFF',
+		reason: 'Derivación manual desde revisión de comprobantes',
+	});
+	expect(queueControl.requests[1]).toMatchObject({
+		action: 'HANDOFF',
+		reason: 'Derivación manual desde revisión de comprobantes',
+	});
+	expect(queueControl.requests[1].idempotencyKey).toBe(queueControl.requests[0].idempotencyKey);
 });
 
 test.describe('inbox móvil progresivo', () => {

@@ -729,6 +729,7 @@ export default function InboxPage() {
 	const selectedConversationIdRef = useRef(null);
 	const lastReadRequestRef = useRef('');
 	const manuallyUnreadConversationIdRef = useRef(null);
+	const paymentReviewIdempotencyKeysRef = useRef(new Map());
 
 	const routeQueue = resolveQueueFromSlug(queueSlug);
 	const routeConversationId = searchParams.get('conversation') || null;
@@ -1386,6 +1387,51 @@ export default function InboxPage() {
 		},
 	});
 
+	const paymentReviewMutation = useMutation({
+		mutationFn: async ({ conversationId, action, reason, idempotencyKey }) => {
+			if (!conversationId) return null;
+
+			const res = await api.post(
+				`/dashboard/conversations/${conversationId}/payment-review/actions`,
+				{ action, reason, idempotencyKey }
+			);
+
+			return { conversationId, action, data: res.data };
+		},
+		onSuccess: async (result) => {
+			if (!result?.conversationId) return;
+
+			paymentReviewIdempotencyKeysRef.current.delete(result.conversationId);
+			setActionFeedbackTone('status');
+			setActionFeedback('Revisión finalizada. La conversación pasó a atención humana.');
+
+			await invalidateInboxAndConversation(result.conversationId);
+
+			const nextQueue = result.data?.queue || 'HUMAN';
+			if (nextQueue !== queue) {
+				setQueue(nextQueue);
+				navigate(
+					buildInboxPath(nextQueue, result.conversationId, readFilter),
+					{ replace: false }
+				);
+			}
+		},
+		onError: (error, variables) => {
+			console.error(error);
+			if (variables?.conversationId) {
+				// Preserve the key so a retry stays idempotent if the response was lost.
+				paymentReviewIdempotencyKeysRef.current.set(
+					variables.conversationId,
+					variables.idempotencyKey
+				);
+			}
+			setActionFeedbackTone('error');
+			setActionFeedback(
+				getRequestErrorMessage(error, 'No pudimos finalizar la revisión de comprobantes.')
+			);
+		},
+	});
+
 	const resetContextMutation = useMutation({
 		mutationFn: async () => {
 			if (!selectedConversationId) return;
@@ -1536,11 +1582,25 @@ export default function InboxPage() {
 	}
 
 	function handleCompletePaymentReview() {
-		if (!selectedConversationId || moveQueueMutation.isPending) return;
-		handleMoveQueue(
-			'HUMAN',
-			'Revisión finalizada. La conversación pasó a atención humana.'
-		);
+		if (
+			!selectedConversationId ||
+			moveQueueMutation.isPending ||
+			paymentReviewMutation.isPending
+		) return;
+
+		let idempotencyKey = paymentReviewIdempotencyKeysRef.current.get(selectedConversationId);
+		if (!idempotencyKey) {
+			idempotencyKey = globalThis.crypto?.randomUUID?.() ||
+				`payment-review-${selectedConversationId}-${Date.now()}`;
+			paymentReviewIdempotencyKeysRef.current.set(selectedConversationId, idempotencyKey);
+		}
+
+		paymentReviewMutation.mutate({
+			conversationId: selectedConversationId,
+			action: 'HANDOFF',
+			reason: 'Derivación manual desde revisión de comprobantes',
+			idempotencyKey,
+		});
 	}
 
 	function handleMarkUnread() {
@@ -1558,6 +1618,7 @@ export default function InboxPage() {
 	const currentQueueLabel = getQueueLabel(currentQueue);
 	const isBusyWithConversationAction =
 		moveQueueMutation.isPending ||
+		paymentReviewMutation.isPending ||
 		resetContextMutation.isPending ||
 		clearHistoryMutation.isPending ||
 		markConversationUnreadMutation.isPending;
@@ -1883,7 +1944,7 @@ export default function InboxPage() {
 									? [{
 										id: 'payment-verified',
 										label: 'Finalizar revisión y derivar',
-										disabled: moveQueueMutation.isPending,
+										disabled: moveQueueMutation.isPending || paymentReviewMutation.isPending,
 										onClick: handleCompletePaymentReview,
 										icon: ArchiveRestore,
 									}]

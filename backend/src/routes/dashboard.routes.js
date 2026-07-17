@@ -31,6 +31,10 @@ import {
 	postSyncCustomers,
 	getCustomersSyncStatus,
 } from '../controllers/customer.controller.js';
+import {
+	getPaymentReviewActions,
+	postPaymentReviewAction,
+} from '../controllers/payment-review.controller.js';
 
 const router = Router();
 const requireInboxAccess = requireAnyRole(['ADMIN', 'AGENT']);
@@ -87,6 +91,8 @@ router.post(
 router.patch('/conversations/:conversationId/read', requireInboxAccess, patchConversationRead);
 router.patch('/conversations/:conversationId/unread', requireInboxAccess, patchConversationUnread);
 router.patch('/conversations/:conversationId/queue', requireInboxAccess, patchConversationQueue);
+router.get('/conversations/:conversationId/payment-review/actions', requireInboxAccess, getPaymentReviewActions);
+router.post('/conversations/:conversationId/payment-review/actions', requireInboxAccess, postPaymentReviewAction);
 router.patch('/conversations/:conversationId/archive', requireInboxAccess, patchConversationArchive);
 
 router.patch('/conversations/:conversationId/reset-context', requireAdmin, patchConversationResetContext);

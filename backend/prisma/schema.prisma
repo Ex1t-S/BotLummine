@@ -52,6 +52,7 @@ model Workspace {
   pendingPaymentAutomationLogs    PendingPaymentAutomationLog[]
   shipmentNotificationSetting     ShipmentNotificationSetting?
   shipmentNotificationLogs        ShipmentNotificationLog[]
+  paymentReviewActions            PaymentReviewAction[]
 }
 
 model WorkspaceBranding {
@@ -177,8 +178,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workspace          Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  featureFlagUpdates WorkspaceFeatureFlag[]
+  workspace            Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  featureFlagUpdates   WorkspaceFeatureFlag[]
+  paymentReviewActions PaymentReviewAction[]
 
   @@index([workspaceId, role])
 }
@@ -221,12 +223,13 @@ model Conversation {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
-  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact      Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  state        ConversationState?
-  messages     Message[]
-  aiLabRuns    AiLabRun[]
-  aiTurnTraces AiTurnTrace[]
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact              Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  state                ConversationState?
+  messages             Message[]
+  aiLabRuns            AiLabRun[]
+  aiTurnTraces         AiTurnTrace[]
+  paymentReviewActions PaymentReviewAction[]
 
   @@unique([workspaceId, contactId])
   @@index([workspaceId, lastMessageAt])
@@ -385,6 +388,27 @@ model Message {
   @@unique([workspaceId, metaMessageId])
   @@index([workspaceId, conversationId, createdAt])
   @@index([workspaceId, createdAt])
+}
+
+model PaymentReviewAction {
+  id             String                  @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  actorUserId    String?
+  action         PaymentReviewActionType
+  previousQueue  ConversationQueue
+  resultQueue    ConversationQueue
+  reason         String?
+  idempotencyKey String?
+  createdAt      DateTime                @default(now())
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, conversationId, createdAt])
+  @@index([workspaceId, action, createdAt])
 }
 
 model StoreInstallation {
@@ -1096,6 +1120,13 @@ enum ConversationQueue {
   AUTO
   HUMAN
   PAYMENT_REVIEW
+}
+
+enum PaymentReviewActionType {
+  APPROVE
+  REJECT
+  REQUEST_NEW_PROOF
+  HANDOFF
 }
 
 enum MessageDirection {
