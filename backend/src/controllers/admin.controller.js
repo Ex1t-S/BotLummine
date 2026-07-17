@@ -36,7 +36,10 @@ import {
 	normalizeAiProfile,
 	normalizeAiVertical,
 } from '../services/ai/vertical-profile.service.js';
-import { workspaceIdsWhere } from '../services/workspaces/workspace-scope.js';
+import {
+	adminManagedUserWhere,
+	workspaceIdsWhere,
+} from '../services/workspaces/workspace-scope.js';
 
 const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
 const DEFAULT_ESTIMATED_MESSAGE_COST_USD = Number(process.env.WHATSAPP_ESTIMATED_MESSAGE_COST_USD || 0);
@@ -1702,7 +1705,10 @@ export async function createWorkspaceUser(req, res, next) {
 export async function updateWorkspaceUser(req, res, next) {
 	try {
 		const userId = normalizeString(req.params.userId);
-		const user = await prisma.user.findUnique({ where: { id: userId } });
+		const platformAdmin = isPlatformAdmin(req.user);
+		const workspaceId = platformAdmin ? '' : requireRequestWorkspaceId(req);
+		const userWhere = adminManagedUserWhere({ userId, workspaceId, platformAdmin });
+		const user = await prisma.user.findFirst({ where: userWhere });
 
 		if (!user) {
 			return res.status(404).json({ ok: false, error: 'Usuario no encontrado.' });
@@ -1724,7 +1730,7 @@ export async function updateWorkspaceUser(req, res, next) {
 		}
 
 		const updated = await prisma.user.update({
-			where: { id: userId },
+			where: userWhere,
 			data,
 			select: {
 				id: true,

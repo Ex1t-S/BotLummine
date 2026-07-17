@@ -567,6 +567,21 @@ flowchart TD
 - Pruebas: 40/40 unitarias, 140 archivos con sintaxis válida; el caso negativo rechaza workspace vacío y normaliza sólo scope explícito.
 - Riesgo de deployment: bajo/medio; los controllers actuales ya envían workspace, pero jobs/callers externos no inventariados deben validarse en staging.
 
+### FIND-P0-028
+
+- Título: la edición de usuarios consultaba y mutaba globalmente antes de aplicar la autorización
+- Área: Backend/Administración/Multitenancy
+- Ambiente: todos
+- Severidad: High
+- Evidencia: `PATCH /api/admin/users/:userId` hacía `findUnique({ id })`, luego autorizaba según el workspace del registro y finalmente `update({ id })`.
+- Impacto: un ADMIN podía distinguir un ID existente de otro tenant por la diferencia 403/404; una regresión entre lectura y escritura perdía la frontera de marca.
+- Causa: la autorización estaba implementada como comprobación posterior al lookup global.
+- Solución: ADMIN usa `id + workspaceId` desde la primera query hasta la mutación y recibe 404 fuera de su scope; sólo PLATFORM_ADMIN conserva lookup global explícito.
+- Estado: resuelto localmente.
+- Archivos: `admin.controller.js`, `workspace-scope.js` y prueba negativa.
+- Pruebas: 41/41 unitarias, 140 archivos con sintaxis válida; se cubren scope obligatorio, aislamiento de ADMIN y excepción explícita de plataforma.
+- Riesgo de deployment: bajo; no cambia el caso autorizado, sólo falla cerrado ante IDs ajenos.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -589,7 +604,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 140 archivos JS/MJS pasan el chequeo de sintaxis.
-- 40 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento de workspace/WABA/analytics/estado/comercio/schedules y caché privada de adjuntos.
+- 41 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento de workspace/WABA/analytics/estado/comercio/schedules/usuarios y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -599,7 +614,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito hace lo mismo. Persisten como backlog las queries de módulos concurrentemente modificados.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito y gestión de usuarios hacen lo mismo. Shopify/Tiendanube verifican HMAC/state y resuelven el tenant mediante tienda/canal; queda pendiente implementar, no sólo reconocer, los webhooks de privacidad Shopify. Persisten como backlog las queries de módulos concurrentemente modificados.
 
 ## 13. Railway y despliegues
 
@@ -621,7 +636,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 140/140 | incluido en build |
-| unit tests | 40/40 | 0,45 s |
+| unit tests | 41/41 | 0,31 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -662,6 +677,7 @@ Durante el refactor de prefetch, una primera corrida privada falló porque falta
 - Fondo público sin Three.js y prefetch privado acotado para evitar trabajo especulativo masivo.
 - CI con typecheck, build raíz, presupuesto de performance y diagnósticos Playwright en fallos.
 - Programaciones de campaña y recuperación de carrito sin fallback de tenant y con mutaciones acotadas por workspace.
+- Edición de usuarios de marca con lookup/mutación dentro del workspace y acceso global exclusivo de plataforma.
 
 ## 18. Comparación antes/después
 
@@ -689,6 +705,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 - Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
 - Staging no representativo.
 - Cron productivo sin evidencia operativa.
+- Webhooks de privacidad Shopify se reconocen pero todavía no ejecutan exportación/redacción de datos.
 
 ## 22. Backlog
 

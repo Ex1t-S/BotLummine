@@ -20,6 +20,12 @@ export function workspaceOwnedWhere({ id, workspaceId, ...constraints } = {}) {
 	};
 }
 
+export function adminManagedUserWhere({ userId, workspaceId, platformAdmin = false } = {}) {
+	const id = requiredIdentifier(userId, 'userId');
+	if (platformAdmin) return { id };
+	return workspaceOwnedWhere({ id, workspaceId });
+}
+
 export async function findWorkspaceOwnedRecord(
 	modelDelegate,
 	{ id, workspaceId, select, include } = {},

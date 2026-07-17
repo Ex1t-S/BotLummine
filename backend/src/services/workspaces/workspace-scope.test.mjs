@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+	adminManagedUserWhere,
 	conversationStateForWorkspaceWhere,
 	findConversationForWorkspace,
 	findInboundMessageForWorkspace,
@@ -29,6 +30,21 @@ describe('workspace-owned record lookups', () => {
 			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
 		);
 		assert.equal(requireWorkspaceScope(' workspace-a '), 'workspace-a');
+	});
+
+	it('keeps brand-admin user management inside its workspace', () => {
+		assert.throws(
+			() => adminManagedUserWhere({ userId: 'user-a' }),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
+		assert.deepEqual(
+			adminManagedUserWhere({ userId: 'user-a', workspaceId: 'workspace-a' }),
+			{ id: 'user-a', workspaceId: 'workspace-a' },
+		);
+		assert.deepEqual(
+			adminManagedUserWhere({ userId: 'user-a', platformAdmin: true }),
+			{ id: 'user-a' },
+		);
 	});
 
 	it('queries an inbound message with an immutable workspace boundary', async () => {
