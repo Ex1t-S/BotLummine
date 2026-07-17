@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
 
 export const ATTRIBUTION_WINDOW_HOURS = Math.max(
@@ -492,8 +492,8 @@ export async function markRecoveredCartsForOrder(order = {}) {
 	return { recovered: result.count || 0 };
 }
 
-export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPACE_ID, orderId, storeId = null } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function attributeOrderConversions({ workspaceId, orderId, storeId = null } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const order = await getOrderById({ workspaceId: resolvedWorkspaceId, orderId, storeId });
 	if (!order) return { conversions: 0, recoveredCarts: 0 };
 
@@ -584,11 +584,12 @@ export async function attributeOrderConversions({ workspaceId = DEFAULT_WORKSPAC
 	return { conversions: persisted, recoveredCarts: recovered.recovered || 0 };
 }
 
-export async function attributeOrdersByIds({ workspaceId = DEFAULT_WORKSPACE_ID, orderIds = [], storeId = null } = {}) {
+export async function attributeOrdersByIds({ workspaceId, orderIds = [], storeId = null } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	let conversions = 0;
 	let recoveredCarts = 0;
 	for (const orderId of [...new Set(orderIds.map(normalizeString).filter(Boolean))]) {
-		const result = await attributeOrderConversions({ workspaceId, orderId, storeId });
+		const result = await attributeOrderConversions({ workspaceId: resolvedWorkspaceId, orderId, storeId });
 		conversions += result.conversions || 0;
 		recoveredCarts += result.recoveredCarts || 0;
 	}
@@ -672,7 +673,7 @@ export async function filterRecoverableAbandonedCarts(carts = [], workspaceId) {
 }
 
 export async function persistChatConfirmationConversions({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	conversationId,
 	messageId = null,
 	messageBody = '',
@@ -680,11 +681,11 @@ export async function persistChatConfirmationConversions({
 	phone = '',
 	createdAt = new Date(),
 } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!messageSuggestsCompletedPurchase(messageBody)) {
 		return { conversions: 0 };
 	}
 
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
 	const windowStart = subtractHours(createdAt, ATTRIBUTION_WINDOW_HOURS);
 	const recipients = await prisma.campaignRecipient.findMany({
 		where: {
@@ -726,8 +727,8 @@ export async function persistChatConfirmationConversions({
 	return { conversions: persisted };
 }
 
-export async function getPersistedConversionInsights({ workspaceId = DEFAULT_WORKSPACE_ID, recipientIds = [] } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getPersistedConversionInsights({ workspaceId, recipientIds = [] } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const ids = [...new Set(recipientIds.map(normalizeString).filter(Boolean))];
 
 	if (!ids.length) {

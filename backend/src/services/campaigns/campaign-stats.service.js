@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import {
 	ATTRIBUTION_WINDOW_HOURS,
 	messageSuggestsCompletedPurchase,
@@ -117,8 +118,8 @@ async function getChatConfirmedPurchaseRecipients(workspaceId) {
 	return chatRecipients;
 }
 
-export async function getCampaignStats({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getCampaignStats({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const workspaceWhere = { workspaceId: resolvedWorkspaceId };
 	const [
 		templatesCount,

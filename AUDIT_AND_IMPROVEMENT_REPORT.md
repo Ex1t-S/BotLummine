@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 58/58 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 59/59 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -732,6 +732,21 @@ flowchart TD
 - Pruebas: 3/3 específicas, 58/58 unitarias, 142 archivos con sintaxis válida y build raíz verde.
 - Riesgo de deployment: medio/alto por cambio fail-closed; staging debe simular DB lookup fallido y confirmar que no hay delivery, además de probar menú por dos workspaces sintéticos.
 
+### FIND-P0-039
+
+- Título: atribución y estadísticas de campañas aceptaban workspace default
+- Área: Backend/Campañas/Analytics/Multitenancy
+- Ambiente: local
+- Severidad: High
+- Evidencia: atribución por orden/lote/chat, insights persistidos y estadísticas reemplazaban un scope ausente por `workspace_default`, incluso con inputs vacíos.
+- Impacto: callers incompletos podían leer conversiones/métricas de otra marca o persistir atribuciones bajo el tenant equivocado.
+- Causa: early returns y contratos legacy anteriores al aislamiento por workspace.
+- Solución: exigir scope antes de cualquier early return/consulta y propagar el ID resuelto en atribución por lote.
+- Estado: resuelto localmente; callers productivos inventariados ya pasan workspace.
+- Archivos: `campaign-attribution.service.js`, `campaign-stats.service.js` y prueba negativa.
+- Pruebas: 1/1 específica cubriendo cinco operaciones, 59/59 unitarias, 142 archivos con sintaxis válida y build raíz verde.
+- Riesgo de deployment: bajo/medio; validar dos workspaces sintéticos con órdenes/recipients homónimos y confirmar métricas aisladas.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -754,7 +769,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 142 archivos JS/MJS pasan el chequeo de sintaxis.
-- 58 pruebas unitarias pasan, incluidas seguridad de DB/schema, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
+- 59 pruebas unitarias pasan, incluidas seguridad de DB/schema, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -786,7 +801,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 142/142 | incluido en build |
-| unit tests | 58/58 | 1,05 s |
+| unit tests | 59/59 | 1,11 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
