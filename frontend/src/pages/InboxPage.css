@@ -1795,6 +1795,93 @@
 	color: #991b1b;
 }
 
+.inbox-payment-review-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	display: grid;
+	place-items: center;
+	padding: 20px;
+	background: rgba(15, 23, 42, 0.48);
+}
+
+.inbox-payment-review-dialog {
+	width: min(100%, 480px);
+	padding: 20px;
+	border: 1px solid var(--ui-border, #d7dee5);
+	border-radius: 16px;
+	background: var(--ui-surface, #ffffff);
+	box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+}
+
+.inbox-payment-review-dialog h2 {
+	margin: 0;
+	color: var(--ui-heading, #0d151b);
+	font-size: 18px;
+}
+
+.inbox-payment-review-dialog p {
+	margin: 8px 0 16px;
+	color: var(--ui-muted, #66737d);
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.inbox-payment-review-dialog label {
+	display: block;
+	margin-bottom: 6px;
+	color: var(--ui-text, #172027);
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.inbox-payment-review-dialog textarea {
+	width: 100%;
+	min-height: 120px;
+	resize: vertical;
+	padding: 10px 12px;
+	border: 1px solid var(--ui-border, #d7dee5);
+	border-radius: 10px;
+	background: var(--ui-surface-soft, #f8fafb);
+	color: var(--ui-text, #172027);
+	font: inherit;
+	font-size: 13px;
+}
+
+.inbox-payment-review-dialog textarea:focus {
+	outline: none;
+	border-color: var(--ui-primary, #0f766e);
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+}
+
+.inbox-payment-review-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.inbox-state-action--primary {
+	border-color: var(--ui-primary, #0f766e);
+	background: var(--ui-primary, #0f766e);
+	color: #ffffff;
+}
+
+@media (max-width: 520px) {
+	.inbox-payment-review-dialog-backdrop {
+		align-items: end;
+		padding: 12px;
+	}
+
+	.inbox-payment-review-dialog-actions {
+		flex-direction: column-reverse;
+	}
+
+	.inbox-payment-review-dialog-actions button {
+		width: 100%;
+	}
+}
+
 .inbox-send-btn {
 	min-width: 64px;
 	width: auto;

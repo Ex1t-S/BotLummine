@@ -320,6 +320,30 @@ test('revisión de pagos comunica errores y conserva la conversación al derivar
 	expect(queueControl.requests[1].idempotencyKey).toBe(queueControl.requests[0].idempotencyKey);
 });
 
+test('revisión de pagos exige motivo para rechazar y registra la acción', async ({ page }) => {
+	const queueControl = { allowAction: true, requests: [] };
+	await installInboxApi(page, { queueControl });
+	await page.goto('/inbox/comprobantes');
+
+	await page.getByRole('button', { name: 'Acciones de conversacion' }).press('Enter');
+	await page.getByRole('menuitem', { name: 'Rechazar comprobante' }).press('Enter');
+
+	await expect(page.getByRole('dialog', { name: 'Rechazar comprobante' })).toBeVisible();
+	await page.screenshot({
+		path: 'audit-artifacts/screenshots/after/inbox-payment-review-reject-dialog-768x1024.png',
+		fullPage: true,
+	});
+	await page.getByLabel('Motivo', { exact: true }).fill('El monto no coincide con el pedido.');
+	await page.getByRole('button', { name: 'Rechazar y derivar' }).click();
+
+	await expect(page).toHaveURL(/\/inbox\/atencion-humana\?conversation=conversation-demo-1/);
+	await expect(page.getByRole('status')).toContainText('Rechazo registrado');
+	expect(queueControl.requests[0]).toMatchObject({
+		action: 'REJECT',
+		reason: 'El monto no coincide con el pedido.',
+	});
+});
+
 test.describe('inbox móvil progresivo', () => {
 	test.use({ viewport: { width: 390, height: 844 } });
 

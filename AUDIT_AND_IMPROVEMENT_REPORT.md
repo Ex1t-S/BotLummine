@@ -1047,9 +1047,24 @@ flowchart TD
 - Pruebas: TypeScript y build frontend verdes; 3/3 E2E en 8,1 s cubriendo loading→datos, error→retry y card móvil sin overflow; capturas 1440x960 y 390x844 inspeccionadas.
 - Riesgo de deployment: bajo; sólo presentación/estado cliente y requests existentes, sin cambio de API.
 
+### FIND-P1-060
+
+- Título: acciones de revisión de pagos disponibles sólo como contrato interno
+- Área: UI/UX/Accesibilidad/Inbox/Pagos
+- Ambiente: local
+- Severidad: Medium
+- Evidencia: la API ya aceptaba `APPROVE`, `REJECT` y `REQUEST_NEW_PROOF`, pero el operador sólo podía derivar manualmente; no había captura de motivo ni feedback específico por decisión.
+- Impacto: el equipo no podía completar el flujo desde la interfaz ni dejar una explicación estructurada para rechazo o nuevo comprobante.
+- Causa: el backend durable se incorporó antes que el recorrido visual y el diálogo de motivo.
+- Solución: agregar acciones de registrar aprobación, rechazar y pedir otro comprobante; diálogo `role=dialog` con label, `aria-modal`, foco inicial, Escape, validación de motivo y clave idempotente por conversación/acción. El feedback aclara que las acciones quedan derivadas a HUMAN.
+- Estado: resuelto localmente para el flujo UI; consulta visual del historial auditable y una política de cola distinta de HUMAN continúan pendientes de staging.
+- Archivos: `frontend/src/pages/InboxPage.jsx/css`, `frontend/tests/inbox/critical-flow.spec.js` y captura sintética de diálogo.
+- Pruebas: TypeScript/build frontend verdes; 6/6 E2E de Inbox en 10,4 s; rechazo con motivo y reintento idempotente verificados.
+- Riesgo de deployment: medio; usa los endpoints/migración nuevos y debe desplegarse sólo después de `PaymentReviewAction` en staging.
+
 ## 8. Auditoría UI/UX
 
-- Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío. Los cambios de cola conservan selección/URL y “Finalizar revisión” usa una acción HANDOFF durable e idempotente sin simular una aprobación.
+- Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío. Los cambios de cola conservan selección/URL y la revisión expone HANDOFF, aprobación registrada, rechazo con motivo y pedido de nuevo comprobante, todos auditables e idempotentes.
 - Operaciones: loading, error recuperable y empty sin marcas quedan separados; el centro vuelve a mostrar prioridades después de retry.
 - Carritos: tabla operativa en desktop con cliente/importe/antigüedad/estado/contacto/responsable/acción; cards en móvil y error inicial separado del vacío.
 - Responsive: corregidos shell contaminado por CSS lazy y composer fuera del viewport.
@@ -1110,7 +1125,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
 | root build | OK; backend + frontend | 12,9 s en la última corrida |
-| Playwright Chromium | 14/14 consolidada previa; 5/5 Inbox + 3/3 Operaciones + 3/3 Carritos actuales | 12,6 s + 4,9 s + 8,1 s; APIs sintéticas, sin delivery |
+| Playwright Chromium | 14/14 consolidada previa; 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos actuales | 10,4 s + 4,9 s + 8,1 s; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
@@ -1126,6 +1141,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Revisión de pagos: entidad y migración aditivas, API GET/POST scoped, actor/motivo/idempotencia y HANDOFF conectado al Inbox.
 - Operaciones: estado vacío sin error boundary, retry de resumen y loading anunciado.
 - Carritos: tabla desktop operativa, cards mobile, filtros alineados y estados loading/error/empty/data mutuamente excluyentes.
+- Pagos: acciones de aprobar/rechazar/pedir comprobante con motivo, foco y feedback accesible; sigue pendiente visualizar el historial de acciones.
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
@@ -1170,7 +1186,7 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 
 ## 19. Capturas
 
-Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; Clientes/selector, Catálogo, AI Lab y Carritos en 390x844; tabla de Carritos en 1440x960; revisión de pagos y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
+Generadas en `frontend/audit-artifacts/screenshots/after/`: landing, precios, contacto y login en 1440x960/390x844; Inbox automático en 1440x960/1280x800; lista/chat en 768x1024/390x844; diálogo de rechazo de pagos en 768x1024; Clientes/selector, Catálogo, AI Lab y Carritos en 390x844; tabla de Carritos en 1440x960; revisión de pagos y sus estados de error recuperable en 1440x960/768x1024; errores de lista/historial, marcas y Analytics en 1440x960. Todas usan fixtures sintéticos. No se conserva una serie completa “before”; la evidencia previa móvil quedó registrada en métricas y hallazgos, limitación declarada para esta iteración.
 
 ## 20. Métricas
 
@@ -1192,7 +1208,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: Inbox base, HANDOFF durable de pagos, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: UI de aprobar/rechazar/pedir comprobante e historial, selección/acciones masivas de carritos, campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
+P1: Inbox base, acciones durables de pagos, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: historial visual de acciones, selección/acciones masivas de carritos, campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 

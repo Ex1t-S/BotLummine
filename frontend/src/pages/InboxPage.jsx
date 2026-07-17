@@ -725,6 +725,7 @@ export default function InboxPage() {
 	const isAdmin = isAdminUser(user);
 	const contactsContainerRef = useRef(null);
 	const messagesContainerRef = useRef(null);
+	const paymentReviewReasonInputRef = useRef(null);
 	const shouldStickToBottomRef = useRef(true);
 	const selectedConversationIdRef = useRef(null);
 	const lastReadRequestRef = useRef('');
@@ -748,6 +749,8 @@ export default function InboxPage() {
 	const [composerDrafts, setComposerDrafts] = useState({});
 	const [actionFeedback, setActionFeedback] = useState('');
 	const [actionFeedbackTone, setActionFeedbackTone] = useState('status');
+	const [paymentReviewDialog, setPaymentReviewDialog] = useState(null);
+	const [paymentReviewReason, setPaymentReviewReason] = useState('');
 	const normalizedSearch = searchTerm.trim().toLowerCase();
 
 	useEffect(() => {
@@ -1294,6 +1297,23 @@ export default function InboxPage() {
 		return () => window.clearTimeout(timeout);
 	}, [actionFeedback]);
 
+	useEffect(() => {
+		if (!paymentReviewDialog) return;
+		paymentReviewReasonInputRef.current?.focus();
+	}, [paymentReviewDialog]);
+
+	useEffect(() => {
+		if (!paymentReviewDialog) return undefined;
+		function handleDialogKeyDown(event) {
+			if (event.key === 'Escape') {
+				setPaymentReviewDialog(null);
+				setPaymentReviewReason('');
+			}
+		}
+		document.addEventListener('keydown', handleDialogKeyDown);
+		return () => document.removeEventListener('keydown', handleDialogKeyDown);
+	}, [paymentReviewDialog]);
+
 	const invalidateInboxAndConversation = async (
 		conversationId = selectedConversationId
 	) => {
@@ -1401,9 +1421,19 @@ export default function InboxPage() {
 		onSuccess: async (result) => {
 			if (!result?.conversationId) return;
 
-			paymentReviewIdempotencyKeysRef.current.delete(result.conversationId);
+			paymentReviewIdempotencyKeysRef.current.delete(
+				`${result.conversationId}:${result.action}`
+			);
+			setPaymentReviewDialog(null);
+			setPaymentReviewReason('');
 			setActionFeedbackTone('status');
-			setActionFeedback('Revisión finalizada. La conversación pasó a atención humana.');
+			const successMessages = {
+				APPROVE: 'Aprobación registrada. La conversación pasó a atención humana para seguimiento.',
+				REJECT: 'Rechazo registrado. La conversación pasó a atención humana para seguimiento.',
+				REQUEST_NEW_PROOF: 'Solicitud de nuevo comprobante registrada y derivada a atención humana.',
+				HANDOFF: 'Revisión finalizada. La conversación pasó a atención humana.',
+			};
+			setActionFeedback(successMessages[result.action] || successMessages.HANDOFF);
 
 			await invalidateInboxAndConversation(result.conversationId);
 
@@ -1416,12 +1446,12 @@ export default function InboxPage() {
 				);
 			}
 		},
-		onError: (error, variables) => {
+			onError: (error, variables) => {
 			console.error(error);
 			if (variables?.conversationId) {
 				// Preserve the key so a retry stays idempotent if the response was lost.
 				paymentReviewIdempotencyKeysRef.current.set(
-					variables.conversationId,
+					`${variables.conversationId}:${variables.action}`,
 					variables.idempotencyKey
 				);
 			}
@@ -1581,26 +1611,60 @@ export default function InboxPage() {
 		moveQueueMutation.mutate({ nextQueue, successMessage });
 	}
 
-	function handleCompletePaymentReview() {
+	function getPaymentReviewIdempotencyKey(conversationId, action) {
+		const mapKey = `${conversationId}:${action}`;
+		let idempotencyKey = paymentReviewIdempotencyKeysRef.current.get(mapKey);
+		if (!idempotencyKey) {
+			idempotencyKey = globalThis.crypto?.randomUUID?.() ||
+				`payment-review-${conversationId}-${action}-${Date.now()}`;
+			paymentReviewIdempotencyKeysRef.current.set(mapKey, idempotencyKey);
+		}
+		return idempotencyKey;
+	}
+
+	function handlePaymentReviewAction(action, reason = '') {
 		if (
 			!selectedConversationId ||
 			moveQueueMutation.isPending ||
 			paymentReviewMutation.isPending
 		) return;
 
-		let idempotencyKey = paymentReviewIdempotencyKeysRef.current.get(selectedConversationId);
-		if (!idempotencyKey) {
-			idempotencyKey = globalThis.crypto?.randomUUID?.() ||
-				`payment-review-${selectedConversationId}-${Date.now()}`;
-			paymentReviewIdempotencyKeysRef.current.set(selectedConversationId, idempotencyKey);
-		}
-
 		paymentReviewMutation.mutate({
 			conversationId: selectedConversationId,
-			action: 'HANDOFF',
-			reason: 'Derivación manual desde revisión de comprobantes',
-			idempotencyKey,
+			action,
+			reason: reason || null,
+			idempotencyKey: getPaymentReviewIdempotencyKey(selectedConversationId, action),
 		});
+	}
+
+	function handleCompletePaymentReview() {
+		handlePaymentReviewAction('HANDOFF', 'Derivación manual desde revisión de comprobantes');
+	}
+
+	function openPaymentReviewReasonDialog(action) {
+		const copy = {
+			REJECT: {
+				title: 'Rechazar comprobante',
+				description: 'Indicá por qué el comprobante no puede aprobarse.',
+				submitLabel: 'Rechazar y derivar',
+			},
+			REQUEST_NEW_PROOF: {
+				title: 'Pedir otro comprobante',
+				description: 'Indicá qué debe corregir o volver a enviar el cliente.',
+				submitLabel: 'Solicitar y derivar',
+			},
+		};
+
+		if (!copy[action]) return;
+		setPaymentReviewReason('');
+		setPaymentReviewDialog({ action, ...copy[action] });
+	}
+
+	function submitPaymentReviewReason(event) {
+		event.preventDefault();
+		const reason = paymentReviewReason.trim();
+		if (!reason || !paymentReviewDialog) return;
+		handlePaymentReviewAction(paymentReviewDialog.action, reason);
 	}
 
 	function handleMarkUnread() {
@@ -1625,6 +1689,47 @@ export default function InboxPage() {
 
 	return (
 		<div className={inboxPageClassName}>
+			{paymentReviewDialog ? (
+				<div className="inbox-payment-review-dialog-backdrop">
+					<div
+						className="inbox-payment-review-dialog"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="payment-review-dialog-title"
+						aria-describedby="payment-review-dialog-description"
+					>
+						<h2 id="payment-review-dialog-title">{paymentReviewDialog.title}</h2>
+						<p id="payment-review-dialog-description">{paymentReviewDialog.description}</p>
+						<form onSubmit={submitPaymentReviewReason}>
+							<label htmlFor="payment-review-reason">Motivo</label>
+							<textarea
+								id="payment-review-reason"
+								ref={paymentReviewReasonInputRef}
+								value={paymentReviewReason}
+								onChange={(event) => setPaymentReviewReason(event.target.value)}
+								maxLength={500}
+								required
+								placeholder="Escribí el motivo para dejarlo en la auditoría"
+							/>
+							<div className="inbox-payment-review-dialog-actions">
+								<button
+									type="button"
+									className="inbox-state-action"
+									onClick={() => {
+										setPaymentReviewDialog(null);
+										setPaymentReviewReason('');
+									}}
+								>
+									Cancelar
+								</button>
+								<button type="submit" className="inbox-state-action inbox-state-action--primary">
+									{paymentReviewDialog.submitLabel}
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			) : null}
 			{showConversationSidebar ? (
 			<aside className="inbox-sidebar">
 				<div className="inbox-sidebar-top">
@@ -1947,6 +2052,25 @@ export default function InboxPage() {
 										disabled: moveQueueMutation.isPending || paymentReviewMutation.isPending,
 										onClick: handleCompletePaymentReview,
 										icon: ArchiveRestore,
+									}, {
+										id: 'payment-approve',
+										label: 'Registrar aprobación',
+										disabled: moveQueueMutation.isPending || paymentReviewMutation.isPending,
+										onClick: () => handlePaymentReviewAction('APPROVE'),
+										icon: CheckCheck,
+									}, {
+										id: 'payment-reject',
+										label: 'Rechazar comprobante',
+										danger: true,
+										disabled: moveQueueMutation.isPending || paymentReviewMutation.isPending,
+										onClick: () => openPaymentReviewReasonDialog('REJECT'),
+										icon: Eraser,
+									}, {
+										id: 'payment-request-proof',
+										label: 'Pedir otro comprobante',
+										disabled: moveQueueMutation.isPending || paymentReviewMutation.isPending,
+										onClick: () => openPaymentReviewReasonDialog('REQUEST_NEW_PROOF'),
+										icon: RotateCcw,
 									}]
 									: []),
 								{
