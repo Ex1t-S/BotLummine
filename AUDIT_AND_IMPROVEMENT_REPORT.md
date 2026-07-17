@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 72/72 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 74/74 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -867,6 +867,21 @@ flowchart TD
 - Pruebas: 2/2 específicas, 72/72 unitarias y build raíz verde en una validación de 13,60 s.
 - Riesgo de deployment: medio; staging debe configurar el secret de state, probar callback válido/alterado/vencido y confirmar que body/query no cambia el workspace autenticado.
 
+### FIND-P0-048
+
+- Título: identidad Lummine persistía como fallback en servicios compartidos
+- Área: Frontend/Backend/Marca blanca/UX
+- Ambiente: local
+- Severidad: High
+- Evidencia: un menú interactivo sin sender mostraba `Lummine` en cualquier workspace y el analizador web se identificaba externamente como `BotLummine Context Analyzer`.
+- Impacto: otra marca podía ver identidad incorrecta en Inbox y sitios analizados recibían un identificador legacy de cliente en vez de la plataforma.
+- Causa: fallbacks históricos no conectados al branding por workspace.
+- Solución: microcopy neutra `Marca`, User-Agent de plataforma `BladeIA Context Analyzer` e import default sin uso eliminado del pipeline de chat.
+- Estado: resuelto localmente; los perfiles `LUMMINE_BODYWEAR` se conservan como vertical explícita/configurable, no como identidad global.
+- Archivos: Inbox, workspace context draft, chat service y prueba de neutralidad.
+- Pruebas: 2/2 específicas, 74/74 unitarias, build raíz verde y `npx tsc -b` sin errores.
+- Riesgo de deployment: bajo; revisión visual de mensajes interactivos sin sender en dos marcas.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -889,7 +904,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 143 archivos JS/MJS pasan el chequeo de sintaxis.
-- 72 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
+- 74 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -921,17 +936,19 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 143/143 | incluido en build |
-| unit tests | 72/72 | 1,33 s |
+| unit tests | 74/74 | 1,44 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
 | frontend build | OK; sin chunks >500 kB | 0,99 s |
-| frontend typecheck | OK; 0 errores | 3,8 s |
+| frontend typecheck | OK; 0 errores | 4,7 s en la última corrida |
 | root build | OK; backend + frontend | incluido en validación consolidada |
 | Playwright Chromium | 14/14; 10 rutas de performance | 23,2 s |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
+
+En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y luego `npm run typecheck` fallaron porque el árbol concurrente actual no define ese script. No fue un error de TypeScript: `npx tsc -b` desde `frontend` terminó con código 0 en 4,7 s. Los manifests sucios del usuario se preservaron y CI continúa ejecutando directamente `npx tsc -b`.
 
 ## 17. Cambios implementados
 

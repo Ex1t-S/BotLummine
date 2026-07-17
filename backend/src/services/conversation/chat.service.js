@@ -65,7 +65,6 @@ import { sendAndPersistOutbound } from './outbound-message.service.js';
 import { maybeForwardPaymentProof } from './payment-proof-forwarding.service.js';
 import { buildMenuAssistantContext } from '../whatsapp/whatsapp-menu.service.js';
 import {
-	DEFAULT_WORKSPACE_ID,
 	getWorkspaceRuntimeConfig,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';

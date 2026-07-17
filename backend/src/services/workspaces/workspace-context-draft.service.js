@@ -209,7 +209,7 @@ async function fetchWebsiteSignals(url = '') {
 		{
 			method: 'GET',
 			headers: {
-				'User-Agent': 'BotLummine Context Analyzer',
+				'User-Agent': 'BladeIA Context Analyzer',
 				'Accept': 'text/html,application/xhtml+xml'
 			}
 		},

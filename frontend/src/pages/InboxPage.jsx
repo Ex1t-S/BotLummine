@@ -324,7 +324,7 @@ function resolveInteractiveMenuDisplay(message = {}) {
 	const title =
 		(isGenericMenuTitle(headerText) ? '' : headerText) ||
 		String(message.senderName || '').trim() ||
-		'Lummine';
+		'Marca';
 	const buttonText = String(payload.buttonText || '').trim() || 'Abrir menu';
 
 	return {
