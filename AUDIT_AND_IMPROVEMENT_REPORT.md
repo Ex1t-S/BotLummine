@@ -597,6 +597,21 @@ flowchart TD
 - Pruebas: 41/41 unitarias y 140 archivos con sintaxis válida; inventario de callers confirma workspace explícito.
 - Riesgo de deployment: bajo; endurecimiento de filtros sin cambios de schema.
 
+### FIND-P0-030
+
+- Título: el pipeline inbound podía inventar `workspace_default` si un caller omitía el scope
+- Área: Backend/WhatsApp/IA/Multitenancy
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: `getOrCreateConversation` y `processInboundMessage` tenían `workspaceId = DEFAULT_WORKSPACE_ID`; las lecturas y actualizaciones posteriores de conversación usaban sólo ID.
+- Impacto: un webhook, job o herramienta interna incompleta podía persistir mensajes, memoria y respuestas IA en el tenant equivocado.
+- Causa: fallback heredado de la etapa single-tenant dentro del servicio compartido más crítico.
+- Solución: ambos entrypoints fallan antes de persistencia sin workspace; todas las lecturas/updates de conversación del turno conservan `id + workspaceId`.
+- Estado: resuelto localmente; no se procesaron mensajes ni se invocaron proveedores.
+- Archivos: `chat.service.js`, `inbound-workspace-scope.test.js`.
+- Pruebas: 43/43 unitarias y 140 archivos con sintaxis válida; dos casos negativos verifican rechazo antes de DB.
+- Riesgo de deployment: medio; callers inventariados pasan workspace, pero staging debe cubrir webhook, AI Lab y job QA antes del rollout.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -619,7 +634,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 140 archivos JS/MJS pasan el chequeo de sintaxis.
-- 41 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento de workspace/WABA/analytics/estado/comercio/schedules/usuarios y caché privada de adjuntos.
+- 43 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/analytics/estado/comercio/schedules/usuarios y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -629,7 +644,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito, gestión de usuarios, deduplicación de Inbox y conexión comercial hacen lo mismo. Shopify/Tiendanube verifican HMAC/state y resuelven el tenant mediante tienda/canal; queda pendiente implementar, no sólo reconocer, los webhooks de privacidad Shopify. Persisten como backlog las queries de módulos concurrentemente modificados.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El pipeline inbound ya no inventa un tenant y conserva scope en todas las conversaciones; reproceso/cooldown, outbound, menú, handoff y memoria usan el mismo límite. Los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito, gestión de usuarios, deduplicación de Inbox y conexión comercial hacen lo mismo. Shopify/Tiendanube verifican HMAC/state y resuelven el tenant mediante tienda/canal; queda pendiente implementar, no sólo reconocer, los webhooks de privacidad Shopify. Persisten como backlog las queries de módulos concurrentemente modificados.
 
 ## 13. Railway y despliegues
 
@@ -651,7 +666,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 140/140 | incluido en build |
-| unit tests | 41/41 | 0,31 s |
+| unit tests | 43/43 | 0,73 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -694,6 +709,7 @@ Durante el refactor de prefetch, una primera corrida privada falló porque falta
 - Programaciones de campaña y recuperación de carrito sin fallback de tenant y con mutaciones acotadas por workspace.
 - Edición de usuarios de marca con lookup/mutación dentro del workspace y acceso global exclusivo de plataforma.
 - Deduplicación de Inbox y selección de comercio con scope propagado a toda la transacción.
+- Entry points inbound/AI sin tenant por defecto y conversaciones acotadas durante todo el turno.
 
 ## 18. Comparación antes/después
 

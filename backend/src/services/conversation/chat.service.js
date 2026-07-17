@@ -6,6 +6,8 @@ import { validateAssistantOutput } from '../ai/assistant-output.js';
 import {
 	conversationStateForWorkspaceWhere,
 	findInboundMessageForWorkspace,
+	requireWorkspaceScope,
+	workspaceOwnedWhere,
 } from '../workspaces/workspace-scope.js';
 import { runAssistantReply } from '../ai/index.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
@@ -506,7 +508,7 @@ function startPendingAutoReplySweep() {
 startPendingAutoReplySweep();
 
 export async function getOrCreateConversation({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	waId,
 	contactName,
 	profileImageUrl,
@@ -515,7 +517,7 @@ export async function getOrCreateConversation({
 	aiEnabled = false,
 	forceRouting = false
 }) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedWaId = normalizeThreadPhone(waId);
 	const normalizedProfileImageUrl = String(profileImageUrl || '').trim();
 	const hasProfileImageUrl = Boolean(normalizedProfileImageUrl);
@@ -579,7 +581,7 @@ export async function getOrCreateConversation({
 
 	if (!conversation.state) {
 		conversation = await prisma.conversation.update({
-			where: { id: conversation.id },
+			where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				state: {
 					create: {
@@ -599,7 +601,7 @@ export async function getOrCreateConversation({
 
 	if (forceRouting && (conversation.queue !== queue || conversation.aiEnabled !== aiEnabled)) {
 		conversation = await prisma.conversation.update({
-			where: { id: conversation.id },
+			where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				queue,
 				aiEnabled
@@ -612,7 +614,7 @@ export async function getOrCreateConversation({
 }
 
 export async function processInboundMessage({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	waId,
 	contactName,
 	profileImageUrl,
@@ -627,7 +629,7 @@ export async function processInboundMessage({
 	bypassResponseCooldown = false,
 }) {
 	const turnStartedAt = Date.now();
-	let resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	let normalizedWaId = normalizeThreadPhone(waId);
 	let conversation = null;
 	let createdInboundAt = new Date();
@@ -758,7 +760,7 @@ export async function processInboundMessage({
 
 	if (!existingInboundMessageId) {
 		await prisma.conversation.update({
-			where: { id: conversation.id },
+			where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				lastMessageAt: createdInboundAt,
 				lastInboundMessageAt: createdInboundAt,
@@ -782,8 +784,8 @@ export async function processInboundMessage({
 		});
 	}
 
-	const freshConversation = await prisma.conversation.findUnique({
-		where: { id: conversation.id },
+	const freshConversation = await prisma.conversation.findFirst({
+		where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
 		include: {
 			contact: true,
 			state: true,
@@ -1031,7 +1033,7 @@ export async function processInboundMessage({
 		});
 
 		await prisma.conversation.update({
-			where: { id: freshConversation.id },
+			where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				queue: replyGate.queue || 'HUMAN',
 				aiEnabled: replyGate.aiEnabled ?? false,
@@ -1054,7 +1056,7 @@ export async function processInboundMessage({
 		});
 
 		await prisma.conversation.update({
-			where: { id: freshConversation.id },
+			where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				lastSummary: buildConversationSummary({
 					intent,
@@ -1184,7 +1186,7 @@ export async function processInboundMessage({
 	});
 
 	await prisma.conversation.update({
-		where: { id: freshConversation.id },
+		where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 		data: {
 			queue: queueDecision.queue,
 			aiEnabled: queueDecision.aiEnabled,
@@ -1241,7 +1243,7 @@ export async function processInboundMessage({
 		});
 
 		await prisma.conversation.update({
-			where: { id: freshConversation.id },
+			where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				queue: 'HUMAN',
 				aiEnabled: false,
@@ -1290,7 +1292,7 @@ export async function processInboundMessage({
 		});
 
 		await prisma.conversation.update({
-			where: { id: freshConversation.id },
+			where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				lastSummary: buildConversationSummary({
 					intent,
@@ -1355,7 +1357,7 @@ export async function processInboundMessage({
 		});
 
 		await prisma.conversation.update({
-			where: { id: freshConversation.id },
+			where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				lastSummary: buildConversationSummary({
 					intent,
@@ -1401,7 +1403,7 @@ export async function processInboundMessage({
 		});
 
 		await prisma.conversation.update({
-			where: { id: freshConversation.id },
+			where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 			data: {
 				lastSummary: buildConversationSummary({
 					intent,
@@ -1979,7 +1981,7 @@ export async function processInboundMessage({
 	});
 
 	await prisma.conversation.update({
-		where: { id: freshConversation.id },
+		where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
 		data: {
 			lastSummary: buildConversationSummary({
 				intent,
