@@ -2,7 +2,10 @@ import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { createAiTurnTrace, logAiTurnTrace } from '../ai/turn-trace.js';
 import { validateAssistantOutput } from '../ai/assistant-output.js';
-import { findInboundMessageForWorkspace } from '../workspaces/workspace-scope.js';
+import {
+	conversationStateForWorkspaceWhere,
+	findInboundMessageForWorkspace,
+} from '../workspaces/workspace-scope.js';
 import { runAssistantReply } from '../ai/index.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
@@ -330,9 +333,10 @@ function clearPendingAutoReply(conversationId) {
 	}
 }
 
-async function processPendingAutoReply(conversationId, { workspaceId = null, transportMode = 'live' } = {}) {
-	const state = await prisma.conversationState.findUnique({
-		where: { conversationId },
+async function processPendingAutoReply(conversationId, { workspaceId, transportMode = 'live' } = {}) {
+	const stateScope = conversationStateForWorkspaceWhere({ conversationId, workspaceId });
+	const state = await prisma.conversationState.findFirst({
+		where: stateScope,
 		include: {
 			conversation: {
 				include: {
@@ -346,7 +350,7 @@ async function processPendingAutoReply(conversationId, { workspaceId = null, tra
 
 	const claimed = await prisma.conversationState.updateMany({
 		where: {
-			conversationId,
+			...stateScope,
 			pendingAutoReplyMessageId: state.pendingAutoReplyMessageId,
 			pendingAutoReplyLockedAt: null,
 		},
@@ -361,6 +365,7 @@ async function processPendingAutoReply(conversationId, { workspaceId = null, tra
 			where: {
 				id: state.pendingAutoReplyMessageId,
 				conversationId,
+				workspaceId,
 				direction: 'INBOUND',
 			},
 			include: {
@@ -374,7 +379,7 @@ async function processPendingAutoReply(conversationId, { workspaceId = null, tra
 		if (!inbound) return false;
 
 		await processInboundMessage({
-			workspaceId: workspaceId || inbound.workspaceId,
+			workspaceId,
 			waId: inbound.conversation?.contact?.waId,
 			contactName:
 				inbound.conversation?.contact?.name ||
@@ -396,7 +401,7 @@ async function processPendingAutoReply(conversationId, { workspaceId = null, tra
 
 		await prisma.conversationState.updateMany({
 			where: {
-				conversationId,
+				...stateScope,
 				pendingAutoReplyMessageId: inbound.id,
 			},
 			data: {
@@ -408,7 +413,7 @@ async function processPendingAutoReply(conversationId, { workspaceId = null, tra
 		return true;
 	} catch (error) {
 		await prisma.conversationState.updateMany({
-			where: { conversationId },
+			where: stateScope,
 			data: { pendingAutoReplyLockedAt: null },
 		}).catch(() => {});
 		throw error;
@@ -422,13 +427,14 @@ function scheduleAutoReplyCooldown({
 	transportMode = 'live',
 	delayMs = AUTO_REPLY_COOLDOWN_MS,
 }) {
-	if (!conversationId || delayMs <= 0) return false;
+	if (!conversationId || !workspaceId || delayMs <= 0) return false;
 
 	clearPendingAutoReply(conversationId);
+	const stateScope = conversationStateForWorkspaceWhere({ conversationId, workspaceId });
 	const dueAt = new Date(Date.now() + delayMs);
 	if (messageId) {
 		prisma.conversationState.updateMany({
-			where: { conversationId },
+			where: stateScope,
 			data: {
 				pendingAutoReplyMessageId: messageId,
 				pendingAutoReplyDueAt: dueAt,

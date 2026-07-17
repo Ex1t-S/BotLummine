@@ -402,6 +402,21 @@ flowchart TD
 - Pruebas: 34/34 unitarias y build backend con 138 archivos válidos.
 - Riesgo de deployment: bajo; aumenta requests de adjuntos a cambio de evitar persistencia no controlada.
 
+### FIND-P0-017
+
+- Título: cooldown automático operaba estados y mensajes sólo por conversationId
+- Área: seguridad/multitenancy/agente IA
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: carga, claim, unlock y limpieza de `pendingAutoReply` ignoraban el `workspaceId` recibido; el mensaje pendiente tampoco lo filtraba y el reproceso prefería el argumento sobre el tenant persistido.
+- Impacto: una asociación interna incorrecta podía reclamar o reprocesar estado de otra conversación/tenant y disparar una respuesta con configuración equivocada.
+- Causa: `ConversationState` no posee `workspaceId` directo y el código no aplicaba filtro relacional mediante `conversation.workspaceId`.
+- Solución: scope canónico relacional, workspace obligatorio al programar/procesar y filtro del mensaje inbound por el mismo tenant.
+- Estado: resuelto.
+- Archivos: `chat.service.js`, `workspace-scope.js` y prueba negativa.
+- Pruebas: 35/35 unitarias, tipo Prisma verificado y build backend verde.
+- Riesgo de deployment: bajo; todos los callers actuales ya suministran el workspace correcto.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -424,7 +439,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 138 archivos JS/MJS pasan el chequeo de sintaxis.
-- 34 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, aislamiento de workspace/WABA/analytics y caché privada de adjuntos.
+- 35 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, aislamiento de workspace/WABA/analytics/estado y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -434,7 +449,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID, el servicio outbound exige `id + workspaceId`, los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Persisten como backlog la auditoría exhaustiva de otras queries por ID y archivos.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound y su cooldown usan scope inmutable, el servicio outbound exige `id + workspaceId`, los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Persisten como backlog la auditoría exhaustiva de otras queries por ID.
 
 ## 13. Railway y despliegues
 
@@ -456,7 +471,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 138/138 | incluido en build |
-| unit tests | 34/34 | 1,0 s |
+| unit tests | 35/35 | 1,2 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -483,6 +498,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Scope WABA obligatorio en webhooks de plantillas de WhatsApp.
 - Scope restrictivo en agregaciones de analytics, incluso con lista vacía.
 - Adjuntos autenticados fuera de caches públicas o persistentes.
+- Cooldown/reproceso automático acotado por la relación conversación-workspace.
 
 ## 18. Comparación antes/después
 

@@ -35,6 +35,22 @@ export function workspaceIdsWhere(workspaceIds = []) {
 	return { workspaceId: { in: normalizedIds } };
 }
 
+export function conversationStateForWorkspaceWhere({
+	conversationId,
+	workspaceId,
+	...constraints
+} = {}) {
+	return {
+		conversationId: requiredIdentifier(conversationId, 'conversationId'),
+		conversation: {
+			is: {
+				workspaceId: requiredIdentifier(workspaceId, 'workspaceId'),
+			},
+		},
+		...constraints,
+	};
+}
+
 export async function findInboundMessageForWorkspace(prismaClient, { id, workspaceId } = {}) {
 	if (!prismaClient?.message?.findFirst) {
 		throw new TypeError('A Prisma-compatible message client is required');

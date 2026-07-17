@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+	conversationStateForWorkspaceWhere,
 	findConversationForWorkspace,
 	findInboundMessageForWorkspace,
 	whatsAppTemplateWebhookWhere,
@@ -94,5 +95,24 @@ describe('workspace-owned record lookups', () => {
 		assert.deepEqual(workspaceIdsWhere([' workspace-a ', '', 'workspace-a', 'workspace-b']), {
 			workspaceId: { in: ['workspace-a', 'workspace-b'] },
 		});
+	});
+
+	it('scopes conversation state operations through the owning conversation', () => {
+		assert.throws(
+			() => conversationStateForWorkspaceWhere({ conversationId: 'conversation-a' }),
+			(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+		);
+		assert.deepEqual(
+			conversationStateForWorkspaceWhere({
+				conversationId: 'conversation-a',
+				workspaceId: 'workspace-a',
+				pendingAutoReplyLockedAt: null,
+			}),
+			{
+				conversationId: 'conversation-a',
+				conversation: { is: { workspaceId: 'workspace-a' } },
+				pendingAutoReplyLockedAt: null,
+			},
+		);
 	});
 });
