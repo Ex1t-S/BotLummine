@@ -19,6 +19,11 @@ frontend/
 
 ## Desarrollo Local
 
+> Seguridad: el backend bloquea el inicio local si `DATABASE_URL` apunta a un host remoto.
+> Usar PostgreSQL local para desarrollo y tests. `ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT=true`
+> existe solo como opt-in consciente para un entorno remoto no productivo; no usarlo para
+> conectar una instancia local a producción.
+
 Instalar dependencias:
 
 ```bash

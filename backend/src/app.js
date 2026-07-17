@@ -21,8 +21,10 @@ import { logger } from './lib/logger.js';
 import { attachRequestId } from './lib/request-id.js';
 import { validateSecretEncryptionConfig } from './lib/secret-crypto.js';
 import { captureException, captureSecurityEvent, initSentry } from './lib/sentry.js';
+import { assertSafeDatabaseTarget } from './lib/database-safety.js';
 
 dotenv.config();
+assertSafeDatabaseTarget();
 validateAuthConfig();
 validateSecretEncryptionConfig();
 initSentry();
