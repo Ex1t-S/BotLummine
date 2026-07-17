@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { createAiTurnTrace, logAiTurnTrace } from '../ai/turn-trace.js';
 import { validateAssistantOutput } from '../ai/assistant-output.js';
+import { findInboundMessageForWorkspace } from '../workspaces/workspace-scope.js';
 import { runAssistantReply } from '../ai/index.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
@@ -654,24 +655,16 @@ export async function processInboundMessage({
 	}
 
 	if (existingInboundMessageId) {
-		inboundMessage = await prisma.message.findUnique({
-			where: { id: existingInboundMessageId },
-			include: {
-				conversation: {
-					include: {
-						contact: true,
-						state: true,
-					},
-				},
-			},
+		inboundMessage = await findInboundMessageForWorkspace(prisma, {
+			id: existingInboundMessageId,
+			workspaceId: resolvedWorkspaceId,
 		});
 
-		if (!inboundMessage || inboundMessage.direction !== 'INBOUND') {
+		if (!inboundMessage) {
 			return finalizeInboundResult({ conversation: null });
 		}
 
 		conversation = inboundMessage.conversation;
-		resolvedWorkspaceId = inboundMessage.workspaceId;
 		normalizedWaId = normalizeThreadPhone(conversation?.contact?.waId || waId);
 		contactName = contactName || inboundMessage.senderName || conversation?.contact?.name || normalizedWaId;
 		messageBody = inboundMessage.body;

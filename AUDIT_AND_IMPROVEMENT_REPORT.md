@@ -297,6 +297,21 @@ flowchart TD
 - Pruebas: salida legacy normalizada, rechazo de vacío/handoff incompleto y fallback ante `INVALID_OUTPUT`.
 - Riesgo de deployment: medio-bajo; conserva `text` y agrega `output`.
 
+### FIND-P0-010
+
+- Título: reproceso inbound podía adoptar el workspace del mensaje buscado sólo por ID
+- Área: seguridad/multitenancy
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: `existingInboundMessageId` usaba `message.findUnique({ id })` y luego asignaba `resolvedWorkspaceId = inboundMessage.workspaceId`.
+- Impacto: un ID incorrecto en el contrato interno podía cruzar el límite de tenant durante el reproceso.
+- Causa: el workspace se trataba como dato recuperado y no como frontera inmutable de la operación.
+- Solución: lookup obligatorio por `id + workspaceId + direction=INBOUND`; nunca reemplazar el workspace esperado.
+- Estado: resuelto.
+- Archivos: `workspace-scope.js`, `workspace-scope.test.mjs`, `chat.service.js`.
+- Pruebas: rechazo de scopes incompletos y aserción exacta del filtro Prisma.
+- Riesgo de deployment: bajo; los reprocesos válidos ya disponen de workspace.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -328,7 +343,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Persisten como backlog la auditoría exhaustiva de queries por ID, archivos y analytics.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Además, el reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID. Persisten como backlog la auditoría exhaustiva de queries por ID, archivos y analytics.
 
 ## 13. Railway y despliegues
 
@@ -350,7 +365,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 129/129 | incluido en build |
-| unit tests | 27/27 | 0,27 s |
+| unit tests | 29/29 | 0,34 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | frontend build | OK con warning de chunk | 0,60 s |
 | root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
@@ -368,6 +383,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Traza canónica redactada por inbound, con límites y cobertura unitaria.
 - Corpus sintético de 36 casos y runner offline bloqueante en CI.
 - Schema interno validado antes de delivery y fallback por `INVALID_OUTPUT`.
+- Scope inmutable `id + workspaceId` para reproceso de mensajes inbound.
 
 ## 18. Comparación antes/después
 
