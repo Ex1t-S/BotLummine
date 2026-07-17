@@ -1,7 +1,11 @@
 import { prisma } from '../../lib/prisma.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
 import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
-import { findWorkspaceOwnedRecord } from '../workspaces/workspace-scope.js';
+import {
+	findWorkspaceOwnedRecord,
+	requireWorkspaceScope,
+	workspaceOwnedWhere,
+} from '../workspaces/workspace-scope.js';
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
@@ -75,8 +79,8 @@ function normalizeStoreInstallation(installation = null) {
 	};
 }
 
-export async function resolveActiveCommerceConnection({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function resolveActiveCommerceConnection({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 
 	const connections = await prisma.commerceConnection.findMany({
 		where: {
@@ -139,8 +143,8 @@ export async function resolveActiveCommerceConnection({ workspaceId = DEFAULT_WO
 	throw error;
 }
 
-export async function markPrimaryCommerceConnection(connectionId, { workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function markPrimaryCommerceConnection(connectionId, { workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	if (!connectionId) return null;
 
 	return prisma.$transaction(async (tx) => {
@@ -161,7 +165,7 @@ export async function markPrimaryCommerceConnection(connectionId, { workspaceId 
 			data: { isPrimary: false },
 		});
 		return tx.commerceConnection.update({
-			where: { id: target.id },
+			where: workspaceOwnedWhere({ id: target.id, workspaceId: resolvedWorkspaceId }),
 			data: { isPrimary: true },
 		});
 	});

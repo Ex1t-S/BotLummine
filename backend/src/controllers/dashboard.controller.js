@@ -17,6 +17,10 @@ import {
 	requireRequestWorkspaceId,
 } from '../services/workspaces/workspace-context.service.js';
 import { WORKSPACE_FEATURE_FLAGS } from '../services/workspaces/workspace-feature-flags.service.js';
+import {
+	conversationStateForWorkspaceWhere,
+	workspaceOwnedWhere,
+} from '../services/workspaces/workspace-scope.js';
 
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
@@ -620,22 +624,25 @@ async function deduplicateInboxContacts(workspaceId) {
 		await prisma.$transaction(async (tx) => {
 			for (const duplicate of duplicates) {
 				const moveResult = await tx.message.updateMany({
-					where: { conversationId: duplicate.id },
+					where: { conversationId: duplicate.id, workspaceId },
 					data: { conversationId: primary.id },
 				});
 
 				movedMessages += moveResult.count;
 
 				await tx.conversationState.deleteMany({
-					where: { conversationId: duplicate.id },
+					where: conversationStateForWorkspaceWhere({
+						conversationId: duplicate.id,
+						workspaceId,
+					}),
 				});
 
 				await tx.conversation.delete({
-					where: { id: duplicate.id },
+					where: workspaceOwnedWhere({ id: duplicate.id, workspaceId }),
 				});
 
 				await tx.contact.delete({
-					where: { id: duplicate.contact.id },
+					where: workspaceOwnedWhere({ id: duplicate.contact.id, workspaceId }),
 				});
 
 				removedConversations += 1;
@@ -643,7 +650,7 @@ async function deduplicateInboxContacts(workspaceId) {
 			}
 
 			await tx.contact.update({
-				where: { id: primary.contact.id },
+				where: workspaceOwnedWhere({ id: primary.contact.id, workspaceId }),
 				data: {
 					name: mergedContactName || undefined,
 					phone: mergedWaId || primary.contact?.phone || undefined,
@@ -659,7 +666,7 @@ async function deduplicateInboxContacts(workspaceId) {
 			});
 
 			await tx.conversation.update({
-				where: { id: primary.id },
+				where: workspaceOwnedWhere({ id: primary.id, workspaceId }),
 				data: {
 					queue: mergedQueue,
 					aiEnabled: mergedAiEnabled,
@@ -675,7 +682,10 @@ async function deduplicateInboxContacts(workspaceId) {
 			if (mergedState) {
 				if (primary.state?.id) {
 					await tx.conversationState.update({
-						where: { conversationId: primary.id },
+						where: conversationStateForWorkspaceWhere({
+							conversationId: primary.id,
+							workspaceId,
+						}),
 						data: mergedState,
 					});
 				} else {

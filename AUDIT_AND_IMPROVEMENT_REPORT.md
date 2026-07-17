@@ -582,6 +582,21 @@ flowchart TD
 - Pruebas: 41/41 unitarias, 140 archivos con sintaxis válida; se cubren scope obligatorio, aislamiento de ADMIN y excepción explícita de plataforma.
 - Riesgo de deployment: bajo; no cambia el caso autorizado, sólo falla cerrado ante IDs ajenos.
 
+### FIND-P0-029
+
+- Título: tareas de mantenimiento perdían el workspace dentro de transacciones destructivas
+- Área: Backend/Inbox/Comercio/Multitenancy
+- Ambiente: todos
+- Severidad: High
+- Evidencia: deduplicación movía/borraba mensajes, estados, conversaciones y contactos sólo por ID; selección primaria de comercio aceptaba tenant implícito y su update final usaba sólo ID.
+- Impacto: aunque los registros provenían de lecturas acotadas, una regresión o dato inconsistente podía ampliar una operación destructiva más allá del workspace original.
+- Causa: confianza en unicidad global y scope no propagado dentro de la transacción.
+- Solución: filtros de workspace en movimientos, deletes, updates y estados relacionados; conexión comercial exige scope explícito y lo conserva en el update final.
+- Estado: resuelto localmente; no se ejecutó deduplicación ni sincronización real.
+- Archivos: `dashboard.controller.js`, `active-commerce.service.js`.
+- Pruebas: 41/41 unitarias y 140 archivos con sintaxis válida; inventario de callers confirma workspace explícito.
+- Riesgo de deployment: bajo; endurecimiento de filtros sin cambios de schema.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -614,7 +629,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito y gestión de usuarios hacen lo mismo. Shopify/Tiendanube verifican HMAC/state y resuelven el tenant mediante tienda/canal; queda pendiente implementar, no sólo reconocer, los webhooks de privacidad Shopify. Persisten como backlog las queries de módulos concurrentemente modificados.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Reproceso/cooldown, outbound, menú, handoff y memoria de conversación usan scope explícito; los webhooks de plantillas exigen `metaTemplateId + wabaId` y analytics mantiene un filtro restrictivo incluso con cero workspaces. Schedules ya no aceptan el tenant por defecto y sus mutaciones/claims conservan `id + workspaceId`; recuperación manual de carrito, gestión de usuarios, deduplicación de Inbox y conexión comercial hacen lo mismo. Shopify/Tiendanube verifican HMAC/state y resuelven el tenant mediante tienda/canal; queda pendiente implementar, no sólo reconocer, los webhooks de privacidad Shopify. Persisten como backlog las queries de módulos concurrentemente modificados.
 
 ## 13. Railway y despliegues
 
@@ -678,6 +693,7 @@ Durante el refactor de prefetch, una primera corrida privada falló porque falta
 - CI con typecheck, build raíz, presupuesto de performance y diagnósticos Playwright en fallos.
 - Programaciones de campaña y recuperación de carrito sin fallback de tenant y con mutaciones acotadas por workspace.
 - Edición de usuarios de marca con lookup/mutación dentro del workspace y acceso global exclusivo de plataforma.
+- Deduplicación de Inbox y selección de comercio con scope propagado a toda la transacción.
 
 ## 18. Comparación antes/después
 
