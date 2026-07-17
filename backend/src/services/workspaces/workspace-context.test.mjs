@@ -3,6 +3,9 @@ import { describe, it } from 'node:test';
 
 import {
 	ensureWorkspaceAccess,
+	getWhatsAppChannelForWorkspace,
+	getWorkspaceOrThrow,
+	getWorkspaceRuntimeConfig,
 	resolveRequestWorkspaceId,
 } from './workspace-context.service.js';
 
@@ -38,5 +41,18 @@ describe('workspace request isolation', () => {
 
 	it('does not invent a workspace for an unauthenticated request', () => {
 		assert.equal(resolveRequestWorkspaceId(requestFor(null)), '');
+	});
+
+	it('rejects shared workspace configuration lookups before Prisma when scope is absent', async () => {
+		for (const operation of [
+			() => getWorkspaceOrThrow(),
+			() => getWorkspaceRuntimeConfig(),
+			() => getWhatsAppChannelForWorkspace(),
+		]) {
+			await assert.rejects(
+				operation,
+				(error) => error?.code === 'WORKSPACE_SCOPE_REQUIRED',
+			);
+		}
 	});
 });

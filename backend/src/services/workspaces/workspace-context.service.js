@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { decryptSecret } from '../../lib/secret-crypto.js';
+import { requireWorkspaceScope } from './workspace-scope.js';
 
 export const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || 'workspace_default';
 export const DEFAULT_WORKSPACE_SLUG = process.env.DEFAULT_WORKSPACE_SLUG || 'default';
@@ -66,7 +67,7 @@ export function ensureWorkspaceAccess(req, workspaceId) {
 }
 
 export async function getWorkspaceOrThrow(workspaceId) {
-	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+	const normalizedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const workspace = await prisma.workspace.findUnique({
 		where: { id: normalizedWorkspaceId },
 		include: {
@@ -151,7 +152,7 @@ export async function ensureDefaultWorkspace() {
 }
 
 export async function getWorkspaceRuntimeConfig(workspaceId) {
-	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const workspace = await prisma.workspace.findUnique({
 		where: { id: normalizedWorkspaceId },
 		include: {
@@ -159,18 +160,23 @@ export async function getWorkspaceRuntimeConfig(workspaceId) {
 			aiConfig: true,
 		},
 	});
+	if (!workspace) {
+		const error = new Error('Workspace no encontrado.');
+		error.status = 404;
+		throw error;
+	}
 
-	const aiConfig = workspace?.aiConfig || {};
+	const aiConfig = workspace.aiConfig || {};
 	const catalogConfig = resolveAiCatalogConfig(aiConfig);
 
 	return {
 		workspaceId: normalizedWorkspaceId,
-		workspaceName: workspace?.name || process.env.BUSINESS_NAME || 'Marca demo',
-		branding: workspace?.branding || null,
+		workspaceName: workspace.name || process.env.BUSINESS_NAME || 'Marca demo',
+		branding: workspace.branding || null,
 		ai: {
 			businessName:
 				aiConfig.businessName ||
-				workspace?.name ||
+				workspace.name ||
 				process.env.BUSINESS_NAME ||
 				'Marca demo',
 			agentName: aiConfig.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente',
@@ -190,7 +196,7 @@ export async function getWorkspaceRuntimeConfig(workspaceId) {
 }
 
 export async function getWhatsAppChannelForWorkspace(workspaceId) {
-	const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const normalizedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const channel = await prisma.whatsAppChannel.findFirst({
 		where: {
 			workspaceId: normalizedWorkspaceId,
