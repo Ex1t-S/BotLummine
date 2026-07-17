@@ -342,6 +342,21 @@ flowchart TD
 - Pruebas: 2/2 escenarios críticos de accesibilidad.
 - Riesgo de deployment: bajo.
 
+### FIND-P0-013
+
+- Título: envío outbound permitía buscar conversaciones sin scope de workspace
+- Área: seguridad/multitenancy
+- Ambiente: todos
+- Severidad: Critical
+- Evidencia: `sendAndPersistOutbound` hacía `conversation.findUnique({ id })` cuando el caller omitía `workspaceId`; nueve llamadas internas no explicitaban el tenant.
+- Impacto: un caller interno nuevo o manipulado podía resolver una conversación de otro workspace y usar su configuración/canal de delivery.
+- Causa: el scope era opcional en el contrato del servicio compartido.
+- Solución: `workspaceId` obligatorio, lookup canónico por `id + workspaceId` y propagación explícita por todos los callers.
+- Estado: resuelto.
+- Archivos: `workspace-scope.js`, `outbound-message.service.js`, AI Lab, chat, menú y prueba negativa.
+- Pruebas: query exacto cubierto; 30/30 unitarias y build raíz verdes.
+- Riesgo de deployment: bajo; los flujos válidos ya conocen el workspace de la conversación.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -363,8 +378,8 @@ flowchart TD
 
 ## 10. Auditoría backend
 
-- 129 archivos JS/MJS pasan el chequeo de sintaxis.
-- 22 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace.
+- 136 archivos JS/MJS pasan el chequeo de sintaxis.
+- 30 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA y aislamiento de workspace.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -374,7 +389,7 @@ Pipeline reconstruido: webhook -> normalización -> persistencia -> workspace/co
 
 ## 12. Seguridad y multitenancy
 
-El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. Además, el reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID. Persisten como backlog la auditoría exhaustiva de queries por ID, archivos y analytics.
+El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas negativas: ADMIN y AGENT no pueden reemplazar el workspace mediante params, query, headers o body; PLATFORM_ADMIN sí puede seleccionar uno explícitamente. El reproceso inbound ya no puede adoptar el workspace de un mensaje buscado sólo por ID y el servicio outbound exige `id + workspaceId` en todas las llamadas. Persisten como backlog la auditoría exhaustiva de otras queries por ID, archivos y analytics.
 
 ## 13. Railway y despliegues
 
@@ -395,13 +410,13 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
-| backend syntax | 129/129 | incluido en build |
-| unit tests | 29/29 | 0,34 s |
+| backend syntax | 136/136 | incluido en build |
+| unit tests | 30/30 | 1,1 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
-| frontend build | OK con warning de chunk | 0,60 s |
-| root build | OK; backend + frontend | 8,7 s concurrente con validaciones |
+| frontend build | OK con warning de chunk | 0,71 s |
+| root build | OK; backend + frontend | 9,4 s |
 | Playwright Chromium | 7/7; 10 rutas de performance | 17,5 s |
 
 ## 17. Cambios implementados
@@ -419,6 +434,7 @@ Medición mock final: rutas internas críticas listas entre 204 y 413 ms; landin
 - Scope inmutable `id + workspaceId` para reproceso de mensajes inbound.
 - Dependencias backend parcheadas y audit high agregado a CI.
 - Menú público móvil y formulario de login cubiertos con pruebas de teclado.
+- Scope obligatorio de workspace en todo envío outbound.
 
 ## 18. Comparación antes/después
 

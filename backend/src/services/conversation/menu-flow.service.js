@@ -254,6 +254,7 @@ async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliv
 
 	return sendAndPersistOutbound({
 		conversationId,
+		workspaceId,
 		body: body || menuConfig.body,
 		deliveryMode,
 		messageType: 'interactive',
@@ -275,9 +276,16 @@ async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliv
 	});
 }
 
-async function sendMenuTextOnly({ conversationId, body, model = 'menu-text', deliveryMode = 'live' }) {
+async function sendMenuTextOnly({
+	conversationId,
+	workspaceId,
+	body,
+	model = 'menu-text',
+	deliveryMode = 'live',
+}) {
 	return sendAndPersistOutbound({
 		conversationId,
+		workspaceId,
 		body,
 		deliveryMode,
 		aiMeta: {
@@ -433,6 +441,7 @@ async function handleMenuSelection({
 
 		await sendMenuTextOnly({
 			conversationId,
+			workspaceId,
 			body: handoffReply,
 			model: option.model || 'menu-human-handoff',
 			deliveryMode: transportMode,
@@ -455,6 +464,7 @@ async function handleMenuSelection({
 
 		await sendMenuTextOnly({
 			conversationId,
+			workspaceId,
 			body: normalizeText(option.replyBody || option.title || 'Listo.'),
 			model: option.model || `menu-message-${selectionId}`,
 			deliveryMode: transportMode,

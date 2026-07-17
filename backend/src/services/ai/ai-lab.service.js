@@ -267,6 +267,7 @@ async function openAiLabMenu({
 
 	return sendAndPersistOutbound({
 		conversationId,
+		workspaceId: resolvedWorkspaceId,
 		body: body || menu.body,
 		deliveryMode: 'lab',
 		messageType: 'interactive',

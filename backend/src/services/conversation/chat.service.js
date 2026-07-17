@@ -1021,6 +1021,7 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
 			body: replyGate.reply,
 			deliveryMode: transportMode,
 			aiMeta: {
@@ -1209,6 +1210,7 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
 			body: reply,
 			deliveryMode: transportMode,
 			aiMeta: {
@@ -1257,6 +1259,7 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
 			body: clarification,
 			deliveryMode: transportMode,
 			aiMeta: {
@@ -1321,6 +1324,7 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
 			body: ack,
 			deliveryMode: transportMode,
 			aiMeta: {
@@ -1366,6 +1370,7 @@ export async function processInboundMessage({
 
 		await sendAndPersistOutbound({
 			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
 			body: handoffReply,
 			deliveryMode: transportMode,
 			aiMeta: {
@@ -1945,6 +1950,7 @@ export async function processInboundMessage({
 
 	await sendAndPersistOutbound({
 		conversationId: freshConversation.id,
+		workspaceId: freshConversation.workspaceId,
 		body: finalReply,
 		deliveryMode: transportMode,
 		aiMeta

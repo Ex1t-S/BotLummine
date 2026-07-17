@@ -8,6 +8,7 @@ import {
 	sendWhatsAppInteractiveList,
 } from '../whatsapp/whatsapp.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
+import { findConversationForWorkspace } from '../workspaces/workspace-scope.js';
 
 function isOutboundDebugEnabled() {
 	return String(process.env.OUTBOUND_DEBUG || '').trim().toLowerCase() === 'true';
@@ -50,7 +51,7 @@ function buildOutboundDebugPayload({
 
 export async function sendAndPersistOutbound({
 	conversationId,
-	workspaceId: expectedWorkspaceId = null,
+	workspaceId: expectedWorkspaceId,
 	waId: providedWaId = '',
 	body,
 	userId = null,
@@ -75,19 +76,13 @@ export async function sendAndPersistOutbound({
 		throw new Error('El mensaje no puede estar vacío.');
 	}
 
-	const conversation = expectedWorkspaceId
-		? await prisma.conversation.findFirst({
-				where: { id: conversationId, workspaceId: expectedWorkspaceId },
-				include: {
-					contact: true,
-				},
-		  })
-		: await prisma.conversation.findUnique({
-				where: { id: conversationId },
-				include: {
-					contact: true,
-				},
-		  });
+	const conversation = await findConversationForWorkspace(prisma, {
+		id: conversationId,
+		workspaceId: expectedWorkspaceId,
+		include: {
+			contact: true,
+		},
+	});
 
 	if (!conversation) {
 		throw new Error('Conversación no encontrada.');

@@ -33,3 +33,17 @@ export async function findInboundMessageForWorkspace(prismaClient, { id, workspa
 		},
 	});
 }
+
+export async function findConversationForWorkspace(
+	prismaClient,
+	{ id, workspaceId, include } = {},
+) {
+	if (!prismaClient?.conversation?.findFirst) {
+		throw new TypeError('A Prisma-compatible conversation client is required');
+	}
+
+	return prismaClient.conversation.findFirst({
+		where: workspaceOwnedWhere({ id, workspaceId }),
+		...(include ? { include } : {}),
+	});
+}

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { findInboundMessageForWorkspace, workspaceOwnedWhere } from './workspace-scope.js';
+import {
+	findConversationForWorkspace,
+	findInboundMessageForWorkspace,
+	workspaceOwnedWhere,
+} from './workspace-scope.js';
 
 describe('workspace-owned record lookups', () => {
 	it('requires both record and workspace identifiers', () => {
@@ -34,6 +38,33 @@ describe('workspace-owned record lookups', () => {
 			id: 'message-a',
 			workspaceId: 'workspace-a',
 			direction: 'INBOUND',
+		});
+	});
+
+	it('queries outbound conversations with an immutable workspace boundary', async () => {
+		let receivedQuery = null;
+		const include = { contact: true };
+		const prismaClient = {
+			conversation: {
+				findFirst: async (query) => {
+					receivedQuery = query;
+					return null;
+				},
+			},
+		};
+
+		await findConversationForWorkspace(prismaClient, {
+			id: 'conversation-a',
+			workspaceId: 'workspace-a',
+			include,
+		});
+
+		assert.deepEqual(receivedQuery, {
+			where: {
+				id: 'conversation-a',
+				workspaceId: 'workspace-a',
+			},
+			include,
 		});
 	});
 });
