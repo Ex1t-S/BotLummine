@@ -2,7 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { normalizeWhatsAppIdentityPhone } from '../../lib/phone-normalization.js';
 import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	WORKSPACE_FEATURE_FLAGS,
 	isWorkspaceFeatureEnabled,
@@ -16,6 +16,7 @@ import {
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
 import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
+import { createAutomationSchemaNotReadyError } from './automation-schema-error.js';
 
 const DEFAULT_DAYS_BACK = 14;
 const AUTO_LIMIT = 100;
@@ -62,90 +63,6 @@ function isShipmentNotificationLogMissing(error) {
 		['P2021', 'P2022'].includes(error?.code) ||
 		/ShipmentNotificationSetting|ShipmentNotificationLog|public\.ShipmentNotification/i.test(String(error?.message || ''))
 	);
-}
-
-async function ensureShipmentNotificationLogTable(workspaceId = DEFAULT_WORKSPACE_ID) {
-	try {
-		await prisma.$executeRawUnsafe(`
-CREATE TABLE IF NOT EXISTS "ShipmentNotificationSetting" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "enabled" BOOLEAN NOT NULL DEFAULT false,
-    "templateLocalId" TEXT,
-    "templateName" TEXT,
-    "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
-    "variableMapping" JSONB,
-    "daysBack" INTEGER NOT NULL DEFAULT 3,
-    "lastRunAt" TIMESTAMP(3),
-    "lastCampaignId" TEXT,
-    "lastError" TEXT,
-    "runCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "ShipmentNotificationSetting_pkey" PRIMARY KEY ("id")
-)`);
-		await prisma.$executeRawUnsafe(`
-CREATE TABLE IF NOT EXISTS "ShipmentNotificationLog" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "notificationKey" TEXT NOT NULL,
-    "source" TEXT NOT NULL,
-    "orderId" TEXT,
-    "orderNumber" TEXT,
-    "shipmentId" TEXT,
-    "campaignId" TEXT,
-    "recipientPhone" TEXT,
-    "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "rawPayload" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ShipmentNotificationLog_pkey" PRIMARY KEY ("id")
-)`);
-		await prisma.$executeRawUnsafe(`
-ALTER TABLE "ShipmentNotificationSetting" ADD COLUMN IF NOT EXISTS "variableMapping" JSONB`);
-		await prisma.$executeRawUnsafe(`
-CREATE UNIQUE INDEX IF NOT EXISTS "ShipmentNotificationSetting_workspaceId_key"
-ON "ShipmentNotificationSetting"("workspaceId")`);
-		await prisma.$executeRawUnsafe(`
-CREATE UNIQUE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_notificationKey_key"
-ON "ShipmentNotificationLog"("workspaceId", "notificationKey")`);
-		await prisma.$executeRawUnsafe(`
-CREATE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_sentAt_idx"
-ON "ShipmentNotificationLog"("workspaceId", "sentAt")`);
-		await prisma.$executeRawUnsafe(`
-CREATE INDEX IF NOT EXISTS "ShipmentNotificationLog_workspaceId_campaignId_idx"
-ON "ShipmentNotificationLog"("workspaceId", "campaignId")`);
-		await prisma.$executeRawUnsafe(`
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint WHERE conname = 'ShipmentNotificationSetting_workspaceId_fkey'
-	) THEN
-		ALTER TABLE "ShipmentNotificationSetting"
-		ADD CONSTRAINT "ShipmentNotificationSetting_workspaceId_fkey"
-		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-		ON DELETE CASCADE ON UPDATE CASCADE;
-	END IF;
-END $$;`);
-		await prisma.$executeRawUnsafe(`
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint WHERE conname = 'ShipmentNotificationLog_workspaceId_fkey'
-	) THEN
-		ALTER TABLE "ShipmentNotificationLog"
-		ADD CONSTRAINT "ShipmentNotificationLog_workspaceId_fkey"
-		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-		ON DELETE CASCADE ON UPDATE CASCADE;
-	END IF;
-END $$;`);
-		logger.warn('shipment_notifications.tables_repaired', { workspaceId });
-	} catch (repairError) {
-		logger.error('shipment_notifications.table_repair_failed', {
-			workspaceId,
-			error: repairError,
-		});
-		throw repairError;
-	}
 }
 
 function normalizeString(value, fallback = '') {
@@ -366,10 +283,7 @@ async function ensureSetting(workspaceId) {
 		});
 	} catch (error) {
 		if (!isShipmentNotificationLogMissing(error)) throw error;
-		await ensureShipmentNotificationLogTable(resolvedWorkspaceId);
-		existing = await prisma.shipmentNotificationSetting.findUnique({
-			where: { workspaceId: resolvedWorkspaceId },
-		});
+		throw createAutomationSchemaNotReadyError('de avisos de despacho', error);
 	}
 
 	if (existing) return existing;
@@ -561,14 +475,7 @@ async function getNotifiedKeys(workspaceId, keys = []) {
 		});
 	} catch (error) {
 		if (!isShipmentNotificationLogMissing(error)) throw error;
-		await ensureShipmentNotificationLogTable(workspaceId);
-		logs = await prisma.shipmentNotificationLog.findMany({
-			where: {
-				workspaceId,
-				notificationKey: { in: unique },
-			},
-			select: { notificationKey: true },
-		});
+		throw createAutomationSchemaNotReadyError('de avisos de despacho', error);
 	}
 
 	return new Set(logs.map((log) => log.notificationKey));
@@ -830,11 +737,7 @@ async function createAndLaunchShipmentCampaign({
 				});
 			} catch (error) {
 				if (!isShipmentNotificationLogMissing(error)) throw error;
-				await ensureShipmentNotificationLogTable(resolvedWorkspaceId);
-				await prisma.shipmentNotificationLog.createMany({
-					data: logRows,
-					skipDuplicates: true,
-				});
+				throw createAutomationSchemaNotReadyError('de avisos de despacho', error);
 			}
 		}
 
@@ -898,8 +801,7 @@ export async function processAutomaticShipmentNotifications({ workspaceId = null
 			settings = await prisma.shipmentNotificationSetting.findMany({ where: { enabled: true } });
 		} catch (error) {
 			if (!isShipmentNotificationLogMissing(error)) throw error;
-			await ensureShipmentNotificationLogTable();
-			settings = await prisma.shipmentNotificationSetting.findMany({ where: { enabled: true } });
+			throw createAutomationSchemaNotReadyError('de avisos de despacho', error);
 		}
 	}
 	const results = [];

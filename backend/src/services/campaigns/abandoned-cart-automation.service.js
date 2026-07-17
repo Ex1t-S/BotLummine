@@ -12,6 +12,7 @@ import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { filterRecoverableAbandonedCarts } from './campaign-attribution.service.js';
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { createAutomationSchemaNotReadyError } from './automation-schema-error.js';
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_MIN_CART_AGE_MINUTES = 60;
@@ -34,91 +35,6 @@ function isAbandonedCartAutomationTableMissing(error) {
 			String(error?.message || '')
 		)
 	);
-}
-
-async function ensureAbandonedCartAutomationTables(workspaceId = DEFAULT_WORKSPACE_ID) {
-	try {
-		await prisma.$executeRawUnsafe(`
-CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationSetting" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "enabled" BOOLEAN NOT NULL DEFAULT false,
-    "templateLocalId" TEXT,
-    "templateName" TEXT,
-    "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
-    "filters" JSONB,
-    "variableMapping" JSONB,
-    "manualVariables" JSONB,
-    "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
-    "minCartAgeMinutes" INTEGER NOT NULL DEFAULT 60,
-    "lastRunAt" TIMESTAMP(3),
-    "lastCampaignId" TEXT,
-    "lastError" TEXT,
-    "runCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "AbandonedCartAutomationSetting_pkey" PRIMARY KEY ("id")
-)`);
-		await prisma.$executeRawUnsafe(`
-CREATE TABLE IF NOT EXISTS "AbandonedCartAutomationLog" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "checkoutId" TEXT NOT NULL,
-    "campaignId" TEXT,
-    "recipientPhone" TEXT,
-    "templateName" TEXT,
-    "rawPayload" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "AbandonedCartAutomationLog_pkey" PRIMARY KEY ("id")
-)`);
-		await prisma.$executeRawUnsafe(`
-CREATE UNIQUE INDEX IF NOT EXISTS "AbandonedCartAutomationSetting_workspaceId_key"
-ON "AbandonedCartAutomationSetting"("workspaceId")`);
-		await prisma.$executeRawUnsafe(`
-CREATE UNIQUE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_checkoutId_key"
-ON "AbandonedCartAutomationLog"("workspaceId", "checkoutId")`);
-		await prisma.$executeRawUnsafe(`
-CREATE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_createdAt_idx"
-ON "AbandonedCartAutomationLog"("workspaceId", "createdAt")`);
-		await prisma.$executeRawUnsafe(`
-CREATE INDEX IF NOT EXISTS "AbandonedCartAutomationLog_workspaceId_campaignId_idx"
-ON "AbandonedCartAutomationLog"("workspaceId", "campaignId")`);
-		await prisma.$executeRawUnsafe(`
-ALTER TABLE "AbandonedCartAutomationSetting" ADD COLUMN IF NOT EXISTS "variableMapping" JSONB`);
-		await prisma.$executeRawUnsafe(`
-ALTER TABLE "AbandonedCartAutomationSetting" ADD COLUMN IF NOT EXISTS "manualVariables" JSONB`);
-		await prisma.$executeRawUnsafe(`
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint WHERE conname = 'AbandonedCartAutomationSetting_workspaceId_fkey'
-	) THEN
-		ALTER TABLE "AbandonedCartAutomationSetting"
-		ADD CONSTRAINT "AbandonedCartAutomationSetting_workspaceId_fkey"
-		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-		ON DELETE CASCADE ON UPDATE CASCADE;
-	END IF;
-END $$;`);
-		await prisma.$executeRawUnsafe(`
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint WHERE conname = 'AbandonedCartAutomationLog_workspaceId_fkey'
-	) THEN
-		ALTER TABLE "AbandonedCartAutomationLog"
-		ADD CONSTRAINT "AbandonedCartAutomationLog_workspaceId_fkey"
-		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-		ON DELETE CASCADE ON UPDATE CASCADE;
-	END IF;
-END $$;`);
-		logger.warn('abandoned_cart_automation.tables_repaired', { workspaceId });
-	} catch (repairError) {
-		logger.error('abandoned_cart_automation.table_repair_failed', {
-			workspaceId,
-			error: repairError,
-		});
-		throw repairError;
-	}
 }
 
 function normalizeString(value, fallback = '') {
@@ -316,10 +232,7 @@ async function ensureSetting(workspaceId) {
 		});
 	} catch (error) {
 		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
-		await ensureAbandonedCartAutomationTables(resolvedWorkspaceId);
-		existing = await prisma.abandonedCartAutomationSetting.findUnique({
-			where: { workspaceId: resolvedWorkspaceId },
-		});
+		throw createAutomationSchemaNotReadyError('de carritos abandonados', error);
 	}
 
 	if (existing) return existing;
@@ -445,15 +358,7 @@ async function findAutomationCandidates(setting) {
 			});
 		} catch (error) {
 			if (!isAbandonedCartAutomationTableMissing(error)) throw error;
-			await ensureAbandonedCartAutomationTables(setting.workspaceId);
-			existingLogs = await prisma.abandonedCartAutomationLog.findMany({
-				where: {
-					workspaceId: setting.workspaceId,
-					checkoutId: { in: checkoutIds },
-					campaignId: { not: null },
-				},
-				select: { checkoutId: true },
-			});
+			throw createAutomationSchemaNotReadyError('de carritos abandonados', error);
 		}
 	}
 	const loggedCheckoutIds = new Set(existingLogs.map((log) => log.checkoutId));
@@ -503,11 +408,7 @@ async function claimCandidateLogs(setting, candidates = []) {
 		});
 	} catch (error) {
 		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
-		await ensureAbandonedCartAutomationTables(setting.workspaceId);
-		await prisma.abandonedCartAutomationLog.createMany({
-			data: rows,
-			skipDuplicates: true,
-		});
+		throw createAutomationSchemaNotReadyError('de carritos abandonados', error);
 	}
 
 	const claimed = await prisma.abandonedCartAutomationLog.findMany({
@@ -666,10 +567,7 @@ export async function processAutomaticAbandonedCartAutomations() {
 		});
 	} catch (error) {
 		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
-		await ensureAbandonedCartAutomationTables();
-		settings = await prisma.abandonedCartAutomationSetting.findMany({
-			where: { enabled: true },
-		});
+		throw createAutomationSchemaNotReadyError('de carritos abandonados', error);
 	}
 	const results = [];
 

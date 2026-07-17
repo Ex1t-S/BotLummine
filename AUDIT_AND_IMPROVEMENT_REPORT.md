@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 49/49 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 51/51 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -657,6 +657,21 @@ flowchart TD
 - Pruebas: 4/4 negativas específicas, 49/49 unitarias, 140 archivos con sintaxis válida y build raíz verde.
 - Riesgo de deployment: medio; falla cerrado para callers legacy incompletos, por lo que staging debe ejecutar settings/run-now y un tick sintético por workspace.
 
+### FIND-P0-034
+
+- Título: servicios de automatización alteraban el schema durante requests y jobs
+- Área: Backend/Base de datos/Seguridad operativa
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: pagos pendientes, carritos abandonados y avisos de despacho ejecutaban `CREATE TABLE`, `ALTER TABLE`, índices y constraints con `$executeRawUnsafe` al recibir P2021/P2022.
+- Impacto: un request o tick podía mutar una base no preparada, saltarse la revisión de SQL/migraciones, competir por locks y ocultar drift del deployment.
+- Causa: mecanismo legacy de autorreparación duplicado respecto de migraciones Prisma ya existentes.
+- Solución: eliminar todo DDL de runtime y devolver `AUTOMATION_SCHEMA_NOT_READY` con HTTP sugerido 503 y mensaje sin detalles de conexión; las migraciones quedan como única vía de schema.
+- Estado: resuelto localmente; no se conectó ni alteró ninguna base.
+- Archivos: tres servicios de automatización, helper de error y test de arquitectura.
+- Pruebas: 2/2 específicas, 51/51 unitarias, 142 archivos con sintaxis válida, build raíz verde y búsqueda global sin `$executeRawUnsafe` en `backend/src`.
+- Riesgo de deployment: medio; un ambiente con migraciones faltantes ahora falla explícitamente en vez de repararse. Verificar `prisma migrate status` y aplicar `migrate deploy` sólo en staging autorizado antes del smoke.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -678,8 +693,8 @@ flowchart TD
 
 ## 10. Auditoría backend
 
-- 140 archivos JS/MJS pasan el chequeo de sintaxis.
-- 49 pruebas unitarias pasan, incluidas seguridad de DB, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones y caché privada de adjuntos.
+- 142 archivos JS/MJS pasan el chequeo de sintaxis.
+- 51 pruebas unitarias pasan, incluidas seguridad de DB/schema, compiler/fallback IA, persistencia/retención de trazas, aislamiento inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones y caché privada de adjuntos.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -710,8 +725,8 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
-| backend syntax | 140/140 | incluido en build |
-| unit tests | 49/49 | 0,98 s |
+| backend syntax | 142/142 | incluido en build |
+| unit tests | 51/51 | 0,86 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
@@ -789,7 +804,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 ## 22. Backlog
 
-P0 local seguro: build/IA/inbound/outbound/schedules/templates/contactos y automatizaciones prioritarias están endurecidos. Pendientes: continuar el inventario por entidad, eliminar reparaciones DDL en runtime, activar/validar retención de trazas sólo en staging aislado, incorporar lint reproducible y resolver el security audit frontend sin pisar manifests locales del usuario.
+P0 local seguro: build/IA/inbound/outbound/schedules/templates/contactos y automatizaciones prioritarias están endurecidos; no queda DDL en runtime. Pendientes: continuar el inventario por entidad, activar/validar retención de trazas sólo en staging aislado, incorporar lint reproducible y resolver el security audit frontend sin pisar manifests locales del usuario.
 
 P1: inbox, pagos, operaciones, campañas/carritos, estados compartidos y accesibilidad crítica.
 

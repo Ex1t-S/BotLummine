@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger, maskPhone } from '../../lib/logger.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
 import {
 	WORKSPACE_FEATURE_FLAGS,
 	isWorkspaceFeatureEnabled,
@@ -10,6 +10,7 @@ import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
 import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsapp-campaign.service.js';
+import { createAutomationSchemaNotReadyError } from './automation-schema-error.js';
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_MIN_ORDER_AGE_MINUTES = 120;
@@ -41,85 +42,6 @@ function isPendingPaymentAutomationTableMissing(error) {
 			String(error?.message || '')
 		)
 	);
-}
-
-async function ensurePendingPaymentAutomationTables(workspaceId = DEFAULT_WORKSPACE_ID) {
-	try {
-		await prisma.$executeRawUnsafe(`
-CREATE TABLE IF NOT EXISTS "PendingPaymentAutomationSetting" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "enabled" BOOLEAN NOT NULL DEFAULT false,
-    "templateLocalId" TEXT,
-    "templateName" TEXT,
-    "templateLanguage" TEXT NOT NULL DEFAULT 'es_AR',
-    "filters" JSONB,
-    "variableMapping" JSONB,
-    "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
-    "minOrderAgeMinutes" INTEGER NOT NULL DEFAULT 120,
-    "lastRunAt" TIMESTAMP(3),
-    "lastCampaignId" TEXT,
-    "lastError" TEXT,
-    "runCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "PendingPaymentAutomationSetting_pkey" PRIMARY KEY ("id")
-)`);
-		await prisma.$executeRawUnsafe(`
-CREATE TABLE IF NOT EXISTS "PendingPaymentAutomationLog" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "orderKey" TEXT NOT NULL,
-    "campaignId" TEXT,
-    "recipientPhone" TEXT,
-    "templateName" TEXT,
-    "rawPayload" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "PendingPaymentAutomationLog_pkey" PRIMARY KEY ("id")
-)`);
-		await prisma.$executeRawUnsafe(`
-CREATE UNIQUE INDEX IF NOT EXISTS "PendingPaymentAutomationSetting_workspaceId_key"
-ON "PendingPaymentAutomationSetting"("workspaceId")`);
-		await prisma.$executeRawUnsafe(`
-CREATE UNIQUE INDEX IF NOT EXISTS "PendingPaymentAutomationLog_workspaceId_orderKey_key"
-ON "PendingPaymentAutomationLog"("workspaceId", "orderKey")`);
-		await prisma.$executeRawUnsafe(`
-CREATE INDEX IF NOT EXISTS "PendingPaymentAutomationLog_workspaceId_createdAt_idx"
-ON "PendingPaymentAutomationLog"("workspaceId", "createdAt")`);
-		await prisma.$executeRawUnsafe(`
-CREATE INDEX IF NOT EXISTS "PendingPaymentAutomationLog_workspaceId_campaignId_idx"
-ON "PendingPaymentAutomationLog"("workspaceId", "campaignId")`);
-		await prisma.$executeRawUnsafe(`
-ALTER TABLE "PendingPaymentAutomationSetting" ADD COLUMN IF NOT EXISTS "variableMapping" JSONB`);
-		await prisma.$executeRawUnsafe(`
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint WHERE conname = 'PendingPaymentAutomationSetting_workspaceId_fkey'
-	) THEN
-		ALTER TABLE "PendingPaymentAutomationSetting"
-		ADD CONSTRAINT "PendingPaymentAutomationSetting_workspaceId_fkey"
-		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-		ON DELETE CASCADE ON UPDATE CASCADE;
-	END IF;
-END $$;`);
-		await prisma.$executeRawUnsafe(`
-DO $$
-BEGIN
-	IF NOT EXISTS (
-		SELECT 1 FROM pg_constraint WHERE conname = 'PendingPaymentAutomationLog_workspaceId_fkey'
-	) THEN
-		ALTER TABLE "PendingPaymentAutomationLog"
-		ADD CONSTRAINT "PendingPaymentAutomationLog_workspaceId_fkey"
-		FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-		ON DELETE CASCADE ON UPDATE CASCADE;
-	END IF;
-END $$;`);
-		logger.warn('pending_payment_automation.tables_repaired', { workspaceId });
-	} catch (repairError) {
-		logger.error('pending_payment_automation.table_repair_failed', { workspaceId, error: repairError });
-		throw repairError;
-	}
 }
 
 function normalizeString(value, fallback = '') {
@@ -238,10 +160,7 @@ async function ensureSetting(workspaceId) {
 		});
 	} catch (error) {
 		if (!isPendingPaymentAutomationTableMissing(error)) throw error;
-		await ensurePendingPaymentAutomationTables(resolvedWorkspaceId);
-		existing = await prisma.pendingPaymentAutomationSetting.findUnique({
-			where: { workspaceId: resolvedWorkspaceId },
-		});
+		throw createAutomationSchemaNotReadyError('de pagos pendientes', error);
 	}
 
 	if (existing) return existing;
@@ -352,11 +271,7 @@ async function findAutomationCandidates(setting) {
 			});
 		} catch (error) {
 			if (!isPendingPaymentAutomationTableMissing(error)) throw error;
-			await ensurePendingPaymentAutomationTables(setting.workspaceId);
-			existingLogs = await prisma.pendingPaymentAutomationLog.findMany({
-				where: { workspaceId: setting.workspaceId, orderKey: { in: orderKeys }, campaignId: { not: null } },
-				select: { orderKey: true },
-			});
+			throw createAutomationSchemaNotReadyError('de pagos pendientes', error);
 		}
 	}
 	const loggedOrderKeys = new Set(existingLogs.map((log) => log.orderKey));
@@ -404,8 +319,7 @@ async function claimCandidateLogs(setting, candidates = []) {
 		await prisma.pendingPaymentAutomationLog.createMany({ data: rows, skipDuplicates: true });
 	} catch (error) {
 		if (!isPendingPaymentAutomationTableMissing(error)) throw error;
-		await ensurePendingPaymentAutomationTables(setting.workspaceId);
-		await prisma.pendingPaymentAutomationLog.createMany({ data: rows, skipDuplicates: true });
+		throw createAutomationSchemaNotReadyError('de pagos pendientes', error);
 	}
 
 	const claimed = await prisma.pendingPaymentAutomationLog.findMany({
@@ -550,8 +464,7 @@ export async function processAutomaticPendingPaymentAutomations() {
 		settings = await prisma.pendingPaymentAutomationSetting.findMany({ where: { enabled: true } });
 	} catch (error) {
 		if (!isPendingPaymentAutomationTableMissing(error)) throw error;
-		await ensurePendingPaymentAutomationTables();
-		settings = await prisma.pendingPaymentAutomationSetting.findMany({ where: { enabled: true } });
+		throw createAutomationSchemaNotReadyError('de pagos pendientes', error);
 	}
 	const results = [];
 
