@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from './workspace-context.service.js';
+import { normalizeWorkspaceId } from './workspace-context.service.js';
+import { requireWorkspaceScope } from './workspace-scope.js';
 
 export const WORKSPACE_FEATURE_FLAGS = Object.freeze({
 	AI_AUTO_REPLIES: 'ai_auto_replies',
@@ -70,8 +71,8 @@ function buildDefaultFlag(definition, workspaceId) {
 	};
 }
 
-export async function listWorkspaceFeatureFlags(workspaceId = DEFAULT_WORKSPACE_ID) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function listWorkspaceFeatureFlags(workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const rows = await prisma.workspaceFeatureFlag.findMany({
 		where: { workspaceId: resolvedWorkspaceId },
 	});
@@ -85,12 +86,12 @@ export async function listWorkspaceFeatureFlags(workspaceId = DEFAULT_WORKSPACE_
 	}));
 }
 
-export async function isWorkspaceFeatureEnabled(workspaceId, key) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function isWorkspaceFeatureEnabled(workspaceId, key, { prismaClient = prisma } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedKey = assertWorkspaceFeatureFlagKey(key);
 
 	try {
-		const row = await prisma.workspaceFeatureFlag.findUnique({
+		const row = await prismaClient.workspaceFeatureFlag.findUnique({
 			where: {
 				workspaceId_key: {
 					workspaceId: resolvedWorkspaceId,
@@ -107,18 +108,18 @@ export async function isWorkspaceFeatureEnabled(workspaceId, key) {
 			key: normalizedKey,
 			error,
 		});
-		return true;
+		return false;
 	}
 }
 
 export async function setWorkspaceFeatureFlag({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	key,
 	enabled,
 	reason = '',
 	updatedById = null,
 } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedKey = assertWorkspaceFeatureFlagKey(key);
 	const normalizedEnabled = Boolean(enabled);
 

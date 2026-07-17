@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { DEFAULT_WORKSPACE_ID, getWorkspaceRuntimeConfig, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { getWorkspaceRuntimeConfig, normalizeWorkspaceId } from '../workspaces/workspace-context.service.js';
+import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import {
 	AI_PROFILES,
 	getAiVerticalProfile,
@@ -703,10 +704,11 @@ function buildRuntimePayload(settings) {
 	};
 }
 
-async function getDefaultMenuConfigForWorkspace(workspaceId = DEFAULT_WORKSPACE_ID) {
+async function getDefaultMenuConfigForWorkspace(workspaceId) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	try {
-		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
-		const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId });
+		const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
+		const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId: resolvedWorkspaceId });
 		if (aiProfile === AI_PROFILES.DKV_INSURANCE) return INSURANCE_WHATSAPP_MENU_CONFIG;
 		if (aiProfile === AI_PROFILES.LUMMINE_BODYWEAR) return LUMMINE_WHATSAPP_MENU_CONFIG;
 		return DEFAULT_WHATSAPP_MENU_CONFIG;
@@ -715,8 +717,8 @@ async function getDefaultMenuConfigForWorkspace(workspaceId = DEFAULT_WORKSPACE_
 	}
 }
 
-export async function getOrCreateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getOrCreateWhatsAppMenuSettings({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const defaultConfig = await getDefaultMenuConfigForWorkspace(resolvedWorkspaceId);
 	let settings = await prisma.whatsAppMenuSetting.findUnique({
 		where: {
@@ -742,7 +744,7 @@ export async function getOrCreateWhatsAppMenuSettings({ workspaceId = DEFAULT_WO
 	return settings;
 }
 
-export async function getWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
+export async function getWhatsAppMenuSettings({ workspaceId } = {}) {
 	const settings = await getOrCreateWhatsAppMenuSettings({ workspaceId });
 	return {
 		...settings,
@@ -750,8 +752,8 @@ export async function getWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_
 	};
 }
 
-export async function updateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID, config, name }) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function updateWhatsAppMenuSettings({ workspaceId, config, name } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const normalizedConfig = normalizeWhatsAppMenuConfig(config || {});
 	const normalizedName = normalizeText(name || 'Configuración principal') || 'Configuración principal';
 
@@ -784,8 +786,8 @@ export async function updateWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPA
 	};
 }
 
-export async function resetWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPACE_ID } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function resetWhatsAppMenuSettings({ workspaceId } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const defaultConfig = await getDefaultMenuConfigForWorkspace(resolvedWorkspaceId);
 	const settings = await prisma.whatsAppMenuSetting.upsert({
 		where: {
@@ -816,8 +818,8 @@ export async function resetWhatsAppMenuSettings({ workspaceId = DEFAULT_WORKSPAC
 	};
 }
 
-export async function getWhatsAppMenuRuntimeConfig({ workspaceId = DEFAULT_WORKSPACE_ID, forceRefresh = false } = {}) {
-	const resolvedWorkspaceId = normalizeWorkspaceId(workspaceId) || DEFAULT_WORKSPACE_ID;
+export async function getWhatsAppMenuRuntimeConfig({ workspaceId, forceRefresh = false } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const runtimeCache = runtimeCacheByWorkspace.get(resolvedWorkspaceId);
 	if (!forceRefresh && runtimeCache?.value && runtimeCache.expiresAt > Date.now()) {
 		return runtimeCache.value;
@@ -833,10 +835,11 @@ export async function getWhatsAppMenuRuntimeConfig({ workspaceId = DEFAULT_WORKS
 		return runtimePayload;
 	} catch (error) {
 		logger.warn('whatsapp_menu.runtime_config_failed', { workspaceId: resolvedWorkspaceId, error });
+		const fallbackConfig = await getDefaultMenuConfigForWorkspace(resolvedWorkspaceId);
 		const runtimePayload = buildRuntimePayload({
 			id: null,
 			name: 'Fallback local',
-			config: DEFAULT_WHATSAPP_MENU_CONFIG
+			config: fallbackConfig
 		});
 		runtimeCacheByWorkspace.set(resolvedWorkspaceId, {
 			expiresAt: Date.now() + CACHE_TTL_MS,
@@ -895,19 +898,20 @@ function resolveRelevantMenuKeys(intent = '', currentState = {}) {
 }
 
 export async function buildMenuAssistantContext({
-	workspaceId = DEFAULT_WORKSPACE_ID,
+	workspaceId,
 	intent = '',
 	currentState = {},
 	responsePolicy = {},
 	commercialPlan = null,
 	queueDecision = null,
 } = {}) {
-	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId });
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const runtime = await getWhatsAppMenuRuntimeConfig({ workspaceId: resolvedWorkspaceId });
 	let verticalProfile = null;
 	let useCommerce = true;
 	try {
-		const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
-		const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId });
+		const workspaceConfig = await getWorkspaceRuntimeConfig(resolvedWorkspaceId);
+		const aiProfile = resolveAiProfile({ workspaceConfig, workspaceId: resolvedWorkspaceId });
 		verticalProfile = getAiVerticalProfile(aiProfile);
 		useCommerce = usesCommerceEngine(aiProfile);
 	} catch {

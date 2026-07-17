@@ -6,7 +6,7 @@ Estado: iteración P0 local de hardening en progreso; producción permanece en m
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 55/55 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota; el inventario de aislamiento continúa de forma incremental. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 58/58 unitarias, TypeScript sin errores y 14/14 Playwright. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -717,6 +717,21 @@ flowchart TD
 - Pruebas: 1/1 específica cubriendo ocho operaciones, 55/55 unitarias, 142 archivos con sintaxis válida y build raíz verde.
 - Riesgo de deployment: medio; validar en staging lectura, search IA y sync de Tiendanube/Shopify con fixtures y credenciales sandbox por workspace.
 
+### FIND-P0-038
+
+- Título: feature flags fallaban abiertos y el menú aceptaba tenant implícito
+- Área: Backend/Reply gate/WhatsApp/Seguridad
+- Ambiente: local
+- Severidad: Critical
+- Evidencia: un error de Prisma en `isWorkspaceFeatureEnabled` devolvía `true`; flags, settings, cache y contexto de menú aceptaban `workspace_default` si faltaba el argumento.
+- Impacto: ante drift/caída de DB podían habilitarse respuestas IA, campañas o envíos que debían estar pausados; un caller incompleto podía reutilizar el menú de otra marca.
+- Causa: estrategia de disponibilidad fail-open y contratos legacy monomarca.
+- Solución: flags fallan cerrados en lookup no verificable, workspace obligatorio en lectura/mutación/routing de menú y fallback compilado dentro del workspace solicitado.
+- Estado: resuelto localmente; no se ejecutaron envíos ni campañas.
+- Archivos: `workspace-feature-flags.service.js`, `whatsapp-menu.service.js` y prueba negativa/fallo inyectado.
+- Pruebas: 3/3 específicas, 58/58 unitarias, 142 archivos con sintaxis válida y build raíz verde.
+- Riesgo de deployment: medio/alto por cambio fail-closed; staging debe simular DB lookup fallido y confirmar que no hay delivery, además de probar menú por dos workspaces sintéticos.
+
 ## 8. Auditoría UI/UX
 
 - Inbox: selección desktop automática con URL; móvil conserva el flujo progresivo lista → chat; borrador por conversación; error y retry sin pérdida; bloqueo de doble envío.
@@ -739,7 +754,7 @@ flowchart TD
 ## 10. Auditoría backend
 
 - 142 archivos JS/MJS pasan el chequeo de sintaxis.
-- 55 pruebas unitarias pasan, incluidas seguridad de DB/schema, compiler/fallback IA, persistencia/retención de trazas, aislamiento de configuración/AI Lab/catálogo/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones y caché privada de adjuntos.
+- 58 pruebas unitarias pasan, incluidas seguridad de DB/schema, compiler/fallback IA, persistencia/retención de trazas, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/contactos/automatizaciones/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - Deben auditarse operaciones por ID sin filtro compuesto de workspace y callbacks legacy con defaults.
 
@@ -771,7 +786,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 142/142 | incluido en build |
-| unit tests | 55/55 | 1,10 s |
+| unit tests | 58/58 | 1,05 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
 | npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
