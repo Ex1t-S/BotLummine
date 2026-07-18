@@ -483,3 +483,11 @@ La revisión lado a lado del demo V2 contra los prototipos aprobados confirmó u
 - [`Resultados dark`](frontend/audit-artifacts/local-demo-v3/campaign-results-dark-desktop.png)
 
 La carpeta `frontend/audit-artifacts/local-demo-v3/` contiene 26 capturas light desktop/móvil y dos validaciones dark adicionales. Automatizaciones y Resultados ahora usan hubs de decisión; sus editores y tracking completos quedan disponibles por drill-down. No se modificó backend, Railway, variables, base de datos ni delivery externo en esta iteración.
+
+## 19. Iteración V4 aprobada: shell grafito y español integral — 18/07/2026
+
+La navegación blanca y promocional del demo V3 se reemplazó por el patrón de `redesign-v2`: sidebar grafito estable, selección índigo, agrupación por dominios y usuario al pie. En 768 px se transforma en un riel vertical de iconos; en 390 px conserva la navegación móvil compacta. El contenido ya no queda dentro de una gran cápsula flotante: ocupa el viewport y se siente como una herramienta SaaS operativa.
+
+La topbar muestra sólo la sección actual. Se eliminó el tercer subtítulo gris y la duplicación de marca. Campañas se presenta como “Centro de campañas”, Audiencias y Rendimiento; Bandeja y Laboratorio de IA reemplazan Inbox y AI Lab. Estados, categorías y formatos externos se traducen únicamente para presentación.
+
+Carritos elimina Responsable y usa Contactado / No contactado. Las capturas V4 están en `frontend/audit-artifacts/local-demo-v4/` para 1440×960, 1280×800, 768×1024 y 390×844. Build y 5/5 pruebas E2E del sandbox están verdes. Esta iteración sigue siendo local: sin Railway, deploy, migraciones ni push.

@@ -1334,3 +1334,21 @@ Abrir `http://127.0.0.1:5173/operations`. El recorrido detallado y las garantía
 ### Estado de publicación
 
 Versión preparada únicamente para revisión local. No se hizo push, deploy, modificación de Railway ni migración. Antes de publicar se debe revisar el diff/commits de esta rama, repetir el checklist y decidir explícitamente el destino; no asumir que volver a un commit anterior revierte datos o efectos de un deployment.
+
+## 30. Iteración V4: navegación grafito y lenguaje operativo en español — 18/07/2026
+
+Se alineó el shell real con la navegación aprobada en `redesign-v2`: barra lateral grafito de borde a borde en escritorio, riel vertical de iconos en tablet y encabezado compacto en móvil. La barra superior dejó de mostrar marca, contexto y subtítulo redundantes; ahora muestra únicamente el nombre de la sección actual. El usuario y la salida permanecen anclados al pie.
+
+La capa de presentación traduce estados de campañas, plantillas y administración sin modificar los valores de API. `APPROVED`, `PAUSED`, `RUNNING`, `FINISHED`, `DRAFT`, categorías y formatos se mantienen como contratos internos, pero se presentan como Aprobada, Pausada, En curso, Finalizada, Borrador, Promocional, Informativa, Texto, Imagen y Documento. También se reemplazaron términos visibles como tracking, checkout, template, sync y password por equivalentes operativos en español.
+
+En Carritos se eliminó la columna Responsable y se recuperó el modelo binario Contactado / No contactado en tabla, tarjetas, filtros y audiencias. La tabla desktop queda en: Cliente, Importe, Antigüedad, Estado, Último contacto y Próxima acción.
+
+### Evidencia V4
+
+- `frontend/audit-artifacts/local-demo-v4/`: 52 capturas sintéticas de 13 rutas en 1440×960, 1280×800, 768×1024 y 390×844.
+- Build frontend: verde, 2.423 módulos transformados.
+- Demo E2E: 5/5 verdes; cubre recorrido integral, encabezado persistente, creación guiada, ausencia de overflow móvil y delivery externo deshabilitado.
+- Auditoría de texto renderizado: 14 rutas recorridas; sin estados crudos ni los términos ingleses priorizados visibles.
+- `git diff --check`: verde; sólo advertencias de normalización LF/CRLF preexistentes.
+
+No se consultó ni modificó Railway, no se desplegó, no se ejecutaron migraciones y no se hizo push.
