@@ -131,8 +131,6 @@ export default function DashboardLayout() {
 	const { resolvedTheme, setTheme } = useTheme();
 	const { user, logout } = useAuth();
 	const contentRef = useRef(null);
-	const lastScrollTopRef = useRef(0);
-	const [topbarHidden, setTopbarHidden] = useState(false);
 	const [logoFailed, setLogoFailed] = useState(false);
 	const [resettingDemo, setResettingDemo] = useState(false);
 	const demoMode = import.meta.env.MODE === 'demo';
@@ -165,8 +163,6 @@ export default function DashboardLayout() {
 	}, [aiLabOnlyWorkspace, location.pathname, navigate]);
 
 	useEffect(() => {
-		lastScrollTopRef.current = 0;
-		setTopbarHidden(false);
 		if (contentRef.current) {
 			contentRef.current.scrollTop = 0;
 		}
@@ -183,33 +179,6 @@ export default function DashboardLayout() {
 			currentPath: location.pathname,
 		});
 	}, [location.pathname, user]);
-
-	function updateTopbarForScroll(scrollTop) {
-		const previousScrollTop = lastScrollTopRef.current;
-		const delta = scrollTop - previousScrollTop;
-
-		if (scrollTop <= 8) {
-			setTopbarHidden(false);
-		} else if (delta > 10) {
-			setTopbarHidden(true);
-		} else if (delta < -10) {
-			setTopbarHidden(false);
-		}
-
-		lastScrollTopRef.current = Math.max(0, scrollTop);
-	}
-
-	function handleContentScroll(event) {
-		updateTopbarForScroll(event.currentTarget.scrollTop || 0);
-	}
-
-	function handleMainWheel(event) {
-		if (event.deltaY > 10) {
-			setTopbarHidden(true);
-		} else if (event.deltaY < -10) {
-			setTopbarHidden(false);
-		}
-	}
 
 	async function handleLogout() {
 		try {
@@ -325,10 +294,7 @@ export default function DashboardLayout() {
 				</button>
 			</aside>
 
-			<div
-				className={`admin-main${topbarHidden ? ' topbar-hidden' : ''}`}
-				onWheelCapture={handleMainWheel}
-			>
+			<div className="admin-main">
 				<header className="admin-topbar">
 					<div>
 						<span>{isPlatformAdmin ? 'Plataforma' : brandName}</span>
@@ -364,7 +330,7 @@ export default function DashboardLayout() {
 					</div>
 				</header>
 
-				<main className="admin-content" ref={contentRef} onScroll={handleContentScroll}>
+				<main className="admin-content" ref={contentRef}>
 					<Outlet />
 				</main>
 			</div>

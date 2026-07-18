@@ -7,7 +7,6 @@ import {
 	CheckCircle2,
 	MessageCircle,
 	RefreshCw,
-	Send,
 	Truck,
 	ShoppingCart,
 	WalletCards,
@@ -185,16 +184,19 @@ function AutomationPanel({
 	const pendingConfigured = Boolean(pending.templateId);
 	const pendingEnabled = Boolean(pending.enabled);
 	const saveError = getMutationErrorMessage(mutations.abandoned, mutations.pendingPayments, mutations.shipments);
+	const activeCount = [abandoned.enabled, pendingEnabled, shipment.enabled].filter(Boolean).length;
+	const errorCount = [abandoned.lastError, pending.lastError, shipment.lastError].filter(Boolean).length;
 
 	return (
-		<section className="operations-automation-panel" aria-labelledby="operations-automation-title">
-			<div className="operations-automation-head">
+		<details className="operations-automation-panel">
+			<summary className="operations-automation-head">
 				<div>
 					<span className="operations-eyebrow">Automatizaciones</span>
-					<h3 id="operations-automation-title">Activar o pausar envios automaticos</h3>
-					<p>Solo admins de marca pueden cambiar estos controles.</p>
+					<h3>Reglas automáticas</h3>
+					<p>{activeCount} de 3 activas · {errorCount ? `${errorCount} requieren atención` : 'sin errores detectados'}</p>
 				</div>
-			</div>
+				<span className="operations-automation-manage">Administrar</span>
+			</summary>
 
 			<div className="operations-automation-list" aria-busy={loading}>
 				<AutomationRow
@@ -266,7 +268,64 @@ function AutomationPanel({
 					{saveError}
 				</div>
 			) : null}
+		</details>
+	);
+}
+
+function PriorityCenter({ items = [], onNavigate }) {
+	return (
+		<section className="operations-v3-panel operations-v3-priorities" aria-labelledby="operations-priority-title">
+			<div className="operations-v3-panel-head">
+				<div>
+					<span>Ordenadas por impacto</span>
+					<h3 id="operations-priority-title">Prioridades de hoy</h3>
+				</div>
+				<strong>{items.length} abiertas</strong>
+			</div>
+
+			{items.length ? (
+				<div className="operations-v3-priority-list">
+					{items.map((item) => {
+						const Icon = item.icon || AlertTriangle;
+						return (
+							<button key={item.id} type="button" className={`operations-v3-priority tone-${item.tone || 'info'}`} onClick={() => onNavigate(item.href)}>
+								<span className="operations-v3-priority-icon"><Icon size={18} strokeWidth={2.1} aria-hidden="true" /></span>
+								<span className="operations-v3-priority-copy">
+									<strong>{item.title}</strong>
+									<small>{item.description}</small>
+								</span>
+								<span className="operations-v3-priority-action">{item.action}<ArrowRight size={15} aria-hidden="true" /></span>
+							</button>
+						);
+					})}
+				</div>
+			) : (
+				<div className="operations-v3-clear"><CheckCircle2 size={20} aria-hidden="true" /><div><strong>No hay tareas críticas</strong><span>La operación está dentro de los niveles esperados.</span></div></div>
+			)}
 		</section>
+	);
+}
+
+function OperationalHealth({ totals = {}, activeAutomations = 0, issueCount = 0, onNavigate }) {
+	const stable = issueCount === 0;
+	return (
+		<aside className="operations-v3-panel operations-v3-health" aria-labelledby="operations-health-title">
+			<div className="operations-v3-panel-head">
+				<div>
+					<span>Lectura rápida</span>
+					<h3 id="operations-health-title">Salud operativa</h3>
+				</div>
+			</div>
+			<div className={`operations-v3-health-score ${stable ? 'is-stable' : 'needs-attention'}`}>
+				<strong>{stable ? 'Estable' : 'Atención'}</strong>
+				<span>{stable ? 'No hay bloqueos abiertos.' : `${formatNumber(issueCount)} señales requieren decisión.`}</span>
+			</div>
+			<div className="operations-v3-health-list">
+				<button type="button" onClick={() => onNavigate('/campaigns/abandoned-carts')}><span>Automatizaciones</span><strong>{activeAutomations}/3 activas</strong></button>
+				<button type="button" onClick={() => onNavigate('/inbox/comprobantes')}><span>Comprobantes</span><strong>{formatNumber(totals.paymentReview)} pendientes</strong></button>
+				<button type="button" onClick={() => onNavigate('/inbox/todos?read=UNREAD')}><span>Inbox</span><strong>{formatNumber(totals.unreadMessages)} sin leer</strong></button>
+			</div>
+		</aside>
 	);
 }
 
@@ -437,52 +496,35 @@ export default function OperationsPage() {
 	const totals = summary.totals || {};
 	const workspaces = summary.workspaces || [];
 	const primaryWorkspace = workspaces[0] || null;
-	const visibleOpenIssuesCount = useMemo(
-		() =>
-			workspaces.reduce((total, item) => {
-				const issues = Array.isArray(item.issues) ? item.issues : [];
-				return total + issues.filter((issue) => !isCampaignOperationIssue(issue)).length;
-			}, 0),
-		[workspaces]
-	);
 	const automationLoading =
 		abandonedAutomationQuery.isLoading ||
 		shipmentSettingsQuery.isLoading ||
 		pendingPaymentAutomationQuery.isLoading;
+	const activeAutomations = [
+		abandonedAutomationQuery.data?.settings?.enabled,
+		shipmentSettingsQuery.data?.settings?.enabled,
+		pendingPaymentAutomationQuery.data?.settings?.enabled,
+	].filter(Boolean).length;
 
-	const quickActions = useMemo(() => {
-		const actions = [
-			{
-				label: 'Revisar comprobantes',
-				value: totals.paymentReview,
-				helper: 'Pagos para validar',
-				tone: totals.paymentReview ? 'warning' : 'neutral',
-				href: platformAdmin ? '/admin' : '/inbox/comprobantes',
-				icon: WalletCards,
-			},
-			{
-				label: 'Chats sin leer',
-				value: totals.unreadConversations,
-				helper: `${formatNumber(totals.unreadMessages)} mensajes pendientes`,
-				tone: totals.unreadConversations ? 'info' : 'neutral',
-				href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD',
-				icon: MessageCircle,
-			},
-		];
-
-		if (brandAdmin) {
-			actions.push({
-				label: 'Carritos nuevos',
-				value: totals.abandonedCartsNew,
-				helper: 'Oportunidades para recuperar',
-				tone: totals.abandonedCartsNew ? 'info' : 'neutral',
-				href: '/abandoned-carts',
-				icon: ShoppingCart,
-			});
-		}
-
-		return actions;
-	}, [brandAdmin, platformAdmin, totals]);
+	const priorityItems = useMemo(() => {
+		const issueItems = workspaces.flatMap((item) => (Array.isArray(item.issues) ? item.issues : []))
+			.filter((issue) => !isCampaignOperationIssue(issue))
+			.map((issue, index) => ({
+				id: `issue-${issue.type || index}-${index}`,
+				title: issue.title || issue.label || 'Alerta operativa',
+				description: issue.description || 'Revisá el detalle para resolver esta señal.',
+				action: issue.action || 'Revisar',
+				href: platformAdmin ? '/admin' : issue.href || '/operations',
+				tone: issue.severity === 'critical' ? 'danger' : 'warning',
+				icon: AlertTriangle,
+			}));
+		const metricItems = [
+			totals.paymentReview ? { id: 'payment-review', title: `${formatNumber(totals.paymentReview)} comprobantes esperan revisión`, description: 'Decisión humana pendiente antes de continuar la atención.', action: 'Revisar', href: platformAdmin ? '/admin' : '/inbox/comprobantes', tone: 'warning', icon: WalletCards } : null,
+			totals.unreadConversations ? { id: 'unread', title: `${formatNumber(totals.unreadConversations)} conversaciones requieren lectura`, description: `${formatNumber(totals.unreadMessages)} mensajes todavía no fueron revisados.`, action: 'Abrir Inbox', href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD', tone: 'info', icon: MessageCircle } : null,
+			brandAdmin && totals.abandonedCartsNew ? { id: 'carts', title: `${formatNumber(totals.abandonedCartsNew)} carritos listos para recuperar`, description: 'Oportunidades sin primer contacto registradas hoy.', action: 'Ver carritos', href: '/abandoned-carts', tone: 'info', icon: ShoppingCart } : null,
+		].filter(Boolean);
+		return [...issueItems, ...metricItems].slice(0, 5);
+	}, [brandAdmin, platformAdmin, totals, workspaces]);
 
 	function goTo(path) {
 		navigate(path);
@@ -520,15 +562,15 @@ export default function OperationsPage() {
 	}
 
 	return (
-		<section className="operations-page">
+		<section className="operations-page operations-page--v3">
 			<PageHeader
 				className="operations-header"
-				eyebrow={platformAdmin ? 'Operación multi marca' : 'Operación diaria'}
-				title={platformAdmin ? 'Prioridades de la plataforma' : getWorkspaceName(primaryWorkspace)}
+				eyebrow={platformAdmin ? 'Operación multi marca' : getWorkspaceName(primaryWorkspace)}
+				title={platformAdmin ? 'Centro de operaciones' : 'Lo que requiere tu atención'}
 				description={
 					platformAdmin
-						? 'Control de marcas con alertas, conversaciones pendientes y salud operativa.'
-						: 'Priorizá comprobantes, chats y oportunidades que requieren acción hoy.'
+						? 'Decisiones y alertas de todas las marcas, ordenadas por impacto.'
+						: 'Resolvé primero lo urgente. La actividad saludable queda en segundo plano.'
 				}
 			>
 				<div className="operations-header-actions">
@@ -538,34 +580,25 @@ export default function OperationsPage() {
 					{isAdmin ? (
 						<ActionButton
 							variant="secondary"
-							onClick={() => goTo(platformAdmin ? '/admin' : '/campaigns/tracking')}
+							onClick={() => goTo(platformAdmin ? '/admin' : '/inbox/automatico')}
 							icon={ArrowRight}
 						>
-							{platformAdmin ? 'Abrir admin' : 'Ver campañas'}
+							{platformAdmin ? 'Abrir admin' : 'Abrir Inbox'}
 						</ActionButton>
 					) : null}
 				</div>
 			</PageHeader>
 
-			<div className="operations-summary-strip">
-				<MetricCard label="Alertas" value={visibleOpenIssuesCount} helper="Problemas o tareas detectadas" tone={visibleOpenIssuesCount ? 'warning' : 'neutral'} icon={AlertTriangle} />
-				<MetricCard label="Conversaciones 30d" value={totals.activeConversations30d} helper="Actividad reciente" icon={MessageCircle} />
-				<MetricCard label="Entrada 30d" value={totals.messages30dInbound} helper="Mensajes recibidos" icon={MessageCircle} />
-				<MetricCard label="Salida 30d" value={totals.messages30dOutbound} helper="Mensajes enviados" icon={Send} />
+			<div className="operations-summary-strip operations-v3-kpis">
+				<MetricCard label="Requieren acción" value={priorityItems.length} helper="Ordenadas por impacto" tone={priorityItems.length ? 'warning' : 'success'} icon={AlertTriangle} />
+				<MetricCard label="Comprobantes" value={totals.paymentReview} helper="Pendientes de decisión" tone={totals.paymentReview ? 'warning' : 'neutral'} icon={WalletCards} />
+				<MetricCard label="Conversaciones" value={totals.unreadConversations} helper={`${formatNumber(totals.unreadMessages)} mensajes sin leer`} tone={totals.unreadConversations ? 'info' : 'neutral'} icon={MessageCircle} />
+				<MetricCard label="Carritos" value={totals.abandonedCartsNew} helper="Oportunidades nuevas" tone={totals.abandonedCartsNew ? 'info' : 'neutral'} icon={ShoppingCart} />
 			</div>
 
-			<div className="operations-quick-actions">
-				{quickActions.map((action) => (
-					<MetricCard
-						key={action.label}
-						label={action.label}
-						value={action.value}
-						helper={action.helper}
-						tone={action.tone}
-						onClick={() => goTo(action.href)}
-						icon={action.icon}
-					/>
-				))}
+			<div className="operations-v3-main-grid">
+				<PriorityCenter items={priorityItems} onNavigate={goTo} />
+				<OperationalHealth totals={totals} activeAutomations={activeAutomations} issueCount={priorityItems.length} onNavigate={goTo} />
 			</div>
 
 			{brandAdmin ? (
@@ -583,18 +616,20 @@ export default function OperationsPage() {
 				/>
 			) : null}
 
-			<div className={platformAdmin ? 'operations-workspaces-grid' : 'operations-single-workspace'}>
-				{workspaces.map((item) => (
-					<WorkspaceOperationCard
-						key={item.workspace.id}
-						item={item}
-						platformAdmin={platformAdmin}
-						onNavigate={goTo}
-					/>
-				))}
-			</div>
+			{platformAdmin ? (
+				<div className="operations-workspaces-grid operations-v3-workspaces">
+					{workspaces.map((item) => (
+						<WorkspaceOperationCard
+							key={item.workspace.id}
+							item={item}
+							platformAdmin={platformAdmin}
+							onNavigate={goTo}
+						/>
+					))}
+				</div>
+			) : null}
 
-			{!workspaces.length ? (
+			{platformAdmin && !workspaces.length ? (
 				<EmptyState
 					title="No hay marcas para mostrar"
 					description="Cuando haya una marca activa, sus prioridades van a aparecer acá."
