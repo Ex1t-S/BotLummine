@@ -121,8 +121,17 @@ function createInitialState() {
 		{
 			id: 'campaign-demo-finished', name: 'Recuperación carritos · Semana 28', status: 'FINISHED', templateId: templates[0].id,
 			templateName: templates[0].name, audienceSource: 'manual_segment', createdAt: '2026-07-14T13:00:00.000Z', startedAt: '2026-07-14T13:05:00.000Z', finishedAt: '2026-07-14T14:10:00.000Z',
-			totalRecipients: 86, sentCount: 86, deliveredCount: 82, readCount: 61, failedCount: 4, pendingCount: 0,
+			totalRecipients: 88, sentCount: 86, deliveredCount: 82, readCount: 61, failedCount: 2, pendingCount: 0,
 			analytics: { repliedRecipients: 16, replyRate: 0.186, effectiveReadRecipients: 61, effectiveReadRate: 0.709, purchasedRecipients: 9, purchaseRate: 0.105, attributedRevenue: 721500, attributedCurrency: 'ARS', conversionsBySource: { order: 7, chat: 2 } },
+			diagnostics: {
+				failures: {
+					totalFailed: 2,
+					byReason: [{ key: 'template_payload', label: 'Plantilla o variables', action: 'Revisar cantidad y orden de variables renderizadas.', count: 2 }],
+					byProviderCode: [{ code: '132000', message: 'Cantidad de parámetros incompatible con la plantilla.', count: 2 }],
+					examples: [{ id: 'failure-demo-1', errorCode: '132000', reasonLabel: 'Plantilla o variables' }],
+				},
+				controls: { blockedReasons: [], riskLevel: 'warning', canRetryFailed: true },
+			},
 		},
 		{
 			id: 'campaign-demo-clean', name: 'Aviso de temporada · Completada', status: 'FINISHED', templateId: templates[1].id,
@@ -394,7 +403,7 @@ function makeHandler(stateRef) {
 		if (campaignMatch) {
 			const campaign = state.campaigns.find((item) => item.id === campaignMatch[1]);
 			if (!campaign) return sendJson(res, { error: 'Campaña demo no encontrada.' }, 404);
-			if (method === 'GET') { const recipients = campaignRecipients(campaign); return sendJson(res, { campaign, recipients, pagination: { page: 1, pageSize: 500, total: campaign.totalRecipients }, analytics: campaign.analytics || {}, diagnostics: { demo: true }, demo: true }); }
+			if (method === 'GET') { const recipients = campaignRecipients(campaign); return sendJson(res, { campaign, recipients, pagination: { page: 1, pageSize: 500, total: campaign.totalRecipients }, analytics: campaign.analytics || {}, diagnostics: campaign.diagnostics || { demo: true }, demo: true }); }
 			if (method === 'DELETE') { state.campaigns = state.campaigns.filter((item) => item.id !== campaign.id); return sendJson(res, { ok: true, demo: true }); }
 			if (campaignMatch[2] === 'launch') { campaign.status = 'RUNNING'; campaign.startedAt = new Date().toISOString(); campaign.sentCount = Math.max(1, Math.round(campaign.totalRecipients * 0.72)); campaign.deliveredCount = Math.round(campaign.sentCount * 0.91); campaign.readCount = Math.round(campaign.deliveredCount * 0.68); campaign.pendingCount = Math.max(0, campaign.totalRecipients - campaign.sentCount); return sendJson(res, { campaign, ok: true, demo: true, deliveredExternally: false }); }
 			if (campaignMatch[2] === 'cancel') { campaign.status = 'CANCELLED'; campaign.finishedAt = new Date().toISOString(); return sendJson(res, { campaign, ok: true, demo: true }); }

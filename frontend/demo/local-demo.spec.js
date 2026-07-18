@@ -83,20 +83,21 @@ test('reintenta sólo fallidos de una campaña finalizada y protege los envíos 
 	const retryButton = page.getByRole('button', { name: 'Reintentar fallidos' });
 	await expect(retryButton).toBeVisible();
 	await expect(page.locator('.campaign-tracking-kpis--essential').getByText('86', { exact: true })).toBeVisible();
-	await expect(page.getByText('4 fallidos · 0 pendientes')).toBeVisible();
+	await expect(page.getByText('2 fallidos · 0 pendientes')).toBeVisible();
+	await expect(page.getByText('Error Meta 132000: las variables no coinciden con la plantilla.')).toBeVisible();
 
 	await retryButton.click();
 	const dialog = page.getByRole('dialog', { name: 'Reintentar envíos sin duplicar' });
 	await expect(dialog).toBeVisible();
-	await expect(dialog.getByText('4 fallidos', { exact: true })).toBeVisible();
+	await expect(dialog.getByText('2 fallidos', { exact: true })).toBeVisible();
 	await expect(dialog.getByText('0 pendientes', { exact: true })).toBeVisible();
 	await expect(dialog.getByText('86 ya enviados, protegidos', { exact: true })).toBeVisible();
+	await expect(dialog.getByText('No se puede reintentar todavía.')).toBeVisible();
 	const cancelRetry = dialog.getByRole('button', { name: 'Cancelar' });
 	const confirmRetry = dialog.getByRole('button', { name: 'Confirmar reintento' });
 	await expect(cancelRetry).toBeFocused();
+	await expect(confirmRetry).toBeDisabled();
 	await page.keyboard.press('Shift+Tab');
-	await expect(confirmRetry).toBeFocused();
-	await page.keyboard.press('Tab');
 	await expect(cancelRetry).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(dialog).toBeHidden();

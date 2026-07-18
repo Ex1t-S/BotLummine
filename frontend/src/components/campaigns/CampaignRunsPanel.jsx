@@ -52,6 +52,22 @@ function getMetric(campaign = {}, keys = []) {
 	return 0;
 }
 
+function hasProviderCode(failureDiagnostics = {}, expectedCode = '') {
+	const normalizedExpected = String(expectedCode || '').replace(/\D+/g, '');
+	if (!normalizedExpected) return false;
+
+	const providerCodes = Array.isArray(failureDiagnostics.byProviderCode)
+		? failureDiagnostics.byProviderCode
+		: [];
+	const examples = Array.isArray(failureDiagnostics.examples)
+		? failureDiagnostics.examples
+		: [];
+
+	return [...providerCodes, ...examples].some((item) => (
+		String(item?.code || item?.errorCode || '').replace(/\D+/g, '') === normalizedExpected
+	));
+}
+
 function buildCampaignActionModel(campaign = {}) {
 	const status = String(campaign?.status || '').toUpperCase();
 	const failedCount = Number(campaign?.failedCount || campaign?.failedRecipients || 0);
@@ -402,6 +418,7 @@ export default function CampaignRunsPanel({
 	const diagnostics = selectedCampaign?.diagnostics || {};
 	const failureDiagnostics = diagnostics.failures || {};
 	const operationalControls = diagnostics.controls || {};
+	const hasTemplateParameterMismatch = hasProviderCode(failureDiagnostics, '132000');
 	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
 	const retryableCount = recipientMetrics.failed + recipientMetrics.pending;
 
@@ -438,6 +455,11 @@ export default function CampaignRunsPanel({
 		if (event.key !== 'Tab') return;
 
 		const buttons = Array.from(event.currentTarget.querySelectorAll('button:not(:disabled)'));
+		if (buttons.length === 1) {
+			event.preventDefault();
+			buttons[0].focus();
+			return;
+		}
 		if (buttons.length < 2) return;
 		const firstButton = buttons[0];
 		const lastButton = buttons[buttons.length - 1];
@@ -540,7 +562,7 @@ export default function CampaignRunsPanel({
 
 							<div className="campaign-run-decision">
 								<strong>Próxima acción</strong>
-								<span>{actionModel.helperText}</span>
+								<span>{hasTemplateParameterMismatch ? 'Meta rechazó las variables de esta plantilla. Corregilas y validalas antes de reintentar.' : actionModel.helperText}</span>
 							</div>
 
 							{operationalControls.blockedReasons?.length || failureDiagnostics.totalFailed ? (
@@ -576,6 +598,13 @@ export default function CampaignRunsPanel({
 													<small>{item.action}</small>
 												</div>
 											))}
+										</div>
+									) : null}
+
+									{hasTemplateParameterMismatch ? (
+										<div className="campaign-provider-warning" role="alert">
+											<strong>Error Meta 132000: las variables no coinciden con la plantilla.</strong>
+											<span>Revisá la cantidad y el orden de los parámetros renderizados. El reintento queda bloqueado hasta corregir el contenido.</span>
 										</div>
 									) : null}
 
@@ -873,10 +902,16 @@ export default function CampaignRunsPanel({
 					<div className="campaign-retry-dialog" role="dialog" aria-modal="true" aria-labelledby="campaign-retry-title" aria-describedby="campaign-retry-description" onKeyDown={handleRetryDialogKeyDown}>
 										<h4 id="campaign-retry-title">Reintentar envíos sin duplicar</h4>
 										<p id="campaign-retry-description">Se volverán a preparar hasta {retryableCount} destinatarios fallidos o pendientes. Los enviados no se tocan y las exclusiones, bajas y conversaciones recientes se controlan otra vez antes del envío.</p>
+										{hasTemplateParameterMismatch ? (
+											<div className="campaign-provider-warning" role="alert">
+												<strong>No se puede reintentar todavía.</strong>
+												<span>Meta devolvió 132000. Corregí y validá la cantidad y el orden de las variables de la plantilla; repetir ahora produciría el mismo fallo.</span>
+											</div>
+										) : null}
 										<div className="campaign-retry-dialog__facts"><span><strong>{recipientMetrics.failed}</strong> fallidos</span><span><strong>{recipientMetrics.pending}</strong> pendientes</span><span><strong>{recipientMetrics.sent}</strong> ya enviados, protegidos</span></div>
 										<div className="campaign-retry-dialog__actions">
 							<button type="button" className="button secondary" autoFocus onClick={() => setRetryConfirmationOpen(false)}>Cancelar</button>
-											<button type="button" className="button primary" disabled={actionLoading || retryableCount === 0} onClick={() => { setRetryConfirmationOpen(false); onResume(selectedCampaign.id); }}>Confirmar reintento</button>
+											<button type="button" className="button primary" disabled={actionLoading || retryableCount === 0 || hasTemplateParameterMismatch} onClick={() => { setRetryConfirmationOpen(false); onResume(selectedCampaign.id); }}>Confirmar reintento</button>
 										</div>
 									</div>
 								</div>
