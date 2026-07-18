@@ -410,6 +410,18 @@
 .campaign-tracking-panel--focused .campaign-safety-panel__head > span { display: grid; gap: 3px; }
 .campaign-tracking-panel--focused .campaign-safety-panel__head small { color: inherit; font-weight: 500; }
 
+.campaign-provider-warning {
+    display: grid;
+    gap: 4px;
+    padding: 12px 13px;
+    border-left: 3px solid #c2410c;
+    background: #fff7ed;
+    color: #7c2d12;
+    font-size: 13px;
+    line-height: 1.45;
+}
+.campaign-provider-warning span { color: #9a3412; }
+
 .campaign-tracking-panel--focused .campaign-conversion-source-strip {
     padding: 8px 0;
     border: 0;
