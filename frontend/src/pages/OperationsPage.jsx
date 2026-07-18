@@ -323,7 +323,7 @@ function OperationalHealth({ totals = {}, activeAutomations = 0, issueCount = 0,
 			<div className="operations-v3-health-list">
 				<button type="button" onClick={() => onNavigate('/campaigns/abandoned-carts')}><span>Automatizaciones</span><strong>{activeAutomations}/3 activas</strong></button>
 				<button type="button" onClick={() => onNavigate('/inbox/comprobantes')}><span>Comprobantes</span><strong>{formatNumber(totals.paymentReview)} pendientes</strong></button>
-				<button type="button" onClick={() => onNavigate('/inbox/todos?read=UNREAD')}><span>Inbox</span><strong>{formatNumber(totals.unreadMessages)} sin leer</strong></button>
+				<button type="button" onClick={() => onNavigate('/inbox/todos?read=UNREAD')}><span>Bandeja</span><strong>{formatNumber(totals.unreadMessages)} sin leer</strong></button>
 			</div>
 		</aside>
 	);
@@ -378,7 +378,7 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 		<section className="operations-workspace-card">
 			<div className="operations-workspace-head">
 				<div>
-					<span>{item.workspace?.slug || item.workspace?.status || 'workspace'}</span>
+					<span>{item.workspace?.slug || item.workspace?.status || 'marca'}</span>
 					<h3>{getWorkspaceName(item)}</h3>
 				</div>
 				<strong className={issueCount ? 'has-issues' : 'is-clear'}>
@@ -520,7 +520,7 @@ export default function OperationsPage() {
 			}));
 		const metricItems = [
 			totals.paymentReview ? { id: 'payment-review', title: `${formatNumber(totals.paymentReview)} comprobantes esperan revisión`, description: 'Decisión humana pendiente antes de continuar la atención.', action: 'Revisar', href: platformAdmin ? '/admin' : '/inbox/comprobantes', tone: 'warning', icon: WalletCards } : null,
-			totals.unreadConversations ? { id: 'unread', title: `${formatNumber(totals.unreadConversations)} conversaciones requieren lectura`, description: `${formatNumber(totals.unreadMessages)} mensajes todavía no fueron revisados.`, action: 'Abrir Inbox', href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD', tone: 'info', icon: MessageCircle } : null,
+			totals.unreadConversations ? { id: 'unread', title: `${formatNumber(totals.unreadConversations)} conversaciones requieren lectura`, description: `${formatNumber(totals.unreadMessages)} mensajes todavía no fueron revisados.`, action: 'Abrir bandeja', href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD', tone: 'info', icon: MessageCircle } : null,
 			brandAdmin && totals.abandonedCartsNew ? { id: 'carts', title: `${formatNumber(totals.abandonedCartsNew)} carritos listos para recuperar`, description: 'Oportunidades sin primer contacto registradas hoy.', action: 'Ver carritos', href: '/abandoned-carts', tone: 'info', icon: ShoppingCart } : null,
 		].filter(Boolean);
 		return [...issueItems, ...metricItems].slice(0, 5);
@@ -583,7 +583,7 @@ export default function OperationsPage() {
 							onClick={() => goTo(platformAdmin ? '/admin' : '/inbox/automatico')}
 							icon={ArrowRight}
 						>
-							{platformAdmin ? 'Abrir admin' : 'Abrir Inbox'}
+							{platformAdmin ? 'Abrir administración' : 'Abrir bandeja'}
 						</ActionButton>
 					) : null}
 				</div>

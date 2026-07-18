@@ -250,7 +250,7 @@ export default function AiLabPage() {
 			<section className="ai-lab-chat-card" aria-labelledby="ai-lab-title">
 				<div className="ai-lab-chat-header">
 					<div>
-						<h1 id="ai-lab-title">AI Lab</h1>
+						<h1 id="ai-lab-title">Laboratorio de IA</h1>
 						<p>
 							{isPlatformAdmin && selectedWorkspace
 								? `${getWorkspaceName(selectedWorkspace)} - ${getWorkspaceVertical(selectedWorkspace)}`

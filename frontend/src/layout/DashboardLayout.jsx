@@ -20,7 +20,7 @@ import {
 	Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import api, { resolveApiUrl } from '../lib/api.js';
+import api from '../lib/api.js';
 import './DashboardLayout.css';
 import logoBladeIA from '../assets/bladeia-logo.svg';
 import { canUseAiLab, isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from '../lib/authz.js';
@@ -33,53 +33,43 @@ import {
 const PAGE_META = [
 	{
 		match: (pathname) => pathname.startsWith('/inbox'),
-		title: 'Inbox',
-		description: 'Conversaciones, comprobantes y atención de clientes.',
+		title: 'Bandeja',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/campaigns'),
 		title: 'Campañas',
-		description: 'Templates, audiencias, envíos y resultados.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/abandoned-carts'),
 		title: 'Carritos',
-		description: 'Oportunidades de recuperación y seguimiento.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/customers'),
 		title: 'Clientes',
-		description: 'Base de clientes, compras y datos de contacto.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/catalog'),
 		title: 'Catálogo',
-		description: 'Productos, stock y sincronización comercial.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/analytics'),
 		title: 'Estadísticas',
-		description: 'Indicadores de ventas y actividad de la marca.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/whatsapp-menu'),
 		title: 'Menú de WhatsApp',
-		description: 'Opciones guiadas y respuestas iniciales.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/ai-lab'),
-		title: 'AI Lab',
-		description: 'Pruebas controladas de IA y menús guiados.',
+		title: 'Laboratorio de IA',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/admin'),
 		title: 'Configuración',
-		description: 'Marca, usuarios, canales y ajustes operativos.',
 	},
 	{
 		match: (pathname) => pathname.startsWith('/operations'),
 		title: 'Operación',
-		description: 'Prioridades abiertas y salud diaria del negocio.',
 	},
 ];
 
@@ -131,7 +121,6 @@ export default function DashboardLayout() {
 	const { resolvedTheme, setTheme } = useTheme();
 	const { user, logout } = useAuth();
 	const contentRef = useRef(null);
-	const [logoFailed, setLogoFailed] = useState(false);
 	const [resettingDemo, setResettingDemo] = useState(false);
 	const demoMode = import.meta.env.MODE === 'demo';
 	const darkMode = resolvedTheme === 'dark';
@@ -143,12 +132,18 @@ export default function DashboardLayout() {
 	const brandName = isPlatformAdmin
 		? 'Admin plataforma'
 		: (workspace?.aiConfig?.businessName || workspace?.name || 'Marca');
-	const logoUrl = resolveApiUrl(workspace?.branding?.logoUrl || '') || logoBladeIA;
+	const userDisplayName = user?.name || user?.email || 'Usuario';
+	const roleLabel = isPlatformAdmin ? 'Superadministrador' : (isAdmin ? 'Administrador' : 'Agente');
+	const userInitials = userDisplayName
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((part) => part.charAt(0).toUpperCase())
+		.join('') || 'U';
 	const basePageMeta = getPageMeta(location.pathname);
 	const pageMeta = isPlatformAdmin && location.pathname.startsWith('/admin')
 		? {
 			title: 'Admin plataforma',
-			description: 'Marcas, usuarios, canales y salud operativa.',
 		}
 		: basePageMeta;
 
@@ -167,10 +162,6 @@ export default function DashboardLayout() {
 			contentRef.current.scrollTop = 0;
 		}
 	}, [location.pathname]);
-
-	useEffect(() => {
-		setLogoFailed(false);
-	}, [logoUrl]);
 
 	useEffect(() => {
 		const paths = getFrequentInternalPaths(user);
@@ -211,29 +202,27 @@ export default function DashboardLayout() {
 				<div className="admin-brand">
 					<div className="admin-brand-mark admin-brand-mark--logo">
 						<img
-							src={logoFailed ? logoBladeIA : logoUrl}
-							alt={brandName}
+							src={logoBladeIA}
+							alt="BladeIA"
 							className="admin-brand-logo"
-							onError={() => setLogoFailed(true)}
 						/>
 					</div>
 
 					<div className="admin-brand-copy">
-						<h1>{brandName}</h1>
-						<p>{aiLabOnlyWorkspace ? 'Pruebas de IA' : (isPlatformAdmin ? 'Gestión multi marca' : (isAdmin ? 'Atención conversacional' : 'Inbox de atención'))}</p>
+						<h1>BladeIA</h1>
 					</div>
 					{demoMode ? <span className="admin-demo-mobile">Demo</span> : null}
 				</div>
 
-				<div className="admin-user-box">
-					<strong>{user?.name || user?.email || 'Usuario'}</strong>
-					<span>{isPlatformAdmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : 'AGENTE')}</span>
+				<div className="admin-workspace-box">
+					<span>Espacio activo</span>
+					<strong>{brandName}</strong>
 				</div>
 
 				<nav className="admin-menu" aria-label="Navegación principal">
 					{aiLabOnlyWorkspace ? (
 						<NavGroup label="Pruebas">
-							<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
+							<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>Laboratorio IA</NavItem>
 						</NavGroup>
 					) : (
 						<>
@@ -247,7 +236,7 @@ export default function DashboardLayout() {
 										className={navClassWithPrefix(location, '/inbox')}
 										onPrepare={preparePath}
 									>
-										Inbox
+										Bandeja
 									</NavItem>
 								) : null}
 							</NavGroup>
@@ -260,7 +249,7 @@ export default function DashboardLayout() {
 										<NavItem to="/customers" icon={Users} onPrepare={preparePath}>Clientes</NavItem>
 									</NavGroup>
 
-									<NavGroup label="Marketing">
+									<NavGroup label="Comercial">
 										<NavItem to="/campaigns" icon={ShoppingBag} className={navClassWithPrefix(location, '/campaigns')} onPrepare={preparePath}>Campañas</NavItem>
 										<NavItem to="/analytics" icon={BarChart3} onPrepare={preparePath}>Estadísticas</NavItem>
 									</NavGroup>
@@ -280,7 +269,7 @@ export default function DashboardLayout() {
 									) : null}
 
 									{showAiLab ? (
-										<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>AI Lab</NavItem>
+										<NavItem to="/ai-lab" icon={FlaskConical} onPrepare={preparePath}>Laboratorio IA</NavItem>
 									) : null}
 								</NavGroup>
 							) : null}
@@ -288,18 +277,22 @@ export default function DashboardLayout() {
 					)}
 				</nav>
 
-				<button className="logout-btn" onClick={handleLogout} type="button">
-					<LogOut size={16} strokeWidth={2.2} aria-hidden="true" />
-					<span>Salir</span>
-				</button>
+				<div className="admin-sidebar-footer">
+					<div className="admin-sidebar-user">
+						<span className="admin-sidebar-avatar" aria-hidden="true">{userInitials}</span>
+						<span><strong>{userDisplayName}</strong><small>{roleLabel}</small></span>
+					</div>
+					<button className="logout-btn" onClick={handleLogout} type="button" aria-label="Cerrar sesión" title="Cerrar sesión">
+						<LogOut size={16} strokeWidth={2.2} aria-hidden="true" />
+						<span>Salir</span>
+					</button>
+				</div>
 			</aside>
 
 			<div className="admin-main">
 				<header className="admin-topbar">
 					<div>
-						<span>{isPlatformAdmin ? 'Plataforma' : brandName}</span>
 						<h2>{pageMeta.title}</h2>
-						<p>{pageMeta.description}</p>
 					</div>
 					<div className="admin-topbar-actions">
 						{demoMode ? (
@@ -324,8 +317,8 @@ export default function DashboardLayout() {
 							)}
 						</button>
 						<div className="admin-topbar-user" aria-label="Usuario actual">
-							<strong>{user?.name || user?.email || 'Usuario'}</strong>
-							<span>{isPlatformAdmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : 'AGENTE')}</span>
+							<strong>{userDisplayName}</strong>
+							<span>{roleLabel}</span>
 						</div>
 					</div>
 				</header>

@@ -1241,3 +1241,330 @@
 		padding: 10px;
 	}
 }
+
+/* Sidebar V2 — product navigation with a stable graphite rail. */
+.admin-shell {
+	grid-template-columns: 232px minmax(0, 1fr) !important;
+	height: 100dvh !important;
+	padding: 0 !important;
+	gap: 0 !important;
+	background: #f4f6f9 !important;
+}
+
+.admin-shell .admin-sidebar {
+	padding: 18px 14px 14px;
+	background: #181c25 !important;
+	border: 0 !important;
+	border-right: 1px solid #262b36 !important;
+	border-radius: 0 !important;
+	color: #eef1f7 !important;
+	box-shadow: none !important;
+}
+
+.admin-shell .admin-main {
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+}
+
+.admin-shell .admin-brand {
+	margin-bottom: 14px;
+	padding: 0 6px 16px;
+	border-bottom: 0;
+}
+
+.admin-shell .admin-brand-mark--logo {
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+}
+
+.admin-shell .admin-brand-copy h1 {
+	color: #fff !important;
+	font-size: 18px;
+	font-weight: 780;
+}
+
+.admin-workspace-box {
+	display: grid;
+	gap: 5px;
+	margin: 0 5px 22px;
+	padding: 12px;
+	border: 1px solid #313743;
+	border-radius: 9px;
+	background: #20252f;
+}
+
+.admin-workspace-box span {
+	color: #9ba6b8;
+	font-size: 10px;
+	font-weight: 620;
+}
+
+.admin-workspace-box strong {
+	overflow: hidden;
+	color: #fff;
+	font-size: 13px;
+	font-weight: 720;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.admin-shell .admin-menu {
+	gap: 18px;
+	padding-right: 0;
+}
+
+.admin-shell .admin-menu-group {
+	gap: 6px;
+}
+
+.admin-shell .admin-menu-group-label {
+	padding-inline: 10px;
+	color: #8e9aae !important;
+	font-size: 10px;
+	letter-spacing: .09em;
+}
+
+.admin-shell .admin-menu-group-links {
+	gap: 3px;
+}
+
+.admin-shell .admin-menu-link {
+	min-height: 40px;
+	padding: 9px 10px;
+	border: 0 !important;
+	border-radius: 7px;
+	background: transparent !important;
+	color: #c7cfdd !important;
+	font-size: 13px;
+	font-weight: 610;
+}
+
+.admin-shell .admin-menu-link svg {
+	color: #9da8ba !important;
+}
+
+.admin-shell .admin-menu-link:hover {
+	background: #232936 !important;
+	color: #fff !important;
+}
+
+.admin-shell .admin-menu-link.active {
+	background: #2a2f3e !important;
+	color: #fff !important;
+}
+
+.admin-shell .admin-menu-link.active svg,
+.admin-shell .admin-menu-link:hover svg {
+	color: #9188ff !important;
+}
+
+.admin-shell .admin-menu-link-chevron {
+	display: none;
+}
+
+.admin-sidebar-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-top: auto;
+	padding: 13px 4px 0;
+	border-top: 1px solid #2b313d;
+}
+
+.admin-sidebar-user {
+	display: grid;
+	grid-template-columns: 32px minmax(0, 1fr);
+	align-items: center;
+	gap: 9px;
+	min-width: 0;
+}
+
+.admin-sidebar-avatar {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 7px;
+	background: #303649;
+	color: #fff;
+	font-size: 10px;
+	font-weight: 780;
+}
+
+.admin-sidebar-user > span:last-child {
+	display: grid;
+	min-width: 0;
+}
+
+.admin-sidebar-user strong {
+	overflow: hidden;
+	color: #fff;
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.admin-sidebar-user small {
+	color: #909caf;
+	font-size: 10px;
+}
+
+.admin-shell .admin-sidebar-footer .logout-btn {
+	display: grid;
+	place-items: center;
+	flex: 0 0 34px;
+	width: 34px;
+	min-width: 34px;
+	min-height: 34px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: #9da8ba;
+	box-shadow: none;
+}
+
+.admin-shell .admin-sidebar-footer .logout-btn:hover {
+	background: #282e3a;
+	color: #fff;
+}
+
+.admin-shell .admin-sidebar-footer .logout-btn span {
+	display: none;
+}
+
+.admin-shell .admin-topbar {
+	min-height: 56px;
+	padding-block: 10px;
+}
+
+.admin-shell .admin-topbar h2 {
+	margin: 0;
+	font-size: 18px;
+}
+
+@media (min-width: 561px) and (max-width: 900px) {
+	.admin-shell {
+		grid-template-columns: 64px minmax(0, 1fr) !important;
+		grid-template-rows: minmax(0, 1fr);
+		padding: 0;
+	}
+
+	.admin-shell .admin-sidebar {
+		grid-column: 1;
+		display: flex;
+		width: 64px;
+		padding: 14px 8px;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
+		overflow: hidden;
+	}
+
+	.admin-shell .admin-main {
+		grid-column: 2;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
+	}
+
+	.admin-shell .admin-brand {
+		justify-content: center;
+		padding: 0 0 14px;
+	}
+
+	.admin-shell .admin-brand-copy,
+	.admin-shell .admin-workspace-box,
+	.admin-shell .admin-menu-group-label,
+	.admin-shell .admin-menu-link span,
+	.admin-shell .admin-sidebar-user > span:last-child,
+	.admin-shell .admin-demo-mobile {
+		display: none;
+	}
+
+	.admin-shell .admin-menu {
+		display: grid;
+		gap: 12px;
+		width: 100%;
+		max-width: none;
+		padding: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
+	}
+
+	.admin-shell .admin-menu-group,
+	.admin-shell .admin-menu-group-links {
+		display: grid;
+		width: 100%;
+		gap: 4px;
+	}
+
+	.admin-shell .admin-menu-link {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 42px;
+		min-height: 42px;
+		padding: 0;
+	}
+
+	.admin-shell .admin-sidebar-footer {
+		display: grid;
+		justify-items: center;
+		padding-inline: 0;
+	}
+
+	.admin-shell .admin-sidebar-user {
+		display: block;
+	}
+
+	.admin-shell .admin-sidebar-footer .logout-btn {
+		margin-top: 5px;
+	}
+}
+
+@media (max-width: 560px) {
+	.admin-shell {
+		grid-template-columns: 1fr !important;
+		padding: 10px !important;
+		background: #eef0f5 !important;
+	}
+
+	.admin-shell .admin-sidebar {
+		background: #fff !important;
+		border: 1px solid #e6eaf2 !important;
+		border-radius: 18px !important;
+		color: #172033 !important;
+	}
+
+	.admin-shell .admin-brand-copy h1 {
+		color: #172033;
+	}
+
+	.admin-shell .admin-workspace-box,
+	.admin-shell .admin-sidebar-user {
+		display: none;
+	}
+
+	.admin-shell .admin-sidebar-footer {
+		grid-column: 2;
+		grid-row: 1;
+		align-self: center;
+		margin: 0;
+		padding: 0;
+		border: 0;
+	}
+
+	.admin-shell .admin-menu-link {
+		color: #5f6b7e !important;
+	}
+
+	.admin-shell .admin-menu-link.active {
+		background: #eef1ff !important;
+		color: #304fd4 !important;
+	}
+}

@@ -1824,7 +1824,7 @@ export default function InboxPage() {
 			<aside className="inbox-sidebar">
 				<div className="inbox-sidebar-top">
 					<div>
-						<strong>Inbox</strong>
+						<strong>Bandeja</strong>
 						<span>
 							{counts.ALL || 0} conversaciones · {isRealtimeConnected ? 'Tiempo real' : 'Actualización periódica'}
 						</span>
