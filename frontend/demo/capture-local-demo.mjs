@@ -4,14 +4,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outputDir = path.resolve(__dirname, '../audit-artifacts/local-demo-v2');
+const outputDir = path.resolve(__dirname, '../audit-artifacts/local-demo-v3');
 const baseURL = process.env.DEMO_BASE_URL || 'http://127.0.0.1:5173';
 
 const routes = [
 	['operations', '/operations', '.operations-page'],
+	['operations-scrolled', '/operations', '.operations-page', true],
 	['inbox', '/inbox/automatico', '.inbox-sidebar'],
-	['campaign-audience', '/campaigns/segment', '.campaigns-page'],
-	['campaign-tracking', '/campaigns/tracking', '.campaigns-page'],
+	['campaign-overview', '/campaigns', '.campaign-os-overview'],
+	['campaign-create', '/campaigns/segment?audience=customers', '.campaign-wizard-nav'],
+	['campaign-audiences', '/campaigns/audiences', '.campaign-os-audiences'],
+	['campaign-results', '/campaigns/tracking', '.campaigns-page'],
 	['carts', '/abandoned-carts', '.abandoned-carts-page'],
 	['analytics', '/analytics', '.analytics-v2-page'],
 	['ai-lab', '/ai-lab', '.ai-lab-page'],
@@ -31,9 +34,14 @@ try {
 		const page = await context.newPage();
 		await page.request.post(`${baseURL}/api/demo/reset`);
 
-		for (const [name, route, readySelector] of routes) {
+		for (const [name, route, readySelector, scrollContent = false] of routes) {
 			await page.goto(`${baseURL}${route}`, { waitUntil: 'domcontentloaded' });
 			await page.locator(readySelector).waitFor({ state: 'visible', timeout: 15_000 });
+			if (scrollContent) {
+				await page.locator('.admin-content').evaluate((element) => {
+					element.scrollTop = 640;
+				});
+			}
 			await page.screenshot({
 				path: path.join(outputDir, `${name}-${viewportName}.png`),
 				fullPage: true,

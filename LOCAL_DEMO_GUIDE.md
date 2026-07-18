@@ -43,12 +43,13 @@ Todos los nombres, teléfonos, emails, URLs y documentos usan rangos de prueba (
 3. **Inbox / Humano:** revisar la conversación derivada y cambiar la cola.
 4. **Inbox / Comprobantes:** revisar el documento sintético y registrar una acción.
 5. **Carritos:** probar filtros, tabla desktop y cards mobile.
-6. **Campañas / Plantillas:** buscar y seleccionar una plantilla aprobada.
-7. **Campañas / Audiencia:** recorrer la selección de clientes y carritos.
-8. **Campañas / Tracking:** revisar campaña activa y campaña finalizada.
-9. **Clientes, Catálogo y Estadísticas:** validar legibilidad y navegación.
-10. **AI Lab:** enviar una consulta y confirmar que la respuesta identifica el modo sintético.
-11. Pulsar **Restaurar datos** y confirmar que el estado vuelve al inicial.
+6. **Campaign OS / Resumen:** revisar estado, próxima acción y métricas esenciales.
+7. **Campaign OS / Audiencias:** elegir clientes, carritos o carga manual y continuar al creador.
+8. **Campaign OS / Crear:** recorrer Mensaje, Audiencia, Variables y Revisar.
+9. **Campaign OS / Plantillas y Resultados:** seleccionar una plantilla aprobada y revisar una campaña activa/finalizada.
+10. **Clientes, Catálogo y Estadísticas:** validar legibilidad y navegación.
+11. **AI Lab:** enviar una consulta y confirmar que la respuesta identifica el modo sintético.
+12. Pulsar **Restaurar datos** y confirmar que el estado vuelve al inicial.
 
 ## Smoke automático del modo demo
 

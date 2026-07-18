@@ -448,3 +448,34 @@ El piloto local actual incluye:
 - Sandbox integral para validar el conjunto sin backend, Railway, WhatsApp ni proveedor de IA.
 
 La evidencia actual se encuentra en `frontend/audit-artifacts/local-demo-v2/`: 14 capturas de Operaciones, Inbox, Campañas/audiencia, Campañas/tracking, Carritos, Analytics y AI Lab en 1440×960 y 390×844. Build y E2E están verdes; el rediseño total de Templates, Administración, Clientes y Catálogo continúa como backlog visual y no debe confundirse con el sandbox funcional ya completo.
+
+## 18. Iteración V3: Operaciones persistente y Campaign OS — 18/07/2026
+
+La revisión lado a lado del demo V2 contra los prototipos aprobados confirmó una regresión de lenguaje visual: la capa de fixtures era completa, pero Operaciones todavía repartía el peso entre demasiados KPIs y Campañas seguía entrando por el formulario legacy. La V3 cambia la arquitectura de información, no sólo los estilos.
+
+### Comparación verificable
+
+| Área | Antes (demo V2) | Después (demo V3) | Cambio de decisión |
+|---|---|---|---|
+| Operaciones | 7 KPIs y automatizaciones con el mismo peso que una alerta | 4 KPIs, lista de prioridades, salud lateral y automatizaciones colapsadas | Lo urgente ocupa el primer recorrido visual |
+| Encabezado | Se ocultaba y reaparecía según dirección del scroll | Siempre visible en desktop; shell compacto propio en móvil | Se elimina el salto instantáneo señalado en revisión |
+| Entrada a Campañas | Formulario largo con hero y tabs anteriores | Resumen operativo Campaign OS | Estado, próxima acción y resultados preceden a la configuración |
+| Audiencia | Filtros complejos como primer paso | Audience Studio con tres recetas y conteo real | Primero se elige el objetivo; luego aparecen los filtros |
+| Creación | Una pantalla extensa | Wizard Mensaje → Audiencia → Variables → Revisar | Menor carga cognitiva y salida clara por paso |
+| Navegación | Funciones mezcladas en tabs internas | Resumen, Crear, Audiencias, Automatizaciones, Plantillas y Resultados | Modelo mental estable por tarea |
+| Dark mode | Overrides cyan heredados | Superficies graphite y acción indigo propias de Campaign OS | El rebranding conserva contraste y separa el producto de la UI legacy |
+
+### Evidencia renderizada V3
+
+- [`Operaciones desktop`](frontend/audit-artifacts/local-demo-v3/operations-desktop.png)
+- [`Operaciones con scroll`](frontend/audit-artifacts/local-demo-v3/operations-scrolled-desktop.png)
+- [`Campaign OS`](frontend/audit-artifacts/local-demo-v3/campaign-overview-desktop.png)
+- [`Creación guiada`](frontend/audit-artifacts/local-demo-v3/campaign-create-desktop.png)
+- [`Audience Studio`](frontend/audit-artifacts/local-demo-v3/campaign-audiences-desktop.png)
+- [`Resultados`](frontend/audit-artifacts/local-demo-v3/campaign-results-desktop.png)
+- [`Campaign OS mobile`](frontend/audit-artifacts/local-demo-v3/campaign-overview-mobile.png)
+- [`Creación mobile`](frontend/audit-artifacts/local-demo-v3/campaign-create-mobile.png)
+- [`Audience Studio mobile`](frontend/audit-artifacts/local-demo-v3/campaign-audiences-mobile.png)
+- [`Campaign OS dark`](frontend/audit-artifacts/local-demo-v3/campaign-overview-dark-desktop.png)
+
+La carpeta `frontend/audit-artifacts/local-demo-v3/` contiene 20 capturas light desktop/móvil y la validación dark adicional. No se modificó backend, Railway, variables, base de datos ni delivery externo en esta iteración.

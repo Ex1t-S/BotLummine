@@ -8,7 +8,16 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await page.goto('/operations');
 	await expect(page.getByRole('status', { name: 'Modo demo local activo' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Lummine Demo', level: 1 })).toBeVisible();
-	await expect(page.getByText('Problemas o tareas detectadas')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Prioridades de hoy' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Salud operativa' })).toBeVisible();
+
+	await page.goto('/campaigns');
+	await expect(page.getByRole('heading', { name: 'Campaign OS', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Campañas recientes' })).toBeVisible();
+
+	await page.goto('/campaigns/audiences');
+	await expect(page.getByRole('heading', { name: 'Elegí primero a quién querés mover' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Usar esta audiencia' })).toBeVisible();
 
 	await page.goto('/abandoned-carts');
 	const cartsTable = page.getByRole('table', { name: 'Carritos abandonados ordenados desde el más reciente' });
@@ -43,9 +52,33 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await expect(page.getByText('En el modo demo no se consulta Gemini ni se envía contenido externo.', { exact: false })).toBeVisible();
 });
 
+test('mantiene visible el encabezado al recorrer una operación extensa', async ({ page }) => {
+	await page.goto('/operations');
+	await page.getByText('Administrar', { exact: true }).click();
+	await page.locator('.admin-content').evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+
+	const topbar = page.locator('.admin-topbar');
+	await expect(topbar).toBeVisible();
+	await expect(topbar).toHaveCSS('opacity', '1');
+	expect(await topbar.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).m42)).toBe(0);
+});
+
+test('guía la creación de campaña sin duplicar la navegación anterior', async ({ page }) => {
+	await page.goto('/campaigns/segment?audience=customers');
+	await expect(page.getByRole('heading', { name: 'Campaign OS', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Crear campaña', level: 3 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Campañas de WhatsApp' })).toBeHidden();
+	await expect(page.getByText('Nombre de campaña')).toBeVisible();
+
+	await page.getByRole('button', { name: /2 Audiencia/ }).click();
+	await expect(page.getByRole('heading', { name: 'Elige a quién escribirle' })).toBeVisible();
+});
+
 test('mantiene el shell compacto y sin overflow en móvil', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
-	for (const route of ['/inbox/automatico', '/campaigns/segment', '/analytics', '/abandoned-carts']) {
+	for (const route of ['/inbox/automatico', '/campaigns', '/campaigns/audiences', '/campaigns/segment', '/analytics', '/abandoned-carts']) {
 		await page.goto(route);
 		await expect(page.locator('.admin-demo-mobile')).toBeVisible();
 		await expect(page.locator('.admin-topbar')).toBeHidden();
