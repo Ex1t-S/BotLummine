@@ -5,6 +5,21 @@ test.beforeEach(async ({ request }) => {
 	await request.post('/api/demo/reset');
 });
 
+test('la portada guía hacia contacto y precios sin métricas inventadas', async ({ page }) => {
+	await page.goto('/inicio');
+	await expect(page.getByRole('heading', { name: 'Responde, retoma y recupera oportunidades desde WhatsApp.' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Hablar con el equipo' })).toHaveAttribute('href', '/contacto');
+	await expect(page.getByText('Vista de ejemplo')).toBeVisible();
+	await expect(page.getByText('Todo en un lugar')).toBeVisible();
+	await expect(page.getByText('$37.0M')).toHaveCount(0);
+
+	await page.goto('/precios');
+	await expect(page.getByRole('link', { name: 'Consultar este plan' })).toHaveCount(2);
+
+	await page.goto('/contacto');
+	await expect(page.getByRole('link', { name: 'Escribir por WhatsApp' })).toHaveAttribute('href', 'https://wa.me/5492923562286');
+});
+
 test('el resumen usa contadores de API y no mezcla borradores con fallos', async ({ page }) => {
 	await page.goto('/campaigns');
 	const deliveryMetric = page.locator('.campaign-os-metric').filter({ hasText: 'Entrega' });

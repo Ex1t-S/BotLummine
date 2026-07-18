@@ -74,8 +74,8 @@ const capabilityCards = [
 ];
 
 const trustStats = [
-	{ label: 'Conversaciones ordenadas', value: '+12k' },
-	{ label: 'Tiempo medio ahorrado', value: '42%' },
+	{ label: 'Un solo lugar para atender', value: 'Inbox operativo' },
+	{ label: 'Seguimiento sin planillas', value: 'Próximo paso visible' },
 ];
 
 const featureCarouselImages = {
@@ -89,12 +89,12 @@ const featureCarouselImages = {
 };
 
 const dashboardRows = [
-	['Ventas', '$37.0M', '+12.4%'],
-	['Carritos', '183', '+8.2%'],
-	['ROI', '5.11', '+2.1%'],
-	['Clientes', '1.528', '+18.0%'],
-	['Campañas', '24', '+6.4%'],
-	['Respuestas', '94%', '+11.6%'],
+	['Bandeja', 'Prioridades', 'Consultas que requieren respuesta'],
+	['Seguimiento', 'Al día', 'Próximas acciones visibles'],
+	['Carritos', 'A recuperar', 'Oportunidades sin contacto'],
+	['Campañas', 'Preparadas', 'Audiencia y mensaje revisados'],
+	['Clientes', 'Contexto', 'Historial para responder mejor'],
+	['Resultados', 'Lectura clara', 'Entrega y respuesta por campaña'],
 ];
 
 function LazyWhenVisible({ children, className, fallback = null, rootMargin = '360px' }) {
@@ -179,8 +179,8 @@ function ProductPreview({ compact = false }) {
 	return (
 		<aside className={`login-product-preview${compact ? ' login-product-preview--compact' : ''}`} aria-label="Vista previa del producto">
 			<div className="login-product-preview__bar">
-				<span>Dashboard</span>
-				<strong>Hoy</strong>
+				<span>Operación comercial</span>
+				<strong>Vista de ejemplo</strong>
 			</div>
 			<div className="login-product-preview__grid">
 				{dashboardRows.map(([label, value, trend]) => (
@@ -192,8 +192,8 @@ function ProductPreview({ compact = false }) {
 				))}
 			</div>
 			<div className="login-product-preview__footer">
-				<strong>86%</strong>
-				<span>de las tiendas mejoran seguimiento comercial en los primeros 30 dias</span>
+				<strong>Todo en un lugar</strong>
+				<span>Conversaciones, clientes, campañas y oportunidades para que el equipo sepa qué hacer después.</span>
 			</div>
 		</aside>
 	);
@@ -506,14 +506,19 @@ export default function LoginPage() {
 			<main className="login-shell">
 				{publicPath === '/contacto' ? (
 					<section className="public-section public-section--single" aria-labelledby="contact-title">
+						<span className="public-section__eyebrow">Contacto</span>
 						<h1 id="contact-title">Hablemos de tu operación comercial.</h1>
 						<p className="login-lead">
-							Escribinos por email o WhatsApp. Te ayudamos a ordenar la atención, hacer mejor seguimiento y aprovechar más conversaciones.
+							Contanos cómo atiende hoy tu equipo y qué parte del seguimiento querés ordenar. Te ayudamos a evaluar el flujo antes de empezar.
 						</p>
+						<div className="contact-actions">
+							<a className="login-primary-cta" href="https://wa.me/5492923562286" target="_blank" rel="noopener noreferrer">Escribir por WhatsApp</a>
+							<a className="login-secondary-cta" href="mailto:germanarroyo016@gmail.com">Enviar email</a>
+						</div>
 
 						<div className="contact-list" aria-label="Canales de contacto">
+							<span>También podés escribirnos a</span>
 							<a href="mailto:germanarroyo016@gmail.com">germanarroyo016@gmail.com</a>
-							<a href="mailto:mendozatomas600@gmail.com">mendozatomas600@gmail.com</a>
 							<a href="https://wa.me/5492923562286" target="_blank" rel="noopener noreferrer">
 								+54 9 2923 562286
 							</a>
@@ -523,9 +528,10 @@ export default function LoginPage() {
 
 				{publicPath === '/precios' ? (
 					<section className="public-section public-section--single" aria-labelledby="pricing-title">
+						<span className="public-section__eyebrow">Precios claros</span>
 						<h1 id="pricing-title">Planes para empezar</h1>
 						<p className="login-lead">
-							Elegí la opción que mejor encaja con tu operación.
+							Elegí la opción que mejor encaja con tu operación. Si tenés dudas sobre el alcance, te ayudamos a elegir antes de contratar.
 						</p>
 
 						<div className="pricing-board login-pricing-board" aria-label="Comparación de planes">
@@ -557,6 +563,7 @@ export default function LoginPage() {
 													</PricingCard.ListItem>
 												))}
 											</PricingCard.List>
+											<Link className="login-pricing-card__cta" to="/contacto">Consultar este plan</Link>
 										</PricingCard.Body>
 									</PricingCard.Card>
 								);
@@ -569,10 +576,20 @@ export default function LoginPage() {
 					<>
 						<section className="login-story" aria-label="Resumen de la plataforma">
 							<div className="login-hero-copy">
+								<span className="login-hero-eyebrow">Operación comercial por WhatsApp</span>
 								<h1>Responde, retoma y recupera oportunidades desde WhatsApp.</h1>
 								<p className="login-lead">
 									BladeIA reúne conversaciones, clientes, campañas y recuperación de carritos para que tu equipo responda mejor, haga seguimiento a tiempo y deje menos ventas dormidas.
 								</p>
+								<div className="login-hero-actions">
+									<Link className="login-primary-cta" to="/contacto">Hablar con el equipo</Link>
+									<Link className="login-secondary-cta" to="/precios">Ver planes</Link>
+								</div>
+								<div className="login-hero-checks" aria-label="Capacidades principales">
+									<span>Atención automática y humana</span>
+									<span>Campañas con seguimiento</span>
+									<span>Carritos recuperables</span>
+								</div>
 							</div>
 
 							<div className="login-dashboard-stack">

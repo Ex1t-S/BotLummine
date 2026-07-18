@@ -3231,6 +3231,17 @@ body:has(.login-page),
 	max-width: 660px;
 }
 
+.login-hero-eyebrow,
+.public-section__eyebrow {
+	display: inline-flex;
+	margin-bottom: 14px;
+	color: rgba(186, 230, 253, 0.9);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
 .login-story h1,
 .public-section h1,
 .login-access-copy h1 {
@@ -3442,7 +3453,7 @@ body:has(.login-page),
 }
 
 .login-product-preview__footer strong {
-	font-size: clamp(1.7rem, 3vw, 2.25rem);
+	font-size: clamp(1.05rem, 1.8vw, 1.35rem);
 	line-height: 1;
 }
 
@@ -3598,6 +3609,11 @@ body:has(.login-page),
 .login-trust-stats--under-dashboard article {
 	min-height: 76px;
 	padding: 12px 16px;
+}
+
+.login-trust-stats--under-dashboard strong {
+	font-size: clamp(0.92rem, 1.15vw, 1.08rem);
+	line-height: 1.12;
 }
 
 .login-trust-stats article {
@@ -3839,6 +3855,36 @@ body:has(.login-page),
 	background: transparent;
 }
 
+.contact-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 26px 0 20px;
+}
+
+.login-pricing-card__cta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 42px;
+	margin-top: 20px;
+	padding: 0 14px;
+	border: 1px solid rgba(125, 211, 252, 0.32);
+	border-radius: 9px;
+	background: rgba(14, 165, 233, 0.08);
+	color: #e0f2fe;
+	font-size: 0.88rem;
+	font-weight: 800;
+	text-decoration: none;
+	transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.login-pricing-card__cta:hover {
+	border-color: rgba(125, 211, 252, 0.62);
+	background: rgba(14, 165, 233, 0.16);
+	transform: translateY(-1px);
+}
+
 .pricing-board {
 	padding: 0;
 	border-color: transparent;
@@ -3911,6 +3957,10 @@ body:has(.login-page),
 	}
 
 	.login-hero-actions {
+		flex-direction: column;
+	}
+
+	.contact-actions {
 		flex-direction: column;
 	}
 
