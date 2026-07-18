@@ -2,7 +2,7 @@
 
 Fecha de inicio: 2026-07-17
 Rama de auditoría original: `audit/general-improvements-20260717`; rama de integración lista para revisión: `audit/general-improvements-main-ready`
-Estado: P0 local de hardening cerrado para el inventario estático actual; producción permanece en modo solo lectura.
+Estado: P0 local de hardening cerrado; cambios publicados en `main` como `8606df0`. Railway no fue modificado manualmente.
 
 ## 1. Resumen ejecutivo
 
@@ -31,7 +31,7 @@ La aplicación tiene una base funcional amplia. La iteración cerró los P0 loca
 
 ## 4. Diferencias local versus desplegado
 
-- El snapshot de producción observado coincide con `c22684f`; `origin/main` posteriormente avanzó a `e5e27b5` y la rama de integración quedó en `7e97e0e`, por lo que el resultado todavía no está desplegado.
+- El snapshot de producción observado antes del push coincidía con `c22684f`; `origin/main` avanzó a `e5e27b5` y luego se publicó `8606df0` en `main`. El estado de Railway/deployment debe verificarse por separado.
 - La integración incorpora `0923301` (multi-Meta/webhooks/canal por conversación) y `e5e27b5` (migraciones Prisma en el arranque productivo). El merge conserva los límites explícitos por workspace y adapta ambos seeds al `routingKey` obligatorio.
 - Staging está varios meses atrasado y no es representativo del código actual.
 - Producción web tiene root directory `/backend`; el cron usa la raíz del repositorio.
@@ -1263,5 +1263,11 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 - Revisión de commits: `origin/main` avanzó de `c22684f` a `e5e27b5`; el merge local `7e97e0e` integra esos dos commits con 80 commits temáticos de auditoría. El diff no contiene secretos detectables por los patrones auditados.
 - Validación local limpia de la integración: 85/85 unitarias, 28/28 evaluaciones IA offline, build raíz verde, 142/142 archivos versionados con sintaxis válida, TypeScript verde, auditorías productivas en cero y 22/22 E2E verdes con performance estricto.
 - Alcance cubierto: P0 local de hardening, multitenancy estático, pipeline IA, CI base, Inbox, acciones/historial de comprobantes, Operaciones, tabla/cards de Carritos, responsive y accesibilidad prioritaria.
-- Veredicto técnico: GO condicionado a revisión humana del diff de integración y confirmación explícita antes del push; el working tree concurrente queda expresamente fuera. El propietario acepta el riesgo residual de un push directo a `main`.
-- Riesgo residual aceptado: las migraciones no se aplicaron ni se pudo ejecutar `prisma migrate diff` sin un PostgreSQL local/shadow descartable; staging está atrasado y faltan pruebas dinámicas de dos workspaces, Axe reproducible y E2E específico de Campañas. Si `main` dispara Railway, el push puede desplegar producción y ejecutar migraciones automáticamente; conservar `c22684f` como referencia de rollback de aplicación.
+- Veredicto técnico: push completado sin force push. El working tree concurrente queda expresamente fuera. El propietario aceptó el riesgo residual de publicación directa a `main`.
+- Riesgo residual aceptado: las migraciones no se aplicaron ni se pudo ejecutar `prisma migrate diff` sin un PostgreSQL local/shadow descartable; staging está atrasado y faltan pruebas dinámicas de dos workspaces, Axe reproducible y E2E específico de Campañas. Si `main` dispara Railway, puede ejecutar migraciones automáticamente. El rollback de aplicación queda en `rollback-main-before-audit-20260718` (`e5e27b5`).
+
+### 27.1 Resultado de publicación
+
+- Push ejecutado: `e5e27b5..8606df0 HEAD -> main`.
+- Tag de rollback publicado: `rollback-main-before-audit-20260718` apuntando a `e5e27b5`.
+- Verificación posterior: `origin/main == 8606df0`; no hubo force push, cambios de variables, reinicio ni operación directa en Railway.
