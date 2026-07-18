@@ -96,7 +96,7 @@ function CartStatusBadge({ cart }) {
 				cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
 			}`}
 		>
-			{cart.statusLabel || (cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo')}
+			{cart.status === 'CONTACTED' ? 'Contactado' : 'No contactado'}
 		</StatusBadge>
 	);
 }
@@ -335,7 +335,7 @@ export default function AbandonedCartsPage() {
 
 			{syncSummary ? (
 				<div className="sync-summary-banner">
-					<strong>Última sync {syncSummary.daysBack} días</strong>
+					<strong>Última sincronización: {syncSummary.daysBack} días</strong>
 					<span>{syncSummary.message || 'La sincronización terminó, pero el proveedor no envió un resumen.'}</span>
 					<small>
 						Guardados: {syncSummary.syncedCount} - Eliminados fuera de ventana: {syncSummary.deletedCount} - Vigentes: {syncSummary.remainingCount}
@@ -350,7 +350,7 @@ export default function AbandonedCartsPage() {
 				</div>
 
 				<div className="stat-box">
-					<span>Nuevos</span>
+					<span>No contactados</span>
 					<strong>{stats.totalNew || 0}</strong>
 				</div>
 
@@ -372,7 +372,7 @@ export default function AbandonedCartsPage() {
 					<span>Buscar carrito</span>
 					<input
 						type="text"
-						placeholder="Nombre, mail, teléfono, ciudad o checkout"
+						placeholder="Nombre, correo, teléfono, ciudad o enlace del carrito"
 						value={filters.q}
 						onChange={(e) => updateFilter('q', e.target.value)}
 					/>
@@ -397,7 +397,7 @@ export default function AbandonedCartsPage() {
 				</label>
 
 				<label>
-					<span>Ventana sync</span>
+					<span>Ventana de sincronización</span>
 					<select
 						value={filters.syncWindow}
 						onChange={(e) => updateFilter('syncWindow', Number(e.target.value))}
@@ -415,7 +415,7 @@ export default function AbandonedCartsPage() {
 						onChange={(e) => updateFilter('status', e.target.value)}
 					>
 						<option value="ALL">Todos</option>
-						<option value="NEW">Nuevo</option>
+						<option value="NEW">No contactado</option>
 						<option value="CONTACTED">Contactado</option>
 					</select>
 				</label>
@@ -466,7 +466,6 @@ export default function AbandonedCartsPage() {
 									<th scope="col">Antigüedad</th>
 									<th scope="col">Estado</th>
 									<th scope="col">Último contacto</th>
-									<th scope="col">Responsable</th>
 									<th scope="col">Próxima acción</th>
 								</tr>
 							</thead>
@@ -481,7 +480,6 @@ export default function AbandonedCartsPage() {
 										<td>{formatCartAge(cart.checkoutCreatedAt || cart.createdAt)}</td>
 										<td><CartStatusBadge cart={cart} /></td>
 										<td>{cart.lastMessageSentLabel || 'Nunca'}</td>
-										<td>{cart.responsibleName || 'Sin asignar'}</td>
 										<td><CartPrimaryAction cart={cart} /></td>
 									</tr>
 								))}

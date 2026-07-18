@@ -194,7 +194,7 @@ function formatDuration(startedAt) {
 
 function buildSyncBadgeLabel(syncStatus) {
 	if (syncStatus.running) return 'Sincronizando en vivo';
-	if (syncStatus.errors?.length) return 'Sync con errores';
+	if (syncStatus.errors?.length) return 'Sincronización con errores';
 	if (syncStatus.hasMoreHistory) return 'Histórico pendiente';
 	return 'Listo';
 }
@@ -536,13 +536,13 @@ export default function CustomersPage() {
 								? `Tiempo transcurrido ${formatDuration(syncStatus.startedAt)} - páginas ${syncStatus.pagesFetched} - pedidos leídos ${syncStatus.ordersFetched} - pedidos guardados ${syncStatus.ordersUpserted}.`
 								: syncStatus.finishedAt
 									? `Última finalización ${formatDateTime(syncStatus.finishedAt)}.`
-									: 'Cuando empiece la sync, acá vas a ver el progreso en vivo.'}
+									: 'Cuando empiece la sincronización, acá vas a ver el progreso en vivo.'}
 						</p>
 					</div>
 					<div className="customers-sync-stats">
 						<div><span>Páginas</span><strong>{syncStatus.pagesFetched || 0}</strong></div>
 						<div><span>Pedidos</span><strong>{syncStatus.ordersFetched || 0}</strong></div>
-						<div><span>Items</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
+					<div><span>Elementos</span><strong>{syncStatus.itemsUpserted || 0}</strong></div>
 					</div>
 				</div>
 

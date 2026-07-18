@@ -103,8 +103,8 @@ export function CampaignOsLayout({ pathname, children }) {
 		<section className="campaign-os">
 			<header className="campaign-os-header">
 				<div>
-					<span className="campaign-os-eyebrow">Lummine Growth</span>
-					<h1>Campaign OS</h1>
+					<span className="campaign-os-eyebrow">Campañas Lummine</span>
+					<h1>Centro de campañas</h1>
 					<p>Planificá, lanzá y medí campañas sin perderte entre configuraciones.</p>
 				</div>
 				{!pathname.startsWith('/campaigns/segment') ? (
@@ -148,7 +148,7 @@ export function CampaignOverview() {
 	});
 
 	if (overviewQuery.isLoading) {
-		return <EmptyState tone="loading" title="Preparando Campaign OS" description="Ordenando campañas, resultados y próximos pasos." />;
+		return <EmptyState tone="loading" title="Preparando el centro de campañas" description="Ordenando campañas, resultados y próximos pasos." />;
 	}
 
 	if (overviewQuery.isError) {
@@ -240,7 +240,7 @@ export function CampaignAudienceStudio() {
 
 	return (
 		<div className="campaign-os-audiences">
-			<div className="campaign-os-intro"><div><span>Audience Studio</span><h2>Elegí primero a quién querés mover</h2><p>Tres caminos claros. Los filtros avanzados aparecen después de elegir el objetivo.</p></div></div>
+			<div className="campaign-os-intro"><div><span>Audiencias</span><h2>Elegí primero a quién querés contactar</h2><p>Tres caminos claros. Los filtros avanzados aparecen después de elegir el objetivo.</p></div></div>
 			{audienceQuery.isError ? <div className="campaign-os-inline-error" role="alert">No pudimos calcular los tamaños. Podés continuar y reintentar dentro del creador.</div> : null}
 			<div className="campaign-os-recipe-list">
 				{recipes.map((recipe, index) => (
@@ -293,7 +293,7 @@ export function CampaignAutomationHub() {
 			id: 'shipments',
 			icon: Truck,
 			title: 'Avisos de despacho',
-			description: 'Informa el tracking cuando el pedido está listo para salir.',
+			description: 'Informa el seguimiento cuando el pedido está listo para salir.',
 			settings: automationQuery.data?.shipments?.settings || automationQuery.data?.shipments || {},
 			to: '/campaigns/shipments',
 		},
@@ -304,7 +304,7 @@ export function CampaignAutomationHub() {
 	return (
 		<div className="campaign-os-automations">
 			<div className="campaign-os-intro">
-				<div><span>Control center</span><h2>Automatizaciones con propósito claro</h2><p>Revisá el estado primero. Entrá a configurar sólo la regla que necesita cambios.</p></div>
+				<div><span>Centro de control</span><h2>Automatizaciones con propósito claro</h2><p>Revisá el estado primero. Entrá a configurar sólo la regla que necesita cambios.</p></div>
 				<div className="campaign-os-inline-totals" aria-label="Resumen de automatizaciones"><span><strong>{number(activeCount)}</strong> activas</span><span className={errorCount ? 'has-error' : ''}><strong>{number(errorCount)}</strong> con error</span></div>
 			</div>
 			{automationQuery.isError ? <div className="campaign-os-inline-error" role="alert">No pudimos leer todas las reglas. Reintentá antes de modificar una automatización.</div> : null}
@@ -360,7 +360,7 @@ export function CampaignResultsHub() {
 
 	return (
 		<div className="campaign-os-results">
-			<div className="campaign-os-intro"><div><span>Performance</span><h2>Resultados para decidir el próximo movimiento</h2><p>Cuatro señales principales y detalle por campaña cuando hace falta investigar.</p></div></div>
+			<div className="campaign-os-intro"><div><span>Rendimiento</span><h2>Resultados para decidir el próximo movimiento</h2><p>Cuatro señales principales y detalle por campaña cuando hace falta investigar.</p></div></div>
 			<div className="campaign-os-metrics" aria-label="Indicadores principales de resultados">
 				<CampaignMetric label="Entrega" value={percent(totals.sent ? totals.delivered / totals.sent * 100 : 0)} helper={`${number(totals.delivered)} mensajes entregados`} tone="success" />
 				<CampaignMetric label="Respuesta" value={percent(totals.sent ? totals.replied / totals.sent * 100 : 0)} helper={`${number(totals.replied)} conversaciones iniciadas`} tone="primary" />

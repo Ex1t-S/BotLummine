@@ -1,4 +1,9 @@
 import { useMemo, useState } from 'react';
+import {
+	formatHeaderFormatLabel,
+	formatTemplateCategoryLabel,
+	formatTemplateStatusLabel,
+} from '../../utils/statusLabels.js';
 
 function formatDate(value) {
 	if (!value) return '--';
@@ -129,7 +134,7 @@ export default function TemplateLibraryPanel({
 						className="button ghost"
 						onClick={onPurgeDeleted}
 						disabled={purgingDeleted}
-						title="Limpia de la base local los templates ya marcados como eliminados"
+						title="Limpia de la base local las plantillas ya marcadas como eliminadas"
 					>
 						{purgingDeleted ? 'Limpiando...' : 'Limpiar eliminados'}
 					</button>
@@ -143,7 +148,7 @@ export default function TemplateLibraryPanel({
 				</div>
 				<div className="campaign-inline-summary-item">
 					<strong>{approvedCount}</strong>
-					<span>aprobados</span>
+					<span>aprobadas</span>
 				</div>
 				<div className="campaign-inline-summary-item">
 					<strong>{filteredTemplates.length}</strong>
@@ -166,7 +171,7 @@ export default function TemplateLibraryPanel({
 					<select value={category} onChange={(event) => setCategory(event.target.value)}>
 						{categories.map((item) => (
 							<option key={item} value={item}>
-								{item === 'all' ? 'Todas' : item}
+								{item === 'all' ? 'Todas' : formatTemplateCategoryLabel(item)}
 							</option>
 						))}
 					</select>
@@ -177,7 +182,7 @@ export default function TemplateLibraryPanel({
 					<select value={status} onChange={(event) => setStatus(event.target.value)}>
 						{statuses.map((item) => (
 							<option key={item} value={item}>
-								{item === 'all' ? 'Todos' : item}
+								{item === 'all' ? 'Todos' : formatTemplateStatusLabel(item)}
 							</option>
 						))}
 					</select>
@@ -200,13 +205,13 @@ export default function TemplateLibraryPanel({
 						<span className="template-library-selected-label">Seleccionado</span>
 						<strong>{selectedTemplate.name}</strong>
 						<small>
-							{selectedTemplate.language || 'es_AR'} - {selectedTemplate.category || 'MARKETING'}
+							{selectedTemplate.language || 'es_AR'} - {formatTemplateCategoryLabel(selectedTemplate.category)}
 						</small>
 					</div>
 
 					<div className="template-library-selected-status">
 						<span className={statusClass(selectedTemplate.status || 'draft')}>
-							{selectedTemplate.status || 'draft'}
+							{formatTemplateStatusLabel(selectedTemplate.status)}
 						</span>
 					</div>
 				</div>
@@ -215,8 +220,8 @@ export default function TemplateLibraryPanel({
 			<div className="campaign-list compact template-library-list">
 				{filteredTemplates.length === 0 ? (
 					<div className="campaign-empty-state">
-						<strong>No hay templates que coincidan.</strong>
-						<p>Probá otro filtro o sincronizá los templates de Meta.</p>
+						<strong>No hay plantillas que coincidan.</strong>
+						<p>Probá otro filtro o sincronizá las plantillas de Meta.</p>
 					</div>
 				) : (
 					filteredTemplates.map((template) => {
@@ -242,7 +247,7 @@ export default function TemplateLibraryPanel({
 									<div className="template-list-card-title">
 										<strong>{template.name}</strong>
 										<p>
-											{template.language || 'es_AR'} - {template.category || 'MARKETING'}
+											{template.language || 'es_AR'} - {formatTemplateCategoryLabel(template.category)}
 										</p>
 									</div>
 
@@ -259,19 +264,19 @@ export default function TemplateLibraryPanel({
 										</button>
 
 										<span className={statusClass(template.status || 'draft')}>
-											{template.status || 'draft'}
+											{formatTemplateStatusLabel(template.status)}
 										</span>
 									</div>
 								</div>
 
 								<div className="template-list-card-tags">
-									<span className="template-chip">{template.category || 'MARKETING'}</span>
+									<span className="template-chip">{formatTemplateCategoryLabel(template.category)}</span>
 									<span className="template-chip">{template.language || 'es_AR'}</span>
 									{template.headerFormat ? (
-										<span className="template-chip">{template.headerFormat}</span>
+										<span className="template-chip">{formatHeaderFormatLabel(template.headerFormat)}</span>
 									) : null}
 									{isMetaSample ? (
-										<span className="template-chip template-chip--warning">sample Meta</span>
+										<span className="template-chip template-chip--warning">muestra de Meta</span>
 									) : null}
 								</div>
 

@@ -5,6 +5,7 @@ import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
+import { formatCampaignStatusLabel } from '../utils/statusLabels.js';
 import './AnalyticsPage.css';
 
 function number(value) {
@@ -75,7 +76,7 @@ function CampaignTable({ campaigns }) {
 					{campaigns.map((campaign) => (
 						<tr key={campaign.id}>
 							<td><strong>{campaign.name}</strong><span>{campaign.templateName || 'Sin plantilla'}</span></td>
-							<td><span className={`analytics-v2-status status-${String(campaign.status || '').toLowerCase()}`}>{campaign.status || 'DRAFT'}</span></td>
+							<td><span className={`analytics-v2-status status-${String(campaign.status || '').toLowerCase()}`}>{formatCampaignStatusLabel(campaign.status)}</span></td>
 							<td>{number(campaign.sentRecipients ?? campaign.sentCount)}</td>
 							<td>{number(campaign.readRecipients ?? campaign.readCount)}</td>
 							<td>{number(campaign.failedRecipients ?? campaign.failedCount)}</td>

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { isPlatformAdminUser } from '../lib/authz.js';
 import { EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
+import { formatStatusLabel } from '../utils/statusLabels.js';
 import './AdminPage.css';
 
 const EMPTY_WORKSPACE_FORM = {
@@ -528,7 +529,7 @@ function WorkspaceAnalyticsCard({ item, selected, onSelect }) {
 						<span>{workspace.slug || workspace.status || 'workspace'}</span>
 					</div>
 				</div>
-				<span className="workspace-card-status">{workspace.status || 'ACTIVE'}</span>
+				<span className="workspace-card-status">{formatStatusLabel(workspace.status, 'Activo')}</span>
 			</div>
 
 			<div
@@ -839,7 +840,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			showNotice(
 				tiendanubeMessage ||
 				(connectedStoreId
-					? `Tienda Nube conectada. Store ID ${connectedStoreId}.`
+					? `Tienda Nube conectada. Identificador de tienda ${connectedStoreId}.`
 					: 'Tienda Nube conectada correctamente.')
 			);
 		}
@@ -1611,7 +1612,7 @@ export default function AdminPage({ defaultTab = '' }) {
 														<strong>{itemName}</strong>
 														<span>{item.name || item.slug || item.id}</span>
 													</div>
-													<StatusPill>{item.status || 'ACTIVE'}</StatusPill>
+											<StatusPill>{formatStatusLabel(item.status, 'Activo')}</StatusPill>
 												</div>
 												<div className="tenant-admin-workspace-card__meta">
 													<small>Slug: {item.slug || 'sin definir'}</small>
@@ -1665,15 +1666,15 @@ export default function AdminPage({ defaultTab = '' }) {
 									<div className="tenant-admin-selected-brand">
 										<StatusPill>Marca interna: {workspaceForm.name || 'sin nombre'}</StatusPill>
 										<StatusPill>Slug: {workspaceForm.slug || 'sin slug'}</StatusPill>
-										<StatusPill>Estado: {workspaceForm.status || 'ACTIVE'}</StatusPill>
+										<StatusPill>Estado: {formatStatusLabel(workspaceForm.status, 'Activo')}</StatusPill>
 									</div>
 									<form className="tenant-admin-grid" onSubmit={handleSaveBrand}>
 										<Input label="Nombre interno" value={workspaceForm.name} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, name: value }))} />
 										<Input label="Identificador interno (slug)" value={workspaceForm.slug} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, slug: value }))} />
 										<Select label="Estado de la marca" value={workspaceForm.status || 'ACTIVE'} onChange={(value) => setWorkspaceForm((cur) => ({ ...cur, status: value }))}>
-											<option value="ACTIVE">ACTIVE</option>
-											<option value="SUSPENDED">SUSPENDED</option>
-											<option value="ARCHIVED">ARCHIVED</option>
+											<option value="ACTIVE">Activo</option>
+											<option value="SUSPENDED">Suspendido</option>
+											<option value="ARCHIVED">Archivado</option>
 										</Select>
 										<Input label="Nombre comercial" value={workspaceForm.aiConfig?.businessName || ''} onChange={(value) => setNestedForm('aiConfig', 'businessName', value)} />
 										<Select label="Perfil de IA" value={workspaceForm.aiConfig?.aiProfile || workspaceForm.aiConfig?.catalogConfig?.aiProfile || 'GENERIC_ECOMMERCE'} onChange={(value) => setWorkspaceForm((cur) => ({
@@ -1883,7 +1884,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						<form className="tenant-admin-grid" onSubmit={handleSaveUser}>
 							<Input label="Nombre" value={userForm.name} required onChange={(value) => setUserForm((cur) => ({ ...cur, name: value }))} />
 							<Input label="Email" value={userForm.email} required={!userForm.id} onChange={(value) => setUserForm((cur) => ({ ...cur, email: value }))} />
-							<Input label={userForm.id ? 'Nuevo password' : 'Password'} type="password" value={userForm.password} required={!userForm.id} onChange={(value) => setUserForm((cur) => ({ ...cur, password: value }))} />
+							<Input label={userForm.id ? 'Nueva contraseña' : 'Contraseña'} type="password" value={userForm.password} required={!userForm.id} onChange={(value) => setUserForm((cur) => ({ ...cur, password: value }))} />
 							<Select label="Rol" value={userForm.role} onChange={(value) => setUserForm((cur) => ({ ...cur, role: value }))}>
 								<option value="AGENT">AGENT - solo inbox</option>
 								{platformAdmin ? <option value="ADMIN">ADMIN - marca completa</option> : null}
@@ -1930,7 +1931,7 @@ export default function AdminPage({ defaultTab = '' }) {
 					<section className="tenant-admin-panel">
 						<h3>Conexion Tienda Nube</h3>
 						<div className="tenant-admin-metrics">
-							<StatusPill>Store ID: {tiendanubeStatus?.storeId || 'sin conectar'}</StatusPill>
+							<StatusPill>Identificador de tienda: {tiendanubeStatus?.storeId || 'sin conectar'}</StatusPill>
 							<StatusPill>Source: {tiendanubeStatus?.activeSource || 'sin resolver'}</StatusPill>
 							<StatusPill>App secret: {tiendanubeStatus?.hasAppSecret ? 'ok' : 'falta revisar'}</StatusPill>
 							<StatusPill>Webhooks esperados: {(tiendanubeStatus?.orderWebhookEvents || []).length || 0}</StatusPill>
@@ -1952,7 +1953,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						<div className="tenant-admin-metrics">
 							<StatusPill>OAuth: {shopifyStatus?.hasClientSecret ? 'listo' : 'revisar credenciales'}</StatusPill>
 							<StatusPill>Tienda: {shopifyStatus?.shopDomain || 'sin tienda'}</StatusPill>
-							<StatusPill>Estado: {shopifyStatus?.status || 'sin resolver'}</StatusPill>
+							<StatusPill>Estado: {formatStatusLabel(shopifyStatus?.status, 'Sin resolver')}</StatusPill>
 							<StatusPill>API: {shopifyStatus?.apiVersion || '2026-04'}</StatusPill>
 						</div>
 						<div className="tenant-admin-grid">
@@ -1978,16 +1979,16 @@ export default function AdminPage({ defaultTab = '' }) {
 						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
 							<Input label="Nombre" value={channelForm.name} onChange={(value) => setChannelForm((cur) => ({ ...cur, name: value }))} />
 							<Input label="WABA ID" value={channelForm.wabaId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, wabaId: value }))} />
-							<Input label="Phone Number ID" value={channelForm.phoneNumberId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, phoneNumberId: value }))} />
+							<Input label="Identificador del número" value={channelForm.phoneNumberId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, phoneNumberId: value }))} />
 							<Input label="Telefono visible" value={channelForm.displayPhoneNumber} onChange={(value) => setChannelForm((cur) => ({ ...cur, displayPhoneNumber: value }))} />
-							<Input label="Access token" type="password" value={channelForm.accessToken} required={!channelForm.id} onChange={(value) => setChannelForm((cur) => ({ ...cur, accessToken: value }))} />
-							<Input label="Verify token" value={channelForm.verifyToken} onChange={(value) => setChannelForm((cur) => ({ ...cur, verifyToken: value }))} />
-							<Input label="Graph version" value={channelForm.graphVersion} onChange={(value) => setChannelForm((cur) => ({ ...cur, graphVersion: value }))} />
+							<Input label="Token de acceso" type="password" value={channelForm.accessToken} required={!channelForm.id} onChange={(value) => setChannelForm((cur) => ({ ...cur, accessToken: value }))} />
+							<Input label="Token de verificación" value={channelForm.verifyToken} onChange={(value) => setChannelForm((cur) => ({ ...cur, verifyToken: value }))} />
+							<Input label="Versión de Graph" value={channelForm.graphVersion} onChange={(value) => setChannelForm((cur) => ({ ...cur, graphVersion: value }))} />
 							<Select label="Estado" value={channelForm.status} onChange={(value) => setChannelForm((cur) => ({ ...cur, status: value }))}>
-								<option value="ACTIVE">ACTIVE</option>
-								<option value="PENDING">PENDING</option>
-								<option value="DISABLED">DISABLED</option>
-								<option value="ERROR">ERROR</option>
+								<option value="ACTIVE">Activo</option>
+								<option value="PENDING">Pendiente</option>
+								<option value="DISABLED">Desactivado</option>
+								<option value="ERROR">Con errores</option>
 							</Select>
 							<button type="submit" disabled={saving}>Guardar WhatsApp</button>
 						</form>
@@ -2001,7 +2002,7 @@ export default function AdminPage({ defaultTab = '' }) {
 							<div className="tenant-admin-metrics">
 								<StatusPill>OAuth: {tiendanubeStatus?.hasAppSecret ? 'listo' : 'revisar app secret'}</StatusPill>
 								<StatusPill>Instalada: {tiendanubeStatus?.storeId || 'sin tienda'}</StatusPill>
-								<StatusPill>Source: {tiendanubeStatus?.activeSource || 'sin resolver'}</StatusPill>
+								<StatusPill>Origen: {tiendanubeStatus?.activeSource || 'sin resolver'}</StatusPill>
 								<StatusPill>Webhooks: {(tiendanubeStatus?.orderWebhookEvents || []).length || 0} eventos</StatusPill>
 							</div>
 						) : null}
@@ -2009,7 +2010,7 @@ export default function AdminPage({ defaultTab = '' }) {
 							<div className="tenant-admin-metrics">
 								<StatusPill>OAuth: {shopifyStatus?.hasClientSecret ? 'listo' : 'revisar credenciales'}</StatusPill>
 								<StatusPill>Tienda: {shopifyStatus?.shopDomain || 'sin tienda'}</StatusPill>
-								<StatusPill>Estado: {shopifyStatus?.status || 'sin resolver'}</StatusPill>
+								<StatusPill>Estado: {formatStatusLabel(shopifyStatus?.status, 'Sin resolver')}</StatusPill>
 								<StatusPill>API: {shopifyStatus?.apiVersion || commerceForm.apiVersion || '2026-04'}</StatusPill>
 							</div>
 						) : null}
@@ -2021,19 +2022,19 @@ export default function AdminPage({ defaultTab = '' }) {
 								<option value="SHOPIFY">SHOPIFY</option>
 								<option value="TIENDANUBE">TIENDANUBE</option>
 							</Select>
-							<Input label="Store ID / dominio" value={commerceForm.externalStoreId} required onChange={(value) => setCommerceForm((cur) => ({ ...cur, externalStoreId: value }))} />
-							<Input label="Shop domain" value={commerceForm.shopDomain} onChange={(value) => setCommerceForm((cur) => ({ ...cur, shopDomain: value }))} />
-							<Input label="Access token" type="password" value={commerceForm.accessToken} required={!commerceForm.id} onChange={(value) => setCommerceForm((cur) => ({ ...cur, accessToken: value }))} />
-							<Input label="Refresh token" type="password" value={commerceForm.refreshToken} onChange={(value) => setCommerceForm((cur) => ({ ...cur, refreshToken: value }))} />
-							<Input label="Scopes" value={commerceForm.scope} onChange={(value) => setCommerceForm((cur) => ({ ...cur, scope: value }))} />
-							<Input label="Store name" value={commerceForm.storeName} onChange={(value) => setCommerceForm((cur) => ({ ...cur, storeName: value }))} />
-							<Input label="Store URL" value={commerceForm.storeUrl} onChange={(value) => setCommerceForm((cur) => ({ ...cur, storeUrl: value }))} />
+							<Input label="Identificador de tienda o dominio" value={commerceForm.externalStoreId} required onChange={(value) => setCommerceForm((cur) => ({ ...cur, externalStoreId: value }))} />
+							<Input label="Dominio de la tienda" value={commerceForm.shopDomain} onChange={(value) => setCommerceForm((cur) => ({ ...cur, shopDomain: value }))} />
+							<Input label="Token de acceso" type="password" value={commerceForm.accessToken} required={!commerceForm.id} onChange={(value) => setCommerceForm((cur) => ({ ...cur, accessToken: value }))} />
+							<Input label="Token de renovación" type="password" value={commerceForm.refreshToken} onChange={(value) => setCommerceForm((cur) => ({ ...cur, refreshToken: value }))} />
+							<Input label="Permisos" value={commerceForm.scope} onChange={(value) => setCommerceForm((cur) => ({ ...cur, scope: value }))} />
+							<Input label="Nombre de la tienda" value={commerceForm.storeName} onChange={(value) => setCommerceForm((cur) => ({ ...cur, storeName: value }))} />
+							<Input label="Dirección de la tienda" value={commerceForm.storeUrl} onChange={(value) => setCommerceForm((cur) => ({ ...cur, storeUrl: value }))} />
 							<Input label="API version" value={commerceForm.apiVersion} onChange={(value) => setCommerceForm((cur) => ({ ...cur, apiVersion: value }))} />
 							<Select label="Estado" value={commerceForm.status} onChange={(value) => setCommerceForm((cur) => ({ ...cur, status: value }))}>
-								<option value="ACTIVE">ACTIVE</option>
-								<option value="PENDING">PENDING</option>
-								<option value="DISABLED">DISABLED</option>
-								<option value="ERROR">ERROR</option>
+								<option value="ACTIVE">Activo</option>
+								<option value="PENDING">Pendiente</option>
+								<option value="DISABLED">Desactivado</option>
+								<option value="ERROR">Con errores</option>
 							</Select>
 							<button type="submit" disabled={saving}>Guardar ecommerce</button>
 							{commerceProvider === 'TIENDANUBE' ? (
@@ -2055,17 +2056,17 @@ export default function AdminPage({ defaultTab = '' }) {
 						<h3>Enbox</h3>
 						<form className="tenant-admin-grid" onSubmit={handleSaveLogistics}>
 							<Input label="Usuario" value={logisticsForm.username} required onChange={(value) => setLogisticsForm((cur) => ({ ...cur, username: value }))} />
-							<Input label="Password" type="password" value={logisticsForm.password} required={!logisticsForm.id} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, password: value }))} />
-							<Input label="Panel base URL" value={logisticsForm.panelBaseUrl} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, panelBaseUrl: value }))} />
-							<Input label="Public base URL" value={logisticsForm.publicBaseUrl} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, publicBaseUrl: value }))} />
-							<Input label="Tracking salt" value={logisticsForm.publicTrackingSalt} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, publicTrackingSalt: value }))} />
-							<Input label="Target client ID" value={logisticsForm.targetClientId} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, targetClientId: value }))} />
-							<Input label="Seed DID" value={logisticsForm.discoverySeedDid} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, discoverySeedDid: value }))} />
+							<Input label="Contraseña" type="password" value={logisticsForm.password} required={!logisticsForm.id} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, password: value }))} />
+							<Input label="Dirección base del panel" value={logisticsForm.panelBaseUrl} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, panelBaseUrl: value }))} />
+							<Input label="Dirección base pública" value={logisticsForm.publicBaseUrl} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, publicBaseUrl: value }))} />
+							<Input label="Clave de seguimiento" value={logisticsForm.publicTrackingSalt} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, publicTrackingSalt: value }))} />
+							<Input label="Identificador del cliente destino" value={logisticsForm.targetClientId} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, targetClientId: value }))} />
+							<Input label="DID inicial" value={logisticsForm.discoverySeedDid} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, discoverySeedDid: value }))} />
 							<Select label="Estado" value={logisticsForm.status} onChange={(value) => setLogisticsForm((cur) => ({ ...cur, status: value }))}>
-								<option value="ACTIVE">ACTIVE</option>
-								<option value="PENDING">PENDING</option>
-								<option value="DISABLED">DISABLED</option>
-								<option value="ERROR">ERROR</option>
+								<option value="ACTIVE">Activo</option>
+								<option value="PENDING">Pendiente</option>
+								<option value="DISABLED">Desactivado</option>
+								<option value="ERROR">Con errores</option>
 							</Select>
 							<button type="submit" disabled={saving}>Guardar Enbox</button>
 						</form>
@@ -2141,7 +2142,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						<div className="tenant-admin-metrics">
 							<StatusPill>Productos: {catalogStatus?.totalProducts ?? 0}</StatusPill>
 							<StatusPill>Publicados: {catalogStatus?.totalPublished ?? 0}</StatusPill>
-							<StatusPill>Ultima sync: {catalogStatus?.lastSync?.status || 'sin sync'}</StatusPill>
+							<StatusPill>Última sincronización: {formatStatusLabel(catalogStatus?.lastSync?.status, 'Sin sincronizar')}</StatusPill>
 						</div>
 						<div className="tenant-admin-kill-switches">
 							{featureFlags.map((flag) => (

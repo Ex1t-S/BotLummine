@@ -2226,7 +2226,7 @@ export default function CampaignComposerPanel({
 										value={abandonedCartFilters.status}
 										onChange={(event) => updateAbandonedCartFilter('status', event.target.value)}
 									>
-										<option value="NEW">Nuevos</option>
+										<option value="NEW">No contactados</option>
 										<option value="CONTACTED">Contactados</option>
 										<option value="ALL">Todos</option>
 									</select>
