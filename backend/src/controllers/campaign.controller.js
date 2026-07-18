@@ -259,6 +259,14 @@ export async function launchCampaignController(req, res) {
 		const result = await launchCampaign(req.params.campaignId, {
 			workspaceId,
 		});
+		// Do not wait for the hourly scheduler after a manual launch.
+		void runCampaignDispatchTick().catch((error) => {
+			logger.error('campaign.launch_dispatch_tick_failed', {
+				campaignId: req.params.campaignId,
+				workspaceId,
+				error,
+			});
+		});
 		return res.json(result);
 	} catch (error) {
 		logger.warn('campaign.launch_failed', {
