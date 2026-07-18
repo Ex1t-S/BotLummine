@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outputDir = path.resolve(__dirname, '../audit-artifacts/local-demo-v3');
+const outputDir = path.resolve(__dirname, '../audit-artifacts/local-demo-v4');
 const baseURL = process.env.DEMO_BASE_URL || 'http://127.0.0.1:5173';
 
 const routes = [
@@ -25,6 +25,8 @@ const routes = [
 
 const viewports = [
 	['desktop', { width: 1440, height: 960 }],
+	['desktop-compact', { width: 1280, height: 800 }],
+	['tablet', { width: 768, height: 1024 }],
 	['mobile', { width: 390, height: 844 }],
 ];
 

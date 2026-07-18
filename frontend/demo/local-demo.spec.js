@@ -7,16 +7,16 @@ test.beforeEach(async ({ request }) => {
 test('recorre el entorno demo sin depender del backend ni de Railway', async ({ page }) => {
 	await page.goto('/operations');
 	await expect(page.getByRole('status', { name: 'Modo demo local activo' })).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Lummine Demo', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Lo que requiere tu atención', level: 2 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Prioridades de hoy' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Salud operativa' })).toBeVisible();
 
 	await page.goto('/campaigns');
-	await expect(page.getByRole('heading', { name: 'Campaign OS', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Centro de campañas', level: 1 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Campañas recientes' })).toBeVisible();
 
 	await page.goto('/campaigns/audiences');
-	await expect(page.getByRole('heading', { name: 'Elegí primero a quién querés mover' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Elegí primero a quién querés contactar' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Usar esta audiencia' })).toBeVisible();
 
 	await page.goto('/campaigns/automations');
@@ -32,14 +32,16 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await expect(cartsTable).toBeVisible();
 	await expect(cartsTable.getByText('Valentina Demo')).toBeVisible();
 	await expect(cartsTable.getByText('$ 184.900,00')).toBeVisible();
+	await expect(cartsTable.getByRole('columnheader', { name: 'Responsable' })).toHaveCount(0);
+	expect(await cartsTable.getByText('No contactado', { exact: true }).count()).toBeGreaterThan(0);
 
 	await page.goto('/campaigns/library');
 	await expect(page.getByRole('button', { name: 'recuperacion_carrito_demo' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'novedad_pedido_demo' })).toBeVisible();
 
 	await page.goto('/campaigns/tracking');
-	await expect(page.getByRole('button', { name: 'Ver tracking de Clientes frecuentes · Julio' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Ver tracking de Recuperación carritos · Semana 28' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Ver seguimiento de Clientes frecuentes · Julio' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Ver seguimiento de Recuperación carritos · Semana 28' })).toBeVisible();
 
 	await page.goto('/inbox/automatico');
 	await expect(page.getByRole('heading', { name: 'Martina Demo' })).toBeVisible();
@@ -75,7 +77,7 @@ test('mantiene visible el encabezado al recorrer una operación extensa', async 
 
 test('guía la creación de campaña sin duplicar la navegación anterior', async ({ page }) => {
 	await page.goto('/campaigns/segment?audience=customers');
-	await expect(page.getByRole('heading', { name: 'Campaign OS', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Centro de campañas', level: 1 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Crear campaña', level: 3 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Campañas de WhatsApp' })).toBeHidden();
 	await expect(page.getByText('Nombre de campaña')).toBeVisible();

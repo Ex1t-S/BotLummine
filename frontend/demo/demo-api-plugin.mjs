@@ -278,7 +278,7 @@ function makeHandler(stateRef) {
 		if (pathname === '/dashboard/operations/summary') {
 			return sendJson(res, {
 				totals: { activeConversations30d: 34, messages30dInbound: 286, messages30dOutbound: 241, paymentReview: 1, unreadConversations: 3, unreadMessages: 6, abandonedCartsNew: 2 },
-				workspaces: [{ workspace: demoWorkspace, metrics: { activeConversations30d: 34, unreadConversations: 3, paymentReview: 1, customersCount: 128, campaignsCount: state.campaigns.length }, issues: [{ id: 'issue-demo-sla', type: 'conversations', severity: 'warning', title: '2 conversaciones cerca del SLA', description: 'Revisá la bandeja humana antes de las 14:30.', count: 2, href: '/inbox/humano' }] }],
+				workspaces: [{ workspace: demoWorkspace, metrics: { activeConversations30d: 34, unreadConversations: 3, paymentReview: 1, customersCount: 128, campaignsCount: state.campaigns.length }, issues: [{ id: 'issue-demo-sla', type: 'conversations', severity: 'warning', title: '2 conversaciones cerca del plazo', description: 'Revisá la bandeja humana antes de las 14:30.', count: 2, href: '/inbox/humano' }] }],
 			});
 		}
 
