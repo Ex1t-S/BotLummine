@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
 
 test.beforeEach(async ({ request }) => {
 	await request.post('/api/demo/reset');
@@ -256,3 +257,41 @@ test('simula creación y lanzamiento sin delivery externo', async ({ request }) 
 	const sent = await sentResponse.json();
 	expect(sent.deliveredExternally).toBe(false);
 });
+
+for (const viewport of [
+	{ name: 'móvil', width: 390, height: 844 },
+	{ name: 'tablet', width: 768, height: 1024 },
+]) {
+	test(`mantiene completas y separadas las filas del inbox en ${viewport.name}`, async ({ page }) => {
+		await page.setViewportSize({ width: viewport.width, height: viewport.height });
+		await page.goto('/inbox/automatico');
+
+		const rows = page.locator('.inbox-contact-card');
+		await expect(rows.first()).toBeVisible();
+		expect(await rows.count()).toBeGreaterThanOrEqual(2);
+
+		const layout = await rows.evaluateAll((elements) => elements.slice(0, 8).map((row, index, visibleRows) => {
+			const rowRect = row.getBoundingClientRect();
+			const metaRect = row.querySelector('.inbox-contact-meta-v2')?.getBoundingClientRect();
+			const nextRect = visibleRows[index + 1]?.getBoundingClientRect();
+			return {
+				height: rowRect.height,
+				containsMetadata: !metaRect || metaRect.bottom <= rowRect.bottom + 0.5,
+				doesNotOverlapNext: !nextRect || rowRect.bottom <= nextRect.top + 0.5,
+			};
+		}));
+
+		expect(layout.every((row) => row.height >= 80)).toBe(true);
+		expect(layout.every((row) => row.containsMetadata)).toBe(true);
+		expect(layout.every((row) => row.doesNotOverlapNext)).toBe(true);
+		const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+		expect(horizontalOverflow).toBeLessThanOrEqual(1);
+		if (viewport.width === 390) {
+			await mkdir('audit-artifacts/inbox-card-cutoff', { recursive: true });
+			await page.screenshot({
+				path: 'audit-artifacts/inbox-card-cutoff/inbox-mobile-390x844.png',
+				fullPage: true,
+			});
+		}
+	});
+}
