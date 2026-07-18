@@ -1156,8 +1156,8 @@ En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y lu
 - Revisión de comprobantes: entidad y migración aditivas, API GET/POST scoped, actor/motivo/idempotencia y HANDOFF conectado al Inbox; sin integración de cobro.
 - Operaciones: estado vacío sin error boundary, retry de resumen y loading anunciado.
 - Carritos: tabla desktop operativa, cards mobile, filtros alineados y estados loading/error/empty/data mutuamente excluyentes.
-- Comprobantes: acciones de validar/rechazar/pedir comprobante con motivo, foco y feedback accesible; sigue pendiente visualizar el historial de acciones.
-- Campañas: se conserva navegación por URL, pero queda pendiente corregir referencias ARIA y focus management de tabs internos/confirmaciones.
+- Comprobantes: acciones de validar/rechazar/pedir comprobante con motivo, foco y feedback accesible; historial visual con estados loading/empty/error/retry y captura determinista.
+- Campañas: navegación por URL, reglas internas con tabs ARIA y confirmación con foco inicial/Escape; quedan retorno de foco y E2E específico.
 - Tokens semánticos, foco visible, reduced motion y contención responsive.
 - Eliminación de fuga CSS de Catálogo.
 - Capturas deterministas públicas e Inbox con datos sintéticos.
@@ -1224,7 +1224,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 
 P0 local seguro: cerrado para el inventario estático actual. Build/IA/inbound/outbound/schedules/templates/contactos, campañas, clientes y automatizaciones prioritarias están endurecidos; no queda DDL en runtime y una prueba transversal impide reintroducir workspaces implícitos. Validaciones remotas pendientes: aislamiento dinámico con dos tenants, retención de trazas y callbacks OAuth, exclusivamente en staging aislado.
 
-P1: Inbox base, acciones durables e historial visual sobre comprobantes, estados de Operaciones y tabla/card de Carritos avanzados. Pendientes: selección/acciones masivas de carritos, semántica ARIA/foco de Campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
+P1: Inbox base, acciones durables e historial visual sobre comprobantes, estados de Operaciones, tabla/card de Carritos y mejora semántica inicial de Campañas. Pendientes: selección/acciones masivas de carritos, retorno de foco/E2E de Campañas, estados compartidos, Axe reproducible y accesibilidad privada restante.
 
 P2: plantillas, catálogo, clientes, AI Lab, imágenes/fuentes públicas y responsive amplio.
 
