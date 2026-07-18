@@ -1071,10 +1071,10 @@ flowchart TD
 - Evidencia: `CampaignSectionShell` siempre genera `role="tabpanel"` con `aria-labelledby="campaigns-tab-${tabId}"`, pero `builder`, `schedules` y `shipments` están ocultos de la navegación principal; sus botones secundarios no tienen `role=tab` ni IDs equivalentes. `CampaignConfirmDialog` declara `role=dialog` pero no gestiona Escape, foco inicial ni retorno de foco.
 - Impacto: lectores de pantalla pueden anunciar un panel sin tab asociado y el teclado puede quedar fuera de contexto al abrir una confirmación destructiva.
 - Causa: la navegación visual se separó en tabs principales y reglas internas sin actualizar el contrato semántico común.
-- Solución propuesta: usar `aria-labelledby` al botón real de la regla activa o un heading estable; implementar foco inicial, Escape, retorno de foco y bloqueo de interacción detrás del diálogo; agregar E2E de teclado para builder/schedules y confirmaciones.
-- Estado: pendiente; no se modificaron `CampaignsFeaturePage.jsx/css` ni sus componentes porque contienen cambios locales concurrentes preservados.
+- Solución aplicada: navegación secundaria con `role=tab`, IDs y `aria-controls` reales; paneles con `aria-labelledby` a headings estables; diálogo con `aria-describedby`, foco inicial y cierre con Escape. El retorno de foco al disparador y una ruta E2E determinista para builder/schedules quedan pendientes.
+- Estado: parcialmente resuelto localmente; las líneas concurrentes de copy/error en el mismo archivo permanecen sin staged ni commit.
 - Archivos: `frontend/src/features/campaigns/CampaignsFeaturePage.jsx`, `CampaignsFeaturePage.css`.
-- Pruebas: inspección estática; no se ejecutó una suite Campaigns mutante para evitar alterar integraciones/fixtures concurrentes.
+- Pruebas: `tsc -b` y build frontend verdes; falta una ruta E2E determinista para las reglas internas y el diálogo.
 - Riesgo de deployment: bajo/medio; cambio limitado a semántica y foco, pero requiere validar cada ruta interna y modal.
 
 ## 8. Auditoría UI/UX
