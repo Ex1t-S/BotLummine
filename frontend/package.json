@@ -8,6 +8,7 @@
     "build": "vite build",
     "showcase:capture": "node capture-showcase-screens.mjs",
     "preview": "vite preview",
+	"audit:security": "npm audit --audit-level=high",
     "test:e2e": "playwright test",
     "test:perf": "playwright test tests/performance/load-times.spec.js --project=chromium"
   },
