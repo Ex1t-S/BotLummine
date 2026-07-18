@@ -1,7 +1,7 @@
 # Auditoría y mejora integral de BotLummine / BladeIA
 
-Fecha de inicio: 2026-07-17  
-Rama: `audit/general-improvements-20260717`  
+Fecha de inicio: 2026-07-17
+Rama: `audit/general-improvements-20260717`
 Estado: P0 local de hardening cerrado para el inventario estático actual; producción permanece en modo solo lectura.
 
 ## 1. Resumen ejecutivo
