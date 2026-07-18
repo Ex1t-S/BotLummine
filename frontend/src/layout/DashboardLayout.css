@@ -1053,6 +1053,69 @@
 	}
 }
 
+.admin-demo-mode {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 38px;
+	padding: 5px 6px 5px 12px;
+	border: 1px solid color-mix(in srgb, #d97706 34%, transparent);
+	border-radius: 9px;
+	background: color-mix(in srgb, #f59e0b 10%, var(--surface-panel, #fff));
+	color: var(--text-primary, #172033);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.admin-demo-mode strong {
+	font-size: 11px;
+	letter-spacing: .06em;
+	color: #9a5700;
+}
+
+.admin-demo-mode button {
+	min-height: 28px;
+	padding: 0 9px;
+	border: 0;
+	border-radius: 6px;
+	background: #172033;
+	color: #fff;
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.admin-demo-mode button:focus-visible {
+	outline: 3px solid var(--focus-ring, #38bdf8);
+	outline-offset: 2px;
+}
+
+.admin-demo-mode button:disabled {
+	opacity: .6;
+	cursor: wait;
+}
+
+.dark .admin-demo-mode {
+	background: color-mix(in srgb, #f59e0b 15%, #111827);
+	color: #f8fafc;
+}
+
+.dark .admin-demo-mode strong {
+	color: #fbbf24;
+}
+
+@media (max-width: 980px) {
+	.admin-demo-mode span {
+		display: none;
+	}
+
+	.admin-demo-mode {
+		padding: 4px;
+		border: 0;
+		background: transparent;
+	}
+}
+
 /* Final mobile containment: feature content must never expand the app shell. */
 @media (max-width: 900px) {
 	.admin-shell {
@@ -1084,5 +1147,118 @@
 
 	.admin-content {
 		overflow-x: hidden;
+	}
+}
+
+.admin-demo-mobile {
+	display: none;
+}
+
+/* Compact app chrome for operational use on phones. */
+@media (max-width: 560px) {
+	.admin-shell {
+		grid-template-rows: auto minmax(0, 1fr);
+		height: 100dvh;
+		overflow: hidden;
+	}
+
+	.admin-sidebar {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 38px;
+		grid-template-rows: 44px 44px;
+		gap: 4px 8px;
+		padding: 8px 12px 6px;
+		border-bottom: 1px solid #e6eaf2;
+	}
+
+	.admin-brand {
+		grid-column: 1;
+		grid-row: 1;
+		min-width: 0;
+		margin: 0;
+		padding: 0;
+	}
+
+	.admin-brand-mark--logo {
+		width: 34px;
+		height: 34px;
+	}
+
+	.admin-brand-copy h1 {
+		font-size: 15px;
+	}
+
+	.admin-brand-copy p {
+		display: none;
+	}
+
+	.admin-demo-mobile {
+		display: inline-flex;
+		align-items: center;
+		min-height: 21px;
+		margin-left: 7px;
+		padding: 0 6px;
+		border-radius: 5px;
+		background: #fff4e5;
+		color: #9a5700;
+		font-size: 9px;
+		font-weight: 800;
+		letter-spacing: .05em;
+		text-transform: uppercase;
+	}
+
+	.admin-user-box {
+		display: none;
+	}
+
+	.admin-menu {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		gap: 6px;
+		padding: 2px 0 4px;
+	}
+
+	.admin-menu-group,
+	.admin-menu-group-links {
+		gap: 4px;
+	}
+
+	.admin-menu-link {
+		min-height: 36px;
+		padding: 7px 9px;
+		border-radius: 8px;
+		font-size: 12px;
+	}
+
+	.logout-btn {
+		display: inline-grid;
+		grid-column: 2;
+		grid-row: 1;
+		align-self: center;
+		place-items: center;
+		width: 36px;
+		min-width: 36px;
+		min-height: 36px;
+		margin: 0;
+		padding: 0;
+		border-radius: 9px;
+		box-shadow: none;
+	}
+
+	.logout-btn span {
+		display: none;
+	}
+
+	.admin-main {
+		grid-template-rows: minmax(0, 1fr);
+		min-height: 0;
+	}
+
+	.admin-topbar {
+		display: none;
+	}
+
+	.admin-content {
+		padding: 10px;
 	}
 }

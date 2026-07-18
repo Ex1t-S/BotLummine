@@ -26,6 +26,7 @@ export function isAiLabOnlyWorkspace(user = null) {
 
 export function canUseAiLab(user = null) {
 	if (isPlatformAdminUser(user)) return true;
+	if (user?.workspace?.demoMode === true) return true;
 	return AI_LAB_WORKSPACE_SLUGS.has(String(user?.workspace?.slug || '').trim());
 }
 

@@ -9,6 +9,11 @@ import { isPlatformAdminUser } from '../lib/authz.js';
 import './AiLabPage.css';
 
 const BLANK_FIXTURE_KEY = 'blank';
+const STARTER_MESSAGES = [
+	'¿Tenés la remera Urban en talle M?',
+	'Quiero saber dónde está mi pedido DEMO-1042',
+	'Necesito hablar con una persona',
+];
 
 function getApiError(error) {
 	return error?.response?.data?.error || error?.message || 'Error desconocido';
@@ -342,11 +347,28 @@ export default function AiLabPage() {
 						})
 					) : (
 						<div className="ai-lab-empty">
-							{isBusy
-								? 'Preparando conversacion...'
-								: isPlatformAdmin && !selectedWorkspaceId
-									? 'Elegi una marca para empezar la prueba.'
-									: 'Escribi un mensaje para empezar la prueba.'}
+							{isBusy ? (
+								<span>Preparando conversación...</span>
+							) : isPlatformAdmin && !selectedWorkspaceId ? (
+								<span>Elegí una marca para empezar la prueba.</span>
+							) : (
+								<>
+									<strong>Probá una conversación de cliente</strong>
+									<span>Escribí un caso libre o empezá con uno de estos ejemplos.</span>
+									<div className="ai-lab-starter-list" aria-label="Mensajes de ejemplo">
+										{STARTER_MESSAGES.map((starterMessage) => (
+											<button
+												key={starterMessage}
+												type="button"
+												onClick={() => setMessageText(starterMessage)}
+												disabled={!session?.id}
+											>
+												{starterMessage}
+											</button>
+										))}
+									</div>
+								</>
+							)}
 						</div>
 					)}
 					{isBusy && session?.messages?.length ? (

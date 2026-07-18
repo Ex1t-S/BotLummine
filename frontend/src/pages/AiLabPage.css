@@ -135,13 +135,57 @@
 }
 
 .ai-lab-empty {
-	display: grid;
-	place-items: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
 	min-height: 240px;
 	color: var(--ui-muted, #66737d);
 	font-size: 14px;
 	font-weight: 650;
 	text-align: center;
+}
+
+.ai-lab-empty strong {
+	color: var(--ui-heading, #0d151b);
+	font-size: 17px;
+	font-weight: 760;
+}
+
+.ai-lab-starter-list {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.ai-lab-starter-list button {
+	min-height: 40px;
+	padding: 8px 12px;
+	border: 1px solid var(--ui-border, #d7dee5);
+	border-radius: 8px;
+	background: var(--ui-surface, #ffffff);
+	color: var(--ui-text, #172027);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.ai-lab-starter-list button:hover:not(:disabled) {
+	border-color: var(--ui-primary, #0f766e);
+	background: var(--ui-primary-muted, #f0fdfa);
+}
+
+.ai-lab-starter-list button:focus-visible {
+	outline: none;
+	box-shadow: var(--ui-focus, 0 0 0 3px rgba(15, 118, 110, 0.18));
+}
+
+.ai-lab-starter-list button:disabled {
+	cursor: not-allowed;
+	opacity: .55;
 }
 
 .ai-lab-message-row {

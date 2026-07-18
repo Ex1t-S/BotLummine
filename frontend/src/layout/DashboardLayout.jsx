@@ -20,7 +20,7 @@ import {
 	Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { resolveApiUrl } from '../lib/api.js';
+import api, { resolveApiUrl } from '../lib/api.js';
 import './DashboardLayout.css';
 import logoBladeIA from '../assets/bladeia-logo.svg';
 import { canUseAiLab, isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from '../lib/authz.js';
@@ -134,6 +134,8 @@ export default function DashboardLayout() {
 	const lastScrollTopRef = useRef(0);
 	const [topbarHidden, setTopbarHidden] = useState(false);
 	const [logoFailed, setLogoFailed] = useState(false);
+	const [resettingDemo, setResettingDemo] = useState(false);
+	const demoMode = import.meta.env.MODE === 'demo';
 	const darkMode = resolvedTheme === 'dark';
 	const isAdmin = isAdminUser(user);
 	const isPlatformAdmin = isPlatformAdminUser(user);
@@ -222,6 +224,18 @@ export default function DashboardLayout() {
 		setTheme(darkMode ? 'light' : 'dark');
 	}
 
+	async function handleDemoReset() {
+		if (!demoMode || resettingDemo) return;
+		setResettingDemo(true);
+		try {
+			await api.post('/demo/reset');
+			queryClient.clear();
+			window.location.assign('/operations');
+		} finally {
+			setResettingDemo(false);
+		}
+	}
+
 	return (
 		<div className="admin-shell">
 			<aside className="admin-sidebar">
@@ -239,6 +253,7 @@ export default function DashboardLayout() {
 						<h1>{brandName}</h1>
 						<p>{aiLabOnlyWorkspace ? 'Pruebas de IA' : (isPlatformAdmin ? 'Gestión multi marca' : (isAdmin ? 'Atención conversacional' : 'Inbox de atención'))}</p>
 					</div>
+					{demoMode ? <span className="admin-demo-mobile">Demo</span> : null}
 				</div>
 
 				<div className="admin-user-box">
@@ -321,6 +336,14 @@ export default function DashboardLayout() {
 						<p>{pageMeta.description}</p>
 					</div>
 					<div className="admin-topbar-actions">
+						{demoMode ? (
+							<div className="admin-demo-mode" role="status" aria-label="Modo demo local activo">
+								<span><strong>DEMO LOCAL</strong> · sin envíos externos</span>
+								<button type="button" onClick={handleDemoReset} disabled={resettingDemo}>
+									{resettingDemo ? 'Restaurando…' : 'Restaurar datos'}
+								</button>
+							</div>
+						) : null}
 						<button
 							type="button"
 							className="admin-theme-toggle"
