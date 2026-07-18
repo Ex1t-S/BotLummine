@@ -265,6 +265,30 @@ test('selecciona la primera conversación en desktop y conserva el borrador si f
 	expect(getSendAttempts()).toBe(2);
 });
 
+test('muestra contexto real en desktop y lo convierte en drawer en viewport compacto', async ({ page }) => {
+	await installInboxApi(page);
+	await page.setViewportSize({ width: 1440, height: 960 });
+	await page.goto('/inbox/automatico');
+
+	const context = page.getByRole('complementary', { name: 'Contexto de la conversación' });
+	await expect(context).toBeVisible();
+	await expect(context).toContainText('Cliente Demo');
+	await expect(context).toContainText('Estado de pedido');
+	await expect(context).toContainText('Consultar pedido');
+	await expect(page.getByRole('button', { name: 'Mostrar contexto' })).toBeHidden();
+
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await expect(context).toBeHidden();
+	const toggle = page.getByRole('button', { name: 'Mostrar contexto' });
+	await expect(toggle).toBeVisible();
+	await toggle.click();
+	await expect(context).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Cerrar contexto' })).toBeVisible();
+	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+	await page.getByRole('button', { name: 'Cerrar contexto' }).click();
+	await expect(context).toBeHidden();
+});
+
 test('separa errores de lista e historial y permite reintentar sin perder el flujo', async ({ page }) => {
 	const failureControl = { allowInbox: false, allowConversation: false };
 	await installInboxApi(page, { failureControl });
@@ -381,7 +405,7 @@ test.describe('inbox móvil progresivo', () => {
 		await page.goto('/inbox/automatico');
 
 		await expect(page).not.toHaveURL(/conversation=/);
-		await expect(page.locator('.inbox-chat-empty')).toBeVisible();
+		await expect(page.locator('.inbox-chat-empty')).toBeHidden();
 		await expectNoHorizontalPageOverflow(page);
 
 		const contact = page.locator('.inbox-contact-card').filter({ hasText: 'Cliente Demo' });

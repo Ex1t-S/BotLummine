@@ -11,9 +11,11 @@ import {
 	Inbox,
 	List,
 	MoreVertical,
+	PanelRight,
 	RefreshCw,
 	RotateCcw,
 	UserRound,
+	X,
 } from 'lucide-react';
 import api, { buildApiUrl, createApiEventSource, resolveApiUrl } from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
@@ -26,14 +28,15 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import './InboxPage.css';
+import './InboxPage.v2.css';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 
 const QUEUES = [
 	{ key: 'ALL', label: 'Todos' },
-	{ key: 'AUTO', label: 'Automatico' },
-	{ key: 'HUMAN', label: 'Atencion humana' },
+	{ key: 'AUTO', label: 'Automático' },
+	{ key: 'HUMAN', label: 'Atención humana' },
 	{ key: 'PAYMENT_REVIEW', label: 'Comprobantes' },
 ];
 
@@ -70,8 +73,8 @@ const READ_FILTERS = [
 
 const QUEUE_LABELS = {
 	ALL: 'Todos',
-	AUTO: 'Automatico',
-	HUMAN: 'Atencion humana',
+	AUTO: 'Automático',
+	HUMAN: 'Atención humana',
 	PAYMENT_REVIEW: 'Comprobantes',
 };
 
@@ -90,6 +93,63 @@ const PAYMENT_REVIEW_ACTION_LABELS = {
 
 function getQueueLabel(queueKey = '') {
 	return QUEUE_LABELS[queueKey] || queueKey || 'Bandeja';
+}
+
+function getIntentLabel(intent = '') {
+	const labels = {
+		ORDER_STATUS: 'Estado de pedido',
+		PRODUCT_QUERY: 'Consulta de producto',
+		PRODUCT: 'Consulta de producto',
+		PAYMENT: 'Consulta de pago',
+		HUMAN_HANDOFF: 'Solicitud de atención',
+	};
+	const normalized = String(intent || '').trim().toUpperCase();
+	return labels[normalized] || String(intent || '').replaceAll('_', ' ').trim() || 'Sin intención detectada';
+}
+
+function ConversationContextPanel({ conversation, activeContact, queueLabel, onClose }) {
+	const contactName = conversation?.contact?.name || activeContact?.displayName || 'Sin nombre';
+	const phone = conversation?.contact?.phone || activeContact?.phoneDisplay || 'Sin teléfono';
+	const detectedIntent = conversation?.state?.lastDetectedIntent || '';
+	const userGoal = conversation?.state?.lastUserGoal || '';
+	const unreadCount = Math.max(0, Number(activeContact?.unreadCount || conversation?.unreadCount || 0));
+
+	return (
+		<aside className="inbox-context-panel" aria-label="Contexto de la conversación">
+			<div className="inbox-context-header">
+				<strong>Contexto</strong>
+				<button type="button" onClick={onClose} aria-label="Cerrar contexto">
+					<X size={17} aria-hidden="true" />
+				</button>
+			</div>
+			<section className="inbox-context-identity">
+				<div className="inbox-context-avatar" aria-hidden="true">{getInitials(contactName)}</div>
+				<div><strong>{contactName}</strong><span>{phone}</span></div>
+			</section>
+			<section className="inbox-context-section">
+				<h3>Resumen</h3>
+				<dl>
+					<div><dt>Cola</dt><dd>{queueLabel}</dd></div>
+					<div><dt>Atención</dt><dd>{conversation?.aiEnabled ? 'IA activa' : 'Equipo humano'}</dd></div>
+					<div><dt>Sin leer</dt><dd>{unreadCount}</dd></div>
+					<div><dt>Última actividad</dt><dd>{activeContact?.lastMessageTime || 'Reciente'}</dd></div>
+				</dl>
+			</section>
+			<section className="inbox-context-section">
+				<h3>Intención detectada</h3>
+				<div className="inbox-context-intent">
+					<span><PanelRight size={15} aria-hidden="true" /></span>
+					<div><strong>{getIntentLabel(detectedIntent)}</strong>{userGoal ? <small>{userGoal}</small> : null}</div>
+				</div>
+			</section>
+			{queueLabel === 'Comprobantes' ? (
+				<section className="inbox-context-note">
+					<strong>Revisión humana</strong>
+					<p>Esta vista registra una decisión operativa; no confirma acreditación bancaria.</p>
+				</section>
+			) : null}
+		</aside>
+	);
 }
 
 function resolveReadFilter(value = '') {
@@ -752,6 +812,7 @@ export default function InboxPage() {
 	const [olderMessages, setOlderMessages] = useState([]);
 	const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 	const [showConversationSidebar, setShowConversationSidebar] = useState(true);
+	const [showContextPanel, setShowContextPanel] = useState(false);
 	const [composerError, setComposerError] = useState('');
 	const [composerDrafts, setComposerDrafts] = useState({});
 	const [actionFeedback, setActionFeedback] = useState('');
@@ -784,6 +845,7 @@ export default function InboxPage() {
 
 	function selectConversation(conversationId) {
 		setSelectedConversationId(conversationId);
+		setShowContextPanel(false);
 		navigate(buildInboxPath(queue, conversationId, readFilter), { replace: false });
 		if (isCompactInboxViewport()) {
 			setShowConversationSidebar(false);
@@ -792,6 +854,7 @@ export default function InboxPage() {
 
 	function clearSelectedConversation() {
 		setSelectedConversationId(null);
+		setShowContextPanel(false);
 		setShowConversationSidebar(true);
 		navigate(buildInboxPath(queue, '', readFilter), { replace: true });
 	}
@@ -1697,7 +1760,10 @@ export default function InboxPage() {
 
 	const inboxPageClassName = [
 		'inbox-page',
+		'inbox-page--v2',
+		selectedConversationId ? 'inbox-page--has-selection' : '',
 		!showConversationSidebar ? 'inbox-page--contacts-hidden' : '',
+		showContextPanel ? 'inbox-page--context-open' : '',
 	]
 		.filter(Boolean)
 		.join(' ');
@@ -1759,7 +1825,9 @@ export default function InboxPage() {
 				<div className="inbox-sidebar-top">
 					<div>
 						<strong>Inbox</strong>
-						<span>{counts.ALL || 0} conversaciones en esta vista</span>
+						<span>
+							{counts.ALL || 0} conversaciones · {isRealtimeConnected ? 'Tiempo real' : 'Actualización periódica'}
+						</span>
 					</div>
 					<div className="inbox-sidebar-actions">
 						<button
@@ -1836,6 +1904,25 @@ export default function InboxPage() {
 						value={searchTerm}
 						onChange={(event) => setSearchTerm(event.target.value)}
 					/>
+				</div>
+
+				<div className="inbox-queue-tabs-v2" role="tablist" aria-label="Colas del Inbox">
+					{QUEUES.filter((item) => item.key !== 'ALL').map((item) => (
+						<button
+							key={item.key}
+							type="button"
+							role="tab"
+							aria-selected={queue === item.key}
+							className={queue === item.key ? 'is-active' : ''}
+							onClick={() => selectQueue(item.key)}
+						>
+							<span>{getQueueLabel(item.key)}</span>
+							<span className="inbox-queue-tab-label-short" aria-hidden="true">
+								{item.key === 'HUMAN' ? 'Humano' : getQueueLabel(item.key)}
+							</span>
+							<strong>{counts[item.key] || 0}</strong>
+						</button>
+					))}
 				</div>
 
 				<div
@@ -1976,6 +2063,11 @@ export default function InboxPage() {
 												{contact.preview || 'Sin mensajes'}
 											</div>
 										</div>
+										<div className="inbox-contact-meta-v2">
+											<span className={`inbox-contact-queue-dot inbox-contact-queue-dot--${String(contact.queue || queue).toLowerCase()}`} aria-hidden="true" />
+											<span>{getQueueLabel(contact.queue || queue)}</span>
+											{hasUnread ? <strong>Requiere lectura</strong> : <span className="inbox-contact-meta-v2__quiet">Al día</span>}
+										</div>
 									</div>
 								</div>
 							</button>
@@ -2021,7 +2113,7 @@ export default function InboxPage() {
 							contactSubtitle={
 								conversation?.contact?.phone ||
 								activeContact?.phoneDisplay ||
-								'Sin telefono'
+								'Sin teléfono'
 							}
 							avatarFallback={(
 								conversation?.contact?.name ||
@@ -2035,6 +2127,17 @@ export default function InboxPage() {
 							status={conversation?.aiEnabled ? 'online' : 'dnd'}
 							queueLabel={currentQueueLabel}
 							aiLabel={conversation?.aiEnabled ? 'IA activa' : 'Humano'}
+							headerTools={(
+								<button
+									type="button"
+									className="inbox-context-toggle"
+									onClick={() => setShowContextPanel((current) => !current)}
+									aria-expanded={showContextPanel}
+									aria-label={showContextPanel ? 'Ocultar contexto' : 'Mostrar contexto'}
+								>
+									<PanelRight size={17} aria-hidden="true" />
+								</button>
+							)}
 							showBackButton
 							onBack={() => setShowConversationSidebar(true)}
 							actions={[
@@ -2047,7 +2150,7 @@ export default function InboxPage() {
 								},
 								{
 									id: 'auto',
-									label: 'Automatico',
+									label: 'Automático',
 									active: conversation?.queue === 'AUTO',
 									disabled: moveQueueMutation.isPending,
 									onClick: () => handleMoveQueue('AUTO'),
@@ -2055,7 +2158,7 @@ export default function InboxPage() {
 								},
 								{
 									id: 'human',
-									label: 'Atencion humana',
+									label: 'Atención humana',
 									active: conversation?.queue === 'HUMAN',
 									disabled: moveQueueMutation.isPending,
 									onClick: () => handleMoveQueue('HUMAN'),
@@ -2099,7 +2202,7 @@ export default function InboxPage() {
 									: []),
 								{
 									id: 'mark-unread',
-									label: 'Marcar no leido',
+									label: 'Marcar no leído',
 									active: Boolean(activeContact?.hasUnread || conversation?.hasUnread),
 									disabled: markConversationUnreadMutation.isPending || !selectedConversationId,
 									onClick: handleMarkUnread,
@@ -2151,7 +2254,7 @@ export default function InboxPage() {
 							) : null}
 							emptyState={(
 								<div className="inbox-empty">
-									Todavia no hay mensajes. Cuando el cliente escriba, el historial va a aparecer aca.
+									Todavía no hay mensajes. Cuando el cliente escriba, el historial va a aparecer acá.
 								</div>
 							)}
 							composer={(
@@ -2163,13 +2266,13 @@ export default function InboxPage() {
 									isLoading={sendMessageMutation.isPending}
 									disabled={!selectedConversationId || conversationQuery.isLoading || conversationQuery.isError}
 									error={composerError}
-									placeholder="Escribi un mensaje"
+									placeholder="Escribí un mensaje"
 									value={composerDrafts[selectedConversationId] || ''}
 									onValueChange={handleComposerDraftChange}
 								/>
 							)}
 						>
-							<details className="inbox-payment-review-history">
+							{currentQueue === 'PAYMENT_REVIEW' ? <details className="inbox-payment-review-history">
 								<summary>
 									<span>Historial de comprobantes</span>
 									<span className="inbox-payment-review-history-count">
@@ -2215,7 +2318,7 @@ export default function InboxPage() {
 										</ol>
 									) : null}
 								</div>
-							</details>
+							</details> : null}
 
 							{conversationQuery.isLoading ? (
 								<div className="inbox-empty" role="status" aria-live="polite" aria-busy="true">
@@ -2241,7 +2344,7 @@ export default function InboxPage() {
 
 							{!conversationQuery.isLoading && !conversationQuery.isError && displayedMessages.length === 0 ? (
 								<div className="inbox-empty">
-									Todavia no hay mensajes. Cuando el cliente escriba, el historial va a aparecer aca.
+									Todavía no hay mensajes. Cuando el cliente escriba, el historial va a aparecer acá.
 								</div>
 							) : null}
 
@@ -2253,6 +2356,14 @@ export default function InboxPage() {
 					</div>
 				)}
 			</section>
+			{selectedConversationId ? (
+				<ConversationContextPanel
+					conversation={conversation}
+					activeContact={activeContact}
+					queueLabel={currentQueueLabel}
+					onClose={() => setShowContextPanel(false)}
+				/>
+			) : null}
 		</div>
 	);
 }

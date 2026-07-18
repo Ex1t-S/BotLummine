@@ -1263,3 +1263,19 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 - Alcance cubierto: P0 local de hardening, multitenancy estático, pipeline IA, CI base, Inbox, acciones/historial de comprobantes, Operaciones, tabla/cards de Carritos, responsive y accesibilidad prioritaria.
 - Veredicto técnico: GO para publicar el HEAD versionado; el working tree concurrente queda expresamente fuera. El propietario acepta el riesgo residual de un push directo a `main`.
 - Riesgo residual aceptado: las migraciones no se aplicaron, staging está atrasado y faltan pruebas dinámicas de dos workspaces, Axe reproducible y E2E específico de Campañas. Si `main` dispara Railway, el push puede desplegar producción y ejecutar migraciones automáticamente; conservar `c22684f` como referencia de rollback de aplicación.
+
+## 28. Rediseño visual V2 local
+
+### FIND-V2-001 · Inbox operativo sin cards anidadas
+
+- Área: UI/UX / Inbox / Responsive.
+- Ambiente: local, con API completamente mockeada y datos sintéticos.
+- Severidad: Improvement.
+- Evidencia: la lista dejó de renderizar cada conversación como una tarjeta; las colas y filtros son compactos, el chat usa una superficie continua y el contexto lateral muestra únicamente cola, modo de atención, no leídos, última actividad e intención realmente presentes en el contrato.
+- Impacto: mayor velocidad de lectura, menos bordes y badges, mejor uso del ancho y navegación móvil Lista → Chat sin panel vacío intermedio.
+- Causa: varias capas CSS legacy de igual jerarquía y componentes construidos alrededor de cards.
+- Solución: capa aislada `InboxPage.v2.css`, contexto responsive y toolbar extensible del componente de conversación. La capa está scoped al Inbox y puede revertirse sin modificar contratos backend.
+- Estado: implementado localmente; no desplegado.
+- Archivos: `InboxPage.jsx`, `InboxPage.v2.css`, `messaging-conversation.tsx`, E2E del Inbox y `frontend/audit-artifacts/redesign-v2-real/`.
+- Pruebas: frontend build verde; 7/7 E2E completos del Inbox; 3/3 críticos repetidos después de los ajustes; capturas 1440×960, 1280×800, 768×1024 y 390×844 inspeccionadas; cero desborde horizontal en las verificaciones automatizadas.
+- Riesgo de deployment: bajo-medio; cambio frontend aislado, pero el shell móvil general todavía conserva una navegación alta que se abordará como componente base antes del cierre visual.

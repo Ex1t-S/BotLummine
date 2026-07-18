@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType, ReactNode, RefObject } from "react";
-import { MoreVertical } from "lucide-react";
+import { ArrowLeft, MoreVertical } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,7 @@ type MessageConversationProps = {
 	onBack?: () => void;
 	actions?: ConversationAction[];
 	moreActions?: ConversationAction[];
+	headerTools?: ReactNode;
 	feedback?: string;
 	feedbackTone?: "status" | "error";
 	isBusy?: boolean;
@@ -131,6 +132,7 @@ export default function MessageConversation({
 	onBack,
 	actions = [],
 	moreActions = [],
+	headerTools = null,
 	feedback = "",
 	feedbackTone = "status",
 	isBusy = false,
@@ -147,6 +149,7 @@ export default function MessageConversation({
 				<div className="inbox-chat-header-top">
 					{showBackButton ? (
 						<button type="button" className="inbox-back-to-list-btn" onClick={onBack}>
+							<ArrowLeft aria-hidden="true" className="size-4" />
 							<span>Conversaciones</span>
 						</button>
 					) : null}
@@ -170,6 +173,7 @@ export default function MessageConversation({
 						{aiLabel ? (
 							<span className={cn("inbox-badge", status === "online" ? "inbox-badge--ai" : "inbox-badge--human")}>{aiLabel}</span>
 						) : null}
+						{headerTools}
 						<MoreActionsMenu actions={actions} moreActions={moreActions} />
 					</div>
 				</div>
@@ -185,7 +189,7 @@ export default function MessageConversation({
 						aria-live={!isBusy && feedbackTone === "error" ? "assertive" : "polite"}
 						aria-busy={isBusy}
 					>
-						{isBusy ? "Procesando accion..." : feedback}
+						{isBusy ? "Procesando acción..." : feedback}
 					</div>
 				) : null}
 			</CardHeader>
