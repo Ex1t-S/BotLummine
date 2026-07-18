@@ -929,13 +929,60 @@
 .admin-shell .admin-content .inbox-page--v2 .inbox-contact-card--selected,
 .admin-shell .admin-content .inbox-page--v2 .inbox-contact-card--unread {
 	margin: 0;
-	padding: 12px 13px;
+	min-height: 80px;
+	height: auto;
+	padding: 10px 13px;
 	border: 0;
 	border-bottom: 1px solid var(--inbox-v2-border);
 	border-radius: 0;
 	background: var(--inbox-v2-paper);
 	box-shadow: none;
 	transform: none;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-row {
+	min-height: 59px;
+	height: auto;
+	align-items: flex-start;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-content {
+	display: grid;
+	grid-template-rows: auto auto auto;
+	min-width: 0;
+	overflow: visible;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-top {
+	min-width: 0;
+	min-height: 19px;
+	margin-bottom: 0;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-time {
+	white-space: nowrap;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-preview-row {
+	min-height: 18px;
+	margin-top: 2px;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-preview,
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-preview-prefix {
+	line-height: 1.5;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-meta-v2 {
+	min-height: 16px;
+	margin-top: 4px;
+	line-height: 1.35;
+}
+
+.admin-shell .admin-content .inbox-page--v2 .inbox-contact-card:focus-visible {
+	z-index: 1;
+	outline: 2px solid var(--inbox-v2-primary);
+	outline-offset: -3px;
 }
 
 .admin-shell .admin-content .inbox-page--v2 .inbox-contact-card:hover {
