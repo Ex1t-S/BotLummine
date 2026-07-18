@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
@@ -263,11 +263,15 @@ function DashboardTabButton({ tab, isActive, onClick }) {
 
 function AutomationRuleNav({ activeTab, onSelect }) {
 	return (
-		<div className="campaign-automation-rule-nav" aria-label="Reglas de automatización">
+		<div className="campaign-automation-rule-nav" role="tablist" aria-label="Reglas de automatización">
 			{AUTOMATION_RULES.map((rule) => (
 				<button
 					key={rule.id}
 					type="button"
+					role="tab"
+					id={`campaigns-tab-${rule.id}`}
+					aria-selected={activeTab === rule.id}
+					aria-controls={`campaigns-panel-${rule.id}`}
 					className={`campaign-automation-rule-card ${activeTab === rule.id ? 'is-active' : ''}`.trim()}
 					onClick={() => onSelect(rule.id)}
 				>
@@ -284,13 +288,13 @@ function CampaignSectionShell({ tabId, eyebrow, title, description, children }) 
 		<section
 			id={`campaigns-panel-${tabId}`}
 			role="tabpanel"
-			aria-labelledby={`campaigns-tab-${tabId}`}
+			aria-labelledby={`campaigns-panel-${tabId}-title`}
 			className="campaigns-tab-shell page-card campaign-shell-card campaigns-tab-shell--clean"
 		>
 			<div className="campaigns-tab-shell__header campaigns-tab-shell__header--stacked">
 				<div>
 					{eyebrow ? <span className="campaigns-tab-shell__eyebrow">{cleanCampaignCopy(eyebrow)}</span> : null}
-					<h3>{cleanCampaignCopy(title)}</h3>
+					<h3 id={`campaigns-panel-${tabId}-title`}>{cleanCampaignCopy(title)}</h3>
 					{description ? <p>{cleanCampaignCopy(description)}</p> : null}
 				</div>
 			</div>
@@ -312,6 +316,18 @@ function CampaignTabLoader() {
 }
 
 function CampaignConfirmDialog({ confirm, onCancel, onConfirm }) {
+	const confirmButtonRef = useRef(null);
+
+	useEffect(() => {
+		if (!confirm) return undefined;
+		confirmButtonRef.current?.focus();
+		function handleKeyDown(event) {
+			if (event.key === 'Escape') onCancel();
+		}
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, [confirm, onCancel]);
+
 	if (!confirm) return null;
 
 	return (
@@ -321,14 +337,15 @@ function CampaignConfirmDialog({ confirm, onCancel, onConfirm }) {
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="campaign-confirm-title"
+				aria-describedby="campaign-confirm-description"
 			>
 				<h3 id="campaign-confirm-title">{confirm.title}</h3>
-				<p>{confirm.message}</p>
+				<p id="campaign-confirm-description">{confirm.message}</p>
 				<div className="campaign-confirm-actions">
 					<button type="button" className="button ghost" onClick={onCancel}>
 						Cancelar
 					</button>
-					<button type="button" className="button danger" onClick={onConfirm}>
+					<button ref={confirmButtonRef} type="button" className="button danger" onClick={onConfirm}>
 						{confirm.confirmLabel || 'Eliminar'}
 					</button>
 				</div>
@@ -849,7 +866,7 @@ function CampaignSchedulesPanel({
 						) : null}
 
 						{schedule.lastError ? (
-							<div className="campaign-schedule-error">{schedule.lastError}</div>
+							<div className="campaign-schedule-error">{getFriendlyError({ message: schedule.lastError })}</div>
 						) : null}
 
 						<div className="campaign-detail-actions campaign-detail-actions--spaced">
