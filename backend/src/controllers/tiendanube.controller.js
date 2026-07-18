@@ -74,6 +74,14 @@ function getTiendanubeStateSecret() {
 	).trim();
 }
 
+function getRegisterSecret() {
+	return String(
+		process.env.TIENDANUBE_REGISTER_SECRET ||
+		process.env.TIENDANUBE_CLIENT_SECRET ||
+		''
+	).trim();
+}
+
 function signTiendanubeState(payload = {}) {
 	const secret = getTiendanubeStateSecret();
 	if (!secret) {
