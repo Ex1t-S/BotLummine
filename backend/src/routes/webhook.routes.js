@@ -10,6 +10,8 @@ const router = Router();
 
 router.get('/whatsapp', verifyWhatsappWebhook);
 router.post('/whatsapp', receiveWhatsappWebhook);
+router.get('/whatsapp/:callbackKey', verifyWhatsappWebhook);
+router.post('/whatsapp/:callbackKey', receiveWhatsappWebhook);
 router.post('/tiendanube/orders', receiveTiendanubeOrderWebhook);
 router.post('/shopify', receiveShopifyWebhook);
 

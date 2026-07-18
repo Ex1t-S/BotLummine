@@ -160,6 +160,7 @@ async function createInboxSample(workspaceId) {
 			data: {
 				workspaceId,
 				contactId: contact.id,
+				routingKey: `${workspaceId}:legacy:${contact.id}`,
 				queue,
 				aiEnabled: queue === 'AUTO',
 				status: 'OPEN',

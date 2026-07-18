@@ -48,10 +48,12 @@ function buildTokenDebugFingerprint(token = '') {
 	};
 }
 
-async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel = 'REQUEST' }) {
+async function sendWhatsAppRequest({ workspaceId = null, whatsappChannelId = null, to, payload, debugLabel = 'REQUEST' }) {
 	const rawTo = to;
 	const finalTo = normalizeWhatsAppNumber(rawTo);
-	const channel = workspaceId ? await getWhatsAppChannelForWorkspace(workspaceId) : null;
+	const channel = workspaceId
+		? await getWhatsAppChannelForWorkspace(workspaceId, { channelId: whatsappChannelId })
+		: null;
 	const graphVersion = channel?.graphVersion || getGraphVersion();
 	const phoneNumberId = channel?.phoneNumberId || getWhatsAppPhoneNumberId();
 	const accessToken = channel?.accessToken || getWhatsAppAccessToken();
@@ -151,7 +153,7 @@ async function sendWhatsAppRequest({ workspaceId = null, to, payload, debugLabel
 
 export { normalizeWhatsAppNumber } from './whatsapp-formatters.js';
 
-export async function sendWhatsAppText({ workspaceId = null, to, body }) {
+export async function sendWhatsAppText({ workspaceId = null, whatsappChannelId = null, to, body }) {
 	const cleanBody = String(body || '').trim();
 
 	if (!cleanBody) {
@@ -170,6 +172,7 @@ export async function sendWhatsAppText({ workspaceId = null, to, body }) {
 
 	return sendWhatsAppRequest({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		debugLabel: 'TEXT',
 		payload: {
@@ -181,6 +184,7 @@ export async function sendWhatsAppText({ workspaceId = null, to, body }) {
 
 export async function sendWhatsAppMedia({
 	workspaceId = null,
+	whatsappChannelId = null,
 	to,
 	mediaType,
 	mediaId,
@@ -216,6 +220,7 @@ export async function sendWhatsAppMedia({
 
 	return sendWhatsAppRequest({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		debugLabel: 'MEDIA',
 		payload: {
@@ -227,6 +232,7 @@ export async function sendWhatsAppMedia({
 
 async function sendWhatsAppLinkedMedia({
 	workspaceId = null,
+	whatsappChannelId = null,
 	to,
 	mediaType,
 	mediaUrl,
@@ -262,6 +268,7 @@ async function sendWhatsAppLinkedMedia({
 
 	return sendWhatsAppRequest({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		debugLabel: 'MEDIA_LINK',
 		payload: {
@@ -271,9 +278,10 @@ async function sendWhatsAppLinkedMedia({
 	});
 }
 
-export async function sendWhatsAppImage({ workspaceId = null, to, mediaUrl, caption = '' }) {
+export async function sendWhatsAppImage({ workspaceId = null, whatsappChannelId = null, to, mediaUrl, caption = '' }) {
 	return sendWhatsAppLinkedMedia({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		mediaType: 'image',
 		mediaUrl,
@@ -283,6 +291,7 @@ export async function sendWhatsAppImage({ workspaceId = null, to, mediaUrl, capt
 
 export async function sendWhatsAppDocument({
 	workspaceId = null,
+	whatsappChannelId = null,
 	to,
 	mediaUrl,
 	filename = '',
@@ -290,6 +299,7 @@ export async function sendWhatsAppDocument({
 }) {
 	return sendWhatsAppLinkedMedia({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		mediaType: 'document',
 		mediaUrl,
@@ -298,9 +308,10 @@ export async function sendWhatsAppDocument({
 	});
 }
 
-export async function sendWhatsAppVideo({ workspaceId = null, to, mediaUrl, caption = '' }) {
+export async function sendWhatsAppVideo({ workspaceId = null, whatsappChannelId = null, to, mediaUrl, caption = '' }) {
 	return sendWhatsAppLinkedMedia({
 		workspaceId,
+	whatsappChannelId,
 		to,
 		mediaType: 'video',
 		mediaUrl,
@@ -308,9 +319,10 @@ export async function sendWhatsAppVideo({ workspaceId = null, to, mediaUrl, capt
 	});
 }
 
-export async function sendWhatsAppAudio({ workspaceId = null, to, mediaUrl }) {
+export async function sendWhatsAppAudio({ workspaceId = null, whatsappChannelId = null, to, mediaUrl }) {
 	return sendWhatsAppLinkedMedia({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		mediaType: 'audio',
 		mediaUrl,
@@ -319,6 +331,7 @@ export async function sendWhatsAppAudio({ workspaceId = null, to, mediaUrl }) {
 
 export async function sendWhatsAppInteractiveList({
 	workspaceId = null,
+	whatsappChannelId = null,
 	to,
 	body,
 	headerText = null,
@@ -369,6 +382,7 @@ export async function sendWhatsAppInteractiveList({
 
 	return sendWhatsAppRequest({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		debugLabel: 'INTERACTIVE_LIST',
 		payload: {
@@ -380,6 +394,7 @@ export async function sendWhatsAppInteractiveList({
 
 export async function sendWhatsAppTemplate({
 	workspaceId = null,
+	whatsappChannelId = null,
 	to,
 	templateName,
 	languageCode = 'es_AR',
@@ -398,6 +413,7 @@ export async function sendWhatsAppTemplate({
 
 	return sendWhatsAppRequest({
 		workspaceId,
+		whatsappChannelId,
 		to,
 		debugLabel: 'TEMPLATE',
 		payload: buildTemplatePayload({

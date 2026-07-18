@@ -118,8 +118,9 @@ async function main() {
     }
   });
 
-  let conversation = await prisma.conversation.findFirst({
-    where: { workspaceId: workspace.id, contactId: contact.id }
+  const routingKey = `${workspace.id}:legacy:${contact.id}`;
+  let conversation = await prisma.conversation.findUnique({
+    where: { routingKey }
   });
 
   if (!conversation) {
@@ -127,6 +128,7 @@ async function main() {
       data: {
         workspaceId: workspace.id,
         contactId: contact.id,
+        routingKey,
         aiEnabled: true,
         lastSummary: 'Cliente demo interesada en body modelador, talle y promo por transferencia.',
         lastMessageAt: new Date(),

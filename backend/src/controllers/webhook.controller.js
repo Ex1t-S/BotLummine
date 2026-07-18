@@ -25,6 +25,7 @@ import {
 import { attributeOrderConversions } from '../services/campaigns/campaign-attribution.service.js';
 import {
 	DEFAULT_WORKSPACE_ID,
+	getWhatsAppChannelByPhoneNumberId,
 	resolveWorkspaceIdFromPhoneNumberId
 } from '../services/workspaces/workspace-context.service.js';
 
@@ -195,7 +196,8 @@ async function processInboundMessages(req, value = {}) {
 	const messages = Array.isArray(value.messages) ? value.messages : [];
 	const contacts = Array.isArray(value.contacts) ? value.contacts : [];
 	const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
-	const workspaceId = await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
+	const channel = await getWhatsAppChannelByPhoneNumberId(phoneNumberId);
+	const workspaceId = channel?.workspaceId || await resolveWorkspaceIdFromPhoneNumberId(phoneNumberId);
 
 	if (!workspaceId) {
 		if (messages.length) {
@@ -224,6 +226,7 @@ async function processInboundMessages(req, value = {}) {
 
 		await processInboundMessage({
 			workspaceId,
+			whatsappChannelId: channel?.channelId || null,
 			waId: message.from,
 			contactName: contactInfo?.profile?.name || message.from,
 			profileImageUrl,
@@ -328,8 +331,9 @@ function getShopifyWebhookSecret() {
 	).trim();
 }
 
-function getWhatsAppWebhookSecret() {
+function getWhatsAppWebhookSecret(app = null) {
 	return String(
+		app?.appSecret ||
 		process.env.WHATSAPP_APP_SECRET ||
 		process.env.META_APP_SECRET ||
 		process.env.FACEBOOK_APP_SECRET ||
@@ -337,13 +341,13 @@ function getWhatsAppWebhookSecret() {
 	).trim();
 }
 
-function isWhatsAppWebhookSignatureRequired() {
-	if (getWhatsAppWebhookSecret()) return true;
+function isWhatsAppWebhookSignatureRequired(app = null) {
+	if (getWhatsAppWebhookSecret(app)) return true;
 	return process.env.NODE_ENV === 'production';
 }
 
-function verifyWhatsAppWebhook(rawBodyBuffer, signatureHeader) {
-	const secret = getWhatsAppWebhookSecret();
+function verifyWhatsAppWebhookSignature(rawBodyBuffer, signatureHeader, app = null) {
+	const secret = getWhatsAppWebhookSecret(app);
 	if (!secret || !signatureHeader) return false;
 
 	const provided = String(signatureHeader).replace(/^sha256=/i, '');
@@ -353,6 +357,53 @@ function verifyWhatsAppWebhook(rawBodyBuffer, signatureHeader) {
 		.digest('hex');
 
 	return timingSafeEquals(provided, expected);
+}
+
+async function resolveWebhookApp(req) {
+	const callbackKey = String(req.params?.callbackKey || '').trim();
+	if (!callbackKey) return null;
+
+	const app = await prisma.whatsAppApp.findFirst({
+		where: { callbackKey, status: 'ACTIVE' },
+	});
+
+	return app || null;
+}
+
+function getWebhookAppVerifyToken(app = null) {
+	if (app?.verifyToken) return decryptSecret(app.verifyToken);
+	return String(process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
+}
+
+async function validatePayloadBelongsToWebhookApp(payload = {}, app = null) {
+	if (!app) return true;
+
+	const phoneNumberIds = [];
+	const wabaIds = [];
+	for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
+		for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+			const value = change?.value || {};
+			const phoneNumberId = value?.metadata?.phone_number_id || value?.metadata?.phoneNumberId || '';
+			const wabaId = value?.waba_id || value?.wabaId || '';
+			if (phoneNumberId) phoneNumberIds.push(String(phoneNumberId).trim());
+			if (wabaId) wabaIds.push(String(wabaId).trim());
+		}
+	}
+
+	for (const phoneNumberId of [...new Set(phoneNumberIds)]) {
+		const channel = await getWhatsAppChannelByPhoneNumberId(phoneNumberId);
+		if (!channel || channel.whatsappAppId !== app.id) return false;
+	}
+
+	if (!phoneNumberIds.length && wabaIds.length) {
+		const matchingChannel = await prisma.whatsAppChannel.findFirst({
+			where: { whatsappAppId: app.id, wabaId: { in: [...new Set(wabaIds)] }, status: 'ACTIVE' },
+			select: { id: true },
+		});
+		return Boolean(matchingChannel);
+	}
+
+	return true;
 }
 
 function verifyShopifyWebhook(rawBodyBuffer, signatureHeader) {
@@ -419,19 +470,25 @@ async function resolveWebhookStoreCredentials(storeId) {
 	throw new Error(`No se encontraron credenciales para la tienda ${normalizedStoreId}.`);
 }
 
-export function verifyWhatsappWebhook(req, res) {
+export async function verifyWhatsappWebhook(req, res) {
 	const mode = req.query['hub.mode'];
 	const token = req.query['hub.verify_token'];
 	const challenge = req.query['hub.challenge'];
+	const app = await resolveWebhookApp(req);
+	if (req.params?.callbackKey && !app) {
+		return res.sendStatus(404);
+	}
+	const expectedToken = getWebhookAppVerifyToken(app);
 
 	logger.info('webhook.whatsapp_verify', {
 		requestId: req.requestId || null,
 		mode,
 		hasChallenge: Boolean(challenge),
-		tokenMatches: token === process.env.WHATSAPP_VERIFY_TOKEN
+		appId: app?.id || null,
+		tokenMatches: timingSafeEquals(token || '', expectedToken || '')
 	});
 
-	if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+	if (mode === 'subscribe' && expectedToken && timingSafeEquals(token || '', expectedToken)) {
 		return res.status(200).send(challenge);
 	}
 
@@ -444,16 +501,21 @@ export async function receiveWhatsappWebhook(req, res) {
 			? req.body
 			: Buffer.from(JSON.stringify(req.body || {}));
 		const signatureHeader = req.headers['x-hub-signature-256'];
+		const app = await resolveWebhookApp(req);
 
-		if (isWhatsAppWebhookSignatureRequired()) {
-			if (!getWhatsAppWebhookSecret()) {
+		if (req.params?.callbackKey && !app) {
+			return res.status(404).json({ ok: false, error: 'Callback de App de WhatsApp no encontrado.' });
+		}
+
+		if (isWhatsAppWebhookSignatureRequired(app)) {
+			if (!getWhatsAppWebhookSecret(app)) {
 				return res.status(500).json({
 					ok: false,
 					error: 'Falta WHATSAPP_APP_SECRET o META_APP_SECRET para validar el webhook de WhatsApp.'
 				});
 			}
 
-			if (!verifyWhatsAppWebhook(rawBodyBuffer, signatureHeader)) {
+			if (!verifyWhatsAppWebhookSignature(rawBodyBuffer, signatureHeader, app)) {
 				captureSecurityEvent('security.webhook_invalid_signature', {
 					extra: {
 						requestId: req.requestId || null,
@@ -478,6 +540,12 @@ export async function receiveWhatsappWebhook(req, res) {
 		}
 
 		req.body = payload;
+		if (!(await validatePayloadBelongsToWebhookApp(payload, app))) {
+			captureSecurityEvent('security.webhook_app_channel_mismatch', {
+				extra: { requestId: req.requestId || null, appId: app?.id || null },
+			});
+			return res.status(403).json({ ok: false, error: 'El numero no pertenece a la App de WhatsApp configurada.' });
+		}
 		res.sendStatus(200);
 
 		const entries = Array.isArray(payload?.entry) ? payload.entry : [];
