@@ -19,6 +19,14 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await expect(page.getByRole('heading', { name: 'Elegí primero a quién querés mover' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Usar esta audiencia' })).toBeVisible();
 
+	await page.goto('/campaigns/automations');
+	await expect(page.getByRole('heading', { name: 'Automatizaciones con propósito claro' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Configurar' })).toHaveCount(3);
+
+	await page.goto('/campaigns/results');
+	await expect(page.getByRole('heading', { name: 'Resultados para decidir el próximo movimiento' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Rendimiento por campaña' })).toBeVisible();
+
 	await page.goto('/abandoned-carts');
 	const cartsTable = page.getByRole('table', { name: 'Carritos abandonados ordenados desde el más reciente' });
 	await expect(cartsTable).toBeVisible();
@@ -73,12 +81,12 @@ test('guía la creación de campaña sin duplicar la navegación anterior', asyn
 	await expect(page.getByText('Nombre de campaña')).toBeVisible();
 
 	await page.getByRole('button', { name: /2 Audiencia/ }).click();
-	await expect(page.getByRole('heading', { name: 'Elige a quién escribirle' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Elegí a quién escribirle' })).toBeVisible();
 });
 
 test('mantiene el shell compacto y sin overflow en móvil', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
-	for (const route of ['/inbox/automatico', '/campaigns', '/campaigns/audiences', '/campaigns/segment', '/analytics', '/abandoned-carts']) {
+	for (const route of ['/inbox/automatico', '/campaigns', '/campaigns/audiences', '/campaigns/automations', '/campaigns/results', '/campaigns/segment', '/analytics', '/abandoned-carts']) {
 		await page.goto(route);
 		await expect(page.locator('.admin-demo-mobile')).toBeVisible();
 		await expect(page.locator('.admin-topbar')).toBeHidden();

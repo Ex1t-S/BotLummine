@@ -472,10 +472,14 @@ La revisión lado a lado del demo V2 contra los prototipos aprobados confirmó u
 - [`Campaign OS`](frontend/audit-artifacts/local-demo-v3/campaign-overview-desktop.png)
 - [`Creación guiada`](frontend/audit-artifacts/local-demo-v3/campaign-create-desktop.png)
 - [`Audience Studio`](frontend/audit-artifacts/local-demo-v3/campaign-audiences-desktop.png)
+- [`Automatizaciones`](frontend/audit-artifacts/local-demo-v3/campaign-automations-desktop.png)
+- [`Plantillas`](frontend/audit-artifacts/local-demo-v3/campaign-templates-desktop.png)
 - [`Resultados`](frontend/audit-artifacts/local-demo-v3/campaign-results-desktop.png)
+- [`Detalle de resultados`](frontend/audit-artifacts/local-demo-v3/campaign-results-detail-desktop.png)
 - [`Campaign OS mobile`](frontend/audit-artifacts/local-demo-v3/campaign-overview-mobile.png)
 - [`Creación mobile`](frontend/audit-artifacts/local-demo-v3/campaign-create-mobile.png)
 - [`Audience Studio mobile`](frontend/audit-artifacts/local-demo-v3/campaign-audiences-mobile.png)
 - [`Campaign OS dark`](frontend/audit-artifacts/local-demo-v3/campaign-overview-dark-desktop.png)
+- [`Resultados dark`](frontend/audit-artifacts/local-demo-v3/campaign-results-dark-desktop.png)
 
-La carpeta `frontend/audit-artifacts/local-demo-v3/` contiene 20 capturas light desktop/móvil y la validación dark adicional. No se modificó backend, Railway, variables, base de datos ni delivery externo en esta iteración.
+La carpeta `frontend/audit-artifacts/local-demo-v3/` contiene 26 capturas light desktop/móvil y dos validaciones dark adicionales. Automatizaciones y Resultados ahora usan hubs de decisión; sus editores y tracking completos quedan disponibles por drill-down. No se modificó backend, Railway, variables, base de datos ni delivery externo en esta iteración.
