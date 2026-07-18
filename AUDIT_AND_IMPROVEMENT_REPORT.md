@@ -997,7 +997,7 @@ flowchart TD
 - Impacto: el operador podía interpretar un cambio de cola como una aprobación auditable; usuarios de teclado o lector de pantalla no recibían el resultado de la acción y la selección se perdía al mover la conversación.
 - Causa: microcopy desacoplado del contrato backend, feedback sin tono semántico y comportamiento manual del menú contrario al patrón de Radix.
 - Solución: renombrar la acción a “Finalizar revisión y derivar”, describir el resultado exacto por cola, cerrar el menú tras seleccionar, anunciar error como `alert` y éxito/progreso como `status`, conservar conversación y URL en la cola destino y exponer selección/no leídos/filtros con semántica accesible.
-- Estado: resuelto para el flujo real disponible; validar/rechazar/pedir otro comprobante con motivo y auditoría durable continúa pendiente de contrato y persistencia backend.
+- Estado: resuelto; las acciones de validar/rechazar/pedir otro comprobante y la auditoría durable se documentan y cubren en FIND-P1-058/FIND-P1-060. No existe integración de cobro.
 - Archivos: `frontend/src/pages/InboxPage.jsx/css`, `frontend/src/components/ui/messaging-conversation.tsx`, `frontend/src/styles/internal-dark-overrides.css`, `frontend/tests/inbox/critical-flow.spec.js` y captura sintética 768x1024.
 - Pruebas: 4/4 flujos críticos de Inbox en 5,8 s; caso de pagos 1/1 en 2,2 s; TypeScript 0 errores; build frontend 589 ms y build raíz 10,52 s.
 - Riesgo de deployment: bajo; no cambia API ni datos, pero conviene smoke de teclado en staging antes del rollout.
@@ -1029,7 +1029,7 @@ flowchart TD
 - Solución: agregar `PaymentReviewAction` como auditoría de acciones sobre comprobantes, con actor, cola previa/final, motivo e idempotencia por workspace; endpoints GET/POST protegidos y acotados por `conversationId + workspaceId`; transacción que desactiva IA y deriva a HUMAN; conectar las acciones a Inbox reutilizando la misma clave tras un error de red.
 - Estado: implementado y validado localmente para persistencia/API y acciones de comprobantes. No representa cobros, conciliación ni integración con un proveedor de pagos.
 - Archivos: schema y migración Prisma `20260717200000_add_payment_review_actions`, `payment-review.controller.js`, rutas dashboard, `InboxPage.jsx` y pruebas de backend/Playwright.
-- Pruebas: Prisma format/validate/generate verdes; syntax 144/144; suite 85/85; TypeScript y build frontend verdes; Inbox 5/5 en 12,6 s; build raíz verde en 12,9 s. La primera corrida del caso E2E falló por mojibake en el fixture, se corrigió el dato sintético y la repetición completa pasó.
+- Pruebas: Prisma format/validate/generate verdes; syntax 144/144; suite 85/85; TypeScript y build frontend verdes; Inbox 6/6 en la última corrida; build raíz verde. La primera corrida del caso E2E falló por mojibake en el fixture, se corrigió el dato sintético y la repetición completa pasó.
 - Riesgo de deployment: medio; migración sólo aditiva y no aplicada. `prisma migrate diff --from-migrations` no pudo generarse sin shadow database; el SQL manual fue revisado, pero debe compararse y ejecutarse primero sobre una base descartable/staging autorizada.
 
 ### FIND-P1-059
@@ -1059,7 +1059,7 @@ flowchart TD
 - Solución: agregar acciones de registrar validación, rechazar y pedir otro comprobante; diálogo `role=dialog` con label, `aria-modal`, foco inicial, Escape, validación de motivo y clave idempotente por conversación/acción. El feedback aclara que las acciones quedan derivadas a HUMAN.
 - Estado: resuelto localmente para el flujo UI y la consulta visual del historial; una política de cola distinta de HUMAN y el smoke integrado continúan pendientes de staging.
 - Archivos: `frontend/src/pages/InboxPage.jsx/css`, `frontend/tests/inbox/critical-flow.spec.js` y capturas sintéticas de diálogo/historial.
-- Pruebas: TypeScript/build frontend verdes; 6/6 E2E de Inbox en 11,4 s; historial, rechazo con motivo y reintento idempotente verificados.
+- Pruebas: TypeScript/build frontend verdes; 6/6 E2E de Inbox en la última corrida; historial, rechazo con motivo y reintento idempotente verificados.
 - Riesgo de deployment: medio; usa los endpoints/migración nuevos y debe desplegarse sólo después de `PaymentReviewAction` en staging.
 
 ### FIND-P1-061
