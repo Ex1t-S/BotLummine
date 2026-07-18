@@ -87,7 +87,7 @@ const defaultSteps: readonly FeatureCarouselStep[] = [
 	{
 		id: "2",
 		name: "Campañas",
-		title: "Lanza seguimientos sin perder trazabilidad",
+		title: "Lanzá seguimientos sin perder trazabilidad",
 		description:
 			"Prepará plantillas, audiencias y envíos desde una misma vista, con resultados visibles después de salir.",
 	},
@@ -101,7 +101,7 @@ const defaultSteps: readonly FeatureCarouselStep[] = [
 	{
 		id: "4",
 		name: "Operación",
-		title: "Mira lo urgente antes de entrar al detalle",
+		title: "Mirá lo urgente antes de entrar al detalle",
 		description:
 			"Resumen de chats, comprobantes, automatizaciones y alertas para ordenar la jornada comercial.",
 	},
@@ -177,6 +177,7 @@ const StepImage = forwardRef<HTMLImageElement, StepImageProps>(({ src, alt, clas
 			ref={ref}
 			alt={alt}
 			className={className}
+			decoding="async"
 			src={src}
 			style={{ position: "absolute", userSelect: "none", maxWidth: "unset", ...style }}
 			{...props}
