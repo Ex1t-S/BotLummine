@@ -378,6 +378,11 @@ test('revisión de comprobantes exige motivo para rechazar y registra la acción
 		fullPage: true,
 	});
 	await page.setViewportSize({ width: 768, height: 1024 });
+	await page.goto('/inbox/comprobantes');
+	const paymentReviewContact = page.locator('.inbox-contact-card').filter({ hasText: 'Cliente Demo' });
+	await expect(paymentReviewContact).toBeVisible();
+	await paymentReviewContact.click();
+	await expect(page.locator('.inbox-chat-workspace')).toBeVisible();
 	await page.getByRole('button', { name: 'Acciones de conversacion' }).press('Enter');
 	await page.getByRole('menuitem', { name: 'Rechazar comprobante' }).press('Enter');
 
