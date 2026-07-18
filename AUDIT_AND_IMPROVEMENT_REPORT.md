@@ -6,7 +6,7 @@ Estado: P0 local de hardening cerrado para el inventario estático actual; produ
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La última validación dejó Prisma válido, build raíz verde, 85/85 unitarias, TypeScript sin errores y 12/12 Playwright en la corrida consolidada (6 Inbox, 3 Operaciones y 3 Carritos). El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La validación final sobre un worktree limpio de `69f6b86` dejó Prisma válido, build raíz verde, 85/85 unitarias, TypeScript sin errores, auditorías productivas en cero y 22/22 Playwright con performance estricto. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
@@ -322,7 +322,7 @@ flowchart TD
 - Impacto: superficie evitable en uploads, multipart y dependencias del proveedor OpenAI.
 - Causa: lockfile con versiones anteriores a los parches disponibles.
 - Solución: upgrades compatibles y audit high bloqueante en CI.
-- Estado: resuelto backend; frontend conserva 2 high pendientes para no pisar manifests del usuario.
+- Estado: resuelto backend y frontend; `69f6b86` actualiza únicamente dependencias transitivas dentro de los rangos declarados y deja ambas auditorías productivas en cero.
 - Archivos: `backend/package.json`, lockfile y workflow.
 - Pruebas: `npm audit --omit=dev --audit-level=high` devuelve 0 vulnerabilidades; build y unitarias verdes.
 - Riesgo de deployment: medio; revisar smoke de uploads/Sentry en staging.
@@ -1029,7 +1029,7 @@ flowchart TD
 - Solución: agregar `PaymentReviewAction` como auditoría de acciones sobre comprobantes, con actor, cola previa/final, motivo e idempotencia por workspace; endpoints GET/POST protegidos y acotados por `conversationId + workspaceId`; transacción que desactiva IA y deriva a HUMAN; conectar las acciones a Inbox reutilizando la misma clave tras un error de red.
 - Estado: implementado y validado localmente para persistencia/API y acciones de comprobantes. No representa cobros, conciliación ni integración con un proveedor de pagos.
 - Archivos: schema y migración Prisma `20260717200000_add_payment_review_actions`, `payment-review.controller.js`, rutas dashboard, `InboxPage.jsx` y pruebas de backend/Playwright.
-- Pruebas: Prisma format/validate/generate verdes; syntax 144/144; suite 85/85; TypeScript y build frontend verdes; Inbox 6/6 en la última corrida; build raíz verde. La primera corrida del caso E2E falló por mojibake en el fixture, se corrigió el dato sintético y la repetición completa pasó.
+- Pruebas: Prisma format/validate/generate verdes; syntax 142/142 en el HEAD limpio; suite 85/85; TypeScript y build frontend verdes; Inbox 6/6 en la última corrida; build raíz verde. La primera corrida del caso E2E falló por mojibake en el fixture, se corrigió el dato sintético y la repetición completa pasó.
 - Riesgo de deployment: medio; migración sólo aditiva y no aplicada. `prisma migrate diff --from-migrations` no pudo generarse sin shadow database; el SQL manual fue revisado, pero debe compararse y ejecutarse primero sobre una base descartable/staging autorizada.
 
 ### FIND-P1-059
@@ -1096,11 +1096,11 @@ flowchart TD
 - El typecheck estricto existente ahora bloquea CI mediante `tsc -b`; sigue sin haber un lint reproducible configurado.
 - Se añadieron tokens semánticos base, foco visible global y reducción de movimiento.
 - Se detectó y eliminó un bloque legacy de estilos globales en `CatalogPage.css`.
-- Auditoría frontend: 5 vulnerabilidades productivas reportadas (2 high en Vite/esbuild); no se modificaron manifests sucios del usuario.
+- Auditoría frontend: 0 vulnerabilidades después de refrescar el lockfile con versiones transitivas compatibles; no se modificó el manifest concurrente del usuario.
 
 ## 10. Auditoría backend
 
-- 144 archivos JS/MJS pasan el chequeo de sintaxis.
+- 142 archivos JS/MJS versionados pasan el chequeo de sintaxis en el HEAD limpio; los dos archivos adicionales del working tree concurrente no forman parte del push.
 - 85 pruebas unitarias pasan, incluidas seguridad de DB/schema/credenciales/media/OAuth/canales, neutralidad de marca, compiler/fallback IA, persistencia/retención de trazas, revisión de comprobantes, fail-closed de flags y aislamiento de configuración/AI Lab/catálogo/menú/atribución/Enbox/pedidos/carritos/inbound/workspace/WABA/templates/analytics/estado/comercio/schedules/usuarios/aprovisionamiento/contactos/corridas de automatización/caché privada.
 - Controllers de dashboard/admin rondan 1.900 líneas.
 - La prueba transversal impide reintroducir workspaces implícitos; la comprobación dinámica de aislamiento y callbacks queda para staging con dos tenants sintéticos.
@@ -1130,17 +1130,17 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | Comando | Resultado | Tiempo |
 |---|---:|---:|
 | `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
-| `npm ci` frontend | OK; 5 vulnerabilidades (2 high) | 7,1 s |
+| `npm ci` frontend | OK; 0 vulnerabilidades | 5,0 s |
 | `prisma validate` | OK | 2,5 s |
-| backend syntax | 144/144 | incluido en build |
+| backend syntax | 142/142 en HEAD limpio | incluido en build |
 | unit tests | 85/85 | 1,73 s |
 | AI eval offline | 28/28 intención; 8 candidatos pendientes | 0,5 s |
 | npm audit backend prod | 0 vulnerabilidades | 1,2 s |
-| npm audit frontend prod | 5; 2 high pendientes | 2,2 s |
+| npm audit frontend prod | 0 vulnerabilidades | 1,6 s |
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
 | root build | OK; backend + frontend | 9,2 s en la última corrida |
-| Playwright Chromium | 12/12 actuales: 6/6 Inbox + 3/3 Operaciones + 3/3 Carritos | 11,8 s consolidada; APIs sintéticas, sin delivery |
+| Playwright Chromium | 22/22 en HEAD limpio; accesibilidad, admin, Carritos, Inbox, Operaciones, visual y performance | 15,8 s; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
 La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
@@ -1215,7 +1215,7 @@ Baseline disponible en las secciones 3, 15 y 16. Evaluación offline de intenci�
 - Sin lint ni Axe reproducibles configurados; typecheck ya bloquea CI y Axe público fue ejecutado de forma diagnóstica. Campañas conserva una deuda de semántica ARIA/foco documentada en FIND-P1-061.
 - La API de revisión modela APPROVE/REJECT/REQUEST_NEW_PROOF/HANDOFF y conserva auditoría de comprobantes; la UI expone esas acciones y el historial visual. Falta el smoke integrado sobre la migración en staging. No hay integración de cobro.
 - Fuente web remota, imágenes públicas pesadas y carrusel lazy de 131,47 kB todavía condicionan la carga pública.
-- Frontend mantiene 2 vulnerabilidades high hasta coordinar sus manifests locales.
+- Backend y frontend quedan en 0 vulnerabilidades productivas en el HEAD limpio; el backend conserva una moderada sólo en dependencias de desarrollo.
 - Staging no representativo.
 - Cron productivo sin evidencia operativa.
 - Webhooks de privacidad Shopify se reconocen pero todavía no ejecutan exportación/redacción de datos.
@@ -1258,8 +1258,8 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 
 ## 27. Veredicto pre-push
 
-- Revisión de commits: `audit/general-improvements-20260717` está 76 commits adelante y 0 atrás respecto de `origin/main`; los commits son temáticos y el diff consolidado no contiene secretos detectables por los patrones de credenciales auditados.
-- Validación local: 85/85 unitarias, build raíz verde, 144/144 archivos con sintaxis válida, TypeScript verde y 12/12 E2E críticos verdes.
+- Revisión de commits: el HEAD funcional `69f6b86` fue validado en un checkout aislado; la rama está 0 commits atrás respecto de `origin/main`, sus commits son temáticos y el diff consolidado no contiene secretos detectables por los patrones de credenciales auditados.
+- Validación local limpia: 85/85 unitarias, 28/28 evaluaciones IA offline, build raíz verde, 142/142 archivos versionados con sintaxis válida, TypeScript verde, auditorías productivas en cero y 22/22 E2E verdes con performance estricto.
 - Alcance cubierto: P0 local de hardening, multitenancy estático, pipeline IA, CI base, Inbox, acciones/historial de comprobantes, Operaciones, tabla/cards de Carritos, responsive y accesibilidad prioritaria.
-- No listo para un push directo a `main` sin una decisión adicional: el working tree conserva cambios concurrentes sin commit, las migraciones no se aplicaron, staging está atrasado, faltan pruebas dinámicas de dos workspaces, Axe reproducible, E2E específico de Campañas y quedan dos vulnerabilidades high del frontend en manifests concurrentes.
-- Recomendación: publicar primero la rama de auditoría, revisar el diff en PR y validar staging aislado; sólo después promover a `main` con rollback preparado. El push directo a `main` es técnicamente posible pero no es la opción de menor riesgo.
+- Veredicto técnico: GO para publicar el HEAD versionado; el working tree concurrente queda expresamente fuera. El propietario acepta el riesgo residual de un push directo a `main`.
+- Riesgo residual aceptado: las migraciones no se aplicaron, staging está atrasado y faltan pruebas dinámicas de dos workspaces, Axe reproducible y E2E específico de Campañas. Si `main` dispara Railway, el push puede desplegar producción y ejecutar migraciones automáticamente; conservar `c22684f` como referencia de rollback de aplicación.
