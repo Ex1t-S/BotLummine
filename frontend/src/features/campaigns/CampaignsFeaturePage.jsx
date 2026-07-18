@@ -1587,6 +1587,10 @@ export default function CampaignsFeaturePage() {
 		const activePath = pathSegments[1] || '';
 		return tabsByPath[activePath]?.id || 'library';
 	}, [location.pathname, tabsByPath]);
+	const requestedCampaignId = useMemo(
+		() => new URLSearchParams(location.search).get('campaign'),
+		[location.search]
+	);
 	const {
 		feedback,
 		templates,
@@ -1602,7 +1606,7 @@ export default function CampaignsFeaturePage() {
 		tracking,
 		abandonedCart,
 		pendingPayment,
-	} = useCampaignsDashboard({ activeTab });
+	} = useCampaignsDashboard({ activeTab, initialCampaignId: requestedCampaignId });
 
 	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
 	const [pendingConfirm, setPendingConfirm] = useState(null);
@@ -1795,7 +1799,10 @@ export default function CampaignsFeaturePage() {
 						<CampaignRunsPanel
 							campaigns={campaigns}
 							selectedCampaign={selectedCampaign}
-							onSelectCampaign={(campaign) => setSelectedCampaignId(campaign.id)}
+							onSelectCampaign={(campaign) => {
+								setSelectedCampaignId(campaign.id);
+								navigate(`/campaigns/tracking?campaign=${campaign.id}`, { replace: true });
+							}}
 							onDispatch={(campaignId) => mutations.action.mutate({ type: 'dispatch', campaignId })}
 							onPause={(campaignId) => mutations.action.mutate({ type: 'pause', campaignId })}
 							onResume={(campaignId) => mutations.action.mutate({ type: 'resume', campaignId })}

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outputDir = path.resolve(__dirname, '../audit-artifacts/local-demo-v4');
+const outputDir = path.resolve(__dirname, '../audit-artifacts/campaign-results-recovery');
 const baseURL = process.env.DEMO_BASE_URL || 'http://127.0.0.1:5173';
 
 const routes = [
@@ -16,8 +16,8 @@ const routes = [
 	['campaign-audiences', '/campaigns/audiences', '.campaign-os-audiences'],
 	['campaign-automations', '/campaigns/automations', '.campaign-os-automations'],
 	['campaign-templates', '/campaigns/library', '.template-library-shell'],
-	['campaign-results', '/campaigns/results', '.campaign-os-results'],
-	['campaign-results-detail', '/campaigns/tracking', '.campaigns-page'],
+	['campaign-results', '/campaigns/results?campaign=campaign-demo-finished', '.campaign-os-results'],
+	['campaign-results-detail', '/campaigns/tracking?campaign=campaign-demo-finished', '.campaign-tracking-panel--focused'],
 	['carts', '/abandoned-carts', '.abandoned-carts-page'],
 	['analytics', '/analytics', '.analytics-v2-page'],
 	['ai-lab', '/ai-lab', '.ai-lab-page'],
