@@ -322,9 +322,56 @@ export async function backfillAutomationRunsForWorkspace({
 		},
 		orderBy: [{ createdAt: 'asc' }],
 	});
+	const attachedCampaigns = await prisma.campaign.findMany({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			automationRunId: { not: null },
+			status: { notIn: ['DRAFT', 'CANCELED'] },
+			audienceSource: { in: AUTOMATION_SOURCE_ALIASES },
+		},
+		select: { id: true },
+	});
+
+	// Only campaigns produced by an automation have an automation log. Manual
+	// abandoned-cart campaigns must stay independent so they remain controllable
+	// from the campaign tracker.
+	const candidateCampaignIds = [...new Set([
+		...campaigns.map((campaign) => campaign.id),
+		...attachedCampaigns.map((campaign) => campaign.id),
+	])];
+	if (!candidateCampaignIds.length) return { processed: 0, groups: 0 };
+	const [abandonedLogs, pendingPaymentLogs, shipmentLogs] = await Promise.all([
+		prisma.abandonedCartAutomationLog.findMany({
+			where: { workspaceId: resolvedWorkspaceId, campaignId: { in: candidateCampaignIds } },
+			select: { campaignId: true },
+		}),
+		prisma.pendingPaymentAutomationLog.findMany({
+			where: { workspaceId: resolvedWorkspaceId, campaignId: { in: candidateCampaignIds } },
+			select: { campaignId: true },
+		}),
+		prisma.shipmentNotificationLog.findMany({
+			where: { workspaceId: resolvedWorkspaceId, campaignId: { in: candidateCampaignIds } },
+			select: { campaignId: true },
+		}),
+	]);
+	const automationCampaignIds = new Set([
+		...abandonedLogs.map((row) => row.campaignId),
+		...pendingPaymentLogs.map((row) => row.campaignId),
+		...shipmentLogs.map((row) => row.campaignId),
+	]);
+	const attachedManualCampaignIds = attachedCampaigns
+		.map((campaign) => campaign.id)
+		.filter((campaignId) => !automationCampaignIds.has(campaignId));
+	if (attachedManualCampaignIds.length) {
+		await prisma.campaign.updateMany({
+			where: { workspaceId: resolvedWorkspaceId, id: { in: attachedManualCampaignIds } },
+			data: { automationRunId: null },
+		});
+	}
+	const automationCampaigns = campaigns.filter((campaign) => automationCampaignIds.has(campaign.id));
 
 	const grouped = new Map();
-	for (const campaign of campaigns) {
+	for (const campaign of automationCampaigns) {
 		const type = normalizeAutomationRunType(campaign.audienceSource);
 		const runKey = getLocalRunKey(campaign.createdAt || new Date(), timezone);
 		const key = `${type}:${runKey}`;
@@ -379,7 +426,7 @@ export async function backfillAutomationRunsForWorkspace({
 		}
 	}
 
-	return { processed: campaigns.length, groups: grouped.size };
+	return { processed: automationCampaigns.length, groups: grouped.size };
 }
 
 async function loadAutomationRun(runId, workspaceId) {

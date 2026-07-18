@@ -132,12 +132,6 @@ function getAutomationRunCollection(data) {
 	return data?.runs || data?.items || [];
 }
 
-function isAutomationAudienceSource(source = '') {
-	return ['abandoned_carts', 'pending_payment', 'shipment_dispatch'].includes(
-		String(source || '').trim().toLowerCase()
-	);
-}
-
 function normalizeTrackingItem(item = {}, kind = 'campaign') {
 	return {
 		...item,
@@ -150,7 +144,7 @@ function buildTrackingItems(automationData, campaignData) {
 		normalizeTrackingItem(run, 'automation_run')
 	);
 	const manualCampaigns = getCampaignCollection(campaignData)
-		.filter((campaign) => !campaign?.automationRunId && !isAutomationAudienceSource(campaign?.audienceSource))
+		.filter((campaign) => !campaign?.automationRunId)
 		.map((campaign) => normalizeTrackingItem(campaign, 'campaign'));
 
 	return [...automationRuns, ...manualCampaigns];

@@ -402,10 +402,21 @@ function extractTemplatePlaceholders(template) {
 	return Array.from(new Set(matches.filter(Boolean)));
 }
 
-function guessSourceForVariable(variableKey = '') {
+function guessSourceForVariable(variableKey = '', audienceMode = 'customers') {
 	const key = normalizeText(variableKey);
 
 	if (!key) return 'fixed';
+
+	if (audienceMode === 'abandoned_carts') {
+		const abandonedCartDefaults = {
+			'1': 'first_name',
+			'2': 'checkout_url',
+			'3': 'product_name',
+			'4': 'total_amount',
+			'5': 'checkout_id',
+		};
+		if (abandonedCartDefaults[key]) return abandonedCartDefaults[key];
+	}
 
 	if (['1', 'nombre', 'name', 'contact_name', 'customer_name', 'cliente'].includes(key)) {
 		return 'contact_name';
@@ -462,12 +473,12 @@ function guessSourceForVariable(variableKey = '') {
 	return 'fixed';
 }
 
-function buildInitialVariableMapping(placeholders = []) {
+function buildInitialVariableMapping(placeholders = [], audienceMode = 'customers') {
 	return Object.fromEntries(
 		placeholders.map((key) => [
 			key,
 			{
-				source: guessSourceForVariable(key),
+				source: guessSourceForVariable(key, audienceMode),
 				fixedValue: '',
 			},
 		])
@@ -796,17 +807,8 @@ export default function CampaignComposerPanel({
 	);
 
 	useEffect(() => {
-		setVariableMapping((current) => {
-			const defaults = buildInitialVariableMapping(templatePlaceholders);
-			const next = {};
-
-			for (const key of templatePlaceholders) {
-				next[key] = current?.[key] || defaults[key];
-			}
-
-			return next;
-		});
-	}, [templatePlaceholders]);
+		setVariableMapping(buildInitialVariableMapping(templatePlaceholders, form.audienceMode));
+	}, [form.audienceMode, templatePlaceholders]);
 
 	useEffect(() => {
 		const templateName = String(selectedTemplate?.name || '').trim();
