@@ -1,0 +1,485 @@
+{
+  "generatedAt": "synthetic-fixtures",
+  "metrics": [
+    {
+      "direction": "a",
+      "screen": "operations",
+      "viewport": "1440x960",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 17
+    },
+    {
+      "direction": "a",
+      "screen": "operations",
+      "viewport": "1280x800",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 17
+    },
+    {
+      "direction": "a",
+      "screen": "operations",
+      "viewport": "768x1024",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 17
+    },
+    {
+      "direction": "a",
+      "screen": "operations",
+      "viewport": "390x844",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 17
+    },
+    {
+      "direction": "a",
+      "screen": "inbox",
+      "viewport": "1440x960",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 10
+    },
+    {
+      "direction": "a",
+      "screen": "inbox",
+      "viewport": "1280x800",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 10
+    },
+    {
+      "direction": "a",
+      "screen": "inbox",
+      "viewport": "768x1024",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 9
+    },
+    {
+      "direction": "a",
+      "screen": "inbox",
+      "viewport": "390x844",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 1,
+      "borders": 3
+    },
+    {
+      "direction": "a",
+      "screen": "campaigns",
+      "viewport": "1440x960",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 13
+    },
+    {
+      "direction": "a",
+      "screen": "campaigns",
+      "viewport": "1280x800",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 13
+    },
+    {
+      "direction": "a",
+      "screen": "campaigns",
+      "viewport": "768x1024",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 13
+    },
+    {
+      "direction": "a",
+      "screen": "campaigns",
+      "viewport": "390x844",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 13
+    },
+    {
+      "direction": "a",
+      "screen": "carts",
+      "viewport": "1440x960",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 10
+    },
+    {
+      "direction": "a",
+      "screen": "carts",
+      "viewport": "1280x800",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 10
+    },
+    {
+      "direction": "a",
+      "screen": "carts",
+      "viewport": "768x1024",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 10
+    },
+    {
+      "direction": "a",
+      "screen": "carts",
+      "viewport": "390x844",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 10
+    },
+    {
+      "direction": "b",
+      "screen": "operations",
+      "viewport": "1440x960",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "b",
+      "screen": "operations",
+      "viewport": "1280x800",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "b",
+      "screen": "operations",
+      "viewport": "768x1024",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "b",
+      "screen": "operations",
+      "viewport": "390x844",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "b",
+      "screen": "inbox",
+      "viewport": "1440x960",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 10
+    },
+    {
+      "direction": "b",
+      "screen": "inbox",
+      "viewport": "1280x800",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 10
+    },
+    {
+      "direction": "b",
+      "screen": "inbox",
+      "viewport": "768x1024",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 9
+    },
+    {
+      "direction": "b",
+      "screen": "inbox",
+      "viewport": "390x844",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 1,
+      "borders": 3
+    },
+    {
+      "direction": "b",
+      "screen": "campaigns",
+      "viewport": "1440x960",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "b",
+      "screen": "campaigns",
+      "viewport": "1280x800",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "b",
+      "screen": "campaigns",
+      "viewport": "768x1024",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "b",
+      "screen": "campaigns",
+      "viewport": "390x844",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "b",
+      "screen": "carts",
+      "viewport": "1440x960",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "b",
+      "screen": "carts",
+      "viewport": "1280x800",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "b",
+      "screen": "carts",
+      "viewport": "768x1024",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "b",
+      "screen": "carts",
+      "viewport": "390x844",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "c",
+      "screen": "operations",
+      "viewport": "1440x960",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "c",
+      "screen": "operations",
+      "viewport": "1280x800",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "c",
+      "screen": "operations",
+      "viewport": "768x1024",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "c",
+      "screen": "operations",
+      "viewport": "390x844",
+      "sections": 3,
+      "kpis": 4,
+      "badges": 4,
+      "actions": 9,
+      "borders": 16
+    },
+    {
+      "direction": "c",
+      "screen": "inbox",
+      "viewport": "1440x960",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 10
+    },
+    {
+      "direction": "c",
+      "screen": "inbox",
+      "viewport": "1280x800",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 10
+    },
+    {
+      "direction": "c",
+      "screen": "inbox",
+      "viewport": "768x1024",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 4,
+      "borders": 9
+    },
+    {
+      "direction": "c",
+      "screen": "inbox",
+      "viewport": "390x844",
+      "sections": 0,
+      "kpis": 0,
+      "badges": 3,
+      "actions": 1,
+      "borders": 3
+    },
+    {
+      "direction": "c",
+      "screen": "campaigns",
+      "viewport": "1440x960",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "c",
+      "screen": "campaigns",
+      "viewport": "1280x800",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "c",
+      "screen": "campaigns",
+      "viewport": "768x1024",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "c",
+      "screen": "campaigns",
+      "viewport": "390x844",
+      "sections": 3,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 6,
+      "borders": 11
+    },
+    {
+      "direction": "c",
+      "screen": "carts",
+      "viewport": "1440x960",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "c",
+      "screen": "carts",
+      "viewport": "1280x800",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "c",
+      "screen": "carts",
+      "viewport": "768x1024",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    },
+    {
+      "direction": "c",
+      "screen": "carts",
+      "viewport": "390x844",
+      "sections": 2,
+      "kpis": 3,
+      "badges": 3,
+      "actions": 5,
+      "borders": 9
+    }
+  ]
+}

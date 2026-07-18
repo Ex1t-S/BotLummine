@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BladeIA · Propuestas de rediseño visual</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --surface-2: #edf4fb;
+      --ink: #16202b;
+      --muted: #687583;
+      --line: #dce4ec;
+      --brand: #1597d1;
+      --brand-strong: #0c75b4;
+      --success: #16835b;
+      --warning: #a96c07;
+      --danger: #bd3d45;
+      --radius: 16px;
+      --shadow: 0 12px 32px rgba(24, 52, 74, .08);
+      --space: 20px;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body[data-direction="b"] {
+      --bg: #f5f6f8;
+      --surface: #fff;
+      --surface-2: #eef1f4;
+      --ink: #18212b;
+      --muted: #697582;
+      --line: #dfe4e8;
+      --brand: #315dcb;
+      --brand-strong: #2048aa;
+      --radius: 10px;
+      --shadow: 0 5px 18px rgba(23, 35, 49, .06);
+      --space: 24px;
+    }
+    body[data-direction="c"] {
+      --bg: #111722;
+      --surface: #18212e;
+      --surface-2: #202b3a;
+      --ink: #f2f5f8;
+      --muted: #a3afbc;
+      --line: #344151;
+      --brand: #a8d86b;
+      --brand-strong: #c2f08a;
+      --success: #7ed5aa;
+      --warning: #f1be71;
+      --danger: #ff8e95;
+      --radius: 8px;
+      --shadow: 0 14px 34px rgba(0, 0, 0, .22);
+      --space: 18px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.45; }
+    button { font: inherit; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 228px 1fr; }
+    .rail { padding: 24px 16px; background: color-mix(in srgb, var(--surface) 92%, var(--brand) 8%); border-right: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.03em; font-size: 18px; padding: 0 8px 30px; }
+    .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--brand); color: #fff; font-weight: 900; }
+    body[data-direction="c"] .brand-mark { color: #111722; }
+    .nav { display: grid; gap: 4px; }
+    .nav button, .screen-nav button, .direction-nav button { border: 0; cursor: pointer; color: var(--muted); background: transparent; text-align: left; border-radius: 8px; padding: 10px 11px; }
+    .nav button:hover, .screen-nav button:hover, .nav button.active, .screen-nav button.active { background: var(--surface-2); color: var(--ink); }
+    .nav button.active { font-weight: 750; box-shadow: inset 3px 0 var(--brand); }
+    .main { min-width: 0; }
+    .topbar { min-height: 74px; padding: 16px clamp(18px, 4vw, 42px); display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+    .eyebrow { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(24px, 3vw, 34px); letter-spacing: -.045em; line-height: 1.05; }
+    h2 { font-size: 17px; letter-spacing: -.02em; }
+    h3 { font-size: 14px; }
+    .avatar { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--brand-strong); font-weight: 800; }
+    .content { padding: clamp(22px, 4vw, 42px); max-width: 1540px; margin: 0 auto; }
+    .prototype-head { display: grid; gap: 20px; margin-bottom: 30px; }
+    .prototype-head p { max-width: 780px; color: var(--muted); font-size: 15px; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .direction-nav, .screen-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+    .direction-nav button.active { color: var(--ink); background: var(--surface-2); font-weight: 800; }
+    .screen-nav { margin-left: auto; }
+    .screen-nav button { padding: 8px 10px; font-size: 12px; }
+    .screen { display: grid; gap: var(--space); }
+    .section { min-width: 0; padding: var(--space); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+    body[data-direction="b"] .section.flat, body[data-direction="c"] .section.flat { border: 0; box-shadow: none; background: transparent; padding-left: 0; padding-right: 0; }
+    body[data-direction="c"] .section { box-shadow: none; }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .section-head p, .meta, .helper { color: var(--muted); font-size: 12px; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .btn { border: 1px solid var(--line); border-radius: 8px; padding: 9px 13px; background: var(--surface); color: var(--ink); cursor: pointer; font-weight: 700; }
+    .btn.primary { border-color: var(--brand); background: var(--brand); color: #fff; }
+    body[data-direction="c"] .btn.primary { color: #111722; }
+    .btn.ghost { border-color: transparent; background: transparent; color: var(--brand-strong); }
+    .btn:hover { filter: brightness(.97); }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .kpi { padding: 15px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    body[data-direction="b"] .kpi, body[data-direction="c"] .kpi { border: 0; border-left: 3px solid var(--brand); border-radius: 0; padding: 4px 14px; }
+    .kpi-label { color: var(--muted); font-size: 12px; }
+    .kpi-value { display: block; margin-top: 3px; font-size: 27px; line-height: 1.1; letter-spacing: -.04em; }
+    .kpi-note { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .grid-2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: var(--space); }
+    .list { display: grid; gap: 0; }
+    .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(120px, .7fr) auto; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .row:last-child { border-bottom: 0; }
+    .row strong { display: block; font-size: 13px; }
+    .row .meta { margin-top: 2px; }
+    .status { display: inline-flex; align-items: center; gap: 5px; width: max-content; padding: 3px 7px; border-radius: 5px; font-size: 11px; font-weight: 750; background: var(--surface-2); color: var(--muted); }
+    body[data-direction="b"] .status, body[data-direction="c"] .status { padding: 0; background: transparent; }
+    .status.warn { color: var(--warning); } .status.ok { color: var(--success); } .status.danger { color: var(--danger); }
+    .priority-list { display: grid; gap: 2px; }
+    .priority { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .priority:last-child { border-bottom: 0; }
+    .priority-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
+    .priority-dot.warn { background: var(--warning); } .priority-dot.danger { background: var(--danger); }
+    .priority strong { display: block; font-size: 13px; }
+    .priority span { color: var(--muted); font-size: 12px; }
+    .inbox-layout { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(360px, 1.5fr) minmax(220px, .7fr); gap: 0; min-height: 560px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+    .inbox-col { min-width: 0; padding: 16px; }
+    .inbox-col + .inbox-col { border-left: 1px solid var(--line); }
+    .conversation { padding: 12px 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .conversation.active { border-left: 3px solid var(--brand); padding-left: 5px; background: var(--surface-2); }
+    .conversation strong { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+    .conversation p { margin-top: 4px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
+    .chat-body { display: grid; align-content: end; min-height: 390px; gap: 9px; padding: 20px 0; }
+    .bubble { max-width: 76%; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+    .bubble.out { justify-self: end; background: color-mix(in srgb, var(--brand) 14%, var(--surface)); }
+    .composer { display: flex; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .composer input, .field { min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; background: var(--surface); color: var(--ink); }
+    .context-item { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .context-item:last-child { border-bottom: 0; }
+    .context-item span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .campaign-list { display: grid; gap: 0; }
+    .campaign-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 120px auto; gap: 14px; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--line); }
+    .campaign-row:last-child { border-bottom: 0; }
+    .campaign-row strong { font-size: 14px; }
+    .campaign-row p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th, td { padding: 13px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 750; }
+    td { font-size: 13px; }
+    tr:last-child td { border-bottom: 0; }
+    .amount { font-weight: 800; }
+    .cart-mobile-list { display: none; }
+    .cart-mobile { display: grid; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .cart-mobile:last-child { border-bottom: 0; }
+    .cart-mobile-head, .cart-mobile-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .cart-mobile-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; color: var(--muted); font-size: 12px; }
+    .callout { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px 15px; border-left: 3px solid var(--brand); background: var(--surface-2); }
+    .callout strong { font-size: 13px; }
+    .callout span { color: var(--muted); font-size: 12px; }
+    .hidden { display: none !important; }
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 72px 1fr; }
+      .rail { padding-inline: 10px; } .brand { justify-content: center; padding-inline: 0; } .brand span, .nav button span { display: none; }
+      .nav button { text-align: center; font-size: 0; } .nav button::first-letter { font-size: 17px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .inbox-layout { grid-template-columns: 230px minmax(0, 1fr); } .inbox-col.context { display: none; }
+    }
+    @media (max-width: 680px) {
+      .app { display: block; } .rail { display: none; }
+      .topbar { min-height: 62px; } .content { padding: 20px 14px 30px; }
+      .toolbar { display: grid; } .screen-nav { margin-left: 0; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+      .kpi { padding: 10px 0; } body[data-direction="a"] .kpi { padding: 12px; }
+      .kpi-value { font-size: 23px; }
+      .inbox-layout { display: block; min-height: 0; border: 0; } .inbox-col { display: none; } .inbox-col.active { display: block; border: 1px solid var(--line); border-radius: var(--radius); min-height: 440px; }
+      .campaign-row { grid-template-columns: 1fr auto; } .campaign-row .meta, .campaign-row .status { grid-column: 1; } .campaign-row .actions { grid-column: 2; grid-row: 1 / span 2; }
+      .row { grid-template-columns: minmax(0, 1fr) auto; } .row .meta { display: none; }
+      .screen .table-wrap { display: none; }
+      .cart-mobile-list { display: grid; }
+    }
+  </style>
+</head>
+<body data-direction="b">
+  <div class="app">
+    <aside class="rail">
+      <div class="brand"><span class="brand-mark">B</span><span>BladeIA</span></div>
+      <nav class="nav" aria-label="Principal">
+        <button class="active" data-screen="operations">◈ <span>Operaciones</span></button>
+        <button data-screen="inbox">◌ <span>Inbox</span></button>
+        <button data-screen="campaigns">◇ <span>Campañas</span></button>
+        <button data-screen="carts">▦ <span>Carritos</span></button>
+        <button>⌁ <span>Clientes</span></button>
+        <button>⚙ <span>Administración</span></button>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><div class="eyebrow">Prototipo de rediseño</div><strong>Workspace demo</strong></div><div class="avatar">GD</div></header>
+      <div class="content">
+        <div class="prototype-head">
+          <div><div class="eyebrow">BladeIA / BotLummine</div><h1 id="screen-title">Operaciones</h1><p id="screen-intro">Una vista enfocada en prioridades y decisiones, con menos ruido visual.</p></div>
+          <div class="toolbar">
+            <div class="direction-nav" aria-label="Direcciones visuales">
+              <button data-direction="a">A · Evolución</button><button class="active" data-direction="b">B · Renovación</button><button data-direction="c">C · Profunda</button>
+            </div>
+            <div class="screen-nav" aria-label="Pantallas prototipo">
+              <button class="active" data-screen="operations">Operaciones</button><button data-screen="inbox">Inbox</button><button data-screen="campaigns">Campañas</button><button data-screen="carts">Carritos</button>
+            </div>
+          </div>
+        </div>
+        <section id="screen" class="screen" aria-live="polite"></section>
+      </div>
+    </main>
+  </div>
+  <script>
+    const copy = {
+      operations: { title: 'Operaciones', intro: 'Una vista enfocada en prioridades y decisiones, con menos ruido visual.' },
+      inbox: { title: 'Inbox', intro: 'Colas, conversación y contexto con una jerarquía operativa clara.' },
+      campaigns: { title: 'Campañas', intro: 'Estado, próxima acción y métricas esenciales en una sola lectura.' },
+      carts: { title: 'Carritos abandonados', intro: 'Una tabla para decidir a quién contactar y qué hacer después.' },
+    };
+    const screen = document.querySelector('#screen');
+    let activeScreen = 'operations';
+    const el = (html) => html;
+    function operations() { return el(`
+      <div class="kpis"><div class="kpi"><span class="kpi-label">Requieren acción</span><strong class="kpi-value">7</strong><span class="kpi-note">+2 desde ayer</span></div><div class="kpi"><span class="kpi-label">Fuera de SLA</span><strong class="kpi-value">3</strong><span class="kpi-note">prioridad alta</span></div><div class="kpi"><span class="kpi-label">Comprobantes</span><strong class="kpi-value">4</strong><span class="kpi-note">esperando revisión humana</span></div><div class="kpi"><span class="kpi-label">Automatizaciones</span><strong class="kpi-value">12/14</strong><span class="kpi-note">2 requieren atención</span></div></div>
+      <div class="grid-2"><section class="section"><div class="section-head"><div><h2>Prioridades de hoy</h2><p>Ordenadas por impacto y urgencia.</p></div><button class="btn ghost">Ver todas</button></div><div class="priority-list"><div class="priority"><i class="priority-dot danger"></i><div><strong>3 conversaciones fuera de SLA</strong><span>La más antigua espera hace 2 h 18 min.</span></div><button class="btn">Abrir</button></div><div class="priority"><i class="priority-dot warn"></i><div><strong>4 comprobantes pendientes</strong><span>Hay 2 con pedido y monto verificados.</span></div><button class="btn">Revisar</button></div><div class="priority"><i class="priority-dot warn"></i><div><strong>2 automatizaciones con error</strong><span>Último fallo: plantilla no aprobada.</span></div><button class="btn">Corregir</button></div><div class="priority"><i class="priority-dot"></i><div><strong>Campaña “Invierno” detenida</strong><span>Falta confirmar una audiencia.</span></div><button class="btn">Ver</button></div></div></section><section class="section"><div class="section-head"><div><h2>Actividad reciente</h2><p>Eventos que cambiaron el estado operativo.</p></div></div><div class="list"><div class="row"><div><strong>Plantilla aprobada</strong><span class="meta">Hace 8 min · Meta</span></div><span class="status ok">Resuelto</span><button class="btn ghost">Abrir</button></div><div class="row"><div><strong>Nuevo handoff humano</strong><span class="meta">Hace 21 min · Inbox</span></div><span class="status">Informativo</span><button class="btn ghost">Abrir</button></div><div class="row"><div><strong>Sincronización de catálogo</strong><span class="meta">Hace 35 min · Tiendanube</span></div><span class="status ok">Completado</span><button class="btn ghost">Abrir</button></div></div></section></div>
+      <section class="section flat"><div class="section-head"><div><h2>Estado general</h2><p>Detalle secundario disponible sin competir con las prioridades.</p></div><button class="btn">Abrir Analytics</button></div><div class="callout"><div><strong>Todo lo demás está saludable.</strong><span> Canales, catálogo y jobs responden dentro del umbral esperado.</span></div><span class="status ok">Saludable</span></div></section>`); }
+    function inbox() { return el(`<div class="inbox-layout"><section class="inbox-col active"><div class="section-head"><div><h2>Conversaciones</h2><p>12 abiertas · 3 no leídas</p></div><button class="btn">Filtrar</button></div><div class="conversation active"><strong>Lucía Gómez <span class="meta">10:42</span></strong><p>¿Me queda en talle M?</p><span class="status warn">AUTO · SLA 18 min</span></div><div class="conversation"><strong>Tomás R. <span class="meta">10:30</span></strong><p>Mandé el comprobante recién.</p><span class="status danger">PAYMENT_REVIEW</span></div><div class="conversation"><strong>Carla Demo <span class="meta">09:58</span></strong><p>Quiero hablar con alguien.</p><span class="status">HUMAN</span></div></section><section class="inbox-col"><div class="chat-head"><div><h2>Lucía Gómez</h2><span class="meta">AUTO · última actividad hace 2 min</span></div><div class="actions"><button class="btn">Asignar</button><button class="btn primary">Derivar</button></div></div><div class="chat-body"><div class="bubble">Hola, ¿tenés el body modelador en talle M?</div><div class="bubble out">Sí, tenemos M disponible. ¿Preferís negro o nude?</div><div class="bubble">Negro. ¿Cuánto demora el envío?</div></div><div class="composer"><input class="field" placeholder="Escribir respuesta…" aria-label="Mensaje" /><button class="btn primary">Enviar</button></div></section><section class="inbox-col context"><div class="section-head"><div><h2>Contexto</h2><p>Solo lo necesario para responder.</p></div></div><div class="context-item"><span>Intención</span><strong>Consulta de producto</strong></div><div class="context-item"><span>Responsable</span><strong>Automático</strong></div><div class="context-item"><span>Cliente</span><strong>2 pedidos · ARS 84.000</strong></div><div class="context-item"><span>Próxima acción</span><strong>Responder disponibilidad</strong></div></section></div>`); }
+    function campaigns() { return el(`<section class="section"><div class="section-head"><div><h2>Campañas activas</h2><p>Estado y próxima acción primero; las métricas viven en contexto.</p></div><div class="actions"><button class="btn">Filtros</button><button class="btn primary">Nueva campaña</button></div></div><div class="campaign-list"><div class="campaign-row"><div><strong>Invierno · recuperación</strong><p>Audiencia: carritos 7–30 días · próxima acción: confirmar plantilla.</p></div><span class="status warn">Borrador</span><span class="meta">0 envíos</span><div class="actions"><button class="btn">Continuar</button></div></div><div class="campaign-row"><div><strong>Clientes frecuentes</strong><p>Audiencia: 126 clientes · próxima acción: revisar rendimiento.</p></div><span class="status ok">Activa</span><span class="meta">98% entrega</span><div class="actions"><button class="btn">Abrir</button></div></div><div class="campaign-row"><div><strong>Vuelta al cole</strong><p>Audiencia: 420 contactos · próxima acción: programada para mañana.</p></div><span class="status">Programada</span><span class="meta">420 previstos</span><div class="actions"><button class="btn">Ver</button></div></div></div></section><div class="grid-2"><section class="section flat"><div class="section-head"><div><h2>Resumen de rendimiento</h2><p>Solo tres señales para decidir.</p></div></div><div class="kpis"><div class="kpi"><span class="kpi-label">Entregas</span><strong class="kpi-value">98%</strong></div><div class="kpi"><span class="kpi-label">Respuestas</span><strong class="kpi-value">42</strong></div><div class="kpi"><span class="kpi-label">Conversiones</span><strong class="kpi-value">9</strong></div></div></section><section class="section flat"><div class="section-head"><div><h2>Próxima acción</h2><p>La tarea que desbloquea el siguiente paso.</p></div></div><div class="callout"><div><strong>Confirmar plantilla “Invierno”</strong><span> Sin aprobación no se puede programar.</span></div><button class="btn primary">Revisar</button></div></section></div>`); }
+    function carts() { return el(`<section class="section"><div class="section-head"><div><h2>Seguimiento de carritos</h2><p>La tabla prioriza cliente, importe, antigüedad y próxima acción.</p></div><div class="actions"><button class="btn">Filtros</button><button class="btn primary">Acción masiva</button></div></div><div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Importe</th><th>Antigüedad</th><th>Estado</th><th>Último contacto</th><th>Próxima acción</th><th></th></tr></thead><tbody><tr><td><strong>Lucía Gómez</strong><br><span class="meta">3 productos</span></td><td class="amount">ARS 42.800</td><td>2 h</td><td><span class="status warn">Sin contacto</span></td><td class="meta">—</td><td>Enviar recordatorio</td><td><button class="btn">Abrir</button></td></tr><tr><td><strong>Tomás R.</strong><br><span class="meta">1 producto</span></td><td class="amount">ARS 18.400</td><td>1 día</td><td><span class="status">Recordatorio 1</span></td><td class="meta">Ayer 16:20</td><td>Esperar respuesta</td><td><button class="btn">Abrir</button></td></tr><tr><td><strong>Carla Demo</strong><br><span class="meta">5 productos</span></td><td class="amount">ARS 96.200</td><td>3 días</td><td><span class="status ok">Interesada</span></td><td class="meta">Hoy 09:14</td><td>Asignar responsable</td><td><button class="btn">Abrir</button></td></tr></tbody></table></div><div class="cart-mobile-list"><article class="cart-mobile"><div class="cart-mobile-head"><strong>Lucía Gómez</strong><strong>ARS 42.800</strong></div><div class="cart-mobile-meta"><span>2 h · 3 productos</span><span class="status warn">Sin contacto</span></div><div class="cart-mobile-foot"><span>Enviar recordatorio</span><button class="btn">Abrir</button></div></article><article class="cart-mobile"><div class="cart-mobile-head"><strong>Tomás R.</strong><strong>ARS 18.400</strong></div><div class="cart-mobile-meta"><span>1 día · 1 producto</span><span class="status">Recordatorio 1</span></div><div class="cart-mobile-foot"><span>Esperar respuesta</span><button class="btn">Abrir</button></div></article><article class="cart-mobile"><div class="cart-mobile-head"><strong>Carla Demo</strong><strong>ARS 96.200</strong></div><div class="cart-mobile-meta"><span>3 días · 5 productos</span><span class="status ok">Interesada</span></div><div class="cart-mobile-foot"><span>Asignar responsable</span><button class="btn">Abrir</button></div></article></div></section><section class="section flat"><div class="section-head"><div><h2>Lectura rápida</h2><p>Las métricas que cambian la siguiente acción.</p></div></div><div class="kpis"><div class="kpi"><span class="kpi-label">Valor abierto</span><strong class="kpi-value">ARS 157k</strong></div><div class="kpi"><span class="kpi-label">Sin contacto</span><strong class="kpi-value">14</strong></div><div class="kpi"><span class="kpi-label">Recuperados 7d</span><strong class="kpi-value">8</strong></div></div></section>`); }
+    function render() { const data = copy[activeScreen]; document.querySelector('#screen-title').textContent = data.title; document.querySelector('#screen-intro').textContent = data.intro; screen.innerHTML = ({ operations, inbox, campaigns, carts }[activeScreen])(); document.querySelectorAll('[data-screen]').forEach((button) => button.classList.toggle('active', button.dataset.screen === activeScreen)); }
+    document.querySelectorAll('[data-screen]').forEach((button) => button.addEventListener('click', () => { activeScreen = button.dataset.screen; render(); }));
+    document.querySelectorAll('[data-direction]').forEach((button) => button.addEventListener('click', () => { document.body.dataset.direction = button.dataset.direction; document.querySelectorAll('[data-direction]').forEach((item) => item.classList.toggle('active', item === button)); }));
+    render();
+  </script>
+</body>
+</html>
