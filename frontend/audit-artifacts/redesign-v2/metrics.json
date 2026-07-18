@@ -1,0 +1,109 @@
+{
+  "generatedAt": "synthetic-fixtures",
+  "metrics": [
+    {
+      "screen": "operations",
+      "state": "default",
+      "viewport": "1440x960",
+      "documentWidth": 1440,
+      "viewportWidth": 1440,
+      "documentHeight": 973,
+      "buttons": 20,
+      "icons": 29,
+      "cards": 5,
+      "kpis": 4,
+      "badges": 0
+    },
+    {
+      "screen": "operations",
+      "state": "default",
+      "viewport": "1280x800",
+      "documentWidth": 1280,
+      "viewportWidth": 1280,
+      "documentHeight": 1180,
+      "buttons": 20,
+      "icons": 29,
+      "cards": 5,
+      "kpis": 4,
+      "badges": 0
+    },
+    {
+      "screen": "operations",
+      "state": "default",
+      "viewport": "768x1024",
+      "documentWidth": 768,
+      "viewportWidth": 768,
+      "documentHeight": 1993,
+      "buttons": 20,
+      "icons": 29,
+      "cards": 5,
+      "kpis": 4,
+      "badges": 0
+    },
+    {
+      "screen": "operations",
+      "state": "default",
+      "viewport": "390x844",
+      "documentWidth": 390,
+      "viewportWidth": 390,
+      "documentHeight": 2124,
+      "buttons": 20,
+      "icons": 29,
+      "cards": 5,
+      "kpis": 4,
+      "badges": 0
+    },
+    {
+      "screen": "inbox",
+      "state": "default",
+      "viewport": "1440x960",
+      "documentWidth": 1440,
+      "viewportWidth": 1440,
+      "documentHeight": 960,
+      "buttons": 28,
+      "icons": 20,
+      "cards": 0,
+      "kpis": 0,
+      "badges": 0
+    },
+    {
+      "screen": "inbox",
+      "state": "default",
+      "viewport": "1280x800",
+      "documentWidth": 1280,
+      "viewportWidth": 1280,
+      "documentHeight": 800,
+      "buttons": 28,
+      "icons": 20,
+      "cards": 0,
+      "kpis": 0,
+      "badges": 0
+    },
+    {
+      "screen": "inbox",
+      "state": "default",
+      "viewport": "768x1024",
+      "documentWidth": 768,
+      "viewportWidth": 768,
+      "documentHeight": 1024,
+      "buttons": 28,
+      "icons": 20,
+      "cards": 0,
+      "kpis": 0,
+      "badges": 0
+    },
+    {
+      "screen": "inbox",
+      "state": "default",
+      "viewport": "390x844",
+      "documentWidth": 390,
+      "viewportWidth": 390,
+      "documentHeight": 844,
+      "buttons": 28,
+      "icons": 20,
+      "cards": 0,
+      "kpis": 0,
+      "badges": 0
+    }
+  ]
+}

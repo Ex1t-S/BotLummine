@@ -8,6 +8,34 @@ Alcance: auditoría visual, tres direcciones y prototipos. No incluye la migraci
 
 Datos: exclusivamente fixtures sintéticos. Railway, base de datos, WhatsApp y proveedores externos no fueron utilizados.
 
+## Estado de decisión y revisión V2
+
+La primera tanda A/B/C fue rechazada por baja densidad útil, exceso de espacio libre, acentos laterales poco refinados e iconografía inconsistente. No se considera una dirección aprobable ni se trasladará al producto.
+
+La revisión V2 adopta una dirección SaaS operativa más densa y fue aprobada como camino de diseño el 18 de julio de 2026. Sus reglas son:
+
+- base neutra y color principal reservado a selección, foco y acciones;
+- tipografía un punto mayor que la primera V2, con metadata legible;
+- iconografía SVG consistente;
+- paneles sólo para agrupaciones semánticas, sin cards de entidad anidadas;
+- listas continuas y tablas antes que colecciones de cajas;
+- bordes completos sutiles, sin barras decorativas en botones;
+- uso deliberado del ancho disponible y responsive progresivo.
+
+Prototipos V2 validados hasta ahora:
+
+| Pantalla | Paneles/cards | KPIs | Desborde horizontal | Estados responsive |
+|---|---:|---:|---|---|
+| Operaciones | 5 | 4 | 0 px | 1440, 1280, 768 y 390 px |
+| Inbox | 0 cards de conversación | 0 | 0 px | Desktop de tres paneles; tablet sin contexto fijo; móvil Lista → Chat |
+
+Prioridades acordadas para la siguiente etapa:
+
+1. Inbox como módulo operativo principal.
+2. Campañas con flujo guiado: objetivo, audiencia, mensaje, programación y revisión.
+3. Audiencias con presets simples y filtros avanzados bajo demanda.
+4. Analíticas orientadas a decisiones, con menos métricas simultáneas y comparación temporal clara.
+
 ## 1. Diagnóstico visual
 
 La interfaz actual es funcional, pero su gramática visual está basada en `card + borde + fondo suave + badge`. Ese patrón se repite incluso cuando el contenido es una lista, una tabla, una sección de configuración o una métrica secundaria. Como resultado, la jerarquía depende más del contenedor que de la importancia operativa.
