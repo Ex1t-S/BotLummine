@@ -5,6 +5,19 @@ test.beforeEach(async ({ request }) => {
 	await request.post('/api/demo/reset');
 });
 
+test('el resumen usa contadores de API y no mezcla borradores con fallos', async ({ page }) => {
+	await page.goto('/campaigns');
+
+	const deliveryMetric = page.locator('.campaign-os-metric').filter({ hasText: 'Entrega' });
+	await expect(deliveryMetric).toContainText('94,6%');
+	await expect(deliveryMetric).not.toContainText('0%');
+
+	const attentionMetric = page.locator('.campaign-os-metric').filter({ hasText: 'Errores pendientes' });
+	await expect(attentionMetric).toContainText('2');
+	await expect(attentionMetric).toContainText('Sólo campañas fallidas o parciales');
+	await expect(page.getByText('Últimas 12 campañas')).toBeVisible();
+});
+
 test('recorre el entorno demo sin depender del backend ni de Railway', async ({ page }) => {
 	await page.goto('/operations');
 	await expect(page.getByRole('status', { name: 'Modo demo local activo' })).toBeVisible();
@@ -68,15 +81,15 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 
 test('conecta resumen, resultados y seguimiento con la campaña elegida en la URL', async ({ page }) => {
 	await page.goto('/campaigns');
-	const finishedCampaign = page.locator('.campaign-os-row').filter({ hasText: 'Recuperación carritos · Semana 28' });
+	const finishedCampaign = page.locator('.campaign-os-row').filter({ hasText: 'Aviso de temporada · Completada' });
 	await expect(finishedCampaign).toHaveCount(1);
 	await finishedCampaign.getByRole('button', { name: 'Ver resultados' }).click();
-	await expect(page).toHaveURL(/\/campaigns\/results\?campaign=campaign-demo-finished$/);
-	await expect(page.getByRole('heading', { name: 'Recuperación carritos · Semana 28' })).toBeVisible();
+	await expect(page).toHaveURL(/\/campaigns\/results\?campaign=campaign-demo-clean$/);
+	await expect(page.getByRole('heading', { name: 'Aviso de temporada · Completada' })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Ver destinatarios' }).click();
-	await expect(page).toHaveURL(/\/campaigns\/tracking\?campaign=campaign-demo-finished$/);
-	await expect(page.getByRole('button', { name: 'Ver seguimiento de Recuperación carritos · Semana 28' })).toHaveAttribute('aria-pressed', 'true');
+	await expect(page).toHaveURL(/\/campaigns\/tracking\?campaign=campaign-demo-clean$/);
+	await expect(page.getByRole('button', { name: 'Ver seguimiento de Aviso de temporada · Completada' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('reintenta sólo fallidos de una campaña finalizada y protege los envíos aceptados', async ({ page }) => {

@@ -387,7 +387,17 @@ function makeHandler(stateRef) {
 		const templateMatch = pathname.match(/^\/campaigns\/templates\/([^/]+)$/);
 		if (templateMatch) { const index = state.templates.findIndex((item) => item.id === templateMatch[1]); if (index < 0) return sendJson(res, { error: 'Plantilla demo no encontrada.' }, 404); if (method === 'PATCH') { const body = await readBody(req); state.templates[index] = { ...state.templates[index], ...body, id: state.templates[index].id, updatedAt: new Date().toISOString() }; return sendJson(res, { template: state.templates[index], demo: true }); } if (method === 'DELETE') { state.templates.splice(index, 1); return sendJson(res, { ok: true, demo: true }); } }
 
-		if (pathname === '/campaigns' && method === 'GET') return sendJson(res, { campaigns: state.campaigns, items: state.campaigns, demo: true });
+		if (pathname === '/campaigns' && method === 'GET') {
+			const campaigns = state.campaigns.map(({ sentCount, deliveredCount, readCount, failedCount, pendingCount, ...campaign }) => ({
+				...campaign,
+				sentRecipients: sentCount,
+				deliveredRecipients: deliveredCount,
+				readRecipients: readCount,
+				failedRecipients: failedCount,
+				pendingRecipients: pendingCount,
+			}));
+			return sendJson(res, { campaigns, items: campaigns, demo: true });
+		}
 		if (pathname === '/campaigns' && method === 'POST') { const body = await readBody(req); const template = state.templates.find((item) => item.id === body.templateId); const campaign = { id: `campaign-demo-${++state.sequence}`, name: body.name || `Campaña demo ${state.sequence}`, status: 'DRAFT', templateId: body.templateId || template?.id || state.templates[0]?.id, templateName: template?.name || state.templates[0]?.name, audienceSource: body.audienceSource || body.source || 'segment', createdAt: new Date().toISOString(), totalRecipients: Number(body.totalRecipients || body.recipientIds?.length || 36), sentCount: 0, deliveredCount: 0, readCount: 0, failedCount: 0, pendingCount: Number(body.totalRecipients || body.recipientIds?.length || 36) }; state.campaigns.unshift(campaign); return sendJson(res, { campaign, id: campaign.id, demo: true }, 201); }
 		if (pathname === '/campaigns/automation-runs') return sendJson(res, { runs: [], items: [], demo: true });
 		if (pathname === '/campaigns/schedules') return sendJson(res, { schedules: [], items: [], demo: true });
