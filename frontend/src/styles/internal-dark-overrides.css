@@ -2,35 +2,35 @@
    Imported last by internal lazy pages so route CSS cannot repaint white panels. */
 
 .dark .admin-shell {
-	--ui-bg: #05070b;
-	--ui-surface: #0d0f14;
-	--ui-surface-soft: #14171f;
-	--ui-surface-muted: #1b202a;
-	--ui-border: #292f3a;
-	--ui-border-strong: #3a4352;
-	--ui-text: #e7e7ea;
-	--ui-heading: #ffffff;
-	--ui-muted: #aaaab3;
-	--ui-subtle: #777985;
-	--ui-primary: #38bdf8;
-	--ui-primary-strong: #7dd3fc;
-	--ui-primary-soft: #082f49;
-	--ui-primary-muted: #0b2537;
-	--ui-info: #7dd3fc;
-	--ui-info-soft: #082b3f;
-	--ui-success: #5bd8a0;
-	--ui-success-soft: #123426;
-	--ui-warning: #ffc46b;
-	--ui-warning-soft: #372712;
-	--ui-danger: #ff8d85;
-	--ui-danger-soft: #3b1d22;
-	--ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
-	--ui-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32);
-	--ui-shadow-lg: 0 24px 58px rgba(0, 0, 0, 0.38);
-	--ui-focus: 0 0 0 3px rgba(56, 189, 248, 0.24);
+	--ui-bg: #11141a;
+	--ui-surface: #171b23;
+	--ui-surface-soft: #1d222c;
+	--ui-surface-muted: #252c38;
+	--ui-border: #303846;
+	--ui-border-strong: #465164;
+	--ui-text: #d8dee8;
+	--ui-heading: #f1f4f8;
+	--ui-muted: #9ca7b7;
+	--ui-subtle: #7e899a;
+	--ui-primary: #8b82f6;
+	--ui-primary-strong: #aaa4ff;
+	--ui-primary-soft: #292747;
+	--ui-primary-muted: #24223b;
+	--ui-info: #8bb8e8;
+	--ui-info-soft: #1d3042;
+	--ui-success: #75c9a1;
+	--ui-success-soft: #1d332b;
+	--ui-warning: #e7b96f;
+	--ui-warning-soft: #372d1f;
+	--ui-danger: #e99892;
+	--ui-danger-soft: #3a2528;
+	--ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
+	--ui-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.22);
+	--ui-shadow-lg: 0 24px 58px rgba(0, 0, 0, 0.26);
+	--ui-focus: 0 0 0 3px rgba(139, 130, 246, 0.22);
 	background:
-		radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.12), transparent 34%),
-		linear-gradient(180deg, #000000 0%, #05070b 100%) !important;
+		radial-gradient(circle at 50% -20%, rgba(139, 130, 246, 0.06), transparent 34%),
+		linear-gradient(180deg, #0f1218 0%, #11141a 100%) !important;
 	color: var(--ui-text) !important;
 }
 
@@ -49,13 +49,13 @@
 .dark .admin-shell .admin-content {
 	background:
 		radial-gradient(circle at 50% -24%, rgba(255, 255, 255, 0.04), transparent 24rem),
-		linear-gradient(180deg, #000000 0, var(--ui-bg) 280px),
+		linear-gradient(180deg, #0f1218 0, var(--ui-bg) 280px),
 		var(--ui-bg) !important;
 	color: var(--ui-text) !important;
 }
 
 .dark .admin-shell .admin-topbar {
-	background: rgba(13, 15, 20, 0.94) !important;
+	background: rgba(23, 27, 35, 0.94) !important;
 }
 
 .dark .admin-shell .admin-brand {
@@ -98,7 +98,7 @@
 .dark .admin-shell .admin-menu-link:hover,
 .dark .admin-shell .admin-menu-link.active {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(56, 189, 248, 0.28) !important;
+	border-color: rgba(139, 130, 246, 0.28) !important;
 	color: var(--ui-heading) !important;
 }
 
@@ -747,19 +747,19 @@
 /* Campaigns dark mode hardening. Campaign route CSS has many legacy white
    backgrounds and gradients, so these route-scoped rules must use background. */
 .dark .admin-shell .admin-content .campaigns-page {
-	--ui-bg: #05070b;
-	--ui-surface: #0d0f14;
-	--ui-surface-soft: #14171f;
-	--ui-surface-muted: #1b202a;
-	--ui-border: #292f3a;
-	--ui-border-strong: #3a4352;
-	--ui-text: #e7e7ea;
-	--ui-heading: #ffffff;
-	--ui-muted: #aaaab3;
-	--ui-primary: #38bdf8;
-	--ui-primary-strong: #7dd3fc;
-	--ui-primary-muted: #0b2537;
-	--ui-primary-soft: #082f49;
+	--ui-bg: #11141a;
+	--ui-surface: #171b23;
+	--ui-surface-soft: #1d222c;
+	--ui-surface-muted: #252c38;
+	--ui-border: #303846;
+	--ui-border-strong: #465164;
+	--ui-text: #d8dee8;
+	--ui-heading: #f1f4f8;
+	--ui-muted: #9ca7b7;
+	--ui-primary: #8b82f6;
+	--ui-primary-strong: #aaa4ff;
+	--ui-primary-muted: #24223b;
+	--ui-primary-soft: #292747;
 	background: transparent !important;
 	color: var(--ui-text) !important;
 }
@@ -1747,7 +1747,56 @@
 	.selected-product-chip
 ) {
 	background: var(--ui-primary-muted) !important;
-	border-color: rgba(56, 189, 248, 0.42) !important;
+	border-color: rgba(139, 130, 246, 0.42) !important;
 	color: var(--ui-heading) !important;
-	box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.18) !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 130, 246, 0.16) !important;
+}
+
+/* Operations V3 uses route-level light surfaces. Keep semantics without bright blocks. */
+.dark .admin-shell .admin-content .operations-v3-panel,
+.dark .admin-shell .admin-content .operations-v3-kpis,
+.dark .admin-shell .admin-content .operations-page--v3 .operations-automation-panel {
+	background: var(--ui-surface, #171b23) !important;
+	border-color: var(--ui-border, #303846) !important;
+	color: var(--ui-text, #d8dee8) !important;
+	box-shadow: none !important;
+}
+
+.dark .admin-shell .admin-content .operations-v3-kpis .operations-kpi-card,
+.dark .admin-shell .admin-content .operations-v3-kpis .operations-kpi-card.kpi-card--primary,
+.dark .admin-shell .admin-content .operations-v3-kpis .operations-kpi-card.kpi-card--warning,
+.dark .admin-shell .admin-content .operations-v3-kpis .operations-kpi-card.kpi-card--success,
+.dark .admin-shell .admin-content .operations-v3-kpis .operations-kpi-card.kpi-card--danger {
+	background: var(--ui-surface-soft, #1d222c) !important;
+	border-color: var(--ui-border, #303846) !important;
+}
+
+.dark .admin-shell .admin-content .operations-v3-panel-head,
+.dark .admin-shell .admin-content .operations-v3-priority,
+.dark .admin-shell .admin-content .operations-v3-health-list button {
+	background: transparent !important;
+	border-color: var(--ui-border, #303846) !important;
+	color: var(--ui-text, #d8dee8) !important;
+}
+
+.dark .admin-shell .admin-content .operations-v3-panel-head h3,
+.dark .admin-shell .admin-content .operations-v3-priority-copy strong,
+.dark .admin-shell .admin-content .operations-v3-health-list strong {
+	color: var(--ui-heading, #f1f4f8) !important;
+}
+
+.dark .admin-shell .admin-content .operations-v3-panel-head span,
+.dark .admin-shell .admin-content .operations-v3-priority-copy small,
+.dark .admin-shell .admin-content .operations-v3-health-list button {
+	color: var(--ui-muted, #9ca7b7) !important;
+}
+
+.dark .admin-shell .admin-content .operations-v3-health-score {
+	background: var(--ui-warning-soft, #372d1f) !important;
+	color: var(--ui-warning, #e7b96f) !important;
+}
+
+.dark .admin-shell .admin-content .operations-v3-health-score.is-stable {
+	background: var(--ui-success-soft, #1d332b) !important;
+	color: var(--ui-success, #75c9a1) !important;
 }
