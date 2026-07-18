@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
 	Bot,
+	Check,
+	ChevronRight,
 	CreditCard,
+	Eye,
+	ListTree,
 	MessageSquareText,
 	PackageSearch,
 	Plus,
 	RotateCcw,
 	Save,
+	Settings2,
 	ShoppingBag,
 	Truck,
 	UserRoundCheck,
@@ -17,8 +22,8 @@ import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import '../styles/WhatsAppMenuPage.css';
 
 const ACTION_TYPES = [
-	{ value: 'SUBMENU', label: 'Abrir otro menu' },
-	{ value: 'INTENT', label: 'La IA continua la conversacion' },
+	{ value: 'SUBMENU', label: 'Abrir otro menú' },
+	{ value: 'INTENT', label: 'La IA continúa la conversación' },
 	{ value: 'MESSAGE', label: 'Responder un texto fijo' },
 	{ value: 'HUMAN', label: 'Pasar a humano' },
 ];
@@ -27,7 +32,7 @@ const INTENT_OPTIONS = [
 	{ value: 'product', label: 'Producto' },
 	{ value: 'order_status', label: 'Estado de pedido' },
 	{ value: 'payment', label: 'Pagos' },
-	{ value: 'shipping', label: 'Envios' },
+	{ value: 'shipping', label: 'Envíos' },
 	{ value: 'size_help', label: 'Talles' },
 ];
 
@@ -39,7 +44,7 @@ const OPTION_PRESETS = [
 		icon: ShoppingBag,
 		option: {
 			title: 'Ver productos',
-			description: 'Catalogo y recomendaciones',
+			description: 'Catálogo y recomendaciones',
 			aliases: ['1', 'productos', 'catalogo', 'ver productos'],
 			actionType: 'INTENT',
 			actionValue: 'product',
@@ -77,7 +82,7 @@ const OPTION_PRESETS = [
 	},
 	{
 		key: 'shipping',
-		label: 'Envios',
+		label: 'Envíos',
 		description: 'Zonas, costos o tiempos.',
 		icon: Truck,
 		option: {
@@ -92,7 +97,7 @@ const OPTION_PRESETS = [
 	{
 		key: 'message',
 		label: 'Respuesta rapida',
-		description: 'Manda un texto fijo.',
+		description: 'Envía un texto fijo.',
 		icon: MessageSquareText,
 		option: {
 			title: 'Respuesta rapida',
@@ -104,15 +109,15 @@ const OPTION_PRESETS = [
 	},
 	{
 		key: 'submenu',
-		label: 'Submenu',
+		label: 'Submenú',
 		description: 'Lleva a otro bloque de opciones.',
 		icon: Plus,
 		option: {
-			title: 'Ver mas opciones',
-			description: 'Abrir otro menu',
+			title: 'Ver más opciones',
+			description: 'Abrir otro menú',
 			aliases: ['mas', 'opciones'],
 			actionType: 'SUBMENU',
-			promptPrefix: 'Te muestro mas opciones.',
+			promptPrefix: 'Te muestro más opciones.',
 		},
 	},
 	{
@@ -134,7 +139,7 @@ const OPTION_PRESETS = [
 function createEmptyOption(nextIndex = 1) {
 	return {
 		id: `menu_option_${Date.now()}_${nextIndex}`,
-		title: 'Nueva opcion',
+		title: 'Nueva opción',
 		description: '',
 		aliases: [String(nextIndex)],
 		actionType: 'MESSAGE',
@@ -151,11 +156,11 @@ function createEmptyOption(nextIndex = 1) {
 function createEmptyMenu(nextIndex = 1) {
 	return {
 		key: `MENU_${Date.now()}_${nextIndex}`,
-		title: 'Nuevo menu',
-		headerText: 'Nuevo menu',
-		body: 'Elegi una opcion:',
+		title: 'Nuevo menú',
+		headerText: 'Nuevo menú',
+		body: 'Elegí una opción:',
 		buttonText: 'Ver opciones',
-		footerText: 'Escribi 0 o menu para volver al inicio.',
+		footerText: 'Escribí 0 o menú para volver al inicio.',
 		sectionTitle: 'Opciones',
 		textFallback: '',
 		isActive: true,
@@ -283,16 +288,16 @@ function validateMenuConfig(menuConfig = null) {
 	const menuKeys = new Set(menus.map((menu) => menu.key));
 
 	if (!menuKeys.has(menuConfig.mainMenuKey)) {
-		warnings.push('El menu inicial no existe o no esta seleccionado.');
+		warnings.push('El menú inicial no existe o no está seleccionado.');
 	}
 
 	for (const menu of menus) {
-		const menuName = menu.title || menu.key || 'Menu sin nombre';
+		const menuName = menu.title || menu.key || 'Menú sin nombre';
 		const activeOptions = (menu.options || []).filter((option) => option.isActive !== false);
 		const aliases = new Map();
 
 		if (!String(menu.title || '').trim()) {
-			warnings.push(`${menuName}: falta el titulo visible.`);
+			warnings.push(`${menuName}: falta el título visible.`);
 		}
 
 		if (!String(menu.body || '').trim()) {
@@ -300,17 +305,17 @@ function validateMenuConfig(menuConfig = null) {
 		}
 
 		if (activeOptions.length > 10) {
-			warnings.push(`${menuName}: WhatsApp permite hasta 10 opciones activas por menu.`);
+			warnings.push(`${menuName}: WhatsApp permite hasta 10 opciones activas por menú.`);
 		}
 
 		for (const option of activeOptions) {
-			const optionName = option.title || 'Opcion sin titulo';
+			const optionName = option.title || 'Opción sin título';
 			if (!String(option.title || '').trim()) {
-				warnings.push(`${menuName}: hay una opcion sin titulo.`);
+				warnings.push(`${menuName}: hay una opción sin título.`);
 			}
 
 			if (option.actionType === 'SUBMENU' && !menuKeys.has(option.actionValue)) {
-				warnings.push(`${optionName}: apunta a un submenu que no existe.`);
+				warnings.push(`${optionName}: apunta a un submenú que no existe.`);
 			}
 
 			if (option.actionType === 'MESSAGE' && !String(option.replyBody || '').trim()) {
@@ -318,11 +323,11 @@ function validateMenuConfig(menuConfig = null) {
 			}
 
 			if (option.actionType === 'HUMAN' && !String(option.replyBody || '').trim()) {
-				warnings.push(`${optionName}: conviene cargar el texto de derivacion.`);
+				warnings.push(`${optionName}: conviene cargar el texto de derivación.`);
 			}
 
 			if (option.actionType === 'INTENT' && !String(option.actionValue || '').trim()) {
-				warnings.push(`${optionName}: falta elegir que continua la IA.`);
+				warnings.push(`${optionName}: falta elegir cómo continúa la IA.`);
 			}
 
 			for (const alias of option.aliases || []) {
@@ -347,7 +352,7 @@ function getPreviewResult(option = {}, menusByKey = {}) {
 		const targetMenu = menusByKey[option.actionValue];
 		return {
 			type: 'submenu',
-			title: targetMenu ? `Abre: ${targetMenu.title}` : 'Submenu no encontrado',
+			title: targetMenu ? `Abre: ${targetMenu.title}` : 'Submenú no encontrado',
 			body: option.promptPrefix || 'Abre otro bloque de opciones.',
 			targetMenu,
 		};
@@ -356,7 +361,7 @@ function getPreviewResult(option = {}, menusByKey = {}) {
 	if (option.actionType === 'INTENT') {
 		return {
 			type: 'intent',
-			title: `La IA continua con: ${getIntentLabel(option.actionValue)}`,
+			title: `La IA continúa con: ${getIntentLabel(option.actionValue)}`,
 			body: option.effectiveMessageBody || 'La IA usa el contexto del chat y responde el proximo paso.',
 		};
 	}
@@ -411,7 +416,7 @@ export default function WhatsAppMenuPage() {
 			setPreviewMenuKey(nextMenuKey);
 			setPreviewSelection(null);
 		} catch (requestError) {
-			setError(requestError?.response?.data?.error || 'No pude cargar el menu de WhatsApp.');
+			setError(requestError?.response?.data?.error || 'No pude cargar el menú de WhatsApp.');
 		} finally {
 			setLoading(false);
 		}
@@ -437,6 +442,23 @@ export default function WhatsAppMenuPage() {
 		[menusByKey, previewSelection]
 	);
 	const validationWarnings = useMemo(() => validateMenuConfig(config), [config]);
+	const buildSteps = useMemo(() => [
+		{
+			label: 'Estructura',
+			description: `${config?.menus?.length || 0} ${(config?.menus?.length || 0) === 1 ? 'menú' : 'menús'}`,
+			complete: Boolean(config?.menus?.length && config?.mainMenuKey),
+		},
+		{
+			label: 'Mensaje',
+			description: selectedMenu?.body?.trim() ? 'Contenido listo' : 'Falta el texto principal',
+			complete: Boolean(selectedMenu?.title?.trim() && selectedMenu?.body?.trim()),
+		},
+		{
+			label: 'Opciones',
+			description: `${sortedSelectedOptions.length} configuradas`,
+			complete: sortedSelectedOptions.length > 0,
+		},
+	], [config?.mainMenuKey, config?.menus?.length, selectedMenu, sortedSelectedOptions.length]);
 
 	function updateMenuField(menuKey, field, value) {
 		setConfig((current) => {
@@ -613,9 +635,9 @@ export default function WhatsAppMenuPage() {
 			setSelectedMenuKey(nextMenuKey);
 			setPreviewMenuKey(nextMenuKey);
 			setPreviewSelection(null);
-			setFeedback('Menu guardado correctamente.');
+			setFeedback('Menú guardado correctamente.');
 		} catch (requestError) {
-			setError(requestError?.response?.data?.error || 'No pude guardar los cambios del menu.');
+			setError(requestError?.response?.data?.error || 'No pude guardar los cambios del menú.');
 		} finally {
 			setSaving(false);
 		}
@@ -637,9 +659,9 @@ export default function WhatsAppMenuPage() {
 			setSelectedMenuKey(nextMenuKey);
 			setPreviewMenuKey(nextMenuKey);
 			setPreviewSelection(null);
-			setFeedback('Se restauro el menu por defecto.');
+			setFeedback('Se restauró el menú original.');
 		} catch (requestError) {
-			setError(requestError?.response?.data?.error || 'No pude restaurar el menu por defecto.');
+			setError(requestError?.response?.data?.error || 'No pude restaurar el menú original.');
 		} finally {
 			setSaving(false);
 		}
@@ -650,8 +672,8 @@ export default function WhatsAppMenuPage() {
 			<div className="wam-page">
 				<EmptyState
 					tone="loading"
-					title="Cargando editor de menu"
-					description="Estamos trayendo la configuracion activa de WhatsApp."
+					title="Cargando diseñador de menú"
+					description="Estamos trayendo la configuración activa de WhatsApp."
 					className="wam-empty"
 				/>
 			</div>
@@ -662,8 +684,8 @@ export default function WhatsAppMenuPage() {
 		return (
 			<div className="wam-page">
 				<EmptyState
-					title="No hay configuracion para mostrar"
-					description="Crea o restaura una configuracion para editar el menu inicial."
+					title="No hay una configuración para mostrar"
+					description="Creá o restaurá una configuración para editar el menú inicial."
 					className="wam-empty"
 				/>
 			</div>
@@ -674,9 +696,9 @@ export default function WhatsAppMenuPage() {
 		<div className="wam-page">
 			<PageHeader
 				className="wam-hero"
-				eyebrow="Automatizacion WhatsApp"
-				title="Constructor de menu"
-				description="Arma el recorrido que ve el cliente con opciones simples, presets y una vista previa interactiva."
+				eyebrow="Experiencia de WhatsApp"
+				title="Diseñador de menú"
+				description="Armá el recorrido de atención y comprobá el resultado en tiempo real, tal como lo verá tu cliente."
 			>
 				<div className="wam-hero__actions">
 					<ActionButton
@@ -686,36 +708,36 @@ export default function WhatsAppMenuPage() {
 						disabled={saving}
 						icon={RotateCcw}
 					>
-						Restaurar default
+						Restaurar original
 					</ActionButton>
 
 					<ActionButton className="wam-button wam-button--primary" onClick={handleSave} disabled={saving} icon={Save}>
-						{saving ? 'Guardando' : 'Guardar cambios'}
+						{saving ? 'Guardando…' : 'Guardar menú'}
 					</ActionButton>
 				</div>
 			</PageHeader>
 
-			<section className="wam-card wam-topbar">
-				<div className="wam-section-head">
+			<section className="wam-setup" aria-labelledby="wam-setup-title">
+				<div className="wam-setup__intro">
+					<Settings2 size={18} aria-hidden="true" />
 					<div>
-						<span className="wam-section-label">Configuracion general</span>
-						<h2>Ajustes base</h2>
-						<p>Define el nombre interno y que menu se abre primero.</p>
+						<h2 id="wam-setup-title">Configuración</h2>
+						<p>Datos internos del recorrido</p>
 					</div>
 				</div>
 
-				<div className="wam-form-grid">
+				<div className="wam-form-grid wam-setup__fields">
 					<label>
-						<span>Nombre de la configuracion</span>
+						<span>Nombre interno</span>
 						<input
 							value={settingsName}
 							onChange={(event) => setSettingsName(event.target.value)}
-							placeholder="Configuracion principal"
+							placeholder="Menú principal"
 						/>
 					</label>
 
 					<label>
-						<span>Menu inicial</span>
+						<span>Primer menú que verá el cliente</span>
 						<select
 							value={config.mainMenuKey}
 							onChange={(event) => {
@@ -738,16 +760,16 @@ export default function WhatsAppMenuPage() {
 			{error ? <div className="wam-alert wam-alert--error">{error}</div> : null}
 
 			<div className="wam-layout">
-				<aside className="wam-card wam-sidebar">
+				<nav className="wam-card wam-sidebar" aria-label="Menús del recorrido">
 					<div className="wam-sidebar__header">
 						<div>
-							<span className="wam-section-label">Estructura</span>
-							<h2>Menus</h2>
+							<span className="wam-section-label">Recorrido</span>
+							<h2>Menús</h2>
 						</div>
 
 						<button type="button" className="wam-button wam-button--secondary wam-button--small" onClick={addMenu}>
 							<Plus size={14} aria-hidden="true" />
-							Agregar
+							Nuevo menú
 						</button>
 					</div>
 
@@ -764,12 +786,12 @@ export default function WhatsAppMenuPage() {
 									onClick={() => setSelectedMenuKey(menu.key)}
 								>
 									<div className="wam-menu-item__top">
-										<span className="wam-menu-item__index">Menu {index + 1}</span>
+										<span className="wam-menu-item__index">Paso {index + 1}</span>
 										{config.mainMenuKey === menu.key ? <span className="wam-chip">Inicial</span> : null}
 									</div>
 
 									<strong>{menu.title}</strong>
-									<p>{menu.body || 'Sin texto principal'}</p>
+									<p>{menu.body || 'Todavía no tiene un mensaje'}</p>
 
 									<div className="wam-menu-item__meta">
 										<span>{totalOptions} opciones</span>
@@ -778,16 +800,16 @@ export default function WhatsAppMenuPage() {
 							);
 						})}
 					</div>
-				</aside>
+				</nav>
 
 				<section className="wam-card wam-editor">
 					{selectedMenu ? (
 						<>
 							<div className="wam-editor__header">
 								<div>
-									<span className="wam-section-label">Contenido</span>
+									<span className="wam-section-label">Edición</span>
 									<h2>{selectedMenu.title}</h2>
-									<p>Edita lo que ve el cliente y que pasa cuando toca cada opcion.</p>
+									<p>Definí el mensaje y qué sucede cuando el cliente elige una opción.</p>
 								</div>
 
 								<button
@@ -795,18 +817,34 @@ export default function WhatsAppMenuPage() {
 									className="wam-button wam-button--danger wam-button--small"
 									onClick={() => removeMenu(selectedMenu.key)}
 								>
-									Eliminar menu
+									Eliminar menú
 								</button>
 							</div>
 
+							<ol className="wam-steps" aria-label="Progreso del menú">
+								{buildSteps.map((step, index) => (
+									<li key={step.label} className={step.complete ? 'is-complete' : ''}>
+										<span className="wam-step__number">{step.complete ? <Check size={14} aria-hidden="true" /> : index + 1}</span>
+										<span>
+											<strong>{step.label}</strong>
+											<small>{step.description}</small>
+										</span>
+									</li>
+								))}
+							</ol>
+
 							<div className="wam-block">
 								<div className="wam-block__header">
-									<h3>Mensaje del menu</h3>
+									<div>
+										<span className="wam-block__step">Paso 1</span>
+										<h3>Mensaje del menú</h3>
+										<p>Es lo primero que recibirá el cliente.</p>
+									</div>
 								</div>
 
 								<div className="wam-form-grid">
 									<label>
-										<span>Titulo interno</span>
+										<span>Nombre de este paso</span>
 										<input
 											value={selectedMenu.title}
 											onChange={(event) => updateMenuField(selectedMenu.key, 'title', event.target.value)}
@@ -814,62 +852,69 @@ export default function WhatsAppMenuPage() {
 									</label>
 
 									<label>
-										<span>Encabezado visible</span>
+										<span>Encabezado para el cliente</span>
 										<input
 											value={selectedMenu.headerText}
 											onChange={(event) => updateMenuField(selectedMenu.key, 'headerText', event.target.value)}
 										/>
 									</label>
 
-									<label>
-										<span>Boton de WhatsApp</span>
-										<input
-											value={selectedMenu.buttonText}
-											onChange={(event) => updateMenuField(selectedMenu.key, 'buttonText', event.target.value)}
-										/>
-									</label>
-
-									<label>
-										<span>Orden</span>
-										<input
-											type="number"
-											value={selectedMenu.sortOrder || 1}
-											onChange={(event) =>
-												updateMenuField(selectedMenu.key, 'sortOrder', Number(event.target.value) || 1)
-											}
-										/>
-									</label>
-
 									<label className="wam-form-grid__full">
-										<span>Texto principal</span>
+										<span>Mensaje principal</span>
 										<textarea
 											rows={3}
 											value={selectedMenu.body}
 											onChange={(event) => updateMenuField(selectedMenu.key, 'body', event.target.value)}
 										/>
 									</label>
-
-									<label>
-										<span>Pie del mensaje</span>
-										<input
-											value={selectedMenu.footerText}
-											onChange={(event) => updateMenuField(selectedMenu.key, 'footerText', event.target.value)}
-										/>
-									</label>
-
-									<label>
-										<span>Titulo de lista</span>
-										<input
-											value={selectedMenu.sectionTitle || ''}
-											onChange={(event) => updateMenuField(selectedMenu.key, 'sectionTitle', event.target.value)}
-										/>
-									</label>
 								</div>
+
+								<details className="wam-message-details">
+									<summary>
+										<span><Settings2 size={16} aria-hidden="true" /> Detalles del mensaje</span>
+										<small>Botón, pie, título de lista y orden</small>
+									</summary>
+									<div className="wam-form-grid">
+										<label>
+											<span>Texto del botón</span>
+											<input
+												value={selectedMenu.buttonText}
+												onChange={(event) => updateMenuField(selectedMenu.key, 'buttonText', event.target.value)}
+											/>
+										</label>
+										<label>
+											<span>Título de la lista</span>
+											<input
+												value={selectedMenu.sectionTitle || ''}
+												onChange={(event) => updateMenuField(selectedMenu.key, 'sectionTitle', event.target.value)}
+											/>
+										</label>
+										<label>
+											<span>Pie del mensaje</span>
+											<input
+												value={selectedMenu.footerText}
+												onChange={(event) => updateMenuField(selectedMenu.key, 'footerText', event.target.value)}
+											/>
+										</label>
+										<label>
+											<span>Orden del menú</span>
+											<input
+												type="number"
+												value={selectedMenu.sortOrder || 1}
+												onChange={(event) => updateMenuField(selectedMenu.key, 'sortOrder', Number(event.target.value) || 1)}
+											/>
+										</label>
+									</div>
+								</details>
 							</div>
 
 							<div className="wam-block">
 								<div className="wam-block__header">
-									<h3>Agregar opcion</h3>
+									<div>
+										<span className="wam-block__step">Paso 2</span>
+										<h3>Agregar una opción</h3>
+										<p>Elegí qué necesita resolver el cliente.</p>
+									</div>
 								</div>
 								<div className="wam-preset-grid">
 									{OPTION_PRESETS.map((preset) => {
@@ -894,7 +939,10 @@ export default function WhatsAppMenuPage() {
 
 							<div className="wam-block">
 								<div className="wam-block__header wam-block__header--between">
-									<h3>Opciones del menu</h3>
+									<div>
+										<span className="wam-block__step">Paso 3</span>
+										<h3>Opciones del menú</h3>
+									</div>
 									<span className="wam-pill wam-pill--soft">{sortedSelectedOptions.length} configuradas</span>
 								</div>
 
@@ -904,7 +952,7 @@ export default function WhatsAppMenuPage() {
 											<summary className="wam-option-card__summary">
 												<div className="wam-option-card__summary-main">
 													<span className="wam-option-card__eyebrow">Opcion {index + 1}</span>
-													<strong>{option.title || 'Nueva opcion'}</strong>
+											<strong>{option.title || 'Nueva opción'}</strong>
 													<p>{option.description || getActionLabel(option.actionType)}</p>
 												</div>
 
@@ -927,7 +975,7 @@ export default function WhatsAppMenuPage() {
 
 												<div className="wam-form-grid">
 													<label>
-														<span>Texto de la opcion</span>
+												<span>Texto de la opción</span>
 														<input
 															value={option.title}
 															onChange={(event) => updateOptionField(selectedMenu.key, option.id, 'title', event.target.value)}
@@ -986,7 +1034,7 @@ export default function WhatsAppMenuPage() {
 																		updateOptionField(selectedMenu.key, option.id, 'actionValue', event.target.value)
 																	}
 																>
-																	<option value="">Elegir menu</option>
+															<option value="">Elegir menú</option>
 																	{config.menus.map((menu) => (
 																		<option key={menu.key} value={menu.key}>
 																			{menu.title}
@@ -1010,7 +1058,7 @@ export default function WhatsAppMenuPage() {
 													{option.actionType === 'INTENT' ? (
 														<>
 															<label>
-																<span>La IA continua con</span>
+														<span>La IA continúa con</span>
 																<select
 																	value={option.actionValue || ''}
 																	onChange={(event) =>
@@ -1045,7 +1093,7 @@ export default function WhatsAppMenuPage() {
 
 													{option.actionType === 'MESSAGE' || option.actionType === 'HUMAN' ? (
 														<label className="wam-form-grid__full">
-															<span>{option.actionType === 'HUMAN' ? 'Texto de derivacion' : 'Respuesta automatica'}</span>
+													<span>{option.actionType === 'HUMAN' ? 'Texto de derivación' : 'Respuesta automática'}</span>
 															<textarea
 																rows={4}
 																value={option.replyBody || ''}
@@ -1062,7 +1110,7 @@ export default function WhatsAppMenuPage() {
 
 													<div className="wam-form-grid">
 														<label className="wam-form-grid__full">
-															<span>Palabras que activan esta opcion</span>
+															<span>Palabras que activan esta opción</span>
 															<input
 																value={
 																	textDrafts[getDraftKey(selectedMenu.key, option.id, 'aliases')] ??
@@ -1121,7 +1169,7 @@ export default function WhatsAppMenuPage() {
 														</label>
 
 														<label className="wam-form-grid__full">
-															<span>Productos de interes</span>
+															<span>Productos de interés</span>
 															<input
 																value={
 																	textDrafts[getDraftKey(selectedMenu.key, option.id, 'interestedProducts')] ??
@@ -1159,62 +1207,82 @@ export default function WhatsAppMenuPage() {
 							</div>
 						</>
 					) : (
-						<div className="wam-empty">Elegi un menu para editar.</div>
+						<div className="wam-empty">Elegí un menú para editar.</div>
 					)}
 				</section>
 
 				<aside className="wam-card wam-preview">
 					<div className="wam-preview__header">
 						<div>
-							<span className="wam-section-label">Preview</span>
-							<h2>Probar recorrido</h2>
-							<p>Toca una opcion para ver el siguiente paso.</p>
+							<span className="wam-section-label"><Eye size={13} aria-hidden="true" /> Vista en vivo</span>
+							<h2>Así lo verá tu cliente</h2>
+							<p>Se actualiza mientras editás. Tocá una opción para probar el recorrido.</p>
 						</div>
 						<button type="button" className="wam-button wam-button--secondary wam-button--small" onClick={resetPreview}>
-							Inicio
+							Volver al inicio
 						</button>
 					</div>
 
 					{previewMenu ? (
 						<>
-							<div className="wam-flow">
+							<div className="wam-flow" aria-label="Recorrido de la vista previa">
+								<ListTree size={14} aria-hidden="true" />
 								<span>{previewMenu.title}</span>
+								{previewSelection ? <ChevronRight size={13} aria-hidden="true" /> : null}
 								{previewSelection ? <span>{previewSelection.title}</span> : null}
 							</div>
 
-							<div className="wam-phone">
+							<div className="wam-phone" aria-label="Simulación del menú en WhatsApp" aria-live="polite">
 								<div className="wam-phone__top">
-									<div className="wam-phone__avatar">M</div>
+									<div className="wam-phone__back" aria-hidden="true">‹</div>
+									<div className="wam-phone__avatar">L</div>
 									<div>
-										<strong>{previewMenu.headerText || previewMenu.title || 'Tu marca'}</strong>
-										<span>Mensaje interactivo</span>
+										<strong>Lummine</strong>
+										<span>Cuenta de empresa</span>
 									</div>
+									<span className="wam-phone__online">en línea</span>
 								</div>
 
 								<div className="wam-phone__screen">
+									<div className="wam-phone__date">Hoy</div>
 									<div className="wam-phone__bubble">
+										{previewMenu.headerText ? <strong className="wam-phone__heading">{previewMenu.headerText}</strong> : null}
 										<p>{previewMenu.body}</p>
+										<small>{previewMenu.footerText}</small>
+										<span className="wam-phone__time">10:42</span>
+									</div>
 
+
+									<div className="wam-phone__list" role="group" aria-label={previewMenu.sectionTitle || 'Opciones disponibles'}>
+										<div className="wam-phone__list-title">
+											<span>{previewMenu.sectionTitle || 'Opciones disponibles'}</span>
+											<small>{previewOptions.length} {previewOptions.length === 1 ? 'opción' : 'opciones'}</small>
+										</div>
 										<div className="wam-phone__options">
-											{previewOptions.map((option) => (
+											{previewOptions.length ? previewOptions.map((option) => (
 												<button
 													type="button"
 													key={option.id}
 													className={`wam-phone__option ${previewSelection?.id === option.id ? 'is-selected' : ''}`}
 													onClick={() => handlePreviewOption(option)}
 												>
-													<strong>{option.title}</strong>
-													<span>{option.description || getActionLabel(option.actionType)}</span>
+													<span className="wam-phone__option-index">{String(previewOptions.indexOf(option) + 1).padStart(2, '0')}</span>
+													<span>
+														<strong>{option.title}</strong>
+														<small>{option.description || getActionLabel(option.actionType)}</small>
+													</span>
+													<ChevronRight size={15} aria-hidden="true" />
 												</button>
-											))}
+											)) : (
+												<div className="wam-phone__empty">Agregá una opción para verla acá.</div>
+											)}
 										</div>
-
-										<small>{previewMenu.footerText}</small>
 									</div>
 
-									<button type="button" className="wam-phone__button">
-										{previewMenu.buttonText}
-									</button>
+									<div className="wam-phone__composer" aria-hidden="true">
+										<span>Mensaje</span>
+										<div>›</div>
+									</div>
 
 									{previewResult ? (
 										<div className={`wam-preview-result is-${previewResult.type}`}>
@@ -1231,7 +1299,7 @@ export default function WhatsAppMenuPage() {
 							</div>
 
 							<div className="wam-validation">
-								<strong>Chequeos antes de guardar</strong>
+								<strong>{validationWarnings.length ? 'Revisá antes de guardar' : 'Listo para guardar'}</strong>
 								{validationWarnings.length ? (
 									<ul>
 										{validationWarnings.slice(0, 8).map((warning) => (
@@ -1239,7 +1307,7 @@ export default function WhatsAppMenuPage() {
 										))}
 									</ul>
 								) : (
-									<p>El menu no tiene advertencias visibles.</p>
+									<p>No encontramos advertencias en este recorrido.</p>
 								)}
 							</div>
 						</>

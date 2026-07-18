@@ -139,12 +139,37 @@ function createInitialState() {
 		displayCreatedAt: new Date(createdAt).toLocaleString('es-AR'), shippingCity: 'Ciudad Demo', shippingProvince: 'Provincia Demo',
 	}));
 
+	const menuSettings = {
+		name: 'Menú de atención',
+		config: {
+			version: 1,
+			mainMenuKey: 'MAIN',
+			menus: [{
+				key: 'MAIN',
+				title: 'Menú principal',
+				headerText: '¡Hola! ¿Cómo podemos ayudarte?',
+				body: 'Elegí una opción y te llevamos al lugar correcto.',
+				buttonText: 'Ver opciones',
+				footerText: 'Podés volver al inicio cuando quieras.',
+				sectionTitle: '¿Qué necesitás resolver?',
+				isActive: true,
+				sortOrder: 1,
+				options: [
+					{ id: 'menu-demo-products', title: 'Ver productos', description: 'Catálogo y recomendaciones', aliases: ['1', 'productos'], actionType: 'INTENT', actionValue: 'product', effectiveMessageBody: 'Quiero ver productos', statePatch: { salesStage: 'DISCOVERY' }, isActive: true, sortOrder: 1 },
+					{ id: 'menu-demo-orders', title: 'Seguir mi pedido', description: 'Estado y entrega', aliases: ['2', 'pedido'], actionType: 'INTENT', actionValue: 'order_status', effectiveMessageBody: 'Quiero saber el estado de mi pedido', statePatch: {}, isActive: true, sortOrder: 2 },
+					{ id: 'menu-demo-human', title: 'Hablar con una persona', description: 'Atención del equipo', aliases: ['3', 'humano'], actionType: 'HUMAN', actionValue: 'human', replyBody: 'Te conectamos con una persona del equipo.', statePatch: {}, isActive: true, sortOrder: 3 },
+				],
+			}],
+		},
+	};
+
 	return {
 		conversations,
 		paymentActions: [{ id: 'payment-action-demo-1', conversationId: 'conversation-demo-payment', action: 'REQUEST_NEW_PROOF', previousQueue: 'PAYMENT_REVIEW', resultQueue: 'PAYMENT_REVIEW', reason: 'El archivo sintético anterior era ilegible.', actorUserId: demoUser.id, createdAt: '2026-07-18T13:30:00.000Z' }],
 		templates,
 		campaigns,
 		carts,
+		menuSettings,
 		aiSession: { id: 'ai-session-demo-local', fixtureKey: 'blank', messages: [], createdAt: DEMO_NOW },
 		sequence: 100,
 	};
@@ -381,7 +406,16 @@ function makeHandler(stateRef) {
 			demo: true,
 		});
 		if (pathname === '/tiendanube/status' || pathname === '/shopify/status') return sendJson(res, { connected: false, configured: false, demo: true });
-		if (pathname === '/whatsapp-menu' && method === 'GET') return sendJson(res, { settings: { name: 'Menú Demo', config: { version: 1, mainMenuKey: 'MAIN', menus: [{ key: 'MAIN', title: 'Menú principal', headerText: 'Hola', body: 'Elegí una opción:', buttonText: 'Ver opciones', footerText: 'Entorno demo', isActive: true, sortOrder: 1, options: [] }] } }, demo: true });
+		if (pathname === '/whatsapp-menu' && method === 'GET') return sendJson(res, { settings: clone(state.menuSettings), demo: true });
+		if (pathname === '/whatsapp-menu' && method === 'PUT') {
+			const body = await readBody(req);
+			state.menuSettings = { name: body.name || 'Menú de atención', config: clone(body.config || state.menuSettings.config) };
+			return sendJson(res, { settings: clone(state.menuSettings), demo: true, deliveredExternally: false });
+		}
+		if (pathname === '/whatsapp-menu/reset' && method === 'POST') {
+			state.menuSettings = createInitialState().menuSettings;
+			return sendJson(res, { settings: clone(state.menuSettings), demo: true, deliveredExternally: false });
+		}
 
 		if (pathname === '/ai-lab/sessions' && method === 'POST') {
 			state.aiSession = { id: 'ai-session-demo-local', fixtureKey: 'blank', messages: [], createdAt: new Date().toISOString(), demo: true };

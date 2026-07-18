@@ -96,6 +96,33 @@ test('mantiene el shell compacto y sin overflow en móvil', async ({ page }) => 
 	}
 });
 
+test('permite diseñar y comprobar el menú de WhatsApp en tiempo real', async ({ page }) => {
+	await page.goto('/whatsapp-menu');
+	await expect(page.getByRole('heading', { name: 'Diseñador de menú' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Así lo verá tu cliente' })).toBeVisible();
+
+	await page.getByLabel('Mensaje principal').fill('Hola, elegí cómo podemos ayudarte hoy.');
+	await expect(page.locator('.wam-phone__bubble').getByText('Hola, elegí cómo podemos ayudarte hoy.')).toBeVisible();
+
+	const previewOption = page.locator('.wam-phone').getByRole('button', { name: '01 Ver productos Catálogo y recomendaciones' });
+	await expect(previewOption).toBeVisible();
+	await previewOption.click();
+	await expect(page.locator('.wam-phone').getByText('La IA continúa con: Producto')).toBeVisible();
+	await page.getByRole('button', { name: 'Guardar menú' }).click();
+	await expect(page.getByText('Menú guardado correctamente.')).toBeVisible();
+
+	await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+	await expect(page.locator('html')).toHaveClass(/dark/);
+	await expect(page.locator('.wam-preview')).toBeVisible();
+});
+
+test('mantiene visible y usable el diseñador de menú en móvil', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/whatsapp-menu');
+	await expect(page.getByRole('heading', { name: 'Así lo verá tu cliente' })).toBeVisible();
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('simula creación y lanzamiento sin delivery externo', async ({ request }) => {
 	const createdResponse = await request.post('/api/campaigns', {
 		data: {
