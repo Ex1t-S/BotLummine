@@ -20,9 +20,8 @@ import {
 	Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import api from '../lib/api.js';
+import api, { resolveApiUrl } from '../lib/api.js';
 import './DashboardLayout.css';
-import logoBladeIA from '../assets/bladeia-logo.svg';
 import { canUseAiLab, isAdminUser, isAiLabOnlyWorkspace, isPlatformAdminUser } from '../lib/authz.js';
 import {
 	getFrequentInternalPaths,
@@ -132,6 +131,10 @@ export default function DashboardLayout() {
 	const brandName = isPlatformAdmin
 		? 'Admin plataforma'
 		: (workspace?.aiConfig?.businessName || workspace?.name || 'Marca');
+	const storeLogoUrl = !isPlatformAdmin ? resolveApiUrl(workspace?.branding?.logoUrl || '') : '';
+	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
+	const visibleStoreLogoUrl = storeLogoUrl && !brandLogoFailed ? storeLogoUrl : '';
+	const brandInitial = brandName.trim().charAt(0).toUpperCase() || 'M';
 	const userDisplayName = user?.name || user?.email || 'Usuario';
 	const roleLabel = isPlatformAdmin ? 'Superadministrador' : (isAdmin ? 'Administrador' : 'Agente');
 	const userInitials = userDisplayName
@@ -201,15 +204,11 @@ export default function DashboardLayout() {
 			<aside className="admin-sidebar">
 				<div className="admin-brand">
 					<div className="admin-brand-mark admin-brand-mark--logo">
-						<img
-							src={logoBladeIA}
-							alt="BladeIA"
-							className="admin-brand-logo"
-						/>
+						{visibleStoreLogoUrl ? <img src={visibleStoreLogoUrl} alt={`${brandName} logo`} className="admin-brand-logo" onError={() => setBrandLogoFailed(true)} /> : <span className="admin-brand-fallback" aria-hidden="true">{brandInitial}</span>}
 					</div>
 
 					<div className="admin-brand-copy">
-						<h1>BladeIA</h1>
+						<h1>{isPlatformAdmin ? 'BladeIA' : brandName}</h1>
 					</div>
 					{demoMode ? <span className="admin-demo-mobile">Demo</span> : null}
 				</div>

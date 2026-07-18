@@ -5,6 +5,16 @@ test.beforeEach(async ({ request }) => {
 	await request.post('/api/demo/reset');
 });
 
+test('el resumen usa contadores de API y no mezcla borradores con fallos', async ({ page }) => {
+	await page.goto('/campaigns');
+	const deliveryMetric = page.locator('.campaign-os-metric').filter({ hasText: 'Entrega' });
+	await expect(deliveryMetric).toContainText('94');
+	await expect(deliveryMetric).not.toContainText('0%');
+	const attentionMetric = page.locator('.campaign-os-metric').filter({ hasText: 'Errores pendientes' });
+	await expect(attentionMetric).toContainText('2');
+	await expect(attentionMetric).toContainText('Sólo campañas fallidas o parciales');
+});
+
 test('recorre el entorno demo sin depender del backend ni de Railway', async ({ page }) => {
 	await page.goto('/operations');
 	await expect(page.getByRole('status', { name: 'Modo demo local activo' })).toBeVisible();

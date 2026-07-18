@@ -51,6 +51,14 @@ function number(value) {
 	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
 }
 
+function campaignCount(campaign = {}, ...keys) {
+	for (const key of keys) {
+		const value = Number(campaign?.[key]);
+		if (Number.isFinite(value)) return value;
+	}
+	return 0;
+}
+
 function currency(value, code = 'ARS') {
 	return new Intl.NumberFormat('es-AR', {
 		style: 'currency',
@@ -70,8 +78,10 @@ function date(value) {
 	return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(parsed);
 }
 
-function statusMeta(status = '') {
+function statusMeta(status = '', campaign = {}) {
 	const value = String(status || 'DRAFT').toUpperCase();
+	const failed = campaignCount(campaign, 'failedCount', 'failedRecipients');
+	if (failed > 0 && !['RUNNING', 'QUEUED'].includes(value)) return { label: 'Requiere atención', tone: 'attention' };
 	if (['RUNNING', 'QUEUED'].includes(value)) return { label: 'En curso', tone: 'running' };
 	if (['FINISHED', 'COMPLETED'].includes(value)) return { label: 'Finalizada', tone: 'finished' };
 	if (['FAILED', 'PARTIAL'].includes(value)) return { label: 'Requiere atención', tone: 'attention' };
@@ -89,9 +99,10 @@ function audienceLabel(source = '') {
 
 function nextCampaignAction(campaign = {}) {
 	const status = String(campaign.status || '').toUpperCase();
+	const failed = campaignCount(campaign, 'failedCount', 'failedRecipients');
 	if (status === 'DRAFT') return { label: 'Completar', to: `/campaigns/segment?draft=${campaign.id}` };
 	if (['RUNNING', 'QUEUED'].includes(status)) return { label: 'Monitorear', to: `/campaigns/tracking?campaign=${campaign.id}` };
-	if (['FAILED', 'PARTIAL'].includes(status)) return { label: 'Resolver', to: `/campaigns/tracking?campaign=${campaign.id}` };
+	if (failed > 0 || ['FAILED', 'PARTIAL'].includes(status)) return { label: 'Resolver', to: `/campaigns/tracking?campaign=${campaign.id}` };
 	return { label: 'Ver resultados', to: `/campaigns/results?campaign=${campaign.id}` };
 }
 
@@ -146,7 +157,7 @@ export function CampaignOverview() {
 		queryKey: ['campaign-os', 'overview'],
 		queryFn: async () => {
 			const [campaignData, templateData, statsData] = await Promise.all([
-				fetchCampaigns({ page: 1, pageSize: 12 }),
+				fetchCampaigns({ limit: 12 }),
 				fetchTemplates(),
 				fetchCampaignOverview(),
 			]);
@@ -171,12 +182,18 @@ export function CampaignOverview() {
 	const templates = getCollection(overviewQuery.data?.templateData, ['templates', 'items']);
 	const stats = overviewQuery.data?.statsData?.stats || overviewQuery.data?.statsData || {};
 	const active = campaigns.filter((item) => ['RUNNING', 'QUEUED'].includes(String(item.status || '').toUpperCase())).length;
-	const attention = campaigns.filter((item) => ['DRAFT', 'FAILED', 'PARTIAL'].includes(String(item.status || '').toUpperCase())).length;
-	const sent = campaigns.reduce((total, item) => total + Number(item.sentCount || 0), 0);
-	const delivered = campaigns.reduce((total, item) => total + Number(item.deliveredCount || 0), 0);
+	const attention = campaigns.filter((item) => {
+		const status = String(item.status || '').toUpperCase();
+		return ['FAILED', 'PARTIAL'].includes(status) || campaignCount(item, 'failedCount', 'failedRecipients') > 0;
+	}).length;
+	const sent = campaigns.reduce((total, item) => total + campaignCount(item, 'sentCount', 'sentRecipients'), 0);
+	const delivered = campaigns.reduce((total, item) => total + campaignCount(item, 'deliveredCount', 'deliveredRecipients'), 0);
 	const deliveryRate = sent ? (delivered / sent) * 100 : 0;
 	const approvedTemplates = templates.filter((item) => String(item.status || '').toUpperCase() === 'APPROVED').length;
-	const nextAttention = campaigns.find((item) => ['FAILED', 'PARTIAL', 'DRAFT'].includes(String(item.status || '').toUpperCase()));
+	const nextAttention = campaigns.find((item) => {
+		const status = String(item.status || '').toUpperCase();
+		return ['FAILED', 'PARTIAL'].includes(status) || campaignCount(item, 'failedCount', 'failedRecipients') > 0;
+	});
 
 	return (
 		<div className="campaign-os-overview">
@@ -187,18 +204,19 @@ export function CampaignOverview() {
 
 			<div className="campaign-os-metrics" aria-label="Indicadores principales de campañas">
 				<CampaignMetric label="En curso" value={number(active)} helper="Campañas enviando ahora" tone="primary" />
-				<CampaignMetric label="Entrega" value={percent(deliveryRate)} helper={`${number(delivered)} mensajes entregados`} tone={deliveryRate >= 90 ? 'success' : 'warning'} />
-				<CampaignMetric label="Requieren acción" value={number(attention)} helper="Borradores o campañas con error" tone={attention ? 'warning' : 'success'} />
-				<CampaignMetric label="Ingresos atribuidos" value={currency(stats.attributedRevenue, stats.attributedCurrency || 'ARS')} helper={`${number(stats.purchasedRecipients)} compras con señal`} />
+				<CampaignMetric label="Entrega" value={sent ? percent(deliveryRate) : '—'} helper={sent ? `${number(delivered)} mensajes entregados` : 'Sin envíos aceptados en la selección'} tone={sent && deliveryRate >= 90 ? 'success' : 'warning'} />
+				<CampaignMetric label="Errores pendientes" value={number(attention)} helper="Sólo campañas fallidas o parciales" tone={attention ? 'warning' : 'success'} />
+				<CampaignMetric label="Ingresos atribuidos" value={currency(stats.attributedRevenue, stats.attributedCurrency || 'ARS')} helper={`Histórico · ${number(stats.purchasedRecipients)} compras con señal`} />
 			</div>
 
 			<div className="campaign-os-dashboard-grid">
 				<section className="campaign-os-list" aria-labelledby="campaign-os-active-title">
 					<div className="campaign-os-section-head"><div><span>Portafolio</span><h3 id="campaign-os-active-title">Campañas recientes</h3></div><button type="button" onClick={() => navigate('/campaigns/results')}>Ver todas</button></div>
 					{campaigns.length ? campaigns.slice(0, 6).map((campaign) => {
-						const status = statusMeta(campaign.status);
+						const status = statusMeta(campaign.status, campaign);
 						const action = nextCampaignAction(campaign);
-						const progress = Number(campaign.totalRecipients || 0) ? (Number(campaign.sentCount || 0) / Number(campaign.totalRecipients || 1)) * 100 : 0;
+						const sentCount = campaignCount(campaign, 'sentCount', 'sentRecipients');
+						const progress = Number(campaign.totalRecipients || 0) ? (sentCount / Number(campaign.totalRecipients || 1)) * 100 : 0;
 						return (
 							<article className="campaign-os-row" key={campaign.id}>
 								<div className="campaign-os-row-main"><strong>{campaign.name || 'Campaña sin nombre'}</strong><span>{audienceLabel(campaign.audienceSource)} · {number(campaign.totalRecipients)} destinatarios</span></div>
@@ -213,7 +231,7 @@ export function CampaignOverview() {
 				<aside className="campaign-os-next" aria-labelledby="campaign-os-next-title">
 					<span>Próximo desbloqueo</span>
 					<h3 id="campaign-os-next-title">{nextAttention ? nextAttention.name : 'Todo está encaminado'}</h3>
-					<p>{nextAttention ? 'Completá el borrador o resolvé el bloqueo para avanzar.' : 'No hay borradores ni errores pendientes.'}</p>
+					<p>{nextAttention ? 'Resolvé el fallo o la campaña parcial para avanzar.' : 'No hay errores de envío pendientes.'}</p>
 					{nextAttention ? <ActionButton icon={ArrowRight} onClick={() => navigate(nextCampaignAction(nextAttention).to)}>{nextCampaignAction(nextAttention).label}</ActionButton> : <div className="campaign-os-all-clear"><CheckCircle2 size={18} aria-hidden="true" />Sin tareas pendientes</div>}
 					<div className="campaign-os-ready"><span>Plantillas listas</span><strong>{approvedTemplates}/{templates.length}</strong><small>Aprobadas para usar</small></div>
 				</aside>
