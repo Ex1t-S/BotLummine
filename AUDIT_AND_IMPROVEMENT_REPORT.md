@@ -1352,3 +1352,30 @@ En Carritos se eliminó la columna Responsable y se recuperó el modelo binario 
 - `git diff --check`: verde; sólo advertencias de normalización LF/CRLF preexistentes.
 
 No se consultó ni modificó Railway, no se desplegó, no se ejecutaron migraciones y no se hizo push.
+
+## 31. Modo oscuro suave y Diseñador de menú — 18/07/2026
+
+Se revisó el modo oscuro sobre pantallas renderizadas y se reemplazó la combinación de negro puro, blanco intenso y cian brillante por una escala grafito más suave. El acento principal pasó a índigo, mientras que éxito, advertencia, peligro e información conservan roles semánticos con menor saturación. La inspección visual detectó y corrigió una superficie clara residual en Salud operativa; los KPI de Operaciones ahora usan superficies neutras y reservan el color para señales pequeñas.
+
+El Constructor de menú fue replanteado como un Diseñador de menú orientado a la tarea:
+
+- configuración general compacta;
+- recorrido de menús visible sin una tercera columna permanente;
+- tres pasos de avance: Estructura, Mensaje y Opciones;
+- campos principales visibles y detalles técnicos colapsables;
+- opciones prediseñadas con lenguaje simple;
+- simulación persistente de WhatsApp con encabezado, mensaje, lista y resultado interactivo;
+- validaciones visibles antes de guardar;
+- adaptación móvil sin overflow.
+
+La demo local incorpora un menú sintético con Productos, Seguimiento de pedido y Atención humana. El endpoint demo permite cargar, guardar y restaurar la configuración sin delivery externo.
+
+### Evidencia y validación
+
+- Capturas antes/después del menú: `frontend/audit-artifacts/menu-redesign/`.
+- Revisión transversal del modo oscuro: `frontend/audit-artifacts/dark-mode-soft/`.
+- `npm --prefix frontend run build`: verde, 2.423 módulos transformados.
+- `npx playwright test -c demo/playwright.demo.config.js`: 7/7 verdes.
+- El nuevo E2E cubre edición reflejada en vivo, selección de una opción, resultado del recorrido, guardado demo, cambio de tema y ausencia de overflow móvil.
+
+No se consultó ni modificó Railway, no se desplegó, no se ejecutaron migraciones y no se hizo push.
