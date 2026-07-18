@@ -232,14 +232,17 @@ async function expectNoHorizontalPageOverflow(page) {
 		const shell = document.querySelector('.admin-shell');
 		const sidebar = document.querySelector('.admin-sidebar');
 		const main = document.querySelector('.admin-main');
-		const shellStyle = shell ? getComputedStyle(shell) : null;
-		const availableWidth = window.innerWidth
-			- Number.parseFloat(shellStyle?.paddingLeft || '0')
-			- Number.parseFloat(shellStyle?.paddingRight || '0');
+		const shellRect = shell?.getBoundingClientRect();
+		const sidebarRect = sidebar?.getBoundingClientRect();
+		const mainRect = main?.getBoundingClientRect();
+		const insideViewport = (rect) => Boolean(rect)
+			&& rect.left >= -1
+			&& rect.right <= window.innerWidth + 1
+			&& rect.width > 0;
 		return document.documentElement.scrollWidth <= window.innerWidth
-			&& Math.round(shell?.getBoundingClientRect().width || 0) === window.innerWidth
-			&& (sidebar?.getBoundingClientRect().width || 0) >= availableWidth - 1
-			&& (main?.getBoundingClientRect().width || 0) >= availableWidth - 1;
+			&& Math.round(shellRect?.width || 0) === window.innerWidth
+			&& insideViewport(sidebarRect)
+			&& insideViewport(mainRect);
 	})).toBe(true);
 }
 

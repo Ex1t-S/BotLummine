@@ -99,11 +99,11 @@ test('separa loading y muestra la tabla operativa en desktop', async ({ page }) 
 
 	const table = page.getByRole('table', { name: 'Carritos abandonados ordenados desde el más reciente' });
 	await expect(table).toBeVisible();
-	for (const column of ['Cliente', 'Importe', 'Antigüedad', 'Estado', 'Último contacto', 'Responsable', 'Próxima acción']) {
+	for (const column of ['Cliente', 'Importe', 'Antigüedad', 'Estado', 'Último contacto', 'Próxima acción']) {
 		await expect(table.getByRole('columnheader', { name: column })).toBeVisible();
 	}
 	await expect(table.getByText('Cliente Sintético')).toBeVisible();
-	await expect(table.getByText('Sin asignar')).toBeVisible();
+	await expect(table.getByText('No contactado', { exact: true })).toBeVisible();
 	await page.screenshot({
 		path: 'audit-artifacts/screenshots/after/abandoned-carts-table-1440x960.png',
 		fullPage: true,

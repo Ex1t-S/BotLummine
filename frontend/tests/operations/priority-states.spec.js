@@ -100,8 +100,8 @@ test('operations comunica loading y luego muestra prioridades', async ({ page })
 
 	await expect(page.getByRole('status')).toContainText('Cargando prioridades operativas');
 	releaseSummary();
-	await expect(page.getByRole('heading', { name: 'Marca Operativa', level: 1 })).toBeVisible();
-	await expect(page.getByText('Revisar comprobantes')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Lo que requiere tu atención' })).toBeVisible();
+	await expect(page.getByText('2 comprobantes esperan revisión')).toBeVisible();
 });
 
 test('operations separa error de empty y permite reintentar', async ({ page }) => {
@@ -111,17 +111,17 @@ test('operations separa error de empty y permite reintentar', async ({ page }) =
 
 	const errorState = page.getByRole('alert').filter({ hasText: 'No pudimos cargar la operación' });
 	await expect(errorState).toBeVisible();
-	await expect(page.getByText('No hay marcas para mostrar')).toHaveCount(0);
+	await expect(page.getByText('No hay tareas críticas')).toHaveCount(0);
 	errorControl.allow = true;
 	await errorState.getByRole('button', { name: 'Reintentar' }).click();
-	await expect(page.getByRole('heading', { name: 'Marca Operativa', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Lo que requiere tu atención' })).toBeVisible();
 });
 
 test('operations ofrece empty explícito sin inventar prioridades', async ({ page }) => {
 	await installOperationsApi(page, { empty: true });
 	await page.goto('/operations');
 
-	await expect(page.getByText('No hay marcas para mostrar')).toBeVisible();
+	await expect(page.getByText('No hay tareas críticas')).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveCount(0);
-	await expect(page.getByText('Revisar comprobantes')).toBeVisible();
+	await expect(page.getByText('La operación está dentro de los niveles esperados.')).toBeVisible();
 });
