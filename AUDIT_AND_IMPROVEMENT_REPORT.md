@@ -1279,3 +1279,58 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 - Archivos: `InboxPage.jsx`, `InboxPage.v2.css`, `messaging-conversation.tsx`, E2E del Inbox y `frontend/audit-artifacts/redesign-v2-real/`.
 - Pruebas: frontend build verde; 7/7 E2E completos del Inbox; 3/3 críticos repetidos después de los ajustes; capturas 1440×960, 1280×800, 768×1024 y 390×844 inspeccionadas; cero desborde horizontal en las verificaciones automatizadas.
 - Riesgo de deployment: bajo-medio; cambio frontend aislado, pero el shell móvil general todavía conserva una navegación alta que se abordará como componente base antes del cierre visual.
+
+## 29. Sandbox local integral y avance visual aprobado — 18/07/2026
+
+### Alcance implementado
+
+Se incorporó un modo `demo` exclusivo del servidor de desarrollo de Vite. Mantiene estado sintético en memoria y permite recorrer Operaciones, Inbox AUTO/HUMAN/PAYMENT_REVIEW, Carritos, Clientes, Catálogo, Campañas, Templates, Tracking, Analytics, Administración, Menú y AI Lab sin iniciar el backend ni conectar una base. Las mutaciones de mensajes y campañas devuelven explícitamente `deliveredExternally: false`; AI Lab usa una respuesta determinista con `providerCalled: false`.
+
+La segunda iteración visual aprobada aplica una jerarquía más plana y operativa: shell móvil compacto, Campañas con navegación secundaria por tareas y menor cantidad de cajas, audiencia explicada como flujo, Analytics independiente con cuatro KPIs y embudo accionable, y AI Lab con casos iniciales de prueba. El azul queda reservado principalmente a selección, foco y acciones.
+
+### Fixtures disponibles
+
+- 4 conversaciones repartidas entre automático, humano y comprobantes.
+- 5 carritos sintéticos en estados nuevo, contactado, recuperado y descartado.
+- 3 templates, incluyendo aprobados y pendiente.
+- 3 campañas: activa, finalizada y borrador; también se puede crear/lanzar una campaña local.
+- Catálogo, clientes, prioridades operativas y métricas coherentes entre pantallas.
+- AI Lab local sin Gemini, Meta ni otro proveedor externo.
+
+No existe una integración de cobro: “comprobantes” representa un workflow humano y auditable sobre evidencia enviada, no una confirmación bancaria ni un historial transaccional.
+
+### Seguridad del entorno
+
+- No se consultó ni modificó Railway.
+- No se ejecutaron migraciones ni seeds.
+- No se usaron secretos o datos productivos.
+- No se enviaron mensajes, archivos o campañas externas.
+- El modo sólo se activa con `vite --mode demo`; el comportamiento normal de desarrollo/build permanece separado.
+- La UI muestra de forma persistente `DEMO LOCAL · sin envíos externos` y ofrece restauración del estado inicial.
+
+### Validación real
+
+| Comando | Resultado | Observación |
+| --- | --- | --- |
+| `npm run build` | Verde | Backend: Prisma generate + sintaxis de 144 archivos. Frontend: 2420 módulos. |
+| `npm run prisma:validate` | Verde | Schema Prisma válido. |
+| `npm run test:unit` | 85/85 | Incluye aislamiento por workspace, prompt compiler, fallback, trazas y límites de integraciones. |
+| `npm run test:e2e` | 23/23 | Incluye Inbox, comprobantes, Operaciones, Carritos, Analytics, accesibilidad y performance. |
+| `npx playwright test --config demo/playwright.demo.config.js` | 3/3 | Recorrido local, responsive y prueba negativa de delivery externo. |
+| `npm audit --audit-level=high` por workspace | Verde en umbral high | 0 vulnerabilidades frontend; backend conserva 1 moderada transitiva en `brace-expansion`. No se aplicó un update indiscriminado. |
+
+Las 27 capturas históricas modificadas previamente se respaldaron antes del E2E y se restauraron con verificación SHA-256: 0 diferencias. La nueva evidencia sintética se guarda separada en `frontend/audit-artifacts/local-demo-v2/` con 14 capturas desktop/móvil.
+
+### Ejecución para revisión
+
+Desde la raíz:
+
+```powershell
+.\start-demo.ps1
+```
+
+Abrir `http://127.0.0.1:5173/operations`. El recorrido detallado y las garantías están en `LOCAL_DEMO_GUIDE.md`. Los datos se restauran con el botón de la cabecera o reiniciando el servidor.
+
+### Estado de publicación
+
+Versión preparada únicamente para revisión local. No se hizo push, deploy, modificación de Railway ni migración. Antes de publicar se debe revisar el diff/commits de esta rama, repetir el checklist y decidir explícitamente el destino; no asumir que volver a un commit anterior revierte datos o efectos de un deployment.

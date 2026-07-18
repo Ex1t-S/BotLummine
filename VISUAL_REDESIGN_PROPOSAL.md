@@ -433,3 +433,18 @@ Cada pantalla tendrá un commit separado. No se modificarán backend, Railway, v
 ## 16. Decisión pendiente
 
 Esta propuesta se detiene aquí, como fue solicitado. La recomendación es aprobar B y, opcionalmente, incorporar la densidad de tablas y el panel contextual de C. No se modificó ninguna pantalla productiva.
+
+## 17. Aprobación y piloto implementado localmente — 18/07/2026
+
+Luego de revisar dos iteraciones renderizadas, se aprobó continuar con la dirección B: renovación moderada, tipografía un punto mayor, superficies neutras, azul restringido y jerarquía operativa. La primera versión fue descartada por exceso de espacio vacío, iconografía y detalles de borde; esos criterios no se trasladaron al producto.
+
+El piloto local actual incluye:
+
+- Inbox V2 completo en desktop/tablet/móvil, con filas planas, chat continuo, contexto responsive y flujo progresivo.
+- Shell móvil compacto sin topbar duplicada.
+- Campañas con navegación por tareas, menos contenedores, audiencia explicada por pasos y tabs legibles a 390 px.
+- Analytics independiente con cuatro indicadores principales, embudo y tabla de campañas recientes.
+- AI Lab con estado inicial guiado y ejemplos sintéticos.
+- Sandbox integral para validar el conjunto sin backend, Railway, WhatsApp ni proveedor de IA.
+
+La evidencia actual se encuentra en `frontend/audit-artifacts/local-demo-v2/`: 14 capturas de Operaciones, Inbox, Campañas/audiencia, Campañas/tracking, Carritos, Analytics y AI Lab en 1440×960 y 390×844. Build y E2E están verdes; el rediseño total de Templates, Administración, Clientes y Catálogo continúa como backlog visual y no debe confundirse con el sandbox funcional ya completo.
