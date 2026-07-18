@@ -5,6 +5,7 @@ import { DEFAULT_WORKSPACE_ID, normalizeWorkspaceId } from '../workspaces/worksp
 import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { resolveActiveCommerceConnection } from '../commerce/active-commerce.service.js';
 import { getShopifyClient } from '../shopify/client.js';
+import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const CHECKOUTS_PER_PAGE = Math.min(
@@ -34,6 +35,152 @@ const DELETE_CHUNK_SIZE = Math.max(
 const TIENDANUBE_TIMEOUT_MS = getHttpTimeoutMs('TIENDANUBE_TIMEOUT_MS', 15000);
 const DEFAULT_DAYS_BACK = 30;
 const ALLOWED_WINDOWS = new Set([1, 3, 7, 15, 30]);
+
+function normalizeLookupValue(value = '') {
+	return String(value || '').trim().toLowerCase();
+}
+
+function getRawPayloadCartKey(rawPayload = {}) {
+	if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) return '';
+	return normalizeLookupValue(
+		rawPayload.abandonedCartId ||
+		rawPayload.checkoutId ||
+		rawPayload.checkout_id ||
+		rawPayload?.metadata?.abandonedCartId ||
+		rawPayload?.metadata?.checkoutId ||
+		rawPayload?.context?.abandonedCartId ||
+		rawPayload?.context?.checkoutId ||
+		''
+	);
+}
+
+/**
+ * Repairs carts left as NEW when an outbound WhatsApp message was already sent.
+ * Matching is workspace-scoped and prefers an explicit cart/checkout marker;
+ * phone matching is used as a fallback for older messages without metadata.
+ */
+export async function reconcileAbandonedCartContactStatus(
+	daysBack = DEFAULT_DAYS_BACK,
+	{ workspaceId } = {}
+) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const normalizedDaysBack = normalizeDaysBack(daysBack);
+	const cutoff = new Date();
+	cutoff.setDate(cutoff.getDate() - normalizedDaysBack);
+
+	const carts = await prisma.abandonedCart.findMany({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			status: 'NEW',
+			checkoutCreatedAt: { gte: cutoff }
+		},
+		select: {
+			id: true,
+			checkoutId: true,
+			contactPhone: true,
+			checkoutCreatedAt: true,
+			createdAt: true
+		}
+	});
+
+	if (!carts.length) return { inspectedCount: 0, updatedCount: 0, updatedCartIds: [] };
+
+	const earliestCartDate = carts.reduce((earliest, cart) => {
+		const value = cart.checkoutCreatedAt || cart.createdAt || cutoff;
+		return value < earliest ? value : earliest;
+	}, new Date());
+
+	const [messages, campaignRecipients] = await Promise.all([
+		prisma.message.findMany({
+			where: {
+				workspaceId: resolvedWorkspaceId,
+				direction: 'OUTBOUND',
+				createdAt: { gte: earliestCartDate }
+			},
+			select: {
+				createdAt: true,
+				rawPayload: true,
+				conversation: {
+					select: {
+						contact: { select: { waId: true, phone: true } }
+					}
+				}
+			}
+		}),
+		prisma.campaignRecipient.findMany({
+			where: {
+				workspaceId: resolvedWorkspaceId,
+				externalKey: { startsWith: 'abandoned_cart:' },
+				OR: [{ sentAt: { gte: earliestCartDate } }, { deliveredAt: { gte: earliestCartDate } }, { readAt: { gte: earliestCartDate } }]
+			},
+			select: { externalKey: true, sentAt: true, deliveredAt: true, readAt: true }
+		})
+	]);
+
+	const messagesByExplicitKey = new Map();
+	const messagesByPhone = new Map();
+	for (const message of messages) {
+		const explicitKey = getRawPayloadCartKey(message.rawPayload);
+		if (explicitKey) {
+			const list = messagesByExplicitKey.get(explicitKey) || [];
+			list.push(message.createdAt);
+			messagesByExplicitKey.set(explicitKey, list);
+		}
+
+		const phone = normalizeThreadPhone(
+			message.conversation?.contact?.waId || message.conversation?.contact?.phone || ''
+		);
+		if (phone) {
+			const list = messagesByPhone.get(phone) || [];
+			list.push(message.createdAt);
+			messagesByPhone.set(phone, list);
+		}
+	}
+	for (const recipient of campaignRecipients) {
+		const key = normalizeLookupValue(String(recipient.externalKey || '').replace(/^abandoned_cart:/i, ''));
+		if (!key) continue;
+		const list = messagesByExplicitKey.get(key) || [];
+		for (const date of [recipient.sentAt, recipient.deliveredAt, recipient.readAt].filter(Boolean)) list.push(date);
+		messagesByExplicitKey.set(key, list);
+	}
+
+	const contactedIds = carts
+		.filter((cart) => {
+			const cartDate = cart.checkoutCreatedAt || cart.createdAt || cutoff;
+			const explicitMessages = [cart.id, cart.checkoutId]
+				.map(normalizeLookupValue)
+				.flatMap((key) => messagesByExplicitKey.get(key) || []);
+			if (explicitMessages.some((date) => date >= cartDate)) return true;
+
+			const phone = normalizeThreadPhone(cart.contactPhone || '');
+			return Boolean(phone && (messagesByPhone.get(phone) || []).some((date) => date >= cartDate));
+		})
+		.map((cart) => cart.id);
+
+	if (!contactedIds.length) {
+		return { inspectedCount: carts.length, updatedCount: 0, updatedCartIds: [] };
+	}
+
+	const now = new Date();
+	const result = await prisma.abandonedCart.updateMany({
+		where: {
+			workspaceId: resolvedWorkspaceId,
+			id: { in: contactedIds },
+			status: 'NEW'
+		},
+		data: {
+			status: 'CONTACTED',
+			contactedAt: now,
+			lastMessageSentAt: now
+		}
+	});
+
+	return {
+		inspectedCount: carts.length,
+		updatedCount: Number(result.count || 0),
+		updatedCartIds: contactedIds
+	};
+}
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));

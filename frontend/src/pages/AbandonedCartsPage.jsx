@@ -206,6 +206,10 @@ export default function AbandonedCartsPage() {
 	useEffect(() => {
 		if (abandonedCartsQuery.isSuccess) {
 			setErrorMessage('');
+			const updatedCount = Number(abandonedCartsQuery.data?.reconciliation?.updatedCount || 0);
+			if (updatedCount > 0) {
+				setSuccessMessage(`${updatedCount} carrito${updatedCount === 1 ? '' : 's'} marcado${updatedCount === 1 ? '' : 's'} como contactado${updatedCount === 1 ? '' : 's'} porque ya tenía mensajes enviados.`);
+			}
 			return;
 		}
 		if (!abandonedCartsQuery.isError) return;
@@ -215,7 +219,7 @@ export default function AbandonedCartsPage() {
 			error?.response?.data?.message ||
 			'No pudimos cargar los carritos abandonados. Probá nuevamente.'
 		);
-	}, [abandonedCartsQuery.error, abandonedCartsQuery.isError, abandonedCartsQuery.isSuccess]);
+	}, [abandonedCartsQuery.data, abandonedCartsQuery.error, abandonedCartsQuery.isError, abandonedCartsQuery.isSuccess]);
 
 	const updateFilter = useCallback((name, value) => {
 		setFilters((prev) => ({

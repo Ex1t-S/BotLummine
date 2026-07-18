@@ -1,6 +1,9 @@
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
-import { syncAbandonedCarts } from '../services/carts/abandoned-cart.service.js';
+import {
+	reconcileAbandonedCartContactStatus,
+	syncAbandonedCarts
+} from '../services/carts/abandoned-cart.service.js';
 import { filterRecoverableAbandonedCarts } from '../services/campaigns/campaign-attribution.service.js';
 import {
 	buildAbandonedCartVariables,
@@ -174,6 +177,7 @@ export async function getAbandonedCarts(req, res, next) {
 		const dateFrom = String(req.query.dateFrom || '');
 		const dateTo = String(req.query.dateTo || '');
 		const syncWindow = normalizeSyncWindow(req.query.syncWindow);
+		const reconciliation = await reconcileAbandonedCartContactStatus(syncWindow, { workspaceId });
 
 		const where = buildWhereClause({ q, status, dateFrom, dateTo, syncWindow });
 		where.workspaceId = workspaceId;
@@ -220,7 +224,8 @@ export async function getAbandonedCarts(req, res, next) {
 				totalContacted,
 				showingFrom: total ? skip + 1 : 0,
 				showingTo: Math.min(skip + pageSize, total)
-			}
+			},
+			reconciliation
 		});
 	} catch (error) {
 		next(error);
@@ -238,10 +243,12 @@ export async function postSyncAbandonedCarts(req, res) {
 			workspaceId,
 			provider: req.body?.provider || req.query?.provider || '',
 		});
+		const reconciliation = await reconcileAbandonedCartContactStatus(daysBack, { workspaceId });
 
 		return res.json({
 			ok: true,
 			...result,
+			reconciliation,
 			deletedCount: Number(result.deletedCount ?? result.removedCount ?? 0),
 			remainingCount: Number(result.remainingCount ?? 0),
 			message: `Sync ${daysBack} días completada: ${result.syncedCount || result.count || 0} sincronizados y ${Number(result.deletedCount ?? result.removedCount ?? 0)} eliminados fuera de ventana.`
