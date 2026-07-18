@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
 	ArrowRight,
 	BarChart3,
@@ -62,6 +63,13 @@ function percent(value) {
 	return `${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
 }
 
+function date(value) {
+	if (!value) return 'Sin fecha';
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) return 'Sin fecha';
+	return new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(parsed);
+}
+
 function statusMeta(status = '') {
 	const value = String(status || 'DRAFT').toUpperCase();
 	if (['RUNNING', 'QUEUED'].includes(value)) return { label: 'En curso', tone: 'running' };
@@ -84,7 +92,7 @@ function nextCampaignAction(campaign = {}) {
 	if (status === 'DRAFT') return { label: 'Completar', to: `/campaigns/segment?draft=${campaign.id}` };
 	if (['RUNNING', 'QUEUED'].includes(status)) return { label: 'Monitorear', to: `/campaigns/tracking?campaign=${campaign.id}` };
 	if (['FAILED', 'PARTIAL'].includes(status)) return { label: 'Resolver', to: `/campaigns/tracking?campaign=${campaign.id}` };
-	return { label: 'Ver resultados', to: `/campaigns/tracking?campaign=${campaign.id}` };
+	return { label: 'Ver resultados', to: `/campaigns/results?campaign=${campaign.id}` };
 }
 
 function CampaignMetric({ label, value, helper, tone = 'neutral' }) {
@@ -186,7 +194,7 @@ export function CampaignOverview() {
 
 			<div className="campaign-os-dashboard-grid">
 				<section className="campaign-os-list" aria-labelledby="campaign-os-active-title">
-					<div className="campaign-os-section-head"><div><span>Portafolio</span><h3 id="campaign-os-active-title">Campañas recientes</h3></div><button type="button" onClick={() => navigate('/campaigns/tracking')}>Ver todas</button></div>
+					<div className="campaign-os-section-head"><div><span>Portafolio</span><h3 id="campaign-os-active-title">Campañas recientes</h3></div><button type="button" onClick={() => navigate('/campaigns/results')}>Ver todas</button></div>
 					{campaigns.length ? campaigns.slice(0, 6).map((campaign) => {
 						const status = statusMeta(campaign.status);
 						const action = nextCampaignAction(campaign);
@@ -330,11 +338,12 @@ export function CampaignAutomationHub() {
 
 export function CampaignResultsHub() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const resultsQuery = useQuery({
 		queryKey: ['campaign-os', 'results'],
 		queryFn: async () => {
 			const [campaignData, statsData] = await Promise.all([
-				fetchCampaigns({ page: 1, pageSize: 20 }),
+				fetchCampaigns({ limit: 100 }),
 				fetchCampaignOverview(),
 			]);
 			return { campaignData, statsData };
@@ -342,12 +351,23 @@ export function CampaignResultsHub() {
 		staleTime: 30_000,
 	});
 
+	const campaigns = getCollection(resultsQuery.data?.campaignData, ['campaigns', 'items']);
+	const withActivity = campaigns.filter((campaign) => Number(campaign.sentCount || campaign.sentRecipients || 0) > 0);
+	const requestedCampaignId = searchParams.get('campaign');
+	const selectedCampaign = campaigns.find((campaign) => campaign.id === requestedCampaignId)
+		|| withActivity[0]
+		|| campaigns[0]
+		|| null;
+
+	useEffect(() => {
+		if (!selectedCampaign?.id || requestedCampaignId === selectedCampaign.id) return;
+		setSearchParams({ campaign: selectedCampaign.id }, { replace: true });
+	}, [requestedCampaignId, selectedCampaign?.id, setSearchParams]);
+
 	if (resultsQuery.isLoading) return <EmptyState tone="loading" title="Preparando resultados" description="Consolidando entrega, respuesta y compras atribuidas." />;
 	if (resultsQuery.isError) return <EmptyState tone="error" title="No pudimos cargar los resultados" description="Reintentá para volver a calcular la lectura operativa."><ActionButton variant="secondary" icon={RefreshCw} onClick={() => resultsQuery.refetch()}>Reintentar</ActionButton></EmptyState>;
 
-	const campaigns = getCollection(resultsQuery.data?.campaignData, ['campaigns', 'items']);
-	const completed = campaigns.filter((campaign) => Number(campaign.sentCount || 0) > 0);
-	const totals = completed.reduce((acc, campaign) => {
+	const totals = withActivity.reduce((acc, campaign) => {
 		acc.sent += Number(campaign.sentCount || 0);
 		acc.delivered += Number(campaign.deliveredCount || 0);
 		acc.replied += Number(campaign.analytics?.repliedRecipients || 0);
@@ -357,33 +377,72 @@ export function CampaignResultsHub() {
 	}, { sent: 0, delivered: 0, replied: 0, purchased: 0, revenue: 0 });
 	const stats = resultsQuery.data?.statsData?.stats || resultsQuery.data?.statsData || {};
 	const revenue = totals.revenue || Number(stats.attributedRevenue || 0);
+	const selectedAnalytics = selectedCampaign?.analytics || {};
+	const selectedSent = Number(selectedCampaign?.sentCount || selectedCampaign?.sentRecipients || 0);
+	const selectedDelivered = Number(selectedCampaign?.deliveredCount || selectedCampaign?.deliveredRecipients || 0);
+	const selectedStatus = statusMeta(selectedCampaign?.status);
+	const selectedAction = selectedCampaign ? nextCampaignAction(selectedCampaign) : null;
+	const selectedHasActivity = selectedSent > 0;
+
+	function selectCampaign(campaignId) {
+		setSearchParams({ campaign: campaignId });
+	}
 
 	return (
 		<div className="campaign-os-results">
-			<div className="campaign-os-intro"><div><span>Rendimiento</span><h2>Resultados para decidir el próximo movimiento</h2><p>Cuatro señales principales y detalle por campaña cuando hace falta investigar.</p></div></div>
-			<div className="campaign-os-metrics" aria-label="Indicadores principales de resultados">
-				<CampaignMetric label="Entrega" value={percent(totals.sent ? totals.delivered / totals.sent * 100 : 0)} helper={`${number(totals.delivered)} mensajes entregados`} tone="success" />
-				<CampaignMetric label="Respuesta" value={percent(totals.sent ? totals.replied / totals.sent * 100 : 0)} helper={`${number(totals.replied)} conversaciones iniciadas`} tone="primary" />
-				<CampaignMetric label="Compras" value={number(totals.purchased || stats.purchasedRecipients)} helper="Con señal atribuida" tone="primary" />
-				<CampaignMetric label="Ingresos atribuidos" value={currency(revenue, stats.attributedCurrency || 'ARS')} helper="No reemplaza la conciliación contable" />
+			<div className="campaign-os-intro campaign-os-intro--results">
+				<div><span>Resultados</span><h2>Qué funcionó y qué necesita atención</h2><p>Elegí una campaña para entender su rendimiento y abrir el seguimiento sólo cuando necesites investigar destinatarios.</p></div>
+				<button type="button" onClick={() => resultsQuery.refetch()} disabled={resultsQuery.isFetching}><RefreshCw size={16} aria-hidden="true" />{resultsQuery.isFetching ? 'Actualizando' : 'Actualizar'}</button>
 			</div>
+			<div className="campaign-os-result-summary" aria-label="Resumen general de resultados">
+				<div><span>Entrega general</span><strong>{percent(totals.sent ? totals.delivered / totals.sent * 100 : 0)}</strong><small>{number(totals.delivered)} de {number(totals.sent)} enviados</small></div>
+				<div><span>Conversaciones</span><strong>{number(totals.replied)}</strong><small>{percent(totals.sent ? totals.replied / totals.sent * 100 : 0)} respondió</small></div>
+				<div><span>Compras atribuidas</span><strong>{number(totals.purchased || stats.purchasedRecipients)}</strong><small>{currency(revenue, stats.attributedCurrency || 'ARS')} en señales</small></div>
+			</div>
+
+			<div className="campaign-os-results-workspace">
 			<section className="campaign-os-results-list" aria-labelledby="campaign-results-title">
-				<div className="campaign-os-section-head"><div><span>Comparación</span><h3 id="campaign-results-title">Rendimiento por campaña</h3></div></div>
-				{completed.length ? completed.map((campaign) => {
+				<div className="campaign-os-section-head"><div><span>Historial</span><h3 id="campaign-results-title">Campañas</h3></div><small>{number(campaigns.length)} en total</small></div>
+				{campaigns.length ? campaigns.map((campaign) => {
 					const analytics = campaign.analytics || {};
-					const delivery = Number(campaign.sentCount || 0) ? Number(campaign.deliveredCount || 0) / Number(campaign.sentCount || 1) * 100 : 0;
+					const sent = Number(campaign.sentCount || campaign.sentRecipients || 0);
+					const delivered = Number(campaign.deliveredCount || campaign.deliveredRecipients || 0);
+					const delivery = sent ? delivered / sent * 100 : 0;
+					const status = statusMeta(campaign.status);
+					const isSelected = campaign.id === selectedCampaign?.id;
 					return (
-						<article className="campaign-os-result-row" key={campaign.id}>
-							<div><strong>{campaign.name}</strong><span>{number(campaign.totalRecipients)} destinatarios · {audienceLabel(campaign.audienceSource)}</span></div>
-							<span><small>Entrega</small><strong>{percent(delivery)}</strong></span>
-							<span><small>Respuestas</small><strong>{number(analytics.repliedRecipients)}</strong></span>
-							<span><small>Compras</small><strong>{number(analytics.purchasedRecipients)}</strong></span>
-							<span><small>Ingresos</small><strong>{currency(analytics.attributedRevenue, analytics.attributedCurrency || 'ARS')}</strong></span>
-							<button type="button" onClick={() => navigate(`/campaigns/tracking?campaign=${campaign.id}`)}>Analizar<ArrowRight size={15} aria-hidden="true" /></button>
-						</article>
+						<button type="button" className={`campaign-os-result-item${isSelected ? ' is-selected' : ''}`} key={campaign.id} onClick={() => selectCampaign(campaign.id)} aria-pressed={isSelected}>
+							<span className="campaign-os-result-item__main"><strong>{campaign.name || 'Campaña sin nombre'}</strong><small>{audienceLabel(campaign.audienceSource)} · {date(campaign.createdAt)}</small></span>
+							<span className={`campaign-os-result-item__status tone-${status.tone}`}>{status.label}</span>
+							<span className="campaign-os-result-item__metric"><small>Entrega</small><strong>{sent ? percent(delivery) : '—'}</strong></span>
+							<span className="campaign-os-result-item__metric"><small>Respuestas</small><strong>{sent ? number(analytics.repliedRecipients) : '—'}</strong></span>
+							<ArrowRight className="campaign-os-result-item__arrow" size={16} aria-hidden="true" />
+						</button>
 					);
-				}) : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><strong>Aún no hay resultados</strong><span>Los envíos con actividad aparecerán en esta comparación.</span></div></div>}
+				}) : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><strong>Todavía no hay campañas</strong><span>Cuando crees la primera, vas a ver acá su estado aunque todavía no tenga envíos.</span></div></div>}
 			</section>
+
+			<aside className="campaign-os-result-detail" aria-live="polite" aria-labelledby="campaign-result-detail-title">
+				{selectedCampaign ? <>
+					<div className="campaign-os-result-detail__header">
+						<div><span className={`campaign-os-result-item__status tone-${selectedStatus.tone}`}>{selectedStatus.label}</span><h3 id="campaign-result-detail-title">{selectedCampaign.name || 'Campaña sin nombre'}</h3><p>{selectedCampaign.templateName || 'Sin plantilla asociada'} · {audienceLabel(selectedCampaign.audienceSource)}</p></div>
+						<small>{date(selectedCampaign.finishedAt || selectedCampaign.startedAt || selectedCampaign.createdAt)}</small>
+					</div>
+					{selectedHasActivity ? <>
+						<div className="campaign-os-result-detail__metrics">
+							<div><span>Entrega</span><strong>{percent(selectedSent ? selectedDelivered / selectedSent * 100 : 0)}</strong><small>{number(selectedDelivered)} entregados</small></div>
+							<div><span>Respuestas</span><strong>{number(selectedAnalytics.repliedRecipients)}</strong><small>{percent(Number(selectedAnalytics.replyRate || 0) * 100)} del envío</small></div>
+							<div><span>Compras</span><strong>{number(selectedAnalytics.purchasedRecipients)}</strong><small>{percent(Number(selectedAnalytics.purchaseRate || 0) * 100)} atribuido</small></div>
+						</div>
+						<div className="campaign-os-result-detail__revenue"><span>Ingresos atribuidos</span><strong>{currency(selectedAnalytics.attributedRevenue, selectedAnalytics.attributedCurrency || 'ARS')}</strong><small>Señal operativa; no reemplaza la conciliación contable.</small></div>
+					</> : <div className="campaign-os-result-detail__empty"><strong>Esta campaña todavía no tiene envíos.</strong><span>Podés completar el borrador o revisar su preparación antes de lanzarla.</span></div>}
+					<div className="campaign-os-result-detail__actions">
+						{!selectedAction.to.startsWith('/campaigns/results') ? <button type="button" className="campaign-os-result-detail__primary" onClick={() => navigate(selectedAction.to)}>{selectedAction.label}<ArrowRight size={15} aria-hidden="true" /></button> : null}
+						{selectedHasActivity ? <button type="button" onClick={() => navigate(`/campaigns/tracking?campaign=${selectedCampaign.id}`)}>Ver destinatarios</button> : null}
+					</div>
+				</> : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><strong>Elegí una campaña</strong><span>Vas a ver su lectura operativa en este panel.</span></div></div>}
+			</aside>
+			</div>
 		</div>
 	);
 }

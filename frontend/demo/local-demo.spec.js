@@ -24,8 +24,9 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await expect(page.getByRole('button', { name: 'Configurar' })).toHaveCount(3);
 
 	await page.goto('/campaigns/results');
-	await expect(page.getByRole('heading', { name: 'Resultados para decidir el próximo movimiento' })).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Rendimiento por campaña' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Qué funcionó y qué necesita atención' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Campañas', level: 3 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Clientes frecuentes · Julio' })).toBeVisible();
 
 	await page.goto('/abandoned-carts');
 	const cartsTable = page.getByRole('table', { name: 'Carritos abandonados ordenados desde el más reciente' });
@@ -62,6 +63,47 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await page.getByLabel('Mensaje de prueba').fill('¿Tenés stock del producto demo?');
 	await page.getByRole('button', { name: 'Enviar' }).click();
 	await expect(page.getByText('En el modo demo no se consulta Gemini ni se envía contenido externo.', { exact: false })).toBeVisible();
+});
+
+test('conecta resumen, resultados y seguimiento con la campaña elegida en la URL', async ({ page }) => {
+	await page.goto('/campaigns');
+	const finishedCampaign = page.locator('.campaign-os-row').filter({ hasText: 'Recuperación carritos · Semana 28' });
+	await expect(finishedCampaign).toHaveCount(1);
+	await finishedCampaign.getByRole('button', { name: 'Ver resultados' }).click();
+	await expect(page).toHaveURL(/\/campaigns\/results\?campaign=campaign-demo-finished$/);
+	await expect(page.getByRole('heading', { name: 'Recuperación carritos · Semana 28' })).toBeVisible();
+
+	await page.getByRole('button', { name: 'Ver destinatarios' }).click();
+	await expect(page).toHaveURL(/\/campaigns\/tracking\?campaign=campaign-demo-finished$/);
+	await expect(page.getByRole('button', { name: 'Ver seguimiento de Recuperación carritos · Semana 28' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('reintenta sólo fallidos de una campaña finalizada y protege los envíos aceptados', async ({ page }) => {
+	await page.goto('/campaigns/tracking?campaign=campaign-demo-finished');
+	const retryButton = page.getByRole('button', { name: 'Reintentar fallidos' });
+	await expect(retryButton).toBeVisible();
+	await expect(page.locator('.campaign-tracking-kpis--essential').getByText('86', { exact: true })).toBeVisible();
+	await expect(page.getByText('4 fallidos · 0 pendientes')).toBeVisible();
+
+	await retryButton.click();
+	const dialog = page.getByRole('dialog', { name: 'Reintentar envíos sin duplicar' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('4 fallidos', { exact: true })).toBeVisible();
+	await expect(dialog.getByText('0 pendientes', { exact: true })).toBeVisible();
+	await expect(dialog.getByText('86 ya enviados, protegidos', { exact: true })).toBeVisible();
+	const cancelRetry = dialog.getByRole('button', { name: 'Cancelar' });
+	const confirmRetry = dialog.getByRole('button', { name: 'Confirmar reintento' });
+	await expect(cancelRetry).toBeFocused();
+	await page.keyboard.press('Shift+Tab');
+	await expect(confirmRetry).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(cancelRetry).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+
+	await page.getByRole('button', { name: 'Ver seguimiento de Aviso de temporada · Completada' }).click();
+	await expect(page).toHaveURL(/campaign=campaign-demo-clean$/);
+	await expect(page.getByRole('button', { name: 'Reintentar fallidos' })).toHaveCount(0);
 });
 
 for (const viewport of [
