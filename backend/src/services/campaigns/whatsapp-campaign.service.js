@@ -1018,7 +1018,7 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 	}
 
 	let conversation = await prisma.conversation.findFirst({
-		where: { workspaceId: resolvedWorkspaceId, contactId: contact.id }
+		where: { routingKey: `${resolvedWorkspaceId}:legacy:${contact.id}` }
 	});
 
 	if (!conversation) {
@@ -1026,6 +1026,7 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 			data: {
 				contactId: contact.id,
 				workspaceId: resolvedWorkspaceId,
+				routingKey: `${resolvedWorkspaceId}:legacy:${contact.id}`,
 				queue: 'AUTO',
 				aiEnabled: true,
 				state: {

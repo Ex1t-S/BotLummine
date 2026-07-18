@@ -81,6 +81,7 @@ export async function sendAndPersistOutbound({
 		workspaceId: expectedWorkspaceId,
 		include: {
 			contact: true,
+			whatsappChannel: true,
 		},
 	});
 
@@ -95,12 +96,14 @@ export async function sendAndPersistOutbound({
 		''
 	);
 	const workspaceId = conversation.workspaceId;
+	const whatsappChannelId = conversation.whatsappChannelId || null;
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 
 	if (isOutboundDebugEnabled()) {
 		logger.debug('whatsapp.outbound_send_started', {
 			provider,
 			workspaceId,
+			whatsappChannelId,
 			conversationId,
 			waId: maskPhone(waId),
 			messageType,
@@ -140,6 +143,7 @@ export async function sendAndPersistOutbound({
 	} else if (hasMedia) {
 		sendResult = await sendWhatsAppMedia({
 			workspaceId,
+			whatsappChannelId,
 			to: waId,
 			mediaType: mediaPayload.mediaType,
 			mediaId: mediaPayload.mediaId,
@@ -149,6 +153,7 @@ export async function sendAndPersistOutbound({
 	} else if (messageType === 'interactive') {
 		sendResult = await sendWhatsAppInteractiveList({
 			workspaceId,
+			whatsappChannelId,
 			to: waId,
 			body: cleanBody,
 			headerText: interactivePayload?.headerText || null,
@@ -160,6 +165,7 @@ export async function sendAndPersistOutbound({
 		if (!sendResult?.ok && interactivePayload?.fallbackText) {
 			sendResult = await sendWhatsAppText({
 				workspaceId,
+				whatsappChannelId,
 				to: waId,
 				body: interactivePayload.fallbackText,
 			});
@@ -167,6 +173,7 @@ export async function sendAndPersistOutbound({
 	} else {
 		sendResult = await sendWhatsAppText({
 			workspaceId,
+			whatsappChannelId,
 			to: waId,
 			body: cleanBody,
 		});
@@ -196,6 +203,7 @@ export async function sendAndPersistOutbound({
 		data: {
 			conversationId: conversation.id,
 			workspaceId,
+			whatsappChannelId,
 			direction: 'OUTBOUND',
 			type: messageType,
 			body:

@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "start": "npm run prisma:migrate && node src/server.js",
     "start:prod": "node src/server.js",
     "build": "npm run prisma:generate && npm run check:syntax",
     "check:syntax": "node scripts/check-syntax.mjs",

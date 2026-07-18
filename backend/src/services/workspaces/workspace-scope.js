@@ -88,6 +88,7 @@ export async function findInboundMessageForWorkspace(prismaClient, { id, workspa
 				include: {
 					contact: true,
 					state: true,
+					whatsappChannel: true,
 				},
 			},
 		},

@@ -1,18 +1,19 @@
 # Auditoría y mejora integral de BotLummine / BladeIA
 
 Fecha de inicio: 2026-07-17
-Rama: `audit/general-improvements-20260717`
-Estado: P0 local de hardening cerrado para el inventario estático actual; producción permanece en modo solo lectura.
+Rama de auditoría original: `audit/general-improvements-20260717`; rama de integración lista para revisión: `audit/general-improvements-main-ready`
+Estado: P0 local de hardening cerrado; cambios publicados en `main` como `8606df0`. Railway no fue modificado manualmente.
 
 ## 1. Resumen ejecutivo
 
-La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La validación final sobre un worktree limpio de `69f6b86` dejó Prisma válido, build raíz verde, 85/85 unitarias, TypeScript sin errores, auditorías productivas en cero y 22/22 Playwright con performance estricto. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
+La aplicación tiene una base funcional amplia. La iteración cerró los P0 locales seguros de build incompleto, falso verde E2E, doble compilación de prompt, fallback de proveedores, fronteras multitenant prioritarias y arranque accidental contra una base remota. También corrigió selección, borradores y doble envío del Inbox, una fuga global de CSS desde Catálogo y el composer inaccesible en móvil. La validación final del HEAD funcional y de la integración con `origin/main` dejó Prisma válido, build raíz verde, 85/85 unitarias, TypeScript sin errores, auditorías productivas en cero y 22/22 Playwright con performance estricto. El `.env` local continúa apuntando a producción; el guard implementado bloquea el arranque local y no se ejecutaron seeds, migraciones ni pruebas con conexión.
 
 ## 2. Estado del repositorio local
 
 - Ruta: `D:\01_Proyectos\Proyectos\Plataforma multi marca\BladeIA`.
-- Base: `main` y `origin/main` en `c22684f`.
-- Rama de trabajo: `audit/general-improvements-20260717`.
+- Base auditada inicialmente: `main`/`origin/main` en `c22684f`.
+- `origin/main` fue actualizado durante la auditoría a `e5e27b5` (multi-Meta y migraciones al arranque).
+- Rama de trabajo original: `audit/general-improvements-20260717`; integración: `audit/general-improvements-main-ready`, HEAD `7e97e0e`.
 - Node local: 22.20.0. npm: 10.9.3.
 - Gestor: npm; existen lockfiles en raíz, backend y frontend.
 - Cambios previos preservados: ocho archivos versionados (412 inserciones, 36 eliminaciones) y assets/documentos de Instagram sin seguimiento.
@@ -21,7 +22,7 @@ La aplicación tiene una base funcional amplia. La iteración cerró los P0 loca
 ## 3. Estado de Railway
 
 - Proyecto: `BladeIA`.
-- Producción web: servicio `BladeIA`, commit `c22684f`, rama `main`, `SUCCESS/RUNNING`, Node 22.23.1, runtime V2, una réplica en `us-east4`, health check `/api/health` y HTTP 200 (~481 ms en la muestra inicial).
+- Producción web: último estado observado antes de esta integración, servicio `BladeIA`, commit `c22684f`, rama `main`, `SUCCESS/RUNNING`, Node 22.23.1, runtime V2, una réplica en `us-east4`, health check `/api/health` y HTTP 200 (~481 ms en la muestra inicial). No se volvió a consultar ni modificar Railway durante el merge.
 - Producción cron: servicio `BotLummine`, schedule `0 * * * *`, comando `npm run jobs:campaign-dispatch`. No hubo logs en las últimas 24 horas y no se observó `DATABASE_URL` entre sus variables propias.
 - Staging: servicio `BladeIA`, commit `fef6232` del 2026-04-08, sin health check configurado, HTTP 200 (~664 ms). Usa otro host Neon.
 - Logs producción: 121 líneas recientes, sin errores/timeouts/reinicios detectados; 47 requests HTTP en 24 h, sin 4xx/5xx ni requests >1 s en la muestra.
@@ -30,7 +31,8 @@ La aplicación tiene una base funcional amplia. La iteración cerró los P0 loca
 
 ## 4. Diferencias local versus desplegado
 
-- Código base local y producción web coinciden en `c22684f`; el working tree local contiene trabajo no publicado.
+- El snapshot de producción observado antes del push coincidía con `c22684f`; `origin/main` avanzó a `e5e27b5` y luego se publicó `8606df0` en `main`. El estado de Railway/deployment debe verificarse por separado.
+- La integración incorpora `0923301` (multi-Meta/webhooks/canal por conversación) y `e5e27b5` (migraciones Prisma en el arranque productivo). El merge conserva los límites explícitos por workspace y adapta ambos seeds al `routingKey` obligatorio.
 - Staging está varios meses atrasado y no es representativo del código actual.
 - Producción web tiene root directory `/backend`; el cron usa la raíz del repositorio.
 - Local usa Node 22.20.0; producción 22.23.1; staging 22.22.2.
@@ -1115,7 +1117,7 @@ El schema incluye `workspaceId` e índices relevantes. Se añadieron pruebas neg
 
 ## 13. Railway y despliegues
 
-Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables operativas y staging obsoleto. El start productivo aplica migraciones automáticamente; debe revisarse el desacople hacia pre-deploy controlado.
+Producción es solo lectura. Riesgos: cron sin evidencia de ejecución/variables operativas y staging obsoleto. `origin/main` ahora aplica migraciones automáticamente en el arranque productivo mediante `prisma migrate deploy`; el cambio queda integrado localmente pero no aplicado a Railway. Antes de publicar se debe confirmar que la migración multi-Meta es compatible con el esquema productivo y que el arranque dispone de una ventana/rollback controlado.
 
 ## 14. Accesibilidad
 
@@ -1129,7 +1131,7 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 
 | Comando | Resultado | Tiempo |
 |---|---:|---:|
-| `npm ci` backend | OK; 11 vulnerabilidades (3 high) | 10,1 s |
+| `npm ci` backend | OK; 1 moderada sólo dev | 8,2 s en integración |
 | `npm ci` frontend | OK; 0 vulnerabilidades | 5,0 s |
 | `prisma validate` | OK | 2,5 s |
 | backend syntax | 142/142 en HEAD limpio | incluido en build |
@@ -1139,11 +1141,11 @@ Baseline mock: rutas internas críticas listas entre 212 y 474 ms; la landing p�
 | npm audit frontend prod | 0 vulnerabilidades | 1,6 s |
 | frontend build | OK; sin chunks >500 kB | 0,93 s |
 | frontend typecheck | OK; 0 errores | 3,5 s en la última corrida |
-| root build | OK; backend + frontend | 9,2 s en la última corrida |
-| Playwright Chromium | 22/22 en HEAD limpio; accesibilidad, admin, Carritos, Inbox, Operaciones, visual y performance | 15,8 s; APIs sintéticas, sin delivery |
+| root build | OK; backend + frontend | 8,7 s en integración |
+| Playwright Chromium | 22/22 en integración; accesibilidad, admin, Carritos, Inbox, Operaciones, visual y performance | 17,9 s; APIs sintéticas, sin delivery |
 | Axe público WCAG 2.2 | 0 violaciones en 4 rutas (antes 1 serious) | 9,5 s con teclado |
 
-La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0 en 46,1 s. Durante el refactor de prefetch, una primera corrida privada había fallado porque faltaba importar `getInternalRouteKey`; el error boundary lo expuso, se corrigió y la repetición aislada completó 10/10 rutas. No se ocultó ni relajó el test.
+La validación consolidada del 17/07/2026 ejecutó secuencialmente Prisma, build raíz, unitarias, `tsc -b` y Playwright y terminó con código 0. La repetición sobre la integración `7e97e0e` también terminó con código 0: Prisma format/validate/generate, 85/85 unitarias, syntax 142/142, typecheck, build raíz, auditorías productivas 0/0, evaluación IA offline 28/28 y Playwright 22/22. No se ocultó ni relajó el test.
 
 En el bloque de neutralidad de marca, `npm --prefix frontend run typecheck` y luego `npm run typecheck` fallaron porque el árbol concurrente actual no define ese script. No fue un error de TypeScript: `npx tsc -b` desde `frontend` terminó con código 0 en 4,7 s. Los manifests sucios del usuario se preservaron y CI continúa ejecutando directamente `npx tsc -b`.
 
@@ -1241,7 +1243,7 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 ## 25. Plan de deployment
 
 1. CI verde y revisión del diff.
-2. Comparar y aplicar primero en base descartable las migraciones aditivas `20260717170000_add_ai_turn_traces` y `20260717200000_add_payment_review_actions`; luego repetir en staging autorizado. Configurar por nombre `AI_TRACE_RETENTION_DAYS`, `AI_TRACE_PRUNE_BATCH_SIZE` y `AI_TRACE_PRUNE_MAX_BATCHES`, sin registrar valores secretos.
+2. Comparar y aplicar primero en base descartable las migraciones `20260717120000_add_multi_meta_apps_and_channel_routing`, `20260717170000_add_ai_turn_traces` y `20260717200000_add_payment_review_actions`; revisar específicamente el backfill/índice `Conversation.routingKey` y el `DROP INDEX` no destructivo de la migración multi-Meta. Luego repetir en staging autorizado. Configurar por nombre `AI_TRACE_RETENTION_DAYS`, `AI_TRACE_PRUNE_BATCH_SIZE` y `AI_TRACE_PRUNE_MAX_BATCHES`, sin registrar valores secretos.
 3. Desplegar a staging aislado.
 4. Smoke de health/auth/inbox con datos sintéticos y delivery deshabilitado.
 5. Autorización explícita.
@@ -1249,7 +1251,7 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 
 ## 26. Rollback
 
-- Mantener commit e imagen Railway previos identificados.
+- Mantener commit e imagen Railway previos identificados (`c22684f`) y tratar `7e97e0e` como candidato no desplegado.
 - Cambios de aplicación compatibles hacia atrás y migraciones sólo aditivas; no eliminar tablas/enums durante un rollback de aplicación.
 - Ante error: detener rollout, redeploy del commit previo y verificar `/api/health`.
 - La nueva app tolera temporalmente la ausencia de `AiTurnTrace`; para rollback completo, volver primero al commit previo y luego, sólo si se decide eliminar metadata, ejecutar `DROP TABLE "AiTurnTrace"` en una ventana autorizada.
@@ -1258,11 +1260,17 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 
 ## 27. Veredicto pre-push
 
-- Revisión de commits: el HEAD funcional `69f6b86` fue validado en un checkout aislado; la rama está 0 commits atrás respecto de `origin/main`, sus commits son temáticos y el diff consolidado no contiene secretos detectables por los patrones de credenciales auditados.
-- Validación local limpia: 85/85 unitarias, 28/28 evaluaciones IA offline, build raíz verde, 142/142 archivos versionados con sintaxis válida, TypeScript verde, auditorías productivas en cero y 22/22 E2E verdes con performance estricto.
+- Revisión de commits: `origin/main` avanzó de `c22684f` a `e5e27b5`; el merge local `7e97e0e` integra esos dos commits con 80 commits temáticos de auditoría. El diff no contiene secretos detectables por los patrones auditados.
+- Validación local limpia de la integración: 85/85 unitarias, 28/28 evaluaciones IA offline, build raíz verde, 142/142 archivos versionados con sintaxis válida, TypeScript verde, auditorías productivas en cero y 22/22 E2E verdes con performance estricto.
 - Alcance cubierto: P0 local de hardening, multitenancy estático, pipeline IA, CI base, Inbox, acciones/historial de comprobantes, Operaciones, tabla/cards de Carritos, responsive y accesibilidad prioritaria.
-- Veredicto técnico: GO para publicar el HEAD versionado; el working tree concurrente queda expresamente fuera. El propietario acepta el riesgo residual de un push directo a `main`.
-- Riesgo residual aceptado: las migraciones no se aplicaron, staging está atrasado y faltan pruebas dinámicas de dos workspaces, Axe reproducible y E2E específico de Campañas. Si `main` dispara Railway, el push puede desplegar producción y ejecutar migraciones automáticamente; conservar `c22684f` como referencia de rollback de aplicación.
+- Veredicto técnico: push completado sin force push. El working tree concurrente quedó expresamente fuera. El propietario aceptó el riesgo residual de publicación directa a `main`.
+- Riesgo residual aceptado: las migraciones no se aplicaron ni se pudo ejecutar `prisma migrate diff` sin un PostgreSQL local/shadow descartable; staging está atrasado y faltan pruebas dinámicas de dos workspaces, Axe reproducible y E2E específico de Campañas. Si `main` dispara Railway, puede ejecutar migraciones automáticamente. El rollback de aplicación quedó en `rollback-main-before-audit-20260718` (`e5e27b5`).
+
+### 27.1 Resultado de publicación anterior
+
+- Push ejecutado: `e5e27b5..8606df0 HEAD -> main`.
+- Tag de rollback publicado: `rollback-main-before-audit-20260718` apuntando a `e5e27b5`.
+- Verificación posterior: `origin/main == 8606df0`; no hubo force push, cambios de variables, reinicio ni operación directa en Railway.
 
 ## 28. Rediseño visual V2 local
 
