@@ -21,6 +21,13 @@ const initialForm = {
 	sendNow: false,
 };
 
+function getInitialAudienceMode(availableModes = [], lockedMode = null) {
+	if (lockedMode) return lockedMode;
+	if (typeof window === 'undefined') return initialForm.audienceMode;
+	const requestedMode = new URLSearchParams(window.location.search).get('audience');
+	return availableModes.includes(requestedMode) ? requestedMode : initialForm.audienceMode;
+}
+
 const initialCustomerFilters = {
 	q: '',
 	productQuery: '',
@@ -707,7 +714,11 @@ export default function CampaignComposerPanel({
 	audienceModeOptions = ['customers', 'manual'],
 	lockedAudienceMode = null,
 }) {
-	const [form, setForm] = useState(initialForm);
+	const [form, setForm] = useState(() => ({
+		...initialForm,
+		audienceMode: getInitialAudienceMode(audienceModeOptions, lockedAudienceMode),
+	}));
+	const [activeStep, setActiveStep] = useState('message');
 	const [uploadingImage, setUploadingImage] = useState(false);
 	const [uploadedMediaId, setUploadedMediaId] = useState('');
 	const [uploadedFileName, setUploadedFileName] = useState('');
@@ -999,6 +1010,21 @@ export default function CampaignComposerPanel({
 		]
 	);
 	const campaignReadyToCreate = campaignChecklist.every((item) => item.ok);
+	const wizardSteps = [
+		{ id: 'message', number: 1, label: 'Mensaje', helper: selectedTemplate?.id ? 'Plantilla elegida' : 'Elegí una plantilla', complete: Boolean(selectedTemplate?.id && form.name.trim()) },
+		{ id: 'audience', number: 2, label: 'Audiencia', helper: recipients.length ? `${formatCompactNumber(recipients.length)} seleccionados` : 'Definí destinatarios', complete: recipients.length > 0 },
+		{ id: 'variables', number: 3, label: 'Variables', helper: templatePlaceholders.length ? (variableMappingError ? 'Faltan datos' : 'Listas') : 'No aplica', complete: !templatePlaceholders.length || !variableMappingError, disabled: !templatePlaceholders.length },
+		{ id: 'review', number: 4, label: 'Revisar', helper: campaignReadyToCreate ? 'Lista para crear' : 'Chequeo final', complete: campaignReadyToCreate },
+	];
+	const visibleStepOrder = templatePlaceholders.length
+		? ['message', 'audience', 'variables', 'review']
+		: ['message', 'audience', 'review'];
+
+	function moveWizard(direction) {
+		const currentIndex = Math.max(0, visibleStepOrder.indexOf(activeStep));
+		const nextIndex = Math.min(visibleStepOrder.length - 1, Math.max(0, currentIndex + direction));
+		setActiveStep(visibleStepOrder[nextIndex]);
+	}
 	const nextActionLabel = useMemo(() => {
 		if (!selectedTemplate?.id) return 'Elegir plantilla';
 		if (requiresHeaderMedia && needsHeaderMediaUpload) return 'Cargar encabezado';
@@ -1580,10 +1606,11 @@ export default function CampaignComposerPanel({
 			customerIds: [],
 			mode: '',
 		});
+		setActiveStep('message');
 	}
 
 	return (
-		<section className="campaign-panel campaign-panel--customers campaign-panel--composer-refresh">
+		<section className={`campaign-panel campaign-panel--customers campaign-panel--composer-refresh campaign-wizard-step-${activeStep}`}>
 			<div className="campaign-panel-header campaign-panel-header--stacked">
 				<div>
 					<h3>Crear campaña</h3>
@@ -1619,6 +1646,22 @@ export default function CampaignComposerPanel({
 				</div>
 
 			</div>
+
+			<nav className="campaign-wizard-nav" aria-label="Pasos para crear la campaña">
+				{wizardSteps.map((step) => (
+					<button
+						key={step.id}
+						type="button"
+						className={`${activeStep === step.id ? 'is-active' : ''} ${step.complete ? 'is-complete' : ''}`.trim()}
+						onClick={() => setActiveStep(step.disabled ? 'review' : step.id)}
+						aria-current={activeStep === step.id ? 'step' : undefined}
+					>
+						<span>{step.number}</span>
+						<strong>{step.label}</strong>
+						<small>{step.helper}</small>
+					</button>
+				))}
+			</nav>
 
 			<form className="campaign-form campaign-form--spacious" onSubmit={handleSubmit}>
 				<div className="campaign-builder-section campaign-builder-section--hero">
@@ -1863,14 +1906,13 @@ export default function CampaignComposerPanel({
 							</div>
 						</div>
 
-						<div className="campaign-filter-block">
-							<div className="campaign-filter-block__head">
+						<details className="campaign-filter-block campaign-filter-details">
+							<summary className="campaign-filter-block__head">
 								<strong>Filtros avanzados</strong>
 								<span>
-									Usa los mismos criterios de clientes para ordenar, segmentar por productos
-									comprados y filtrar calidad de contacto.
+									Producto, cantidad de compras, envío y calidad del contacto.
 								</span>
-							</div>
+							</summary>
 							<div className="campaign-builder-grid campaign-builder-grid--filters">
 								<label className="field">
 									<span>Envio</span>
@@ -1969,13 +2011,13 @@ export default function CampaignComposerPanel({
 									<span>Solo clientes con telefono valido para WhatsApp</span>
 								</label>
 							</div>
-						</div>
+						</details>
 
-						<div className="campaign-filter-block campaign-product-filter-group">
-							<div className="campaign-filter-block__head">
+						<details className="campaign-filter-block campaign-product-filter-group campaign-filter-details">
+							<summary className="campaign-filter-block__head">
 								<strong>Exclusiones</strong>
-								<span>Evitá repetir plantillas ya enviadas a los mismos clientes.</span>
-							</div>
+								<span>Opcional: evitá repetir plantillas ya enviadas.</span>
+							</summary>
 							<label className="campaign-toggle">
 								<input
 									type="checkbox"
@@ -2030,7 +2072,7 @@ export default function CampaignComposerPanel({
 									onClear={clearSentTemplateFilters}
 								/>
 							) : null}
-						</div>
+						</details>
 
 						<div className="campaign-inline-actions campaign-inline-actions--wrap">
 							<button
@@ -2574,6 +2616,18 @@ export default function CampaignComposerPanel({
 							{creating ? 'Creando...' : form.sendNow ? 'Crear y enviar ahora' : 'Crear campaña'}
 						</button>
 					</div>
+				</div>
+
+				<div className="campaign-wizard-footer">
+					<button type="button" className="button ghost" onClick={() => moveWizard(-1)} disabled={activeStep === 'message'}>
+						Anterior
+					</button>
+					<span>Paso {visibleStepOrder.indexOf(activeStep) + 1} de {visibleStepOrder.length}</span>
+					{activeStep !== 'review' ? (
+						<button type="button" className="button primary" onClick={() => moveWizard(1)}>
+							Continuar
+						</button>
+					) : null}
 				</div>
 			</form>
 		</section>

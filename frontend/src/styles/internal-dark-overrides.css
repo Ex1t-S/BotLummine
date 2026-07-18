@@ -546,6 +546,120 @@
 	box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.18) !important;
 }
 
+/* Campaign OS has its own product language: neutral graphite surfaces and an
+   indigo action color. Keep it separate from the legacy cyan dark overrides. */
+.dark .admin-shell .admin-content .campaign-os {
+	--campaign-os-accent: #7781ff;
+	--campaign-os-accent-strong: #a8aeff;
+	--campaign-os-ink: #f6f7fb;
+	--campaign-os-muted: #a4adbd;
+	--campaign-os-border: #2a303b;
+	--campaign-os-soft: #11151d;
+	color: var(--campaign-os-ink) !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-nav,
+	.campaign-os-metrics,
+	.campaign-os-list,
+	.campaign-os-recipe,
+	.campaign-os-audience-note,
+	.campaign-os-inline-error
+) {
+	background: #0f131a !important;
+	border-color: var(--campaign-os-border) !important;
+	color: #e9ebf2 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-metric,
+	.campaign-os-row,
+	.campaign-os-section-head
+) {
+	border-color: var(--campaign-os-border) !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-header h1,
+	.campaign-os-intro h2,
+	.campaign-os-section-head h3,
+	.campaign-os-row-main strong,
+	.campaign-os-metric strong,
+	.campaign-os-recipe h3,
+	.campaign-os-recipe-count strong
+) {
+	color: #f7f8fb !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-header p,
+	.campaign-os-intro p,
+	.campaign-os-row-main span,
+	.campaign-os-metric > span,
+	.campaign-os-metric small,
+	.campaign-os-recipe p,
+	.campaign-os-recipe-count span,
+	.campaign-os-audience-note span
+) {
+	color: var(--campaign-os-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-nav-link {
+	color: #aeb6c6 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-nav-link:hover {
+	background: #171c25 !important;
+	color: #fff !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-nav-link.is-active {
+	background: #eef0f7 !important;
+	color: #11151d !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-nav-link.is-active :where(span, svg) {
+	color: #11151d !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-header .internal-action-btn.is-primary,
+.dark .admin-shell .admin-content .campaign-os .campaign-os-header .internal-action-btn.is-primary :where(span, strong, svg) {
+	color: #fff !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-intro > button,
+	.campaign-os-section-head button,
+	.campaign-os-row-action,
+	.campaign-os-recipe > button
+) {
+	background: #171c25 !important;
+	border-color: #333b49 !important;
+	color: #f3f4f8 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-next {
+	background: #171c2a !important;
+	border-color: #343c50 !important;
+	color: #fff !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-next h3 {
+	color: #fff !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-metric.tone-primary strong {
+	color: #8f98ff !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-metric.tone-success strong {
+	color: #68d5af !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-metric.tone-warning strong {
+	color: #f3bc69 !important;
+}
+
 .dark .admin-shell .admin-content :where(
 	.template-library-selected-banner strong,
 	.template-list-card.selected strong,
