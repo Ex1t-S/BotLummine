@@ -1,4 +1,8 @@
 import crypto from 'crypto';
+import {
+	getWhatsAppWebhookSecrets,
+	verifyWhatsAppWebhookSignature as verifyConfiguredWhatsAppWebhookSignature
+} from '../lib/whatsapp-webhook-signature.js';
 import { prisma } from '../lib/prisma.js';
 import { decryptSecret } from '../lib/secret-crypto.js';
 import { logger, maskPhone } from '../lib/logger.js';
@@ -331,32 +335,26 @@ function getShopifyWebhookSecret() {
 	).trim();
 }
 
-function getWhatsAppWebhookSecret(app = null) {
-	return String(
-		app?.appSecret ||
-		process.env.WHATSAPP_APP_SECRET ||
-		process.env.META_APP_SECRET ||
-		process.env.FACEBOOK_APP_SECRET ||
-		''
-	).trim();
+<<<<<<< HEAD
+function getWhatsAppWebhookSecretsForApp(app = null) {
+	return [...new Set([
+		app?.appSecret,
+		...getWhatsAppWebhookSecrets()
+	].map((secret) => String(secret || '').trim()).filter(Boolean))];
 }
 
 function isWhatsAppWebhookSignatureRequired(app = null) {
-	if (getWhatsAppWebhookSecret(app)) return true;
+	if (getWhatsAppWebhookSecretsForApp(app).length) return true;
 	return process.env.NODE_ENV === 'production';
 }
 
 function verifyWhatsAppWebhookSignature(rawBodyBuffer, signatureHeader, app = null) {
-	const secret = getWhatsAppWebhookSecret(app);
-	if (!secret || !signatureHeader) return false;
-
-	const provided = String(signatureHeader).replace(/^sha256=/i, '');
-	const expected = crypto
-		.createHmac('sha256', secret)
-		.update(rawBodyBuffer)
-		.digest('hex');
-
-	return timingSafeEquals(provided, expected);
+	const secrets = getWhatsAppWebhookSecretsForApp(app);
+	return secrets.length > 0 && verifyConfiguredWhatsAppWebhookSignature(
+		rawBodyBuffer,
+		signatureHeader,
+		{ WHATSAPP_APP_SECRETS: secrets.join(',') }
+	);
 }
 
 async function resolveWebhookApp(req) {
@@ -508,10 +506,10 @@ export async function receiveWhatsappWebhook(req, res) {
 		}
 
 		if (isWhatsAppWebhookSignatureRequired(app)) {
-			if (!getWhatsAppWebhookSecret(app)) {
+			if (!getWhatsAppWebhookSecretsForApp(app).length) {
 				return res.status(500).json({
 					ok: false,
-					error: 'Falta WHATSAPP_APP_SECRET o META_APP_SECRET para validar el webhook de WhatsApp.'
+					error: 'Falta configurar un secreto de app para validar el webhook de WhatsApp.'
 				});
 			}
 
