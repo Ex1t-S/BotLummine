@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { formatCampaignStatusLabel } from '../../utils/statusLabels.js';
 
 function formatDate(value) {
 	if (!value) return '--';
@@ -144,7 +145,7 @@ function buildCampaignActionModel(campaign = {}) {
 			primaryAction: null,
 			secondaryLabel: null,
 			secondaryAction: null,
-			helperText: 'La campaña ya terminó. Si querés repetirla, conviene crear una nueva a partir de este mismo template.',
+			helperText: 'La campaña ya terminó. Si querés repetirla, conviene crear una nueva a partir de esta misma plantilla.',
 		};
 	}
 
@@ -447,10 +448,10 @@ export default function CampaignRunsPanel({
 		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Historial y tracking de campañas</h3>
+					<h3>Historial y seguimiento de campañas</h3>
 					<p>
 						Seguí borradores, campañas activas y resultados desde una vista más clara,
-						con tracking real de envíos, entregas y lecturas.
+						con seguimiento real de envíos, entregas y lecturas.
 					</p>
 				</div>
 			</div>
@@ -469,8 +470,8 @@ export default function CampaignRunsPanel({
 				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-list">
 					<div className="campaign-detail-header">
 						<div>
-								<h4>Campañas cargadas</h4>
-								<p>Elegí una campaña para revisar su tracking y sus destinatarios.</p>
+							<h4>Campañas cargadas</h4>
+							<p>Elegí una campaña para revisar su seguimiento y sus destinatarios.</p>
 						</div>
 					</div>
 
@@ -495,15 +496,15 @@ export default function CampaignRunsPanel({
 										className={`campaign-list-card campaign-list-card--run${isSelected ? ' selected' : ''}`}
 										onClick={() => onSelectCampaign(campaign)}
 										aria-pressed={isSelected}
-										aria-label={`Ver tracking de ${campaign.name}`}
+										aria-label={`Ver seguimiento de ${campaign.name}`}
 									>
 										<div className="campaign-list-card-top">
 											<div>
 												<strong>{campaign.name}</strong>
-												<p>{campaign.templateName || campaign.template?.name || 'Sin template asociado'}</p>
+												<p>{campaign.templateName || campaign.template?.name || 'Sin plantilla asociada'}</p>
 											</div>
 											<span className={badgeClass(campaign.status)}>
-												{campaign.status || 'DRAFT'}
+												{formatCampaignStatusLabel(campaign.status)}
 											</span>
 										</div>
 
@@ -535,7 +536,7 @@ export default function CampaignRunsPanel({
 									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripcion.'}</p>
 								</div>
 								<span className={badgeClass(selectedCampaign.status)}>
-									{selectedCampaign.status || 'DRAFT'}
+									{formatCampaignStatusLabel(selectedCampaign.status)}
 								</span>
 							</div>
 
