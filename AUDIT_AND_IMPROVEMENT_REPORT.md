@@ -1255,3 +1255,11 @@ No apta todavía: staging debe actualizarse desde un commit revisado, confirmar 
 - La nueva app tolera temporalmente la ausencia de `AiTurnTrace`; para rollback completo, volver primero al commit previo y luego, sólo si se decide eliminar metadata, ejecutar `DROP TABLE "AiTurnTrace"` en una ventana autorizada.
 - El endpoint de revisión de comprobantes requiere `PaymentReviewAction`; desplegar la migración antes de habilitar la ruta. Ante rollback de aplicación, conservar tabla y enum para evitar una operación destructiva innecesaria.
 - Si una migración futura fuera necesaria, preparar rollback SQL probado sobre copia descartable; no usar `db push` ni `migrate reset`.
+
+## 27. Veredicto pre-push
+
+- Revisión de commits: `audit/general-improvements-20260717` está 76 commits adelante y 0 atrás respecto de `origin/main`; los commits son temáticos y el diff consolidado no contiene secretos detectables por los patrones de credenciales auditados.
+- Validación local: 85/85 unitarias, build raíz verde, 144/144 archivos con sintaxis válida, TypeScript verde y 12/12 E2E críticos verdes.
+- Alcance cubierto: P0 local de hardening, multitenancy estático, pipeline IA, CI base, Inbox, acciones/historial de comprobantes, Operaciones, tabla/cards de Carritos, responsive y accesibilidad prioritaria.
+- No listo para un push directo a `main` sin una decisión adicional: el working tree conserva cambios concurrentes sin commit, las migraciones no se aplicaron, staging está atrasado, faltan pruebas dinámicas de dos workspaces, Axe reproducible, E2E específico de Campañas y quedan dos vulnerabilidades high del frontend en manifests concurrentes.
+- Recomendación: publicar primero la rama de auditoría, revisar el diff en PR y validar staging aislado; sólo después promover a `main` con rollback preparado. El push directo a `main` es técnicamente posible pero no es la opción de menor riesgo.
