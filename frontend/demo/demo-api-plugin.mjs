@@ -104,6 +104,11 @@ function createInitialState() {
 			bodyText: 'Beneficio de prueba para clientes frecuentes.', headerFormat: 'IMAGE', updatedAt: '2026-07-18T12:00:00.000Z',
 			components: [{ type: 'BODY', text: 'Beneficio de prueba para clientes frecuentes.' }],
 		},
+		{
+			id: 'template-demo-event', name: 'recordatorio_evento_demo', language: 'es_AR', category: 'UTILITY', status: 'DRAFT',
+			bodyText: 'Hola {{1}}, te recordamos que tu evento comienza el {{2}}.', headerFormat: 'TEXT', updatedAt: '2026-07-15T10:00:00.000Z',
+			components: [{ type: 'BODY', text: 'Hola {{1}}, te recordamos que tu evento comienza el {{2}}.' }],
+		},
 	];
 
 	const campaigns = [

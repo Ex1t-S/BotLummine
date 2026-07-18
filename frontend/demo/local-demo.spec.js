@@ -36,8 +36,10 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	expect(await cartsTable.getByText('No contactado', { exact: true }).count()).toBeGreaterThan(0);
 
 	await page.goto('/campaigns/library');
-	await expect(page.getByRole('button', { name: 'recuperacion_carrito_demo' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'novedad_pedido_demo' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'recuperacion_carrito_demo' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'novedad_pedido_demo' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'beneficio_invierno_demo' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'recordatorio_evento_demo' })).toBeVisible();
 
 	await page.goto('/campaigns/tracking');
 	await expect(page.getByRole('button', { name: 'Ver seguimiento de Clientes frecuentes · Julio' })).toBeVisible();
@@ -61,6 +63,70 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await page.getByRole('button', { name: 'Enviar' }).click();
 	await expect(page.getByText('En el modo demo no se consulta Gemini ni se envía contenido externo.', { exact: false })).toBeVisible();
 });
+
+for (const viewport of [
+	{ name: 'desktop', width: 1440, height: 960 },
+	{ name: 'tablet', width: 768, height: 1024 },
+	{ name: 'mobile', width: 390, height: 844 },
+]) {
+	test(`muestra las cuatro plantillas completas en ${viewport.name}`, async ({ page }) => {
+		await page.setViewportSize({ width: viewport.width, height: viewport.height });
+		await page.goto('/campaigns/library');
+
+		const library = page.getByRole('list', { name: 'Plantillas disponibles' });
+		const cards = library.getByRole('listitem');
+		await expect(cards).toHaveCount(4);
+
+		for (const name of [
+			'beneficio_invierno_demo',
+			'recuperacion_carrito_demo',
+			'novedad_pedido_demo',
+			'recordatorio_evento_demo',
+		]) {
+			await expect(page.getByRole('heading', { name })).toBeVisible();
+		}
+
+		const layout = await library.evaluate((element) => {
+			const style = window.getComputedStyle(element);
+			const bounds = element.getBoundingClientRect();
+			const children = Array.from(element.children).map((child) => child.getBoundingClientRect());
+			return {
+				overflowY: style.overflowY,
+				columns: style.gridTemplateColumns.split(' ').length,
+				allCardsInsideWidth: children.every((card) => card.left >= bounds.left - 1 && card.right <= bounds.right + 1),
+				lastCardInsideList: children.at(-1)?.bottom <= bounds.bottom + 1,
+			};
+		});
+
+		expect(layout.overflowY).not.toBe('auto');
+		expect(layout.overflowY).not.toBe('scroll');
+		expect(layout.allCardsInsideWidth).toBe(true);
+		expect(layout.lastCardInsideList).toBe(true);
+		expect(layout.columns).toBe(viewport.width <= 620 ? 1 : 2);
+
+		const pendingCard = library.getByRole('listitem', { name: /beneficio_invierno_demo/ });
+		const chooseButton = pendingCard.getByRole('button', { name: 'Elegir plantilla' });
+		await chooseButton.click();
+		await expect(pendingCard.getByRole('button', { name: 'Plantilla elegida' })).toHaveAttribute('aria-pressed', 'true');
+		await expect(pendingCard.getByText('Elegida', { exact: true })).toBeVisible();
+
+		if (viewport.name === 'mobile') {
+			await page.screenshot({
+				path: `audit-artifacts/campaign-template-picker-patch/templates-${viewport.width}x${viewport.height}.png`,
+			});
+			await page.locator('.admin-content').evaluate((element) => {
+				element.scrollTop = element.scrollHeight;
+			});
+			await page.screenshot({
+				path: `audit-artifacts/campaign-template-picker-patch/templates-${viewport.width}x${viewport.height}-final.png`,
+			});
+		} else {
+			await page.locator('.template-library-shell').screenshot({
+				path: `audit-artifacts/campaign-template-picker-patch/templates-${viewport.width}x${viewport.height}.png`,
+			});
+		}
+	});
+}
 
 test('mantiene visible el encabezado al recorrer una operación extensa', async ({ page }) => {
 	await page.goto('/operations');

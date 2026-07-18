@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Check } from 'lucide-react';
 import {
 	formatHeaderFormatLabel,
 	formatTemplateCategoryLabel,
@@ -17,7 +18,7 @@ function formatDate(value) {
 }
 
 function statusClass(status = '') {
-	return `campaign-badge ${String(status).toLowerCase()}`;
+	return `campaign-badge template-status ${String(status).toLowerCase()}`;
 }
 
 function isMetaSampleTemplate(template) {
@@ -104,11 +105,6 @@ export default function TemplateLibraryPanel({
 		(template) => String(template?.status || '').toUpperCase() === 'APPROVED'
 	).length;
 
-	const selectedTemplate =
-		filteredTemplates.find((template) => template.id === selectedTemplateId) ||
-		templates.find((template) => template.id === selectedTemplateId) ||
-		null;
-
 	return (
 		<section className="campaign-panel campaign-panel--soft template-library-shell">
 			<div className="template-library-header">
@@ -141,19 +137,17 @@ export default function TemplateLibraryPanel({
 				</div>
 			</div>
 
-			<div className="campaign-inline-summary template-library-summary">
-				<div className="campaign-inline-summary-item">
-					<strong>{templates.length}</strong>
-					<span>plantillas</span>
-				</div>
-				<div className="campaign-inline-summary-item">
-					<strong>{approvedCount}</strong>
-					<span>aprobadas</span>
-				</div>
-				<div className="campaign-inline-summary-item">
-					<strong>{filteredTemplates.length}</strong>
-					<span>resultados</span>
-				</div>
+			<div className="template-library-overview" aria-label="Resumen de plantillas">
+				<p>
+					<strong>{templates.length}</strong> disponibles
+					<span aria-hidden="true">·</span>
+					<strong>{approvedCount}</strong> listas para enviar
+				</p>
+				<span className="template-library-result-count" role="status" aria-live="polite">
+					{filteredTemplates.length === templates.length
+						? 'Mostrando todas'
+						: `${filteredTemplates.length} de ${templates.length} visibles`}
+				</span>
 			</div>
 
 			<div className="campaign-filters-grid">
@@ -199,25 +193,7 @@ export default function TemplateLibraryPanel({
 				</label>
 			</div>
 
-			{selectedTemplate ? (
-				<div className="template-library-selected-banner">
-					<div>
-						<span className="template-library-selected-label">Seleccionado</span>
-						<strong>{selectedTemplate.name}</strong>
-						<small>
-							{selectedTemplate.language || 'es_AR'} - {formatTemplateCategoryLabel(selectedTemplate.category)}
-						</small>
-					</div>
-
-					<div className="template-library-selected-status">
-						<span className={statusClass(selectedTemplate.status || 'draft')}>
-							{formatTemplateStatusLabel(selectedTemplate.status)}
-						</span>
-					</div>
-				</div>
-			) : null}
-
-			<div className="campaign-list compact template-library-list">
+			<div className="campaign-list template-library-list" role="list" aria-label="Plantillas disponibles">
 				{filteredTemplates.length === 0 ? (
 					<div className="campaign-empty-state">
 						<strong>No hay plantillas que coincidan.</strong>
@@ -233,50 +209,36 @@ export default function TemplateLibraryPanel({
 							<article
 								key={template.id}
 								className={`campaign-list-card campaign-list-card--template template-list-card${isSelected ? ' selected' : ''}`}
-								onClick={() => onSelectTemplate(template)}
-								role="button"
-								tabIndex={0}
-								onKeyDown={(event) => {
-									if (event.key === 'Enter' || event.key === ' ') {
-										event.preventDefault();
-										onSelectTemplate(template);
-									}
-								}}
+								role="listitem"
+								aria-label={`${template.name}, ${formatTemplateStatusLabel(template.status)}`}
 							>
 								<div className="campaign-list-card-top">
 									<div className="template-list-card-title">
-										<strong>{template.name}</strong>
+										<h4>{template.name}</h4>
 										<p>
 											{template.language || 'es_AR'} - {formatTemplateCategoryLabel(template.category)}
 										</p>
 									</div>
 
 									<div className="template-list-card-top-actions">
-										<button
-											type="button"
-											className="button ghost"
-											onClick={(event) => {
-												event.stopPropagation();
-												onEditTemplate?.(template);
-											}}
-										>
-											Editar
-										</button>
-
 										<span className={statusClass(template.status || 'draft')}>
 											{formatTemplateStatusLabel(template.status)}
 										</span>
+										{isSelected ? (
+											<span className="template-selection-state">
+												<Check size={14} strokeWidth={2.5} aria-hidden="true" />
+												Elegida
+											</span>
+										) : null}
 									</div>
 								</div>
 
-								<div className="template-list-card-tags">
-									<span className="template-chip">{formatTemplateCategoryLabel(template.category)}</span>
-									<span className="template-chip">{template.language || 'es_AR'}</span>
+								<div className="template-card-meta" aria-label="Formato de la plantilla">
 									{template.headerFormat ? (
-										<span className="template-chip">{formatHeaderFormatLabel(template.headerFormat)}</span>
+										<span>{formatHeaderFormatLabel(template.headerFormat)}</span>
 									) : null}
 									{isMetaSample ? (
-										<span className="template-chip template-chip--warning">muestra de Meta</span>
+										<span className="template-card-meta-warning">Muestra de Meta</span>
 									) : null}
 								</div>
 
@@ -288,23 +250,26 @@ export default function TemplateLibraryPanel({
 									<div className="campaign-inline-actions">
 										<button
 											type="button"
-											className={`button ${isSelected ? 'secondary' : 'ghost'}`}
-											onClick={(event) => {
-												event.stopPropagation();
-												onSelectTemplate(template);
-											}}
+											className={`button template-select-button${isSelected ? ' is-selected' : ''}`}
+											onClick={() => onSelectTemplate(template)}
+											aria-pressed={isSelected}
 										>
-											{isSelected ? 'Seleccionado' : 'Usar'}
+											{isSelected ? 'Plantilla elegida' : 'Elegir plantilla'}
+										</button>
+
+										<button
+											type="button"
+											className="button ghost template-secondary-action"
+											onClick={() => onEditTemplate?.(template)}
+										>
+											Editar
 										</button>
 
 										{!isMetaSample && template.id ? (
 											<button
 												type="button"
-												className="button ghost"
-												onClick={(event) => {
-													event.stopPropagation();
-													onDeleteTemplate(template);
-												}}
+												className="button ghost template-secondary-action template-secondary-action--danger"
+												onClick={() => onDeleteTemplate(template)}
 											>
 												Eliminar
 											</button>
