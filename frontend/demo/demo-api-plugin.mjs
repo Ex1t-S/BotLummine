@@ -125,6 +125,12 @@ function createInitialState() {
 			analytics: { repliedRecipients: 16, replyRate: 0.186, effectiveReadRecipients: 61, effectiveReadRate: 0.709, purchasedRecipients: 9, purchaseRate: 0.105, attributedRevenue: 721500, attributedCurrency: 'ARS', conversionsBySource: { order: 7, chat: 2 } },
 		},
 		{
+			id: 'campaign-demo-clean', name: 'Aviso de temporada · Completada', status: 'FINISHED', templateId: templates[1].id,
+			templateName: templates[1].name, audienceSource: 'customers', createdAt: '2026-07-12T13:00:00.000Z', startedAt: '2026-07-12T13:05:00.000Z', finishedAt: '2026-07-12T13:40:00.000Z',
+			totalRecipients: 40, sentCount: 40, deliveredCount: 39, readCount: 30, failedCount: 0, pendingCount: 0,
+			analytics: { repliedRecipients: 8, replyRate: 0.2, effectiveReadRecipients: 30, effectiveReadRate: 0.75, purchasedRecipients: 2, purchaseRate: 0.05, attributedRevenue: 128000, attributedCurrency: 'ARS', conversionsBySource: { order: 2 } },
+		},
+		{
 			id: 'campaign-demo-draft', name: 'Lanzamiento Urban · Borrador', status: 'DRAFT', templateId: templates[2].id,
 			templateName: templates[2].name, audienceSource: 'segment', createdAt: '2026-07-18T11:30:00.000Z',
 			totalRecipients: 45, sentCount: 0, deliveredCount: 0, readCount: 0, failedCount: 0, pendingCount: 45,

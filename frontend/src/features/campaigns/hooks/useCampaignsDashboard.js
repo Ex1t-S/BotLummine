@@ -261,12 +261,12 @@ function extractDetailResponsePayload(data) {
 	return data;
 }
 
-export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
+export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId = null } = {}) {
 	const queryClient = useQueryClient();
 	const { feedback, showFeedback } = useCampaignFeedback();
 
 	const [selectedTemplate, setSelectedTemplate] = useState(null);
-	const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+	const [selectedCampaignId, setSelectedCampaignId] = useState(initialCampaignId);
 	const [abandonedCartForm, setAbandonedCartForm] = useState(initialAbandonedCartForm);
 	const [abandonedCartPreview, setAbandonedCartPreview] = useState({
 		total: 0,
@@ -498,6 +498,11 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 	}, [templates, selectedTemplate]);
 
 	useEffect(() => {
+		if (initialCampaignId && campaigns.some((campaign) => campaign.id === initialCampaignId)) {
+			if (selectedCampaignId !== initialCampaignId) setSelectedCampaignId(initialCampaignId);
+			return;
+		}
+
 		if ((!selectedCampaignId || !campaigns.some((campaign) => campaign.id === selectedCampaignId)) && campaigns.length) {
 			setSelectedCampaignId(campaigns[0].id);
 			return;
@@ -506,7 +511,7 @@ export function useCampaignsDashboard({ activeTab = 'library' } = {}) {
 		if (selectedCampaignId && campaigns.length === 0) {
 			setSelectedCampaignId(null);
 		}
-	}, [campaigns, selectedCampaignId]);
+	}, [campaigns, initialCampaignId, selectedCampaignId]);
 
 	useEffect(() => {
 		setCampaignTrackingPage(1);

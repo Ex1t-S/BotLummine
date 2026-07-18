@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { formatCampaignStatusLabel } from '../../utils/statusLabels.js';
 
 function formatDate(value) {
@@ -30,23 +30,6 @@ function formatMoney(value, currency = 'ARS') {
 	}
 }
 
-function calculateCampaignCost(sentCount = 0) {
-	return Number(sentCount || 0) * 0.06;
-}
-
-function formatUsdCost(value = 0) {
-	try {
-		return new Intl.NumberFormat('en-US', {
-			style: 'currency',
-			currency: 'USD',
-			minimumFractionDigits: 2,
-			maximumFractionDigits: 2,
-		}).format(Number(value || 0));
-	} catch {
-		return `USD ${Number(value || 0).toFixed(2)}`;
-	}
-}
-
 function formatCompactNumber(value) {
 	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
 }
@@ -67,19 +50,6 @@ function getMetric(campaign = {}, keys = []) {
 	}
 
 	return 0;
-}
-
-function getStatusTone(status = '') {
-	const normalized = String(status || '').toUpperCase();
-
-	if (['RUNNING', 'QUEUED', 'ACTIVE'].includes(normalized)) return 'En marcha';
-	if (['PAUSED', 'CANCELED'].includes(normalized)) return 'Detenida';
-	if (['PARTIAL'].includes(normalized)) return 'Parcial';
-	if (['FAILED'].includes(normalized)) return 'Con fallos';
-	if (['COMPLETED', 'SENT', 'FINISHED'].includes(normalized)) return 'Finalizada';
-	if (['OPEN'].includes(normalized)) return 'Sin fallos';
-
-	return 'Borrador';
 }
 
 function buildCampaignActionModel(campaign = {}) {
@@ -139,6 +109,20 @@ function buildCampaignActionModel(campaign = {}) {
 	}
 
 	if (status === 'FINISHED') {
+		if (failedCount > 0 || pendingCount > 0) {
+			return {
+				primaryLabel: failedCount > 0 ? 'Reintentar fallidos' : 'Relanzar pendientes',
+				primaryDisabled: false,
+				primaryAction: 'resume',
+				secondaryLabel: null,
+				secondaryAction: null,
+				helperText:
+					failedCount > 0
+						? `La campaña terminó, pero ${failedCount} destinatario${failedCount === 1 ? '' : 's'} fallaron. El reintento no toca los envíos aceptados.`
+						: `La campaña terminó con ${pendingCount} destinatario${pendingCount === 1 ? '' : 's'} pendiente${pendingCount === 1 ? '' : 's'}.`,
+			};
+		}
+
 		return {
 			primaryLabel: 'Finalizada',
 			primaryDisabled: true,
@@ -382,6 +366,7 @@ export default function CampaignRunsPanel({
 	loading = false,
 	tracking = {},
 }) {
+	const [retryConfirmationOpen, setRetryConfirmationOpen] = useState(false);
 	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
 	const selectedIsAutomationRun = selectedCampaign?.kind === 'automation_run';
 	const canDelete = selectedCampaign && !selectedIsAutomationRun && !['RUNNING', 'QUEUED'].includes(currentStatus);
@@ -417,8 +402,8 @@ export default function CampaignRunsPanel({
 	const diagnostics = selectedCampaign?.diagnostics || {};
 	const failureDiagnostics = diagnostics.failures || {};
 	const operationalControls = diagnostics.controls || {};
-	const campaignCost = calculateCampaignCost(recipientMetrics.sent);
 	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
+	const retryableCount = recipientMetrics.failed + recipientMetrics.pending;
 
 	const filteredRecipients = useMemo(() => {
 		return allRecipients.filter((recipient) => {
@@ -444,14 +429,35 @@ export default function CampaignRunsPanel({
 		safePage * pageSize
 	);
 
+	function handleRetryDialogKeyDown(event) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			setRetryConfirmationOpen(false);
+			return;
+		}
+		if (event.key !== 'Tab') return;
+
+		const buttons = Array.from(event.currentTarget.querySelectorAll('button:not(:disabled)'));
+		if (buttons.length < 2) return;
+		const firstButton = buttons[0];
+		const lastButton = buttons[buttons.length - 1];
+		if (event.shiftKey && document.activeElement === firstButton) {
+			event.preventDefault();
+			lastButton.focus();
+		}
+		if (!event.shiftKey && document.activeElement === lastButton) {
+			event.preventDefault();
+			firstButton.focus();
+		}
+	}
+
 	return (
-		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel">
+		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel campaign-tracking-panel--focused">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Historial y seguimiento de campañas</h3>
+					<h3>Seguimiento de envíos</h3>
 					<p>
-						Seguí borradores, campañas activas y resultados desde una vista más clara,
-						con seguimiento real de envíos, entregas y lecturas.
+						Elegí una campaña, revisá lo que requiere atención y bajá al destinatario sólo si necesitás investigar.
 					</p>
 				</div>
 			</div>
@@ -467,11 +473,11 @@ export default function CampaignRunsPanel({
 				</div>
 			) : (
 			<div className="campaign-runs-grid campaign-runs-grid--balanced">
-				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-list">
+				<div className="campaign-detail-box campaign-detail-box--tracking campaign-detail-box--tracking-list">
 					<div className="campaign-detail-header">
 						<div>
-							<h4>Campañas cargadas</h4>
-							<p>Elegí una campaña para revisar su seguimiento y sus destinatarios.</p>
+							<h4>Historial</h4>
+							<p>{campaigns.length} campaña{campaigns.length === 1 ? '' : 's'} disponible{campaigns.length === 1 ? '' : 's'}</p>
 						</div>
 					</div>
 
@@ -484,10 +490,9 @@ export default function CampaignRunsPanel({
 						) : (
 							campaigns.map((campaign) => {
 								const isSelected = selectedCampaign?.id === campaign.id;
-								const campaignAnalytics = campaign?.analytics || {};
 								const listTotalRecipients = getMetric(campaign, ['totalRecipients', 'recipientCount']);
 								const listSentRecipients = getMetric(campaign, ['sentRecipients', 'sentCount']);
-								const listCost = calculateCampaignCost(listSentRecipients);
+								const listFailedRecipients = getMetric(campaign, ['failedRecipients', 'failedCount']);
 
 								return (
 									<button
@@ -503,22 +508,15 @@ export default function CampaignRunsPanel({
 												<strong>{campaign.name}</strong>
 												<p>{campaign.templateName || campaign.template?.name || 'Sin plantilla asociada'}</p>
 											</div>
-											<span className={badgeClass(campaign.status)}>
+											<span className={`campaign-run-state campaign-run-state--${String(campaign.status || 'draft').toLowerCase()}`}>
 												{formatCampaignStatusLabel(campaign.status)}
 											</span>
 										</div>
 
-										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile">
-											<span>{listTotalRecipients} destinatarios</span>
-											<span>{getStatusTone(campaign.status)}</span>
-											<span>Creada {formatDate(campaign.createdAt)}</span>
-										</div>
-
-										<div className="campaign-inline-stats campaign-inline-stats--stack-mobile campaign-inline-stats--analytics">
-											<span>Respondieron {Number(campaignAnalytics.repliedRecipients || 0)}</span>
-											<span>Lectura efectiva {Number(campaignAnalytics.effectiveReadRecipients || 0)}</span>
-											<span>Señales {Number(campaignAnalytics.conversionSignalRecipients || campaignAnalytics.purchasedRecipients || 0)}</span>
-											<span>Costo {formatUsdCost(listCost)}</span>
+										<div className="campaign-run-list-summary">
+											<span><strong>{formatCompactNumber(listSentRecipients)}</strong> de {formatCompactNumber(listTotalRecipients)} enviados</span>
+											<span className={listFailedRecipients ? 'has-error' : ''}>{listFailedRecipients ? `${listFailedRecipients} fallidos` : 'Sin fallos'}</span>
+											<small>{formatDate(campaign.createdAt)}</small>
 										</div>
 									</button>
 								);
@@ -527,7 +525,7 @@ export default function CampaignRunsPanel({
 					</div>
 				</div>
 
-				<div className="campaign-detail-box campaign-detail-box--elevated campaign-detail-box--tracking campaign-detail-box--tracking-detail">
+				<div className="campaign-detail-box campaign-detail-box--tracking campaign-detail-box--tracking-detail">
 					{selectedCampaign ? (
 						<>
 							<div className="campaign-detail-header">
@@ -535,30 +533,31 @@ export default function CampaignRunsPanel({
 									<h4>{selectedCampaign.name}</h4>
 									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripcion.'}</p>
 								</div>
-								<span className={badgeClass(selectedCampaign.status)}>
+								<span className={`campaign-run-state campaign-run-state--${String(selectedCampaign.status || 'draft').toLowerCase()}`}>
 									{formatCampaignStatusLabel(selectedCampaign.status)}
 								</span>
 							</div>
 
-							<div className="campaign-helper-box">
-								<div className="campaign-helper-text">{actionModel.helperText}</div>
+							<div className="campaign-run-decision">
+								<strong>Próxima acción</strong>
+								<span>{actionModel.helperText}</span>
 							</div>
 
 							{operationalControls.blockedReasons?.length || failureDiagnostics.totalFailed ? (
-								<div className={`campaign-safety-panel campaign-safety-panel--${operationalControls.riskLevel || 'notice'}`}>
-									<div className="campaign-safety-panel__head">
-										<div>
-											<strong>Seguridad comercial y fallidos</strong>
-											<span>
+								<details className={`campaign-safety-panel campaign-safety-panel--${operationalControls.riskLevel || 'notice'}`} open={Boolean(failureDiagnostics.totalFailed)}>
+									<summary className="campaign-safety-panel__head">
+										<span>
+											<strong>Fallos y controles de seguridad</strong>
+											<small>
 												{failureDiagnostics.totalFailed
 													? `${failureDiagnostics.totalFailed} destinatario(s) fallidos detectados.`
 													: 'Sin fallidos registrados para esta campana.'}
-											</span>
-										</div>
+											</small>
+										</span>
 										{failureDiagnostics.possiblePhoneNormalization ? (
 											<b>{failureDiagnostics.possiblePhoneNormalization} posible(s) telefono mal normalizado</b>
 										) : null}
-									</div>
+									</summary>
 
 									{operationalControls.blockedReasons?.length ? (
 										<div className="campaign-safety-list">
@@ -594,20 +593,22 @@ export default function CampaignRunsPanel({
 											))}
 										</div>
 									) : null}
-								</div>
+								</details>
 							) : null}
 
 							<div className="campaign-detail-actions campaign-detail-actions--spaced">
+								{actionModel.primaryAction ? (
 								<button
 									className="button primary"
 									onClick={() => {
-										if (actionModel.primaryAction === 'dispatch') onDispatch(selectedCampaign.id);
-										if (actionModel.primaryAction === 'resume') onResume(selectedCampaign.id);
+									if (actionModel.primaryAction === 'dispatch') onDispatch(selectedCampaign.id);
+									if (actionModel.primaryAction === 'resume') setRetryConfirmationOpen(true);
 									}}
 									disabled={actionLoading || actionModel.primaryDisabled}
 								>
 									{actionModel.primaryLabel}
 								</button>
+								) : null}
 
 								{actionModel.secondaryAction === 'pause' ? (
 									<button
@@ -636,39 +637,15 @@ export default function CampaignRunsPanel({
 								) : null}
 							</div>
 
-							<div className="campaign-tracking-kpis">
-								<div className="campaign-tracking-kpi campaign-tracking-kpi--featured">
-									<span>Señales de compra</span>
-									<strong>{Number(analytics.conversionSignalRecipients || 0)}</strong>
-									<small>{formatPercent(analytics.conversionSignalRate || 0)} con pedido o chat</small>
-								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Total</span>
-									<strong>{recipientMetrics.total}</strong>
-								</div>
+							<div className="campaign-tracking-kpis campaign-tracking-kpis--essential" aria-label="Señales principales de la campaña">
 								<div className="campaign-tracking-kpi">
 									<span>Enviados</span>
 									<strong>{recipientMetrics.sent}</strong>
+									<small>de {recipientMetrics.total} destinatarios</small>
 								</div>
 								<div className="campaign-tracking-kpi">
 									<span>Entregados</span>
 									<strong>{recipientMetrics.delivered}</strong>
-								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Leidos</span>
-									<strong>{recipientMetrics.read}</strong>
-								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Fallidos</span>
-									<strong>{recipientMetrics.failed}</strong>
-								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Pendientes</span>
-									<strong>{recipientMetrics.pending}</strong>
-								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Omitidos</span>
-									<strong>{recipientMetrics.skipped || 0}</strong>
 								</div>
 								<div className="campaign-tracking-kpi">
 									<span>Respondieron</span>
@@ -676,26 +653,18 @@ export default function CampaignRunsPanel({
 									<small>{formatPercent(analytics.replyRate || 0)}</small>
 								</div>
 								<div className="campaign-tracking-kpi">
-									<span>Lectura efectiva</span>
-									<strong>{Number(analytics.effectiveReadRecipients || 0)}</strong>
-									<small>{formatPercent(analytics.effectiveReadRate || 0)}</small>
-								</div>
-								<div className="campaign-tracking-kpi">
 									<span>Compraron</span>
 									<strong>{Number(analytics.purchasedRecipients || 0)}</strong>
 									<small>{formatPercent(analytics.purchaseRate || 0)}</small>
 								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Compra por chat</span>
-									<strong>{Number(analytics.chatConfirmedPurchaseRecipients || 0)}</strong>
-									<small>{formatPercent(analytics.chatConfirmedPurchaseRate || 0)}</small>
-								</div>
-								<div className="campaign-tracking-kpi">
-									<span>Costo</span>
-									<strong>{formatUsdCost(campaignCost)}</strong>
-									<small>{recipientMetrics.sent} enviados x USD 0.06</small>
-								</div>
 							</div>
+
+							{recipientMetrics.failed || recipientMetrics.pending || recipientMetrics.skipped ? (
+								<div className="campaign-run-exceptions" role="status">
+									<strong>{recipientMetrics.failed} fallidos · {recipientMetrics.pending} pendientes</strong>
+									<span>{recipientMetrics.skipped || 0} omitidos por exclusiones o contexto reciente.</span>
+								</div>
+							) : null}
 
 							{conversionSourceItems.length ? (
 								<div className="campaign-conversion-source-strip" aria-label="Conversiones por fuente">
@@ -898,6 +867,20 @@ export default function CampaignRunsPanel({
 									</button>
 								</div>
 							</div>
+
+							{retryConfirmationOpen ? (
+								<div className="campaign-retry-backdrop" role="presentation">
+					<div className="campaign-retry-dialog" role="dialog" aria-modal="true" aria-labelledby="campaign-retry-title" aria-describedby="campaign-retry-description" onKeyDown={handleRetryDialogKeyDown}>
+										<h4 id="campaign-retry-title">Reintentar envíos sin duplicar</h4>
+										<p id="campaign-retry-description">Se volverán a preparar hasta {retryableCount} destinatarios fallidos o pendientes. Los enviados no se tocan y las exclusiones, bajas y conversaciones recientes se controlan otra vez antes del envío.</p>
+										<div className="campaign-retry-dialog__facts"><span><strong>{recipientMetrics.failed}</strong> fallidos</span><span><strong>{recipientMetrics.pending}</strong> pendientes</span><span><strong>{recipientMetrics.sent}</strong> ya enviados, protegidos</span></div>
+										<div className="campaign-retry-dialog__actions">
+							<button type="button" className="button secondary" autoFocus onClick={() => setRetryConfirmationOpen(false)}>Cancelar</button>
+											<button type="button" className="button primary" disabled={actionLoading || retryableCount === 0} onClick={() => { setRetryConfirmationOpen(false); onResume(selectedCampaign.id); }}>Confirmar reintento</button>
+										</div>
+									</div>
+								</div>
+							) : null}
 						</>
 					) : (
 						<div className="campaign-empty-state">

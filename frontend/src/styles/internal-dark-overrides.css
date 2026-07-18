@@ -681,6 +681,50 @@
 	color: #f3bc69 !important;
 }
 
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-result-summary,
+	.campaign-os-result-summary > div,
+	.campaign-os-result-item,
+	.campaign-os-result-detail__metrics,
+	.campaign-os-result-detail__metrics > div
+) {
+	border-color: var(--campaign-os-border) !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-result-item {
+	background: transparent !important;
+	color: #f7f8fb !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-result-item:hover {
+	background: #171c25 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-result-item.is-selected {
+	background: #202541 !important;
+	box-shadow: inset 3px 0 #8f98ff !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-result-summary strong,
+	.campaign-os-result-item strong
+) {
+	color: #f7f8fb !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os :where(
+	.campaign-os-result-summary span,
+	.campaign-os-result-summary small,
+	.campaign-os-result-item small
+) {
+	color: var(--campaign-os-muted) !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-result-detail {
+	background: #171c2a !important;
+	border: 1px solid #343c50 !important;
+}
+
 .dark .admin-shell .admin-content :where(
 	.template-library-selected-banner strong,
 	.template-list-card.selected strong,
