@@ -1818,7 +1818,7 @@ export default function CampaignComposerPanel({
 						<div className="campaign-step-head">
 							<div>
 								<span className="campaign-step-badge">2. Audiencia</span>
-								<h4>Elige a quién escribirle</h4>
+							<h4>Elegí a quién escribirle</h4>
 								<p>
 									Filtrá clientes, revisá el alcance y seleccioná los destinatarios de la campaña.
 								</p>

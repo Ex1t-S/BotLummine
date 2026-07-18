@@ -9,12 +9,23 @@ import {
 	Megaphone,
 	Plus,
 	RefreshCw,
+	Settings2,
+	ShoppingCart,
 	Sparkles,
+	Truck,
 	Users,
+	WalletCards,
 	Workflow,
 } from 'lucide-react';
 import api from '../../lib/api.js';
-import { fetchCampaignOverview, fetchCampaigns, fetchTemplates } from '../../lib/campaigns.js';
+import {
+	fetchAbandonedCartAutomationSettings,
+	fetchCampaignOverview,
+	fetchCampaigns,
+	fetchPendingPaymentAutomationSettings,
+	fetchShipmentNotificationSettings,
+	fetchTemplates,
+} from '../../lib/campaigns.js';
 import { ActionButton, EmptyState } from '../../components/ui/InternalPage.jsx';
 import './CampaignCommandCenter.css';
 
@@ -22,9 +33,9 @@ const NAV_ITEMS = [
 	{ id: 'overview', to: '/campaigns', label: 'Resumen', icon: LayoutDashboard, exact: true },
 	{ id: 'create', to: '/campaigns/segment', label: 'Crear', icon: Plus },
 	{ id: 'audiences', to: '/campaigns/audiences', label: 'Audiencias', icon: Users },
-	{ id: 'automations', to: '/campaigns/abandoned-carts', label: 'Automatizaciones', icon: Workflow, paths: ['/campaigns/abandoned-carts', '/campaigns/pending-payments', '/campaigns/shipments', '/campaigns/schedules'] },
+	{ id: 'automations', to: '/campaigns/automations', label: 'Automatizaciones', icon: Workflow, paths: ['/campaigns/automations', '/campaigns/abandoned-carts', '/campaigns/pending-payments', '/campaigns/shipments', '/campaigns/schedules'] },
 	{ id: 'templates', to: '/campaigns/library', label: 'Plantillas', icon: Sparkles, paths: ['/campaigns/library', '/campaigns/builder'] },
-	{ id: 'results', to: '/campaigns/tracking', label: 'Resultados', icon: BarChart3 },
+	{ id: 'results', to: '/campaigns/results', label: 'Resultados', icon: BarChart3, paths: ['/campaigns/results', '/campaigns/tracking'] },
 ];
 
 function getCollection(data, keys = []) {
@@ -242,6 +253,137 @@ export function CampaignAudienceStudio() {
 				))}
 			</div>
 			<div className="campaign-os-audience-note"><strong>La audiencia no se guarda a ciegas.</strong><span>Antes de crear la campaña vas a ver el total, una muestra de destinatarios y cualquier dato faltante.</span></div>
+		</div>
+	);
+}
+
+export function CampaignAutomationHub() {
+	const navigate = useNavigate();
+	const automationQuery = useQuery({
+		queryKey: ['campaign-os', 'automations'],
+		queryFn: async () => {
+			const [carts, payments, shipments] = await Promise.all([
+				fetchAbandonedCartAutomationSettings(),
+				fetchPendingPaymentAutomationSettings(),
+				fetchShipmentNotificationSettings(),
+			]);
+			return { carts, payments, shipments };
+		},
+		staleTime: 30_000,
+	});
+
+	const rows = [
+		{
+			id: 'carts',
+			icon: ShoppingCart,
+			title: 'Recuperación de carritos',
+			description: 'Detecta oportunidades nuevas y prepara el contacto con una regla controlada.',
+			settings: automationQuery.data?.carts?.settings || automationQuery.data?.carts || {},
+			to: '/campaigns/abandoned-carts',
+		},
+		{
+			id: 'payments',
+			icon: WalletCards,
+			title: 'Recordatorio de pedidos pendientes',
+			description: 'Recuerda completar el pago sin mezclar la revisión humana de comprobantes.',
+			settings: automationQuery.data?.payments?.settings || automationQuery.data?.payments || {},
+			to: '/campaigns/pending-payments',
+		},
+		{
+			id: 'shipments',
+			icon: Truck,
+			title: 'Avisos de despacho',
+			description: 'Informa el tracking cuando el pedido está listo para salir.',
+			settings: automationQuery.data?.shipments?.settings || automationQuery.data?.shipments || {},
+			to: '/campaigns/shipments',
+		},
+	];
+	const activeCount = rows.filter((row) => Boolean(row.settings?.enabled)).length;
+	const errorCount = rows.filter((row) => Boolean(row.settings?.lastError)).length;
+
+	return (
+		<div className="campaign-os-automations">
+			<div className="campaign-os-intro">
+				<div><span>Control center</span><h2>Automatizaciones con propósito claro</h2><p>Revisá el estado primero. Entrá a configurar sólo la regla que necesita cambios.</p></div>
+				<div className="campaign-os-inline-totals" aria-label="Resumen de automatizaciones"><span><strong>{number(activeCount)}</strong> activas</span><span className={errorCount ? 'has-error' : ''}><strong>{number(errorCount)}</strong> con error</span></div>
+			</div>
+			{automationQuery.isError ? <div className="campaign-os-inline-error" role="alert">No pudimos leer todas las reglas. Reintentá antes de modificar una automatización.</div> : null}
+			<div className="campaign-os-automation-list">
+				{rows.map((row) => {
+					const Icon = row.icon;
+					const enabled = Boolean(row.settings?.enabled);
+					const hasError = Boolean(row.settings?.lastError);
+					return (
+						<article className="campaign-os-automation-row" key={row.id}>
+							<span className="campaign-os-automation-icon"><Icon size={19} aria-hidden="true" /></span>
+							<div><span>{hasError ? 'Requiere atención' : enabled ? 'Activa' : 'Pausada'}</span><h3>{row.title}</h3><p>{row.description}</p></div>
+							<strong className={`campaign-os-automation-state ${hasError ? 'has-error' : enabled ? 'is-active' : ''}`}>{hasError ? 'Error' : enabled ? 'Funcionando' : 'Pausada'}</strong>
+							<button type="button" onClick={() => navigate(row.to)}><Settings2 size={15} aria-hidden="true" />Configurar</button>
+						</article>
+					);
+				})}
+			</div>
+			<div className="campaign-os-audience-note"><strong>Configura con contexto.</strong><span>Cada regla conserva su editor completo, pero la complejidad queda detrás de una decisión explícita.</span></div>
+		</div>
+	);
+}
+
+export function CampaignResultsHub() {
+	const navigate = useNavigate();
+	const resultsQuery = useQuery({
+		queryKey: ['campaign-os', 'results'],
+		queryFn: async () => {
+			const [campaignData, statsData] = await Promise.all([
+				fetchCampaigns({ page: 1, pageSize: 20 }),
+				fetchCampaignOverview(),
+			]);
+			return { campaignData, statsData };
+		},
+		staleTime: 30_000,
+	});
+
+	if (resultsQuery.isLoading) return <EmptyState tone="loading" title="Preparando resultados" description="Consolidando entrega, respuesta y compras atribuidas." />;
+	if (resultsQuery.isError) return <EmptyState tone="error" title="No pudimos cargar los resultados" description="Reintentá para volver a calcular la lectura operativa."><ActionButton variant="secondary" icon={RefreshCw} onClick={() => resultsQuery.refetch()}>Reintentar</ActionButton></EmptyState>;
+
+	const campaigns = getCollection(resultsQuery.data?.campaignData, ['campaigns', 'items']);
+	const completed = campaigns.filter((campaign) => Number(campaign.sentCount || 0) > 0);
+	const totals = completed.reduce((acc, campaign) => {
+		acc.sent += Number(campaign.sentCount || 0);
+		acc.delivered += Number(campaign.deliveredCount || 0);
+		acc.replied += Number(campaign.analytics?.repliedRecipients || 0);
+		acc.purchased += Number(campaign.analytics?.purchasedRecipients || 0);
+		acc.revenue += Number(campaign.analytics?.attributedRevenue || 0);
+		return acc;
+	}, { sent: 0, delivered: 0, replied: 0, purchased: 0, revenue: 0 });
+	const stats = resultsQuery.data?.statsData?.stats || resultsQuery.data?.statsData || {};
+	const revenue = totals.revenue || Number(stats.attributedRevenue || 0);
+
+	return (
+		<div className="campaign-os-results">
+			<div className="campaign-os-intro"><div><span>Performance</span><h2>Resultados para decidir el próximo movimiento</h2><p>Cuatro señales principales y detalle por campaña cuando hace falta investigar.</p></div></div>
+			<div className="campaign-os-metrics" aria-label="Indicadores principales de resultados">
+				<CampaignMetric label="Entrega" value={percent(totals.sent ? totals.delivered / totals.sent * 100 : 0)} helper={`${number(totals.delivered)} mensajes entregados`} tone="success" />
+				<CampaignMetric label="Respuesta" value={percent(totals.sent ? totals.replied / totals.sent * 100 : 0)} helper={`${number(totals.replied)} conversaciones iniciadas`} tone="primary" />
+				<CampaignMetric label="Compras" value={number(totals.purchased || stats.purchasedRecipients)} helper="Con señal atribuida" tone="primary" />
+				<CampaignMetric label="Ingresos atribuidos" value={currency(revenue, stats.attributedCurrency || 'ARS')} helper="No reemplaza la conciliación contable" />
+			</div>
+			<section className="campaign-os-results-list" aria-labelledby="campaign-results-title">
+				<div className="campaign-os-section-head"><div><span>Comparación</span><h3 id="campaign-results-title">Rendimiento por campaña</h3></div></div>
+				{completed.length ? completed.map((campaign) => {
+					const analytics = campaign.analytics || {};
+					const delivery = Number(campaign.sentCount || 0) ? Number(campaign.deliveredCount || 0) / Number(campaign.sentCount || 1) * 100 : 0;
+					return (
+						<article className="campaign-os-result-row" key={campaign.id}>
+							<div><strong>{campaign.name}</strong><span>{number(campaign.totalRecipients)} destinatarios · {audienceLabel(campaign.audienceSource)}</span></div>
+							<span><small>Entrega</small><strong>{percent(delivery)}</strong></span>
+							<span><small>Respuestas</small><strong>{number(analytics.repliedRecipients)}</strong></span>
+							<span><small>Compras</small><strong>{number(analytics.purchasedRecipients)}</strong></span>
+							<span><small>Ingresos</small><strong>{currency(analytics.attributedRevenue, analytics.attributedCurrency || 'ARS')}</strong></span>
+							<button type="button" onClick={() => navigate(`/campaigns/tracking?campaign=${campaign.id}`)}>Analizar<ArrowRight size={15} aria-hidden="true" /></button>
+						</article>
+					);
+				}) : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><strong>Aún no hay resultados</strong><span>Los envíos con actividad aparecerán en esta comparación.</span></div></div>}
+			</section>
 		</div>
 	);
 }

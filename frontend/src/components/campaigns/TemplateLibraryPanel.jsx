@@ -109,7 +109,7 @@ export default function TemplateLibraryPanel({
 			<div className="template-library-header">
 				<div>
 					<span className="campaigns-eyebrow">Biblioteca</span>
-					<h3>Elegí el template para tu próxima campaña</h3>
+					<h3>Elegí la plantilla para tu próxima campaña</h3>
 					<p>
 						Buscá por nombre, estado o contenido y seleccioná la plantilla que vas a usar,
 						editar o programar.
@@ -118,11 +118,11 @@ export default function TemplateLibraryPanel({
 
 				<div className="template-library-header-actions">
 					<button className="button primary" onClick={onCreateTemplate}>
-						Crear template
+						Crear plantilla
 					</button>
 
 					<button className="button secondary" onClick={onSync} disabled={syncing}>
-						{syncing ? 'Sincronizando...' : 'Sincronizar templates'}
+						{syncing ? 'Sincronizando...' : 'Sincronizar plantillas'}
 					</button>
 
 					<button
@@ -139,7 +139,7 @@ export default function TemplateLibraryPanel({
 			<div className="campaign-inline-summary template-library-summary">
 				<div className="campaign-inline-summary-item">
 					<strong>{templates.length}</strong>
-					<span>templates</span>
+					<span>plantillas</span>
 				</div>
 				<div className="campaign-inline-summary-item">
 					<strong>{approvedCount}</strong>

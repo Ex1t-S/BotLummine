@@ -562,6 +562,8 @@
 	.campaign-os-nav,
 	.campaign-os-metrics,
 	.campaign-os-list,
+	.campaign-os-results-list,
+	.campaign-os-automation-list,
 	.campaign-os-recipe,
 	.campaign-os-audience-note,
 	.campaign-os-inline-error
@@ -574,6 +576,8 @@
 .dark .admin-shell .admin-content .campaign-os :where(
 	.campaign-os-metric,
 	.campaign-os-row,
+	.campaign-os-result-row,
+	.campaign-os-automation-row,
 	.campaign-os-section-head
 ) {
 	border-color: var(--campaign-os-border) !important;
@@ -587,6 +591,8 @@
 	.campaign-os-metric strong,
 	.campaign-os-recipe h3,
 	.campaign-os-recipe-count strong
+	,.campaign-os-automation-row h3
+	,.campaign-os-result-row strong
 ) {
 	color: #f7f8fb !important;
 }
@@ -600,6 +606,9 @@
 	.campaign-os-recipe p,
 	.campaign-os-recipe-count span,
 	.campaign-os-audience-note span
+	,.campaign-os-automation-row p
+	,.campaign-os-result-row span
+	,.campaign-os-result-row small
 ) {
 	color: var(--campaign-os-muted) !important;
 }
@@ -632,10 +641,22 @@
 	.campaign-os-section-head button,
 	.campaign-os-row-action,
 	.campaign-os-recipe > button
+	,.campaign-os-automation-row > button
+	,.campaign-os-result-row > button
 ) {
 	background: #171c25 !important;
 	border-color: #333b49 !important;
 	color: #f3f4f8 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-inline-totals > span {
+	background: #171c25 !important;
+	border-color: #333b49 !important;
+}
+
+.dark .admin-shell .admin-content .campaign-os .campaign-os-automation-icon {
+	background: #202541 !important;
+	color: #a8aeff !important;
 }
 
 .dark .admin-shell .admin-content .campaign-os .campaign-os-next {

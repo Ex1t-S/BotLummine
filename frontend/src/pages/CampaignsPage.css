@@ -700,3 +700,115 @@
 		padding-inline: 12px;
 	}
 }
+
+/* Campaign OS template library: flat inventory instead of stacked cards. */
+.campaign-os__legacy .template-library-shell {
+	padding: 20px 2px;
+}
+
+.campaign-os__legacy .template-library-header {
+	align-items: flex-start;
+	gap: 18px;
+}
+
+.campaign-os__legacy .template-library-header h3 {
+	font-size: 25px;
+	letter-spacing: -.03em;
+}
+
+.campaign-os__legacy .template-library-header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.campaign-os__legacy .template-library-header-actions .button {
+	min-height: 40px;
+	border-radius: 9px;
+}
+
+.campaign-os__legacy .template-library-summary {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0;
+	overflow: hidden;
+	border: 1px solid #e1e5ed;
+	border-radius: 10px;
+	background: #fff;
+}
+
+.campaign-os__legacy .template-library-summary .campaign-inline-summary-item {
+	min-height: 58px;
+	padding: 10px 14px;
+	border: 0;
+	border-left: 1px solid #e8ebf1;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.campaign-os__legacy .template-library-summary .campaign-inline-summary-item:first-child {
+	border-left: 0;
+}
+
+.campaign-os__legacy .template-library-list {
+	gap: 0;
+	overflow: hidden;
+	border: 1px solid #e1e5ed;
+	border-radius: 11px;
+	background: #fff;
+}
+
+.campaign-os__legacy .template-library-list .template-list-card {
+	margin: 0;
+	padding: 15px 16px;
+	border: 0;
+	border-bottom: 1px solid #e8ebf1;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.campaign-os__legacy .template-library-list .template-list-card:last-child {
+	border-bottom: 0;
+}
+
+.campaign-os__legacy .template-library-list .template-list-card.selected {
+	background: #f1f3ff;
+}
+
+.campaign-os__legacy .template-library-list .template-chip {
+	border: 0;
+	background: #f1f3f7;
+}
+
+@media (max-width: 620px) {
+	.campaign-os__legacy .template-library-shell {
+		padding: 12px 0;
+	}
+
+	.campaign-os__legacy .template-library-header-actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		width: 100%;
+	}
+
+	.campaign-os__legacy .template-library-header-actions .button {
+		width: auto;
+		min-width: 0;
+		padding-inline: 10px;
+	}
+
+	.campaign-os__legacy .template-library-header-actions .button:last-child {
+		grid-column: 1 / -1;
+	}
+
+	.campaign-os__legacy .template-library-summary {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.campaign-os__legacy .template-library-summary .campaign-inline-summary-item {
+		min-width: 0;
+		padding: 9px;
+	}
+}
