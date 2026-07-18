@@ -103,10 +103,10 @@ test('separa el error de analytics de las metricas y conserva recuperacion', asy
 	await page.setViewportSize({ width: 1440, height: 960 });
 	await page.goto('/analytics');
 
-	const errorState = page.getByRole('alert').filter({ hasText: 'No pudimos cargar las estadisticas' });
+	const errorState = page.getByRole('alert').filter({ hasText: /No pudimos cargar las estad/ });
 	await expect(errorState).toBeVisible();
-	await expect(page.getByText('Campañas: 0')).toHaveCount(0);
-	await expect(page.getByText('No hay marcas para mostrar')).toHaveCount(0);
+	await expect(page.getByText('Mensajes recibidos')).toHaveCount(0);
+	await expect(page.getByText('Todavía no hay actividad para analizar')).toHaveCount(0);
 	await errorState.scrollIntoViewIfNeeded();
 	await page.screenshot({
 		path: 'audit-artifacts/screenshots/after/admin-analytics-error-1440x960.png',
@@ -114,6 +114,6 @@ test('separa el error de analytics de las metricas y conserva recuperacion', asy
 
 	control.allowAnalytics = true;
 	await errorState.getByRole('button', { name: 'Reintentar' }).click();
-	await expect(page.getByText('No hay marcas para mostrar')).toBeVisible();
-	await expect(page.getByRole('alert').filter({ hasText: 'No pudimos cargar las estadisticas' })).toHaveCount(0);
+	await expect(page.getByText('Todavía no hay actividad para analizar')).toBeVisible();
+	await expect(page.getByRole('alert').filter({ hasText: /No pudimos cargar las estad/ })).toHaveCount(0);
 });

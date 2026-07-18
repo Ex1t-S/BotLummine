@@ -3,6 +3,7 @@ export const internalRouteModules = {
 	operations: () => import('../pages/OperationsPage.jsx'),
 	inbox: () => import('../pages/InboxPage.jsx'),
 	admin: () => import('../pages/AdminPage.jsx'),
+	analytics: () => import('../pages/AnalyticsPage.jsx'),
 	catalog: () => import('../pages/CatalogPage.jsx'),
 	campaigns: () => import('../pages/CampaignsPage.jsx'),
 	abandonedCarts: () => import('../pages/AbandonedCartsPage.jsx'),
@@ -17,7 +18,8 @@ export function getInternalRouteKey(pathname = '') {
 
 	if (path.startsWith('/operations')) return 'operations';
 	if (path.startsWith('/inbox')) return 'inbox';
-	if (path.startsWith('/admin') || path.startsWith('/analytics')) return 'admin';
+	if (path.startsWith('/admin')) return 'admin';
+	if (path.startsWith('/analytics')) return 'analytics';
 	if (path.startsWith('/catalog')) return 'catalog';
 	if (path.startsWith('/campaigns')) return 'campaigns';
 	if (path.startsWith('/abandoned-carts')) return 'abandonedCarts';

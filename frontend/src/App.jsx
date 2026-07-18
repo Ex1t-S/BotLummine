@@ -16,6 +16,7 @@ const CustomersPage = lazyWithRetry(internalRouteModules.customers, 'CustomersPa
 const WhatsAppMenuPage = lazyWithRetry(internalRouteModules.whatsappMenu, 'WhatsAppMenuPage');
 const AiLabPage = lazyWithRetry(internalRouteModules.aiLab, 'AiLabPage');
 const AdminPage = lazyWithRetry(internalRouteModules.admin, 'AdminPage');
+const AnalyticsPage = lazyWithRetry(internalRouteModules.analytics, 'AnalyticsPage');
 const OperationsPage = lazyWithRetry(internalRouteModules.operations, 'OperationsPage');
 const PrivateAppShell = lazyWithRetry(internalRouteModules.privateShell, 'PrivateAppShell');
 const LoginPage = lazyWithRetry(internalRouteModules.login, 'LoginPage');
@@ -54,7 +55,7 @@ function BrandAnalyticsRoute() {
 		return <Navigate to="/admin" replace />;
 	}
 
-	return <AdminPage defaultTab="analytics" />;
+	return <AnalyticsPage />;
 }
 
 function AiLabRoute() {

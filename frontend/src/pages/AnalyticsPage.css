@@ -1,0 +1,260 @@
+.analytics-v2-page {
+	display: grid;
+	gap: 22px;
+	width: 100%;
+	color: var(--text-primary, #172033);
+}
+
+.analytics-v2-page .internal-page-header {
+	padding: 0 0 18px;
+	border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.admin-shell .admin-content .analytics-v2-page .internal-page-header {
+	padding: 0 0 18px !important;
+	border: 0 !important;
+	border-bottom: 1px solid var(--border-subtle, #e2e8f0) !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+.analytics-v2-metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	border-block: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.analytics-v2-metric {
+	position: relative;
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+	padding: 18px 22px 18px 0;
+}
+
+.analytics-v2-metric + .analytics-v2-metric {
+	padding-left: 22px;
+	border-left: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.analytics-v2-metric span,
+.analytics-v2-section-head span {
+	color: var(--text-muted, #667085);
+	font-size: 12px;
+	font-weight: 750;
+	letter-spacing: .055em;
+	text-transform: uppercase;
+}
+
+.analytics-v2-metric strong {
+	font-size: clamp(25px, 2.4vw, 34px);
+	font-weight: 730;
+	letter-spacing: -.035em;
+	line-height: 1;
+}
+
+.analytics-v2-metric small {
+	color: var(--text-secondary, #475467);
+	font-size: 13px;
+	line-height: 1.35;
+}
+
+.analytics-v2-metric.tone-warning strong { color: #b54708; }
+.analytics-v2-metric.tone-success strong { color: #067647; }
+
+.analytics-v2-overview {
+	display: grid;
+	grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
+	gap: 32px;
+}
+
+.analytics-v2-section {
+	min-width: 0;
+	padding: 0;
+}
+
+.analytics-v2-section-head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px;
+	padding-bottom: 13px;
+	border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.analytics-v2-section-head h3 {
+	margin: 4px 0 0;
+	font-size: 18px;
+	font-weight: 720;
+	letter-spacing: -.015em;
+}
+
+.analytics-v2-section-head small {
+	color: var(--text-muted, #667085);
+	font-size: 12px;
+}
+
+.analytics-v2-progress-list {
+	display: grid;
+	gap: 18px;
+	padding-top: 18px;
+}
+
+.analytics-v2-progress-row {
+	display: grid;
+	grid-template-columns: 34px minmax(0, 1fr);
+	gap: 12px;
+	align-items: start;
+}
+
+.analytics-v2-progress-icon {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	background: var(--surface-hover, #f1f5f9);
+	color: var(--action-primary, #2556d8);
+}
+
+.analytics-v2-progress-label {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 14px;
+}
+
+.analytics-v2-progress-track {
+	height: 7px;
+	margin: 8px 0 6px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: var(--surface-hover, #eef2f6);
+}
+
+.analytics-v2-progress-track span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--action-primary, #2556d8);
+}
+
+.analytics-v2-progress-row small {
+	color: var(--text-muted, #667085);
+	font-size: 12px;
+}
+
+.analytics-v2-facts {
+	display: grid;
+	margin: 0;
+}
+
+.analytics-v2-facts > div {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 4px 16px;
+	padding: 16px 0;
+	border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.analytics-v2-facts dt {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+	font-weight: 650;
+}
+
+.analytics-v2-facts dd {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 720;
+}
+
+.analytics-v2-facts small {
+	grid-column: 1 / -1;
+	color: var(--text-muted, #667085);
+	font-size: 12px;
+}
+
+.analytics-v2-section--table {
+	padding-top: 4px;
+}
+
+.analytics-v2-table-wrap {
+	overflow-x: auto;
+}
+
+.analytics-v2-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.analytics-v2-table th {
+	padding: 11px 14px;
+	border-bottom: 1px solid var(--border-strong, #cbd5e1);
+	color: var(--text-muted, #667085);
+	font-size: 11px;
+	font-weight: 750;
+	letter-spacing: .045em;
+	text-align: left;
+	text-transform: uppercase;
+}
+
+.analytics-v2-table td {
+	padding: 14px;
+	border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+	vertical-align: middle;
+}
+
+.analytics-v2-table td:first-child { min-width: 240px; }
+.analytics-v2-table td strong,
+.analytics-v2-table td span { display: block; }
+.analytics-v2-table td:first-child span { margin-top: 3px; color: var(--text-muted, #667085); font-size: 12px; }
+
+.analytics-v2-status {
+	width: fit-content;
+	padding: 4px 7px;
+	border-radius: 5px;
+	background: #f2f4f7;
+	color: #475467;
+	font-size: 11px;
+	font-weight: 750;
+}
+
+.analytics-v2-status.status-running { background: #ecfdf3; color: #067647; }
+.analytics-v2-status.status-finished { background: #eff8ff; color: #175cd3; }
+.analytics-v2-status.status-failed { background: #fef3f2; color: #b42318; }
+
+.analytics-v2-inline-empty {
+	margin: 0;
+	padding: 22px 0;
+	color: var(--text-muted, #667085);
+}
+
+.dark .analytics-v2-progress-icon,
+.dark .analytics-v2-progress-track { background: #1f2937; }
+.dark .analytics-v2-status { background: #253044; color: #cbd5e1; }
+.dark .analytics-v2-status.status-running { background: #063c2f; color: #6ce9a6; }
+.dark .analytics-v2-status.status-finished { background: #102a56; color: #84adff; }
+
+@media (max-width: 1050px) {
+	.analytics-v2-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.analytics-v2-metric:nth-child(3) { padding-left: 0; border-left: 0; border-top: 1px solid var(--border-subtle, #e2e8f0); }
+	.analytics-v2-metric:nth-child(4) { border-top: 1px solid var(--border-subtle, #e2e8f0); }
+	.analytics-v2-overview { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+	.analytics-v2-page { gap: 18px; }
+	.analytics-v2-metrics { grid-template-columns: 1fr; }
+	.analytics-v2-metric,
+	.analytics-v2-metric + .analytics-v2-metric { padding: 14px 0; border-left: 0; border-top: 1px solid var(--border-subtle, #e2e8f0); }
+	.analytics-v2-metric:first-child { border-top: 0; }
+	.analytics-v2-table th:nth-child(3),
+	.analytics-v2-table td:nth-child(3),
+	.analytics-v2-table th:nth-child(5),
+	.analytics-v2-table td:nth-child(5) { display: none; }
+}
