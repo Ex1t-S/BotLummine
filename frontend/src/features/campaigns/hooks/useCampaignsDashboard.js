@@ -32,6 +32,7 @@ import {
 	sendShipmentNotifications,
 	syncTemplates,
 	updateAbandonedCartAutomationSettings,
+	updateCampaignDraft,
 	updateCampaignSchedule,
 	updatePendingPaymentAutomationSettings,
 	updateShipmentNotificationSettings,
@@ -638,6 +639,17 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la campaña.'),
 	});
 
+	const updateCampaignDraftMutation = useMutation({
+		mutationFn: ({ campaignId, payload }) => updateCampaignDraft(campaignId, payload),
+		onSuccess: async (response) => {
+			const updatedId = extractCreatedCampaignId(response);
+			invalidateAll(updatedId);
+			if (updatedId) setSelectedCampaignId(updatedId);
+			showFeedback('success', 'Borrador actualizado.');
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar el borrador.'),
+	});
+
 	const deleteCampaignMutation = useMutation({
 		mutationFn: deleteCampaign,
 		onSuccess: (_response, deletedCampaignId) => {
@@ -933,6 +945,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			updateTemplate: updateTemplateMutation,
 			deleteTemplate: deleteTemplateMutation,
 			createCampaign: createCampaignMutation,
+			updateCampaignDraft: updateCampaignDraftMutation,
 			deleteCampaign: deleteCampaignMutation,
 			action: actionMutation,
 			abandonedPreview: abandonedCartPreviewMutation,

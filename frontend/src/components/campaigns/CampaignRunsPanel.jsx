@@ -12,7 +12,7 @@ function formatDate(value) {
 }
 
 function formatPercent(value) {
-	const numeric = Number(value || 0);
+	const numeric = Math.min(1, Math.max(0, Number(value || 0)));
 	return `${Math.ceil(numeric * 100)}%`;
 }
 

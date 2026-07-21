@@ -64,6 +64,11 @@ export async function createCampaign(payload) {
 	return unwrap(response);
 }
 
+export async function updateCampaignDraft(campaignId, payload) {
+	const response = await api.patch(`/campaigns/${campaignId}`, payload);
+	return unwrap(response);
+}
+
 export async function deleteCampaign(campaignId) {
 	const response = await api.delete(`/campaigns/${campaignId}`);
 	return unwrap(response);

@@ -844,6 +844,7 @@ model Campaign {
   failedRecipients    Int            @default(0)
   skippedRecipients   Int            @default(0)
   defaultComponents   Json?
+  draftContext        Json?
   previewText         String?
   lastError           String?
   startedAt           DateTime?

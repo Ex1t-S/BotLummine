@@ -1717,10 +1717,13 @@ export async function listCampaigns({ workspaceId, limit = 50 } = {}) {
 
 	const analyticsMap = new Map(analyticsByCampaignId);
 
-	return campaigns.map((campaign) => ({
-		...campaign,
-		analytics: analyticsMap.get(campaign.id) || null
-	}));
+	return campaigns.map((campaign) => {
+		const { draftContext: _draftContext, ...campaignSummary } = campaign;
+		return {
+			...campaignSummary,
+			analytics: analyticsMap.get(campaign.id) || null,
+		};
+	});
 }
 
 function getRecipientDispatchAt(recipient = {}) {
@@ -2013,15 +2016,25 @@ export async function buildCampaignRecipientInsights(recipients = [], workspaceI
 	}
 
 	const base = recipientsWithDispatch.length || 0;
+	const dispatchedRecipientIds = new Set(
+		recipientsWithDispatch.map((recipient) => recipient.id).filter(Boolean)
+	);
 	const persistedInsights = await getPersistedConversionInsights({
 		workspaceId: resolvedWorkspaceId,
 		recipientIds: normalizedRecipients.map((recipient) => recipient.id),
 	});
 	const persistedSummary = persistedInsights.summary || {};
-	const persistedById = persistedInsights.recipientsById || new Map();
-	const finalPurchasedRecipients = Math.max(purchasedRecipients, persistedSummary.purchasedRecipients || 0);
-	const finalChatConfirmedRecipients = Math.max(chatConfirmedPurchaseRecipients, persistedSummary.chatConfirmedPurchaseRecipients || 0);
-	const finalConversionSignalRecipients = Math.max(conversionSignalRecipients, persistedSummary.conversionSignalRecipients || 0);
+	const persistedById = new Map(
+		[...(persistedInsights.recipientsById || new Map())]
+			.filter(([recipientId]) => dispatchedRecipientIds.has(recipientId))
+	);
+	const persistedRecipientInsights = [...persistedById.values()];
+	const persistedPurchasedRecipients = persistedRecipientInsights.filter((insight) => insight.purchaseDetected).length;
+	const persistedChatConfirmedRecipients = persistedRecipientInsights.filter((insight) => insight.chatConfirmedPurchase).length;
+	const persistedConversionSignalRecipients = persistedRecipientInsights.filter((insight) => insight.conversionSignal).length;
+	const finalPurchasedRecipients = Math.min(base, Math.max(purchasedRecipients, persistedPurchasedRecipients));
+	const finalChatConfirmedRecipients = Math.min(base, Math.max(chatConfirmedPurchaseRecipients, persistedChatConfirmedRecipients));
+	const finalConversionSignalRecipients = Math.min(base, Math.max(conversionSignalRecipients, persistedConversionSignalRecipients));
 	const finalConversionsBySource = {
 		...(persistedSummary.conversionsBySource || {}),
 	};
@@ -2041,23 +2054,26 @@ export async function buildCampaignRecipientInsights(recipients = [], workspaceI
 	}
 
 	const mergedRecipientInsights = [...recipientsById.values()];
-	const mergedPurchasedRecipients = mergedRecipientInsights.filter((insight) => insight.purchaseDetected).length;
-	const mergedChatConfirmedRecipients = mergedRecipientInsights.filter((insight) => insight.chatConfirmedPurchase).length;
-	const mergedConversionSignalRecipients = mergedRecipientInsights.filter((insight) => insight.conversionSignal).length;
+	const mergedPurchasedRecipients = Math.min(base, mergedRecipientInsights.filter((insight) => insight.purchaseDetected).length);
+	const mergedChatConfirmedRecipients = Math.min(base, mergedRecipientInsights.filter((insight) => insight.chatConfirmedPurchase).length);
+	const mergedConversionSignalRecipients = Math.min(base, mergedRecipientInsights.filter((insight) => insight.conversionSignal).length);
+	const finalPurchasedCount = Math.min(base, Math.max(finalPurchasedRecipients, mergedPurchasedRecipients));
+	const finalChatConfirmedCount = Math.min(base, Math.max(finalChatConfirmedRecipients, mergedChatConfirmedRecipients));
+	const finalConversionSignalCount = Math.min(base, Math.max(finalConversionSignalRecipients, mergedConversionSignalRecipients));
 
 	return {
 		summary: {
 			...emptySummary,
 			repliedRecipients,
 			effectiveReadRecipients,
-			purchasedRecipients: Math.max(finalPurchasedRecipients, mergedPurchasedRecipients),
-			chatConfirmedPurchaseRecipients: Math.max(finalChatConfirmedRecipients, mergedChatConfirmedRecipients),
-			conversionSignalRecipients: Math.max(finalConversionSignalRecipients, mergedConversionSignalRecipients),
+			purchasedRecipients: finalPurchasedCount,
+			chatConfirmedPurchaseRecipients: finalChatConfirmedCount,
+			conversionSignalRecipients: finalConversionSignalCount,
 			replyRate: base > 0 ? repliedRecipients / base : 0,
 			effectiveReadRate: base > 0 ? effectiveReadRecipients / base : 0,
-			purchaseRate: base > 0 ? Math.max(finalPurchasedRecipients, mergedPurchasedRecipients) / base : 0,
-			chatConfirmedPurchaseRate: base > 0 ? Math.max(finalChatConfirmedRecipients, mergedChatConfirmedRecipients) / base : 0,
-			conversionSignalRate: base > 0 ? Math.max(finalConversionSignalRecipients, mergedConversionSignalRecipients) / base : 0,
+			purchaseRate: base > 0 ? finalPurchasedCount / base : 0,
+			chatConfirmedPurchaseRate: base > 0 ? finalChatConfirmedCount / base : 0,
+			conversionSignalRate: base > 0 ? finalConversionSignalCount / base : 0,
 			attributedRevenue: persistedSummary.attributedRevenue || 0,
 			attributedCurrency: persistedSummary.attributedCurrency || 'ARS',
 			conversionsBySource: finalConversionsBySource,
@@ -2160,6 +2176,7 @@ export async function createCampaignDraft({
 	audienceSource = null,
 	audienceFilters = null,
 	notes = null,
+	draftContext = null,
 	launchedByUserId = null,
 	automationRunId = null
 }) {
@@ -2288,6 +2305,7 @@ export async function createCampaignDraft({
 			defaultComponents: normalizedComponents.length
 				? normalizedComponents
 				: safeArray(template?.rawPayload?.components),
+			draftContext: draftContext && typeof draftContext === 'object' ? draftContext : null,
 			previewText: previewBase.previewText,
 			status: 'DRAFT',
 			recipients: {
@@ -2302,6 +2320,88 @@ export async function createCampaignDraft({
 	return {
 		campaign
 	};
+}
+
+export async function updateCampaignDraft(campaignId, {
+	workspaceId,
+	name,
+	templateId,
+	languageCode,
+	sendComponents = [],
+	recipients = [],
+	contactIds = [],
+	includeAllContacts = false,
+	audienceSource = null,
+	audienceFilters = null,
+	notes = null,
+	draftContext = null,
+} = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const existing = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId },
+	});
+
+	if (!existing) throw new Error('No se encontro la campana.');
+	if (existing.status !== 'DRAFT') {
+		throw new Error('Solo se pueden editar campanas en borrador.');
+	}
+
+	const template = templateId
+		? await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId })
+		: await getTemplateOrThrow(existing.templateLocalId, { workspaceId: resolvedWorkspaceId });
+	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || existing.audienceSource || 'manual');
+	const normalizedComponents = safeArray(sendComponents).length
+		? safeArray(sendComponents)
+		: safeArray(template?.rawPayload?.components);
+	const draftCampaign = {
+		...existing,
+		templateLocalId: template.id,
+		audienceSource: normalizedAudienceSource,
+		defaultComponents: normalizedComponents,
+	};
+	const recipientRows = await buildAdditionalCampaignRecipientRows(draftCampaign, {
+		recipients,
+		contactIds,
+		includeAllContacts,
+		audienceSource: normalizedAudienceSource,
+		audienceFilters,
+	});
+	const pendingRecipients = recipientRows.filter((recipient) => recipient.status === 'PENDING').length;
+	const skippedRecipients = recipientRows.filter((recipient) => recipient.status === 'SKIPPED').length;
+	const previewBase = renderTemplatePreviewFromComponents(normalizedComponents, {});
+
+	const campaign = await prisma.$transaction(async (tx) => {
+		await tx.campaignRecipient.deleteMany({
+			where: { workspaceId: resolvedWorkspaceId, campaignId },
+		});
+		await tx.campaign.update({
+			where: { id: campaignId },
+			data: {
+				name: normalizeString(name, existing.name),
+				templateLocalId: template.id,
+				templateMetaId: template.metaTemplateId,
+				templateName: template.name,
+				templateLanguage: template.language || normalizeString(languageCode, 'es_AR'),
+				templateCategory: template.category,
+				audienceSource: normalizedAudienceSource,
+				notes: notes || null,
+				totalRecipients: recipientRows.length,
+				pendingRecipients,
+				sentRecipients: 0,
+				deliveredRecipients: 0,
+				readRecipients: 0,
+				failedRecipients: 0,
+				skippedRecipients,
+				defaultComponents: normalizedComponents,
+				draftContext: draftContext && typeof draftContext === 'object' ? draftContext : null,
+				previewText: previewBase.previewText,
+			},
+		});
+		await tx.campaignRecipient.createMany({ data: recipientRows });
+		return tx.campaign.findFirst({ where: { id: campaignId, workspaceId: resolvedWorkspaceId } });
+	});
+
+	return { campaign };
 }
 
 async function buildAdditionalCampaignRecipientRows(campaign, {
@@ -2319,7 +2419,7 @@ async function buildAdditionalCampaignRecipientRows(campaign, {
 		throw new Error('La campana no tiene plantilla asociada.');
 	}
 
-	const normalizedAudienceSource = normalizeAudienceSource(campaign.audienceSource || audienceSource || 'manual');
+	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || campaign.audienceSource || 'manual');
 	const excludeSentTemplate =
 		audienceFilters?.excludeSentTemplate === true ||
 		audienceFilters?.excludeSentTemplate === 'true' ||
@@ -2621,12 +2721,17 @@ export async function deleteCampaign(campaignId, { workspaceId } = {}) {
 		select: {
 			id: true,
 			name: true,
-			status: true
+			status: true,
+			automationRunId: true,
 		}
 	});
 
 	if (!campaign) {
 		throw new Error('No se encontró la campaña.');
+	}
+
+	if (campaign.automationRunId) {
+		throw new Error('Las campañas automáticas se administran desde Automatizaciones.');
 	}
 
 	if (['RUNNING', 'QUEUED'].includes(String(campaign.status || '').toUpperCase())) {

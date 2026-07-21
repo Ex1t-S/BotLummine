@@ -1,5 +1,6 @@
 import {
 	createCampaignDraft,
+	updateCampaignDraft,
 	launchCampaign,
 	cancelCampaign,
 	deleteCampaign,
@@ -244,6 +245,7 @@ export async function createCampaignController(req, res) {
 			audienceSource: req.body?.audienceSource || null,
 			audienceFilters: req.body?.audienceFilters || null,
 			notes: req.body?.notes || null,
+			draftContext: req.body?.draftContext || null,
 			launchedByUserId: req.user?.id || null,
 		});
 
@@ -306,6 +308,29 @@ export async function retryFailedCampaignRecipientsController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 		});
 		void executeCampaignDispatcherTick();
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
+export async function updateCampaignDraftController(req, res) {
+	try {
+		const result = await updateCampaignDraft(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+			name: req.body?.name,
+			templateId: req.body?.templateId || null,
+			languageCode: req.body?.languageCode || 'es_AR',
+			sendComponents: Array.isArray(req.body?.sendComponents) ? req.body.sendComponents : [],
+			recipients: Array.isArray(req.body?.recipients) ? req.body.recipients : [],
+			contactIds: Array.isArray(req.body?.contactIds) ? req.body.contactIds : [],
+			includeAllContacts: normalizeBoolean(req.body?.includeAllContacts),
+			audienceSource: req.body?.audienceSource || null,
+			audienceFilters: req.body?.audienceFilters || null,
+			notes: req.body?.notes || null,
+			draftContext: req.body?.draftContext || null,
+		});
+
 		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error);

@@ -312,6 +312,20 @@
 	color: var(--campaign-os-accent-strong);
 }
 
+.campaign-os-row-delete {
+	border: 0;
+	background: transparent;
+	color: #b42318;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.campaign-os-row-delete:disabled {
+	opacity: .45;
+	cursor: not-allowed;
+}
+
 .campaign-os-next {
 	padding: 20px;
 	background: var(--campaign-os-ink);

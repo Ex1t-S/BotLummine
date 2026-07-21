@@ -1,7 +1,8 @@
 import CampaignKpiCard from '../../../components/campaigns/CampaignKpiCard.jsx';
 
 function formatPercent(value) {
-	return `${Math.ceil(Number(value || 0) * 100)}%`;
+	const ratio = Math.min(1, Math.max(0, Number(value || 0)));
+	return `${Math.ceil(ratio * 100)}%`;
 }
 
 export default function CampaignOverviewGrid({ overview }) {

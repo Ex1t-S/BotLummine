@@ -16,6 +16,7 @@ import {
 	getAutomationRunController,
 	getCampaignController,
 	createCampaignController,
+	updateCampaignDraftController,
 	launchCampaignController,
 	cancelCampaignController,
 	deleteCampaignController,
@@ -81,6 +82,7 @@ router.post('/automation-runs/:runId/retry-failed', retryFailedAutomationRunCont
 router.get('/', listCampaignsController);
 router.post('/', createCampaignController);
 router.get('/:campaignId', getCampaignController);
+router.patch('/:campaignId', updateCampaignDraftController);
 router.delete('/:campaignId', deleteCampaignController);
 router.post('/:campaignId/launch', launchCampaignController);
 router.post('/:campaignId/cancel', cancelCampaignController);

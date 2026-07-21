@@ -1,9 +1,11 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CampaignFeedbackAlert from './components/CampaignFeedbackAlert.jsx';
 import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 import { lazyWithRetry } from '../../lib/lazyWithRetry.js';
 import { buildAbandonedCartFilters } from './utils.js';
+import { fetchCampaignDetail } from '../../lib/campaigns.js';
 import TemplateHeaderMediaUpload from './components/TemplateHeaderMediaUpload.jsx';
 import {
 	mergeHeaderMediaVariableMapping,
@@ -1591,6 +1593,15 @@ export default function CampaignsFeaturePage() {
 		() => new URLSearchParams(location.search).get('campaign'),
 		[location.search]
 	);
+	const requestedDraftId = useMemo(
+		() => new URLSearchParams(location.search).get('draft'),
+		[location.search]
+	);
+	const draftQuery = useQuery({
+		queryKey: ['campaigns', 'draft', requestedDraftId],
+		queryFn: () => fetchCampaignDetail(requestedDraftId),
+		enabled: activeTab === 'segment' && Boolean(requestedDraftId),
+	});
 	const {
 		feedback,
 		templates,
@@ -1610,6 +1621,12 @@ export default function CampaignsFeaturePage() {
 
 	const [builderModeRequest, setBuilderModeRequest] = useState('edit');
 	const [pendingConfirm, setPendingConfirm] = useState(null);
+	useEffect(() => {
+		const draftTemplateId = draftQuery.data?.campaign?.draftContext?.templateId || draftQuery.data?.campaign?.templateLocalId;
+		if (!draftTemplateId) return;
+		const draftTemplate = templates.find((template) => template.id === draftTemplateId);
+		if (draftTemplate) setSelectedTemplate(draftTemplate);
+	}, [draftQuery.data, templates, setSelectedTemplate]);
 
 	const currentTab = useMemo(
 		() => TAB_DEFINITIONS.find((tab) => tab.id === activeTab) || TAB_DEFINITIONS[0],
@@ -1752,7 +1769,10 @@ export default function CampaignsFeaturePage() {
 							selectedTemplate={selectedTemplate}
 							onSelectTemplate={setSelectedTemplate}
 							onCreateCampaign={(payload) => mutations.createCampaign.mutateAsync(payload)}
-							creatingCampaign={mutations.createCampaign.isPending}
+							onUpdateCampaign={(campaignId, payload) => mutations.updateCampaignDraft.mutateAsync({ campaignId, payload })}
+							draftId={requestedDraftId}
+							draftContext={draftQuery.data?.campaign?.draftContext || null}
+							creating={mutations.createCampaign.isPending || mutations.updateCampaignDraft.isPending}
 							audienceModeOptions={['customers', 'abandoned_carts']}
 						/>
 					</CampaignSectionShell>

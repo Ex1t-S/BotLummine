@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
 	ArrowRight,
@@ -68,7 +68,8 @@ function currency(value, code = 'ARS') {
 }
 
 function percent(value) {
-	return `${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
+	const numeric = Math.min(100, Math.max(0, Number(value || 0)));
+	return `${numeric.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
 }
 
 function date(value) {
@@ -116,6 +117,20 @@ function CampaignMetric({ label, value, helper, tone = 'neutral' }) {
 	);
 }
 
+function useDeleteCampaignMutation() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (campaignId) => {
+			const response = await api.delete(`/campaigns/${campaignId}`);
+			return response.data;
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['campaign-os'] });
+			queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+		},
+	});
+}
+
 export function CampaignOsLayout({ pathname, children }) {
 	const navigate = useNavigate();
 	return (
@@ -153,6 +168,7 @@ export function CampaignOsLayout({ pathname, children }) {
 
 export function CampaignOverview() {
 	const navigate = useNavigate();
+	const deleteCampaignMutation = useDeleteCampaignMutation();
 	const overviewQuery = useQuery({
 		queryKey: ['campaign-os', 'overview'],
 		queryFn: async () => {
@@ -195,6 +211,13 @@ export function CampaignOverview() {
 		return ['FAILED', 'PARTIAL'].includes(status) || campaignCount(item, 'failedCount', 'failedRecipients') > 0;
 	});
 
+	function requestDeleteCampaign(campaign) {
+		const status = String(campaign?.status || '').toUpperCase();
+		if (!campaign?.id || campaign?.automationRunId || ['RUNNING', 'QUEUED'].includes(status)) return;
+		if (!window.confirm(`Vas a eliminar "${campaign.name || 'esta campaña'}". Esta acción no se puede deshacer.`)) return;
+		deleteCampaignMutation.mutate(campaign.id);
+	}
+
 	return (
 		<div className="campaign-os-overview">
 			<div className="campaign-os-intro">
@@ -223,6 +246,15 @@ export function CampaignOverview() {
 								<span className={`campaign-os-status tone-${status.tone}`}><CircleDot size={12} aria-hidden="true" />{status.label}</span>
 								<div className="campaign-os-progress"><span><i style={{ width: `${Math.min(100, progress)}%` }} /></span><small>{percent(progress)}</small></div>
 								<button type="button" className="campaign-os-row-action" onClick={() => navigate(action.to)}>{action.label}<ArrowRight size={15} aria-hidden="true" /></button>
+								{!campaign.automationRunId ? <button
+									type="button"
+									className="campaign-os-row-delete"
+									onClick={(event) => { event.stopPropagation(); requestDeleteCampaign(campaign); }}
+									disabled={deleteCampaignMutation.isPending || ['RUNNING', 'QUEUED'].includes(String(campaign.status || '').toUpperCase())}
+									aria-label={`Eliminar ${campaign.name || 'campaña'}`}
+								>
+									Eliminar
+								</button> : null}
 							</article>
 						);
 					}) : <div className="campaign-os-empty"><Megaphone size={20} aria-hidden="true" /><div><strong>Todavía no hay campañas</strong><span>Creá la primera para empezar a medir resultados.</span></div></div>}
@@ -356,6 +388,7 @@ export function CampaignAutomationHub() {
 
 export function CampaignResultsHub() {
 	const navigate = useNavigate();
+	const deleteCampaignMutation = useDeleteCampaignMutation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const resultsQuery = useQuery({
 		queryKey: ['campaign-os', 'results'],
@@ -386,8 +419,8 @@ export function CampaignResultsHub() {
 	if (resultsQuery.isError) return <EmptyState tone="error" title="No pudimos cargar los resultados" description="Reintentá para volver a calcular la lectura operativa."><ActionButton variant="secondary" icon={RefreshCw} onClick={() => resultsQuery.refetch()}>Reintentar</ActionButton></EmptyState>;
 
 	const totals = withActivity.reduce((acc, campaign) => {
-		acc.sent += Number(campaign.sentCount || 0);
-		acc.delivered += Number(campaign.deliveredCount || 0);
+		acc.sent += Number(campaign.sentCount || campaign.sentRecipients || 0);
+		acc.delivered += Number(campaign.deliveredCount || campaign.deliveredRecipients || 0);
 		acc.replied += Number(campaign.analytics?.repliedRecipients || 0);
 		acc.purchased += Number(campaign.analytics?.purchasedRecipients || 0);
 		acc.revenue += Number(campaign.analytics?.attributedRevenue || 0);
@@ -404,6 +437,18 @@ export function CampaignResultsHub() {
 
 	function selectCampaign(campaignId) {
 		setSearchParams({ campaign: campaignId });
+	}
+
+	function requestDeleteCampaign(campaign) {
+		const status = String(campaign?.status || '').toUpperCase();
+		if (!campaign?.id || campaign?.automationRunId || ['RUNNING', 'QUEUED'].includes(status)) return;
+		if (!window.confirm(`Vas a eliminar "${campaign.name || 'esta campaña'}". Esta acción no se puede deshacer.`)) return;
+		deleteCampaignMutation.mutate(campaign.id, {
+			onSuccess: () => {
+				const nextCampaign = campaigns.find((item) => item.id !== campaign.id && !item.automationRunId);
+				setSearchParams(nextCampaign ? { campaign: nextCampaign.id } : {}, { replace: true });
+			},
+		});
 	}
 
 	return (
@@ -457,6 +502,11 @@ export function CampaignResultsHub() {
 					<div className="campaign-os-result-detail__actions">
 						{!selectedAction.to.startsWith('/campaigns/results') ? <button type="button" className="campaign-os-result-detail__primary" onClick={() => navigate(selectedAction.to)}>{selectedAction.label}<ArrowRight size={15} aria-hidden="true" /></button> : null}
 						{selectedHasActivity ? <button type="button" onClick={() => navigate(`/campaigns/tracking?campaign=${selectedCampaign.id}`)}>Ver destinatarios</button> : null}
+						{selectedCampaign && !selectedCampaign.automationRunId ? <button
+							type="button"
+							onClick={() => requestDeleteCampaign(selectedCampaign)}
+							disabled={deleteCampaignMutation.isPending || ['RUNNING', 'QUEUED'].includes(String(selectedCampaign.status || '').toUpperCase())}
+						>Eliminar campaña</button> : null}
 					</div>
 				</> : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><strong>Elegí una campaña</strong><span>Vas a ver su lectura operativa en este panel.</span></div></div>}
 			</aside>

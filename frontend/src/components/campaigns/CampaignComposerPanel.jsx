@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
 	fetchCampaignCustomers,
 	previewAbandonedCartAudience,
@@ -721,6 +721,9 @@ export default function CampaignComposerPanel({
 	selectedTemplate,
 	onSelectTemplate,
 	onCreateCampaign,
+	onUpdateCampaign,
+	draftId = null,
+	draftContext = null,
 	creating,
 	audienceModeOptions = ['customers', 'manual'],
 	lockedAudienceMode = null,
@@ -776,6 +779,33 @@ export default function CampaignComposerPanel({
 		error: '',
 	});
 	const [selectedCustomersMap, setSelectedCustomersMap] = useState({});
+	const restoredDraftRef = useRef('');
+
+	useEffect(() => {
+		if (!draftId || !draftContext || restoredDraftRef.current === draftId) return;
+
+		const context = draftContext || {};
+		const restoredForm = context.form && typeof context.form === 'object' ? context.form : {};
+		setForm((current) => ({ ...current, ...restoredForm }));
+		setActiveStep(context.activeStep || 'message');
+		setCustomerFilters({ ...initialCustomerFilters, ...(context.customerFilters || {}) });
+		setAbandonedCartFilters({ ...initialAbandonedCartFilters, ...(context.abandonedCartFilters || {}) });
+		setSelectedProductFilters(Array.isArray(context.selectedProductFilters) ? context.selectedProductFilters : []);
+		setSelectedSentTemplateFilters(Array.isArray(context.selectedSentTemplateFilters) ? context.selectedSentTemplateFilters : []);
+		setVariableMapping(context.variableMapping && typeof context.variableMapping === 'object' ? context.variableMapping : {});
+		setContactLimit(context.contactLimit || '');
+		setBulkSelectionInfo({
+			count: Number(context.bulkSelectionInfo?.count || 0),
+			customerIds: Array.isArray(context.bulkSelectionInfo?.customerIds) ? context.bulkSelectionInfo.customerIds : [],
+			mode: context.bulkSelectionInfo?.mode || '',
+		});
+		if (context.selectedCustomers && typeof context.selectedCustomers === 'object') {
+			setSelectedCustomersMap(context.selectedCustomers);
+		}
+		setUploadedMediaId(context.uploadedMediaId || '');
+		setUploadedFileName(context.uploadedFileName || '');
+		restoredDraftRef.current = draftId;
+	}, [draftContext, draftId]);
 
 	useEffect(() => {
 		if (!selectedTemplate && templates.length) {
@@ -791,11 +821,14 @@ export default function CampaignComposerPanel({
 	}, [lockedAudienceMode, form.audienceMode]);
 
 	useEffect(() => {
+		if (draftId && draftContext?.templateId && selectedTemplate?.id === draftContext.templateId && restoredDraftRef.current === draftId) {
+			return;
+		}
 		setUploadedMediaId('');
 		setUploadedFileName('');
 		setImageError('');
 		clearFilteredSelection();
-	}, [selectedTemplate?.id]);
+	}, [draftContext?.templateId, draftId, selectedTemplate?.id]);
 
 	const templatePlaceholders = useMemo(
 		() => extractTemplatePlaceholders(selectedTemplate),
@@ -807,8 +840,11 @@ export default function CampaignComposerPanel({
 	);
 
 	useEffect(() => {
+		if (draftId && draftContext?.templateId && selectedTemplate?.id === draftContext.templateId && restoredDraftRef.current === draftId && draftContext.variableMapping) {
+			return;
+		}
 		setVariableMapping(buildInitialVariableMapping(templatePlaceholders, form.audienceMode));
-	}, [form.audienceMode, templatePlaceholders]);
+	}, [draftContext, draftId, form.audienceMode, selectedTemplate?.id, templatePlaceholders]);
 
 	useEffect(() => {
 		const templateName = String(selectedTemplate?.name || '').trim();
@@ -1577,9 +1613,27 @@ export default function CampaignComposerPanel({
 					},
 			notes: form.description.trim() || null,
 			sendComponents: getTemplateComponents(selectedTemplate),
+			draftContext: {
+				version: 1,
+				templateId: selectedTemplate.id,
+				form,
+				activeStep,
+				customerFilters,
+				abandonedCartFilters,
+				selectedProductFilters,
+				selectedSentTemplateFilters,
+				variableMapping,
+				contactLimit,
+				bulkSelectionInfo,
+				selectedCustomers: selectedCustomersMap,
+				uploadedMediaId,
+				uploadedFileName,
+			},
 		};
 
-		const result = await onCreateCampaign(payload);
+		const result = draftId && onUpdateCampaign
+			? await onUpdateCampaign(draftId, payload)
+			: await onCreateCampaign(payload);
 		const createdCampaignId = extractCreatedCampaignId(result);
 
 		if (form.sendNow) {
