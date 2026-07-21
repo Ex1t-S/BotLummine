@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { BookOpen, Languages, Paperclip, Send, Smile, StopCircle, Trash2, Wand2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookOpen, Languages, Mic, Paperclip, Send, Smile, Square, StopCircle, Trash2, Wand2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,13 @@ const EMOJIS = ["🙂", "😂", "😍", "✨", "❤️", "👍", "🙏", "📦"]
 const FILE_ACCEPT =
 	"image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv";
 
+const RECORDING_MIME_TYPES = [
+	"audio/ogg;codecs=opus",
+	"audio/mp4",
+	"audio/webm;codecs=opus",
+	"audio/webm",
+];
+
 function formatFileSize(bytes = 0) {
 	const size = Number(bytes || 0);
 	if (!Number.isFinite(size) || size <= 0) return "";
@@ -32,6 +39,7 @@ type AiChatInputProps = {
 	onSendMessage: (message: string) => boolean | void | Promise<boolean | void>;
 	onUploadFile?: (file: File) => void;
 	onClearFile?: () => void;
+	onRecording?: (file: File) => void;
 	selectedFile?: File | null;
 	isLoading?: boolean;
 	disabled?: boolean;
@@ -45,6 +53,7 @@ export default function AiChatInput({
 	onSendMessage,
 	onUploadFile,
 	onClearFile,
+	onRecording,
 	selectedFile = null,
 	isLoading = false,
 	disabled = false,
@@ -59,6 +68,12 @@ export default function AiChatInput({
 	const [selectedCommands, setSelectedCommands] = useState<string[]>([]);
 	const [emojiOpen, setEmojiOpen] = useState(false);
 	const [commandOpen, setCommandOpen] = useState(false);
+	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+	const recordingStreamRef = useRef<MediaStream | null>(null);
+	const recordingChunksRef = useRef<Blob[]>([]);
+	const [isRecording, setIsRecording] = useState(false);
+	const [recordingSeconds, setRecordingSeconds] = useState(0);
+	const [recordingError, setRecordingError] = useState("");
 
 	const input = value ?? internalInput;
 	const setInput = (nextValue: string | ((current: string) => string)) => {
@@ -67,6 +82,64 @@ export default function AiChatInput({
 		onValueChange?.(resolvedValue);
 	};
 	const canSubmit = Boolean(input.trim() || selectedFile) && !disabled && !isLoading;
+
+	useEffect(() => {
+		if (!isRecording) return undefined;
+		const timer = window.setInterval(() => setRecordingSeconds((current) => current + 1), 1000);
+		return () => window.clearInterval(timer);
+	}, [isRecording]);
+
+	useEffect(() => () => {
+		mediaRecorderRef.current?.stop();
+		recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+	}, []);
+
+	const formatRecordingTime = (seconds: number) =>
+		`${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+
+	const stopRecording = () => {
+		mediaRecorderRef.current?.stop();
+		setIsRecording(false);
+	};
+
+	const startRecording = async () => {
+		if (isRecording || disabled || isLoading || !onRecording) return;
+		setRecordingError("");
+
+		if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+			setRecordingError("Este navegador no permite grabar audios.");
+			return;
+		}
+
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			const mimeType = RECORDING_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+			const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+			recordingStreamRef.current = stream;
+			mediaRecorderRef.current = recorder;
+			recordingChunksRef.current = [];
+			recorder.ondataavailable = (event) => {
+				if (event.data.size > 0) recordingChunksRef.current.push(event.data);
+			};
+			recorder.onstop = () => {
+				const type = recorder.mimeType || mimeType || "audio/webm";
+				const extension = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
+				const file = new File(recordingChunksRef.current, `audio-${Date.now()}.${extension}`, { type });
+				if (file.size > 0) onRecording(file);
+				recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+				recordingStreamRef.current = null;
+				mediaRecorderRef.current = null;
+			};
+			recorder.start();
+			setRecordingSeconds(0);
+			setIsRecording(true);
+		} catch (error) {
+			console.error(error);
+			recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+			recordingStreamRef.current = null;
+			setRecordingError("No se pudo acceder al micrófono. Revisá los permisos del navegador.");
+		}
+	};
 
 	const handleSubmit = async () => {
 		if (!canSubmit || submissionInFlightRef.current) return;
@@ -125,7 +198,7 @@ export default function AiChatInput({
 
 	return (
 		<div className="ai-chat-input w-full bg-background">
-			{error ? <div role="alert" className="inbox-composer-feedback inbox-composer-feedback--error">{error}</div> : null}
+			{error || recordingError ? <div role="alert" className="inbox-composer-feedback inbox-composer-feedback--error">{error || recordingError}</div> : null}
 			{isLoading ? <div role="status" aria-live="polite" className="inbox-composer-feedback inbox-composer-feedback--sending">Enviando mensaje...</div> : null}
 
 			{selectedFile ? (
@@ -151,6 +224,18 @@ export default function AiChatInput({
 			) : null}
 
 			<div className="inbox-composer ai-chat-input__bar">
+				<Button
+					variant={isRecording ? "destructive" : "ghost"}
+					size="icon"
+					type="button"
+					onClick={isRecording ? stopRecording : startRecording}
+					disabled={disabled || isLoading || Boolean(selectedFile)}
+					title={isRecording ? "Detener grabación" : "Grabar audio de voz"}
+					aria-label={isRecording ? "Detener grabación" : "Grabar audio de voz"}
+				>
+					{isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
+				</Button>
+				{isRecording ? <span className="inbox-recording-indicator" role="status">{formatRecordingTime(recordingSeconds)}</span> : null}
 				<Button
 					variant="ghost"
 					size="icon"

@@ -782,6 +782,8 @@
 }
 
 .inbox-selected-file {
+	position: relative;
+
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -798,6 +800,14 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
+}
+
+.inbox-recording-indicator {
+	min-width: 42px;
+	color: #dc2626;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
 }
 
 .inbox-selected-file-icon {

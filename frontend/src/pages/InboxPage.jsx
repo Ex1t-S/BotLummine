@@ -1689,6 +1689,11 @@ export default function InboxPage() {
 		setSelectedFile(file || null);
 	}
 
+	function handleRecording(file) {
+		setComposerError('');
+		setSelectedFile(file || null);
+	}
+
 	function handleClearSelectedFile() {
 		setSelectedFile(null);
 	}
@@ -2261,6 +2266,7 @@ export default function InboxPage() {
 								<AiChatInput
 									onSendMessage={handleSendComposerMessage}
 									onUploadFile={handleSelectFile}
+									onRecording={handleRecording}
 									selectedFile={selectedFile}
 									onClearFile={handleClearSelectedFile}
 									isLoading={sendMessageMutation.isPending}
