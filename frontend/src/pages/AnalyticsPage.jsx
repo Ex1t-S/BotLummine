@@ -5,7 +5,6 @@ import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ActionButton, EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
-import { formatCampaignStatusLabel } from '../utils/statusLabels.js';
 import './AnalyticsPage.css';
 
 function number(value) {
@@ -22,16 +21,6 @@ function currency(value, code = 'ARS') {
 
 function percent(value) {
 	return `${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
-}
-
-function date(value) {
-	if (!value) return 'Sin actividad';
-	return new Date(value).toLocaleString('es-AR', {
-		day: '2-digit',
-		month: 'short',
-		hour: '2-digit',
-		minute: '2-digit',
-	});
 }
 
 function ratio(part, total) {
@@ -67,28 +56,6 @@ function ProgressRow({ icon: Icon, label, value, total, helper }) {
 	);
 }
 
-function CampaignTable({ campaigns }) {
-	return (
-		<div className="analytics-v2-table-wrap">
-			<table className="analytics-v2-table" aria-label="Rendimiento de campañas recientes">
-				<thead><tr><th>Campaña</th><th>Estado</th><th>Enviados</th><th>Leídos</th><th>Fallidos</th><th>Inicio</th></tr></thead>
-				<tbody>
-					{campaigns.map((campaign) => (
-						<tr key={campaign.id}>
-							<td><strong>{campaign.name}</strong><span>{campaign.templateName || 'Sin plantilla'}</span></td>
-							<td><span className={`analytics-v2-status status-${String(campaign.status || '').toLowerCase()}`}>{formatCampaignStatusLabel(campaign.status)}</span></td>
-							<td>{number(campaign.sentRecipients ?? campaign.sentCount)}</td>
-							<td>{number(campaign.readRecipients ?? campaign.readCount)}</td>
-							<td>{number(campaign.failedRecipients ?? campaign.failedCount)}</td>
-							<td>{date(campaign.startedAt || campaign.createdAt)}</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
-	);
-}
-
 export default function AnalyticsPage() {
 	useInternalDarkOverrides();
 	const { user } = useAuth();
@@ -111,8 +78,6 @@ export default function AnalyticsPage() {
 		return workspaces.find((item) => item?.workspace?.id === workspaceId) || workspaces[0] || null;
 	}, [data.workspaces, workspaceId]);
 	const metrics = selected?.metrics || data.totals || {};
-	const detail = data.detail || {};
-	const campaigns = Array.isArray(detail.campaigns) ? detail.campaigns : [];
 	const sent = Number(metrics.sentRecipientsCount || 0);
 	const delivered = Number(metrics.deliveredRecipientsCount || 0);
 	const read = Number(metrics.readRecipientsCount || 0);
@@ -176,13 +141,6 @@ export default function AnalyticsPage() {
 						</section>
 					</div>
 
-					<section className="analytics-v2-section analytics-v2-section--table" aria-labelledby="analytics-campaigns-title">
-						<div className="analytics-v2-section-head">
-							<div><span>Detalle</span><h3 id="analytics-campaigns-title">Campañas recientes</h3></div>
-							<small>Hasta 8 campañas</small>
-						</div>
-						{campaigns.length ? <CampaignTable campaigns={campaigns} /> : <p className="analytics-v2-inline-empty">No hay campañas recientes para esta marca.</p>}
-					</section>
 				</>
 			)}
 		</section>
