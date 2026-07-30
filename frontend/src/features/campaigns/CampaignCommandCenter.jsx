@@ -173,7 +173,7 @@ export function CampaignOverview() {
 		queryKey: ['campaign-os', 'overview'],
 		queryFn: async () => {
 			const [campaignData, templateData, statsData] = await Promise.all([
-				fetchCampaigns({ limit: 12 }),
+				fetchCampaigns({ limit: 10 }),
 				fetchTemplates(),
 				fetchCampaignOverview(),
 			]);
@@ -394,7 +394,7 @@ export function CampaignResultsHub() {
 		queryKey: ['campaign-os', 'results'],
 		queryFn: async () => {
 			const [campaignData, statsData] = await Promise.all([
-				fetchCampaigns({ limit: 100 }),
+				fetchCampaigns({ limit: 10 }),
 				fetchCampaignOverview(),
 			]);
 			return { campaignData, statsData };
@@ -465,7 +465,7 @@ export function CampaignResultsHub() {
 
 			<div className="campaign-os-results-workspace">
 			<section className="campaign-os-results-list" aria-labelledby="campaign-results-title">
-				<div className="campaign-os-section-head"><div><span>Historial</span><h3 id="campaign-results-title">Campañas</h3></div><small>{number(campaigns.length)} en total</small></div>
+				<div className="campaign-os-section-head"><div><span>Historial</span><h3 id="campaign-results-title">Campañas</h3></div><small>{number(campaigns.length)} visibles · máximo 10</small></div>
 				{campaigns.length ? campaigns.map((campaign) => {
 					const analytics = campaign.analytics || {};
 					const sent = Number(campaign.sentCount || campaign.sentRecipients || 0);

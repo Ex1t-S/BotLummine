@@ -1678,12 +1678,42 @@ export function buildSendComponentsFromTemplate({
 	return sendComponents;
 }
 
-export async function listCampaigns({ workspaceId, limit = 50 } = {}) {
+const CAMPAIGN_HISTORY_LIMIT = 10;
+const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
+
+async function archiveOlderCampaigns(workspaceId) {
+	const candidates = await prisma.campaign.findMany({
+		where: { workspaceId, archivedAt: null },
+		orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+		take: CAMPAIGN_HISTORY_LIMIT + 1,
+		select: { createdAt: true },
+	});
+
+	if (candidates.length <= CAMPAIGN_HISTORY_LIMIT) return 0;
+
+	const cutoff = candidates[CAMPAIGN_HISTORY_LIMIT - 1]?.createdAt;
+	if (!cutoff) return 0;
+
+	const archived = await prisma.campaign.updateMany({
+		where: {
+			workspaceId,
+			archivedAt: null,
+			createdAt: { lt: cutoff },
+			status: { notIn: ACTIVE_CAMPAIGN_STATUSES },
+		},
+		data: { archivedAt: new Date() },
+	});
+
+	return archived.count;
+}
+
+export async function listCampaigns({ workspaceId, limit = CAMPAIGN_HISTORY_LIMIT } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	await archiveOlderCampaigns(resolvedWorkspaceId);
 	const campaigns = await prisma.campaign.findMany({
-		where: { workspaceId: resolvedWorkspaceId },
+		where: { workspaceId: resolvedWorkspaceId, archivedAt: null },
 		orderBy: [{ createdAt: 'desc' }],
-		take: Math.max(1, Math.min(Number(limit) || 50, 1000)),
+		take: Math.max(1, Math.min(Number(limit) || CAMPAIGN_HISTORY_LIMIT, CAMPAIGN_HISTORY_LIMIT)),
 		include: {
 			recipients: {
 				orderBy: [{ createdAt: 'desc' }],

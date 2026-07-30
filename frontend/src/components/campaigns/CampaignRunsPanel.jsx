@@ -499,8 +499,8 @@ export default function CampaignRunsPanel({
 				<div className="campaign-detail-box campaign-detail-box--tracking campaign-detail-box--tracking-list">
 					<div className="campaign-detail-header">
 						<div>
-							<h4>Historial</h4>
-							<p>{campaigns.length} campaña{campaigns.length === 1 ? '' : 's'} disponible{campaigns.length === 1 ? '' : 's'}</p>
+							<h4>Historial · últimas 10</h4>
+							<p>{campaigns.length} campaña{campaigns.length === 1 ? '' : 's'} visibles</p>
 						</div>
 					</div>
 

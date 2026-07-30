@@ -852,6 +852,7 @@ model Campaign {
   dispatchLockedAt    DateTime?
   dispatchLockId      String?
   rawPayload          Json?
+  archivedAt          DateTime?
   automationRunId     String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -862,6 +863,7 @@ model Campaign {
   conversions   CampaignConversion[]
 
   @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, archivedAt, createdAt])
   @@index([workspaceId, dispatchLockedAt])
   @@index([workspaceId, automationRunId])
 }

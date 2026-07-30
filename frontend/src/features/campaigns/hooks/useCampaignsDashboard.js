@@ -306,7 +306,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 
 	const campaignsQuery = useQuery({
 		queryKey: queryKeys.campaigns.runs(),
-		queryFn: () => fetchCampaigns(),
+		queryFn: () => fetchCampaigns({ limit: 10 }),
 		enabled: needsCampaignRuns,
 		placeholderData: keepPreviousData,
 		...queryPresets.campaigns,

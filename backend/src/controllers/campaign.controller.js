@@ -223,7 +223,7 @@ export async function listCampaignsController(req, res) {
 	try {
 		const campaigns = await listCampaigns({
 			workspaceId: requireRequestWorkspaceId(req),
-			limit: req.query.limit || 50,
+			limit: req.query.limit || 10,
 		});
 		return res.json({ ok: true, campaigns });
 	} catch (error) {
