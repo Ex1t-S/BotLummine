@@ -221,7 +221,7 @@ export function CampaignOverview() {
 	return (
 		<div className="campaign-os-overview">
 			<div className="campaign-os-intro">
-				<div><span>Estado de hoy</span><h2>Campañas que están moviendo el negocio</h2><p>Primero el estado y la próxima decisión; después, las métricas.</p></div>
+				<div><span>Últimas 12 campañas</span><h2>Campañas que están moviendo el negocio</h2><p>Primero el estado y la próxima decisión; los borradores no se mezclan con errores de envío.</p></div>
 				<button type="button" onClick={() => overviewQuery.refetch()} disabled={overviewQuery.isFetching}><RefreshCw size={16} aria-hidden="true" />{overviewQuery.isFetching ? 'Actualizando' : 'Actualizar'}</button>
 			</div>
 
@@ -431,7 +431,7 @@ export function CampaignResultsHub() {
 	const selectedAnalytics = selectedCampaign?.analytics || {};
 	const selectedSent = Number(selectedCampaign?.sentCount || selectedCampaign?.sentRecipients || 0);
 	const selectedDelivered = Number(selectedCampaign?.deliveredCount || selectedCampaign?.deliveredRecipients || 0);
-	const selectedStatus = statusMeta(selectedCampaign?.status);
+	const selectedStatus = statusMeta(selectedCampaign?.status, selectedCampaign);
 	const selectedAction = selectedCampaign ? nextCampaignAction(selectedCampaign) : null;
 	const selectedHasActivity = selectedSent > 0;
 
@@ -471,7 +471,7 @@ export function CampaignResultsHub() {
 					const sent = Number(campaign.sentCount || campaign.sentRecipients || 0);
 					const delivered = Number(campaign.deliveredCount || campaign.deliveredRecipients || 0);
 					const delivery = sent ? delivered / sent * 100 : 0;
-					const status = statusMeta(campaign.status);
+					const status = statusMeta(campaign.status, campaign);
 					const isSelected = campaign.id === selectedCampaign?.id;
 					return (
 						<button type="button" className={`campaign-os-result-item${isSelected ? ' is-selected' : ''}`} key={campaign.id} onClick={() => selectCampaign(campaign.id)} aria-pressed={isSelected}>
