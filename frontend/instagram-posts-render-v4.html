@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>BladeIA Instagram Renderer V4</title>
+		<style>
+			:root {
+				--cyan: #38d7ff;
+				--cyan-soft: rgba(56, 215, 255, 0.58);
+				--violet: #a78bfa;
+				--green: #2ee57a;
+				--text: #f8fafc;
+				--muted: #b8c3d3;
+				--silver: #e7edf6;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				width: 1080px;
+				height: 1350px;
+				margin: 0;
+				overflow: hidden;
+				background: #010205;
+				font-family:
+					Inter,
+					Sora,
+					Arial,
+					Helvetica,
+					sans-serif;
+			}
+
+			body {
+				display: grid;
+				place-items: center;
+			}
+
+			.post {
+				position: relative;
+				width: 1080px;
+				height: 1350px;
+				overflow: hidden;
+				color: var(--text);
+				background:
+					linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.28)),
+					var(--bg) center / cover no-repeat,
+					#010205;
+				isolation: isolate;
+			}
+
+			.post::before,
+			.post::after {
+				content: "";
+				position: absolute;
+				inset: 0;
+				pointer-events: none;
+			}
+
+			.post::before {
+				z-index: 1;
+				background:
+					radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.12), transparent 0 130px, transparent 360px),
+					linear-gradient(180deg, rgba(0, 0, 0, 0.56) 0 24%, transparent 45%),
+					linear-gradient(0deg, rgba(0, 0, 0, 0.7), transparent 28%),
+					radial-gradient(circle at 50% 54%, transparent 0 430px, rgba(0, 0, 0, 0.28) 690px);
+			}
+
+			.post::after {
+				z-index: 2;
+				background-image:
+					linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+					linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+				background-size: 180px 180px;
+				mask-image: linear-gradient(180deg, transparent 0, black 18%, transparent 82%);
+				opacity: 0.32;
+			}
+
+			.brand {
+				position: absolute;
+				z-index: 8;
+				left: 62px;
+				top: 50px;
+				display: flex;
+				align-items: center;
+				gap: 16px;
+				color: #fff;
+				filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.58));
+			}
+
+			.brand.bottom {
+				top: auto;
+				bottom: 54px;
+			}
+
+			.brand.center {
+				left: 50%;
+				transform: translateX(-50%);
+			}
+
+			.brand img {
+				width: 54px;
+				height: 54px;
+				border-radius: 14px;
+				object-fit: cover;
+			}
+
+			.brand span {
+				font-size: 27px;
+				font-weight: 850;
+				line-height: 1;
+			}
+
+			.copy {
+				position: absolute;
+				z-index: 7;
+				left: 68px;
+				right: 68px;
+				top: 132px;
+			}
+
+			.copy.center {
+				text-align: center;
+			}
+
+			.kicker {
+				margin-bottom: 18px;
+				font-size: 18px;
+				font-weight: 900;
+				color: var(--cyan);
+				text-transform: uppercase;
+			}
+
+			h1 {
+				max-width: 920px;
+				margin: 0;
+				color: transparent;
+				background: linear-gradient(180deg, #fff 0%, var(--silver) 48%, #9ba7b8 100%);
+				-webkit-background-clip: text;
+				background-clip: text;
+				font-family:
+					Impact,
+					Arial Black,
+					Inter,
+					Arial,
+					sans-serif;
+				font-size: 82px;
+				font-weight: 950;
+				line-height: 0.98;
+				text-transform: uppercase;
+				text-wrap: balance;
+				letter-spacing: 0;
+				text-shadow:
+					0 24px 58px rgba(0, 0, 0, 0.86),
+					0 0 42px rgba(56, 215, 255, 0.18);
+			}
+
+			.copy.center h1 {
+				margin: 0 auto;
+			}
+
+			.accent {
+				color: transparent;
+				background: linear-gradient(180deg, #ecfeff 0%, #7dd3fc 44%, #a78bfa 100%);
+				-webkit-background-clip: text;
+				background-clip: text;
+			}
+
+			.lead {
+				max-width: 760px;
+				margin: 24px 0 0;
+				color: var(--muted);
+				font-size: 25px;
+				font-weight: 550;
+				line-height: 1.24;
+				text-shadow: 0 12px 28px rgba(0, 0, 0, 0.84);
+			}
+
+			.copy.center .lead {
+				margin-left: auto;
+				margin-right: auto;
+			}
+
+			.visual {
+				position: absolute;
+				z-index: 5;
+				inset: 0;
+				pointer-events: none;
+			}
+
+			.product-screen {
+				position: absolute;
+				overflow: hidden;
+				border: 1px solid rgba(190, 230, 255, 0.22);
+				border-radius: 30px;
+				background: rgba(5, 8, 16, 0.52);
+				box-shadow:
+					0 42px 90px rgba(0, 0, 0, 0.78),
+					0 0 56px rgba(56, 215, 255, 0.22),
+					inset 0 1px 0 rgba(255, 255, 255, 0.13);
+				backdrop-filter: blur(10px);
+			}
+
+			.product-screen::after {
+				content: "";
+				position: absolute;
+				inset: 0;
+				background:
+					linear-gradient(115deg, rgba(255, 255, 255, 0.24), transparent 18% 74%, rgba(56, 215, 255, 0.14)),
+					radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.2), transparent 0 120px);
+				mix-blend-mode: screen;
+				pointer-events: none;
+			}
+
+			.product-screen img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				filter: saturate(1.06) contrast(1.04);
+			}
+
+			.floating-word {
+				position: absolute;
+				z-index: 8;
+				color: rgba(236, 254, 255, 0.94);
+				font-size: 30px;
+				font-weight: 900;
+				text-transform: uppercase;
+				text-shadow:
+					0 0 18px rgba(56, 215, 255, 0.45),
+					0 16px 36px rgba(0, 0, 0, 0.82);
+			}
+
+			.floating-word.violet {
+				color: #d8c8ff;
+				text-shadow:
+					0 0 20px rgba(167, 139, 250, 0.56),
+					0 16px 36px rgba(0, 0, 0, 0.82);
+			}
+
+			.floating-word.green {
+				color: #b8ffd4;
+				text-shadow:
+					0 0 18px rgba(46, 229, 122, 0.5),
+					0 16px 36px rgba(0, 0, 0, 0.82);
+			}
+
+			.signature {
+				position: absolute;
+				z-index: 8;
+				right: 64px;
+				bottom: 54px;
+				color: rgba(232, 240, 250, 0.78);
+				font-size: 22px;
+				font-weight: 850;
+			}
+
+			.p1 .shot {
+				left: 386px;
+				top: 626px;
+				width: 660px;
+				height: 440px;
+				transform: perspective(1100px) rotateX(5deg) rotateY(-18deg) rotateZ(-4deg);
+			}
+
+			.p1 .word-a {
+				left: 102px;
+				top: 780px;
+			}
+
+			.p1 .word-b {
+				left: 178px;
+				top: 948px;
+			}
+
+			.p1 .word-c {
+				left: 642px;
+				top: 1096px;
+			}
+
+			.logo-core {
+				position: absolute;
+				z-index: 7;
+				left: 50%;
+				top: 564px;
+				width: 360px;
+				height: 360px;
+				transform: translateX(-50%);
+				display: grid;
+				place-items: center;
+			}
+
+			.logo-core::before {
+				content: "";
+				position: absolute;
+				width: 520px;
+				height: 520px;
+				border-radius: 50%;
+				background: radial-gradient(circle, rgba(56, 215, 255, 0.32), transparent 0 32%, transparent 62%);
+				box-shadow:
+					0 0 120px rgba(56, 215, 255, 0.34),
+					inset 0 0 80px rgba(167, 139, 250, 0.16);
+			}
+
+			.logo-core img {
+				position: relative;
+				width: 218px;
+				height: 218px;
+				object-fit: contain;
+				filter: drop-shadow(0 0 34px rgba(56, 215, 255, 0.68));
+			}
+
+			.p2 .word-a {
+				left: 118px;
+				top: 628px;
+			}
+
+			.p2 .word-b {
+				right: 118px;
+				top: 628px;
+			}
+
+			.p2 .word-c {
+				left: 50%;
+				top: 1014px;
+				transform: translateX(-50%);
+			}
+
+			.p3 .shot {
+				right: 68px;
+				top: 676px;
+				width: 548px;
+				height: 354px;
+				transform: perspective(1000px) rotateX(6deg) rotateY(-12deg) rotateZ(2deg);
+			}
+
+			.p3 .split-name {
+				position: absolute;
+				z-index: 7;
+				font-size: 132px;
+				font-family: Impact, "Arial Black", Arial, sans-serif;
+				font-weight: 950;
+				line-height: 1;
+				color: rgba(255, 255, 255, 0.13);
+				text-transform: uppercase;
+			}
+
+			.p3 .ai {
+				left: 86px;
+				top: 612px;
+				color: rgba(90, 220, 255, 0.2);
+			}
+
+			.p3 .team {
+				right: 86px;
+				top: 1036px;
+				color: rgba(216, 200, 255, 0.18);
+			}
+
+			.p3 .word-a {
+				left: 104px;
+				top: 810px;
+			}
+
+			.p3 .word-b {
+				left: 614px;
+				top: 1090px;
+			}
+
+			.p4 .shot {
+				left: 282px;
+				top: 562px;
+				width: 694px;
+				height: 430px;
+				transform: perspective(1050px) rotateX(4deg) rotateY(-15deg) rotateZ(-3deg);
+			}
+
+			.p4 .word-a {
+				left: 100px;
+				top: 658px;
+			}
+
+			.p4 .word-b {
+				left: 130px;
+				top: 854px;
+			}
+
+			.p4 .word-c {
+				left: 620px;
+				top: 1060px;
+			}
+
+			.p5 .shot {
+				left: 114px;
+				top: 610px;
+				width: 714px;
+				height: 442px;
+				transform: perspective(1080px) rotateX(7deg) rotateY(10deg) rotateZ(2deg);
+			}
+
+			.p5 .word-a {
+				left: 98px;
+				top: 1078px;
+			}
+
+			.p5 .word-b {
+				left: 436px;
+				top: 1128px;
+			}
+
+			.p5 .word-c {
+				right: 84px;
+				top: 1048px;
+			}
+
+			.p6 .force-label {
+				position: absolute;
+				z-index: 7;
+				width: 430px;
+				color: #fff;
+			}
+
+			.p6 .force-label h2 {
+				margin: 0 0 20px;
+				font-family: Impact, "Arial Black", Arial, sans-serif;
+				font-size: 62px;
+				line-height: 0.96;
+				text-transform: uppercase;
+				letter-spacing: 0;
+			}
+
+			.p6 .force-label p {
+				margin: 12px 0;
+				color: rgba(226, 232, 240, 0.82);
+				font-size: 27px;
+				font-weight: 800;
+				line-height: 1.1;
+				text-shadow: 0 10px 26px rgba(0, 0, 0, 0.8);
+			}
+
+			.p6 .auto {
+				left: 84px;
+				top: 636px;
+			}
+
+			.p6 .human {
+				right: 70px;
+				top: 820px;
+				text-align: right;
+			}
+
+			.p7 .process {
+				position: absolute;
+				z-index: 7;
+				left: 86px;
+				right: 80px;
+				top: 596px;
+				height: 438px;
+			}
+
+			.p7 .step {
+				position: absolute;
+				color: #f8fafc;
+				font-size: 30px;
+				font-weight: 900;
+				text-transform: uppercase;
+				text-shadow:
+					0 0 22px rgba(56, 215, 255, 0.42),
+					0 14px 32px rgba(0, 0, 0, 0.82);
+			}
+
+			.p7 .step::before {
+				content: "";
+				display: block;
+				width: 16px;
+				height: 16px;
+				margin-bottom: 12px;
+				border-radius: 50%;
+				background: #dff7ff;
+				box-shadow: 0 0 24px rgba(56, 215, 255, 0.85);
+			}
+
+			.p7 .s1 {
+				left: 0;
+				top: 214px;
+			}
+
+			.p7 .s2 {
+				left: 190px;
+				top: 122px;
+			}
+
+			.p7 .s3 {
+				left: 392px;
+				top: 48px;
+			}
+
+			.p7 .s4 {
+				left: 590px;
+				top: 142px;
+			}
+
+			.p7 .s5 {
+				left: 744px;
+				top: 252px;
+			}
+
+			.p7 .shot {
+				right: 64px;
+				bottom: 134px;
+				width: 468px;
+				height: 286px;
+				transform: perspective(980px) rotateX(6deg) rotateY(-16deg) rotateZ(3deg);
+			}
+
+			.p8 .shot {
+				left: 208px;
+				top: 610px;
+				width: 706px;
+				height: 430px;
+				transform: perspective(1080px) rotateX(7deg) rotateY(-10deg) rotateZ(-2deg);
+			}
+
+			.p8 .word-a {
+				left: 104px;
+				top: 760px;
+			}
+
+			.p8 .word-b {
+				left: 104px;
+				top: 888px;
+			}
+
+			.p8 .word-c {
+				right: 90px;
+				top: 1082px;
+			}
+
+			.p9 .copy {
+				top: 112px;
+			}
+
+			.p9 .system-logo {
+				position: absolute;
+				z-index: 8;
+				left: 50%;
+				top: 468px;
+				display: grid;
+				justify-items: center;
+				transform: translateX(-50%);
+				filter: drop-shadow(0 0 32px rgba(56, 215, 255, 0.5));
+			}
+
+			.p9 .system-logo img {
+				width: 118px;
+				height: 118px;
+				object-fit: contain;
+			}
+
+			.p9 .system-logo span {
+				margin-top: 8px;
+				color: #fff;
+				font-size: 48px;
+				font-weight: 900;
+			}
+
+			.p9 .shot-a {
+				left: 64px;
+				top: 668px;
+				width: 536px;
+				height: 326px;
+				transform: perspective(980px) rotateX(7deg) rotateY(14deg) rotateZ(-4deg);
+			}
+
+			.p9 .shot-b {
+				right: 66px;
+				top: 766px;
+				width: 464px;
+				height: 288px;
+				transform: perspective(960px) rotateX(6deg) rotateY(-15deg) rotateZ(4deg);
+			}
+
+			.p9 .shot-c {
+				left: 272px;
+				top: 974px;
+				width: 520px;
+				height: 318px;
+				transform: perspective(980px) rotateX(8deg) rotateY(-4deg) rotateZ(1deg);
+			}
+
+			.cta {
+				position: absolute;
+				z-index: 9;
+				right: 68px;
+				bottom: 52px;
+				color: #e0f7ff;
+				font-size: 29px;
+				font-weight: 900;
+				text-shadow: 0 0 18px rgba(56, 215, 255, 0.42);
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script>
+			const asset = (path) => new URL(path, window.location.href).href;
+			const logo = asset("./src/assets/app-logo-mark.png");
+			const logoLarge = asset("./src/assets/bladeia-logo.png");
+
+			const posts = [
+				{
+					id: 1,
+					className: "p1",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-01.png",
+					brand: "bottom",
+					kicker: "Inbox comercial",
+					title: 'Tu WhatsApp no est&aacute; saturado. <span class="accent">Est&aacute; desordenado.</span>',
+					lead: "Si todo cae mezclado, tu equipo responde tarde y pierde oportunidades.",
+					image: "./src/assets/feature-carousel/showcase-inbox-auto.png",
+					visual: "inbox",
+				},
+				{
+					id: 2,
+					className: "p2",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-02.png",
+					brand: "center",
+					title: 'Responde, retoma y recupera <span class="accent">oportunidades.</span>',
+					lead: "WhatsApp, clientes, campa&ntilde;as y carritos en una operaci&oacute;n comercial.",
+					visual: "logo",
+					center: true,
+				},
+				{
+					id: 3,
+					className: "p3",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-03.png",
+					brand: "bottom",
+					kicker: "IA + equipo",
+					title: 'La IA responde. <span class="accent">Tu equipo decide.</span>',
+					lead: "Automatiz&aacute; lo repetible sin perder control humano.",
+					image: "./src/assets/feature-carousel/showcase-inbox-payments.png",
+					visual: "split",
+				},
+				{
+					id: 4,
+					className: "p4",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-04.png",
+					brand: "bottom",
+					kicker: "Carritos",
+					title: 'Un carrito abandonado <span class="accent">todav&iacute;a puede volver.</span>',
+					lead: "Detect&aacute;, prioriz&aacute; y retom&aacute; con contexto.",
+					image: "./src/assets/feature-carousel/showcase-carts.png",
+					visual: "cart",
+				},
+				{
+					id: 5,
+					className: "p5",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-05.png",
+					brand: "bottom",
+					kicker: "Campa&ntilde;as",
+					title: 'Campa&ntilde;as con seguimiento, <span class="accent">no mensajes al aire.</span>',
+					lead: "Segment&aacute;, envi&aacute; y med&iacute; qu&eacute; conversaciones vuelven a moverse.",
+					image: "./src/assets/feature-carousel/showcase-campaigns.png",
+					visual: "campaigns",
+				},
+				{
+					id: 6,
+					className: "p6",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-06.png",
+					brand: "bottom",
+					kicker: "Criterio operativo",
+					title: '<span class="accent">Qu&eacute; automatizar</span> y qu&eacute; no.',
+					lead: "La IA acelera lo repetible. El equipo sostiene lo cr&iacute;tico.",
+					visual: "criteria",
+				},
+				{
+					id: 7,
+					className: "p7",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-07.png",
+					brand: "bottom",
+					kicker: "M&eacute;todo BladeIA",
+					title: 'As&iacute; ordenamos tu operaci&oacute;n <span class="accent">en WhatsApp.</span>',
+					lead: "Diagnosticar. Conectar. Entrenar. Medir. Ajustar.",
+					image: "./src/assets/feature-carousel/showcase-operations.png",
+					visual: "process",
+				},
+				{
+					id: 8,
+					className: "p8",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-08.png",
+					brand: "bottom",
+					kicker: "M&eacute;tricas",
+					title: 'Lo que no se mide, <span class="accent">se pierde.</span>',
+					lead: "Conversaciones, campa&ntilde;as, carritos y actividad comercial en una vista.",
+					image: "./src/assets/feature-carousel/showcase-operations.png",
+					visual: "metrics",
+				},
+				{
+					id: 9,
+					className: "p9",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v4-09.png",
+					brand: "",
+					kicker: "BladeIA",
+					title: 'IA comercial para marcas que venden <span class="accent">por WhatsApp.</span>',
+					lead: "Inbox, clientes, campa&ntilde;as, carritos y seguimiento en un mismo sistema.",
+					visual: "system",
+					center: true,
+				},
+			];
+
+			function brand(position = "") {
+				return `<div class="brand ${position}"><img src="${logo}" alt=""><span>BladeIA</span></div>`;
+			}
+
+			function header(post) {
+				return `
+					<section class="copy ${post.center ? "center" : ""}">
+						${post.kicker ? `<div class="kicker">${post.kicker}</div>` : ""}
+						<h1>${post.title}</h1>
+						${post.lead ? `<p class="lead">${post.lead}</p>` : ""}
+					</section>
+				`;
+			}
+
+			function screen(src, className = "shot") {
+				return `<div class="product-screen ${className}"><img src="${asset(src)}" alt=""></div>`;
+			}
+
+			function visual(post) {
+				if (post.visual === "logo") {
+					return `
+						<div class="logo-core"><img src="${logoLarge}" alt=""></div>
+						<div class="floating-word word-a">Responder</div>
+						<div class="floating-word violet word-b">Retomar</div>
+						<div class="floating-word green word-c">Recuperar</div>
+					`;
+				}
+
+				if (post.visual === "split") {
+					return `
+						<div class="split-name ai">IA</div>
+						<div class="split-name team">Equipo</div>
+						${screen(post.image)}
+						<div class="floating-word word-a">Automatiza</div>
+						<div class="floating-word violet word-b">Decide</div>
+					`;
+				}
+
+				if (post.visual === "criteria") {
+					return `
+						<div class="force-label auto">
+							<h2>Automatizar</h2>
+							<p>Consultas frecuentes</p>
+							<p>Cat&aacute;logo</p>
+							<p>Seguimiento</p>
+							<p>Carritos</p>
+						</div>
+						<div class="force-label human">
+							<h2>Humano</h2>
+							<p>Reclamos</p>
+							<p>Pagos</p>
+							<p>Casos sensibles</p>
+							<p>Decisiones</p>
+						</div>
+					`;
+				}
+
+				if (post.visual === "process") {
+					return `
+						<div class="process">
+							<div class="step s1">Diagnosticar</div>
+							<div class="step s2">Conectar</div>
+							<div class="step s3">Entrenar</div>
+							<div class="step s4">Medir</div>
+							<div class="step s5">Ajustar</div>
+						</div>
+						${screen(post.image)}
+					`;
+				}
+
+				if (post.visual === "system") {
+					const imgs = [
+						"./src/assets/feature-carousel/showcase-inbox-auto.png",
+						"./src/assets/feature-carousel/showcase-campaigns.png",
+						"./src/assets/feature-carousel/showcase-carts.png",
+					];
+					return `
+						<div class="system-logo"><img src="${logoLarge}" alt=""><span>BladeIA</span></div>
+						${screen(imgs[0], "shot-a")}
+						${screen(imgs[1], "shot-b")}
+						${screen(imgs[2], "shot-c")}
+						<div class="cta">bladeia.com</div>
+					`;
+				}
+
+				if (post.visual === "cart") {
+					return `
+						${screen(post.image)}
+						<div class="floating-word word-a">Detectar</div>
+						<div class="floating-word violet word-b">Priorizar</div>
+						<div class="floating-word green word-c">Retomar</div>
+					`;
+				}
+
+				if (post.visual === "campaigns") {
+					return `
+						${screen(post.image)}
+						<div class="floating-word word-a">Audiencia</div>
+						<div class="floating-word violet word-b">Mensaje</div>
+						<div class="floating-word green word-c">Resultado</div>
+					`;
+				}
+
+				if (post.visual === "metrics") {
+					return `
+						${screen(post.image)}
+						<div class="floating-word word-a">Conversaciones</div>
+						<div class="floating-word violet word-b">Campa&ntilde;as</div>
+						<div class="floating-word green word-c">Control</div>
+					`;
+				}
+
+				return `
+					${screen(post.image)}
+					<div class="floating-word word-a">Prioridad</div>
+					<div class="floating-word violet word-b">Contexto</div>
+					<div class="floating-word green word-c">Seguimiento</div>
+				`;
+			}
+
+			function render(post) {
+				document.getElementById("root").innerHTML = `
+					<main class="post ${post.className}" style="--bg:url('${asset(post.bg)}')">
+						${post.visual === "system" ? "" : brand(post.brand)}
+						${header(post)}
+						<div class="visual">${visual(post)}</div>
+						${post.visual === "system" ? "" : '<div class="signature">@bladeia.ok</div>'}
+					</main>
+				`;
+			}
+
+			async function markReady() {
+				await Promise.all(
+					Array.from(document.images).map((img) => {
+						if (img.complete) return Promise.resolve();
+						return new Promise((resolve) => {
+							img.addEventListener("load", resolve, { once: true });
+							img.addEventListener("error", resolve, { once: true });
+						});
+					}),
+				);
+				if (document.fonts && document.fonts.ready) {
+					await document.fonts.ready;
+				}
+				window.__READY__ = true;
+			}
+
+			const params = new URLSearchParams(window.location.search);
+			const id = Number(params.get("post") || 1);
+			render(posts.find((post) => post.id === id) || posts[0]);
+			markReady();
+		</script>
+	</body>
+</html>

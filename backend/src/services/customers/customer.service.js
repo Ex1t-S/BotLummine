@@ -195,6 +195,22 @@ function normalizeOrderStatus(value) {
 	return normalized ? normalized.toLowerCase() : null;
 }
 
+function getOrderGatewayValue(order = {}) {
+	return cleanString(order?.gateway);
+}
+
+function getOrderGatewayIdValue(order = {}) {
+	return cleanString(order?.gateway_id);
+}
+
+function getOrderGatewayNameValue(order = {}) {
+	return cleanString(order?.gateway_name);
+}
+
+function getOrderGatewayLinkValue(order = {}) {
+	return cleanString(order?.gateway_link);
+}
+
 function subtractDays(date, days) {
 	return new Date(date.getTime() - days * 24 * 60 * 60 * 1000);
 }
@@ -674,6 +690,10 @@ function mapOrderPayload(order, storeId, customerProfileId, workspaceId, provide
 		shippingStatus: normalizeOrderStatus(deriveShippingStatus(order)),
 		totalAmount: toDecimalOrNull(order?.total),
 		currency: cleanString(order?.currency) || 'ARS',
+		gateway: getOrderGatewayValue(order),
+		gatewayId: getOrderGatewayIdValue(order),
+		gatewayName: getOrderGatewayNameValue(order),
+		gatewayLink: getOrderGatewayLinkValue(order),
 		products: Array.isArray(order?.products) ? order.products : [],
 		rawPayload: order,
 		orderCreatedAt: parseDateOrNull(order?.created_at),

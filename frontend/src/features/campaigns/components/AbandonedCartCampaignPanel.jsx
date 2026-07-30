@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatPreviewText } from '../utils.js';
+import { getFriendlyError } from '../errorMessages.js';
+import { formatTemplateStatusLabel } from '../../../utils/statusLabels.js';
 import TemplateHeaderMediaUpload from './TemplateHeaderMediaUpload.jsx';
 import {
 	mergeHeaderMediaVariableMapping,
@@ -263,7 +265,7 @@ function AutomationCard({
 				<div>
 					<span className="campaigns-eyebrow">Automatizacion</span>
 					<h4>Enviar carritos nuevos cada 30 minutos</h4>
-					<p>Cuando esta activa, sincroniza y detecta carritos nuevos con al menos 1 hora para mandar el template configurado.</p>
+					<p>Cuando está activa, sincroniza y detecta carritos nuevos con al menos 1 hora para enviar la plantilla configurada.</p>
 				</div>
 				<span className={`campaign-schedule-status ${form.enabled ? 'is-active' : ''}`.trim()}>
 					{form.enabled ? 'Activa' : 'Pausada'}
@@ -299,10 +301,10 @@ function AutomationCard({
 						onChange={(event) => updateTemplateId(event.target.value)}
 						disabled={loading || saving}
 					>
-						<option value="">Seleccionar template</option>
+						<option value="">Seleccionar plantilla</option>
 						{templates.map((template) => (
 							<option key={template.id} value={template.id}>
-								{template.name} - {template.language} - {template.status}
+								{template.name} - {template.language} - {formatTemplateStatusLabel(template.status)}
 							</option>
 						))}
 					</select>
@@ -387,7 +389,7 @@ function AutomationCard({
 				</span>
 				<span>
 					<strong>Template</strong>
-					<small>{selectedAutomationTemplate?.name || settings?.templateName || 'Sin template'}</small>
+					<small>{selectedAutomationTemplate?.name || settings?.templateName || 'Sin plantilla'}</small>
 				</span>
 			</div>
 
@@ -396,7 +398,7 @@ function AutomationCard({
 					<strong>Variables del carrito</strong>
 					<span>
 						{templateVariableKeys.length
-							? `${templateVariableKeys.length} variable(s) detectada(s) en el template.`
+						? `${templateVariableKeys.length} variable(s) detectada(s) en la plantilla.`
 							: 'Selecciona una plantilla con variables para mapear el link, nombre y otros datos.'}
 					</span>
 				</div>
@@ -443,7 +445,7 @@ function AutomationCard({
 			</div>
 
 			{settings?.lastError ? (
-				<div className="campaign-schedule-error">{settings.lastError}</div>
+				<div className="campaign-schedule-error">{getFriendlyError({ message: settings.lastError })}</div>
 			) : null}
 
 			<div className="campaign-form-actions campaign-form-actions--end">
@@ -603,10 +605,10 @@ export default function AbandonedCartCampaignPanel({
 								onSelectTemplate(next);
 							}}
 						>
-							<option value="">Seleccionar template</option>
+							<option value="">Seleccionar plantilla</option>
 							{templates.map((template) => (
 								<option key={template.id} value={template.id}>
-									{template.name} · {template.language} · {template.status}
+									{template.name} · {template.language} · {formatTemplateStatusLabel(template.status)}
 								</option>
 							))}
 						</select>
@@ -659,7 +661,7 @@ export default function AbandonedCartCampaignPanel({
 								value={form.status}
 								onChange={(e) => onUpdateField('status', e.target.value)}
 							>
-								<option value="NEW">Nuevos</option>
+								<option value="NEW">No contactados</option>
 								<option value="CONTACTED">Contactados</option>
 								<option value="ALL">Todos</option>
 							</select>
@@ -724,7 +726,7 @@ export default function AbandonedCartCampaignPanel({
 							<strong>Variables del carrito</strong>
 							<span>
 								{templateVariableKeys.length
-									? `${templateVariableKeys.length} variable(s) detectada(s) en el template.`
+								? `${templateVariableKeys.length} variable(s) detectada(s) en la plantilla.`
 									: 'Selecciona una plantilla con variables para mapear link, nombre y otros datos.'}
 							</span>
 						</div>
@@ -863,7 +865,7 @@ export default function AbandonedCartCampaignPanel({
 						) : (
 							<div className="campaign-custom-audience-empty">
 								<strong>Sin destinatarios para mostrar</strong>
-								<span>Elegí un template y previsualizá los primeros contactos antes de crear la campaña.</span>
+								<span>Elegí una plantilla y previsualizá los primeros contactos antes de crear la campaña.</span>
 							</div>
 						)}
 					</div>

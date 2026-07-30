@@ -102,7 +102,35 @@ export async function createTemplateController(req, res) {
 		const template = await persistTemplateBuilderMetadata(result.template, req.body);
 		return res.status(201).json({ ok: true, ...result, template });
 	} catch (error) {
-		return sendError(res, error);
+		const components = Array.isArray(req.body?.components) ? req.body.components : [];
+		logger.error('campaign.template_create_failed', {
+			workspaceId: req.user?.workspaceId || null,
+			userId: req.user?.id || null,
+			name: req.body?.name || null,
+			category: req.body?.category || null,
+			language: req.body?.language || null,
+			parameterFormat: req.body?.parameterFormat || null,
+			componentTypes: components.map((component) => component?.type || null),
+			componentSummary: components.map((component) => ({
+				type: component?.type || null,
+				format: component?.format || null,
+				hasExample: Boolean(component?.example),
+				buttonTypes: Array.isArray(component?.buttons)
+					? component.buttons.map((button) => button?.type || null)
+					: [],
+				buttonFields: Array.isArray(component?.buttons)
+					? component.buttons.map((button) => ({
+						type: button?.type || null,
+						hasText: Boolean(button?.text),
+						hasUrl: Boolean(button?.url),
+						hasUrlExample: Boolean(button?.example),
+						hasPhoneNumber: Boolean(button?.phone_number)
+					}))
+					: []
+			})),
+			error,
+		});
+		return sendError(res, error, 400, 'template');
 	}
 }
 
@@ -118,7 +146,18 @@ export async function updateTemplateController(req, res) {
 		const template = await persistTemplateBuilderMetadata(result.template, req.body);
 		return res.json({ ok: true, ...result, template });
 	} catch (error) {
-		return sendError(res, error);
+		logger.error('campaign.template_update_failed', {
+			workspaceId: req.user?.workspaceId || null,
+			userId: req.user?.id || null,
+			templateId: req.params?.templateId || null,
+			category: req.body?.category || null,
+			parameterFormat: req.body?.parameterFormat || null,
+			componentTypes: Array.isArray(req.body?.components)
+				? req.body.components.map((component) => component?.type || null)
+				: [],
+			error,
+		});
+		return sendError(res, error, 400, 'edit');
 	}
 }
 

@@ -75,13 +75,19 @@ function logGraph(label, payload) {
 
 function normalizeAxiosGraphError(error) {
 	const apiError = error?.response?.data?.error;
-
-	return new Error(
+	const normalized = new Error(
 		apiError?.message ||
 		error?.response?.data?.message ||
 		error?.message ||
 		'Error desconocido contra Graph API.'
 	);
+
+	normalized.metaCode = apiError?.code || null;
+	normalized.metaSubcode = apiError?.error_subcode || null;
+	normalized.metaType = apiError?.type || null;
+	normalized.metaTraceId = apiError?.fbtrace_id || null;
+	normalized.metaErrorData = apiError?.error_data || null;
+	return normalized;
 }
 
 export async function graphGet(path, { params = {}, headers = {}, accessToken = null } = {}) {

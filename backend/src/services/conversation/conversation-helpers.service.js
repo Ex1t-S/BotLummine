@@ -1364,7 +1364,7 @@ export async function resolveIntentAction({
 	}
 
 	if (intent === 'payment') {
-		return handlePaymentIntent({ currentState, workspaceId });
+		return handlePaymentIntent({ messageBody, currentState, workspaceId });
 	}
 
 	if (intent === 'shipping') {

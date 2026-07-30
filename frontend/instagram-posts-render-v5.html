@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>BladeIA Instagram Renderer V5</title>
+		<style>
+			:root {
+				--cyan: #38bdf8;
+				--violet: #a78bfa;
+				--green: #22c55e;
+				--text: #f8fafc;
+				--muted: #d3dbe8;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				width: 1080px;
+				height: 1350px;
+				margin: 0;
+				overflow: hidden;
+				background: #010205;
+				font-family:
+					Inter,
+					Sora,
+					Arial,
+					Helvetica,
+					sans-serif;
+			}
+
+			body {
+				display: grid;
+				place-items: center;
+			}
+
+			.post {
+				position: relative;
+				width: 1080px;
+				height: 1350px;
+				overflow: hidden;
+				color: var(--text);
+				background:
+					linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.18)),
+					var(--bg) var(--bg-position, center) / cover no-repeat,
+					#010205;
+				isolation: isolate;
+			}
+
+			.post::before,
+			.post::after {
+				content: "";
+				position: absolute;
+				inset: 0;
+				z-index: 1;
+				pointer-events: none;
+			}
+
+			.post::before {
+				background:
+					linear-gradient(180deg, rgba(0, 0, 0, 0.995) 0, rgba(0, 0, 0, 0.985) 520px, rgba(0, 0, 0, 0.72) 660px, transparent 820px),
+					linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0, rgba(0, 0, 0, 0.32) 210px, transparent 430px),
+					radial-gradient(circle at 50% 50%, transparent 0 430px, rgba(0, 0, 0, 0.22) 720px);
+			}
+
+			.post::after {
+				z-index: 2;
+				background:
+					linear-gradient(90deg, rgba(0, 0, 0, 0.18), transparent 28% 72%, rgba(0, 0, 0, 0.18)),
+					radial-gradient(circle at 18% 10%, rgba(56, 189, 248, 0.1), transparent 0 160px, transparent 420px);
+				mix-blend-mode: normal;
+			}
+
+			.content {
+				position: absolute;
+				z-index: 6;
+				left: 68px;
+				right: 68px;
+				top: 118px;
+				text-align: left;
+				isolation: isolate;
+			}
+
+			.content::before {
+				content: "";
+				position: absolute;
+				z-index: 0;
+				left: -64px;
+				right: -64px;
+				top: -78px;
+				bottom: -210px;
+				background: radial-gradient(ellipse at 30% 42%, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0.94) 64%, transparent 88%);
+				filter: blur(12px);
+				pointer-events: none;
+			}
+
+			.content.center {
+				text-align: center;
+			}
+
+			.content.center::before {
+				background: radial-gradient(ellipse at 50% 42%, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0.95) 66%, transparent 90%);
+			}
+
+			.kicker {
+				position: relative;
+				z-index: 1;
+				margin: 0 0 18px;
+				color: var(--cyan);
+				font-size: 18px;
+				font-weight: 900;
+				line-height: 1;
+				text-transform: uppercase;
+				letter-spacing: 0;
+				text-shadow: 0 0 24px rgba(56, 189, 248, 0.42);
+			}
+
+			.title {
+				position: relative;
+				z-index: 1;
+				max-width: 940px;
+				margin: 0;
+				color: transparent;
+				background: linear-gradient(180deg, #ffffff 0%, #dbe5ee 45%, #8d9aa8 100%);
+				-webkit-background-clip: text;
+				background-clip: text;
+				font-family:
+					Impact,
+					Arial Black,
+					Inter,
+					Arial,
+					sans-serif;
+				font-size: var(--title-size, 74px);
+				font-weight: 950;
+				line-height: 1.08;
+				text-transform: uppercase;
+				text-wrap: balance;
+				letter-spacing: 0;
+				text-shadow:
+					0 2px 0 rgba(255, 255, 255, 0.16),
+					0 14px 42px rgba(0, 0, 0, 0.9),
+					0 0 34px rgba(56, 189, 248, 0.22);
+			}
+
+			.center .title {
+				margin: 0 auto;
+			}
+
+			.accent {
+				color: transparent;
+				background: linear-gradient(180deg, #e8faff 0%, #7dd3fc 48%, #a78bfa 100%);
+				-webkit-background-clip: text;
+				background-clip: text;
+			}
+
+			.subtitle {
+				position: relative;
+				z-index: 1;
+				max-width: 830px;
+				margin: 24px 0 0;
+				color: var(--muted);
+				font-size: 24px;
+				font-weight: 700;
+				line-height: 1.28;
+				text-shadow: 0 12px 30px rgba(0, 0, 0, 0.9);
+			}
+
+			.center .subtitle {
+				margin-left: auto;
+				margin-right: auto;
+			}
+
+			.erase {
+				position: absolute;
+				z-index: 4;
+				pointer-events: none;
+			}
+
+			.erase.soft {
+				background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.98), rgba(0, 0, 0, 0.78) 58%, transparent 76%);
+				filter: blur(5px);
+			}
+
+			.erase.band {
+				background: linear-gradient(180deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.7) 62%, transparent);
+			}
+
+			.signature {
+				position: absolute;
+				z-index: 7;
+				right: 68px;
+				bottom: 52px;
+				color: rgba(232, 240, 250, 0.84);
+				font-size: 22px;
+				font-weight: 850;
+				text-shadow: 0 10px 24px rgba(0, 0, 0, 0.86);
+			}
+
+			.logo-unit {
+				position: absolute;
+				z-index: 7;
+				display: grid;
+				justify-items: center;
+				color: #fff;
+				text-shadow: 0 14px 34px rgba(0, 0, 0, 0.88);
+			}
+
+			.logo-unit img {
+				display: block;
+				width: var(--logo-size, 116px);
+				height: var(--logo-size, 116px);
+				object-fit: contain;
+				filter:
+					drop-shadow(0 0 24px rgba(56, 189, 248, 0.58))
+					drop-shadow(0 18px 42px rgba(0, 0, 0, 0.78));
+			}
+
+			.logo-unit .wordmark {
+				margin-top: 12px;
+				font-size: var(--wordmark-size, 52px);
+				font-weight: 900;
+				line-height: 1;
+			}
+
+			.logo-unit.compact {
+				grid-auto-flow: column;
+				align-items: center;
+				gap: 18px;
+			}
+
+			.logo-unit.compact .wordmark {
+				margin-top: 0;
+			}
+
+			.floating {
+				position: absolute;
+				z-index: 6;
+				color: #f8fafc;
+				font-size: 28px;
+				font-weight: 900;
+				text-transform: uppercase;
+				text-shadow:
+					0 0 18px rgba(56, 189, 248, 0.5),
+					0 14px 30px rgba(0, 0, 0, 0.84);
+			}
+
+			.floating.violet {
+				color: #d8c8ff;
+				text-shadow:
+					0 0 20px rgba(167, 139, 250, 0.56),
+					0 14px 30px rgba(0, 0, 0, 0.84);
+			}
+
+			.floating.green {
+				color: #b8ffd4;
+				text-shadow:
+					0 0 18px rgba(34, 197, 94, 0.56),
+					0 14px 30px rgba(0, 0, 0, 0.84);
+			}
+
+			.p1 {
+				--bg-position: center 48%;
+			}
+
+			.p1 .content {
+				top: 120px;
+			}
+
+			.p1 .erase-a {
+				left: 0;
+				top: 52px;
+				width: 650px;
+				height: 430px;
+			}
+
+			.p1 .w1 {
+				left: 84px;
+				top: 820px;
+			}
+
+			.p1 .w2 {
+				left: 238px;
+				top: 952px;
+			}
+
+			.p1 .w3 {
+				right: 116px;
+				bottom: 236px;
+			}
+
+			.p2 {
+				--bg-position: center;
+				--title-size: 78px;
+			}
+
+			.p2::before {
+				background:
+					linear-gradient(180deg, rgba(0, 0, 0, 0.995) 0, rgba(0, 0, 0, 0.98) 520px, rgba(0, 0, 0, 0.62) 680px, transparent 840px),
+					radial-gradient(circle at 50% 56%, rgba(0, 0, 0, 0.98), rgba(0, 0, 0, 0.86) 0 260px, transparent 480px),
+					linear-gradient(0deg, rgba(0, 0, 0, 0.62), transparent 360px);
+			}
+
+			.p2 .erase-a {
+				left: 150px;
+				top: 480px;
+				width: 720px;
+				height: 590px;
+				background: radial-gradient(ellipse at center, rgba(0, 0, 0, 1) 0 76%, rgba(0, 0, 0, 0.98) 86%, transparent 96%);
+			}
+
+			.p2 .logo-unit {
+				left: 50%;
+				top: 574px;
+				transform: translateX(-50%);
+				--logo-size: 134px;
+				--wordmark-size: 58px;
+			}
+
+			.p2 .w1 {
+				left: 108px;
+				top: 696px;
+			}
+
+			.p2 .w2 {
+				right: 118px;
+				top: 696px;
+			}
+
+			.p2 .w3 {
+				left: 50%;
+				top: 1034px;
+				transform: translateX(-50%);
+			}
+
+			.p3 {
+				--bg-position: center 48%;
+				--title-size: 78px;
+			}
+
+			.p3 .erase-a {
+				left: 0;
+				top: 50px;
+				width: 720px;
+				height: 380px;
+			}
+
+			.p3 .erase-b {
+				left: 388px;
+				bottom: 34px;
+				width: 330px;
+				height: 126px;
+			}
+
+			.p3 .w1 {
+				left: 112px;
+				top: 786px;
+			}
+
+			.p3 .w2 {
+				right: 120px;
+				top: 786px;
+			}
+
+			.p4 {
+				--bg-position: center 46%;
+				--title-size: 74px;
+			}
+
+			.p4 .erase-a {
+				left: 0;
+				top: 54px;
+				width: 760px;
+				height: 390px;
+			}
+
+			.p4 .w1 {
+				left: 88px;
+				top: 858px;
+			}
+
+			.p4 .w2 {
+				left: 424px;
+				bottom: 154px;
+			}
+
+			.p4 .w3 {
+				right: 98px;
+				top: 858px;
+			}
+
+			.p5 {
+				--bg-position: center 48%;
+				--title-size: 72px;
+			}
+
+			.p5 .erase-a {
+				left: 0;
+				top: 56px;
+				width: 780px;
+				height: 430px;
+			}
+
+			.p5 .w1 {
+				left: 104px;
+				bottom: 212px;
+			}
+
+			.p5 .w2 {
+				left: 448px;
+				bottom: 166px;
+			}
+
+			.p5 .w3 {
+				right: 90px;
+				bottom: 216px;
+			}
+
+			.p6 {
+				--bg-position: center 48%;
+				--title-size: 82px;
+			}
+
+			.p6 .erase-a {
+				left: 0;
+				top: 56px;
+				width: 790px;
+				height: 390px;
+			}
+
+			.p6 .criterion {
+				position: absolute;
+				z-index: 6;
+				width: 380px;
+				color: #fff;
+				text-shadow: 0 12px 28px rgba(0, 0, 0, 0.9);
+			}
+
+			.p6 .criterion h2 {
+				margin: 0 0 16px;
+				font-family: Impact, "Arial Black", Inter, Arial, sans-serif;
+				font-size: 50px;
+				line-height: 1;
+				text-transform: uppercase;
+				letter-spacing: 0;
+			}
+
+			.p6 .criterion p {
+				margin: 10px 0;
+				font-size: 25px;
+				font-weight: 850;
+				line-height: 1.08;
+				color: rgba(238, 242, 247, 0.92);
+			}
+
+			.p6 .auto {
+				left: 106px;
+				top: 684px;
+			}
+
+				.p6 .human {
+				right: 86px;
+				top: 760px;
+				text-align: right;
+			}
+
+			.p7 {
+				--bg-position: center 48%;
+				--title-size: 76px;
+			}
+
+			.p7 .erase-a {
+				left: 0;
+				top: 52px;
+				width: 810px;
+				height: 400px;
+			}
+
+			.p7 .steps {
+				position: absolute;
+				z-index: 6;
+				left: 94px;
+				top: 616px;
+				display: grid;
+				gap: 20px;
+				color: #f8fafc;
+				font-size: 25px;
+				font-weight: 900;
+				text-transform: uppercase;
+				text-shadow:
+					0 0 18px rgba(56, 189, 248, 0.48),
+					0 12px 26px rgba(0, 0, 0, 0.86);
+			}
+
+			.p7 .steps span {
+				display: block;
+			}
+
+			.p8 {
+				--bg-position: center 49%;
+				--title-size: 78px;
+			}
+
+			.p8 .erase-a {
+				left: 0;
+				top: 48px;
+				width: 760px;
+				height: 408px;
+			}
+
+			.p8 .w1 {
+				left: 112px;
+				top: 782px;
+			}
+
+			.p8 .w2 {
+				left: 112px;
+				top: 920px;
+			}
+
+			.p8 .w3 {
+				right: 88px;
+				bottom: 184px;
+			}
+
+			.p9 {
+				--bg-position: center 49%;
+				--title-size: 70px;
+			}
+
+			.p9 .content {
+				top: 106px;
+				text-align: center;
+			}
+
+			.p9 .title {
+				margin: 0 auto;
+			}
+
+			.p9 .erase-a {
+				left: 0;
+				top: 46px;
+				width: 1080px;
+				height: 440px;
+			}
+
+			.p9 .erase-b {
+				left: 346px;
+				bottom: 34px;
+				width: 388px;
+				height: 116px;
+			}
+
+			.p9 .logo-unit {
+				left: 50%;
+				bottom: 54px;
+				transform: translateX(-50%);
+				--logo-size: 58px;
+				--wordmark-size: 30px;
+			}
+
+			.p9 .cta {
+				position: absolute;
+				z-index: 7;
+				right: 74px;
+				bottom: 58px;
+				color: #e0f7ff;
+				font-size: 27px;
+				font-weight: 900;
+				text-shadow: 0 0 20px rgba(56, 189, 248, 0.42);
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script>
+			const asset = (path) => new URL(path, window.location.href).href;
+			const logo = asset("./src/assets/bladeia-logo.svg");
+
+			const posts = [
+				{
+					id: 1,
+					className: "p1",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-06.png",
+					kicker: "Inbox comercial",
+					title: 'Tu WhatsApp no est&aacute; saturado. <span class="accent">Est&aacute; desordenado.</span>',
+					subtitle:
+						"Si cada consulta cae en el mismo lugar, tu equipo responde tarde, pierde contexto y deja oportunidades sin seguimiento.",
+					visual: "inbox",
+				},
+				{
+					id: 2,
+					className: "p2",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-02.png",
+					title: 'Responde, retoma y recupera <span class="accent">oportunidades.</span>',
+					subtitle: "",
+					visual: "logo",
+					center: true,
+				},
+				{
+					id: 3,
+					className: "p3",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-03.png",
+					kicker: "IA + equipo",
+					title: 'La IA responde. <span class="accent">Tu equipo decide.</span>',
+					subtitle: "Automatizamos lo repetible y dejamos lo sensible en manos humanas.",
+					visual: "split",
+				},
+				{
+					id: 4,
+					className: "p4",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-08.png",
+					kicker: "Carritos",
+					title: 'Un carrito abandonado <span class="accent">todav&iacute;a puede volver.</span>',
+					subtitle: "Detecta oportunidades, prioriza las m&aacute;s valiosas y retoma la conversaci&oacute;n con contexto.",
+					visual: "cart",
+				},
+				{
+					id: 5,
+					className: "p5",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-09.png",
+					kicker: "Campa&ntilde;as",
+					title: 'Campa&ntilde;as con seguimiento, <span class="accent">no mensajes al aire.</span>',
+					subtitle: "Segmenta, env&iacute;a y mide qu&eacute; conversaciones vuelven a moverse.",
+					visual: "campaigns",
+				},
+				{
+					id: 6,
+					className: "p6",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-04.png",
+					kicker: "Criterio operativo",
+					title: '<span class="accent">Qu&eacute; automatizar</span> y qu&eacute; no.',
+					subtitle: "La IA acelera lo repetible. El equipo humano sostiene lo cr&iacute;tico.",
+					visual: "criteria",
+				},
+				{
+					id: 7,
+					className: "p7",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-05.png",
+					kicker: "M&eacute;todo BladeIA",
+					title: 'As&iacute; ordenamos tu operaci&oacute;n <span class="accent">en WhatsApp.</span>',
+					subtitle: "Diagnosticar. Conectar. Entrenar. Medir. Ajustar.",
+					visual: "process",
+				},
+				{
+					id: 8,
+					className: "p8",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-01.png",
+					kicker: "M&eacute;tricas",
+					title: 'Lo que no se mide, <span class="accent">se pierde.</span>',
+					subtitle: "Conversaciones, campa&ntilde;as, carritos y actividad comercial en una vista.",
+					visual: "metrics",
+				},
+				{
+					id: 9,
+					className: "p9",
+					bg: "./src/assets/instagram/bladeia-instagram-bg-v5-07.png",
+					kicker: "BladeIA",
+					title: 'IA comercial para marcas que venden <span class="accent">por WhatsApp.</span>',
+					subtitle: "Inbox, clientes, campa&ntilde;as, carritos y seguimiento en un mismo sistema.",
+					visual: "system",
+					center: true,
+				},
+			];
+
+			function header(post) {
+				return `
+					<section class="content ${post.center ? "center" : ""}">
+						${post.kicker ? `<div class="kicker">${post.kicker}</div>` : ""}
+						<h1 class="title">${post.title}</h1>
+						${post.subtitle ? `<p class="subtitle">${post.subtitle}</p>` : ""}
+					</section>
+				`;
+			}
+
+			function logoUnit(className = "") {
+				return `
+					<div class="logo-unit ${className}">
+						<img src="${logo}" alt="">
+						<div class="wordmark">BladeIA</div>
+					</div>
+				`;
+			}
+
+			function labels(post) {
+				if (post.visual === "logo") {
+					return `
+						<div class="erase soft erase-a"></div>
+						${logoUnit()}
+						<div class="floating w1">Responder</div>
+						<div class="floating violet w2">Retomar</div>
+						<div class="floating green w3">Recuperar</div>
+					`;
+				}
+
+				if (post.visual === "split") {
+					return `
+						<div class="erase soft erase-a"></div>
+						<div class="erase soft erase-b"></div>
+					`;
+				}
+
+				if (post.visual === "cart") {
+					return `
+						<div class="erase soft erase-a"></div>
+					`;
+				}
+
+				if (post.visual === "campaigns") {
+					return `
+						<div class="erase soft erase-a"></div>
+					`;
+				}
+
+				if (post.visual === "criteria") {
+					return `
+						<div class="erase soft erase-a"></div>
+					`;
+				}
+
+				if (post.visual === "process") {
+					return `
+						<div class="erase soft erase-a"></div>
+					`;
+				}
+
+				if (post.visual === "metrics") {
+					return `
+						<div class="erase soft erase-a"></div>
+					`;
+				}
+
+				if (post.visual === "system") {
+					return `
+						<div class="erase band erase-a"></div>
+						<div class="erase soft erase-b"></div>
+						${logoUnit("compact")}
+						<div class="cta">bladeia.com</div>
+					`;
+				}
+
+				return `
+					<div class="erase soft erase-a"></div>
+				`;
+			}
+
+			function render(post) {
+				document.getElementById("root").innerHTML = `
+					<main class="post ${post.className}" style="--bg:url('${asset(post.bg)}')">
+						${header(post)}
+						${labels(post)}
+						${post.visual === "logo" || post.visual === "system" ? "" : '<div class="signature">@bladeia.ok</div>'}
+					</main>
+				`;
+			}
+
+			async function markReady() {
+				await Promise.all(
+					Array.from(document.images).map((img) => {
+						if (img.complete) return Promise.resolve();
+						return new Promise((resolve) => {
+							img.addEventListener("load", resolve, { once: true });
+							img.addEventListener("error", resolve, { once: true });
+						});
+					}),
+				);
+				if (document.fonts && document.fonts.ready) {
+					await document.fonts.ready;
+				}
+				window.__READY__ = true;
+			}
+
+			const params = new URLSearchParams(window.location.search);
+			const id = Number(params.get("post") || 1);
+			render(posts.find((post) => post.id === id) || posts[0]);
+			markReady();
+		</script>
+	</body>
+</html>

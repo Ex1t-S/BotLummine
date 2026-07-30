@@ -47,6 +47,7 @@ import {
 	normalizeOverview,
 } from '../utils.js';
 import { useCampaignFeedback } from './useCampaignFeedback.js';
+import { getFriendlyError } from '../errorMessages.js';
 
 const initialAbandonedCartForm = {
 	name: '',
@@ -578,7 +579,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 						: 'Templates sincronizados con Meta.'
 			);
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo sincronizar.'),
+		onError: (error) => showFeedback('error', getFriendlyError(error, 'No se pudo sincronizar.')),
 	});
 
 	const purgeDeletedTemplatesMutation = useMutation({
@@ -587,11 +588,11 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			invalidateAll();
 			showFeedback(
 				'success',
-				`${Number(result?.deletedCount || 0)} templates eliminados de la base local.`
+				`${Number(result?.deletedCount || 0)} plantillas eliminadas de la base local.`
 			);
 		},
 		onError: (error) =>
-			showFeedback('error', error?.response?.data?.error || 'No se pudieron limpiar los templates eliminados.'),
+			showFeedback('error', error?.response?.data?.error || 'No se pudieron limpiar las plantillas eliminadas.'),
 	});
 
 	const createTemplateMutation = useMutation({
@@ -604,7 +605,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			}
 			showFeedback('success', 'Template creado correctamente.');
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear el template.'),
+		onError: (error) => showFeedback('error', getFriendlyError(error, 'No se pudo crear la plantilla.')),
 	});
 
 	const updateTemplateMutation = useMutation({
@@ -613,7 +614,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			invalidateAll();
 			showFeedback('success', 'Template actualizado.');
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar el template.'),
+		onError: (error) => showFeedback('error', getFriendlyError(error, 'No se pudo actualizar la plantilla.')),
 	});
 
 	const deleteTemplateMutation = useMutation({
@@ -623,7 +624,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			setSelectedTemplate(null);
 			showFeedback('success', 'Template eliminado.');
 		},
-		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar el template.'),
+		onError: (error) => showFeedback('error', getFriendlyError(error, 'No se pudo eliminar la plantilla.')),
 	});
 
 	const createCampaignMutation = useMutation({
@@ -745,7 +746,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			const resolvedTemplateId = templateId || selectedTemplate?.id || null;
 
 			if (!resolvedTemplateId) {
-				throw new Error('Elegí un template antes de crear la campaña.');
+				throw new Error('Elegí una plantilla antes de crear la campaña.');
 			}
 
 			const payload = {
@@ -899,7 +900,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 		const resolvedTemplateId = payload.templateId || selectedTemplate?.id || null;
 
 		if (!resolvedTemplateId) {
-			showFeedback('error', 'Elegí un template para previsualizar la campaña.');
+			showFeedback('error', 'Elegí una plantilla para previsualizar la campaña.');
 			return;
 		}
 

@@ -31,6 +31,13 @@ function normalizeString(value, fallback = '') {
 	return normalized || fallback;
 }
 
+function normalizePhoneNumber(value = '') {
+	const raw = normalizeString(value);
+	if (!raw) return '';
+	const digits = raw.replace(/[^0-9]/g, '');
+	return digits ? `+${digits}` : '';
+}
+
 function toUpper(value, fallback = '') {
 	return normalizeString(value, fallback).toUpperCase();
 }
@@ -115,7 +122,7 @@ function mapTemplateToForm(template) {
 	};
 }
 
-function buildButtonsComponent(buttons = []) {
+function buildButtonsComponent(buttons = [], parameterFormat = 'POSITIONAL') {
 	const normalized = safeArray(buttons)
 		.map((button, index) => normalizeButton(button, index))
 		.filter((button) => button.text);
@@ -128,18 +135,37 @@ function buildButtonsComponent(buttons = []) {
 		type: 'BUTTONS',
 		buttons: normalized.map((button) => {
 			if (button.type === 'URL') {
-				return {
+				const buttonPayload = {
 					type: 'URL',
 					text: button.text,
 					url: button.url,
 				};
+				const urlVariables = getVariables(button.url, parameterFormat);
+
+				if (urlVariables.length) {
+					if (toUpper(parameterFormat) === 'NAMED') {
+						buttonPayload.example = {
+							url_named_params: buildNamedExamples(urlVariables, 'url'),
+						};
+					} else {
+						buttonPayload.example = [
+							urlVariables.reduce(
+								(url, variableKey) =>
+									url.replace(`{{${variableKey}}}`, buildSampleValue(variableKey, 'url')),
+								button.url
+							),
+						];
+					}
+				}
+
+				return buttonPayload;
 			}
 
 			if (button.type === 'PHONE_NUMBER') {
 				return {
 					type: 'PHONE_NUMBER',
 					text: button.text,
-					phone_number: button.phoneNumber,
+					phone_number: normalizePhoneNumber(button.phoneNumber),
 				};
 			}
 
@@ -271,7 +297,7 @@ function buildPayload(form) {
 		});
 	}
 
-	const buttonsComponent = buildButtonsComponent(form.buttons);
+	const buttonsComponent = buildButtonsComponent(form.buttons, form.parameterFormat);
 	if (buttonsComponent) {
 		components.push(buttonsComponent);
 	}
@@ -476,7 +502,7 @@ export default function TemplateBuilderPanel({
 		const hasNamed = /\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}/.test(allText);
 
 		if (hasPositional && hasNamed) {
-			return 'No mezcles variables numéricas y nombradas en el mismo template.';
+			return 'No mezcles variables numéricas y nombradas en la misma plantilla.';
 		}
 
 		if (form.parameterFormat === 'POSITIONAL' && hasNamed) {
@@ -492,14 +518,14 @@ export default function TemplateBuilderPanel({
 
 	function validatePayload(payload) {
 		if (!payload.name) {
-			return 'Poné un nombre interno para el template.';
+			return 'Poné un nombre interno para la plantilla.';
 		}
 
 		const bodyComponent = payload.components.find((component) => component.type === 'BODY');
 		const bodyText = bodyComponent?.text;
 
 		if (!bodyText) {
-			return 'El body del template es obligatorio.';
+			return 'El cuerpo de la plantilla es obligatorio.';
 		}
 
 		const variableError = validateVariableUsage();
@@ -512,19 +538,19 @@ export default function TemplateBuilderPanel({
 				getPositionalVariables(bodyText).length &&
 				!bodyComponent?.example?.body_text?.[0]?.length
 			) {
-				return 'El body usa variables posicionales, pero faltan examples.body_text.';
+				return 'El cuerpo usa variables por posición, pero faltan ejemplos para completarlas.';
 			}
 		} else {
 			if (
 				getNamedVariables(bodyText).length &&
 				!bodyComponent?.example?.body_text_named_params?.length
 			) {
-				return 'El body usa variables nombradas, pero faltan examples.body_text_named_params.';
+				return 'El cuerpo usa variables por nombre, pero faltan ejemplos para completarlas.';
 			}
 		}
 
 		if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) && !form.headerAssetHandle) {
-			return `Para templates con header ${form.headerType} necesitás un media upload que devuelva header_handle.`;
+			return `Para plantillas con encabezado ${form.headerType} necesitás subir un archivo que devuelva su identificador.`;
 		}
 
 		for (const button of safeArray(form.buttons)) {
@@ -534,6 +560,14 @@ export default function TemplateBuilderPanel({
 
 			if (button.type === 'URL' && !button.url.trim()) {
 				return 'Los botones de enlace necesitan una URL.';
+			}
+
+			if (button.type === 'URL' && !/^https?:\/\//i.test(button.url.trim())) {
+				return 'Los botones de enlace necesitan una URL que empiece con https://.';
+			}
+
+			if (button.type === 'PHONE_NUMBER' && button.phoneNumber.trim() && !/^\+?[1-9]\d{7,14}$/.test(normalizePhoneNumber(button.phoneNumber))) {
+				return 'El numero del boton de llamada debe incluir codigo de pais, por ejemplo +5492210000000.';
 			}
 
 			if (button.type === 'PHONE_NUMBER' && !button.phoneNumber.trim()) {
@@ -549,7 +583,7 @@ export default function TemplateBuilderPanel({
 
 		if (isReadOnlyTemplate) {
 			setLocalError(
-				'El template hello_world es de muestra de Meta y no se puede editar. Creá uno nuevo.'
+				'La plantilla hello_world es de muestra de Meta y no se puede editar. Creá una nueva.'
 			);
 			return;
 		}
@@ -578,7 +612,7 @@ export default function TemplateBuilderPanel({
 		<section className="campaign-panel campaign-panel--soft template-builder-shell">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>{isEditingSelectedTemplate ? 'Editar template' : 'Crear template nuevo'}</h3>
+					<h3>{isEditingSelectedTemplate ? 'Editar plantilla' : 'Crear plantilla nueva'}</h3>
 					<p>
 						Definí el mensaje, las variables y los botones antes de usarlo en campañas.
 					</p>
@@ -591,7 +625,7 @@ export default function TemplateBuilderPanel({
 
 					{!forcedCreateMode ? (
 						<button type="button" className="button secondary" onClick={startCreateMode}>
-							Nuevo template
+							Nueva plantilla
 						</button>
 					) : null}
 
@@ -607,7 +641,7 @@ export default function TemplateBuilderPanel({
 				<form className="campaign-form" onSubmit={handleSubmit}>
 					{isReadOnlyTemplate ? (
 						<div className="campaign-inline-warning">
-							Estás viendo un template sample de Meta. No se puede editar ni eliminar desde la
+							Estás viendo una plantilla de muestra de Meta. No se puede editar ni eliminar desde la
 							API.
 						</div>
 					) : null}
@@ -641,9 +675,9 @@ export default function TemplateBuilderPanel({
 								value={form.category}
 								onChange={(event) => updateForm('category', event.target.value)}
 							>
-								<option value="MARKETING">MARKETING</option>
-								<option value="UTILITY">UTILITY</option>
-								<option value="AUTHENTICATION">AUTHENTICATION</option>
+								<option value="MARKETING">Promocional</option>
+								<option value="UTILITY">Informativa</option>
+								<option value="AUTHENTICATION">Autenticación</option>
 							</select>
 						</label>
 
@@ -653,17 +687,16 @@ export default function TemplateBuilderPanel({
 								value={form.parameterFormat}
 								onChange={(event) => updateForm('parameterFormat', event.target.value)}
 							>
-								<option value="POSITIONAL">POSITIONAL ({"{{1}}, {{2}}"})</option>
-								<option value="NAMED">NAMED ({"{{nombre}}, {{producto}}"})</option>
+								<option value="POSITIONAL">Por posición ({"{{1}}, {{2}}"})</option>
+								<option value="NAMED">Por nombre ({"{{nombre}}, {{producto}}"})</option>
 							</select>
 							<small>
-								Los botones siguen usando parámetros posicionales en Meta aunque el body sea
-								NAMED.
+								Los botones siguen usando parámetros por posición en Meta aunque el cuerpo use nombres.
 							</small>
 						</label>
 
 						<label className="field">
-							<span>Tipo de header</span>
+						<span>Tipo de encabezado</span>
 							<select
 								value={form.headerType}
 								onChange={(event) => {
@@ -682,17 +715,17 @@ export default function TemplateBuilderPanel({
 									}));
 								}}
 							>
-								<option value="TEXT">TEXT</option>
-								<option value="IMAGE">IMAGE</option>
-								<option value="VIDEO">VIDEO</option>
-								<option value="DOCUMENT">DOCUMENT</option>
+							<option value="TEXT">Texto</option>
+							<option value="IMAGE">Imagen</option>
+							<option value="VIDEO">Video</option>
+							<option value="DOCUMENT">Documento</option>
 							</select>
 						</label>
 					</div>
 
 					{form.headerType === 'TEXT' ? (
 						<label className="field">
-							<span>Header opcional</span>
+						<span>Encabezado opcional</span>
 							<input
 								value={form.headerText}
 								onChange={(event) => updateForm('headerText', event.target.value)}
@@ -713,7 +746,7 @@ export default function TemplateBuilderPanel({
 								background: '#fff',
 							}}
 						>
-							<span>{`${getHeaderMediaLabel(form.headerType)} de header`}</span>
+							<span>{`${getHeaderMediaLabel(form.headerType)} del encabezado`}</span>
 
 							<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
 								<label
@@ -765,14 +798,14 @@ export default function TemplateBuilderPanel({
 									className="template-builder-media-status template-builder-media-status--success"
 									style={{ fontSize: 12, color: '#475569' }}
 								>
-									Header handle listo: <strong>{form.headerAssetHandle}</strong>
+									Identificador del encabezado listo: <strong>{form.headerAssetHandle}</strong>
 								</div>
 							) : (
 								<div
 									className="template-builder-media-status template-builder-media-status--warning"
 									style={{ fontSize: 12, color: '#b45309' }}
 								>
-									Para templates con {form.headerType}, Meta exige un <strong>header_handle</strong> de
+									Para plantillas con {form.headerType}, Meta exige un <strong>identificador de encabezado</strong> de
 									ejemplo.
 								</div>
 							)}
@@ -782,7 +815,7 @@ export default function TemplateBuilderPanel({
 									className="template-builder-media-status template-builder-media-status--success"
 									style={{ fontSize: 12, color: '#475569' }}
 								>
-									Media ID guardado: <strong>{form.headerMediaId}</strong>
+									Identificador del archivo guardado: <strong>{form.headerMediaId}</strong>
 								</div>
 							) : null}
 
@@ -1031,7 +1064,7 @@ export default function TemplateBuilderPanel({
 									: 'Guardar cambios'
 								: creating
 									? 'Creando…'
-									: 'Crear template'}
+									: 'Crear plantilla'}
 						</button>
 					</div>
 				</form>
@@ -1092,7 +1125,7 @@ export default function TemplateBuilderPanel({
 							) : null}
 
 							<div className="campaign-preview-body">
-								{form.bodyText || 'El cuerpo del template se ve acá.'}
+								{form.bodyText || 'El cuerpo de la plantilla se ve acá.'}
 							</div>
 							{form.footerText ? (
 								<div className="campaign-preview-footer">{form.footerText}</div>

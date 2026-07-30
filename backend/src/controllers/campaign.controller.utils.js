@@ -1,14 +1,25 @@
 import { prisma } from '../lib/prisma.js';
+import { classifyWhatsAppError } from '../lib/whatsapp-error-classifier.js';
 import { workspaceOwnedWhere } from '../services/workspaces/workspace-scope.js';
 
 export function normalizeBoolean(value) {
 	return ['1', 'true', 'yes', 'si'].includes(String(value || '').trim().toLowerCase());
 }
 
-export function sendError(res, error, status = 400) {
+export function sendError(res, error, status = 400, context = 'general') {
+	const errorInfo = classifyWhatsAppError(error, context);
 	return res.status(status).json({
 		ok: false,
-		error: error.message || 'Error desconocido',
+		error: errorInfo.message,
+		errorInfo,
+		...(error?.metaCode ? {
+			meta: {
+				code: error.metaCode,
+				subcode: error.metaSubcode || null,
+				type: error.metaType || null,
+				traceId: error.metaTraceId || null,
+			}
+		} : {}),
 	});
 }
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "instagram:render": "node render-instagram-posts.mjs",
     "showcase:capture": "node capture-showcase-screens.mjs",
     "preview": "vite preview",
 	"audit:security": "npm audit --audit-level=high",

@@ -6,6 +6,8 @@ import { useCampaignsDashboard } from './hooks/useCampaignsDashboard.js';
 import { lazyWithRetry } from '../../lib/lazyWithRetry.js';
 import { buildAbandonedCartFilters } from './utils.js';
 import { fetchCampaignDetail } from '../../lib/campaigns.js';
+import { getFriendlyError } from './errorMessages.js';
+import { formatTemplateStatusLabel } from '../../utils/statusLabels.js';
 import TemplateHeaderMediaUpload from './components/TemplateHeaderMediaUpload.jsx';
 import {
 	mergeHeaderMediaVariableMapping,

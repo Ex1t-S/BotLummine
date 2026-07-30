@@ -522,13 +522,14 @@ export async function retryFailedAutomationRun(runId, { workspaceId } = {}) {
 		results.push(await retryFailedCampaignRecipients(campaign.id, { workspaceId: resolvedWorkspaceId }));
 	}
 
+	const queuedCampaigns = results.filter((result) => result?.queued).length;
 	await touchAutomationRun(run.id, {
 		workspaceId: resolvedWorkspaceId,
-		status: retryableCampaigns.length ? 'QUEUED' : run.status,
+		status: queuedCampaigns ? 'QUEUED' : run.status,
 	});
 	return {
 		runId: run.id,
-		retriedCampaigns: retryableCampaigns.length,
+		retriedCampaigns: queuedCampaigns,
 		results,
 	};
 }

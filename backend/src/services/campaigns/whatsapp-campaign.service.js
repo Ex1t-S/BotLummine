@@ -2304,7 +2304,7 @@ export async function createCampaignDraft({
 			skippedRecipients,
 			defaultComponents: normalizedComponents.length
 				? normalizedComponents
-				: safeArray(template?.rawPayload?.components),
+				: getTemplateComponentsForCampaign(template),
 			draftContext: draftContext && typeof draftContext === 'object' ? draftContext : null,
 			previewText: previewBase.previewText,
 			status: 'DRAFT',
