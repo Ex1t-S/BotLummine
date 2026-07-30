@@ -7,17 +7,21 @@ test.beforeEach(async ({ request }) => {
 
 test('la portada guía hacia contacto y precios sin métricas inventadas', async ({ page }) => {
 	await page.goto('/inicio');
-	await expect(page.getByRole('heading', { name: 'Responde, retoma y recupera oportunidades desde WhatsApp.' })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Hablar con el equipo' })).toHaveAttribute('href', '/contacto');
-	await expect(page.getByText('Vista de ejemplo')).toBeVisible();
-	await expect(page.getByText('Todo en un lugar')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Convertí conversaciones en trabajo comercial ordenado.' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Solicitar una demo' }).first()).toHaveAttribute('href', '/contacto');
+	await expect(page.getByText('Vista del producto')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Resumen de la plataforma' }).getByText('Bandeja compartida').first()).toBeVisible();
 	await expect(page.getByText('$37.0M')).toHaveCount(0);
 
 	await page.goto('/precios');
-	await expect(page.getByRole('link', { name: 'Consultar este plan' })).toHaveCount(2);
+	const planActions = page.locator('.login-pricing-card__cta');
+	await expect(planActions).toHaveCount(2);
+	for (const action of await planActions.all()) {
+		await expect(action).toHaveAttribute('href', /^\/contacto\?plan=/);
+	}
 
 	await page.goto('/contacto');
-	await expect(page.getByRole('link', { name: 'Escribir por WhatsApp' })).toHaveAttribute('href', 'https://wa.me/5492923562286');
+	await expect(page.getByRole('link', { name: /WhatsApp/i })).toHaveAttribute('href', 'https://wa.me/5492923562286');
 });
 
 test('el resumen usa contadores de API y no mezcla borradores con fallos', async ({ page }) => {
@@ -82,7 +86,7 @@ test('recorre el entorno demo sin depender del backend ni de Railway', async ({ 
 	await page.goto('/analytics');
 	await expect(page.getByRole('main').getByRole('heading', { name: 'Estadísticas', level: 2 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Embudo de entrega' })).toBeVisible();
-	await expect(page.getByRole('table', { name: 'Rendimiento de campañas recientes' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Actividad que requiere contexto' })).toBeVisible();
 
 	await page.goto('/ai-lab');
 	await expect(page.getByLabel('Mensaje de prueba')).toBeEnabled();

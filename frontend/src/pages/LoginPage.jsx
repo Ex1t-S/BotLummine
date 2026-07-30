@@ -218,7 +218,7 @@ function ProductPreview({ compact = false }) {
 					width="1280"
 					height="800"
 					decoding="async"
-					fetchPriority="high"
+					fetchpriority="high"
 				/>
 			</div>
 			<div className="login-product-preview__footer">
