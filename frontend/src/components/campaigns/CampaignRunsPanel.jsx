@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatRecipientError } from '../../features/campaigns/errorMessages.js';
 import { formatCampaignStatusLabel } from '../../utils/statusLabels.js';
 
 function formatDate(value) {
@@ -196,7 +197,7 @@ function formatRecipientStatus(status = '') {
 	return normalized;
 }
 
-function formatRecipientErrorMessage(message = '') {
+function formatRecipientErrorMessage(message = '', code = '') {
 	const normalized = String(message || '').trim();
 	const key = normalized.toLowerCase();
 
@@ -208,7 +209,7 @@ function formatRecipientErrorMessage(message = '') {
 		opted_out: 'Omitido: contacto excluido de marketing.',
 	};
 
-	return labels[key] || normalized;
+	return labels[key] || formatRecipientError(code, normalized);
 }
 
 function buildRecipientMetrics(campaign = {}) {
@@ -311,7 +312,7 @@ function recipientMatchesSearch(recipient = {}, search = '') {
 		recipient.status,
 		recipient.errorMessage,
 		formatRecipientStatus(recipient.status),
-		formatRecipientErrorMessage(recipient.errorMessage),
+		formatRecipientErrorMessage(recipient.errorMessage, recipient.errorCode),
 	]
 		.filter(Boolean)
 		.join(' ')
@@ -614,8 +615,8 @@ export default function CampaignRunsPanel({
 												<span key={item.id}>
 													<strong>{item.contactName || item.phone || 'Destinatario'}</strong>
 													<small>
-														{item.reasonLabel}
-														{item.errorCode ? ` · ${item.errorCode}` : ''}
+																{formatRecipientError(item.errorCode, item.errorMessage || item.reasonLabel)}
+																{item.errorCode ? ` · Codigo Meta ${item.errorCode}` : ''}
 														{item.normalizedPhone && item.normalizedPhone !== item.phone ? ` · sugerido ${item.normalizedPhone}` : ''}
 													</small>
 												</span>
@@ -791,7 +792,7 @@ export default function CampaignRunsPanel({
 														</span>
 														{recipient.errorMessage ? (
 															<div className="campaign-recipient-error">
-																{recipient.errorCode ? `${recipient.errorCode}: ` : ''}{formatRecipientErrorMessage(recipient.errorMessage)}
+																{formatRecipientErrorMessage(recipient.errorMessage, recipient.errorCode)}
 															</div>
 														) : null}
 													</td>

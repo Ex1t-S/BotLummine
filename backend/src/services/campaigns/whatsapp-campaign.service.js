@@ -1312,7 +1312,7 @@ function classifyCampaignFailure(recipient = {}) {
 	if (/template|parameter|component|variable/i.test(normalizedMessage)) {
 		return {
 			key: 'template_payload',
-			label: 'Template o variables',
+			label: 'Plantilla o variables',
 			action: 'Revisar variables renderizadas y estado de la plantilla.',
 			phoneIssue: false,
 			normalizedPhone: normalizedPhone || null,
