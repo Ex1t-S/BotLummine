@@ -252,6 +252,126 @@ function getAttachmentDownloadState(message = {}) {
 	};
 }
 
+function isProtectedInboxMediaUrl(value = '') {
+	try {
+		const url = new URL(
+			String(value || ''),
+			typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+		);
+		return url.pathname.startsWith('/api/media/inbox/');
+	} catch {
+		return false;
+	}
+}
+
+function getMediaFallbackMimeType(mediaKind = '') {
+	return mediaKind === 'audio' ? 'audio/ogg' : 'image/webp';
+}
+
+function AuthenticatedMediaPreview({ mediaKind, attachmentUrl, attachmentName }) {
+	const [blobUrl, setBlobUrl] = useState('');
+	const [errorMessage, setErrorMessage] = useState('');
+	const [isLoading, setIsLoading] = useState(true);
+	const [retryCount, setRetryCount] = useState(0);
+
+	useEffect(() => {
+		const controller = new AbortController();
+		let nextBlobUrl = '';
+
+		setIsLoading(true);
+		setErrorMessage('');
+		setBlobUrl('');
+
+		api.get(attachmentUrl, {
+			responseType: 'blob',
+			withCredentials: true,
+			signal: controller.signal,
+		})
+			.then((response) => {
+				const blob = response?.data;
+				const responseType = String(blob?.type || '').toLowerCase();
+				if (!blob || !blob.size) {
+					throw new Error('El archivo multimedia llegó vacío.');
+				}
+				if (responseType.includes('json') || responseType.includes('text/html')) {
+					throw new Error('El servidor no devolvió un archivo multimedia válido.');
+				}
+
+				const expectedPrefix = mediaKind === 'audio' ? 'audio/' : 'image/';
+				const mediaBlob = responseType.startsWith(expectedPrefix)
+					? blob
+					: new Blob([blob], { type: getMediaFallbackMimeType(mediaKind) });
+				nextBlobUrl = URL.createObjectURL(mediaBlob);
+				setBlobUrl(nextBlobUrl);
+				setIsLoading(false);
+			})
+			.catch((error) => {
+				if (error?.code === 'ERR_CANCELED' || controller.signal.aborted) return;
+				setIsLoading(false);
+				setErrorMessage('No se pudo cargar este archivo multimedia.');
+			});
+
+		return () => {
+			controller.abort();
+			if (nextBlobUrl) URL.revokeObjectURL(nextBlobUrl);
+		};
+	}, [attachmentUrl, mediaKind, retryCount]);
+
+	if (isLoading) {
+		return (
+			<div className="inbox-attachment-preview">
+				<div className="inbox-attachment-file-card inbox-attachment-file-card--loading" role="status">
+					Cargando {mediaKind === 'audio' ? 'audio' : 'sticker'}…
+				</div>
+			</div>
+		);
+	}
+
+	if (errorMessage || !blobUrl) {
+		return (
+			<div className="inbox-attachment-preview">
+				<div className="inbox-attachment-file-card inbox-attachment-file-card--pending" role="alert">
+					<div className="inbox-attachment-file-name">
+						{attachmentName || (mediaKind === 'audio' ? 'Audio recibido' : 'Sticker recibido')}
+					</div>
+					<div className="inbox-attachment-file-status">
+						{errorMessage || 'No se pudo descargar automáticamente.'}
+					</div>
+					<button
+						type="button"
+						className="inbox-attachment-file-retry"
+						onClick={() => setRetryCount((current) => current + 1)}
+					>
+						Reintentar
+					</button>
+				</div>
+			</div>
+		);
+	}
+
+	if (mediaKind === 'audio') {
+		return (
+			<div className="inbox-attachment-preview">
+				<audio controls preload="metadata" src={blobUrl} className="inbox-attachment-audio">
+					Tu navegador no soporta audio HTML5.
+				</audio>
+			</div>
+		);
+	}
+
+	return (
+		<div className="inbox-attachment-preview">
+			<a href={blobUrl} target="_blank" rel="noreferrer" className="inbox-attachment-link-wrap">
+				<img
+					src={blobUrl}
+					alt={attachmentName || 'Sticker recibido'}
+					className="inbox-attachment-media inbox-attachment-image inbox-attachment-sticker"
+				/>
+			</a>
+		</div>
+	);
+}
+
 function shouldHideBodyBecauseItIsOnlyPlaceholder(message = {}) {
 	const body = String(message.body || '').trim();
 
@@ -494,8 +614,22 @@ function AttachmentPreview({ message }) {
 	const attachmentUrl = resolveMessageAttachmentUrl(message);
 	const attachmentName = String(message.attachmentName || '').trim();
 	const downloadState = getAttachmentDownloadState(message);
+	const requiresAuthenticatedLoader =
+		Boolean(attachmentUrl) &&
+		isProtectedInboxMediaUrl(attachmentUrl) &&
+		['audio', 'image'].includes(mediaKind);
 
 	if (!mediaKind || !attachmentUrl) return null;
+
+	if (requiresAuthenticatedLoader) {
+		return (
+			<AuthenticatedMediaPreview
+				mediaKind={mediaKind}
+				attachmentUrl={attachmentUrl}
+				attachmentName={attachmentName}
+			/>
+		);
+	}
 
 	if (downloadState.pending) {
 		return (

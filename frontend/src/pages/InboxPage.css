@@ -1414,6 +1414,12 @@
 	border-color: rgba(245, 158, 11, 0.24);
 }
 
+.inbox-attachment-file-card--loading {
+	color: #52616b;
+	font-size: 13px;
+	font-weight: 600;
+}
+
 .inbox-attachment-file-name {
 	font-size: 13px;
 	font-weight: 700;
@@ -1435,6 +1441,18 @@
 	color: #2563eb;
 	text-decoration: underline;
 	word-break: break-word;
+}
+
+.inbox-attachment-file-retry {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: #2563eb;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 700;
+	text-decoration: underline;
+	cursor: pointer;
 }
 
 .inbox-realtime-badge {

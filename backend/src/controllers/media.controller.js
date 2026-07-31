@@ -94,6 +94,17 @@ function getInboxMediaPhoneNumberId(rawPayload = null) {
 	return '';
 }
 
+function resolveInboxMediaMimeType(message = {}) {
+	const storedMimeType = String(message.attachmentMimeType || '').trim().toLowerCase();
+	if (storedMimeType) return storedMimeType.split(';')[0].trim();
+
+	const attachmentType = String(message?.rawPayload?.attachment?.type || '').trim().toLowerCase();
+	if (attachmentType === 'sticker') return 'image/webp';
+	if (attachmentType === 'audio') return 'audio/ogg';
+
+	return '';
+}
+
 async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
 	const safeFileName = String(fileName || '').trim();
 	if (!safeFileName) return false;
@@ -174,9 +185,7 @@ export async function serveInboxMediaController(req, res) {
 			});
 		}
 
-		const inferredMimeType =
-			message.attachmentMimeType ||
-			(message?.rawPayload?.attachment?.type === 'sticker' ? 'image/webp' : '');
+		const inferredMimeType = resolveInboxMediaMimeType(message);
 
 		applyPrivateMediaCachePolicy(res);
 		if (inferredMimeType) {
