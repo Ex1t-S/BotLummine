@@ -91,10 +91,10 @@ function statusMeta(status = '', campaign = {}) {
 		};
 	}
 	const failed = campaignCount(campaign, 'failedCount', 'failedRecipients');
-	if (failed > 0 && !['RUNNING', 'QUEUED'].includes(value)) return { label: 'Requiere atención', tone: 'attention' };
+	if (failed > 0 && !['RUNNING', 'QUEUED'].includes(value)) return { label: 'Revisión recomendada', tone: 'attention' };
 	if (['RUNNING', 'QUEUED'].includes(value)) return { label: 'En curso', tone: 'running' };
 	if (['FINISHED', 'COMPLETED'].includes(value)) return { label: 'Finalizada', tone: 'finished' };
-	if (['FAILED', 'PARTIAL'].includes(value)) return { label: 'Requiere atención', tone: 'attention' };
+	if (['FAILED', 'PARTIAL'].includes(value)) return { label: 'Revisión recomendada', tone: 'attention' };
 	if (value === 'CANCELLED') return { label: 'Cancelada', tone: 'muted' };
 	return { label: 'Borrador', tone: 'draft' };
 }
@@ -237,7 +237,7 @@ export function CampaignOverview() {
 			<div className="campaign-os-metrics" aria-label="Indicadores principales de campañas">
 				<CampaignMetric label="En curso" value={number(active)} helper="Campañas enviando ahora" tone="primary" />
 				<CampaignMetric label="Entrega" value={sent ? percent(deliveryRate) : '—'} helper={sent ? `${number(delivered)} mensajes entregados` : 'Sin envíos aceptados en la selección'} tone={sent && deliveryRate >= 90 ? 'success' : 'warning'} />
-				<CampaignMetric label="Errores pendientes" value={number(attention)} helper="Sólo campañas fallidas o parciales" tone={attention ? 'warning' : 'success'} />
+				<CampaignMetric label="Revisiones pendientes" value={number(attention)} helper="Campañas con envíos para revisar" tone={attention ? 'warning' : 'success'} />
 				<CampaignMetric label="Ingresos atribuidos" value={currency(stats.attributedRevenue, stats.attributedCurrency || 'ARS')} helper={`Histórico · ${number(stats.purchasedRecipients)} compras con señal`} />
 			</div>
 
@@ -272,7 +272,7 @@ export function CampaignOverview() {
 				<aside className="campaign-os-next" aria-labelledby="campaign-os-next-title">
 					<span>Próximo desbloqueo</span>
 					<h3 id="campaign-os-next-title">{nextAttention ? nextAttention.name : 'Todo está encaminado'}</h3>
-					<p>{nextAttention ? 'Resolvé el fallo o la campaña parcial para avanzar.' : 'No hay errores de envío pendientes.'}</p>
+					<p>{nextAttention ? 'Revisá el resultado y reintentá sólo lo que haga falta.' : 'No hay envíos pendientes de revisión.'}</p>
 					{nextAttention ? <ActionButton icon={ArrowRight} onClick={() => navigate(nextCampaignAction(nextAttention).to)}>{nextCampaignAction(nextAttention).label}</ActionButton> : <div className="campaign-os-all-clear"><CheckCircle2 size={18} aria-hidden="true" />Sin tareas pendientes</div>}
 					<div className="campaign-os-ready"><span>Plantillas listas</span><strong>{approvedTemplates}/{templates.length}</strong><small>Aprobadas para usar</small></div>
 				</aside>
@@ -383,7 +383,7 @@ export function CampaignAutomationHub() {
 					return (
 						<article className="campaign-os-automation-row" key={row.id}>
 							<span className="campaign-os-automation-icon"><Icon size={19} aria-hidden="true" /></span>
-							<div><span>{hasError ? 'Requiere atención' : enabled ? 'Activa' : 'Pausada'}</span><h3>{row.title}</h3><p>{row.description}</p></div>
+							<div><span>{hasError ? 'Revisión recomendada' : enabled ? 'Activa' : 'Pausada'}</span><h3>{row.title}</h3><p>{row.description}</p></div>
 							<strong className={`campaign-os-automation-state ${hasError ? 'has-error' : enabled ? 'is-active' : ''}`}>{hasError ? 'Error' : enabled ? 'Funcionando' : 'Pausada'}</strong>
 							<button type="button" onClick={() => navigate(row.to)}><Settings2 size={15} aria-hidden="true" />Configurar</button>
 						</article>

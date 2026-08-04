@@ -481,7 +481,7 @@ export default function CampaignRunsPanel({
 				<div>
 					<h3>Seguimiento de envíos</h3>
 					<p>
-						Elegí una campaña, revisá lo que requiere atención y bajá al destinatario sólo si necesitás investigar.
+						Elegí una campaña, revisá lo que necesite seguimiento y bajá al destinatario sólo si necesitás investigar.
 					</p>
 				</div>
 			</div>
