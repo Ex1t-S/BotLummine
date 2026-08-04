@@ -1169,7 +1169,12 @@ async function refreshCampaignCounters(campaignId) {
 		campaignId
 	};
 
-	const [pending, accepted, delivered, read, failed, skipped] = await Promise.all([
+	await prisma.campaignRecipient.deleteMany({
+		where: { ...scopedWhere, status: 'SKIPPED' }
+	});
+
+	const [total, pending, accepted, delivered, read, failed, skipped] = await Promise.all([
+		prisma.campaignRecipient.count({ where: scopedWhere }),
 		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: 'PENDING' } }),
 		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: { in: ['SENT', 'DELIVERED', 'READ'] } } }),
 		prisma.campaignRecipient.count({ where: { ...scopedWhere, status: { in: ['DELIVERED', 'READ'] } } }),
@@ -1189,6 +1194,7 @@ async function refreshCampaignCounters(campaignId) {
 	await prisma.campaign.updateMany({
 		where: { id: campaignId, workspaceId: campaign.workspaceId },
 		data: {
+			totalRecipients: total,
 			pendingRecipients: pending,
 			sentRecipients: accepted,
 			deliveredRecipients: delivered,
@@ -1422,7 +1428,10 @@ async function buildCampaignOperationalControls(campaign = {}) {
 
 function isFatalCampaignProviderError(sendResult = {}) {
 	const providerError = extractCampaignProviderError(sendResult);
-	return providerError.code === '190';
+	// A rate-limit response must stop the current campaign immediately. Continuing
+	// to drain the pending queue only converts a temporary Meta limit into a much
+	// larger burst of rejected messages.
+	return ['190', '131048'].includes(providerError.code);
 }
 
 class CampaignDispatchFatalError extends Error {
@@ -2334,7 +2343,7 @@ export async function createCampaignDraft({
 			skippedRecipients,
 			defaultComponents: normalizedComponents.length
 				? normalizedComponents
-				: getTemplateComponentsForCampaign(template),
+				: safeArray(template?.rawPayload?.components),
 			draftContext: draftContext && typeof draftContext === 'object' ? draftContext : null,
 			previewText: previewBase.previewText,
 			status: 'DRAFT',
@@ -2346,9 +2355,10 @@ export async function createCampaignDraft({
 			recipients: true
 		}
 	});
+	const refreshed = await refreshCampaignCounters(campaign.id);
 
 	return {
-		campaign
+		campaign: refreshed || campaign
 	};
 }
 
@@ -2431,7 +2441,8 @@ export async function updateCampaignDraft(campaignId, {
 		return tx.campaign.findFirst({ where: { id: campaignId, workspaceId: resolvedWorkspaceId } });
 	});
 
-	return { campaign };
+	const refreshed = await refreshCampaignCounters(campaignId);
+	return { campaign: refreshed || campaign };
 }
 
 async function buildAdditionalCampaignRecipientRows(campaign, {
@@ -3048,12 +3059,8 @@ async function dispatchSingleRecipient(campaign, recipient) {
 			reason: suppressionReason,
 		});
 
-		return prisma.campaignRecipient.update({
+		return prisma.campaignRecipient.delete({
 			where: workspaceOwnedWhere({ id: recipient.id, workspaceId: campaign.workspaceId }),
-			data: {
-				status: 'SKIPPED',
-				errorMessage: suppressionReason,
-			},
 		});
 	}
 

@@ -13,10 +13,12 @@ import { createOrAppendAutomationCampaignDraft, launchCampaign } from './whatsap
 import { createAutomationSchemaNotReadyError } from './automation-schema-error.js';
 
 const DEFAULT_INTERVAL_MINUTES = 60;
-const DEFAULT_MIN_ORDER_AGE_MINUTES = 120;
+const DEFAULT_MIN_ORDER_AGE_MINUTES = 180;
+const MIN_AUTOMATION_AGE_MINUTES = 1;
+const MAX_AUTOMATION_AGE_MINUTES = 30 * 24 * 60;
 const PENDING_PAYMENT_STATUSES = ['pending', 'pending_confirmation', 'unpaid', 'pago pendiente', 'pago en espera'];
 const DEFAULT_FILTERS = {
-	daysBack: 5,
+	daysBack: 7,
 	limit: 50,
 	minTotal: null,
 	productQuery: '',
@@ -59,10 +61,16 @@ function normalizeBoolean(value) {
 	return ['1', 'true', 'yes', 'on', 'si'].includes(normalized);
 }
 
+function normalizeAgeMinutes(value, fallback = DEFAULT_MIN_ORDER_AGE_MINUTES) {
+	const parsed = Number(value ?? fallback);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.max(MIN_AUTOMATION_AGE_MINUTES, Math.min(parsed, MAX_AUTOMATION_AGE_MINUTES));
+}
+
 function normalizeFilters(input = {}) {
 	const parsedMinTotal = Number(input.minTotal);
 	return {
-		daysBack: DEFAULT_FILTERS.daysBack,
+		daysBack: Math.max(1, Math.min(Number(input.daysBack || DEFAULT_FILTERS.daysBack) || DEFAULT_FILTERS.daysBack, 90)),
 		limit: Math.max(1, Math.min(Number(input.limit || DEFAULT_FILTERS.limit) || DEFAULT_FILTERS.limit, 500)),
 		minTotal:
 			input.minTotal === '' || input.minTotal === null || input.minTotal === undefined
@@ -113,7 +121,7 @@ function serializeSetting(setting = null) {
 		variableMapping: normalizeMapping(setting?.variableMapping || {}),
 		availableVariables: PENDING_PAYMENT_VARIABLE_OPTIONS,
 		intervalMinutes: Number(setting?.intervalMinutes || DEFAULT_INTERVAL_MINUTES),
-		minOrderAgeMinutes: Number(setting?.minOrderAgeMinutes || DEFAULT_MIN_ORDER_AGE_MINUTES),
+		minOrderAgeMinutes: normalizeAgeMinutes(setting?.minOrderAgeMinutes),
 		lastRunAt: setting?.lastRunAt || null,
 		lastCampaignId: setting?.lastCampaignId || null,
 		lastError: setting?.lastError || null,
@@ -131,6 +139,56 @@ function subtractDays(days) {
 
 function getOrderKey(order = {}) {
 	return normalizeString(order.orderId || order.orderNumber || order.id || '');
+}
+
+function getOrderKeyFromRecipientExternalKey(value = '') {
+	const normalized = normalizeString(value);
+	return normalized.toLowerCase().startsWith('pending_payment:')
+		? normalizeString(normalized.slice('pending_payment:'.length))
+		: '';
+}
+
+async function getRetryablePaymentOrderKeys(logs = [], workspaceId) {
+	const campaignIds = [...new Set(logs.map((log) => log.campaignId).filter(Boolean))];
+	if (!campaignIds.length) return new Set(logs.map((log) => log.orderKey).filter(Boolean));
+
+	const [campaigns, recipients] = await Promise.all([
+		prisma.campaign.findMany({
+			where: { workspaceId, id: { in: campaignIds } },
+			select: { id: true, status: true },
+		}),
+		prisma.campaignRecipient.findMany({
+			where: { workspaceId, campaignId: { in: campaignIds } },
+			select: { campaignId: true, externalKey: true, status: true },
+		}),
+	]);
+
+	const campaignStatusById = new Map(campaigns.map((campaign) => [campaign.id, String(campaign.status || '').toUpperCase()]));
+	const stateByOrderKey = new Map();
+	for (const recipient of recipients) {
+		const orderKey = getOrderKeyFromRecipientExternalKey(recipient.externalKey);
+		if (!orderKey) continue;
+		const state = stateByOrderKey.get(orderKey) || { success: false, pending: false, failed: false };
+		const status = String(recipient.status || '').toUpperCase();
+		state.success ||= ['SENT', 'DELIVERED', 'READ'].includes(status);
+		state.pending ||= status === 'PENDING';
+		state.failed ||= status === 'FAILED';
+		stateByOrderKey.set(orderKey, state);
+	}
+
+	const retryable = new Set();
+	for (const log of logs) {
+		if (!log.campaignId) {
+			retryable.add(log.orderKey);
+			continue;
+		}
+		const state = stateByOrderKey.get(log.orderKey) || { success: false, pending: false, failed: false };
+		const campaignStatus = campaignStatusById.get(log.campaignId) || '';
+		if (state.success || state.pending || ['QUEUED', 'RUNNING'].includes(campaignStatus)) continue;
+		if (state.failed || ['FAILED', 'PARTIAL', 'CANCELED'].includes(campaignStatus)) retryable.add(log.orderKey);
+	}
+
+	return retryable;
 }
 
 function getPrimaryProductName(order = {}) {
@@ -187,6 +245,7 @@ export async function updatePendingPaymentAutomationSettings({
 	templateId = null,
 	filters = {},
 	variableMapping = undefined,
+	minOrderAgeMinutes = undefined,
 } = {}) {
 	const resolvedWorkspaceId = resolvePendingPaymentAutomationWorkspaceId(workspaceId);
 	const nextEnabled = normalizeBoolean(enabled);
@@ -208,6 +267,9 @@ export async function updatePendingPaymentAutomationSettings({
 	}
 	const nextVariableMapping =
 		variableMapping === undefined ? normalizeMapping(current?.variableMapping || {}) : normalizeMapping(variableMapping);
+	const nextMinOrderAgeMinutes = normalizeAgeMinutes(
+		minOrderAgeMinutes === undefined ? current?.minOrderAgeMinutes : minOrderAgeMinutes
+	);
 
 	const setting = await prisma.pendingPaymentAutomationSetting.upsert({
 		where: { workspaceId: resolvedWorkspaceId },
@@ -220,7 +282,7 @@ export async function updatePendingPaymentAutomationSettings({
 			filters: normalizeFilters(filters),
 			variableMapping: nextVariableMapping,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
-			minOrderAgeMinutes: DEFAULT_MIN_ORDER_AGE_MINUTES,
+			minOrderAgeMinutes: nextMinOrderAgeMinutes,
 			lastError: null,
 		},
 		update: {
@@ -231,7 +293,7 @@ export async function updatePendingPaymentAutomationSettings({
 			filters: normalizeFilters(filters),
 			variableMapping: nextVariableMapping,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
-			minOrderAgeMinutes: DEFAULT_MIN_ORDER_AGE_MINUTES,
+			minOrderAgeMinutes: nextMinOrderAgeMinutes,
 			lastError: null,
 		},
 	});
@@ -265,9 +327,9 @@ async function findAutomationCandidates(setting) {
 	let existingLogs = [];
 	if (orderKeys.length) {
 		try {
-			existingLogs = await prisma.pendingPaymentAutomationLog.findMany({
-				where: { workspaceId: setting.workspaceId, orderKey: { in: orderKeys }, campaignId: { not: null } },
-				select: { orderKey: true },
+				existingLogs = await prisma.pendingPaymentAutomationLog.findMany({
+					where: { workspaceId: setting.workspaceId, orderKey: { in: orderKeys } },
+					select: { orderKey: true, campaignId: true },
 			});
 		} catch (error) {
 			if (!isPendingPaymentAutomationTableMissing(error)) throw error;
@@ -275,12 +337,13 @@ async function findAutomationCandidates(setting) {
 		}
 	}
 	const loggedOrderKeys = new Set(existingLogs.map((log) => log.orderKey));
+	const retryableOrderKeys = await getRetryablePaymentOrderKeys(existingLogs, setting.workspaceId);
 	const latestByPhone = new Map();
 
 	for (const order of rawOrders) {
 		const orderKey = getOrderKey(order);
 		const phone = normalizeWhatsAppIdentityPhone(order.normalizedPhone || order.contactPhone || '');
-		if (!orderKey || !phone || loggedOrderKeys.has(orderKey)) continue;
+		if (!orderKey || !phone || (loggedOrderKeys.has(orderKey) && !retryableOrderKeys.has(orderKey))) continue;
 		if (!orderMatchesProductQuery(order, filters.productQuery)) continue;
 
 		const previous = latestByPhone.get(phone);
@@ -326,7 +389,6 @@ async function claimCandidateLogs(setting, candidates = []) {
 		where: {
 			workspaceId: setting.workspaceId,
 			orderKey: { in: rows.map((row) => row.orderKey) },
-			campaignId: null,
 		},
 		select: { orderKey: true },
 	});
@@ -362,6 +424,21 @@ async function createAndLaunchAutomationCampaign(setting, orders = [], { launche
 		const campaignId = created?.campaign?.id || created?.campaignId || null;
 
 		if (campaignId) {
+			const failedRecipientReset = await prisma.campaignRecipient.updateMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					campaignId,
+					externalKey: { in: orderKeys.map((orderKey) => `pending_payment:${orderKey}`) },
+					status: 'FAILED',
+				},
+				data: {
+					status: 'PENDING',
+					errorCode: null,
+					errorSubcode: null,
+					errorMessage: null,
+					failedAt: null,
+				},
+			});
 			await prisma.pendingPaymentAutomationLog.updateMany({
 				where: {
 					workspaceId: setting.workspaceId,
@@ -370,9 +447,13 @@ async function createAndLaunchAutomationCampaign(setting, orders = [], { launche
 				},
 				data: { campaignId, automationRunId: run.id },
 			});
-			if (Number(created?.pendingRecipients || created?.campaign?.pendingRecipients || 0) > 0) {
+			const pendingCount = await prisma.campaignRecipient.count({
+				where: { workspaceId: setting.workspaceId, campaignId, status: 'PENDING' },
+			});
+			if (pendingCount > 0) {
 				await launchCampaign(campaignId, { workspaceId: setting.workspaceId });
 			}
+			created.resetFailedRecipients = Number(failedRecipientReset?.count || 0);
 		}
 
 		await touchAutomationRun(run.id, { workspaceId: setting.workspaceId, status: 'OPEN' });
@@ -380,7 +461,7 @@ async function createAndLaunchAutomationCampaign(setting, orders = [], { launche
 		return {
 			automationRunId: run.id,
 			campaignId,
-			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
+			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0) + Number(created?.resetFailedRecipients || 0),
 		};
 	} catch (error) {
 		await prisma.pendingPaymentAutomationLog.deleteMany({

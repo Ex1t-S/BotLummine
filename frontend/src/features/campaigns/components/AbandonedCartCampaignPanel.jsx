@@ -37,8 +37,9 @@ function formatAutomationDate(value) {
 const defaultAutomationForm = {
 	enabled: false,
 	templateId: '',
-	daysBack: 30,
+	daysBack: 7,
 	limit: 50,
+	minCartAgeMinutes: 60,
 	minTotal: '',
 	productQuery: '',
 };
@@ -177,8 +178,9 @@ function AutomationCard({
 		setForm({
 			enabled: Boolean(settings?.enabled),
 			templateId: settings?.templateId || selectedTemplate?.id || '',
-			daysBack: Number(filters.daysBack || 30),
+			daysBack: Number(filters.daysBack || 7),
 			limit: Number(filters.limit || 50),
+			minCartAgeMinutes: Number(settings?.minCartAgeMinutes || 60),
 			minTotal: filters.minTotal ?? '',
 			productQuery: filters.productQuery || '',
 		});
@@ -225,11 +227,12 @@ function AutomationCard({
 			templateId,
 			filters: {
 				daysBack: nextForm.daysBack,
-				status: 'NEW',
+				status: 'ALL',
 				limit: nextForm.limit,
 				minTotal: nextForm.minTotal,
 				productQuery: nextForm.productQuery,
 			},
+				minCartAgeMinutes: Math.max(1, Math.min(43200, Number(nextForm.minCartAgeMinutes || 60))),
 			variableMapping: mergeHeaderMediaVariableMapping(
 				templateForPayload,
 				headerMediaId,
@@ -264,8 +267,8 @@ function AutomationCard({
 			<div className="campaign-abandoned-automation-card__header">
 				<div>
 					<span className="campaigns-eyebrow">Automatizacion</span>
-					<h4>Enviar carritos nuevos cada 30 minutos</h4>
-					<p>Cuando está activa, sincroniza y detecta carritos nuevos con al menos 1 hora para enviar la plantilla configurada.</p>
+					<h4>Enviar carritos nuevos cada hora</h4>
+					<p>Cuando está activa, sincroniza y detecta carritos nuevos que superen la espera minima configurada.</p>
 				</div>
 				<span className={`campaign-schedule-status ${form.enabled ? 'is-active' : ''}`.trim()}>
 					{form.enabled ? 'Activa' : 'Pausada'}
@@ -287,7 +290,7 @@ function AutomationCard({
 					<strong>Automatizacion {form.enabled ? 'activada' : 'desactivada'}</strong>
 					<small>
 						{form.enabled
-							? 'Queda guardada al activar y se ejecuta como maximo cada 30 minutos.'
+							? 'Queda guardada al activar y se ejecuta como maximo cada hora.'
 							: 'Activala para guardar el estado automaticamente.'}
 					</small>
 				</span>
@@ -369,6 +372,17 @@ function AutomationCard({
 						value={form.productQuery}
 						onChange={(event) => updateField('productQuery', event.target.value)}
 						placeholder="Opcional"
+						disabled={loading || saving}
+					/>
+				</label>
+				<label className="field">
+					<span>Espera minima (minutos)</span>
+					<input
+						type="number"
+						min="1"
+						max="43200"
+						value={form.minCartAgeMinutes}
+						onChange={(event) => updateField('minCartAgeMinutes', Number(event.target.value || 60))}
 						disabled={loading || saving}
 					/>
 				</label>
@@ -538,7 +552,7 @@ export default function AbandonedCartCampaignPanel({
 
 	function buildAudienceFilters() {
 		return {
-			daysBack: Number(form.daysBack || 30),
+			daysBack: Number(form.daysBack || 7),
 			status: form.status || 'NEW',
 			limit: Number(form.limit || 50),
 			minTotal:

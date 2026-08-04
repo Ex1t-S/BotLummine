@@ -82,6 +82,27 @@ export function formatCampaignStatusLabel(value, fallback = 'Borrador') {
 	return CAMPAIGN_STATUS_LABELS[normalize(value)] || readableFallback(value, fallback);
 }
 
+export function getCampaignStatusPresentation(campaign = {}) {
+	const status = normalize(campaign?.status);
+	const failed = Number(campaign?.failedCount ?? campaign?.failedRecipients ?? 0);
+	const pending = Number(campaign?.pendingCount ?? campaign?.pendingRecipients ?? 0);
+	const isFinished = pending === 0 && ['FINISHED', 'COMPLETED', 'PARTIAL', 'FAILED'].includes(status);
+
+	if (isFinished) {
+		return {
+			label: 'Finalizada',
+			detail: failed > 0 ? 'Con fallos' : null,
+			tone: 'finished',
+		};
+	}
+
+	return {
+		label: formatCampaignStatusLabel(status),
+		detail: null,
+		tone: status.toLowerCase() || 'draft',
+	};
+}
+
 export function formatTemplateStatusLabel(value, fallback = 'Borrador') {
 	return TEMPLATE_STATUS_LABELS[normalize(value)] || readableFallback(value, fallback);
 }

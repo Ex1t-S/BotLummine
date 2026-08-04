@@ -23,6 +23,7 @@ backend/scripts/*
 !backend/scripts/check-syntax.mjs
 !backend/scripts/run-agent-eval-offline.mjs
 !backend/scripts/archive-aiqa-conversations.mjs
+!backend/scripts/recover-lummine-quota-failures.mjs
 debug-output/
 backend/debug-output/
 **/debug-output/

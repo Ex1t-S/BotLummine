@@ -65,6 +65,15 @@ const CAMPAIGN_TRACKING_PAGE_SIZE = 24;
 const CAMPAIGN_POLL_INTERVAL_MS = 5000;
 const CAMPAIGN_STATUS_POLL_WINDOW_MS = 60 * 60 * 1000;
 const SHIPMENT_NOTIFICATION_DAYS_BACK = 14;
+const DAILY_AUTOMATION_RUN_TYPES = new Set([
+	'abandoned_carts',
+	'abandoned_cart',
+	'pending_payment',
+	'pending_payments',
+	'shipment_dispatch',
+	'shipment_notifications',
+	'shipments',
+]);
 
 function formatDateInput(date) {
 	return date.toISOString().slice(0, 10);
@@ -142,11 +151,14 @@ function normalizeTrackingItem(item = {}, kind = 'campaign') {
 }
 
 function buildTrackingItems(automationData, campaignData) {
-	const automationRuns = getAutomationRunCollection(automationData).map((run) =>
-		normalizeTrackingItem(run, 'automation_run')
+	const automationRuns = getAutomationRunCollection(automationData)
+		.filter((run) => DAILY_AUTOMATION_RUN_TYPES.has(String(run?.type || '').toLowerCase()))
+		.map((run) => normalizeTrackingItem(run, 'automation_run'));
+	const automationRunById = new Map(
+		automationRuns.map((run) => [run.id, run])
 	);
 	const manualCampaigns = getCampaignCollection(campaignData)
-		.filter((campaign) => !campaign?.automationRunId)
+		.filter((campaign) => !campaign?.automationRunId || !automationRunById.has(campaign.automationRunId))
 		.map((campaign) => normalizeTrackingItem(campaign, 'campaign'));
 
 	return [...automationRuns, ...manualCampaigns];

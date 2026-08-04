@@ -16,12 +16,14 @@ import { createAutomationSchemaNotReadyError } from './automation-schema-error.j
 
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_MIN_CART_AGE_MINUTES = 60;
+const MIN_AUTOMATION_AGE_MINUTES = 1;
+const MAX_AUTOMATION_AGE_MINUTES = 30 * 24 * 60;
 const DEFAULT_ACTIVE_INTERVAL_MINUTES = 60;
 const DEFAULT_IDLE_INTERVAL_MINUTES = 60;
 const DEFAULT_DEEP_IDLE_INTERVAL_MINUTES = 60;
 const DEFAULT_FILTERS = {
-	daysBack: 30,
-	status: 'NEW',
+	daysBack: 7,
+	status: 'ALL',
 	limit: 50,
 	minTotal: null,
 	productQuery: '',
@@ -52,6 +54,12 @@ function normalizeIntervalMinutes(value, fallback, min = 5, max = 24 * 60) {
 	const parsed = Number(value || fallback);
 	if (!Number.isFinite(parsed)) return fallback;
 	return Math.max(min, Math.min(parsed, max));
+}
+
+function normalizeAgeMinutes(value, fallback = DEFAULT_MIN_CART_AGE_MINUTES) {
+	const parsed = Number(value ?? fallback);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.max(MIN_AUTOMATION_AGE_MINUTES, Math.min(parsed, MAX_AUTOMATION_AGE_MINUTES));
 }
 
 function getRuntimeState(workspaceId) {
@@ -119,11 +127,11 @@ function recordRuntimeResult(workspaceId, processed = 0) {
 
 function normalizeFilters(input = {}) {
 	const parsedMinTotal = Number(input.minTotal);
-	const rawStatus = normalizeString(input.status || 'NEW').toUpperCase();
+	const rawStatus = normalizeString(input.status || DEFAULT_FILTERS.status).toUpperCase();
 
 	return {
 		daysBack: Math.max(1, Math.min(Number(input.daysBack || DEFAULT_FILTERS.daysBack) || DEFAULT_FILTERS.daysBack, 30)),
-		status: rawStatus === 'NEW' ? 'NEW' : 'NEW',
+		status: ['NEW', 'CONTACTED', 'ALL'].includes(rawStatus) ? rawStatus : DEFAULT_FILTERS.status,
 		limit: Math.max(1, Math.min(Number(input.limit || DEFAULT_FILTERS.limit) || DEFAULT_FILTERS.limit, 500)),
 		minTotal:
 			input.minTotal === '' || input.minTotal === null || input.minTotal === undefined
@@ -187,7 +195,7 @@ function serializeSetting(setting = null) {
 		variableMapping: filters.variableMapping || {},
 		manualVariables: filters.manualVariables || {},
 		intervalMinutes: DEFAULT_INTERVAL_MINUTES,
-		minCartAgeMinutes: Number(setting?.minCartAgeMinutes || DEFAULT_MIN_CART_AGE_MINUTES),
+		minCartAgeMinutes: normalizeAgeMinutes(setting?.minCartAgeMinutes),
 		lastRunAt: setting?.lastRunAt || null,
 		lastCampaignId: setting?.lastCampaignId || null,
 		lastError: setting?.lastError || null,
@@ -221,6 +229,60 @@ function cartMatchesProductQuery(cart = {}, productQuery = '') {
 			.toLowerCase()
 			.includes(needle)
 	);
+}
+
+function getCheckoutIdFromRecipientExternalKey(value = '') {
+	const normalized = normalizeString(value);
+	return normalized.toLowerCase().startsWith('abandoned_cart:')
+		? normalizeString(normalized.slice('abandoned_cart:'.length))
+		: '';
+}
+
+async function getRetryableCartCheckoutIds(logs = [], workspaceId) {
+	const campaignIds = [...new Set(logs.map((log) => log.campaignId).filter(Boolean))];
+	if (!campaignIds.length) {
+		return new Set(logs.map((log) => log.checkoutId).filter(Boolean));
+	}
+
+	const [campaigns, recipients] = await Promise.all([
+		prisma.campaign.findMany({
+			where: { workspaceId, id: { in: campaignIds } },
+			select: { id: true, status: true },
+		}),
+		prisma.campaignRecipient.findMany({
+			where: { workspaceId, campaignId: { in: campaignIds } },
+			select: { campaignId: true, externalKey: true, status: true },
+		}),
+	]);
+
+	const campaignStatusById = new Map(campaigns.map((campaign) => [campaign.id, String(campaign.status || '').toUpperCase()]));
+	const stateByCheckoutId = new Map();
+	for (const recipient of recipients) {
+		const checkoutId = getCheckoutIdFromRecipientExternalKey(recipient.externalKey);
+		if (!checkoutId) continue;
+		const state = stateByCheckoutId.get(checkoutId) || { success: false, pending: false, failed: false };
+		const status = String(recipient.status || '').toUpperCase();
+		state.success ||= ['SENT', 'DELIVERED', 'READ'].includes(status);
+		state.pending ||= status === 'PENDING';
+		state.failed ||= status === 'FAILED';
+		stateByCheckoutId.set(checkoutId, state);
+	}
+
+	const retryable = new Set();
+	for (const log of logs) {
+		if (!log.campaignId) {
+			retryable.add(log.checkoutId);
+			continue;
+		}
+		const state = stateByCheckoutId.get(log.checkoutId) || { success: false, pending: false, failed: false };
+		const campaignStatus = campaignStatusById.get(log.campaignId) || '';
+		if (state.success || state.pending || ['QUEUED', 'RUNNING'].includes(campaignStatus)) continue;
+		if (state.failed || ['FAILED', 'PARTIAL', 'CANCELED'].includes(campaignStatus)) {
+			retryable.add(log.checkoutId);
+		}
+	}
+
+	return retryable;
 }
 
 async function ensureSetting(workspaceId) {
@@ -260,6 +322,7 @@ export async function updateAbandonedCartAutomationSettings({
 	filters = {},
 	variableMapping = undefined,
 	manualVariables = undefined,
+	minCartAgeMinutes = undefined,
 } = {}) {
 	const resolvedWorkspaceId = resolveAbandonedCartAutomationWorkspaceId(workspaceId);
 	const nextEnabled = normalizeBoolean(enabled);
@@ -281,6 +344,9 @@ export async function updateAbandonedCartAutomationSettings({
 	}
 
 	const currentFilters = normalizeFilters(current?.filters || DEFAULT_FILTERS);
+	const nextMinCartAgeMinutes = normalizeAgeMinutes(
+		minCartAgeMinutes === undefined ? current?.minCartAgeMinutes : minCartAgeMinutes
+	);
 	const nextFilters = normalizeFilters({
 		...filters,
 		variableMapping:
@@ -303,7 +369,7 @@ export async function updateAbandonedCartAutomationSettings({
 			templateLanguage: template?.language || 'es_AR',
 			filters: nextFilters,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
-			minCartAgeMinutes: DEFAULT_MIN_CART_AGE_MINUTES,
+			minCartAgeMinutes: nextMinCartAgeMinutes,
 			lastError: null,
 		},
 		update: {
@@ -313,7 +379,7 @@ export async function updateAbandonedCartAutomationSettings({
 			templateLanguage: template?.language || 'es_AR',
 			filters: nextFilters,
 			intervalMinutes: DEFAULT_INTERVAL_MINUTES,
-			minCartAgeMinutes: DEFAULT_MIN_CART_AGE_MINUTES,
+			minCartAgeMinutes: nextMinCartAgeMinutes,
 			lastError: null,
 		},
 	});
@@ -329,7 +395,7 @@ async function findAutomationCandidates(setting) {
 	const rawCarts = await prisma.abandonedCart.findMany({
 		where: {
 			workspaceId: setting.workspaceId,
-			status: 'NEW',
+			status: filters.status === 'NEW' ? 'NEW' : { in: ['NEW', 'CONTACTED'] },
 			contactPhone: { not: null },
 			abandonedCheckoutUrl: { not: null },
 			checkoutCreatedAt: {
@@ -349,26 +415,26 @@ async function findAutomationCandidates(setting) {
 	let existingLogs = [];
 	if (checkoutIds.length) {
 		try {
-			existingLogs = await prisma.abandonedCartAutomationLog.findMany({
-				where: {
-					workspaceId: setting.workspaceId,
-					checkoutId: { in: checkoutIds },
-					campaignId: { not: null },
-				},
-				select: { checkoutId: true },
-			});
+				existingLogs = await prisma.abandonedCartAutomationLog.findMany({
+					where: {
+						workspaceId: setting.workspaceId,
+						checkoutId: { in: checkoutIds },
+					},
+					select: { checkoutId: true, campaignId: true },
+				});
 		} catch (error) {
 			if (!isAbandonedCartAutomationTableMissing(error)) throw error;
 			throw createAutomationSchemaNotReadyError('de carritos abandonados', error);
 		}
 	}
 	const loggedCheckoutIds = new Set(existingLogs.map((log) => log.checkoutId));
+	const retryableCheckoutIds = await getRetryableCartCheckoutIds(existingLogs, setting.workspaceId);
 	const latestByPhone = new Map();
 
 	for (const cart of recoverableCarts) {
 		const checkoutId = normalizeString(cart.checkoutId);
 		const phone = normalizeWhatsAppIdentityPhone(cart.contactPhone || '');
-		if (!checkoutId || !phone || loggedCheckoutIds.has(checkoutId)) continue;
+		if (!checkoutId || !phone || (loggedCheckoutIds.has(checkoutId) && !retryableCheckoutIds.has(checkoutId))) continue;
 		if (!cartMatchesProductQuery(cart, filters.productQuery)) continue;
 
 		const previous = latestByPhone.get(phone);
@@ -416,7 +482,6 @@ async function claimCandidateLogs(setting, candidates = []) {
 		where: {
 			workspaceId: setting.workspaceId,
 			checkoutId: { in: rows.map((row) => row.checkoutId) },
-			campaignId: null,
 		},
 		select: { checkoutId: true },
 	});
@@ -442,7 +507,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 			audienceSource: 'abandoned_carts',
 			audienceFilters: {
 				...filters,
-				status: 'NEW',
+				status: 'ALL',
 				checkoutIds,
 				limit: checkoutIds.length,
 				variableMapping: filters.variableMapping || {},
@@ -454,6 +519,21 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 		const campaignId = created?.campaign?.id || created?.campaignId || null;
 
 		if (campaignId) {
+			const failedRecipientReset = await prisma.campaignRecipient.updateMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					campaignId,
+					externalKey: { in: checkoutIds.map((checkoutId) => `abandoned_cart:${checkoutId}`) },
+					status: 'FAILED',
+				},
+				data: {
+					status: 'PENDING',
+					errorCode: null,
+					errorSubcode: null,
+					errorMessage: null,
+					failedAt: null,
+				},
+			});
 			await prisma.abandonedCartAutomationLog.updateMany({
 				where: {
 					workspaceId: setting.workspaceId,
@@ -462,9 +542,13 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 				},
 				data: { campaignId, automationRunId: run.id },
 			});
-			if (Number(created?.pendingRecipients || created?.campaign?.pendingRecipients || 0) > 0) {
+			const pendingCount = await prisma.campaignRecipient.count({
+				where: { workspaceId: setting.workspaceId, campaignId, status: 'PENDING' },
+			});
+			if (pendingCount > 0) {
 				await launchCampaign(campaignId, { workspaceId: setting.workspaceId });
 			}
+			created.resetFailedRecipients = Number(failedRecipientReset?.count || 0);
 		}
 
 		await touchAutomationRun(run.id, { workspaceId: setting.workspaceId, status: 'OPEN' });
@@ -472,7 +556,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 		return {
 			automationRunId: run.id,
 			campaignId,
-			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0),
+			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0) + Number(created?.resetFailedRecipients || 0),
 		};
 	} catch (error) {
 		await prisma.abandonedCartAutomationLog.deleteMany({

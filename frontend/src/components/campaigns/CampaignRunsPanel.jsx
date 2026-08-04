@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { formatRecipientError } from '../../features/campaigns/errorMessages.js';
-import { formatCampaignStatusLabel } from '../../utils/statusLabels.js';
+import { getCampaignStatusPresentation } from '../../utils/statusLabels.js';
 
 function formatDate(value) {
 	if (!value) return '--';
@@ -422,6 +422,7 @@ export default function CampaignRunsPanel({
 	const hasTemplateParameterMismatch = hasProviderCode(failureDiagnostics, '132000');
 	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
 	const retryableCount = recipientMetrics.failed + recipientMetrics.pending;
+	const selectedStatusPresentation = getCampaignStatusPresentation(selectedCampaign || {});
 
 	const filteredRecipients = useMemo(() => {
 		return allRecipients.filter((recipient) => {
@@ -516,6 +517,7 @@ export default function CampaignRunsPanel({
 								const listTotalRecipients = getMetric(campaign, ['totalRecipients', 'recipientCount']);
 								const listSentRecipients = getMetric(campaign, ['sentRecipients', 'sentCount']);
 								const listFailedRecipients = getMetric(campaign, ['failedRecipients', 'failedCount']);
+								const statusPresentation = getCampaignStatusPresentation(campaign);
 
 								return (
 									<button
@@ -531,8 +533,9 @@ export default function CampaignRunsPanel({
 												<strong>{campaign.name}</strong>
 												<p>{campaign.templateName || campaign.template?.name || 'Sin plantilla asociada'}</p>
 											</div>
-											<span className={`campaign-run-state campaign-run-state--${String(campaign.status || 'draft').toLowerCase()}`}>
-												{formatCampaignStatusLabel(campaign.status)}
+											<span className={`campaign-run-state campaign-run-state--${statusPresentation.tone}`}>
+												<strong>{statusPresentation.label}</strong>
+												{statusPresentation.detail ? <small>{statusPresentation.detail}</small> : null}
 											</span>
 										</div>
 
@@ -556,8 +559,9 @@ export default function CampaignRunsPanel({
 									<h4>{selectedCampaign.name}</h4>
 									<p>{selectedCampaign.description || selectedCampaign.notes || 'Sin descripcion.'}</p>
 								</div>
-								<span className={`campaign-run-state campaign-run-state--${String(selectedCampaign.status || 'draft').toLowerCase()}`}>
-									{formatCampaignStatusLabel(selectedCampaign.status)}
+								<span className={`campaign-run-state campaign-run-state--${selectedStatusPresentation.tone}`}>
+									<strong>{selectedStatusPresentation.label}</strong>
+									{selectedStatusPresentation.detail ? <small>{selectedStatusPresentation.detail}</small> : null}
 								</span>
 							</div>
 

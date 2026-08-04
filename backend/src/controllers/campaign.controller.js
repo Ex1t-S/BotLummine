@@ -517,6 +517,7 @@ export async function updateAbandonedCartAutomationSettingsController(req, res) 
 			filters: req.body?.filters || {},
 			variableMapping: req.body?.variableMapping,
 			manualVariables: req.body?.manualVariables,
+			minCartAgeMinutes: req.body?.minCartAgeMinutes,
 		});
 		return res.json({ ok: true, settings });
 	} catch (error) {
@@ -557,6 +558,7 @@ export async function updatePendingPaymentAutomationSettingsController(req, res)
 			templateId: req.body?.templateId || null,
 			filters: req.body?.filters || {},
 			variableMapping: req.body?.variableMapping,
+			minOrderAgeMinutes: req.body?.minOrderAgeMinutes,
 		});
 		return res.json({ ok: true, settings });
 	} catch (error) {

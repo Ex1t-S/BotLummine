@@ -28,6 +28,7 @@ import {
 	fetchTemplates,
 } from '../../lib/campaigns.js';
 import { ActionButton, EmptyState } from '../../components/ui/InternalPage.jsx';
+import { getCampaignStatusPresentation } from '../../utils/statusLabels.js';
 import './CampaignCommandCenter.css';
 
 const NAV_ITEMS = [
@@ -81,6 +82,14 @@ function date(value) {
 
 function statusMeta(status = '', campaign = {}) {
 	const value = String(status || 'DRAFT').toUpperCase();
+	if (['FINISHED', 'COMPLETED', 'FAILED', 'PARTIAL'].includes(value)) {
+		const presentation = getCampaignStatusPresentation({ ...campaign, status: value });
+		return {
+			label: presentation.label,
+			detail: presentation.detail,
+			tone: presentation.tone === 'partial' ? 'attention' : presentation.tone,
+		};
+	}
 	const failed = campaignCount(campaign, 'failedCount', 'failedRecipients');
 	if (failed > 0 && !['RUNNING', 'QUEUED'].includes(value)) return { label: 'Requiere atención', tone: 'attention' };
 	if (['RUNNING', 'QUEUED'].includes(value)) return { label: 'En curso', tone: 'running' };
@@ -243,7 +252,7 @@ export function CampaignOverview() {
 						return (
 							<article className="campaign-os-row" key={campaign.id}>
 								<div className="campaign-os-row-main"><strong>{campaign.name || 'Campaña sin nombre'}</strong><span>{audienceLabel(campaign.audienceSource)} · {number(campaign.totalRecipients)} destinatarios</span></div>
-								<span className={`campaign-os-status tone-${status.tone}`}><CircleDot size={12} aria-hidden="true" />{status.label}</span>
+								<span className={`campaign-os-status tone-${status.tone}`}><CircleDot size={12} aria-hidden="true" /><span><strong>{status.label}</strong>{status.detail ? <small>{status.detail}</small> : null}</span></span>
 								<div className="campaign-os-progress"><span><i style={{ width: `${Math.min(100, progress)}%` }} /></span><small>{percent(progress)}</small></div>
 								<button type="button" className="campaign-os-row-action" onClick={() => navigate(action.to)}>{action.label}<ArrowRight size={15} aria-hidden="true" /></button>
 								{!campaign.automationRunId ? <button

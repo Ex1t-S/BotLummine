@@ -255,6 +255,8 @@
 	font-size: 12px;
 	font-weight: 720;
 }
+.campaign-os-status > span { display: inline-flex; flex-direction: column; gap: 1px; }
+.campaign-os-status small { color: #8a93a2; font-size: 11px; font-weight: 600; }
 
 .campaign-os-status.tone-running { color: var(--campaign-os-accent-strong); }
 .campaign-os-status.tone-finished { color: #08745b; }

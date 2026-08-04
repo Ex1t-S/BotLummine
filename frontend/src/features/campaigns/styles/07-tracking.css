@@ -342,10 +342,15 @@
 .campaign-tracking-panel--focused .campaign-list-card--run.selected { background: #f1f2ff; box-shadow: inset 3px 0 #4b58ff; }
 
 .campaign-run-state {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
     color: #687184;
     font-size: 12px;
     font-weight: 750;
 }
+.campaign-run-state small { color: #8a93a2; font-size: 11px; font-weight: 600; }
 .campaign-run-state--running,
 .campaign-run-state--queued { color: #3541d4; }
 .campaign-run-state--finished,

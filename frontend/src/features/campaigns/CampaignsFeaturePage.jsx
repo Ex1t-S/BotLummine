@@ -374,7 +374,7 @@ const initialScheduleForm = {
 };
 
 const DEFAULT_PENDING_PAYMENT_FILTERS = {
-	daysBack: 5,
+	daysBack: 7,
 	limit: 50,
 	minTotal: '',
 	productQuery: '',
@@ -938,6 +938,7 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 	const [headerMediaFileName, setHeaderMediaFileName] = useState('');
 	const [form, setForm] = useState({
 		limit: filters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
+		minOrderAgeMinutes: Number(settings.minOrderAgeMinutes || 180),
 		minTotal: filters.minTotal ?? '',
 		productQuery: filters.productQuery || '',
 	});
@@ -967,6 +968,7 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 		setHeaderMediaFileName('');
 		setForm({
 			limit: nextFilters.limit || DEFAULT_PENDING_PAYMENT_FILTERS.limit,
+			minOrderAgeMinutes: Number(settings.minOrderAgeMinutes || 180),
 			minTotal: nextFilters.minTotal ?? '',
 			productQuery: nextFilters.productQuery || '',
 		});
@@ -993,6 +995,7 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 				minTotal: form.minTotal,
 				productQuery: form.productQuery,
 			},
+			minOrderAgeMinutes: Math.max(1, Math.min(43200, Number(form.minOrderAgeMinutes || 180))),
 			variableMapping: mergeHeaderMediaVariableMapping(
 				selectedTemplate,
 				headerMediaId,
@@ -1010,7 +1013,7 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 			<div className="campaign-schedule-ops">
 				<div>
 					<strong>Recordatorios de pagos pendientes</strong>
-					<span>Detecta pedidos pendientes, espera 2 horas desde la creacion y envia una sola vez por pedido.</span>
+					<span>Detecta pedidos pendientes cuando superan la espera minima y envia una sola vez por pedido.</span>
 				</div>
 				<label className="campaign-toggle">
 					<input
@@ -1074,11 +1077,15 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 					/>
 					<label className="field">
 						<span>Ventana</span>
-						<input value="Ultimos 5 dias" readOnly />
+						<input value="Ultimos 7 dias" readOnly />
 					</label>
 					<label className="field">
 						<span>Limite por corrida</span>
 						<input type="number" min="1" max="500" value={form.limit} onChange={(event) => updateField('limit', event.target.value)} />
+					</label>
+					<label className="field">
+						<span>Espera minima (minutos)</span>
+						<input type="number" min="1" max="43200" value={form.minOrderAgeMinutes} onChange={(event) => updateField('minOrderAgeMinutes', Number(event.target.value || 180))} />
 					</label>
 					<label className="field">
 						<span>Monto minimo</span>
@@ -1136,7 +1143,7 @@ function PendingPaymentAutomationPanel({ templates = [], pendingPayment, mutatio
 			<div className="campaign-schedule-section">
 				<div className="campaign-schedule-section__title">
 					<strong>Estado</strong>
-					<span>Ultimos 5 dias, espera minima: {Number(settings.minOrderAgeMinutes || 120)} minutos.</span>
+					<span>Ultimos 7 dias, espera minima: {Number(settings.minOrderAgeMinutes || 180)} minutos.</span>
 				</div>
 				<div className="campaign-schedule-meta-grid">
 					<div>
