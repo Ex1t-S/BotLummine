@@ -213,6 +213,12 @@ export async function sendAndPersistOutbound({
 			attachmentUrl: attachmentMeta?.attachmentUrl || null,
 			attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
 			attachmentName: attachmentMeta?.attachmentName || null,
+			attachmentStatus: attachmentMeta?.storageFileName || attachmentMeta?.attachmentStoredFileName || attachmentMeta?.id
+				? 'AVAILABLE'
+				: 'UNKNOWN',
+			attachmentMetaId: attachmentMeta?.id || attachmentMeta?.attachmentId || null,
+			attachmentStorageKey: attachmentMeta?.storageFileName || attachmentMeta?.attachmentStoredFileName || null,
+			attachmentSha256: attachmentMeta?.sha256 || attachmentMeta?.attachmentSha256 || null,
 			senderName: workspaceConfig.ai.businessName || 'Marca',
 			provider: aiMeta?.provider || provider,
 			model: aiMeta?.model || model,

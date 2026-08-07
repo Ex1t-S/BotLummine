@@ -54,6 +54,7 @@ model Workspace {
   shipmentNotificationSetting     ShipmentNotificationSetting?
   shipmentNotificationLogs        ShipmentNotificationLog[]
   paymentReviewActions            PaymentReviewAction[]
+  conversationEvents              ConversationEvent[]
 }
 
 model WorkspaceBranding {
@@ -209,6 +210,7 @@ model User {
   workspace            Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   featureFlagUpdates   WorkspaceFeatureFlag[]
   paymentReviewActions PaymentReviewAction[]
+  conversationEvents   ConversationEvent[]
 
   @@index([workspaceId, role])
 }
@@ -261,6 +263,7 @@ model Conversation {
   aiLabRuns            AiLabRun[]
   aiTurnTraces         AiTurnTrace[]
   paymentReviewActions PaymentReviewAction[]
+  conversationEvents   ConversationEvent[]
 
   @@index([workspaceId, contactId, whatsappChannelId])
   @@index([workspaceId, lastMessageAt])
@@ -346,6 +349,10 @@ model ConversationState {
   objections                Json?
   needsHuman                Boolean   @default(false)
   handoffReason             String?
+  humanLockMode             String?
+  humanLockedAt             DateTime?
+  humanReleasedAt           DateTime?
+  humanAutoResumeAt         DateTime?
   interactionCount          Int       @default(0)
   notes                     String?
   currentProductFocus       String?
@@ -370,6 +377,7 @@ model ConversationState {
   menuPath                  String?
   menuLastSelection         String?
   menuLastPromptAt          DateTime?
+  menuInvalidAttempts       Int       @default(0)
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
@@ -393,25 +401,29 @@ model WhatsAppMenuSetting {
 }
 
 model Message {
-  id                 String           @id @default(cuid())
-  workspaceId        String
-  conversationId     String
-  whatsappChannelId  String?
-  metaMessageId      String?
-  senderName         String?
-  direction          MessageDirection
-  type               String           @default("text")
-  body               String
-  provider           String?
-  model              String?
-  tokenPrompt        Int?
-  tokenCompletion    Int?
-  tokenTotal         Int?
-  attachmentUrl      String?
-  attachmentMimeType String?
-  attachmentName     String?
-  rawPayload         Json?
-  createdAt          DateTime         @default(now())
+  id                   String           @id @default(cuid())
+  workspaceId          String
+  conversationId       String
+  whatsappChannelId    String?
+  metaMessageId        String?
+  senderName           String?
+  direction            MessageDirection
+  type                 String           @default("text")
+  body                 String
+  provider             String?
+  model                String?
+  tokenPrompt          Int?
+  tokenCompletion      Int?
+  tokenTotal           Int?
+  attachmentUrl        String?
+  attachmentMimeType   String?
+  attachmentName       String?
+  attachmentStatus     String           @default("UNKNOWN")
+  attachmentMetaId     String?
+  attachmentStorageKey String?
+  attachmentSha256     String?
+  rawPayload           Json?
+  createdAt            DateTime         @default(now())
 
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -442,6 +454,29 @@ model PaymentReviewAction {
   @@unique([workspaceId, idempotencyKey])
   @@index([workspaceId, conversationId, createdAt])
   @@index([workspaceId, action, createdAt])
+}
+
+model ConversationEvent {
+  id             String             @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  eventType      String
+  actorType      String             @default("SYSTEM")
+  actorUserId    String?
+  fromQueue      ConversationQueue?
+  toQueue        ConversationQueue?
+  reason         String?
+  idempotencyKey String?
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, conversationId, createdAt])
+  @@index([workspaceId, eventType, createdAt])
 }
 
 model StoreInstallation {

@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { publishInboxEvent } from '../lib/inbox-events.js';
 import { requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
+import { HUMAN_LOCK_MODE, recordConversationEvent } from '../services/conversation/conversation-events.service.js';
 
 const PAYMENT_REVIEW_ACTIONS = new Set([
 	'APPROVE',
@@ -163,6 +164,7 @@ export async function postPaymentReviewAction(req, res, next) {
 
 		const resultQueue = 'HUMAN';
 		const handoffReason = `payment_review_${action.toLowerCase()}`;
+		const lockedAt = new Date();
 		const actionRecord = await prisma.$transaction(async (tx) => {
 			const created = await tx.paymentReviewAction.create({
 				data: {
@@ -184,8 +186,34 @@ export async function postPaymentReviewAction(req, res, next) {
 
 			await tx.conversationState.upsert({
 				where: { conversationId },
-				update: { needsHuman: true, handoffReason },
-				create: { conversationId, needsHuman: true, handoffReason },
+				update: {
+					needsHuman: true,
+					handoffReason,
+					humanLockMode: HUMAN_LOCK_MODE.HARD,
+					humanLockedAt: lockedAt,
+					humanReleasedAt: null,
+					humanAutoResumeAt: null,
+				},
+				create: {
+					conversationId,
+					needsHuman: true,
+					handoffReason,
+					humanLockMode: HUMAN_LOCK_MODE.HARD,
+					humanLockedAt: lockedAt,
+				},
+			});
+
+			await recordConversationEvent({
+				db: tx,
+				workspaceId,
+				conversationId,
+				eventType: 'PAYMENT_REVIEW_ACTION',
+				actorType: req.user?.id ? 'USER' : 'SYSTEM',
+				actorUserId: req.user?.id || null,
+				fromQueue: conversation.queue,
+				toQueue: resultQueue,
+				reason: handoffReason,
+				metadata: { action, reason: reason || null },
 			});
 
 			return created;

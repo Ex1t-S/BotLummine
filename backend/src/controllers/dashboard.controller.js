@@ -21,6 +21,13 @@ import {
 	conversationStateForWorkspaceWhere,
 	workspaceOwnedWhere,
 } from '../services/workspaces/workspace-scope.js';
+import {
+	HUMAN_LOCK_MODE,
+	recordConversationEvent,
+	resolveHumanAutoResumeAt,
+	resolveHumanLockMode,
+} from '../services/conversation/conversation-events.service.js';
+import { syncHumanHandoff } from '../services/conversation/menu-flow.service.js';
 
 const AI_LAB_CONTACT_PREFIX = '__AI_LAB__::';
 
@@ -1517,6 +1524,25 @@ export async function getConversationMessagesJson(req, res, next) {
 						lastRecommendedOffer: true,
 						menuActive: true,
 						menuPath: true,
+						menuInvalidAttempts: true,
+						humanLockMode: true,
+						humanLockedAt: true,
+						humanReleasedAt: true,
+						humanAutoResumeAt: true,
+					},
+				},
+				conversationEvents: {
+					orderBy: { createdAt: 'desc' },
+					take: 120,
+					select: {
+						id: true,
+						eventType: true,
+						actorType: true,
+						fromQueue: true,
+						toQueue: true,
+						reason: true,
+						metadata: true,
+						createdAt: true,
 					},
 				},
 				messages: {
@@ -1538,6 +1564,8 @@ export async function getConversationMessagesJson(req, res, next) {
 						attachmentName: true,
 						attachmentMimeType: true,
 						attachmentUrl: true,
+						attachmentStatus: true,
+						attachmentMetaId: true,
 						rawPayload: true,
 					},
 					orderBy: {
@@ -1604,7 +1632,13 @@ export async function getConversationMessagesJson(req, res, next) {
 					lastRecommendedOffer: conversation.state?.lastRecommendedOffer || '',
 					menuActive: Boolean(conversation.state?.menuActive),
 					menuPath: conversation.state?.menuPath || '',
+					menuInvalidAttempts: conversation.state?.menuInvalidAttempts || 0,
+					humanLockMode: conversation.state?.humanLockMode || '',
+					humanLockedAt: conversation.state?.humanLockedAt || null,
+					humanReleasedAt: conversation.state?.humanReleasedAt || null,
+					humanAutoResumeAt: conversation.state?.humanAutoResumeAt || null,
 				},
+				events: (conversation.conversationEvents || []).reverse(),
 				messages: pageMessages.map((msg) => ({
 					id: msg.id,
 					direction: msg.direction,
@@ -1617,6 +1651,8 @@ export async function getConversationMessagesJson(req, res, next) {
 					attachmentName: msg.attachmentName || null,
 					attachmentMimeType: msg.attachmentMimeType || null,
 					attachmentUrl: msg.attachmentUrl || null,
+					attachmentStatus: msg.attachmentStatus || 'UNKNOWN',
+					attachmentMetaId: msg.attachmentMetaId || null,
 					rawPayload: enrichInteractiveMenuPayload(msg, menuRuntime),
 				})),
 				messagesPage: {
@@ -1754,7 +1790,7 @@ export async function postConversationMessage(req, res, next) {
 
 		const conversation = await prisma.conversation.findFirst({
 			where: { id: conversationId, workspaceId },
-			include: { contact: true },
+			include: { contact: true, state: true },
 		});
 
 		if (!conversation) {
@@ -1850,6 +1886,23 @@ export async function postConversationMessage(req, res, next) {
 			});
 		}
 
+		await syncHumanHandoff({
+			conversationId,
+			workspaceId,
+			reason: 'manual_handoff',
+			currentState: conversation.state || {},
+		});
+		await recordConversationEvent({
+			workspaceId,
+			conversationId,
+			eventType: 'MANUAL_MESSAGE_SENT',
+			actorType: req.user?.id ? 'USER' : 'SYSTEM',
+			actorUserId: req.user?.id || null,
+			toQueue: 'HUMAN',
+			reason: 'manual_handoff',
+			metadata: { messageType },
+		});
+
 		await prisma.conversation.updateMany({
 			where: { id: conversationId, workspaceId },
 			data: {
@@ -1882,6 +1935,7 @@ export async function patchConversationQueue(req, res, next) {
 		const { conversationId } = req.params;
 		const workspaceId = requireRequestWorkspaceId(req);
 		const requestedQueue = String(req.body?.queue || '').toUpperCase();
+		const requestedReason = String(req.body?.reason || '').trim() || null;
 		const allowedQueues = ['AUTO', 'HUMAN', 'PAYMENT_REVIEW'];
 
 		if (!allowedQueues.includes(requestedQueue)) {
@@ -1915,6 +1969,13 @@ export async function patchConversationQueue(req, res, next) {
 		});
 
 		if (conversation.state) {
+			const lockedAt = new Date();
+			const humanLockMode = requestedQueue === 'HUMAN'
+				? resolveHumanLockMode({
+					reason: requestedReason || 'manual_handoff',
+					currentState: conversation.state,
+				})
+				: null;
 			await prisma.conversationState.update({
 				where: { conversationId },
 				data: {
@@ -1923,8 +1984,14 @@ export async function patchConversationQueue(req, res, next) {
 						requestedQueue === 'AUTO'
 							? null
 							: requestedQueue === 'HUMAN'
-								? 'manual_handoff'
+								? requestedReason || 'manual_handoff'
 								: conversation.state.handoffReason,
+					humanLockMode,
+					humanLockedAt: requestedQueue === 'HUMAN' ? lockedAt : undefined,
+					humanReleasedAt: requestedQueue === 'AUTO' ? lockedAt : undefined,
+					humanAutoResumeAt: requestedQueue === 'HUMAN'
+						? resolveHumanAutoResumeAt({ mode: humanLockMode, lockedAt })
+						: null,
 				},
 			});
 		} else {
@@ -1932,10 +1999,25 @@ export async function patchConversationQueue(req, res, next) {
 				data: {
 					conversationId,
 					needsHuman: requestedQueue === 'HUMAN',
-					handoffReason: requestedQueue === 'HUMAN' ? 'manual_handoff' : null,
+					handoffReason: requestedQueue === 'HUMAN' ? requestedReason || 'manual_handoff' : null,
+					humanLockMode: requestedQueue === 'HUMAN' ? HUMAN_LOCK_MODE.COMMERCIAL_24H : null,
+					humanLockedAt: requestedQueue === 'HUMAN' ? new Date() : null,
 				},
 			});
 		}
+		await recordConversationEvent({
+			workspaceId,
+			conversationId,
+			eventType: requestedQueue === 'AUTO' ? 'HUMAN_RELEASED' : 'QUEUE_CHANGED',
+			actorType: req.user?.id ? 'USER' : 'SYSTEM',
+			actorUserId: req.user?.id || null,
+			fromQueue: conversation.queue,
+			toQueue: requestedQueue,
+			reason: requestedReason || (requestedQueue === 'AUTO' ? 'manual_release' : 'manual_handoff'),
+			metadata: {
+				aiEnabled: requestedQueue === 'AUTO',
+			},
+		});
 		publishInboxEvent({
 			workspaceId,
 			scope: 'conversation',

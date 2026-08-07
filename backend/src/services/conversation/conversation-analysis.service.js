@@ -474,6 +474,16 @@ export function analyzeConversationTurn({
 		intent,
 		isReadyToBuy
 	});
+	const buyingIntentLevel = isReadyToBuy
+		? 'high'
+		: ['product', 'stock_check', 'size_help', 'payment', 'shipping'].includes(String(intent || ''))
+			? 'medium'
+			: currentState?.buyingIntentLevel || null;
+	const salesStage = isReadyToBuy
+		? 'READY_TO_BUY'
+		: intent === 'product'
+			? 'PRODUCT_INTEREST'
+			: currentState?.salesStage || null;
 
 	const frequentSize = extractFrequentSize(text) || currentState.frequentSize || null;
 	const paymentPreference = detectPaymentPreference(text) || currentState.paymentPreference || null;
@@ -514,6 +524,8 @@ export function analyzeConversationTurn({
 		objections,
 		lastDetectedIntent: intent,
 		lastUserGoal: inferLastUserGoal(intent, text, isReadyToBuy, currentState, campaignContext),
+		buyingIntentLevel,
+		salesStage,
 		currentProductFamily,
 		requestedOfferType,
 		excludedProductKeywords,

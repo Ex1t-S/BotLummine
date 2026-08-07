@@ -22,6 +22,7 @@ import {
 	isInsuranceWorkspaceId,
 	isLummineBodywearProfile,
 } from '../ai/vertical-profile.service.js';
+import { HUMAN_LOCK_MODE, isHumanLockActive } from './conversation-events.service.js';
 
 const UNABLE_TO_CONTINUE_HANDOFF_REPLY =
 	'Dejanos tu consulta detallada y, cuando un asesor este disponible, te va a contestar la duda.';
@@ -725,6 +726,10 @@ function isWaitingForHuman(currentState = {}) {
 
 function isHumanHandoffWithinSilenceWindow(currentState = {}, hours = 24) {
 	if (!isWaitingForHuman(currentState)) return false;
+	if (currentState?.humanLockMode === HUMAN_LOCK_MODE.HARD) return true;
+	if (currentState?.humanLockMode === HUMAN_LOCK_MODE.COMMERCIAL_24H) {
+		return isHumanLockActive(currentState);
+	}
 	const updatedAt = currentState?.updatedAt ? new Date(currentState.updatedAt).getTime() : 0;
 	if (!updatedAt || !Number.isFinite(updatedAt)) return true;
 	return Date.now() - updatedAt < hours * 60 * 60 * 1000;
@@ -978,6 +983,16 @@ export function resolveReplyGate({
 	}
 
 	if (isWaitingForHuman(currentState)) {
+		if (
+			currentState?.humanLockMode === HUMAN_LOCK_MODE.HARD &&
+			isHumanLockActive(currentState)
+		) {
+			return {
+				action: 'suppress',
+				reason: 'hard_human_lock',
+			};
+		}
+
 		if (
 			isHumanHandoffWithinSilenceWindow(currentState) ||
 			looksLikeSameHandoffTopic(q, currentState)
@@ -1470,7 +1485,9 @@ export function buildStatePayload({
 			: typeof memoryPatch?.categoryLocked === 'boolean'
 				? memoryPatch.categoryLocked
 				: Boolean(currentState?.categoryLocked),
-		salesStage: shouldClearCommercialContext ? null : currentState?.salesStage || null,
+		salesStage: shouldClearCommercialContext
+			? null
+			: memoryPatch?.salesStage || currentState?.salesStage || null,
 		shownOffers: shouldClearCommercialContext ? [] : currentState?.shownOffers || [],
 		shownPrices: shouldClearCommercialContext ? [] : currentState?.shownPrices || [],
 		sharedLinks: shouldClearCommercialContext ? [] : currentState?.sharedLinks || [],
@@ -1480,7 +1497,9 @@ export function buildStatePayload({
 		lastRecommendedOffer: shouldClearCommercialContext
 			? null
 			: currentState?.lastRecommendedOffer || null,
-		buyingIntentLevel: shouldClearCommercialContext ? null : currentState?.buyingIntentLevel || null,
+		buyingIntentLevel: shouldClearCommercialContext
+			? null
+			: memoryPatch?.buyingIntentLevel || currentState?.buyingIntentLevel || null,
 		frictionLevel: currentState?.frictionLevel || null,
 		commercialSummary: shouldClearCommercialContext
 			? null

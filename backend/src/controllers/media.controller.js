@@ -64,6 +64,7 @@ async function findInboxMediaMessage(fileName, workspaceId) {
 			workspaceId: true,
 			attachmentMimeType: true,
 			attachmentName: true,
+			attachmentStatus: true,
 			rawPayload: true
 		},
 		orderBy: {
@@ -112,6 +113,7 @@ async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
 	const message = await findInboxMediaMessage(safeFileName, workspaceId);
 
 	if (!message) return false;
+	if (!['PENDING', 'DOWNLOAD_FAILED'].includes(message.attachmentStatus)) return false;
 
 	const attachmentId =
 		message?.rawPayload?.attachment?.id ||
@@ -164,6 +166,14 @@ export async function serveInboxMediaController(req, res) {
 		let stats = await fs.stat(absolutePath).catch(() => null);
 
 		if (!stats || !stats.isFile()) {
+			if (message.attachmentStatus === 'UNRECOVERABLE') {
+				return res.status(410).json({
+					ok: false,
+					error: 'Este archivo histórico ya no está disponible en el workspace actual.',
+					attachmentStatus: 'UNRECOVERABLE',
+				});
+			}
+
 			const restored = await tryRestoreMissingInboxMedia(fileName, workspaceId).catch((error) => {
 				logger.warn('media.restore_failed', {
 					workspaceId,

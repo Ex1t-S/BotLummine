@@ -248,6 +248,7 @@ async function processInboundMessages(req, value = {}) {
 					name: attachmentMeta.attachmentName || null,
 					url: attachmentMeta.attachmentUrl || null,
 					storageFileName: attachmentMeta.attachmentStoredFileName || null,
+					sha256: attachmentMeta.attachmentSha256 || null,
 					size: attachmentMeta.attachmentSize || null,
 					phoneNumberId: phoneNumberId || null,
 					downloadPending: Boolean(attachmentMeta.attachmentDownloadPending),

@@ -61,6 +61,7 @@ import {
 	maybeHandleMenuFlow,
 	syncHumanHandoff,
 } from './menu-flow.service.js';
+import { recordConversationEvent } from './conversation-events.service.js';
 import { sendAndPersistOutbound } from './outbound-message.service.js';
 import { maybeForwardPaymentProof } from './payment-proof-forwarding.service.js';
 import { buildMenuAssistantContext } from '../whatsapp/whatsapp-menu.service.js';
@@ -113,6 +114,25 @@ function isCatalogFollowUpRequest(text = '') {
 	if (!normalized || normalized.length > 90) return false;
 	if (/^\[(imagen|documento|audio|video|sticker|archivo)\s+recibid[oa]/i.test(normalized)) return false;
 	return /(link|url|web|comprar|foto|fotos|imagen|imagenes|video|mandame|enviame|pasame|ver|mostrame|muestrame)/i.test(normalized);
+}
+
+function buildUnavailableAttachmentReply(messageType = 'image') {
+	if (String(messageType).toLowerCase() === 'sticker') {
+		return 'Recibí el sticker 😊. Si necesitás ayuda con un producto, pedido o pago, escribime qué querés consultar y te ayudo.';
+	}
+
+	return 'Recibí el archivo, pero ya no puedo abrirlo desde este canal. Si podés, reenviámelo o contame qué necesitás revisar y seguimos.';
+}
+
+function isPaymentContextForUnavailableAttachment({ messageBody = '', currentState = {}, recentMessages = [] } = {}) {
+	const text = [
+		messageBody,
+		currentState?.lastIntent,
+		currentState?.lastUserGoal,
+		...recentMessages.filter((message) => message.role === 'user').map((message) => message.text),
+	].join(' ').toLowerCase();
+
+	return /(pago|pagar|transfer|alias|comprobante|ticket|mercado pago)/i.test(text);
 }
 
 function buildCatalogQueryContext({
@@ -661,6 +681,20 @@ export async function processInboundMessage({
 		});
 		logAiTurnTrace(turnTrace);
 		if (inboundMessage?.id && turnTrace.workspaceId && turnTrace.conversationId) {
+			await recordConversationEvent({
+				workspaceId: turnTrace.workspaceId,
+				conversationId: turnTrace.conversationId,
+				eventType: 'INBOUND_DECISION',
+				toQueue: route,
+				reason: handoffReason,
+				metadata: {
+					messageId: inboundMessage.id,
+					intent: legacyTrace?.intent || null,
+					model: legacyTrace?.model || null,
+					shouldReply: Boolean(legacyTrace?.shouldReply),
+					responsePolicy: legacyTrace?.responsePolicy || null,
+				},
+			});
 			await persistAiTurnTrace({
 				trace: turnTrace,
 				inboundMessageId: inboundMessage.id,
@@ -703,6 +737,9 @@ export async function processInboundMessage({
 			attachmentUrl: inboundMessage.attachmentUrl,
 			attachmentMimeType: inboundMessage.attachmentMimeType,
 			attachmentName: inboundMessage.attachmentName,
+			attachmentStatus: inboundMessage.attachmentStatus,
+			attachmentStorageKey: inboundMessage.attachmentStorageKey,
+			attachmentStoredFileName: inboundMessage.attachmentStorageKey,
 			...(attachmentMeta || {}),
 		};
 		createdInboundAt = inboundMessage.createdAt || createdInboundAt;
@@ -744,9 +781,41 @@ export async function processInboundMessage({
 				attachmentUrl: attachmentMeta?.attachmentUrl || null,
 				attachmentMimeType: attachmentMeta?.attachmentMimeType || null,
 				attachmentName: attachmentMeta?.attachmentName || null,
+				attachmentStatus: attachmentMeta?.attachmentStoredFileName
+					? 'AVAILABLE'
+					: attachmentMeta?.attachmentDownloadPending
+						? 'PENDING'
+						: attachmentMeta?.attachmentDownloadError
+							? 'DOWNLOAD_FAILED'
+							: attachmentMeta?.attachmentId
+								? 'UNRECOVERABLE'
+								: 'UNKNOWN',
+				attachmentMetaId: attachmentMeta?.attachmentId || null,
+				attachmentStorageKey: attachmentMeta?.attachmentStoredFileName || null,
+				attachmentSha256: attachmentMeta?.attachmentSha256 || null,
 				rawPayload,
 				createdAt: createdInboundAt,
 			}
+		});
+		await recordConversationEvent({
+			workspaceId: resolvedWorkspaceId,
+			conversationId: conversation.id,
+			eventType: 'INBOUND_RECEIVED',
+			toQueue: conversation.queue,
+			metadata: {
+				messageId: inboundMessage.id,
+				messageType,
+				attachmentStatus: attachmentMeta?.attachmentId
+					? attachmentMeta?.attachmentStoredFileName
+						? 'AVAILABLE'
+						: attachmentMeta?.attachmentDownloadPending
+							? 'PENDING'
+							: attachmentMeta?.attachmentDownloadError
+								? 'DOWNLOAD_FAILED'
+								: 'UNRECOVERABLE'
+					: 'UNKNOWN',
+				campaignTriggered: Boolean(rawPayload?.campaignMeta?.campaignId),
+			},
 		});
 		await persistChatConfirmationConversions({
 			workspaceId: resolvedWorkspaceId,
@@ -907,7 +976,7 @@ export async function processInboundMessage({
 	const recentMessages = freshConversation.messages.slice(-8).map((msg) => ({
 		role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
 		text: msg.body
-	}));
+			}));
 
 	if (recentMessages.length) {
 		recentMessages[recentMessages.length - 1] = {
@@ -925,6 +994,54 @@ export async function processInboundMessage({
 		recentMessages,
 		waId: normalizedWaId,
 	});
+	const attachmentType = String(messageType || '').toLowerCase();
+	const hasAttachmentId = Boolean(
+		attachmentMeta?.attachmentId ||
+		rawPayload?.attachment?.id ||
+		rawPayload?.message?.image?.id ||
+		rawPayload?.message?.document?.id ||
+		rawPayload?.message?.sticker?.id
+	);
+	const attachmentUnavailable =
+		hasAttachmentId &&
+		(attachmentMeta?.attachmentStatus === 'UNRECOVERABLE' ||
+			!(attachmentMeta?.attachmentStoredFileName || attachmentMeta?.attachmentStorageKey)) &&
+		['image', 'document', 'sticker'].includes(attachmentType);
+
+	if (
+		attachmentUnavailable &&
+		(attachmentType === 'sticker' ||
+			(!isPaymentContextForUnavailableAttachment({
+				messageBody: effectiveMessageBody,
+				currentState,
+				recentMessages,
+			}))
+	)) {
+		const attachmentReply = buildUnavailableAttachmentReply(attachmentType);
+		await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			workspaceId: resolvedWorkspaceId,
+			body: attachmentReply,
+			deliveryMode: transportMode,
+			aiMeta: {
+				provider: 'system',
+				model: 'attachment-unavailable',
+				raw: {
+					attachmentStatus: 'UNRECOVERABLE',
+					messageType: attachmentType,
+				},
+			},
+		});
+		trace = {
+			...trace,
+			intent: 'attachment_unavailable',
+			assistantMessage: attachmentReply,
+			provider: 'system',
+			model: 'attachment-unavailable',
+			shouldReply: true,
+		};
+		return finalizeInboundResult({ conversation: freshConversation, trace });
+	}
 
 	const memoryPatch = analyzeConversationTurn({
 		messageBody: effectiveMessageBody,
@@ -1905,7 +2022,8 @@ export async function processInboundMessage({
 				await syncHumanHandoff({
 					conversationId: freshConversation.id,
 					workspaceId: freshConversation.workspaceId,
-					reason: commercialPlan?.handoffReason || 'ai_declared_handoff'
+					reason: commercialPlan?.handoffReason || 'ai_declared_handoff',
+					currentState: enrichedState,
 				});
 			}
 		} catch (aiError) {
@@ -1949,6 +2067,7 @@ export async function processInboundMessage({
 			conversationId: freshConversation.id,
 			workspaceId: freshConversation.workspaceId,
 			reason: 'ai_cannot_continue',
+			currentState: enrichedState,
 		});
 		queueDecision = {
 			queue: 'HUMAN',

@@ -95,9 +95,13 @@ function hasOrderDelayFollowupKeywords(q = '') {
 }
 
 function hasPurchaseKeywords(q = '') {
-	return /(quiero comprar|quiero ese|quiero uno|me interesa|pasame el link|como compro|te lo compro|te compro|armar el pedido|armo el pedido|podemos hacer el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|encargar|reservarmelo|reservamelo)/.test(
+	return /(quiero comprar|quiero ese|quiero uno|me interesa|pasame el link|como compro|te lo compro|te compro|armar el pedido|armo el pedido|podemos hacer el pedido|puedo hacer el pedido|puedo armar el pedido|por aca puedo comprar|por whatsapp puedo comprar|cerrar la compra|avanzar con la compra|encargar|reservarmelo|reservamelo|\bcomprar\b|\badquirir\b)/.test(
 		q
 	);
+}
+
+function hasPriceKeywords(q = '') {
+	return /(precio|cuanto sale|cuanto cuesta|valor|a cuanto|sale\s+\$?\d)/.test(q);
 }
 
 function hasPaymentKeywords(q = '') {
@@ -263,10 +267,11 @@ export function detectIntent(text = '', currentState = {}, options = {}) {
 	if (!insuranceVertical && hasShippingKeywords(q)) return 'shipping';
 	if (!insuranceVertical && hasSizeKeywords(q)) return 'size_help';
 	if (!insuranceVertical && hasStockKeywords(q)) return 'stock_check';
+	if (!insuranceVertical && hasPriceKeywords(q)) return 'product';
 	if (hasProductKeywords(q)) return 'product';
 
 	if (purchaseFlow) {
-		return productContext ? 'product' : 'general';
+		return 'product';
 	}
 
 	return 'general';
