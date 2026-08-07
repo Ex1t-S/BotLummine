@@ -27,11 +27,13 @@ export function normalizeCustomerFilterParams(
 	{
 		pageSize = 24,
 		selectedProducts = [],
+		excludedProducts = [],
 		includeCampaignFields = false,
 		sentTemplateNames = [],
 	} = {}
 ) {
 	const selectedProductQuery = serializeCustomerProductFilters(selectedProducts);
+	const excludedProductQuery = serializeCustomerProductFilters(excludedProducts);
 	const templateNames = normalizeList(sentTemplateNames);
 	const shouldExcludeSentTemplate = Boolean(
 		includeCampaignFields &&
@@ -60,6 +62,7 @@ export function normalizeCustomerFilterParams(
 
 	return {
 		...params,
+		excludedProductQuery,
 		minOrders: isBlank(filters.minOrders) ? '' : filters.minOrders,
 		hasOrders: filters.hasOrders ? '1' : '',
 		excludeSentTemplate: shouldExcludeSentTemplate ? '1' : '',

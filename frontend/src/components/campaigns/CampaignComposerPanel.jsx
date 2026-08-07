@@ -31,6 +31,7 @@ function getInitialAudienceMode(availableModes = [], lockedMode = null) {
 const initialCustomerFilters = {
 	q: '',
 	productQuery: '',
+	excludedProductQuery: '',
 	orderNumber: '',
 	dateFrom: '',
 	dateTo: '',
@@ -730,11 +731,14 @@ export default function CampaignComposerPanel({
 	const [imageError, setImageError] = useState('');
 	const [submitError, setSubmitError] = useState('');
 	const [showProductPicker, setShowProductPicker] = useState(false);
+	const [showExcludedProductPicker, setShowExcludedProductPicker] = useState(false);
 	const [showTemplateExclusionPicker, setShowTemplateExclusionPicker] = useState(false);
 	const [catalogOptions, setCatalogOptions] = useState([]);
 	const [productSearch, setProductSearch] = useState('');
+	const [excludedProductSearch, setExcludedProductSearch] = useState('');
 	const [templateExclusionSearch, setTemplateExclusionSearch] = useState('');
 	const [selectedProductFilters, setSelectedProductFilters] = useState([]);
+	const [excludedProductFilters, setExcludedProductFilters] = useState([]);
 	const [selectedSentTemplateFilters, setSelectedSentTemplateFilters] = useState([]);
 	const [variableMapping, setVariableMapping] = useState({});
 	const [showAudiencePreview, setShowAudiencePreview] = useState(false);
@@ -782,6 +786,7 @@ export default function CampaignComposerPanel({
 		setCustomerFilters({ ...initialCustomerFilters, ...(context.customerFilters || {}) });
 		setAbandonedCartFilters({ ...initialAbandonedCartFilters, ...(context.abandonedCartFilters || {}) });
 		setSelectedProductFilters(Array.isArray(context.selectedProductFilters) ? context.selectedProductFilters : []);
+		setExcludedProductFilters(Array.isArray(context.excludedProductFilters) ? context.excludedProductFilters : []);
 		setSelectedSentTemplateFilters(Array.isArray(context.selectedSentTemplateFilters) ? context.selectedSentTemplateFilters : []);
 		setVariableMapping(context.variableMapping && typeof context.variableMapping === 'object' ? context.variableMapping : {});
 		setContactLimit(context.contactLimit || '');
@@ -1144,7 +1149,7 @@ export default function CampaignComposerPanel({
 			return `Seleccionar primeros ${formatCompactNumber(effectiveSelectionCount)} filtrados`;
 		}
 
-		if (selectedProductFilters.length) {
+		if (selectedProductFilters.length || excludedProductFilters.length) {
 			return 'Seleccionar todos los filtrados';
 		}
 
@@ -1154,12 +1159,14 @@ export default function CampaignComposerPanel({
 		contactLimitNumber,
 		effectiveSelectionCount,
 		selectedProductFilters.length,
+		excludedProductFilters.length,
 		totalFoundCount,
 	]);
 	function buildCustomerRequestParams(nextFilters = customerFilters) {
 		return normalizeCustomerFilterParams(nextFilters, {
 			pageSize: initialCustomerFilters.pageSize,
 			selectedProducts: selectedProductFilters,
+			excludedProducts: excludedProductFilters,
 			includeCampaignFields: true,
 			sentTemplateNames: sentTemplateFilterNames,
 		});
@@ -1357,6 +1364,34 @@ export default function CampaignComposerPanel({
 		clearFilteredSelection();
 	}
 
+	function toggleExcludedProductFilter(label) {
+		setExcludedProductFilters((current) => {
+			const next = current.includes(label)
+				? current.filter((item) => item !== label)
+				: [...current, label];
+
+			setCustomerFilters((prev) => ({
+				...prev,
+				page: 1,
+				excludedProductQuery: serializeCustomerProductFilters(next),
+			}));
+			clearFilteredSelection();
+
+			return next;
+		});
+	}
+
+	function clearExcludedProducts() {
+		setExcludedProductFilters([]);
+		setExcludedProductSearch('');
+		setCustomerFilters((prev) => ({
+			...prev,
+			page: 1,
+			excludedProductQuery: '',
+		}));
+		clearFilteredSelection();
+	}
+
 	function toggleSentTemplateFilter(templateName) {
 		setSelectedSentTemplateFilters((current) => {
 			const next = current.includes(templateName)
@@ -1406,7 +1441,7 @@ export default function CampaignComposerPanel({
 			setBulkSelectionInfo({
 				count: limitedCustomers.length,
 				customerIds: limitedCustomers.map((customer) => customer.id).filter(Boolean),
-				mode: selectedProductFilters.length ? 'products' : 'all',
+				mode: selectedProductFilters.length || excludedProductFilters.length ? 'filters' : 'all',
 			});
 
 			setShowAudiencePreview(true);
@@ -1546,6 +1581,7 @@ export default function CampaignComposerPanel({
 		const normalizedCustomerAudienceFilters = normalizeCustomerFilterParams(customerFilters, {
 			pageSize: initialCustomerFilters.pageSize,
 			selectedProducts: selectedProductFilters,
+			excludedProducts: excludedProductFilters,
 			includeCampaignFields: true,
 			sentTemplateNames: sentTemplateFilterNames,
 		});
@@ -1584,6 +1620,8 @@ export default function CampaignComposerPanel({
 						sentTemplateName: normalizedCustomerAudienceFilters.sentTemplateName,
 						sentTemplateNames: sentTemplateFilterNames,
 						selectedProducts: selectedProductFilters,
+						excludedProducts: excludedProductFilters,
+						excludedProductQuery: normalizedCustomerAudienceFilters.excludedProductQuery,
 						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
 						selectedCount: selectedCustomers.length,
 						variableMapping,
@@ -1613,6 +1651,7 @@ export default function CampaignComposerPanel({
 				customerFilters,
 				abandonedCartFilters,
 				selectedProductFilters,
+				excludedProductFilters,
 				selectedSentTemplateFilters,
 				variableMapping,
 				contactLimit,
@@ -2022,17 +2061,62 @@ export default function CampaignComposerPanel({
 								</div>
 							) : null}
 
-							{showProductPicker ? (
-								<ProductMultiSelect
-									options={catalogOptions}
-									selectedValues={selectedProductFilters}
-									search={productSearch}
-									onSearchChange={setProductSearch}
-									onToggleValue={toggleProductFilter}
-									onClear={clearSelectedProducts}
-								/>
-							) : null}
-							<div className="campaign-builder-grid campaign-builder-grid--toggles">
+			{showProductPicker ? (
+				<ProductMultiSelect
+					options={catalogOptions}
+					selectedValues={selectedProductFilters}
+					search={productSearch}
+					onSearchChange={setProductSearch}
+					onToggleValue={toggleProductFilter}
+					onClear={clearSelectedProducts}
+				/>
+			) : null}
+
+			<label className="field">
+				<span>Excluir si compr&oacute;</span>
+				<small>Si compr&oacute; alguno, queda fuera aunque tambi&eacute;n haya comprado otros productos.</small>
+				<button
+					type="button"
+					className={`campaign-product-filter-toggle ${showExcludedProductPicker ? 'open' : ''}`}
+					onClick={() => setShowExcludedProductPicker((current) => !current)}
+				>
+					{excludedProductFilters.length
+						? `Selector de exclusiones (${excludedProductFilters.length})`
+						: 'Selector de productos a excluir'}
+				</button>
+			</label>
+
+			{excludedProductFilters.length ? (
+				<div className="campaign-selected-products-row campaign-selected-products-row--interactive">
+					{excludedProductFilters.map((productName) => (
+						<button
+							key={productName}
+							type="button"
+							className="campaign-selected-product-chip"
+							onClick={() => toggleExcludedProductFilter(productName)}
+							title="Quitar exclusi&oacute;n"
+						>
+							<span>{productName}</span>
+							<strong>x</strong>
+						</button>
+					))}
+				</div>
+			) : null}
+
+			{showExcludedProductPicker ? (
+				<ProductMultiSelect
+					options={catalogOptions}
+					selectedValues={excludedProductFilters}
+					search={excludedProductSearch}
+					onSearchChange={setExcludedProductSearch}
+					onToggleValue={toggleExcludedProductFilter}
+					onClear={clearExcludedProducts}
+					placeholder="Buscar producto a excluir..."
+					emptyText="No hay coincidencias en el cat&aacute;logo."
+					clearText="Limpiar exclusiones"
+				/>
+			) : null}
+			<div className="campaign-builder-grid campaign-builder-grid--toggles">
 								<label className="campaign-toggle campaign-toggle--card">
 									<input
 										type="checkbox"
@@ -2173,12 +2257,17 @@ export default function CampaignComposerPanel({
 								<span>clientes seleccionados</span>
 							</div>
 
-							<div className="campaign-audience-summary-card">
-								<strong>{formatCompactNumber(selectedProductFilters.length)}</strong>
-								<span>productos marcados</span>
-							</div>
+					<div className="campaign-audience-summary-card">
+						<strong>{formatCompactNumber(selectedProductFilters.length)}</strong>
+						<span>productos marcados</span>
+					</div>
 
-							<div className="campaign-audience-summary-card">
+					<div className="campaign-audience-summary-card">
+						<strong>{formatCompactNumber(excludedProductFilters.length)}</strong>
+						<span>productos excluidos</span>
+					</div>
+
+					<div className="campaign-audience-summary-card">
 								<strong>{formatCompactNumber(excludedByTemplateCount)}</strong>
 								<span>ya recibieron plantilla</span>
 							</div>
@@ -2196,6 +2285,12 @@ export default function CampaignComposerPanel({
 											{product}
 										</span>
 									))}
+								</div>
+							) : null}
+
+							{excludedProductFilters.length ? (
+								<div className="campaign-helper-inline-text">
+									Se excluyen clientes que compraron: {excludedProductFilters.join(', ')}.
 								</div>
 							) : null}
 

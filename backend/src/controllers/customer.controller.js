@@ -60,6 +60,18 @@ function buildProductTerms(productQuery = '') {
 		.filter(Boolean);
 }
 
+function buildProductMatchConditions(productTerms = []) {
+	return productTerms.flatMap((term) => {
+		const normalized = normalizeText(term);
+		return [
+			{ name: { contains: term, mode: 'insensitive' } },
+			{ normalizedName: { contains: normalized } },
+			{ variantName: { contains: term, mode: 'insensitive' } },
+			{ sku: { contains: term, mode: 'insensitive' } },
+		];
+	});
+}
+
 function buildPaymentStatusVariants(paymentStatus = '') {
 	const raw = String(paymentStatus || '').trim().toLowerCase();
 
@@ -158,6 +170,7 @@ function buildCustomersWhere({
 	workspaceId,
 	q,
 	productQuery,
+	excludedProductQuery,
 	orderNumber,
 	dateFrom,
 	dateTo,
@@ -201,15 +214,22 @@ function buildCustomersWhere({
 		and.push({
 			items: {
 				some: {
-					OR: productTerms.flatMap((term) => {
-						const normalized = normalizeText(term);
-						return [
-							{ name: { contains: term, mode: 'insensitive' } },
-							{ normalizedName: { contains: normalized } },
-							{ variantName: { contains: term, mode: 'insensitive' } },
-							{ sku: { contains: term, mode: 'insensitive' } },
-						];
-					}),
+					OR: buildProductMatchConditions(productTerms),
+				},
+			},
+		});
+	}
+
+	const excludedProductTerms = buildProductTerms(excludedProductQuery);
+	if (excludedProductTerms.length > 0) {
+		and.push({
+			customerProfile: {
+				is: {
+					orderItems: {
+						none: {
+							OR: buildProductMatchConditions(excludedProductTerms),
+						},
+					},
 				},
 			},
 		});
@@ -592,6 +612,7 @@ export async function getCustomers(req, res) {
 		const {
 			q = '',
 			productQuery = '',
+			excludedProductQuery = '',
 			orderNumber = '',
 			dateFrom = '',
 			dateTo = '',
@@ -627,6 +648,7 @@ export async function getCustomers(req, res) {
 			workspaceId,
 			q,
 			productQuery,
+			excludedProductQuery,
 			orderNumber,
 			dateFrom,
 			dateTo,
