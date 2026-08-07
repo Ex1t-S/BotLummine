@@ -59,6 +59,16 @@ import {
 	sendError,
 } from './campaign.controller.utils.js';
 
+function triggerCampaignDispatch(campaignId, workspaceId) {
+	void runCampaignDispatchTick({ campaignId }).catch((error) => {
+		logger.error('campaign.launch_dispatch_tick_failed', {
+			campaignId,
+			workspaceId,
+			error,
+		});
+	});
+}
+
 export async function listTemplates(req, res) {
 	try {
 		const templates = await listLocalTemplates({
@@ -271,8 +281,10 @@ export async function getCampaignController(req, res) {
 
 export async function createCampaignController(req, res) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		const sendNow = normalizeBoolean(req.body?.sendNow);
 		const result = await createCampaignDraft({
-			workspaceId: requireRequestWorkspaceId(req),
+			workspaceId,
 			name: req.body?.name,
 			templateId: req.body?.templateId || null,
 			templateName: req.body?.templateName || null,
@@ -287,8 +299,19 @@ export async function createCampaignController(req, res) {
 			draftContext: req.body?.draftContext || null,
 			launchedByUserId: req.user?.id || null,
 		});
+		let responseCampaign = result.campaign;
+		if (sendNow && result?.campaign?.id) {
+			const launched = await launchCampaign(result.campaign.id, { workspaceId });
+			responseCampaign = launched.campaign;
+			triggerCampaignDispatch(result.campaign.id, workspaceId);
+		}
 
-		return res.status(201).json({ ok: true, ...result });
+		return res.status(201).json({
+			ok: true,
+			...result,
+			campaign: responseCampaign,
+			launched: sendNow,
+		});
 	} catch (error) {
 		return sendError(res, error);
 	}
@@ -300,14 +323,9 @@ export async function launchCampaignController(req, res) {
 		const result = await launchCampaign(req.params.campaignId, {
 			workspaceId,
 		});
-		// Do not wait for the hourly scheduler after a manual launch.
-		void runCampaignDispatchTick().catch((error) => {
-			logger.error('campaign.launch_dispatch_tick_failed', {
-				campaignId: req.params.campaignId,
-				workspaceId,
-				error,
-			});
-		});
+		// Do not wait for the hourly scheduler after a manual launch. Target the
+		// campaign just launched so concurrent manual sends cannot consume it.
+		triggerCampaignDispatch(req.params.campaignId, workspaceId);
 		return res.json(result);
 	} catch (error) {
 		logger.warn('campaign.launch_failed', {
@@ -355,8 +373,10 @@ export async function retryFailedCampaignRecipientsController(req, res) {
 
 export async function updateCampaignDraftController(req, res) {
 	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		const sendNow = normalizeBoolean(req.body?.sendNow);
 		const result = await updateCampaignDraft(req.params.campaignId, {
-			workspaceId: requireRequestWorkspaceId(req),
+			workspaceId,
 			name: req.body?.name,
 			templateId: req.body?.templateId || null,
 			languageCode: req.body?.languageCode || 'es_AR',
@@ -369,8 +389,19 @@ export async function updateCampaignDraftController(req, res) {
 			notes: req.body?.notes || null,
 			draftContext: req.body?.draftContext || null,
 		});
+		let responseCampaign = result.campaign;
+		if (sendNow) {
+			const launched = await launchCampaign(req.params.campaignId, { workspaceId });
+			responseCampaign = launched.campaign;
+			triggerCampaignDispatch(req.params.campaignId, workspaceId);
+		}
 
-		return res.json({ ok: true, ...result });
+		return res.json({
+			ok: true,
+			...result,
+			campaign: responseCampaign,
+			launched: sendNow,
+		});
 	} catch (error) {
 		return sendError(res, error);
 	}

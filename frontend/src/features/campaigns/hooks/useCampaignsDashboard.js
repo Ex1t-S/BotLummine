@@ -554,28 +554,6 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 		}
 	}
 
-	useEffect(() => {
-		async function handleLaunchRequested(event) {
-			const campaignId = event?.detail?.campaignId;
-			if (!campaignId) return;
-
-			try {
-				await dispatchCampaign(campaignId);
-				invalidateAll(campaignId);
-				setSelectedCampaignId(campaignId);
-				showFeedback('success', 'Campaña creada y lanzada.');
-			} catch (error) {
-				showFeedback(
-					'error',
-					error?.response?.data?.error || 'La campaña se creó pero no se pudo lanzar.'
-				);
-			}
-		}
-
-		window.addEventListener('campaign:launch-requested', handleLaunchRequested);
-		return () => window.removeEventListener('campaign:launch-requested', handleLaunchRequested);
-	}, [selectedCampaignId, showFeedback]);
-
 	const syncMutation = useMutation({
 		mutationFn: syncTemplates,
 		onSuccess: (result) => {
@@ -647,7 +625,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			if (createdId) {
 				setSelectedCampaignId(createdId);
 			}
-			showFeedback('success', 'Campaña creada.');
+			showFeedback('success', response?.launched ? 'Campaña creada y lanzada.' : 'Campaña creada.');
 		},
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo crear la campaña.'),
 	});
@@ -658,7 +636,7 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			const updatedId = extractCreatedCampaignId(response);
 			invalidateAll(updatedId);
 			if (updatedId) setSelectedCampaignId(updatedId);
-			showFeedback('success', 'Borrador actualizado.');
+			showFeedback('success', response?.launched ? 'Campaña actualizada y lanzada.' : 'Borrador actualizado.');
 		},
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo actualizar el borrador.'),
 	});

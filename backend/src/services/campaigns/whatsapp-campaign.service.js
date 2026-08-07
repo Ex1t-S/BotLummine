@@ -2842,10 +2842,11 @@ export async function retryFailedCampaignRecipients(campaignId, { workspaceId } 
 	};
 }
 
-export async function claimNextCampaignForDispatch() {
+export async function claimNextCampaignForDispatch({ campaignId = null } = {}) {
 	const lockExpiresBefore = new Date(Date.now() - normalizeCampaignLockMs());
 	const candidates = await prisma.campaign.findMany({
 		where: {
+			...(campaignId ? { id: campaignId } : {}),
 			status: {
 				in: ['QUEUED', 'RUNNING']
 			},
@@ -3420,8 +3421,8 @@ async function dispatchClaimedCampaign(campaignId, lockId) {
 	};
 }
 
-export async function runCampaignDispatchTick() {
-	const claimed = await claimNextCampaignForDispatch();
+export async function runCampaignDispatchTick({ campaignId = null } = {}) {
+	const claimed = await claimNextCampaignForDispatch({ campaignId });
 
 	if (!claimed) {
 		return {

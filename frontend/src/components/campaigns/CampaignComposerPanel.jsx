@@ -693,15 +693,6 @@ function formatCompactNumber(value) {
 	return new Intl.NumberFormat('es-AR').format(Number(value || 0));
 }
 
-function extractCreatedCampaignId(result) {
-	return (
-		result?.id ||
-		result?.campaign?.id ||
-		result?.data?.id ||
-		result?.data?.campaign?.id ||
-		null
-	);
-}
 function getRecipientDisplayName(customer = {}) {
 	return (
 		customer?.displayName ||
@@ -1561,6 +1552,7 @@ export default function CampaignComposerPanel({
 
 		const payload = {
 			name: form.name.trim(),
+			sendNow: Boolean(form.sendNow),
 			templateId: selectedTemplate.id,
 			languageCode: selectedTemplate.language || 'es_AR',
 			recipients,
@@ -1631,19 +1623,10 @@ export default function CampaignComposerPanel({
 			},
 		};
 
-		const result = draftId && onUpdateCampaign
-			? await onUpdateCampaign(draftId, payload)
-			: await onCreateCampaign(payload);
-		const createdCampaignId = extractCreatedCampaignId(result);
-
-		if (form.sendNow) {
-			if (createdCampaignId && typeof window !== 'undefined') {
-				window.dispatchEvent(
-					new CustomEvent('campaign:launch-requested', {
-						detail: { campaignId: createdCampaignId },
-					})
-				);
-			}
+		if (draftId && onUpdateCampaign) {
+			await onUpdateCampaign(draftId, payload);
+		} else {
+			await onCreateCampaign(payload);
 		}
 
 		setForm((current) => ({
