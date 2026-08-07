@@ -60,8 +60,15 @@ function buildProductTerms(productQuery = '') {
 		.filter(Boolean);
 }
 
-function buildProductMatchConditions(productTerms = []) {
-	return productTerms.flatMap((term) => {
+function buildProductIds(productIds = '') {
+	return String(productIds || '')
+		.split('||')
+		.map((item) => item.trim())
+		.filter(Boolean);
+}
+
+function buildProductMatchConditions(productTerms = [], productIds = []) {
+	const conditions = productTerms.flatMap((term) => {
 		const normalized = normalizeText(term);
 		return [
 			{ name: { contains: term, mode: 'insensitive' } },
@@ -70,6 +77,12 @@ function buildProductMatchConditions(productTerms = []) {
 			{ sku: { contains: term, mode: 'insensitive' } },
 		];
 	});
+
+	if (productIds.length) {
+		conditions.push({ productId: { in: productIds } });
+	}
+
+	return conditions;
 }
 
 function buildPaymentStatusVariants(paymentStatus = '') {
@@ -170,7 +183,9 @@ function buildCustomersWhere({
 	workspaceId,
 	q,
 	productQuery,
+	productIds,
 	excludedProductQuery,
+	excludedProductIds,
 	orderNumber,
 	dateFrom,
 	dateTo,
@@ -210,24 +225,26 @@ function buildCustomersWhere({
 	}
 
 	const productTerms = buildProductTerms(productQuery);
-	if (productTerms.length > 0) {
+	const selectedProductIds = buildProductIds(productIds);
+	if (productTerms.length > 0 || selectedProductIds.length > 0) {
 		and.push({
 			items: {
 				some: {
-					OR: buildProductMatchConditions(productTerms),
+					OR: buildProductMatchConditions(productTerms, selectedProductIds),
 				},
 			},
 		});
 	}
 
 	const excludedProductTerms = buildProductTerms(excludedProductQuery);
-	if (excludedProductTerms.length > 0) {
+	const excludedIds = buildProductIds(excludedProductIds);
+	if (excludedProductTerms.length > 0 || excludedIds.length > 0) {
 		and.push({
 			customerProfile: {
 				is: {
 					orderItems: {
 						none: {
-							OR: buildProductMatchConditions(excludedProductTerms),
+							OR: buildProductMatchConditions(excludedProductTerms, excludedIds),
 						},
 					},
 				},
@@ -612,7 +629,9 @@ export async function getCustomers(req, res) {
 		const {
 			q = '',
 			productQuery = '',
+			productIds = '',
 			excludedProductQuery = '',
+			excludedProductIds = '',
 			orderNumber = '',
 			dateFrom = '',
 			dateTo = '',
@@ -648,7 +667,9 @@ export async function getCustomers(req, res) {
 			workspaceId,
 			q,
 			productQuery,
+			productIds,
 			excludedProductQuery,
+			excludedProductIds,
 			orderNumber,
 			dateFrom,
 			dateTo,

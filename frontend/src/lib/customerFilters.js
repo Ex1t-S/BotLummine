@@ -27,7 +27,9 @@ export function normalizeCustomerFilterParams(
 	{
 		pageSize = 24,
 		selectedProducts = [],
+		selectedProductIds = [],
 		excludedProducts = [],
+		excludedProductIds = [],
 		includeCampaignFields = false,
 		sentTemplateNames = [],
 	} = {}
@@ -62,7 +64,9 @@ export function normalizeCustomerFilterParams(
 
 	return {
 		...params,
+		productIds: serializeCustomerFilterList(selectedProductIds),
 		excludedProductQuery,
+		excludedProductIds: serializeCustomerFilterList(excludedProductIds),
 		minOrders: isBlank(filters.minOrders) ? '' : filters.minOrders,
 		hasOrders: filters.hasOrders ? '1' : '',
 		excludeSentTemplate: shouldExcludeSentTemplate ? '1' : '',

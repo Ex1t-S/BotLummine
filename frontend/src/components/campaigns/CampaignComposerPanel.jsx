@@ -162,7 +162,7 @@ function buildCatalogProducts(rawCatalog = []) {
 
 		seen.add(normalized.toLowerCase());
 		options.push({
-			id: item?.id || item?.productId || normalized,
+			id: item?.productId || item?.id || normalized,
 			label: normalized,
 		});
 	}
@@ -918,6 +918,22 @@ export default function CampaignComposerPanel({
 		return selectedProductFilters.slice(0, 3).join(', ');
 	}, [selectedProductFilters]);
 
+	const selectedProductIds = useMemo(() => {
+		const selected = new Set(selectedProductFilters);
+		return catalogOptions
+			.filter((product) => selected.has(product.label))
+			.map((product) => product.id)
+			.filter(Boolean);
+	}, [catalogOptions, selectedProductFilters]);
+
+	const excludedProductIds = useMemo(() => {
+		const excluded = new Set(excludedProductFilters);
+		return catalogOptions
+			.filter((product) => excluded.has(product.label))
+			.map((product) => product.id)
+			.filter(Boolean);
+	}, [catalogOptions, excludedProductFilters]);
+
 	const availableProducts = useMemo(() => {
 		const counts = new Map();
 
@@ -1166,7 +1182,9 @@ export default function CampaignComposerPanel({
 		return normalizeCustomerFilterParams(nextFilters, {
 			pageSize: initialCustomerFilters.pageSize,
 			selectedProducts: selectedProductFilters,
+			selectedProductIds,
 			excludedProducts: excludedProductFilters,
+			excludedProductIds,
 			includeCampaignFields: true,
 			sentTemplateNames: sentTemplateFilterNames,
 		});
@@ -1581,7 +1599,9 @@ export default function CampaignComposerPanel({
 		const normalizedCustomerAudienceFilters = normalizeCustomerFilterParams(customerFilters, {
 			pageSize: initialCustomerFilters.pageSize,
 			selectedProducts: selectedProductFilters,
+			selectedProductIds,
 			excludedProducts: excludedProductFilters,
+			excludedProductIds,
 			includeCampaignFields: true,
 			sentTemplateNames: sentTemplateFilterNames,
 		});
@@ -1620,7 +1640,9 @@ export default function CampaignComposerPanel({
 						sentTemplateName: normalizedCustomerAudienceFilters.sentTemplateName,
 						sentTemplateNames: sentTemplateFilterNames,
 						selectedProducts: selectedProductFilters,
+						selectedProductIds,
 						excludedProducts: excludedProductFilters,
+						excludedProductIds,
 						excludedProductQuery: normalizedCustomerAudienceFilters.excludedProductQuery,
 						selectedCustomerIds: selectedCustomers.map((customer) => customer.id),
 						selectedCount: selectedCustomers.length,
