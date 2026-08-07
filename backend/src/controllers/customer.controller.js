@@ -67,12 +67,27 @@ function buildProductIds(productIds = '') {
 		.filter(Boolean);
 }
 
+function buildProductNameAliases(term = '') {
+	const normalized = normalizeText(term);
+	const tokens = normalized
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean)
+		.filter((token) => token !== 'pack' && token !== 'copia' && !/^\d+$/.test(token) && !/^\d+x\d+$/.test(token));
+
+	const singular = tokens.map((token) => {
+		if (token.endsWith('icas') || token.endsWith('oras')) return token.slice(0, -1);
+		if (token.endsWith('as') || token.endsWith('os')) return token.slice(0, -1);
+		return token;
+	});
+
+	return [...new Set([normalized, singular.join(' ')].filter((alias) => alias.length >= 5))];
+}
+
 function buildProductMatchConditions(productTerms = [], productIds = []) {
 	const conditions = productTerms.flatMap((term) => {
-		const normalized = normalizeText(term);
 		return [
 			{ name: { contains: term, mode: 'insensitive' } },
-			{ normalizedName: { contains: normalized } },
+			...buildProductNameAliases(term).map((alias) => ({ normalizedName: { contains: alias } })),
 			{ variantName: { contains: term, mode: 'insensitive' } },
 			{ sku: { contains: term, mode: 'insensitive' } },
 		];
