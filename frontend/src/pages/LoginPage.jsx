@@ -13,7 +13,7 @@ import {
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRouteForUser, getDefaultRouteForUser } from '../lib/authz.js';
 import { getApiErrorMessage } from '../lib/api.js';
-import logoBladeIA from '../assets/bladeia-logo.svg';
+import logoBladeIA from '../assets/app-logo-mark.png';
 import showcaseInboxAuto from '../assets/feature-carousel/showcase-inbox-auto.png';
 import showcaseInboxPayments from '../assets/feature-carousel/showcase-inbox-payments.png';
 import showcaseCampaigns from '../assets/feature-carousel/showcase-campaigns.png';
@@ -152,6 +152,24 @@ function LazyWhenVisible({ children, className, fallback = null, rootMargin = '3
 	return (
 		<div ref={containerRef} className={className}>
 			{isVisible ? children : fallback}
+		</div>
+	);
+}
+
+function FeatureCarouselPlaceholder() {
+	return (
+		<div className="login-feature-carousel__placeholder" role="status" aria-live="polite">
+			<div className="login-feature-carousel__placeholder-bar" aria-hidden="true" />
+			<div className="login-feature-carousel__placeholder-copy">
+				<span className="login-feature-carousel__placeholder-kicker">Producto real</span>
+				<strong>Cargando vista del producto…</strong>
+				<span>Preparando una muestra de los flujos de BladeIA.</span>
+			</div>
+			<div className="login-feature-carousel__placeholder-panel" aria-hidden="true">
+				<span />
+				<span />
+				<span />
+			</div>
 		</div>
 	);
 }
@@ -507,7 +525,7 @@ export default function LoginPage() {
 						<div className="login-nav__actions">
 							{!user ? (
 								<Link className="login-nav__cta" to="/contacto">
-									Solicitar demo
+									Solicitar una demo
 								</Link>
 							) : null}
 							<Link className="login-nav__login" to={accessPath}>
@@ -562,7 +580,7 @@ export default function LoginPage() {
 						<div className="login-mobile-nav__actions">
 							{!user ? (
 								<Link to="/contacto" tabIndex={mobileNavOpen ? 0 : -1}>
-									Solicitar demo
+									Solicitar una demo
 								</Link>
 							) : null}
 							<Link to={accessPath} tabIndex={mobileNavOpen ? 0 : -1}>
@@ -723,8 +741,11 @@ export default function LoginPage() {
 								<h2>Recorré los flujos que usa el equipo todos los días.</h2>
 								<p>Las vistas usan datos sintéticos y muestran el producto sin información de clientes reales.</p>
 							</div>
-							<LazyWhenVisible className="login-feature-carousel__lazy" fallback={<div className="login-feature-carousel__placeholder" aria-hidden="true" />}>
-								<Suspense fallback={<div className="login-feature-carousel__placeholder" aria-hidden="true" />}>
+							<LazyWhenVisible
+								className="login-feature-carousel__lazy"
+								fallback={<FeatureCarouselPlaceholder />}
+							>
+								<Suspense fallback={<FeatureCarouselPlaceholder />}>
 									<FeatureCarousel image={featureCarouselImages} />
 								</Suspense>
 							</LazyWhenVisible>
