@@ -103,7 +103,7 @@ test('separa loading y muestra la tabla operativa en desktop', async ({ page }) 
 		await expect(table.getByRole('columnheader', { name: column })).toBeVisible();
 	}
 	await expect(table.getByText('Cliente Sintético')).toBeVisible();
-	await expect(table.getByText('No contactado', { exact: true })).toBeVisible();
+	await expect(table.getByText('Por contactar', { exact: true })).toBeVisible();
 	await page.screenshot({
 		path: 'audit-artifacts/screenshots/after/abandoned-carts-table-1440x960.png',
 		fullPage: true,
