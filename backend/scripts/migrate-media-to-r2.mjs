@@ -14,6 +14,8 @@ import {
 
 const apply = process.argv.includes('--apply');
 const definitiveMissing = process.argv.includes('--mark-missing-unrecoverable');
+const diskOnly = process.argv.includes('--disk-only');
+const refreshDisk = process.argv.includes('--refresh-disk');
 const sourceArg = process.argv.find((value) => value.startsWith('--source-dir='));
 const sourceDir = path.resolve(sourceArg?.split('=').slice(1).join('=') || process.env.LEGACY_MEDIA_SOURCE_DIR || 'storage/inbox-media');
 const batchSize = Math.max(10, Math.min(500, Number(process.env.MEDIA_MIGRATION_BATCH_SIZE || 100)));
@@ -87,17 +89,20 @@ async function updateAvailable(message, stored, buffer, mimeType) {
 }
 
 async function migrateMessage(message, counters) {
-	if (await objectAlreadyExists(message.attachmentStorageKey)) {
+	const fileName = fileNameFromMessage(message) || `media-${message.id}.bin`;
+	let buffer = await readLegacyFile(fileName);
+	if (!(refreshDisk && buffer) && await objectAlreadyExists(message.attachmentStorageKey)) {
 		counters.alreadyStored += 1;
 		return;
 	}
 
-	const fileName = fileNameFromMessage(message) || `media-${message.id}.bin`;
-	let buffer = await readLegacyFile(fileName);
 	let mimeType = message.attachmentMimeType || 'application/octet-stream';
 
 	if (buffer) {
 		counters.fromDisk += 1;
+	} else if (diskOnly) {
+		counters.skippedNoDisk += 1;
+		return;
 	} else if (message.attachmentMetaId) {
 		try {
 			const phoneNumberId = phoneNumberIdFromPayload(message.rawPayload);
@@ -150,7 +155,7 @@ async function migrateMessage(message, counters) {
 		buffer,
 		fileName,
 		mimeType,
-		sha256: message.attachmentSha256 || '',
+		sha256: crypto.createHash('sha256').update(buffer).digest('hex'),
 	});
 	await updateAvailable(message, stored, buffer, mimeType);
 	counters.uploaded += 1;
@@ -169,6 +174,7 @@ async function main() {
 		uploaded: 0,
 		missing: 0,
 		failed: 0,
+		skippedNoDisk: 0,
 	};
 	let cursor = null;
 
@@ -213,4 +219,3 @@ main()
 		process.exitCode = 1;
 	})
 	.finally(() => prisma.$disconnect());
-
