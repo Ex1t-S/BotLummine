@@ -1,0 +1,12 @@
+[Unit]
+Description=Run BladeIA local PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 America/Argentina/Buenos_Aires
+Persistent=true
+RandomizedDelaySec=5m
+Unit=bladeia-backup-local.service
+
+[Install]
+WantedBy=timers.target
+

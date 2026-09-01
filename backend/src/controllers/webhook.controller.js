@@ -182,7 +182,8 @@ async function enrichInboundAttachmentMeta(
 				attachmentMeta.attachmentName ||
 				pendingMedia?.attachmentName ||
 				null,
-			attachmentStoredFileName: pendingMedia?.storedFileName || null,
+			attachmentStoredFileName: null,
+			attachmentPendingFileName: pendingMedia?.storedFileName || null,
 			attachmentSize: pendingMedia?.attachmentSize || null,
 			attachmentDownloadPending: Boolean(pendingMedia?.pendingDownload),
 			attachmentDownloadError:

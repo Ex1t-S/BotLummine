@@ -22,11 +22,13 @@ import { attachRequestId } from './lib/request-id.js';
 import { validateSecretEncryptionConfig } from './lib/secret-crypto.js';
 import { captureException, captureSecurityEvent, initSentry } from './lib/sentry.js';
 import { assertSafeDatabaseTarget } from './lib/database-safety.js';
+import { assertR2StorageConfig } from './services/storage/r2-storage.service.js';
 
 dotenv.config();
 assertSafeDatabaseTarget();
 validateAuthConfig();
 validateSecretEncryptionConfig();
+assertR2StorageConfig();
 initSentry();
 
 const app = express();
@@ -275,6 +277,7 @@ const RELEASE_ID = 'backend-hardening-20260501';
 app.get('/api/health', async (_req, res) => {
 	const shouldCheckDb = String(process.env.HEALTHCHECK_DB || 'false').trim().toLowerCase() === 'true';
 	let database = shouldCheckDb ? 'unchecked' : 'skipped';
+	let status = 200;
 
 	if (shouldCheckDb) {
 		try {
@@ -282,16 +285,21 @@ app.get('/api/health', async (_req, res) => {
 			database = 'ok';
 		} catch (error) {
 			database = 'error';
+			status = 503;
 			logger.warn('health.database_check_failed', { error });
 		}
 	}
 
-	res.json({
-		ok: true,
+	res.status(status).json({
+		ok: status === 200,
 		service: 'whatsapp-ai-assistant-backend',
 		release: RELEASE_ID,
 		env: process.env.NODE_ENV || 'development',
-		commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || null,
+		commit:
+			process.env.APP_COMMIT_SHA ||
+			process.env.RAILWAY_GIT_COMMIT_SHA ||
+			process.env.VERCEL_GIT_COMMIT_SHA ||
+			null,
 		database,
 	});
 });

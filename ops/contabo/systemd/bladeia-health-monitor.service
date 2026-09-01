@@ -1,0 +1,10 @@
+[Unit]
+Description=Verificación operativa y alertas de BladeIA
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+EnvironmentFile=-/srv/bladeia/.env
+ExecStart=/srv/bladeia/scripts/health-monitor.sh

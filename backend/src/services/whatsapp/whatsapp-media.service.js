@@ -9,6 +9,10 @@ import {
 	normalizeWorkspaceId
 } from '../workspaces/workspace-context.service.js';
 import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
+import {
+	isR2StorageEnabled,
+	putPrivateObject,
+} from '../storage/r2-storage.service.js';
 
 function normalizeString(value, fallback = '') {
 	const normalized = String(value ?? '').trim();
@@ -81,17 +85,6 @@ function canGenerateTemplateHeaderHandle(mimeType = '') {
 	].includes(normalizeString(mimeType).toLowerCase());
 }
 
-function getBackendPublicBaseUrl() {
-	const explicit =
-		normalizeString(process.env.BACKEND_PUBLIC_URL) ||
-		normalizeString(process.env.PUBLIC_BACKEND_URL) ||
-		normalizeString(process.env.RENDER_EXTERNAL_URL) ||
-		normalizeString(process.env.RAILWAY_STATIC_URL) ||
-		(process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${normalizeString(process.env.RAILWAY_PUBLIC_DOMAIN)}` : '');
-
-	return explicit.replace(/\/+$/, '');
-}
-
 function sanitizeFileName(value, fallback = 'file') {
 	const normalized = normalizeString(value, fallback)
 		.replace(/[\\/:*?"<>|]+/g, '-')
@@ -154,12 +147,6 @@ function extractMetaError(error) {
 
 function buildPublicInboxMediaUrl(fileName) {
 	const safeFileName = encodeURIComponent(path.basename(String(fileName || '').trim()));
-	const baseUrl = getBackendPublicBaseUrl();
-
-	if (baseUrl) {
-		return `${baseUrl}/api/media/inbox/${safeFileName}`;
-	}
-
 	return `/api/media/inbox/${safeFileName}`;
 }
 
@@ -177,6 +164,55 @@ async function ensureInboundMediaDir() {
 	const storageDir = resolveConfiguredStorageDir();
 	await fs.mkdir(storageDir, { recursive: true });
 	return storageDir;
+}
+
+function buildInboxStorageKey(workspaceId, storedFileName, now = new Date()) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const safeFileName = path.basename(String(storedFileName || '').trim());
+	const year = String(now.getUTCFullYear());
+	const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+	return `chat/${resolvedWorkspaceId}/${year}/${month}/${safeFileName}`;
+}
+
+async function persistInboxMedia({ workspaceId, buffer, storedFileName, mimeType, sha256 = '' }) {
+	if (isR2StorageEnabled()) {
+		const storageKey = buildInboxStorageKey(workspaceId, storedFileName);
+		await putPrivateObject({
+			key: storageKey,
+			body: buffer,
+			contentType: mimeType,
+			metadata: {
+				workspaceid: normalizeString(workspaceId),
+				sha256: normalizeString(sha256) || crypto.createHash('sha256').update(buffer).digest('hex'),
+			},
+		});
+		return { storageKey, storedAbsolutePath: null };
+	}
+
+	const storageDir = await ensureInboundMediaDir();
+	const storedAbsolutePath = path.join(storageDir, storedFileName);
+	await fs.writeFile(storedAbsolutePath, buffer);
+	return { storageKey: storedFileName, storedAbsolutePath };
+}
+
+export async function saveRecoveredInboxMediaBuffer({
+	workspaceId,
+	buffer,
+	fileName,
+	mimeType = 'application/octet-stream',
+	sha256 = '',
+}) {
+	const safeFileName = path.basename(String(fileName || '').trim());
+	if (!safeFileName) {
+		throw new Error('Nombre de archivo inválido para recuperar media.');
+	}
+	return persistInboxMedia({
+		workspaceId,
+		buffer,
+		storedFileName: safeFileName,
+		mimeType,
+		sha256,
+	});
 }
 
 function buildStoredInboundFileName({
@@ -457,6 +493,7 @@ export async function uploadWhatsAppMedia({
 }
 
 export async function saveLocalInboxMediaCopy({
+	workspaceId,
 	filePath,
 	fileName = '',
 	mimeType = '',
@@ -471,14 +508,16 @@ export async function saveLocalInboxMediaCopy({
 		preferredFileName: fileName,
 		metaMessageId
 	});
-	const storageDir = await ensureInboundMediaDir();
-	const storedPath = path.join(storageDir, storedFileName);
-
-	await fs.writeFile(storedPath, buffer);
+	const persisted = await persistInboxMedia({
+		workspaceId,
+		buffer,
+		storedFileName,
+		mimeType: normalizeString(mimeType || 'application/octet-stream'),
+	});
 
 	return {
 		attachmentUrl: buildPublicInboxMediaUrl(storedFileName),
-		storedFileName,
+		storedFileName: persisted.storageKey,
 		attachmentMimeType: normalizeString(mimeType || 'application/octet-stream'),
 		attachmentName: buildReadableAttachmentName({
 			messageType,
@@ -593,8 +632,6 @@ export async function saveInboundWhatsAppMedia({
 		workspaceId: resolvedWorkspaceId,
 		phoneNumberId
 	});
-	const storageDir = await ensureInboundMediaDir();
-
 	const effectiveMimeType = normalizeString(
 		attachmentMimeType ||
 			metadata.mimeType ||
@@ -609,8 +646,13 @@ export async function saveInboundWhatsAppMedia({
 		metaMessageId
 	});
 
-	const absolutePath = path.join(storageDir, storedFileName);
-	await fs.writeFile(absolutePath, buffer);
+	const persisted = await persistInboxMedia({
+		workspaceId: resolvedWorkspaceId,
+		buffer,
+		storedFileName,
+		mimeType: effectiveMimeType,
+		sha256: metadata.sha256,
+	});
 
 	return {
 		attachmentId: safeAttachmentId,
@@ -623,8 +665,8 @@ export async function saveInboundWhatsAppMedia({
 		}),
 		attachmentSha256: normalizeString(metadata.sha256 || ''),
 		attachmentSize: metadata.fileSize || buffer.length,
-		storedFileName,
-		storedAbsolutePath: absolutePath,
+		storedFileName: persisted.storageKey,
+		storedAbsolutePath: persisted.storedAbsolutePath,
 		downloadSourceUrl: metadata.url,
 		waId: normalizeString(waId || '')
 	};

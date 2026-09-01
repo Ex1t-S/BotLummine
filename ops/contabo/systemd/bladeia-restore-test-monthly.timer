@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify BladeIA R2 backup with a full restore monthly
+
+[Timer]
+OnCalendar=Sun *-*-01..07 05:00:00 America/Argentina/Buenos_Aires
+Persistent=true
+RandomizedDelaySec=10m
+Unit=bladeia-restore-test-monthly.service
+
+[Install]
+WantedBy=timers.target
+

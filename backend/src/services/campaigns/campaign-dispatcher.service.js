@@ -3,6 +3,7 @@ import { processDueCampaignSchedules } from './campaign-schedule.service.js';
 import { processAutomaticShipmentNotifications } from './shipment-notification.service.js';
 import { processAutomaticAbandonedCartAutomations } from './abandoned-cart-automation.service.js';
 import { processAutomaticPendingPaymentAutomations } from './pending-payment-automation.service.js';
+import { prisma } from '../../lib/prisma.js';
 
 let dispatcherBusy = false;
 const taskLastRunAt = new Map();
@@ -30,7 +31,7 @@ async function runTaskIfDue(key, intervalMs, task) {
 	return task();
 }
 
-export async function executeCampaignDispatcherTick() {
+async function executeCampaignDispatcherTickWithLock() {
 	if (dispatcherBusy) {
 		return {
 			ok: true,
@@ -71,4 +72,28 @@ export async function executeCampaignDispatcherTick() {
 	} finally {
 		dispatcherBusy = false;
 	}
+}
+
+export async function executeCampaignDispatcherTick() {
+	return prisma.$transaction(async (transaction) => {
+		const rows = await transaction.$queryRaw`
+			SELECT pg_try_advisory_xact_lock(
+				hashtextextended('bladeia:campaign-dispatch', 0)
+			) AS locked
+		`;
+		const locked = Boolean(rows?.[0]?.locked);
+
+		if (!locked) {
+			return {
+				ok: true,
+				skipped: true,
+				message: 'Otro dispatcher mantiene el lock global de PostgreSQL.',
+			};
+		}
+
+		return executeCampaignDispatcherTickWithLock();
+	}, {
+		maxWait: 10_000,
+		timeout: 60 * 60 * 1000,
+	});
 }
