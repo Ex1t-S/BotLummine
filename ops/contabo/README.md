@@ -27,8 +27,11 @@ base de datos con la aplicación de inmobiliaria.
    `restrict,command="/usr/local/sbin/bladeia-deploy-ssh"` y guardar una copia
    externa de `/srv/bladeia/secrets/restic-password`.
 5. Autenticar al usuario `deploy` contra GHCR con un token `read:packages`.
-6. Emitir el certificado de `api.bladeia.com`, instalar la configuración Nginx
-   incluida y validar con `nginx -t` antes de recargar.
+6. Emitir el certificado de `api.bladeia.com`, instalar
+   `nginx/bladeia-log-format.conf` en `/etc/nginx/conf.d/` y
+   `nginx/api.bladeia.com.conf` en `/etc/nginx/sites-available/`. Validar con
+   `nginx -t` antes de recargar. El formato dedicado omite query strings para
+   no guardar tokens de webhooks u OAuth en los access logs.
 
 Los timers sólo se habilitan después del cutover:
 
