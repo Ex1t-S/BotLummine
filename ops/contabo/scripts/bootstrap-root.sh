@@ -48,6 +48,7 @@ exec runuser -u deploy -- /srv/bladeia/scripts/deploy.sh "$SHA"
 EOF
 chmod 750 /usr/local/sbin/bladeia-deploy
 chown root:root /usr/local/sbin/bladeia-deploy
+install -m 755 -o root -g root "$SOURCE_ROOT/scripts/deploy-ssh-command.sh" /usr/local/sbin/bladeia-deploy-ssh
 
 cat > /etc/sudoers.d/bladeia-deploy <<EOF
 $ACTION_USER ALL=(root) NOPASSWD: /usr/local/sbin/bladeia-deploy *
@@ -70,5 +71,4 @@ fi
 sysctl -w vm.swappiness=10 >/dev/null
 printf 'vm.swappiness=10\n' > /etc/sysctl.d/99-bladeia-swap.conf
 
-echo "Bootstrap listo. Falta instalar la clave pública de GitHub Actions, completar .env y configurar Nginx/certificado."
-
+echo "Bootstrap listo. Instalar la clave con restrict,command=\"/usr/local/sbin/bladeia-deploy-ssh\", completar .env y configurar Nginx/certificado."

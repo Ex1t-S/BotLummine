@@ -22,8 +22,9 @@ base de datos con la aplicación de inmobiliaria.
    ```
 
 4. Completar `/srv/bladeia/.env`, instalar la clave pública del workflow en
-   `/home/bladeia-deploy/.ssh/authorized_keys` y guardar una copia externa de
-   `/srv/bladeia/secrets/restic-password`.
+   `/home/bladeia-deploy/.ssh/authorized_keys` con las opciones
+   `restrict,command="/usr/local/sbin/bladeia-deploy-ssh"` y guardar una copia
+   externa de `/srv/bladeia/secrets/restic-password`.
 5. Autenticar al usuario `deploy` contra GHCR con un token `read:packages`.
 6. Emitir el certificado de `api.bladeia.com`, instalar la configuración Nginx
    incluida y validar con `nginx -t` antes de recargar.
