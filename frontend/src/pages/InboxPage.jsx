@@ -59,7 +59,8 @@ function buildInboxPath(queueKey = 'AUTO', conversationId = '', readFilter = 'AL
 	const slug = QUEUE_ROUTES[queueKey] || QUEUE_ROUTES.AUTO;
 	const params = new URLSearchParams();
 	if (conversationId) params.set('conversation', conversationId);
-	if (readFilter && readFilter !== 'ALL') params.set('read', readFilter);
+	if (readFilter === 'WAITING_RESPONSE') params.set('status', 'WAITING_RESPONSE');
+	else if (readFilter && readFilter !== 'ALL') params.set('read', readFilter);
 	const query = params.toString() ? `?${params.toString()}` : '';
 	return `/inbox/${slug}${query}`;
 }
@@ -67,6 +68,7 @@ function buildInboxPath(queueKey = 'AUTO', conversationId = '', readFilter = 'AL
 
 const READ_FILTERS = [
 	{ key: 'ALL', label: 'Todos' },
+	{ key: 'WAITING_RESPONSE', label: 'Esperando respuesta' },
 	{ key: 'UNREAD', label: 'No leídos' },
 	{ key: 'READ', label: 'Leídos' },
 ];
@@ -935,7 +937,7 @@ export default function InboxPage() {
 
 	const routeQueue = resolveQueueFromSlug(queueSlug);
 	const routeConversationId = searchParams.get('conversation') || null;
-	const routeReadFilter = resolveReadFilter(searchParams.get('read') || '');
+	const routeReadFilter = resolveReadFilter(searchParams.get('read') || searchParams.get('status') || '');
 
 	const [queue, setQueue] = useState(routeQueue);
 	const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
@@ -1066,14 +1068,16 @@ export default function InboxPage() {
 	const visibleContacts = useMemo(() => {
 		const filtered = filteredContacts.filter((contact) => {
 			const hasUnread = Boolean(contact.hasUnread) || Number(contact.unreadCount || 0) > 0;
+			const waitingResponse = contact.lastMessageDirection === 'INBOUND';
 
+			if (readFilter === 'WAITING_RESPONSE') return waitingResponse;
 			if (readFilter === 'UNREAD') return hasUnread;
 			if (readFilter === 'READ') return !hasUnread;
 			return true;
 		});
 
 		if (
-			readFilter === 'UNREAD' &&
+			['UNREAD', 'WAITING_RESPONSE'].includes(readFilter) &&
 			selectedConversationId &&
 			!filtered.some((contact) => contact.conversationId === selectedConversationId)
 		) {
@@ -1095,7 +1099,7 @@ export default function InboxPage() {
 
 	useEffect(() => {
 		if (routeConversationId) return;
-		if (readFilter === 'UNREAD' && !selectedConversationId) {
+		if (['UNREAD', 'WAITING_RESPONSE'].includes(readFilter) && !selectedConversationId) {
 			return;
 		}
 
@@ -1963,7 +1967,7 @@ export default function InboxPage() {
 			<aside className="inbox-sidebar">
 				<div className="inbox-sidebar-top">
 					<div>
-						<strong>Bandeja</strong>
+						<strong>Bandeja · {getQueueLabel(queue)}</strong>
 						<span>
 							{counts.ALL || 0} conversaciones · {isRealtimeConnected ? 'Tiempo real' : 'Actualización periódica'}
 						</span>
@@ -2119,6 +2123,8 @@ export default function InboxPage() {
 									? 'Probá con otro nombre, teléfono o mensaje.'
 									: readFilter === 'UNREAD'
 										? 'No quedan chats sin leer. Cambiá el filtro para ver el resto.'
+										: readFilter === 'WAITING_RESPONSE'
+											? 'No hay conversaciones pendientes de respuesta.'
 										: 'Cuando entren mensajes nuevos, van a aparecer acá.'}
 							</span>
 						</div>
@@ -2205,7 +2211,11 @@ export default function InboxPage() {
 										<div className="inbox-contact-meta-v2">
 											<span className={`inbox-contact-queue-dot inbox-contact-queue-dot--${String(contact.queue || queue).toLowerCase()}`} aria-hidden="true" />
 											<span>{getQueueLabel(contact.queue || queue)}</span>
-											{hasUnread ? <strong>Requiere lectura</strong> : <span className="inbox-contact-meta-v2__quiet">Al día</span>}
+										{contact.lastMessageDirection === 'INBOUND' ? (
+											<strong>Espera respuesta</strong>
+										) : (
+											<span className="inbox-contact-meta-v2__quiet">Esperando cliente</span>
+										)}
 										</div>
 									</div>
 								</div>

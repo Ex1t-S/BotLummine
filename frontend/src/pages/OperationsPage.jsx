@@ -323,7 +323,7 @@ function OperationalHealth({ totals = {}, activeAutomations = 0, issueCount = 0,
 			<div className="operations-v3-health-list">
 				<button type="button" onClick={() => onNavigate('/campaigns/abandoned-carts')}><span>Automatizaciones</span><strong>{activeAutomations}/3 activas</strong></button>
 				<button type="button" onClick={() => onNavigate('/inbox/comprobantes')}><span>Comprobantes</span><strong>{formatNumber(totals.paymentReview)} pendientes</strong></button>
-				<button type="button" onClick={() => onNavigate('/inbox/todos?read=UNREAD')}><span>Bandeja</span><strong>{formatNumber(totals.unreadMessages)} sin leer</strong></button>
+				<button type="button" onClick={() => onNavigate('/inbox/todos?status=WAITING_RESPONSE')}><span>Bandeja</span><strong>{formatNumber(totals.waitingResponseConversations)} esperan respuesta</strong></button>
 			</div>
 		</aside>
 	);
@@ -396,11 +396,11 @@ function WorkspaceOperationCard({ item, platformAdmin, onNavigate }) {
 					icon={WalletCards}
 				/>
 				<MetricCard
-					label="Chats sin leer"
-					value={metrics.unreadConversations}
-					helper={`${formatNumber(metrics.unreadMessages)} mensajes pendientes`}
-					tone={metrics.unreadConversations ? 'info' : 'neutral'}
-					onClick={!platformAdmin ? () => onNavigate('/inbox/todos?read=UNREAD') : null}
+					label="Esperando respuesta"
+					value={metrics.waitingResponseConversations}
+					helper={`${formatNumber(metrics.waitingResponseUnder24h)} <24 h · ${formatNumber(metrics.waitingResponseOver24h)} >24 h`}
+					tone={metrics.waitingResponseConversations ? 'info' : 'neutral'}
+					onClick={!platformAdmin ? () => onNavigate('/inbox/todos?status=WAITING_RESPONSE') : null}
 					icon={MessageCircle}
 				/>
 			</div>
@@ -520,7 +520,7 @@ export default function OperationsPage() {
 			}));
 		const metricItems = [
 			totals.paymentReview ? { id: 'payment-review', title: `${formatNumber(totals.paymentReview)} comprobantes esperan revisión`, description: 'Decisión humana pendiente antes de continuar la atención.', action: 'Revisar', href: platformAdmin ? '/admin' : '/inbox/comprobantes', tone: 'warning', icon: WalletCards } : null,
-			totals.unreadConversations ? { id: 'unread', title: `${formatNumber(totals.unreadConversations)} conversaciones requieren lectura`, description: `${formatNumber(totals.unreadMessages)} mensajes todavía no fueron revisados.`, action: 'Abrir bandeja', href: platformAdmin ? '/admin' : '/inbox/todos?read=UNREAD', tone: 'info', icon: MessageCircle } : null,
+			totals.waitingResponseConversations ? { id: 'waiting-response', title: `${formatNumber(totals.waitingResponseConversations)} conversaciones esperan respuesta`, description: `${formatNumber(totals.waitingResponseUnder24h)} con menos de 24 h · ${formatNumber(totals.waitingResponseOver24h)} con más de 24 h.`, action: 'Abrir bandeja', href: platformAdmin ? '/admin' : '/inbox/todos?status=WAITING_RESPONSE', tone: totals.waitingResponseOver24h ? 'warning' : 'info', icon: MessageCircle } : null,
 			brandAdmin && totals.abandonedCartsNew ? { id: 'carts', title: `${formatNumber(totals.abandonedCartsNew)} carritos listos para recuperar`, description: 'Oportunidades sin primer contacto registradas hoy.', action: 'Ver carritos', href: '/abandoned-carts', tone: 'info', icon: ShoppingCart } : null,
 		].filter(Boolean);
 		return [...issueItems, ...metricItems].slice(0, 5);
@@ -553,7 +553,7 @@ export default function OperationsPage() {
 					description="Probá nuevamente en unos segundos. Si sigue pasando, revisá la conexión del backend."
 					className="operations-empty error"
 				>
-					<ActionButton onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching} icon={RefreshCw}>
+					<ActionButton variant="secondary" onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching} icon={RefreshCw}>
 						{summaryQuery.isFetching ? 'Reintentando' : 'Reintentar'}
 					</ActionButton>
 				</EmptyState>
@@ -574,25 +574,24 @@ export default function OperationsPage() {
 				}
 			>
 				<div className="operations-header-actions">
-					<ActionButton onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching} icon={RefreshCw}>
-						{summaryQuery.isFetching ? 'Actualizando' : 'Actualizar'}
-					</ActionButton>
 					{isAdmin ? (
 						<ActionButton
-							variant="secondary"
 							onClick={() => goTo(platformAdmin ? '/admin' : '/inbox/automatico')}
 							icon={ArrowRight}
 						>
 							{platformAdmin ? 'Abrir administración' : 'Abrir bandeja'}
 						</ActionButton>
 					) : null}
+					<ActionButton variant="secondary" onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching} icon={RefreshCw}>
+						{summaryQuery.isFetching ? 'Actualizando' : 'Actualizar'}
+					</ActionButton>
 				</div>
 			</PageHeader>
 
 			<div className="operations-summary-strip operations-v3-kpis">
 				<MetricCard label="Requieren acción" value={priorityItems.length} helper="Ordenadas por impacto" tone={priorityItems.length ? 'warning' : 'success'} icon={AlertTriangle} />
 				<MetricCard label="Comprobantes" value={totals.paymentReview} helper="Pendientes de decisión" tone={totals.paymentReview ? 'warning' : 'neutral'} icon={WalletCards} />
-				<MetricCard label="Conversaciones" value={totals.unreadConversations} helper={`${formatNumber(totals.unreadMessages)} mensajes sin leer`} tone={totals.unreadConversations ? 'info' : 'neutral'} icon={MessageCircle} />
+				<MetricCard label="Esperando respuesta" value={totals.waitingResponseConversations} helper={`${formatNumber(totals.waitingResponseUnder24h)} <24 h · ${formatNumber(totals.waitingResponseOver24h)} >24 h`} tone={totals.waitingResponseConversations ? 'info' : 'neutral'} icon={MessageCircle} />
 				<MetricCard label="Carritos" value={totals.abandonedCartsNew} helper="Oportunidades nuevas" tone={totals.abandonedCartsNew ? 'info' : 'neutral'} icon={ShoppingCart} />
 			</div>
 

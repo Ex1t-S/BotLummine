@@ -489,9 +489,13 @@ function emptyAnalyticsMetrics() {
 		activeConversations30d: 0,
 		unreadConversationsCount: 0,
 		unreadMessagesCount: 0,
+		waitingResponseConversations: 0,
+		waitingResponseUnder24h: 0,
+		waitingResponseOver24h: 0,
 		readRate: 0,
 		deliveryRate: 0,
 		conversionCount: 0,
+		chatConfirmedPurchaseCount: 0,
 		attributedRevenue: 0,
 		attributedCurrency: 'ARS',
 		abandonedCartsCount: 0,
@@ -510,7 +514,7 @@ function applyEstimatedCost(metrics) {
 	return metrics;
 }
 
-async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
+async function getDetectedRecoveredCartsByWorkspace(workspaceIds = [], since = null) {
 	if (!workspaceIds.length) return new Map();
 
 	const [carts, orders, automationLogs, campaignRecipients] = await Promise.all([
@@ -656,6 +660,7 @@ async function getDetectedRecoveredCartsByWorkspace(workspaceIds = []) {
 	};
 
 	for (const cart of carts) {
+		if (since && new Date(cart.recoveredAt || cart.checkoutCreatedAt || cart.createdAt || 0) < new Date(since)) continue;
 		const paidOrder = getCartPaidOrders(cart).find((order) => cartHasContactBeforeOrder(cart, order));
 		if (!paidOrder || !cartHasContactBeforeOrder(cart, paidOrder)) continue;
 		if (matchedCartIds.has(cart.id)) continue;
@@ -1127,7 +1132,9 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			});
 		}
 
-		const activitySince = subtractDays(ANALYTICS_ACTIVITY_DAYS);
+		const requestedDays = Number(req.query.periodDays || req.query.days || ANALYTICS_ACTIVITY_DAYS);
+		const activityWindowDays = [7, 30, 90].includes(requestedDays) ? requestedDays : ANALYTICS_ACTIVITY_DAYS;
+		const activitySince = subtractDays(activityWindowDays);
 		const workspaces = await prisma.workspace.findMany({
 			where: platformAdmin ? undefined : { id: selectedWorkspaceId },
 			select: {
@@ -1161,28 +1168,29 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			messageRows30d,
 			activeConversationRows30d,
 			unreadConversationRows,
+			waitingResponseRows,
 			campaignStatsRows,
 			recoveredCartMetrics,
 			abandonedCartRows,
 		] = await Promise.all([
 			prisma.campaign.groupBy({
 				by: ['workspaceId', 'status'],
-				where: analyticsScope,
+				where: { ...analyticsScope, createdAt: { gte: activitySince } },
 				_count: { _all: true },
 			}),
 			prisma.campaignRecipient.groupBy({
 				by: ['workspaceId', 'status', 'billable'],
-				where: analyticsScope,
+				where: { ...analyticsScope, campaign: { createdAt: { gte: activitySince } } },
 				_count: { _all: true },
 			}),
 			prisma.customerProfile.groupBy({
 				by: ['workspaceId'],
-				where: analyticsScope,
+				where: { ...analyticsScope, createdAt: { gte: activitySince } },
 				_count: { _all: true },
 			}),
 			prisma.customerOrder.groupBy({
 				by: ['workspaceId', 'currency'],
-				where: analyticsScope,
+				where: { ...analyticsScope, createdAt: { gte: activitySince } },
 				_count: { _all: true },
 				_sum: { totalAmount: true },
 			}),
@@ -1202,16 +1210,20 @@ export async function getWorkspaceAnalytics(req, res, next) {
 				_count: { _all: true },
 				_sum: { unreadCount: true },
 			}),
+			prisma.conversation.findMany({
+				where: { ...analyticsScope, archivedAt: null, lastMessageAt: { not: null } },
+				select: { workspaceId: true, lastMessageAt: true, messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { direction: true } } },
+			}),
 			Promise.all(
 				workspaceIds.map(async (workspaceId) => ({
 					workspaceId,
-					stats: await getCampaignStats({ workspaceId }),
+					stats: await getCampaignStats({ workspaceId, dateFrom: activitySince, archiveScope: 'all' }),
 				}))
 			),
-			getDetectedRecoveredCartsByWorkspace(workspaceIds),
+			getDetectedRecoveredCartsByWorkspace(workspaceIds, activitySince),
 			prisma.abandonedCart.groupBy({
 				by: ['workspaceId', 'status'],
-				where: analyticsScope,
+				where: { ...analyticsScope, createdAt: { gte: activitySince } },
 				_count: { _all: true },
 				_sum: { totalAmount: true },
 			}),
@@ -1278,10 +1290,22 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			metrics.unreadMessagesCount = row._sum?.unreadCount || 0;
 		}
 
+		for (const row of waitingResponseRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics || row.messages?.[0]?.direction !== 'INBOUND') continue;
+			metrics.waitingResponseConversations += 1;
+			const ageMs = Math.max(0, Date.now() - new Date(row.lastMessageAt).getTime());
+			if (ageMs > 24 * 60 * 60 * 1000) metrics.waitingResponseOver24h += 1;
+			else metrics.waitingResponseUnder24h += 1;
+		}
+
 		for (const row of campaignStatsRows) {
 			const metrics = metricsByWorkspace.get(row.workspaceId);
 			if (!metrics) continue;
 			metrics.conversionCount = Number(row.stats?.purchasedRecipients || 0);
+			metrics.chatConfirmedPurchaseCount = Number(row.stats?.chatConfirmedPurchaseRecipients || 0);
+			metrics.attributedRevenue = Number(row.stats?.attributedRevenue || 0);
+			metrics.attributedCurrency = row.stats?.attributedCurrency || 'ARS';
 		}
 
 		for (const row of abandonedCartRows) {
@@ -1297,7 +1321,6 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			if (!metrics) continue;
 			metrics.recoveredCartsCount = recovered.count || 0;
 			metrics.recoveredCartValue = recovered.value || 0;
-			metrics.conversionCount += recovered.count || 0;
 		}
 
 		const workspaceAnalytics = workspaces.map((workspace) => ({
@@ -1323,7 +1346,11 @@ export async function getWorkspaceAnalytics(req, res, next) {
 			acc.activeConversations30d += metrics.activeConversations30d || 0;
 			acc.unreadConversationsCount += metrics.unreadConversationsCount || 0;
 			acc.unreadMessagesCount += metrics.unreadMessagesCount || 0;
+			acc.waitingResponseConversations += metrics.waitingResponseConversations || 0;
+			acc.waitingResponseUnder24h += metrics.waitingResponseUnder24h || 0;
+			acc.waitingResponseOver24h += metrics.waitingResponseOver24h || 0;
 			acc.conversionCount += metrics.conversionCount || 0;
+			acc.chatConfirmedPurchaseCount += metrics.chatConfirmedPurchaseCount || 0;
 			acc.attributedRevenue += metrics.attributedRevenue || 0;
 			acc.abandonedCartsCount += metrics.abandonedCartsCount || 0;
 			acc.contactedCartsCount += metrics.contactedCartsCount || 0;
@@ -1345,7 +1372,9 @@ export async function getWorkspaceAnalytics(req, res, next) {
 		return res.json({
 			ok: true,
 			estimatedMessageCostUsd: DEFAULT_ESTIMATED_MESSAGE_COST_USD,
-			activityWindowDays: ANALYTICS_ACTIVITY_DAYS,
+			activityWindowDays,
+			period: { days: activityWindowDays, from: activitySince.toISOString(), to: new Date().toISOString() },
+			updatedAt: new Date().toISOString(),
 			totals,
 			workspaces: workspaceAnalytics,
 			detail,

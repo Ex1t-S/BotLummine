@@ -186,9 +186,9 @@ const TAB_DEFINITIONS = [
 	{
 		id: 'tracking',
 		path: 'tracking',
-		label: 'Seguimiento',
+		label: 'Diagnóstico',
 		eyebrow: 'Campañas',
-		title: 'Seguimiento',
+		title: 'Diagnóstico de campaña',
 		description:
 			'Revisa estados, resultados y destinatarios desde una vista separada para controlar lo que ya salio.',
 	},
@@ -223,13 +223,6 @@ const TAB_DEFINITIONS = [
 	},
 ];
 
-const MAIN_NAV_ITEMS = [
-	{ id: 'library', label: 'Templates', helper: 'Biblioteca y editor' },
-	{ id: 'abandoned-carts', label: 'Automatización', helper: 'Reglas recurrentes' },
-	{ id: 'segment', label: 'Campañas', helper: 'Envío puntual' },
-	{ id: 'tracking', label: 'Historial', helper: 'Métricas y resultados' },
-];
-
 const AUTOMATION_RULES = [
 	{
 		id: 'abandoned-carts',
@@ -247,23 +240,6 @@ const AUTOMATION_RULES = [
 		description: 'Enviá tracking a pedidos despachados por rango de fechas.',
 	},
 ];
-
-function DashboardTabButton({ tab, isActive, onClick }) {
-	return (
-		<button
-			type="button"
-			role="tab"
-			id={`campaigns-tab-${tab.id}`}
-			aria-selected={isActive}
-			aria-controls={`campaigns-panel-${tab.id}`}
-			className={`campaigns-tab-button ${isActive ? 'is-active' : ''}`.trim()}
-			onClick={() => onClick(tab.id)}
-		>
-			<span className="campaigns-tab-button__label">{cleanCampaignCopy(tab.label)}</span>
-			{tab.helper ? <span className="campaigns-tab-button__helper">{cleanCampaignCopy(tab.helper)}</span> : null}
-		</button>
-	);
-}
 
 function AutomationRuleNav({ activeTab, onSelect }) {
 	return (
@@ -1678,14 +1654,14 @@ export default function CampaignsFeaturePage() {
 		});
 	}
 
-	function requestDeleteCampaign(campaign) {
+	function requestArchiveCampaign(campaign) {
 		if (!campaign?.id) return;
 		setPendingConfirm({
 			type: 'campaign',
 			id: campaign.id,
-			title: 'Eliminar campaña',
-			message: `Vas a eliminar "${campaign.name}". Esta acción no se puede deshacer.`,
-			confirmLabel: 'Eliminar campaña',
+			title: 'Archivar campaña',
+			message: `Vas a archivar "${campaign.name}". Seguirá disponible en Archivo.`,
+			confirmLabel: 'Archivar campaña',
 		});
 	}
 
@@ -1708,7 +1684,7 @@ export default function CampaignsFeaturePage() {
 		}
 
 		if (pendingConfirm.type === 'campaign') {
-			mutations.deleteCampaign.mutate(pendingConfirm.id);
+			mutations.archiveCampaign.mutate({ campaignId: pendingConfirm.id });
 		}
 
 		if (pendingConfirm.type === 'schedule') {
@@ -1835,9 +1811,9 @@ export default function CampaignsFeaturePage() {
 							onDispatch={(campaignId) => mutations.action.mutate({ type: 'dispatch', campaignId })}
 							onPause={(campaignId) => mutations.action.mutate({ type: 'pause', campaignId })}
 							onResume={(campaignId) => mutations.action.mutate({ type: 'resume', campaignId })}
-							onDelete={requestDeleteCampaign}
+							onArchive={requestArchiveCampaign}
 							actionLoading={mutations.action.isPending || queries.campaignDetail.isFetching}
-							deleteLoading={mutations.deleteCampaign.isPending}
+							deleteLoading={mutations.archiveCampaign.isPending}
 							loading={queries.campaigns.isLoading || queries.automationRuns.isLoading}
 							tracking={tracking}
 						/>
@@ -1915,20 +1891,6 @@ export default function CampaignsFeaturePage() {
 
 					<CampaignFeedbackAlert feedback={feedback} />
 
-					<div className="campaigns-tab-nav" role="tablist" aria-label="Secciones de campañas">
-						{MAIN_NAV_ITEMS.map((tab) => (
-							<DashboardTabButton
-								key={tab.id}
-								tab={tab}
-								isActive={
-									activeTab === tab.id ||
-									(tab.id === 'abandoned-carts' && ['abandoned-carts', 'pending-payments', 'shipments', 'schedules'].includes(activeTab)) ||
-									(tab.id === 'library' && activeTab === 'builder')
-								}
-								onClick={openTab}
-							/>
-						))}
-					</div>
 				</div>
 			</div>
 

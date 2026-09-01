@@ -378,21 +378,26 @@ async function claimCandidateLogs(setting, candidates = []) {
 
 	if (!rows.length) return [];
 
+	// Use the unique (workspaceId, orderKey) constraint as an atomic claim. A
+	// createMany followed by a read could return logs inserted by another worker,
+	// causing duplicate pending-payment sends under concurrent ticks.
+	const uniqueRows = [...new Map(rows.map((row) => [row.orderKey, row])).values()];
+	const claimedKeys = new Set();
+
 	try {
-		await prisma.pendingPaymentAutomationLog.createMany({ data: rows, skipDuplicates: true });
+		for (const row of uniqueRows) {
+			try {
+				await prisma.pendingPaymentAutomationLog.create({ data: row });
+				claimedKeys.add(row.orderKey);
+			} catch (error) {
+				if (error?.code !== 'P2002') throw error;
+			}
+		}
 	} catch (error) {
 		if (!isPendingPaymentAutomationTableMissing(error)) throw error;
 		throw createAutomationSchemaNotReadyError('de pagos pendientes', error);
 	}
 
-	const claimed = await prisma.pendingPaymentAutomationLog.findMany({
-		where: {
-			workspaceId: setting.workspaceId,
-			orderKey: { in: rows.map((row) => row.orderKey) },
-		},
-		select: { orderKey: true },
-	});
-	const claimedKeys = new Set(claimed.map((row) => row.orderKey));
 	return candidates.filter((order) => claimedKeys.has(getOrderKey(order)));
 }
 

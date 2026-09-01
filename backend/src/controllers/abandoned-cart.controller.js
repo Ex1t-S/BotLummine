@@ -44,6 +44,7 @@ function formatCurrency(value, currency = 'ARS') {
 		return new Intl.NumberFormat('es-AR', {
 			style: 'currency',
 			currency: currency || 'ARS',
+			currencyDisplay: 'code',
 			maximumFractionDigits: 0
 		}).format(Number(value || 0));
 	} catch {
@@ -151,7 +152,12 @@ function mapCartForView(cart, workspaceConfig = null) {
 	return {
 		...cart,
 		initials,
-		statusLabel: cart.status === 'CONTACTED' ? 'Contactado' : 'Nuevo',
+		statusLabel: {
+			NEW: 'Por contactar',
+			CONTACTED: 'Contactado',
+			RECOVERED: 'Recuperado',
+			DISMISSED: 'Descartado',
+		}[String(cart.status || 'NEW').toUpperCase()] || 'Por contactar',
 		totalLabel: formatCurrency(cart.totalAmount, cart.currency || 'ARS'),
 		productsCount: productsList.reduce((acc, item) => acc + Number(item.quantity || 0), 0),
 		displayCreatedAt: formatDateTime(cart.checkoutCreatedAt || cart.createdAt),
@@ -163,6 +169,34 @@ function mapCartForView(cart, workspaceConfig = null) {
 		canOpenCart: !!cart.abandonedCheckoutUrl,
 		canMessage: !!cart.contactPhone
 	};
+}
+
+async function getConversationIdsByPhone(carts = [], workspaceId) {
+	const waIds = [...new Set(
+		carts
+			.map((cart) => normalizeThreadPhone(cart.contactPhone))
+			.filter(Boolean)
+	)];
+	if (!waIds.length) return new Map();
+
+	const contacts = await prisma.contact.findMany({
+		where: { workspaceId, waId: { in: waIds } },
+		select: {
+			waId: true,
+			conversations: {
+				where: { archivedAt: null },
+				orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
+				take: 1,
+				select: { id: true },
+			},
+		},
+	});
+
+	return new Map(
+		contacts
+			.map((contact) => [contact.waId, contact.conversations?.[0]?.id || null])
+			.filter(([, conversationId]) => conversationId)
+	);
 }
 
 export async function getAbandonedCarts(req, res, next) {
@@ -191,7 +225,7 @@ export async function getAbandonedCarts(req, res, next) {
 		statsBaseWhere.workspaceId = workspaceId;
 		const skip = (page - 1) * pageSize;
 
-		const [items, total, totalNew, totalContacted, workspaceConfig] = await Promise.all([
+		const [items, total, totalNew, totalContacted, totalRecovered, totalDismissed, workspaceConfig] = await Promise.all([
 			prisma.abandonedCart.findMany({
 				where,
 				orderBy: [{ checkoutCreatedAt: 'desc' }, { updatedAt: 'desc' }],
@@ -201,10 +235,16 @@ export async function getAbandonedCarts(req, res, next) {
 			prisma.abandonedCart.count({ where }),
 			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'NEW' } }),
 			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'CONTACTED' } }),
+			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'RECOVERED' } }),
+			prisma.abandonedCart.count({ where: { ...statsBaseWhere, status: 'DISMISSED' } }),
 			getWorkspaceRuntimeConfig(workspaceId)
 		]);
 
-		const carts = items.map((cart) => mapCartForView(cart, workspaceConfig));
+		const conversationIdsByPhone = await getConversationIdsByPhone(items, workspaceId);
+		const carts = items.map((cart) => ({
+			...mapCartForView(cart, workspaceConfig),
+			conversationId: conversationIdsByPhone.get(normalizeThreadPhone(cart.contactPhone)) || null,
+		}));
 		const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
 		return res.json({
@@ -222,6 +262,8 @@ export async function getAbandonedCarts(req, res, next) {
 				total,
 				totalNew,
 				totalContacted,
+				totalRecovered,
+				totalDismissed,
 				showingFrom: total ? skip + 1 : 0,
 				showingTo: Math.min(skip + pageSize, total)
 			},

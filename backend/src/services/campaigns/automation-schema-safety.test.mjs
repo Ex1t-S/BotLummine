@@ -34,4 +34,14 @@ describe('automation schema safety', () => {
 			assert.match(source, /createAutomationSchemaNotReadyError/, fileName);
 		}
 	});
+
+	it('uses an atomic unique-key claim for cart and payment automations', () => {
+		const cartSource = readFileSync(new URL('abandoned-cart-automation.service.js', import.meta.url), 'utf8');
+		const paymentSource = readFileSync(new URL('pending-payment-automation.service.js', import.meta.url), 'utf8');
+
+		for (const source of [cartSource, paymentSource]) {
+			assert.match(source, /\.create\(\{ data: row \}\)/);
+			assert.match(source, /error\?\.code !== 'P2002'/);
+		}
+	});
 });

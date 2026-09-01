@@ -186,7 +186,9 @@ const StepImage = forwardRef<HTMLImageElement, StepImageProps>(({ src, alt, clas
 });
 StepImage.displayName = "StepImage";
 
-const MotionStepImage = motion(StepImage);
+// Framer Motion 12 deprecates the callable `motion(Component)` form.
+// `motion.create` keeps the same behavior without emitting a runtime warning.
+const MotionStepImage = motion.create(StepImage);
 
 function AnimatedStepImage({ preset = "fadeInScale", delay = 0, ...props }: AnimatedStepImageProps) {
 	const presetConfig = ANIMATION_PRESETS[preset];

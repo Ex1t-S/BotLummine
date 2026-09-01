@@ -443,19 +443,36 @@ async function loadAutomationRun(runId, workspaceId) {
 export async function listAutomationRuns({
 	workspaceId,
 	limit = 30,
+	page = 1,
+	pageSize = limit,
+	dateFrom,
+	dateTo,
+	type,
+	status,
+	search,
+	archiveScope = 'current',
 	timezone = DEFAULT_TIMEZONE,
 } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
-	try {
-		await backfillAutomationRunsForWorkspace({ workspaceId: resolvedWorkspaceId, timezone });
-	} catch (error) {
-		logger.warn('automation_runs.backfill_failed', { workspaceId: resolvedWorkspaceId, error });
-	}
-
-	const runs = await prisma.automationRun.findMany({
-		where: { workspaceId: resolvedWorkspaceId },
+	const currentPage = Math.max(1, Number(page) || 1);
+	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || Number(limit) || 30, 100));
+	const from = dateFrom ? new Date(dateFrom) : archiveScope === 'current' ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) : null;
+	const to = dateTo ? new Date(dateTo) : null;
+	const createdAt = {};
+	if (from && !Number.isNaN(from.getTime())) createdAt.gte = from;
+	if (to && !Number.isNaN(to.getTime())) createdAt.lte = to;
+	const where = {
+		workspaceId: resolvedWorkspaceId,
+		...(Object.keys(createdAt).length ? { createdAt } : {}),
+		...(type ? { type: String(type).toUpperCase() } : {}),
+		...(status ? { status: String(status).toUpperCase() } : {}),
+		...(search ? { OR: [{ runKey: { contains: String(search), mode: 'insensitive' } }, { type: { contains: String(search), mode: 'insensitive' } }] } : {}),
+	};
+	const [total, runs] = await Promise.all([prisma.automationRun.count({ where }), prisma.automationRun.findMany({
+		where,
 		orderBy: [{ runKey: 'desc' }, { createdAt: 'desc' }],
-		take: Math.max(1, Math.min(Number(limit) || 30, 100)),
+		skip: (currentPage - 1) * currentPageSize,
+		take: currentPageSize,
 		include: {
 			campaigns: {
 				orderBy: [{ createdAt: 'asc' }],
@@ -467,13 +484,14 @@ export async function listAutomationRuns({
 				},
 			},
 		},
-	});
+	})]);
 
 	const serialized = await Promise.all(runs.map((run) => serializeAutomationRun(run)));
-	return serialized.filter((run) => run.campaignCount > 0).sort((a, b) => {
+	const filtered = serialized.filter((run) => run.campaignCount > 0).sort((a, b) => {
 		if (a.runKey !== b.runKey) return b.runKey.localeCompare(a.runKey);
 		return (AUTOMATION_TYPE_ORDER[a.type] || 99) - (AUTOMATION_TYPE_ORDER[b.type] || 99);
 	});
+	return { runs: filtered, pagination: { page: currentPage, pageSize: currentPageSize, total, totalPages: Math.max(1, Math.ceil(total / currentPageSize)), hasNextPage: currentPage * currentPageSize < total, hasPreviousPage: currentPage > 1 } };
 }
 
 export async function getAutomationRunDetail(runId, {
