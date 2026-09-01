@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { formatPreviewText } from '../utils.js';
 import { getFriendlyError } from '../errorMessages.js';
 import { formatTemplateStatusLabel } from '../../../utils/statusLabels.js';
@@ -267,8 +268,8 @@ function AutomationCard({
 			<div className="campaign-abandoned-automation-card__header">
 				<div>
 					<span className="campaigns-eyebrow">Automatizacion</span>
-					<h4>Enviar carritos nuevos cada hora</h4>
-					<p>Cuando está activa, sincroniza y detecta carritos nuevos que superen la espera minima configurada.</p>
+					<h4>Enviar carritos nuevos automáticamente</h4>
+					<p>Revisa carritos nuevos cada hora dentro de la ventana de contacto (09:00 a 21:00 ART).</p>
 				</div>
 				<span className={`campaign-schedule-status ${form.enabled ? 'is-active' : ''}`.trim()}>
 					{form.enabled ? 'Activa' : 'Pausada'}
@@ -290,7 +291,7 @@ function AutomationCard({
 					<strong>Automatizacion {form.enabled ? 'activada' : 'desactivada'}</strong>
 					<small>
 						{form.enabled
-							? 'Queda guardada al activar y se ejecuta como maximo cada hora.'
+							? 'Se ejecuta como máximo cada hora entre las 09:00 y las 21:00.'
 							: 'Activala para guardar el estado automaticamente.'}
 					</small>
 				</span>
@@ -492,111 +493,17 @@ function AutomationCard({
 export default function AbandonedCartCampaignPanel({
 	templates = [],
 	selectedTemplate,
-	onSelectTemplate,
-	form,
-	onUpdateField,
-	preview,
-	previewing,
-	creating,
 	automationSettings,
 	automationLoading,
 	savingAutomation,
 	runningAutomation,
-	onPreview,
-	onCreate,
 	onSaveAutomation,
 	onRunAutomationNow,
 }) {
-	const [variableMapping, setVariableMapping] = useState({});
-	const [manualVariables, setManualVariables] = useState({});
-	const [headerMediaId, setHeaderMediaId] = useState('');
-	const [headerMediaFileName, setHeaderMediaFileName] = useState('');
-	const templateVariableKeys = useMemo(
-		() => extractTemplateVariableKeys(selectedTemplate),
-		[selectedTemplate]
-	);
-	const effectiveVariableMapping = useMemo(() => {
-		const mapping = {};
-		templateVariableKeys.forEach((key) => {
-			mapping[key] = variableMapping[key] || getDefaultAbandonedCartSource(key);
-		});
-		return mapping;
-	}, [templateVariableKeys, variableMapping]);
-	const effectiveManualVariables = useMemo(
-		() => normalizeManualVariables(manualVariables, effectiveVariableMapping),
-		[manualVariables, effectiveVariableMapping]
-	);
-	const effectiveVariableMappingWithHeaderMedia = useMemo(
-		() => mergeHeaderMediaVariableMapping(selectedTemplate, headerMediaId, effectiveVariableMapping),
-		[selectedTemplate, headerMediaId, effectiveVariableMapping]
-	);
-
-	useEffect(() => {
-		setHeaderMediaId('');
-		setHeaderMediaFileName('');
-	}, [selectedTemplate?.id]);
-
-	function updateVariableSource(variableKey, sourceKey) {
-		setVariableMapping((current) => ({
-			...current,
-			[variableKey]: sourceKey,
-		}));
-	}
-
-	function updateManualVariable(variableKey, value) {
-		setManualVariables((current) => ({
-			...current,
-			[variableKey]: value,
-		}));
-	}
-
-	function buildAudienceFilters() {
-		return {
-			daysBack: Number(form.daysBack || 7),
-			status: form.status || 'NEW',
-			limit: Number(form.limit || 50),
-			minTotal:
-				form.minTotal === '' || form.minTotal === null || form.minTotal === undefined
-					? null
-					: Number(form.minTotal),
-			productQuery: normalizeString(form.productQuery || ''),
-		};
-	}
+	const navigate = useNavigate();
 
 	return (
-		<div className="campaign-custom-audience campaign-custom-audience--premium">
-			<div className="campaign-custom-audience-intro campaign-custom-audience-intro--compact">
-				<div className="campaign-custom-audience-title-row">
-					<div>
-						<span className="campaigns-eyebrow">Audiencia inteligente</span>
-						<h3>Recuperación de carritos</h3>
-					</div>
-
-					<div className="campaign-inline-summary campaign-inline-summary--soft campaign-inline-summary--tight">
-						<div className="campaign-inline-summary-item">
-							<strong>{form.daysBack}</strong>
-							<span>días</span>
-						</div>
-						<div className="campaign-inline-summary-item">
-							<strong>{form.limit || 0}</strong>
-							<span>contactos</span>
-						</div>
-						<div className="campaign-inline-summary-item">
-							<strong>{moneyLabel(form.minTotal)}</strong>
-							<span>mínimo</span>
-						</div>
-						<div className="campaign-inline-summary-item">
-							<strong>{preview.total || 0}</strong>
-							<span>preview</span>
-						</div>
-					</div>
-				</div>
-
-				<p className="campaign-custom-audience-subtext">
-					Filtrá carritos, revisá destinatarios y creá una campaña específica de recuperación.
-				</p>
-			</div>
-
+		<div className="campaign-automation-only">
 			<AutomationCard
 				templates={templates}
 				selectedTemplate={selectedTemplate}
@@ -607,283 +514,14 @@ export default function AbandonedCartCampaignPanel({
 				onSave={onSaveAutomation}
 				onRunNow={onRunAutomationNow}
 			/>
-
-			<div className="campaign-custom-audience-grid campaign-custom-audience-grid--balanced">
-				<div className="campaign-custom-audience-card campaign-custom-audience-card--form">
-					<label className="field">
-						<span>Template</span>
-						<select
-							value={selectedTemplate?.id || ''}
-							onChange={(e) => {
-								const next = templates.find((template) => template.id === e.target.value) || null;
-								onSelectTemplate(next);
-							}}
-						>
-							<option value="">Seleccionar plantilla</option>
-							{templates.map((template) => (
-								<option key={template.id} value={template.id}>
-									{template.name} · {template.language} · {formatTemplateStatusLabel(template.status)}
-								</option>
-							))}
-						</select>
-					</label>
-
-					<TemplateHeaderMediaUpload
-						template={selectedTemplate}
-						mediaId={headerMediaId}
-						fileName={headerMediaFileName}
-						disabled={previewing || creating}
-						onUploaded={(nextMediaId, nextFileName) => {
-							setHeaderMediaId(nextMediaId);
-							setHeaderMediaFileName(nextFileName);
-						}}
-						onClear={() => {
-							setHeaderMediaId('');
-							setHeaderMediaFileName('');
-						}}
-					/>
-
-					<div className="campaign-form-grid two-columns">
-						<label className="field">
-							<span>Nombre</span>
-							<input
-								value={form.name}
-								onChange={(e) => onUpdateField('name', e.target.value)}
-								placeholder="Recuperación carritos 30 días"
-							/>
-						</label>
-
-						<label className="field">
-							<span>Ventana</span>
-							<select
-								value={form.daysBack}
-								onChange={(e) => onUpdateField('daysBack', Number(e.target.value))}
-							>
-								<option value={1}>1 dia</option>
-								<option value={3}>3 dias</option>
-								<option value={7}>7 días</option>
-								<option value={15}>15 días</option>
-								<option value={30}>30 días</option>
-							</select>
-						</label>
-					</div>
-
-					<div className="campaign-custom-audience-grid-4">
-						<label className="field">
-							<span>Estado</span>
-							<select
-								value={form.status}
-								onChange={(e) => onUpdateField('status', e.target.value)}
-							>
-								<option value="NEW">No contactados</option>
-								<option value="CONTACTED">Contactados</option>
-								<option value="ALL">Todos</option>
-							</select>
-						</label>
-
-						<label className="field">
-							<span>Límite</span>
-							<input
-								type="number"
-								min="1"
-								max="500"
-								value={form.limit}
-								onChange={(e) => onUpdateField('limit', Number(e.target.value || 50))}
-							/>
-						</label>
-
-						<label className="field">
-							<span>Monto mínimo</span>
-							<input
-								type="number"
-								min="0"
-								value={form.minTotal}
-								onChange={(e) => onUpdateField('minTotal', e.target.value)}
-								placeholder="0"
-							/>
-						</label>
-
-						<label className="field">
-							<span>Producto</span>
-							<input
-								value={form.productQuery}
-								onChange={(e) => onUpdateField('productQuery', e.target.value)}
-								placeholder="body, faja, calza"
-							/>
-						</label>
-					</div>
-
-					<label className="field">
-						<span>Notas internas</span>
-						<textarea
-							value={form.notes}
-							onChange={(e) => onUpdateField('notes', e.target.value)}
-							placeholder="Referencia interna"
-							rows={3}
-						/>
-					</label>
-
-					<label className="campaign-toggle campaign-toggle--card">
-						<input
-							type="checkbox"
-							checked={form.launchNow}
-							onChange={(e) => onUpdateField('launchNow', e.target.checked)}
-						/>
-						<span>
-							<strong>Lanzar al crear</strong>
-							<small>Para recuperaciones rápidas.</small>
-						</span>
-					</label>
-
-					<div className="campaign-schedule-section">
-						<div className="campaign-schedule-section__title">
-							<strong>Variables del carrito</strong>
-							<span>
-								{templateVariableKeys.length
-								? `${templateVariableKeys.length} variable(s) detectada(s) en la plantilla.`
-									: 'Selecciona una plantilla con variables para mapear link, nombre y otros datos.'}
-							</span>
-						</div>
-						<div className="campaign-shipment-variable-grid">
-							{templateVariableKeys.map((variableKey) => (
-								<div className="field" key={variableKey}>
-									<span>{`Variable {{${variableKey}}}`}</span>
-									<select
-										value={effectiveVariableMapping[variableKey] || ''}
-										onChange={(event) => updateVariableSource(variableKey, event.target.value)}
-									>
-										{ABANDONED_CART_DATA_OPTIONS.map((option) => (
-											<option key={option.key} value={option.key}>
-												{option.label}
-											</option>
-										))}
-									</select>
-									{effectiveVariableMapping[variableKey] === '__manual__' ? (
-										<input
-											value={manualVariables[variableKey] || ''}
-											onChange={(event) => updateManualVariable(variableKey, event.target.value)}
-											placeholder="Pega un link o texto fijo"
-										/>
-									) : null}
-								</div>
-							))}
-							{!templateVariableKeys.length ? (
-								<div className="campaign-custom-audience-empty">
-									<strong>Sin variables detectadas</strong>
-									<span>La plantilla seleccionada no tiene campos tipo {'{{1}}'} o {'{{checkout_url}}'}.</span>
-								</div>
-							) : null}
-						</div>
-						<div className="campaign-shipment-data-options">
-							{ABANDONED_CART_DATA_OPTIONS.map((option) => (
-								<span key={option.key}>
-									<strong>{option.label}</strong>
-									<small>{option.description}</small>
-								</span>
-							))}
-						</div>
-					</div>
-
-					<div className="campaign-form-actions campaign-form-actions--end">
-						<button
-							type="button"
-							className="button ghost"
-							onClick={() =>
-								onPreview({
-									templateId: selectedTemplate?.id || null,
-									filters: buildAudienceFilters(),
-									variableMapping: effectiveVariableMappingWithHeaderMedia,
-									manualVariables: effectiveManualVariables,
-								})
-							}
-							disabled={previewing || !selectedTemplate}
-						>
-							{previewing ? 'Generando...' : 'Previsualizar'}
-						</button>
-
-						<button
-							type="button"
-							className="button primary"
-							onClick={() =>
-								onCreate({
-									launchNow: Boolean(form.launchNow),
-									name: form.name,
-									notes: form.notes || null,
-									templateId: selectedTemplate?.id || null,
-									languageCode: selectedTemplate?.language || 'es_AR',
-									filters: buildAudienceFilters(),
-									variableMapping: effectiveVariableMappingWithHeaderMedia,
-									manualVariables: effectiveManualVariables,
-								})
-							}
-							disabled={
-								creating ||
-								!selectedTemplate ||
-								templateNeedsHeaderMediaUpload(selectedTemplate, headerMediaId)
-							}
-						>
-							{creating
-								? 'Creando campaña...'
-								: form.launchNow
-									? 'Crear y lanzar campaña'
-									: 'Guardar campaña'}
-						</button>
-					</div>
+			<div className="campaign-automation-next-step">
+				<div>
+					<strong>¿Querés enviar una campaña puntual?</strong>
+					<span>La configuración de audiencia, preview y lanzamiento está separada para que no modifiques la regla automática por accidente.</span>
 				</div>
-
-				<div className="campaign-custom-audience-card campaign-custom-audience-preview campaign-custom-audience-preview--elevated">
-					<div className="campaign-custom-audience-preview-head">
-						<div>
-							<div className="campaign-custom-audience-preview-title">Vista previa</div>
-							<div className="campaign-custom-audience-preview-subtitle">
-								{preview.total || 0} destinatarios
-							</div>
-						</div>
-
-						{selectedTemplate ? (
-							<span className="campaign-custom-audience-pill">{selectedTemplate.name}</span>
-						) : null}
-					</div>
-
-					<div
-						className="campaign-custom-audience-preview-list"
-						aria-live="polite"
-						aria-busy={previewing}
-					>
-						{preview.recipients?.length ? (
-							preview.recipients.slice(0, 8).map((recipient, index) => (
-								<div
-									key={`${recipient.phone}-${index}`}
-									className="campaign-custom-audience-recipient"
-								>
-									<div className="campaign-custom-audience-recipient-top">
-										<strong>{recipient.contactName || recipient.phone}</strong>
-										<span>{recipient.totalAmount || ''}</span>
-									</div>
-
-									<div className="campaign-custom-audience-recipient-product">
-										{recipient.primaryProductName || 'Sin producto principal'}
-									</div>
-
-									<div className="campaign-custom-audience-recipient-phone">
-										{recipient.phone}
-									</div>
-
-									{recipient.renderedPreviewText ? (
-										<div className="campaign-custom-audience-recipient-preview">
-											{formatPreviewText(recipient.renderedPreviewText, 220)}
-										</div>
-									) : null}
-								</div>
-							))
-						) : (
-							<div className="campaign-custom-audience-empty">
-								<strong>Sin destinatarios para mostrar</strong>
-								<span>Elegí una plantilla y previsualizá los primeros contactos antes de crear la campaña.</span>
-							</div>
-						)}
-					</div>
-				</div>
+				<button type="button" className="button primary" onClick={() => navigate('/campaigns/segment?audience=abandoned_carts')}>
+					Crear campaña puntual
+				</button>
 			</div>
 		</div>
 	);

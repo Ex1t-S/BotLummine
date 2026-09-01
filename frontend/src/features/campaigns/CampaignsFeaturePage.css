@@ -1,5 +1,38 @@
 @import './styles/09-feature-page.css';
 
+.campaign-automation-only {
+	display: grid;
+	gap: 18px;
+}
+
+.campaign-automation-next-step {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 20px 24px;
+	border: 1px solid rgba(57, 117, 177, 0.22);
+	border-radius: 16px;
+	background: linear-gradient(135deg, rgba(240, 248, 255, 0.96), rgba(248, 251, 255, 0.84));
+}
+
+.campaign-automation-next-step > div {
+	display: grid;
+	gap: 5px;
+}
+
+.campaign-automation-next-step strong {
+	color: #10213d;
+	font-size: 15px;
+}
+
+.campaign-automation-next-step span {
+	max-width: 760px;
+	color: #5f6f86;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
 .campaign-schedules {
 	display: grid;
 	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);

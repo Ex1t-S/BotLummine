@@ -498,6 +498,45 @@
 .campaign-os-inline-totals .has-error,
 .campaign-os-inline-totals .has-error strong { color: #b42318; }
 
+.campaign-os-automation-window {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18px;
+	margin: 18px 0 14px;
+	padding: 14px 16px;
+	border: 1px solid #dbe4f3;
+	border-radius: 12px;
+	background: #f7faff;
+}
+
+.campaign-os-automation-window > div {
+	display: grid;
+	gap: 3px;
+}
+
+.campaign-os-automation-window strong {
+	font-size: 13px;
+	color: #1c2c45;
+}
+
+.campaign-os-automation-window span {
+	color: #63728a;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.campaign-os-automation-window__badge {
+	flex: 0 0 auto;
+	padding: 6px 9px;
+	border-radius: 999px;
+	background: #e8efff;
+	color: #3541d4 !important;
+	font-size: 11px !important;
+	font-weight: 760;
+	white-space: nowrap;
+}
+
 .campaign-os-automation-list,
 .campaign-os-results-list {
 	overflow: hidden;

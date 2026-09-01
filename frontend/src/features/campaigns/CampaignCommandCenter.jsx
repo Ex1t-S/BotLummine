@@ -375,6 +375,10 @@ export function CampaignAutomationHub() {
 				<div className="campaign-os-inline-totals" aria-label="Resumen de automatizaciones"><span><strong>{number(activeCount)}</strong> activas</span><span className={errorCount ? 'has-error' : ''}><strong>{number(errorCount)}</strong> con error</span></div>
 			</div>
 			{automationQuery.isError ? <div className="campaign-os-inline-error" role="alert">No pudimos leer todas las reglas. Reintentá antes de modificar una automatización.</div> : null}
+			<div className="campaign-os-automation-window" role="note">
+				<div><strong>Ventana de contacto</strong><span>Las automatizaciones envían de 09:00 a 21:00 (hora de Argentina). Durante la noche quedan pausadas y retoman en la próxima ventana.</span></div>
+				<span className="campaign-os-automation-window__badge">09:00–21:00 ART</span>
+			</div>
 			<div className="campaign-os-automation-list">
 				{rows.map((row) => {
 					const Icon = row.icon;
