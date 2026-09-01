@@ -21,7 +21,7 @@ if [ -n "$OLD_TAG" ] && docker compose ps --status running db | grep -q bladeia-
   "$DEPLOY_ROOT/scripts/backup-local.sh" >/dev/null
 fi
 
-docker compose --profile jobs run --rm job npm run prisma:migrate
+docker compose --profile jobs run --rm --no-deps job npm run prisma:migrate
 docker compose up -d --no-deps api
 
 healthy=0
@@ -49,4 +49,3 @@ fi
 printf '%s\n' "$NEW_TAG" > "$DEPLOY_ROOT/.deployed-image-tag"
 chmod 600 "$DEPLOY_ROOT/.deployed-image-tag"
 docker compose ps
-
