@@ -11,7 +11,11 @@ function isAbsoluteUrl(value = '') {
 const explicitApiBase = normalizeBaseUrl(
 	import.meta.env.VITE_BASE_API_URL || import.meta.env.VITE_API_URL || ''
 );
-const apiBaseURL = explicitApiBase || '/api';
+// Railway was the legacy backend host. If an old Vercel environment variable
+// survives a migration, never send browser traffic to a stopped deployment;
+// the same-origin rewrite in vercel.json is the safe production fallback.
+const isRetiredRailwayApi = /(?:^|\.)botlummine-production\.up\.railway\.app(?:\/|$)/i.test(explicitApiBase);
+const apiBaseURL = isRetiredRailwayApi ? '/api' : (explicitApiBase || '/api');
 
 function normalizeTimeoutMs(value, fallbackMs = 30000) {
 	const parsed = Number(value || fallbackMs);
