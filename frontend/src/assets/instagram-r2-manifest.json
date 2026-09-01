@@ -1,0 +1,611 @@
+{
+  "source": "instagram",
+  "prefix": "marketing/instagram",
+  "files": {
+    "ads-stories/bladeia-story-ad-v1-01-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-01-final-7371dc765eec.png",
+      "sha256": "7371dc765eecea0fd69fc6629d234eb1e90f4cafe58485cff805cdc6a0b47e5d",
+      "size": 2260275
+    },
+    "ads-stories/bladeia-story-ad-v1-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-01-9e9d2978bec7.png",
+      "sha256": "9e9d2978bec79b7e6c00c994c5081fddb5dd209b716e6bbe14ee76900e14a274",
+      "size": 1335202
+    },
+    "ads-stories/bladeia-story-ad-v1-02-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-02-final-d0fed5b29514.png",
+      "sha256": "d0fed5b29514c5b60c851b76167ddeeed56e2a76c2056b978f0261d10d2e7444",
+      "size": 3021490
+    },
+    "ads-stories/bladeia-story-ad-v1-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-02-d4405af59f52.png",
+      "sha256": "d4405af59f52eec94a2904b0ef9319dc2a776115513af6fd0dcee3500aae49e0",
+      "size": 1724267
+    },
+    "ads-stories/bladeia-story-ad-v1-03-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-03-final-151235894b4f.png",
+      "sha256": "151235894b4f9b4b4b39223f5fc2415db1176bd245fa92cdff8095c48094a23d",
+      "size": 2681522
+    },
+    "ads-stories/bladeia-story-ad-v1-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-03-606f9f77bce5.png",
+      "sha256": "606f9f77bce5d64520c81ba8554574aff913f3b79b60a90174047adf2d1190f1",
+      "size": 1534662
+    },
+    "ads-stories/bladeia-story-ad-v1-04-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-04-final-133da4fea292.png",
+      "sha256": "133da4fea292109b6190905844f9365543d88af71b2d05aca0293ca2880466de",
+      "size": 2835742
+    },
+    "ads-stories/bladeia-story-ad-v1-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-04-2296ad5e06f8.png",
+      "sha256": "2296ad5e06f86e014158dc1809d47feefecba93a623e2c368ba89210516fe854",
+      "size": 1615582
+    },
+    "ads-stories/bladeia-story-ad-v1-05-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-05-final-ea4ccea8880c.png",
+      "sha256": "ea4ccea8880c89f7863e08b8c14f8bf9136eef3a538e724d5957fe2352295bcd",
+      "size": 2913490
+    },
+    "ads-stories/bladeia-story-ad-v1-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-05-ea3e704874d2.png",
+      "sha256": "ea3e704874d259ad044726d771b4983526a4ede2986f810d25fea19cfacd8e67",
+      "size": 1640834
+    },
+    "ads-stories/bladeia-story-ad-v1-06-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-06-final-37879933ee01.png",
+      "sha256": "37879933ee01887dca77a9ee9068bea88e63ee497afd2d2b68861c3e21aebb76",
+      "size": 2772938
+    },
+    "ads-stories/bladeia-story-ad-v1-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-06-c52979ad0932.png",
+      "sha256": "c52979ad09323874035f15ff0f883692d561f73958c1e94765ff71cd2015908d",
+      "size": 1613997
+    },
+    "ads-stories/bladeia-story-ad-v1-07-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-07-final-36a3c8a3564c.png",
+      "sha256": "36a3c8a3564c3d01030c9421a1fee8a978798f427182327350404eba8b2a8f9f",
+      "size": 2924892
+    },
+    "ads-stories/bladeia-story-ad-v1-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-07-07d903a345db.png",
+      "sha256": "07d903a345db172570dc74dbd14daa9113c8112c4f0f90fd255b95dcd7d046f9",
+      "size": 1675550
+    },
+    "ads-stories/bladeia-story-ad-v1-08-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-08-final-d9be04f48887.png",
+      "sha256": "d9be04f48887f70192a0831102016a7346aab26d21eccf0530677a2f091b8d0d",
+      "size": 3044476
+    },
+    "ads-stories/bladeia-story-ad-v1-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-08-563228ed2b0d.png",
+      "sha256": "563228ed2b0d2a7aad19ddaec5adfb67541bf083492656973fab6593ef60a41e",
+      "size": 1751268
+    },
+    "ads-stories/bladeia-story-ad-v1-09-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-09-final-19f1506ddb31.png",
+      "sha256": "19f1506ddb31e5631401876815f2180f70d7c1f523bba30b466e4f06d0b32922",
+      "size": 2807557
+    },
+    "ads-stories/bladeia-story-ad-v1-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-09-587365bdc2c7.png",
+      "sha256": "587365bdc2c7cab62da6451b08e87c3e96b7b48252c731a044949910c62c7aaf",
+      "size": 1587595
+    },
+    "ads-stories/bladeia-story-ad-v1-10-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-10-final-bd0dd48d504b.png",
+      "sha256": "bd0dd48d504b4b9f52f3ae7a9994dae88b1d804e845c53d3365fe76a69fa7e7a",
+      "size": 2625852
+    },
+    "ads-stories/bladeia-story-ad-v1-10.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v1-10-f48981a688e9.png",
+      "sha256": "f48981a688e97e33b4aeea40ecb2a532f4f7463bbfa4558cabca28f7e742eec5",
+      "size": 1439224
+    },
+    "ads-stories/bladeia-story-ad-v2-01-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-01-final-3ab682979991.png",
+      "sha256": "3ab6829799915b2c475aea76aae1f8c556283fb0266f7b510329ff3e6a248769",
+      "size": 2998014
+    },
+    "ads-stories/bladeia-story-ad-v2-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-01-d22375db35a1.png",
+      "sha256": "d22375db35a1ce026392f40eb7c0d392501480641db55901fe762ab0e8141925",
+      "size": 1703923
+    },
+    "ads-stories/bladeia-story-ad-v2-02-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-02-final-1de8ad6758a6.png",
+      "sha256": "1de8ad6758a653c81791a034e971a0d6da348b048bad88722e9e80f04250ac21",
+      "size": 2275049
+    },
+    "ads-stories/bladeia-story-ad-v2-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-02-bccbb0565110.png",
+      "sha256": "bccbb05651109af0384102404dc9d44a6b83e98139616eb0e429e72c8cffa2d0",
+      "size": 1325251
+    },
+    "ads-stories/bladeia-story-ad-v2-03-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-03-final-dcab66cf905d.png",
+      "sha256": "dcab66cf905d1cdde35e0d39d79cb8c62b6b7ec97be18836dfda0601e0931a0c",
+      "size": 2611445
+    },
+    "ads-stories/bladeia-story-ad-v2-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-03-20aa0d72cacb.png",
+      "sha256": "20aa0d72cacb74b96f9a1721bc17401be7b597273c7ac44d54f04af6d55362f5",
+      "size": 1587196
+    },
+    "ads-stories/bladeia-story-ad-v2-04-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-04-final-979bc06afedc.png",
+      "sha256": "979bc06afedc0e8ea9df650b57e83e283cea158dd3f50618ab78157a3f74da94",
+      "size": 2351855
+    },
+    "ads-stories/bladeia-story-ad-v2-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-04-f6c87dd5919f.png",
+      "sha256": "f6c87dd5919fc96a72048495ef35ad1f65b8d61f59fbaa9c3caf3861c496e6f2",
+      "size": 1427875
+    },
+    "ads-stories/bladeia-story-ad-v2-05-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-05-final-15ec3b2489bf.png",
+      "sha256": "15ec3b2489bf32a99a090591b2a8553d8dece9f0224bf654d1ea909d5a47997f",
+      "size": 2880878
+    },
+    "ads-stories/bladeia-story-ad-v2-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-05-91ab0129c198.png",
+      "sha256": "91ab0129c19861f75e30dc909fe87dc9daa2350d414788ed708059485630c316",
+      "size": 1635177
+    },
+    "ads-stories/bladeia-story-ad-v2-06-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-06-final-655b42e35e47.png",
+      "sha256": "655b42e35e47ea54952abf2a4838beee0c2bce234d7c59c3a125b6a357fe2e2c",
+      "size": 2509356
+    },
+    "ads-stories/bladeia-story-ad-v2-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-06-4851a0372f3a.png",
+      "sha256": "4851a0372f3aaca08cba53be3dfb57b93f60612dd89595730b4ddefdc557629a",
+      "size": 1422866
+    },
+    "ads-stories/bladeia-story-ad-v2-07-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-07-final-0343c8d09a4e.png",
+      "sha256": "0343c8d09a4e0d903a20da21380303d48cfcdb3b8683a777719cab30c505477a",
+      "size": 3026928
+    },
+    "ads-stories/bladeia-story-ad-v2-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-07-65a5e20f0413.png",
+      "sha256": "65a5e20f0413243318227c0ac418574a3be783d003ae8d442a24ec748942c8f5",
+      "size": 1676159
+    },
+    "ads-stories/bladeia-story-ad-v2-08-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-08-final-303e58990431.png",
+      "sha256": "303e58990431e16db82c7ac9ad071fbcd75d3866daa451ff75ca78e23ff9ad6b",
+      "size": 3070307
+    },
+    "ads-stories/bladeia-story-ad-v2-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-08-8297e0e28544.png",
+      "sha256": "8297e0e28544562e312e4bec62e2762fd9e2ff2a9a08b858044d1c4c1afeb0d5",
+      "size": 1667928
+    },
+    "ads-stories/bladeia-story-ad-v2-09-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-09-final-9eff457e2e02.png",
+      "sha256": "9eff457e2e02a54e51512245f56ca6cae5508d6e097dbf68db9c3c71beaba3b7",
+      "size": 1930130
+    },
+    "ads-stories/bladeia-story-ad-v2-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-09-b27c706b440e.png",
+      "sha256": "b27c706b440e227ca23e4c496418efdec8ce67ee3bc88df2703ea35e4dcd9898",
+      "size": 1099134
+    },
+    "ads-stories/bladeia-story-ad-v2-10-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-10-final-2af5f020f9cd.png",
+      "sha256": "2af5f020f9cd983f2ea380e7bb41cd9487332e063f641f0976f6c4d64a6ffbfb",
+      "size": 2282076
+    },
+    "ads-stories/bladeia-story-ad-v2-10.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/ads-stories/bladeia-story-ad-v2-10-856a30f56e21.png",
+      "sha256": "856a30f56e219b32e36af1677d48871b4c429e833f3855995f522c72c7d3dcb6",
+      "size": 1379237
+    },
+    "bladeia-instagram-bg-v4-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-01-06f9ec84b1a4.png",
+      "sha256": "06f9ec84b1a43db7a18fdcd504a6b3bb26c34e663af47b2980ad0572b8fea00d",
+      "size": 1701868
+    },
+    "bladeia-instagram-bg-v4-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-02-8dbe8a382003.png",
+      "sha256": "8dbe8a382003946ba0dd3d8bbeff7d613e8a454c9fc67353e60ec7c31439b3ea",
+      "size": 1804504
+    },
+    "bladeia-instagram-bg-v4-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-03-6c6b48fcd47d.png",
+      "sha256": "6c6b48fcd47d072bc8eefcdb6d20ae31e893a7ee87f2f2a9ecfba5f0265b1c6c",
+      "size": 1500486
+    },
+    "bladeia-instagram-bg-v4-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-04-cd0a440699ba.png",
+      "sha256": "cd0a440699bab508c1970ef66895446b0c71e41d43923d9408be7e03f62fadc4",
+      "size": 1735150
+    },
+    "bladeia-instagram-bg-v4-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-05-6f956d5f461b.png",
+      "sha256": "6f956d5f461b1c60b08551d1245f7ce4aca3a63758ad149fe51c7f80729874ef",
+      "size": 1485089
+    },
+    "bladeia-instagram-bg-v4-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-06-61ae204c67c6.png",
+      "sha256": "61ae204c67c6d0897e4f1c1309593fb6e3bf2c2181f6450cca7914fc0ba17dea",
+      "size": 1708724
+    },
+    "bladeia-instagram-bg-v4-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-07-02b6a7a262f5.png",
+      "sha256": "02b6a7a262f5088117a755e7a4b16624c16011af741302fcc26004a767ec4387",
+      "size": 1647916
+    },
+    "bladeia-instagram-bg-v4-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-08-391e2262ed6c.png",
+      "sha256": "391e2262ed6c146542d8778485f9f4a0c73e3014e7a1cb5ccf6d1b419f4fbee4",
+      "size": 1652090
+    },
+    "bladeia-instagram-bg-v4-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v4-09-3a41d1e44278.png",
+      "sha256": "3a41d1e44278de10714042a535950b874e6d3407a6d73861acc8de7c74d742d0",
+      "size": 1760761
+    },
+    "bladeia-instagram-bg-v5-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-01-68fe26563b88.png",
+      "sha256": "68fe26563b88f6b6c970b36b582d433ac0da28a7449952a8cf77d86b6eaa21f4",
+      "size": 1493034
+    },
+    "bladeia-instagram-bg-v5-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-02-22c735917683.png",
+      "sha256": "22c7359176839047dffba864454648d86963c81d63a86572ee7c7ce4cd7858c2",
+      "size": 1413231
+    },
+    "bladeia-instagram-bg-v5-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-03-9b4cad72b9e2.png",
+      "sha256": "9b4cad72b9e23a658ff77960504f18ec078235ab1578049fa2b7e4e728484d9c",
+      "size": 1573303
+    },
+    "bladeia-instagram-bg-v5-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-04-b72d9a72298d.png",
+      "sha256": "b72d9a72298d27110420cf20f4409eca216f2cc174db24fc345229c5154cd5ee",
+      "size": 1310214
+    },
+    "bladeia-instagram-bg-v5-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-05-58a50db3187a.png",
+      "sha256": "58a50db3187a7b1dd7eb2d7e11a41a613f91021811cc484a1f3b36d40a8496d8",
+      "size": 1330061
+    },
+    "bladeia-instagram-bg-v5-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-06-5cdb25480f9b.png",
+      "sha256": "5cdb25480f9b1336d60d122a150118b2b2bbae134a891f4e8b62c290cb005743",
+      "size": 1587783
+    },
+    "bladeia-instagram-bg-v5-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-07-f394f87c6540.png",
+      "sha256": "f394f87c65405e7246e3c59e01761b327bd5f4aaebbcd5baadf8b71e07c9248a",
+      "size": 1557823
+    },
+    "bladeia-instagram-bg-v5-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-08-31a7008255bc.png",
+      "sha256": "31a7008255bc26e49b96a0b10151f24db8e335edaeb8cac4ec926f020ede95c2",
+      "size": 1465628
+    },
+    "bladeia-instagram-bg-v5-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-bg-v5-09-55b37db458f9.png",
+      "sha256": "55b37db458f935638e814041513e825ae336bd3650fe53e49ede9caca76819f9",
+      "size": 1343036
+    },
+    "bladeia-instagram-post-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-01-2ee4458671b3.png",
+      "sha256": "2ee4458671b3bcddc35d374dff994fafb54598ecd6dc1d8e7e657915cbeb1a38",
+      "size": 247599
+    },
+    "bladeia-instagram-post-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-02-3a9f47fca36f.png",
+      "sha256": "3a9f47fca36f555401ebc2bf988684eb252c051f540602c2f3517f2c3a41e47b",
+      "size": 289069
+    },
+    "bladeia-instagram-post-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-03-f469d382b1af.png",
+      "sha256": "f469d382b1afb1e0749d9bf16b9f91793442e424151469335c45fe615bad278e",
+      "size": 211554
+    },
+    "bladeia-instagram-post-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-04-5211cdf27c22.png",
+      "sha256": "5211cdf27c221900bafe71cd66893f9124b279e6557012e5bb0f80b4e7983bcd",
+      "size": 1916813
+    },
+    "bladeia-instagram-post-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-05-d00e63b0423c.png",
+      "sha256": "d00e63b0423c2821330a313c4dad6bb3bc6d8e075c88d5beadcdb8085a5a5497",
+      "size": 356706
+    },
+    "bladeia-instagram-post-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-06-8044f705a132.png",
+      "sha256": "8044f705a132cae6dfa6bdf80f0cf86eaaaaf2f72c6f43cdba9494392292592e",
+      "size": 207688
+    },
+    "bladeia-instagram-post-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-07-764b3e9707cb.png",
+      "sha256": "764b3e9707cb1e3bf589a85f6779ff0f4591efae71eedec784eb5e97580c5351",
+      "size": 249375
+    },
+    "bladeia-instagram-post-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-08-7008f683b3b6.png",
+      "sha256": "7008f683b3b6b1eca0f435ad7c55f424997d743d9f64d7022a4dbb48fd3fa49b",
+      "size": 305413
+    },
+    "bladeia-instagram-post-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-09-48d8b6e7025d.png",
+      "sha256": "48d8b6e7025d90da6e820987cd45bbf3b896dc27350a74aa6b8c99bf10785ac3",
+      "size": 289774
+    },
+    "bladeia-instagram-post-v2-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-01-314eaf634319.png",
+      "sha256": "314eaf634319246a6002b1cb725aa56d047d9ac737cb04addaa768a26d9d1dcd",
+      "size": 504711
+    },
+    "bladeia-instagram-post-v2-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-02-4df28da77e0d.png",
+      "sha256": "4df28da77e0db7f59520b9d57312dc9d767dd98d99d03690d653da84bdc31a40",
+      "size": 592440
+    },
+    "bladeia-instagram-post-v2-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-03-5ed9c56827e0.png",
+      "sha256": "5ed9c56827e09e62b063b0d72a6470c86997aecc3f519f22662fd53e95f4b0d0",
+      "size": 375580
+    },
+    "bladeia-instagram-post-v2-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-04-8b4399d014c4.png",
+      "sha256": "8b4399d014c4d6b7c3ca9531b10bace57a28e8ed72641acb2ae9b70dcf2682f4",
+      "size": 588712
+    },
+    "bladeia-instagram-post-v2-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-05-c0858abeb442.png",
+      "sha256": "c0858abeb44265c6268f76da49d3ad40f43b9e44611603ed4d155d1f1a44c1e8",
+      "size": 513601
+    },
+    "bladeia-instagram-post-v2-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-06-d52fad7d3ec7.png",
+      "sha256": "d52fad7d3ec77080681b3f8011873a8e9c6ecc2e57efad8bbbdd1cd094385794",
+      "size": 356554
+    },
+    "bladeia-instagram-post-v2-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-07-95afd882e7e5.png",
+      "sha256": "95afd882e7e5ada381cfa05e98869e8bb4c17023debc4f130a887936cea1cacf",
+      "size": 413389
+    },
+    "bladeia-instagram-post-v2-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-08-0dddbb461c03.png",
+      "sha256": "0dddbb461c0312b443e6cee4ea457f9f6eba093f147b8d34801f19d5e59f7d10",
+      "size": 339930
+    },
+    "bladeia-instagram-post-v2-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v2-09-fe97df82b6f2.png",
+      "sha256": "fe97df82b6f298caaae6ed19e126a9b9e5e86098e81cc7bb3f88d846b2771efb",
+      "size": 565470
+    },
+    "bladeia-instagram-post-v3-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-01-5c5a4f8ae04d.png",
+      "sha256": "5c5a4f8ae04d4769a35a55b80a645ce8742e9d5405fa3cb8f18d877b9fda9ed6",
+      "size": 574117
+    },
+    "bladeia-instagram-post-v3-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-02-b1269e5c6143.png",
+      "sha256": "b1269e5c61431d444a967c1af858a98f55b1f72c7015de08dccbbde2e68931a8",
+      "size": 618254
+    },
+    "bladeia-instagram-post-v3-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-03-14b466059ba6.png",
+      "sha256": "14b466059ba68e147ae37faf375042b0aeff68a8e8f94c6d6568b2b1ab648d5e",
+      "size": 438894
+    },
+    "bladeia-instagram-post-v3-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-04-8e1db23167c0.png",
+      "sha256": "8e1db23167c0b0744f6fc2ea95abebf81fca581b1cfb0c3b3fd27ddf7c9532f9",
+      "size": 640298
+    },
+    "bladeia-instagram-post-v3-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-05-373636305aa0.png",
+      "sha256": "373636305aa0ffd82d9fb9be6cd7d73a884d2a05adf2208629e7de631d3b39af",
+      "size": 596839
+    },
+    "bladeia-instagram-post-v3-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-06-59ba4d3c6609.png",
+      "sha256": "59ba4d3c6609ec5d23e8c5ec46e52ee9643c47fe38b96a0ec01dd636436d2338",
+      "size": 406135
+    },
+    "bladeia-instagram-post-v3-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-07-10ef6150dae2.png",
+      "sha256": "10ef6150dae2810e3de8e8cd0efaa5ad3234e6a7a85d4b752cf458f993aa029e",
+      "size": 459342
+    },
+    "bladeia-instagram-post-v3-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-08-ed27481a7a0f.png",
+      "sha256": "ed27481a7a0f440e061faaa4eec9893efbde0df8f2d5d76d6ac51cf1aec17421",
+      "size": 400393
+    },
+    "bladeia-instagram-post-v3-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v3-09-6bc0198f0783.png",
+      "sha256": "6bc0198f07839facb800f300bb146136a864b2f3507089b549f2512a4ddc3698",
+      "size": 627453
+    },
+    "bladeia-instagram-post-v4-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-01-3a217fdd0007.png",
+      "sha256": "3a217fdd000720493d53ae080e47dd74c62ad2925c38459cca95516522460220",
+      "size": 1179951
+    },
+    "bladeia-instagram-post-v4-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-02-5aa70a4db0bc.png",
+      "sha256": "5aa70a4db0bc14356072d88f76b1f698891da0fc54c46b7b335e35b547a32c2e",
+      "size": 1449645
+    },
+    "bladeia-instagram-post-v4-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-03-8be050bbfa77.png",
+      "sha256": "8be050bbfa775448fd4544da960ad8c69c7cc87288195f86dc8855eb34e9847e",
+      "size": 1096396
+    },
+    "bladeia-instagram-post-v4-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-04-18e1cc3e0078.png",
+      "sha256": "18e1cc3e0078da2073798112e455b31c0223296eb1854f4b05cf9fe6ff58c464",
+      "size": 1202960
+    },
+    "bladeia-instagram-post-v4-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-05-102c344c5dba.png",
+      "sha256": "102c344c5dba48fe4b33d6ce78d9311137349da2971c7cb452884a6814af02f4",
+      "size": 1073024
+    },
+    "bladeia-instagram-post-v4-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-06-7b503865e3ee.png",
+      "sha256": "7b503865e3ee67035f82c8c3fa67fd22d825794badf4e03f5c8701fb34d8c391",
+      "size": 1236567
+    },
+    "bladeia-instagram-post-v4-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-07-fe2644bff6c6.png",
+      "sha256": "fe2644bff6c6b5f1bfeed2fb6a1ae59bb24f8d447922b14bdef119dadaeb4d3c",
+      "size": 1240012
+    },
+    "bladeia-instagram-post-v4-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-08-6173359f2666.png",
+      "sha256": "6173359f26660c9e4b842c16023fb4070d5c1892ffe39cf6573fa5b6eeea0049",
+      "size": 1086035
+    },
+    "bladeia-instagram-post-v4-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v4-09-d108b89255b4.png",
+      "sha256": "d108b89255b46a14630e82ea8b4c610922ca82a79b6fb08db06761ae887fd3cb",
+      "size": 1170815
+    },
+    "bladeia-instagram-post-v5-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-01-dccd5e841e0b.png",
+      "sha256": "dccd5e841e0bb443a22bb80dfed3ca347e3ab665c0496f173c8d294d48b47dad",
+      "size": 878701
+    },
+    "bladeia-instagram-post-v5-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-02-55ad2fb88a2a.png",
+      "sha256": "55ad2fb88a2a177a6b76d84596e8c2a4f368ef904ee0b1e999c49cb9e86e8c19",
+      "size": 563655
+    },
+    "bladeia-instagram-post-v5-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-03-7fe023d6faed.png",
+      "sha256": "7fe023d6faed3d53f95c32f167db2a1343620e0c4c3d1ce5299d006c99269589",
+      "size": 854598
+    },
+    "bladeia-instagram-post-v5-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-04-e638c3da3c2c.png",
+      "sha256": "e638c3da3c2c4262a52cd1b59670ec6c13b74f2a9a2d8debee85871c01c1f3fb",
+      "size": 864194
+    },
+    "bladeia-instagram-post-v5-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-05-459bf5d7ce3c.png",
+      "sha256": "459bf5d7ce3c7dace3cd7ba87a4d27ec22919b712db9936063f4e6e9fcb8f9f2",
+      "size": 818411
+    },
+    "bladeia-instagram-post-v5-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-06-5573b9299a95.png",
+      "sha256": "5573b9299a95c7963094c6d4aab99f495b8468739f204b2a60e6e3d54b751214",
+      "size": 821448
+    },
+    "bladeia-instagram-post-v5-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-07-cd23975442ae.png",
+      "sha256": "cd23975442ae02397eb609bf7e290b72ab43a3a50039abd3bc353cb738387a79",
+      "size": 804890
+    },
+    "bladeia-instagram-post-v5-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-08-9338b09dc9bb.png",
+      "sha256": "9338b09dc9bba2ff126503e995e1f835348f4c1995972370eb49a1f0eb7dd901",
+      "size": 791262
+    },
+    "bladeia-instagram-post-v5-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v5-09-c47d4f7db54f.png",
+      "sha256": "c47d4f7db54f1fd73d6f7e65a26f97c18bdb74e1705380895557f84981ae3223",
+      "size": 951788
+    },
+    "bladeia-instagram-post-v6-01-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-01-final-92a301ca425e.png",
+      "sha256": "92a301ca425e8b4123ee88d5f4b5f4621d90ab9bb62f27c85f0ca42e67fb741e",
+      "size": 2231613
+    },
+    "bladeia-instagram-post-v6-01.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-01-c085c69ca251.png",
+      "sha256": "c085c69ca2511f58844f9a2660ce8f4442f7893f34104012208ccfee784885a3",
+      "size": 1799795
+    },
+    "bladeia-instagram-post-v6-02-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-02-final-02c1b28733e5.png",
+      "sha256": "02c1b28733e59b77f5e57a91243ad1cd5a065650548526da22aa385736656029",
+      "size": 2100102
+    },
+    "bladeia-instagram-post-v6-02.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-02-c719ea5d1a67.png",
+      "sha256": "c719ea5d1a671a253ee64e3d4ccb64fcb6f1560a4a650063269ed91e13471b5e",
+      "size": 1527551
+    },
+    "bladeia-instagram-post-v6-03-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-03-final-985427ace66e.png",
+      "sha256": "985427ace66eff502dab3b569f9de80e1949eca553e5f2117bb654da6f77b969",
+      "size": 2320851
+    },
+    "bladeia-instagram-post-v6-03.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-03-d29aa2f02b99.png",
+      "sha256": "d29aa2f02b9918251676f882fba33f123fd33109da15455973b0e43ff44f80fb",
+      "size": 1752500
+    },
+    "bladeia-instagram-post-v6-04-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-04-final-e5234a329b33.png",
+      "sha256": "e5234a329b33a4a69d4bdb6f54d92d15e2c211c67500d7b9ee2d7506b4e35011",
+      "size": 2335415
+    },
+    "bladeia-instagram-post-v6-04.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-04-6638f56c4924.png",
+      "sha256": "6638f56c4924200b553b917f082f3290e83fb2886d386da81173e10799ab0163",
+      "size": 1778572
+    },
+    "bladeia-instagram-post-v6-05-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-05-final-cc308aaaf0ac.png",
+      "sha256": "cc308aaaf0aceed2bc52632d7ae38c00b7ddb48523d6771e7af51c14e34a24e1",
+      "size": 2363402
+    },
+    "bladeia-instagram-post-v6-05.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-05-00b16173f0d0.png",
+      "sha256": "00b16173f0d0d16b8186d5297e863555293d436bf00a608d32c461796ba94283",
+      "size": 1716818
+    },
+    "bladeia-instagram-post-v6-06-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-06-final-99dbe6fc6976.png",
+      "sha256": "99dbe6fc69763d7f27bf0a1d4d5ff60855846a784bd6ca12a9c451a3ce4e48eb",
+      "size": 2110686
+    },
+    "bladeia-instagram-post-v6-06.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-06-aec5b3ab6f8f.png",
+      "sha256": "aec5b3ab6f8f74eb404e717af72ab9619763b5c3b868ba9e6e321a9111b65d89",
+      "size": 1631834
+    },
+    "bladeia-instagram-post-v6-07-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-07-final-9d4b9927a7dc.png",
+      "sha256": "9d4b9927a7dc437ed8190020090a95829eb1eeba4ecaf3fc86df12df546039bd",
+      "size": 2286346
+    },
+    "bladeia-instagram-post-v6-07.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-07-f9fbd990bde1.png",
+      "sha256": "f9fbd990bde1d1d1ae9847190abbcb9bdd6c7aea244b58a8522aff726f9e3b63",
+      "size": 1753545
+    },
+    "bladeia-instagram-post-v6-08-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-08-final-d8121d5d3098.png",
+      "sha256": "d8121d5d30987353109e386a1f73c173451053e51551bd0f14d71f51a7f75502",
+      "size": 2040299
+    },
+    "bladeia-instagram-post-v6-08.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-08-8563feeb4e3d.png",
+      "sha256": "8563feeb4e3d3e8cf28848f3cab2b176e9135115b7187389acfb6cf92d9a458a",
+      "size": 1554708
+    },
+    "bladeia-instagram-post-v6-09-final.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-09-final-7ba6a730d49a.png",
+      "sha256": "7ba6a730d49a0d9e0d2459c52f8c80ca101ded0d06a102591bcd030e3673845d",
+      "size": 2225218
+    },
+    "bladeia-instagram-post-v6-09.png": {
+      "url": "https://assets.bladeia.com/marketing/instagram/bladeia-instagram-post-v6-09-0a527c7d1389.png",
+      "sha256": "0a527c7d1389276a85c23447c293b91bdf10ad225c0076caf56500e1b47f247c",
+      "size": 1715483
+    }
+  }
+}

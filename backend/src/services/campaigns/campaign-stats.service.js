@@ -34,10 +34,26 @@ function addHours(date, hours) {
 	return new Date(new Date(date).getTime() + hours * 60 * 60 * 1000);
 }
 
-async function getChatConfirmedPurchaseRecipients(workspaceId) {
+async function getAutomationHealth(workspaceId) {
+	const settings = await Promise.all([
+		prisma.abandonedCartAutomationSetting.findUnique({ where: { workspaceId }, select: { enabled: true, intervalMinutes: true, lastRunAt: true, lastError: true } }),
+		prisma.pendingPaymentAutomationSetting.findUnique({ where: { workspaceId }, select: { enabled: true, intervalMinutes: true, lastRunAt: true, lastError: true } }),
+		prisma.shipmentNotificationSetting.findUnique({ where: { workspaceId }, select: { enabled: true, lastRunAt: true, lastError: true } }),
+	]);
+	const names = ['abandoned_carts', 'pending_payment', 'shipments'];
+	return settings.map((setting, index) => {
+		const intervalMinutes = Number(setting?.intervalMinutes || 60);
+		const threshold = (intervalMinutes * 2 + 15) * 60 * 1000;
+		const stale = Boolean(setting?.enabled && (!setting.lastRunAt || Date.now() - new Date(setting.lastRunAt).getTime() > threshold));
+		return { type: names[index], enabled: Boolean(setting?.enabled), lastRunAt: setting?.lastRunAt || null, intervalMinutes, stale, lastError: setting?.lastError || null };
+	});
+}
+
+async function getChatConfirmedPurchaseRecipients(workspaceId, campaignWhere = {}) {
 	const recipients = await prisma.campaignRecipient.findMany({
 		where: {
 			workspaceId,
+			...(Object.keys(campaignWhere).length ? { campaign: campaignWhere } : {}),
 			conversationId: { not: null },
 			status: { in: ['SENT', 'DELIVERED', 'READ'] },
 			OR: [
@@ -118,9 +134,24 @@ async function getChatConfirmedPurchaseRecipients(workspaceId) {
 	return chatRecipients;
 }
 
-export async function getCampaignStats({ workspaceId } = {}) {
+export async function getCampaignStats({ workspaceId, dateFrom, dateTo, kind, audienceSource, archiveScope = 'all' } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const workspaceWhere = { workspaceId: resolvedWorkspaceId };
+	const campaignWhere = { ...workspaceWhere };
+	if (dateFrom || dateTo) {
+		campaignWhere.createdAt = {};
+		if (dateFrom && !Number.isNaN(new Date(dateFrom).getTime())) campaignWhere.createdAt.gte = new Date(dateFrom);
+		if (dateTo && !Number.isNaN(new Date(dateTo).getTime())) {
+			const to = new Date(dateTo);
+			if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateTo))) to.setUTCHours(23, 59, 59, 999);
+			campaignWhere.createdAt.lte = to;
+		}
+	}
+	if (String(kind || '').toLowerCase() === 'manual') campaignWhere.automationRunId = null;
+	if (String(kind || '').toLowerCase() === 'automated') campaignWhere.automationRunId = { not: null };
+	if (audienceSource) campaignWhere.audienceSource = String(audienceSource);
+	if (String(archiveScope || '').toLowerCase() === 'current') campaignWhere.archivedAt = null;
+	const recipientWhere = { ...workspaceWhere, ...(Object.keys(campaignWhere).length > 1 ? { campaign: Object.fromEntries(Object.entries(campaignWhere).filter(([key]) => key !== 'workspaceId')) } : {}) };
 	const [
 		templatesCount,
 		approvedTemplatesCount,
@@ -128,6 +159,7 @@ export async function getCampaignStats({ workspaceId } = {}) {
 		activeCampaignsCount,
 		recipientsCount,
 		sentRecipientsCount,
+		deliveredRecipientsCount,
 		billableRecipientsCount,
 		statusGroups,
 		conversions,
@@ -135,23 +167,24 @@ export async function getCampaignStats({ workspaceId } = {}) {
 	] = await Promise.all([
 		prisma.whatsAppTemplate.count({ where: { ...workspaceWhere, deletedAt: null } }),
 		prisma.whatsAppTemplate.count({ where: { ...workspaceWhere, deletedAt: null, status: 'APPROVED' } }),
-		prisma.campaign.count({ where: workspaceWhere }),
-		prisma.campaign.count({ where: { ...workspaceWhere, status: { in: ACTIVE_STATUSES } } }),
-		prisma.campaignRecipient.count({ where: workspaceWhere }),
+		prisma.campaign.count({ where: campaignWhere }),
+		prisma.campaign.count({ where: { ...campaignWhere, status: { in: ACTIVE_STATUSES } } }),
+		prisma.campaignRecipient.count({ where: recipientWhere }),
 		prisma.campaignRecipient.count({
 			where: {
-				...workspaceWhere,
+				...recipientWhere,
 				status: { in: ['SENT', 'DELIVERED', 'READ'] },
 			},
 		}),
-		prisma.campaignRecipient.count({ where: { ...workspaceWhere, billable: true } }),
+		prisma.campaignRecipient.count({ where: { ...recipientWhere, status: { in: ['DELIVERED', 'READ'] } } }),
+		prisma.campaignRecipient.count({ where: { ...recipientWhere, billable: true } }),
 		prisma.campaign.groupBy({
 			by: ['status'],
-			where: workspaceWhere,
+			where: campaignWhere,
 			_count: { _all: true },
 		}),
 		prisma.campaignConversion.findMany({
-			where: workspaceWhere,
+			where: { ...workspaceWhere, ...(Object.keys(campaignWhere).length > 1 ? { campaign: Object.fromEntries(Object.entries(campaignWhere).filter(([key]) => key !== 'workspaceId')) } : {}) },
 			select: {
 				recipientId: true,
 				source: true,
@@ -159,7 +192,7 @@ export async function getCampaignStats({ workspaceId } = {}) {
 				currency: true,
 			},
 		}),
-		getChatConfirmedPurchaseRecipients(resolvedWorkspaceId),
+		getChatConfirmedPurchaseRecipients(resolvedWorkspaceId, Object.fromEntries(Object.entries(campaignWhere).filter(([key]) => key !== 'workspaceId'))),
 	]);
 
 	const statusBreakdown = STATUS_BUCKETS.reduce((acc, status) => {
@@ -206,6 +239,7 @@ export async function getCampaignStats({ workspaceId } = {}) {
 	const conversionSignalRecipients = signalRecipients.size;
 	const purchasedRecipients = realRecipients.size;
 	const chatConfirmedPurchaseRecipients = chatRecipients.size;
+	const automationHealth = await getAutomationHealth(resolvedWorkspaceId);
 
 	return {
 		templatesCount,
@@ -214,6 +248,7 @@ export async function getCampaignStats({ workspaceId } = {}) {
 		activeCampaignsCount,
 		recipientsCount,
 		sentRecipientsCount,
+		deliveredRecipientsCount,
 		estimatedMonthlyCostUsd,
 		statusBreakdown,
 		conversionSignalRecipients,
@@ -224,5 +259,9 @@ export async function getCampaignStats({ workspaceId } = {}) {
 		attributedRevenue,
 		attributedCurrency,
 		conversionsBySource,
+		period: { dateFrom: dateFrom || null, dateTo: dateTo || null, archiveScope, kind: kind || null, audienceSource: audienceSource || null },
+		updatedAt: new Date().toISOString(),
+		attribution: { realSources: [...REAL_CONVERSION_SOURCES], chatSource: APP_CONVERSION_SOURCE, deduplication: 'recipientId' },
+		automationHealth,
 	};
 }

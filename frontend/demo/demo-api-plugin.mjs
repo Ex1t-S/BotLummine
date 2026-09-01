@@ -147,14 +147,15 @@ function createInitialState() {
 	];
 
 	const carts = [
-		['cart-demo-1', 'Valentina Demo', '$ 184.900,00', 'NEW', 'Nuevo', '2026-07-18T13:20:00.000Z', 'Nunca', null, ['Zapatillas Urban · 38', 'Medias Trail']],
-		['cart-demo-2', 'Tomás Demo', '$ 96.500,00', 'CONTACTED', 'Contactado', '2026-07-17T20:10:00.000Z', 'Hoy, 11:05', 'Operador Demo', ['Campera Nube · M']],
-		['cart-demo-3', 'Lucía Demo', '$ 242.000,00', 'NEW', 'Nuevo', '2026-07-17T15:30:00.000Z', 'Nunca', null, ['Bota Sur · 39']],
-		['cart-demo-4', 'Benjamín Demo', '$ 78.400,00', 'RECOVERED', 'Recuperado', '2026-07-15T18:00:00.000Z', '15/07, 16:22', 'Operador Demo', ['Remera Base · L']],
-		['cart-demo-5', 'Agustina Demo', '$ 129.990,00', 'DISMISSED', 'Descartado', '2026-07-14T14:30:00.000Z', '14/07, 12:15', 'Operador Demo', ['Mochila City']],
-	].map(([id, contactName, totalLabel, status, statusLabel, createdAt, lastMessageSentLabel, responsibleName, productsPreview], index) => ({
+		['cart-demo-1', 'Valentina Demo', 'ARS 184.900', 'NEW', 'Por contactar', '2026-07-18T13:20:00.000Z', 'Nunca', null, ['Zapatillas Urban · 38', 'Medias Trail'], 'conversation-demo-auto'],
+		['cart-demo-2', 'Tomás Demo', 'ARS 96.500', 'CONTACTED', 'Contactado', '2026-07-17T20:10:00.000Z', 'Hoy, 11:05', 'Operador Demo', ['Campera Nube · M'], 'conversation-demo-human'],
+		['cart-demo-3', 'Lucía Demo', 'ARS 242.000', 'NEW', 'Por contactar', '2026-07-17T15:30:00.000Z', 'Nunca', null, ['Bota Sur · 39'], 'conversation-demo-payment'],
+		['cart-demo-4', 'Benjamín Demo', 'ARS 78.400', 'RECOVERED', 'Recuperado', '2026-07-15T18:00:00.000Z', '15/07, 16:22', 'Operador Demo', ['Remera Base · L'], null],
+		['cart-demo-5', 'Agustina Demo', 'ARS 129.990', 'DISMISSED', 'Descartado', '2026-07-14T14:30:00.000Z', '14/07, 12:15', 'Operador Demo', ['Mochila City'], null],
+	].map(([id, contactName, totalLabel, status, statusLabel, createdAt, lastMessageSentLabel, responsibleName, productsPreview, conversationId], index) => ({
 		id, contactName, contactPhone: `+54 11 0000 02${String(index + 1).padStart(2, '0')}`, contactEmail: `cliente${index + 1}@example.test`,
 		checkoutCreatedAt: createdAt, createdAt, status, statusLabel, totalLabel, lastMessageSentLabel, responsibleName,
+		conversationId, currency: 'ARS',
 		canOpenCart: true, abandonedCheckoutUrl: `https://example.test/demo/cart/${id}`, productsPreview,
 		displayCreatedAt: new Date(createdAt).toLocaleString('es-AR'), shippingCity: 'Ciudad Demo', shippingProvince: 'Provincia Demo',
 	}));
@@ -283,11 +284,13 @@ function computeCampaignStats(state) {
 		sentRecipientsCount: state.campaigns.reduce((total, item) => total + Number(item.sentCount || 0), 0),
 		purchasedRecipients: 16,
 		conversionSignalRecipients: 34,
+		chatConfirmedPurchaseRecipients: 11,
 		attributedRevenue: 1207500,
 		attributedCurrency: 'ARS',
 		purchaseRate: 0.064,
 		conversionSignalRate: 0.136,
 		statusBreakdown: { RUNNING: 1, FINISHED: 1, DRAFT: 1 },
+		updatedAt: DEMO_NOW,
 	};
 }
 
@@ -322,8 +325,8 @@ function makeHandler(stateRef) {
 
 		if (pathname === '/dashboard/operations/summary') {
 			return sendJson(res, {
-				totals: { activeConversations30d: 34, messages30dInbound: 286, messages30dOutbound: 241, paymentReview: 1, unreadConversations: 3, unreadMessages: 6, abandonedCartsNew: 2 },
-				workspaces: [{ workspace: demoWorkspace, metrics: { activeConversations30d: 34, unreadConversations: 3, paymentReview: 1, customersCount: 128, campaignsCount: state.campaigns.length }, issues: [{ id: 'issue-demo-sla', type: 'conversations', severity: 'warning', title: '2 conversaciones cerca del plazo', description: 'Revisá la bandeja humana antes de las 14:30.', count: 2, href: '/inbox/humano' }] }],
+			totals: { activeConversations30d: 34, messages30dInbound: 286, messages30dOutbound: 241, paymentReview: 1, unreadConversations: 3, unreadMessages: 6, waitingResponseConversations: 12, waitingResponseUnder24h: 8, waitingResponseOver24h: 4, abandonedCartsNew: 2 },
+			workspaces: [{ workspace: demoWorkspace, metrics: { activeConversations30d: 34, unreadConversations: 3, unreadMessages: 6, waitingResponseConversations: 12, waitingResponseUnder24h: 8, waitingResponseOver24h: 4, paymentReview: 1, customersCount: 128, campaignsCount: state.campaigns.length }, issues: [{ id: 'issue-demo-sla', type: 'conversations', severity: 'warning', title: '2 conversaciones cerca del plazo', description: 'Revisá la bandeja humana antes de las 14:30.', count: 2, href: '/inbox/humano' }] }],
 			});
 		}
 
@@ -366,10 +369,25 @@ function makeHandler(stateRef) {
 		}
 
 		if (pathname === '/dashboard/abandoned-carts' && method === 'GET') {
-			const total = state.carts.length;
-			return sendJson(res, { ok: true, carts: state.carts, stats: { total, totalNew: state.carts.filter((item) => item.status === 'NEW').length, totalContacted: state.carts.filter((item) => item.status === 'CONTACTED').length, showingFrom: total ? 1 : 0, showingTo: total }, pagination: { page: 1, totalPages: 1, total }, demo: true });
+			const query = String(url.searchParams.get('q') || '').trim().toLowerCase();
+			const status = String(url.searchParams.get('status') || 'ALL').toUpperCase();
+			const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+			const pageSize = 12;
+			const filtered = state.carts.filter((item) => {
+				const matchesStatus = status === 'ALL' || item.status === status;
+				const haystack = [item.contactName, item.contactPhone, item.contactEmail, item.shippingCity, item.shippingProvince, item.id].join(' ').toLowerCase();
+				return matchesStatus && (!query || haystack.includes(query));
+			});
+			const total = filtered.length;
+			const totalPages = Math.max(1, Math.ceil(total / pageSize));
+			const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+			return sendJson(res, { ok: true, referenceNow: DEMO_NOW, carts: pageItems, stats: { total, totalNew: filtered.filter((item) => item.status === 'NEW').length, totalContacted: filtered.filter((item) => item.status === 'CONTACTED').length, totalRecovered: filtered.filter((item) => item.status === 'RECOVERED').length, totalDismissed: filtered.filter((item) => item.status === 'DISMISSED').length, showingFrom: total ? (page - 1) * pageSize + 1 : 0, showingTo: Math.min(page * pageSize, total) }, pagination: { page, pageSize, totalPages, total }, demo: true });
 		}
-		if (pathname === '/dashboard/abandoned-carts/sync' && method === 'POST') return sendJson(res, { ok: true, daysBack: 30, syncedCount: state.carts.length, deletedCount: 0, remainingCount: state.carts.length, message: 'Fixtures de carritos actualizados localmente.', demo: true });
+		if (pathname === '/dashboard/abandoned-carts/sync' && method === 'POST') {
+			const body = await readBody(req);
+			const daysBack = Number(body?.daysBack || url.searchParams.get('daysBack') || 30);
+			return sendJson(res, { ok: true, daysBack, syncedCount: state.carts.length, deletedCount: 0, remainingCount: state.carts.length, message: 'Fixtures de carritos actualizados localmente.', demo: true });
+		}
 
 		const catalog = createCatalog();
 		if (pathname === '/dashboard/catalog' && method === 'GET') return sendJson(res, { items: catalog, products: catalog, total: catalog.length, page: 1, totalPages: 1, demo: true });
@@ -396,7 +414,7 @@ function makeHandler(stateRef) {
 				failedRecipients: failedCount,
 				pendingRecipients: pendingCount,
 			}));
-			return sendJson(res, { campaigns, items: campaigns, demo: true });
+			return sendJson(res, { campaigns, items: campaigns, pagination: { page: 1, pageSize: campaigns.length, total: campaigns.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false }, demo: true });
 		}
 		if (pathname === '/campaigns' && method === 'POST') { const body = await readBody(req); const template = state.templates.find((item) => item.id === body.templateId); const campaign = { id: `campaign-demo-${++state.sequence}`, name: body.name || `Campaña demo ${state.sequence}`, status: 'DRAFT', templateId: body.templateId || template?.id || state.templates[0]?.id, templateName: template?.name || state.templates[0]?.name, audienceSource: body.audienceSource || body.source || 'segment', createdAt: new Date().toISOString(), totalRecipients: Number(body.totalRecipients || body.recipientIds?.length || 36), sentCount: 0, deliveredCount: 0, readCount: 0, failedCount: 0, pendingCount: Number(body.totalRecipients || body.recipientIds?.length || 36) }; state.campaigns.unshift(campaign); return sendJson(res, { campaign, id: campaign.id, demo: true }, 201); }
 		if (pathname === '/campaigns/automation-runs') return sendJson(res, { runs: [], items: [], demo: true });
@@ -409,12 +427,13 @@ function makeHandler(stateRef) {
 		if (pathname === '/campaigns/shipment-notifications/candidates') return sendJson(res, { candidates: [], summary: { total: 0 }, demo: true });
 		if (pathname.endsWith('/run-now') || pathname === '/campaigns/dispatch/tick') return sendJson(res, { ok: true, processed: 0, deliveredExternally: false, demo: true });
 
-		const campaignMatch = pathname.match(/^\/campaigns\/([^/]+)(?:\/(launch|cancel|retry-failed))?$/);
+		const campaignMatch = pathname.match(/^\/campaigns\/([^/]+)(?:\/(launch|cancel|retry-failed|archive))?$/);
 		if (campaignMatch) {
 			const campaign = state.campaigns.find((item) => item.id === campaignMatch[1]);
 			if (!campaign) return sendJson(res, { error: 'Campaña demo no encontrada.' }, 404);
 			if (method === 'GET') { const recipients = campaignRecipients(campaign); return sendJson(res, { campaign, recipients, pagination: { page: 1, pageSize: 500, total: campaign.totalRecipients }, analytics: campaign.analytics || {}, diagnostics: campaign.diagnostics || { demo: true }, demo: true }); }
 			if (method === 'DELETE') { state.campaigns = state.campaigns.filter((item) => item.id !== campaign.id); return sendJson(res, { ok: true, demo: true }); }
+			if (campaignMatch[2] === 'archive' && method === 'PATCH') { const body = await readBody(req); campaign.archivedAt = body.archived === false ? null : new Date().toISOString(); return sendJson(res, { campaign, ok: true, demo: true }); }
 			if (campaignMatch[2] === 'launch') { campaign.status = 'RUNNING'; campaign.startedAt = new Date().toISOString(); campaign.sentCount = Math.max(1, Math.round(campaign.totalRecipients * 0.72)); campaign.deliveredCount = Math.round(campaign.sentCount * 0.91); campaign.readCount = Math.round(campaign.deliveredCount * 0.68); campaign.pendingCount = Math.max(0, campaign.totalRecipients - campaign.sentCount); return sendJson(res, { campaign, ok: true, demo: true, deliveredExternally: false }); }
 			if (campaignMatch[2] === 'cancel') { campaign.status = 'CANCELLED'; campaign.finishedAt = new Date().toISOString(); return sendJson(res, { campaign, ok: true, demo: true }); }
 			if (campaignMatch[2] === 'retry-failed') { campaign.status = 'RUNNING'; campaign.failedCount = 0; return sendJson(res, { campaign, ok: true, demo: true, deliveredExternally: false }); }
@@ -424,17 +443,21 @@ function makeHandler(stateRef) {
 		if (pathname === `/admin/workspaces/${demoWorkspace.id}`) return sendJson(res, { workspace: demoWorkspace, demo: true });
 		if (pathname === `/admin/workspaces/${demoWorkspace.id}/users`) return sendJson(res, { users: [demoUser], demo: true });
 		if (pathname === `/admin/workspaces/${demoWorkspace.id}/catalog/status`) return sendJson(res, { catalog: { totalProducts: catalog.length, totalPublished: catalog.length, lastSync: { status: 'SUCCESS', finishedAt: DEMO_NOW } }, demo: true });
-		if (pathname === '/admin/analytics/workspaces') return sendJson(res, {
-			activityWindowDays: 30,
-			totals: { campaignsCount: state.campaigns.length, activeCampaignsCount: state.campaigns.filter((item) => item.status === 'RUNNING').length, recipientsCount: 251, customersCount: 128, revenueTotal: 3205000, currency: 'ARS', activeConversations30d: 34, recoveredCartsCount: 9, recoveredCartValue: 721500, estimatedCampaignCostUsd: 12.4, sentRecipientsCount: 184, deliveredRecipientsCount: 172, readRecipientsCount: 125, failedRecipientsCount: 7, unreadMessagesCount: 6 },
-			workspaces: [{ workspace: demoWorkspace, metrics: { messages30dInbound: 286, messages30dOutbound: 241, activeConversations30d: 34, sentRecipientsCount: 184, deliveredRecipientsCount: 172, readRecipientsCount: 125, failedRecipientsCount: 7, deliveryRate: 93.5, readRate: 72.7, conversionCount: 16, recoveredCartsCount: 9, recoveredCartValue: 721500, currency: 'ARS', estimatedCampaignCostUsd: 12.4, unreadMessagesCount: 6 } }],
-			detail: {
-				workspaceId: demoWorkspace.id,
-				campaigns: state.campaigns.map((campaign) => ({ ...campaign, sentRecipients: campaign.sentCount, deliveredRecipients: campaign.deliveredCount, readRecipients: campaign.readCount, failedRecipients: campaign.failedCount })),
-				customers: { ordersCount: 13, revenueTotal: 3205000, recentOrders: [], topCustomers: [] },
-			},
-			demo: true,
-		});
+		if (pathname === '/admin/analytics/workspaces') {
+			const requestedPeriodDays = Number(url.searchParams.get('periodDays') || 30);
+			const activityWindowDays = [7, 30, 90].includes(requestedPeriodDays) ? requestedPeriodDays : 30;
+			return sendJson(res, {
+				activityWindowDays,
+				totals: { campaignsCount: state.campaigns.length, activeCampaignsCount: state.campaigns.filter((item) => item.status === 'RUNNING').length, recipientsCount: 251, customersCount: 128, revenueTotal: 3205000, currency: 'ARS', activeConversations30d: 34, recoveredCartsCount: 9, recoveredCartValue: 721500, estimatedCampaignCostUsd: 12.4, sentRecipientsCount: 184, deliveredRecipientsCount: 172, readRecipientsCount: 125, failedRecipientsCount: 7, unreadMessagesCount: 6, waitingResponseConversations: 12, waitingResponseUnder24h: 8, waitingResponseOver24h: 4, conversionCount: 16, attributedRevenue: 1207500, chatConfirmedPurchaseCount: 11 },
+				workspaces: [{ workspace: demoWorkspace, metrics: { messages30dInbound: 286, messages30dOutbound: 241, activeConversations30d: 34, sentRecipientsCount: 184, deliveredRecipientsCount: 172, readRecipientsCount: 125, failedRecipientsCount: 7, deliveryRate: 93.5, readRate: 72.7, conversionCount: 16, attributedRevenue: 1207500, chatConfirmedPurchaseCount: 11, recoveredCartsCount: 9, recoveredCartValue: 721500, currency: 'ARS', estimatedCampaignCostUsd: 12.4, unreadMessagesCount: 6, waitingResponseConversations: 12, waitingResponseUnder24h: 8, waitingResponseOver24h: 4 } }],
+				detail: {
+					workspaceId: demoWorkspace.id,
+					campaigns: state.campaigns.map((campaign) => ({ ...campaign, sentRecipients: campaign.sentCount, deliveredRecipients: campaign.deliveredCount, readRecipients: campaign.readCount, failedRecipients: campaign.failedCount })),
+					customers: { ordersCount: 13, revenueTotal: 3205000, recentOrders: [], topCustomers: [] },
+				},
+				demo: true,
+			});
+		}
 		if (pathname === '/tiendanube/status' || pathname === '/shopify/status') return sendJson(res, { connected: false, configured: false, demo: true });
 		if (pathname === '/whatsapp-menu' && method === 'GET') return sendJson(res, { settings: clone(state.menuSettings), demo: true });
 		if (pathname === '/whatsapp-menu' && method === 'PUT') {

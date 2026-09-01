@@ -144,8 +144,10 @@ test('carga audios y stickers autenticados de mensajes entrantes y enviados', as
 	await installMediaApi(page);
 	await page.goto('/inbox/automatico');
 
-	await expect(page.locator('audio.inbox-attachment-audio')).toBeVisible();
-	await expect(page.locator('audio.inbox-attachment-audio')).toHaveAttribute('src', /^blob:/);
+	const audio = page.locator('audio.inbox-attachment-audio');
+	await expect(audio).toBeAttached();
+	await expect(audio).toHaveAttribute('controls', '');
+	await expect(audio).toHaveAttribute('src', /^blob:/);
 	await expect(page.locator('img.inbox-attachment-sticker')).toBeVisible();
 	await expect(page.locator('img.inbox-attachment-sticker')).toHaveAttribute('src', /^blob:/);
 	await expect(page.getByText('Cargando audio')).toHaveCount(0);
@@ -159,7 +161,9 @@ test('permite reintentar un audio histórico que inicialmente no está disponibl
 	await expect(errorCard).toBeVisible();
 	await errorCard.getByRole('button', { name: 'Reintentar' }).click();
 
-	await expect(page.locator('audio.inbox-attachment-audio')).toBeVisible();
-	await expect(page.locator('audio.inbox-attachment-audio')).toHaveAttribute('src', /^blob:/);
+	const audio = page.locator('audio.inbox-attachment-audio');
+	await expect(audio).toBeAttached();
+	await expect(audio).toHaveAttribute('controls', '');
+	await expect(audio).toHaveAttribute('src', /^blob:/);
 	expect(getAudioAttempts()).toBe(2);
 });

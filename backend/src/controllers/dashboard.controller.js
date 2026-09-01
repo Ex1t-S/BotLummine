@@ -165,6 +165,10 @@ function emptyOperationMetrics() {
 		paymentReview: 0,
 		unreadConversations: 0,
 		unreadMessages: 0,
+		waitingResponseConversations: 0,
+		waitingResponseUnder24h: 0,
+		waitingResponseOver24h: 0,
+		waitingResponseMessages: 0,
 		activeConversations30d: 0,
 		messages30dInbound: 0,
 		messages30dOutbound: 0,
@@ -246,13 +250,14 @@ function buildOperationIssues({ workspace, metrics, channel, latestCatalogSync, 
 		});
 	}
 
-	if (metrics.unreadMessages > 0) {
+	if (metrics.waitingResponseConversations > 0) {
 		issues.push({
-			type: 'unread',
-			severity: 'info',
-			label: `${metrics.unreadMessages} mensajes no leidos`,
-			action: 'Ver inbox',
-			href: '/inbox/todos?read=UNREAD',
+			type: 'waiting_response',
+			severity: metrics.waitingResponseOver24h > 0 ? 'warning' : 'info',
+			label: `${metrics.waitingResponseConversations} conversaciones esperan respuesta`,
+			description: `${metrics.waitingResponseUnder24h} con menos de 24 h · ${metrics.waitingResponseOver24h} con más de 24 h.`,
+			action: 'Abrir bandeja',
+			href: '/inbox/todos?status=WAITING_RESPONSE',
 		});
 	}
 
@@ -1114,6 +1119,7 @@ export async function getOperationSummary(req, res, next) {
 		const [
 			queueRows,
 			unreadRows,
+			waitingResponseRows,
 			activeConversationRows,
 			messageRows,
 			campaignRows,
@@ -1140,6 +1146,15 @@ export async function getOperationSummary(req, res, next) {
 				},
 				_count: { _all: true },
 				_sum: { unreadCount: true },
+			}),
+			prisma.conversation.findMany({
+				where: { ...scopedWhere, ...VISIBLE_INBOX_CONTACT_WHERE, archivedAt: null, lastMessageAt: { not: null } },
+				select: {
+					workspaceId: true,
+					lastMessageAt: true,
+					unreadCount: true,
+					messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { direction: true } },
+				},
 			}),
 			prisma.conversation.groupBy({
 				by: ['workspaceId'],
@@ -1266,6 +1281,16 @@ export async function getOperationSummary(req, res, next) {
 			if (!metrics) continue;
 			metrics.unreadConversations = row._count?._all || 0;
 			metrics.unreadMessages = row._sum?.unreadCount || 0;
+		}
+
+		for (const row of waitingResponseRows) {
+			const metrics = metricsByWorkspace.get(row.workspaceId);
+			if (!metrics || row.messages?.[0]?.direction !== 'INBOUND') continue;
+			const ageMs = Math.max(0, Date.now() - new Date(row.lastMessageAt).getTime());
+			metrics.waitingResponseConversations += 1;
+			metrics.waitingResponseMessages += normalizeCount(row.unreadCount || 1);
+			if (ageMs > 24 * 60 * 60 * 1000) metrics.waitingResponseOver24h += 1;
+			else metrics.waitingResponseUnder24h += 1;
 		}
 
 		for (const row of activeConversationRows) {
@@ -1834,6 +1859,7 @@ export async function postConversationMessage(req, res, next) {
 			}
 
 			const localCopy = await saveLocalInboxMediaCopy({
+				workspaceId,
 				filePath: uploadedFile.path,
 				fileName: uploadedFile.originalname || uploadResult.fileName || 'archivo',
 				mimeType: uploadResult.mimeType || uploadedFile.mimetype,

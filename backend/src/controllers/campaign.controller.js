@@ -4,6 +4,7 @@ import {
 	launchCampaign,
 	cancelCampaign,
 	deleteCampaign,
+	archiveCampaign,
 	listCampaigns,
 	getCampaignDetail,
 	retryFailedCampaignRecipients,
@@ -231,11 +232,20 @@ export async function previewAbandonedCartAudienceController(req, res) {
 
 export async function listCampaignsController(req, res) {
 	try {
-		const campaigns = await listCampaigns({
+		const result = await listCampaigns({
 			workspaceId: requireRequestWorkspaceId(req),
-			limit: req.query.limit || 10,
+			limit: req.query.limit || req.query.pageSize || 10,
+			page: req.query.page || 1,
+			pageSize: req.query.pageSize || req.query.limit || 10,
+			dateFrom: req.query.dateFrom,
+			dateTo: req.query.dateTo,
+			status: req.query.status,
+			kind: req.query.kind,
+			audienceSource: req.query.audienceSource,
+			search: req.query.search,
+			archiveScope: req.query.archiveScope || 'current',
 		});
-		return res.json({ ok: true, campaigns });
+		return res.json({ ok: true, ...result });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
@@ -245,9 +255,17 @@ export async function listAutomationRunsController(req, res) {
 	try {
 		const runs = await listAutomationRuns({
 			workspaceId: requireRequestWorkspaceId(req),
-			limit: req.query.limit || 30,
+			limit: req.query.limit || req.query.pageSize || 30,
+			page: req.query.page || 1,
+			pageSize: req.query.pageSize || req.query.limit || 30,
+			dateFrom: req.query.dateFrom,
+			dateTo: req.query.dateTo,
+			type: req.query.type,
+			status: req.query.status,
+			search: req.query.search,
+			archiveScope: req.query.archiveScope || 'current',
 		});
-		return res.json({ ok: true, runs });
+		return res.json({ ok: true, ...runs });
 	} catch (error) {
 		return sendError(res, error, 500);
 	}
@@ -272,6 +290,9 @@ export async function getCampaignController(req, res) {
 			workspaceId: requireRequestWorkspaceId(req),
 			page: req.query.page || 1,
 			pageSize: req.query.pageSize || 50,
+			status: req.query.status,
+			purchase: req.query.purchase,
+			search: req.query.search,
 		});
 		return res.json({ ok: true, ...result });
 	} catch (error) {
@@ -359,6 +380,18 @@ export async function deleteCampaignController(req, res) {
 	}
 }
 
+export async function archiveCampaignController(req, res) {
+	try {
+		const campaign = await archiveCampaign(req.params.campaignId, {
+			workspaceId: requireRequestWorkspaceId(req),
+			archived: req.body?.archived !== false,
+		});
+		return res.json({ ok: true, campaign });
+	} catch (error) {
+		return sendError(res, error);
+	}
+}
+
 export async function retryFailedCampaignRecipientsController(req, res) {
 	try {
 		const result = await retryFailedCampaignRecipients(req.params.campaignId, {
@@ -430,7 +463,14 @@ export async function dispatchTickController(_req, res) {
 
 export async function getCampaignStatsController(req, res) {
 	try {
-		const stats = await getCampaignStats({ workspaceId: requireRequestWorkspaceId(req) });
+		const stats = await getCampaignStats({
+			workspaceId: requireRequestWorkspaceId(req),
+			dateFrom: req.query.dateFrom,
+			dateTo: req.query.dateTo,
+			kind: req.query.kind,
+			audienceSource: req.query.audienceSource,
+			archiveScope: req.query.archiveScope || 'all',
+		});
 		return res.json({ ok: true, stats });
 	} catch (error) {
 		return sendError(res, error, 500);

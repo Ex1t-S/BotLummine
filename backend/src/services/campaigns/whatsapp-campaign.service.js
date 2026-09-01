@@ -1272,7 +1272,6 @@ function classifyCampaignFailure(recipient = {}) {
 
 	if (
 		hasInvalidPhoneShape ||
-		code === '100' ||
 		['131026', '131030', '131047', '131051'].includes(code) ||
 		/phone|recipient|numero|valid|undeliverable|not a whatsapp/i.test(message)
 	) {
@@ -1280,6 +1279,7 @@ function classifyCampaignFailure(recipient = {}) {
 			key: 'phone_or_recipient',
 			label: 'Telefono o destinatario',
 			action: 'Revisar normalizacion, 9 despues de 54 y alta del numero en WhatsApp.',
+			retryable: false,
 			phoneIssue: hasInvalidPhoneShape,
 			normalizedPhone: normalizedPhone || null,
 		};
@@ -1290,6 +1290,7 @@ function classifyCampaignFailure(recipient = {}) {
 			key: 'provider_rate_limit',
 			label: 'Limite de envio',
 			action: 'Pausar reintentos masivos y retomar con menor cadencia.',
+			retryable: false,
 			phoneIssue: false,
 			normalizedPhone: normalizedPhone || null,
 		};
@@ -1300,16 +1301,18 @@ function classifyCampaignFailure(recipient = {}) {
 			key: 'provider_delivery_policy',
 			label: 'Entrega limitada por Meta',
 			action: 'Evitar reintentar de inmediato; revisar cadencia, audiencia y tipo de plantilla.',
+			retryable: false,
 			phoneIssue: false,
 			normalizedPhone: normalizedPhone || null,
 		};
 	}
 
-	if (code === '190' || /token|oauth|permission|access/i.test(normalizedMessage)) {
+	if (['190', '100'].includes(code) || /token|oauth|permission|access/i.test(normalizedMessage)) {
 		return {
 			key: 'provider_auth',
 			label: 'Credenciales Meta',
 			action: 'Revisar token, permisos y canal WhatsApp del workspace.',
+			retryable: false,
 			phoneIssue: false,
 			normalizedPhone: normalizedPhone || null,
 		};
@@ -1320,6 +1323,7 @@ function classifyCampaignFailure(recipient = {}) {
 			key: 'template_payload',
 			label: 'Plantilla o variables',
 			action: 'Revisar variables renderizadas y estado de la plantilla.',
+			retryable: false,
 			phoneIssue: false,
 			normalizedPhone: normalizedPhone || null,
 		};
@@ -1329,6 +1333,7 @@ function classifyCampaignFailure(recipient = {}) {
 		key: 'provider_other',
 		label: 'Proveedor',
 		action: 'Revisar el mensaje de Meta y logs del envio.',
+		retryable: true,
 		phoneIssue: false,
 		normalizedPhone: normalizedPhone || null,
 	};
@@ -1354,6 +1359,7 @@ function buildCampaignFailureDiagnostics(recipients = []) {
 			key: classification.key,
 			label: classification.label,
 			action: classification.action,
+			retryable: classification.retryable === true,
 		});
 		if (classification.phoneIssue) {
 			possiblePhoneNormalization += 1;
@@ -1385,6 +1391,7 @@ function buildCampaignFailureDiagnostics(recipients = []) {
 
 	return {
 		totalFailed: failedRecipients.length,
+		retryableFailed: [...byReason.values()].filter((item) => item.retryable).reduce((sum, item) => sum + item.count, 0),
 		possiblePhoneNormalization,
 		byReason: [...byReason.values()].sort((a, b) => b.count - a.count),
 		byProviderCode: [...byProviderCode.values()].sort((a, b) => b.count - a.count),
@@ -1687,49 +1694,60 @@ export function buildSendComponentsFromTemplate({
 	return sendComponents;
 }
 
-const CAMPAIGN_HISTORY_LIMIT = 10;
-const ACTIVE_CAMPAIGN_STATUSES = ['QUEUED', 'RUNNING'];
+const CAMPAIGN_PAGE_SIZE = 10;
+const CAMPAIGN_DEFAULT_DAYS = 90;
 
-async function archiveOlderCampaigns(workspaceId) {
-	const candidates = await prisma.campaign.findMany({
-		where: { workspaceId, archivedAt: null },
-		orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-		take: CAMPAIGN_HISTORY_LIMIT + 1,
-		select: { createdAt: true },
-	});
-
-	if (candidates.length <= CAMPAIGN_HISTORY_LIMIT) return 0;
-
-	const cutoff = candidates[CAMPAIGN_HISTORY_LIMIT - 1]?.createdAt;
-	if (!cutoff) return 0;
-
-	const archived = await prisma.campaign.updateMany({
-		where: {
-			workspaceId,
-			archivedAt: null,
-			createdAt: { lt: cutoff },
-			status: { notIn: ACTIVE_CAMPAIGN_STATUSES },
-		},
-		data: { archivedAt: new Date() },
-	});
-
-	return archived.count;
+function parseDateFilter(value, endOfDay = false) {
+	if (!value) return null;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return null;
+	if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(String(value))) date.setUTCHours(23, 59, 59, 999);
+	return date;
 }
 
-export async function listCampaigns({ workspaceId, limit = CAMPAIGN_HISTORY_LIMIT } = {}) {
+function getCampaignFilters({ dateFrom, dateTo, archiveScope = 'current' } = {}) {
+	const now = new Date();
+	const defaultFrom = new Date(now.getTime() - CAMPAIGN_DEFAULT_DAYS * 24 * 60 * 60 * 1000);
+	const from = parseDateFilter(dateFrom) || (archiveScope === 'current' ? defaultFrom : null);
+	const to = parseDateFilter(dateTo, true);
+	const createdAt = {};
+	if (from) createdAt.gte = from;
+	if (to) createdAt.lte = to;
+	const scope = String(archiveScope || 'current').toLowerCase();
+	const archive = scope === 'archive' ? { OR: [{ archivedAt: { not: null } }, { createdAt: { lt: defaultFrom } }] } : scope === 'all' ? {} : { archivedAt: null };
+	return { createdAt, archive, from, to };
+}
+
+export async function listCampaigns({ workspaceId, limit = CAMPAIGN_PAGE_SIZE, page = 1, pageSize = limit, dateFrom, dateTo, status, kind, audienceSource, search, archiveScope = 'current' } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
-	await archiveOlderCampaigns(resolvedWorkspaceId);
-	const campaigns = await prisma.campaign.findMany({
-		where: { workspaceId: resolvedWorkspaceId, archivedAt: null },
-		orderBy: [{ createdAt: 'desc' }],
-		take: Math.max(1, Math.min(Number(limit) || CAMPAIGN_HISTORY_LIMIT, CAMPAIGN_HISTORY_LIMIT)),
+	const filters = getCampaignFilters({ dateFrom, dateTo, archiveScope });
+	const statuses = safeArray(String(status || '').split(',')).map((item) => item.trim().toUpperCase()).filter(Boolean);
+	const where = {
+		workspaceId: resolvedWorkspaceId,
+		...filters.archive,
+		...(Object.keys(filters.createdAt).length ? { createdAt: filters.createdAt } : {}),
+		...(statuses.length ? { status: { in: statuses } } : {}),
+		...(String(kind || '').toLowerCase() === 'manual' ? { automationRunId: null } : String(kind || '').toLowerCase() === 'automated' ? { automationRunId: { not: null } } : {}),
+		...(audienceSource ? { audienceSource: normalizeAudienceSource(audienceSource) } : {}),
+		...(search ? { OR: [{ name: { contains: String(search), mode: 'insensitive' } }, { templateName: { contains: String(search), mode: 'insensitive' } }, { notes: { contains: String(search), mode: 'insensitive' } }] } : {}),
+	};
+	const currentPage = Math.max(1, Number(page) || 1);
+	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || Number(limit) || CAMPAIGN_PAGE_SIZE, 100));
+	const [total, campaigns] = await Promise.all([
+		prisma.campaign.count({ where }),
+		prisma.campaign.findMany({
+			where,
+			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+			skip: (currentPage - 1) * currentPageSize,
+			take: currentPageSize,
 		include: {
 			recipients: {
 				orderBy: [{ createdAt: 'desc' }],
 				take: 15
 			}
 		}
-	});
+		})
+	]);
 
 	const analyticsByCampaignId = await Promise.all(
 		campaigns.map(async (campaign) => {
@@ -1756,13 +1774,24 @@ export async function listCampaigns({ workspaceId, limit = CAMPAIGN_HISTORY_LIMI
 
 	const analyticsMap = new Map(analyticsByCampaignId);
 
-	return campaigns.map((campaign) => {
+	return {
+		campaigns: campaigns.map((campaign) => {
 		const { draftContext: _draftContext, ...campaignSummary } = campaign;
 		return {
 			...campaignSummary,
 			analytics: analyticsMap.get(campaign.id) || null,
 		};
-	});
+		}),
+		pagination: {
+			page: currentPage,
+			pageSize: currentPageSize,
+			total,
+			totalPages: Math.max(1, Math.ceil(total / currentPageSize)),
+			hasNextPage: currentPage * currentPageSize < total,
+			hasPreviousPage: currentPage > 1,
+		},
+		filters: { dateFrom: filters.from?.toISOString() || null, dateTo: filters.to?.toISOString() || null, archiveScope },
+	};
 }
 
 function getRecipientDispatchAt(recipient = {}) {
@@ -2122,7 +2151,7 @@ export async function buildCampaignRecipientInsights(recipients = [], workspaceI
 	};
 }
 
-export async function getCampaignDetail(campaignId, { workspaceId, page = 1, pageSize = 50 } = {}) {
+export async function getCampaignDetail(campaignId, { workspaceId, page = 1, pageSize = 50, status = '', purchase = 'ALL', search = '' } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const campaign = await prisma.campaign.findFirst({
 		where: { id: campaignId, workspaceId: resolvedWorkspaceId }
@@ -2135,7 +2164,7 @@ export async function getCampaignDetail(campaignId, { workspaceId, page = 1, pag
 	const currentPage = Math.max(1, Number(page) || 1);
 	const currentPageSize = Math.max(1, Math.min(Number(pageSize) || 50, 1000));
 
-	const [template, totalRecipients, recipients, allRecipientsForInsights] = await Promise.all([
+	const [template, allRecipientsForInsights] = await Promise.all([
 		campaign.templateLocalId
 			? prisma.whatsAppTemplate.findFirst({
 					where: {
@@ -2144,13 +2173,6 @@ export async function getCampaignDetail(campaignId, { workspaceId, page = 1, pag
 					}
 			  })
 			: null,
-		prisma.campaignRecipient.count({ where: { workspaceId: resolvedWorkspaceId, campaignId } }),
-		prisma.campaignRecipient.findMany({
-			where: { workspaceId: resolvedWorkspaceId, campaignId },
-			orderBy: [{ createdAt: 'asc' }],
-			skip: (currentPage - 1) * currentPageSize,
-			take: currentPageSize
-		}),
 		prisma.campaignRecipient.findMany({
 			where: { workspaceId: resolvedWorkspaceId, campaignId },
 			select: {
@@ -2179,6 +2201,25 @@ export async function getCampaignDetail(campaignId, { workspaceId, page = 1, pag
 		buildCampaignOperationalControls(campaign),
 	]);
 	const failureDiagnostics = buildCampaignFailureDiagnostics(allRecipientsForInsights);
+	const normalizedStatus = String(status || '').trim().toUpperCase();
+	const normalizedPurchase = String(purchase || 'ALL').trim().toUpperCase();
+	const normalizedSearch = String(search || '').trim().toLowerCase();
+	const filteredRecipients = allRecipientsForInsights.filter((recipient) => {
+		if (normalizedStatus && normalizedStatus !== 'ALL' && String(recipient.status || '').toUpperCase() !== normalizedStatus) return false;
+		if (normalizedSearch) {
+			const haystack = [recipient.contactName, recipient.phone, recipient.waId, recipient.status, recipient.errorMessage, recipient.errorCode].filter(Boolean).join(' ').toLowerCase();
+			if (!haystack.includes(normalizedSearch)) return false;
+		}
+		if (normalizedPurchase && normalizedPurchase !== 'ALL') {
+			const insight = insights.recipientsById.get(recipient.id) || {};
+			const hasPurchase = Boolean(insight.purchaseDetected || insight.chatConfirmedPurchase || insight.conversionSignal);
+			if (normalizedPurchase === 'PURCHASED' && !hasPurchase) return false;
+			if (normalizedPurchase === 'NOT_PURCHASED' && hasPurchase) return false;
+		}
+		return true;
+	});
+	const totalRecipients = filteredRecipients.length;
+	const recipients = filteredRecipients.slice((currentPage - 1) * currentPageSize, currentPage * currentPageSize);
 	const enrichedRecipients = recipients.map((recipient) => ({
 		...recipient,
 		...(insights.recipientsById.get(recipient.id) || {})
@@ -2707,6 +2748,19 @@ export async function launchCampaign(campaignId, { workspaceId } = {}) {
 		: null;
 
 	ensureApprovedTemplate(template);
+	const dispatchComponents = safeArray(campaign.defaultComponents).length
+		? safeArray(campaign.defaultComponents)
+		: safeArray(template.rawPayload?.components);
+	const header = dispatchComponents.find((component) => toUpper(component?.type) === 'HEADER');
+	const headerFormat = toUpper(header?.format || template.rawPayload?.components?.find?.((component) => toUpper(component?.type) === 'HEADER')?.format || '');
+	if (['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(headerFormat)) {
+		const parameter = safeArray(header?.parameters)[0] || {};
+		const mediaField = headerFormat.toLowerCase();
+		const media = parameter?.[mediaField] || {};
+		if (!media.id && !media.link) {
+			throw new Error(`La plantilla requiere multimedia ${headerFormat} válida antes de poner la campaña en cola.`);
+		}
+	}
 
 	const pendingCount = await prisma.campaignRecipient.count({
 		where: {
@@ -2775,8 +2829,8 @@ export async function deleteCampaign(campaignId, { workspaceId } = {}) {
 		throw new Error('Las campañas automáticas se administran desde Automatizaciones.');
 	}
 
-	if (['RUNNING', 'QUEUED'].includes(String(campaign.status || '').toUpperCase())) {
-		throw new Error('No se puede eliminar una campaña en ejecución o en cola.');
+	if (String(campaign.status || '').toUpperCase() !== 'DRAFT') {
+		throw new Error('Solo se pueden eliminar borradores. Las campañas ejecutadas deben archivarse.');
 	}
 
 	await prisma.$transaction([
@@ -2795,6 +2849,22 @@ export async function deleteCampaign(campaignId, { workspaceId } = {}) {
 	};
 }
 
+export async function archiveCampaign(campaignId, { workspaceId, archived = true } = {}) {
+	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
+	const campaign = await prisma.campaign.findFirst({
+		where: { id: campaignId, workspaceId: resolvedWorkspaceId },
+		select: { id: true, name: true, status: true, archivedAt: true },
+	});
+	if (!campaign) throw new Error('No se encontró la campaña.');
+	if (['RUNNING', 'QUEUED'].includes(String(campaign.status || '').toUpperCase())) {
+		throw new Error('No se puede archivar una campaña en ejecución o en cola.');
+	}
+	return prisma.campaign.update({
+		where: workspaceOwnedWhere({ id: campaignId, workspaceId: resolvedWorkspaceId }),
+		data: { archivedAt: archived === false ? null : new Date() },
+	});
+}
+
 export async function retryFailedCampaignRecipients(campaignId, { workspaceId } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	const [campaignDispatchEnabled, whatsappOutboundEnabled] = await Promise.all([
@@ -2809,14 +2879,13 @@ export async function retryFailedCampaignRecipients(campaignId, { workspaceId } 
 		throw new Error('Los envios salientes de WhatsApp estan pausados para este workspace.');
 	}
 
-	await prisma.campaignRecipient.updateMany({
-		where: {
-			workspaceId: resolvedWorkspaceId,
-			campaignId,
-			status: {
-				in: ['FAILED', 'PENDING']
-			}
-		},
+	const failedRecipients = await prisma.campaignRecipient.findMany({
+		where: { workspaceId: resolvedWorkspaceId, campaignId, status: 'FAILED' },
+		select: { id: true, errorCode: true, errorMessage: true, phone: true, waId: true },
+	});
+	const retryableIds = failedRecipients.filter((recipient) => classifyCampaignFailure(recipient).retryable).map((recipient) => recipient.id);
+	const updatedRecipients = await prisma.campaignRecipient.updateMany({
+		where: { workspaceId: resolvedWorkspaceId, campaignId, OR: [{ status: 'PENDING' }, { id: { in: retryableIds } }] },
 		data: {
 			status: 'PENDING',
 			errorCode: null,
@@ -2838,7 +2907,9 @@ export async function retryFailedCampaignRecipients(campaignId, { workspaceId } 
 	await refreshCampaignCounters(campaignId);
 
 	return {
-		campaign: updated
+		campaign: updated,
+		retriedRecipients: updatedRecipients.count,
+		skippedNonRetryable: Math.max(0, failedRecipients.length - retryableIds.length),
 	};
 }
 

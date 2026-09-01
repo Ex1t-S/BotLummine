@@ -17,4 +17,9 @@ describe('commercial intent detection', () => {
 		assert.equal(detectIntent('quiero saber donde esta mi pedido'), 'order_status');
 		assert.equal(detectIntent('quiero hacer un cambio'), 'return_exchange');
 	});
+
+	it('does not classify campaign opt-outs as purchase intent', () => {
+		assert.equal(detectIntent('No me interesa, denme de baja'), 'general');
+		assert.equal(detectIntent('No me escriban más por este carrito'), 'general');
+	});
 });

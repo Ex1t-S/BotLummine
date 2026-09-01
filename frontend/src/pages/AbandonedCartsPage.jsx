@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import api from '../lib/api.js';
 import { queryKeys, queryPresets } from '../lib/queryClient.js';
@@ -24,6 +25,8 @@ const EMPTY_ABANDONED_CARTS_DATA = {
 		total: 0,
 		totalNew: 0,
 		totalContacted: 0,
+		totalRecovered: 0,
+		totalDismissed: 0,
 		showingFrom: 0,
 		showingTo: 0
 	},
@@ -76,11 +79,11 @@ function getVisiblePages(currentPage, totalPages) {
 	return pages;
 }
 
-function formatCartAge(value) {
+function formatCartAge(value, referenceNow = Date.now()) {
 	const createdAt = new Date(value || '');
 	if (Number.isNaN(createdAt.getTime())) return 'Sin fecha';
 
-	const elapsedMs = Math.max(0, Date.now() - createdAt.getTime());
+	const elapsedMs = Math.max(0, new Date(referenceNow).getTime() - createdAt.getTime());
 	const elapsedHours = Math.floor(elapsedMs / (1000 * 60 * 60));
 	if (elapsedHours < 24) return elapsedHours <= 1 ? 'Hace 1 hora' : `Hace ${elapsedHours} horas`;
 
@@ -89,41 +92,59 @@ function formatCartAge(value) {
 }
 
 function CartStatusBadge({ cart }) {
+	const status = String(cart.status || 'NEW').toUpperCase();
+	const statusCopy = {
+		NEW: 'Por contactar',
+		CONTACTED: 'Contactado',
+		RECOVERED: 'Recuperado',
+		DISMISSED: 'Descartado',
+	};
+	const tone = status === 'RECOVERED' ? 'success' : status === 'CONTACTED' ? 'info' : status === 'DISMISSED' ? 'neutral' : 'warning';
 	return (
 		<StatusBadge
-			tone={cart.status === 'CONTACTED' ? 'success' : 'info'}
+			tone={tone}
 			className={`status-badge ${
-				cart.status === 'CONTACTED' ? 'status-contacted' : 'status-new'
+				status === 'RECOVERED' ? 'status-recovered' : status === 'CONTACTED' ? 'status-contacted' : status === 'DISMISSED' ? 'status-dismissed' : 'status-new'
 			}`}
 		>
-			{cart.status === 'CONTACTED' ? 'Contactado' : 'No contactado'}
+			{statusCopy[status] || statusCopy.NEW}
 		</StatusBadge>
 	);
 }
 
-function CartPrimaryAction({ cart }) {
-	if (!cart.canOpenCart) {
-		return (
-			<button type="button" className="secondary-link-btn" disabled>
-				Falta link
-			</button>
-		);
-	}
-
+function CartActions({ cart, onOpenConversation, onContact }) {
+	const terminalStatus = ['RECOVERED', 'DISMISSED'].includes(String(cart.status || '').toUpperCase());
 	return (
-		<a
-			href={cart.abandonedCheckoutUrl}
-			target="_blank"
-			rel="noreferrer"
-			className="secondary-link-btn"
-		>
-			Abrir carrito
-		</a>
+		<div className="abandoned-action-group">
+			{terminalStatus ? (
+				<button type="button" className="secondary-link-btn" disabled>
+					Sin contacto pendiente
+				</button>
+			) : cart.conversationId ? (
+				<button type="button" className="primary-action-btn" onClick={() => onOpenConversation(cart.conversationId)}>
+					Abrir conversación
+				</button>
+			) : (
+				<button type="button" className="primary-action-btn" onClick={() => onContact(cart)}>
+					Contactar
+				</button>
+			)}
+			{cart.canOpenCart ? (
+				<a href={cart.abandonedCheckoutUrl} target="_blank" rel="noreferrer" className="secondary-link-btn">
+					Ver carrito
+				</a>
+			) : (
+				<button type="button" className="secondary-link-btn" disabled>Sin enlace</button>
+			)}
+		</div>
 	);
 }
 
 const AbandonedCartCard = memo(function AbandonedCartCard({
 	cart,
+	onOpenConversation,
+	onContact,
+	referenceNow,
 }) {
 	return (
 		<article className="abandoned-card">
@@ -145,15 +166,13 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 					<strong>{cart.totalLabel}</strong>
 				</div>
 
-				<div className="abandoned-card-actions">
-					<CartPrimaryAction cart={cart} />
-				</div>
+				<CartActions cart={cart} onOpenConversation={onOpenConversation} onContact={onContact} />
 			</div>
 
 			<div className="abandoned-meta-grid">
 				<div>
 					<span>Fecha</span>
-					<strong>{cart.displayCreatedAt || '-'}</strong>
+					<strong>{formatCartAge(cart.checkoutCreatedAt || cart.createdAt, referenceNow)} · {cart.displayCreatedAt || '-'}</strong>
 				</div>
 
 				<div>
@@ -172,9 +191,9 @@ const AbandonedCartCard = memo(function AbandonedCartCard({
 				)}
 			</div>
 
-			{cart.status === 'CONTACTED' ? (
+			{cart.status === 'CONTACTED' || cart.status === 'RECOVERED' ? (
 				<div className="abandoned-contact-note">
-					Ultimo envio: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
+					Último contacto: <strong>{cart.lastMessageSentLabel || 'Nunca'}</strong>
 				</div>
 			) : null}
 		</article>
@@ -185,6 +204,7 @@ export default function AbandonedCartsPage() {
 	useInternalDarkOverrides();
 
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
 	const [syncing, setSyncing] = useState(false);
 	const [filters, setFilters] = useState(initialFilters);
 	const [appliedFilters, setAppliedFilters] = useState(initialFilters);
@@ -311,16 +331,29 @@ export default function AbandonedCartsPage() {
 	const loading = abandonedCartsQuery.isLoading;
 	const carts = Array.isArray(data.carts) ? data.carts : [];
 	const stats = data.stats || {};
+	const referenceNow = data.referenceNow || Date.now();
 	const pagination = data.pagination || { page: 1, totalPages: 1 };
 	const visiblePages = getVisiblePages(pagination.page || 1, pagination.totalPages || 1);
 	const hasInitialLoadError = abandonedCartsQuery.isError && carts.length === 0;
+	const periodLabel = filters.dateFrom || filters.dateTo
+		? `${filters.dateFrom || 'inicio'} — ${filters.dateTo || 'hoy'}`
+		: `últimos ${filters.syncWindow || DEFAULT_SYNC_WINDOW_DAYS} días`;
+
+	function handleOpenConversation(conversationId) {
+		if (!conversationId) return;
+		navigate(`/inbox/todos?conversation=${encodeURIComponent(conversationId)}`);
+	}
+
+	function handleContact(cart) {
+		navigate(`/campaigns/abandoned-carts?cartId=${encodeURIComponent(cart.id)}`);
+	}
 
 	return (
 		<div className="abandoned-carts-page">
 			<PageHeader
 				className="page-header"
 				title="Carritos abandonados"
-				description={`${stats.total || 0} carritos en los ultimos ${filters.syncWindow || DEFAULT_SYNC_WINDOW_DAYS} dias. Se conserva el estado de los ya contactados por campanas.`}
+				description={`${stats.total || 0} carritos en el período ${periodLabel}. La sincronización se configura por separado.`}
 			>
 				<div className="inline-actions">
 					<ActionButton onClick={handleSync} disabled={syncing} icon={RefreshCw}>
@@ -354,7 +387,7 @@ export default function AbandonedCartsPage() {
 				</div>
 
 				<div className="stat-box">
-					<span>No contactados</span>
+					<span>Por contactar</span>
 					<strong>{stats.totalNew || 0}</strong>
 				</div>
 
@@ -364,10 +397,8 @@ export default function AbandonedCartsPage() {
 				</div>
 
 				<div className="stat-box">
-					<span>Mostrando</span>
-					<strong>
-						{stats.showingFrom || 0}-{stats.showingTo || 0}
-					</strong>
+					<span>Recuperados</span>
+					<strong>{stats.totalRecovered || 0}</strong>
 				</div>
 			</div>
 
@@ -401,13 +432,13 @@ export default function AbandonedCartsPage() {
 				</label>
 
 				<label>
-					<span>Ventana de sincronización</span>
+					<span>Ventana para sincronizar</span>
 					<select
 						value={filters.syncWindow}
 						onChange={(e) => updateFilter('syncWindow', Number(e.target.value))}
 					>
 						{SYNC_WINDOW_OPTIONS.map((days) => (
-							<option key={days} value={days}>{days} dia{days === 1 ? '' : 's'}</option>
+							<option key={days} value={days}>{days} día{days === 1 ? '' : 's'}</option>
 						))}
 					</select>
 				</label>
@@ -419,8 +450,10 @@ export default function AbandonedCartsPage() {
 						onChange={(e) => updateFilter('status', e.target.value)}
 					>
 						<option value="ALL">Todos</option>
-						<option value="NEW">No contactado</option>
+						<option value="NEW">Por contactar</option>
 						<option value="CONTACTED">Contactado</option>
+						<option value="RECOVERED">Recuperado</option>
+						<option value="DISMISSED">Descartado</option>
 					</select>
 				</label>
 
@@ -481,10 +514,10 @@ export default function AbandonedCartsPage() {
 											<span>{cart.contactPhone || cart.contactEmail || 'Sin contacto'}</span>
 										</td>
 										<td><strong>{cart.totalLabel || '-'}</strong></td>
-										<td>{formatCartAge(cart.checkoutCreatedAt || cart.createdAt)}</td>
+						<td>{formatCartAge(cart.checkoutCreatedAt || cart.createdAt, referenceNow)}</td>
 										<td><CartStatusBadge cart={cart} /></td>
-										<td>{cart.lastMessageSentLabel || 'Nunca'}</td>
-										<td><CartPrimaryAction cart={cart} /></td>
+						<td>{cart.lastMessageSentLabel || 'Nunca'}</td>
+						<td><CartActions cart={cart} onOpenConversation={handleOpenConversation} onContact={handleContact} /></td>
 									</tr>
 								))}
 							</tbody>
@@ -496,6 +529,9 @@ export default function AbandonedCartsPage() {
 							<AbandonedCartCard
 								key={cart.id}
 								cart={cart}
+								onOpenConversation={handleOpenConversation}
+								onContact={handleContact}
+								referenceNow={referenceNow}
 							/>
 						))}
 					</div>

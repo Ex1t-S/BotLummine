@@ -284,6 +284,18 @@
 	border-color: #a7f3d0;
 }
 
+.status-badge.status-recovered {
+	background: #ecfdf5;
+	color: #047857;
+	border-color: #86efac;
+}
+
+.status-badge.status-dismissed {
+	background: #f8fafc;
+	color: #64748b;
+	border-color: #cbd5e1;
+}
+
 .abandoned-meta-grid {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -352,6 +364,19 @@
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 8px;
+}
+
+.abandoned-action-group {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.abandoned-action-group .primary-action-btn,
+.abandoned-action-group .secondary-link-btn {
+	min-width: 128px;
 }
 
 .secondary-link-btn,
@@ -1311,6 +1336,16 @@
 
 .abandoned-carts-table .secondary-link-btn {
 	min-width: 108px;
+}
+
+.abandoned-carts-table .abandoned-action-group {
+	justify-content: flex-start;
+	flex-wrap: nowrap;
+}
+
+.abandoned-carts-table .abandoned-action-group .primary-action-btn,
+.abandoned-carts-table .abandoned-action-group .secondary-link-btn {
+	min-width: 118px;
 }
 
 .abandoned-carts-grid {

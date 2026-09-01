@@ -1,0 +1,12 @@
+[Unit]
+Description=Run BladeIA encrypted R2 backup weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 America/Argentina/Buenos_Aires
+Persistent=true
+RandomizedDelaySec=5m
+Unit=bladeia-backup-weekly.service
+
+[Install]
+WantedBy=timers.target
+

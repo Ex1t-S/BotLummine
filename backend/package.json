@@ -14,6 +14,11 @@
     "jobs:enbox-sync": "node src/jobs/enbox-sync.job.js",
     "jobs:campaign-dispatch": "node src/jobs/campaign-dispatch.job.js",
     "jobs:recover-lummine-quota": "node scripts/recover-lummine-quota-failures.mjs",
+    "audit:abandoned-cart-duplicates": "node scripts/dedupe-abandoned-cart-messages.mjs",
+    "audit:abandoned-cart-duplicates:apply": "node scripts/dedupe-abandoned-cart-messages.mjs --apply",
+    "media:r2:migrate": "node scripts/migrate-media-to-r2.mjs",
+    "media:r2:migrate:apply": "node scripts/migrate-media-to-r2.mjs --apply",
+    "assets:r2:upload": "node scripts/upload-public-assets-to-r2.mjs",
     "jobs:diagnose": "node src/jobs/diagnose.job.js",
     "ai:test:no-context": "node scripts/test-ai-no-context.mjs",
     "ai:test:workspace-flow": "node scripts/test-ai-workspace-flow.mjs",
@@ -38,6 +43,7 @@
     "tiendanube:customers:debug": "node scripts/debug-tiendanube-customers.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1124.0",
     "@prisma/client": "^6.19.3",
     "@sentry/node": "^10.66.0",
     "axios": "^1.16.1",
@@ -56,5 +62,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2"
   }
 }

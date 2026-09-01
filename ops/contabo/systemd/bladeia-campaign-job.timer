@@ -1,0 +1,12 @@
+[Unit]
+Description=Run BladeIA campaign dispatcher hourly
+
+[Timer]
+OnCalendar=*-*-* *:05:00
+Persistent=true
+AccuracySec=30s
+Unit=bladeia-campaign-job.service
+
+[Install]
+WantedBy=timers.target
+

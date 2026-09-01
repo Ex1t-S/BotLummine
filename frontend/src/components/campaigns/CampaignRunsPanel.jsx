@@ -377,7 +377,7 @@ export default function CampaignRunsPanel({
 	onDispatch,
 	onPause,
 	onResume,
-	onDelete,
+	onArchive,
 	actionLoading,
 	deleteLoading,
 	loading = false,
@@ -385,8 +385,7 @@ export default function CampaignRunsPanel({
 }) {
 	const [retryConfirmationOpen, setRetryConfirmationOpen] = useState(false);
 	const currentStatus = String(selectedCampaign?.status || '').toUpperCase();
-	const selectedIsAutomationRun = selectedCampaign?.kind === 'automation_run';
-	const canDelete = selectedCampaign && !selectedIsAutomationRun && !['RUNNING', 'QUEUED'].includes(currentStatus);
+	const canDelete = selectedCampaign && !['RUNNING', 'QUEUED'].includes(currentStatus);
 	const deleteBusy = Boolean(deleteLoading && selectedCampaign?.id);
 	const actionModel = useMemo(
 		() => buildCampaignActionModel(selectedCampaign || {}),
@@ -421,7 +420,7 @@ export default function CampaignRunsPanel({
 	const operationalControls = diagnostics.controls || {};
 	const hasTemplateParameterMismatch = hasProviderCode(failureDiagnostics, '132000');
 	const conversionSourceItems = buildConversionSourceItems(analytics.conversionsBySource || {});
-	const retryableCount = recipientMetrics.failed + recipientMetrics.pending;
+	const retryableCount = Number(failureDiagnostics.retryableFailed ?? (recipientMetrics.failed + recipientMetrics.pending));
 	const selectedStatusPresentation = getCampaignStatusPresentation(selectedCampaign || {});
 
 	const filteredRecipients = useMemo(() => {
@@ -440,13 +439,12 @@ export default function CampaignRunsPanel({
 		});
 	}, [allRecipients, statusFilter, purchaseFilter, search]);
 
-	const totalPages = Math.max(1, Math.ceil(filteredRecipients.length / pageSize));
+	const serverTotal = Number(selectedCampaign?.pagination?.total || 0);
+	const totalPages = Number(selectedCampaign?.pagination?.totalPages) || Math.max(1, Math.ceil(filteredRecipients.length / pageSize));
 	const safePage = Math.min(page, totalPages);
 
-	const paginatedRecipients = filteredRecipients.slice(
-		(safePage - 1) * pageSize,
-		safePage * pageSize
-	);
+	const paginatedRecipients = selectedCampaign?.pagination ? filteredRecipients : filteredRecipients.slice((safePage - 1) * pageSize, safePage * pageSize);
+	const visibleTotal = serverTotal || filteredRecipients.length;
 
 	function handleRetryDialogKeyDown(event) {
 		if (event.key === 'Escape') {
@@ -479,7 +477,7 @@ export default function CampaignRunsPanel({
 		<section className="campaign-panel campaign-panel--soft campaign-tracking-panel campaign-tracking-panel--focused">
 			<div className="campaign-panel-header">
 				<div>
-					<h3>Seguimiento de envíos</h3>
+					<h3>Diagnóstico de campaña</h3>
 					<p>
 						Elegí una campaña, revisá lo que necesite seguimiento y bajá al destinatario sólo si necesitás investigar.
 					</p>
@@ -500,7 +498,7 @@ export default function CampaignRunsPanel({
 				<div className="campaign-detail-box campaign-detail-box--tracking campaign-detail-box--tracking-list">
 					<div className="campaign-detail-header">
 						<div>
-							<h4>Historial · últimas 10</h4>
+							<h4>Ejecuciones</h4>
 							<p>{campaigns.length} campaña{campaigns.length === 1 ? '' : 's'} visibles</p>
 						</div>
 					</div>
@@ -638,9 +636,9 @@ export default function CampaignRunsPanel({
 									if (actionModel.primaryAction === 'dispatch') onDispatch(selectedCampaign.id);
 									if (actionModel.primaryAction === 'resume') setRetryConfirmationOpen(true);
 									}}
-									disabled={actionLoading || actionModel.primaryDisabled}
+									disabled={actionLoading || actionModel.primaryDisabled || (actionModel.primaryAction === 'resume' && retryableCount === 0)}
 								>
-									{actionModel.primaryLabel}
+									{actionModel.primaryAction === 'resume' ? `Reintentar recuperables${retryableCount ? ` (${retryableCount})` : ''}` : actionModel.primaryLabel}
 								</button>
 								) : null}
 
@@ -654,19 +652,19 @@ export default function CampaignRunsPanel({
 									</button>
 								) : null}
 
-								{!selectedIsAutomationRun ? (
+								{selectedCampaign ? (
 								<button
 									type="button"
 									className="button danger"
-									onClick={() => onDelete(selectedCampaign)}
+									onClick={() => onArchive(selectedCampaign)}
 									disabled={!canDelete || deleteBusy}
 									title={
 										canDelete
-											? 'Eliminar campaña'
-											: 'No se puede eliminar una campaña en cola o en ejecución'
+										? 'Archivar campaña'
+										: 'No se puede archivar una campaña en cola o en ejecución'
 									}
 								>
-									{deleteBusy ? 'Eliminando...' : 'Eliminar'}
+									{deleteBusy ? 'Archivando...' : 'Archivar'}
 								</button>
 								) : null}
 							</div>
@@ -763,9 +761,9 @@ export default function CampaignRunsPanel({
 							</div>
 
 							<div className="campaign-results-summary" aria-live="polite">
-								<strong>{formatCompactNumber(filteredRecipients.length)}</strong>
+								<strong>{formatCompactNumber(visibleTotal)}</strong>
 								<span>
-									destinatario{filteredRecipients.length === 1 ? '' : 's'} en la vista actual
+									 destinatario{visibleTotal === 1 ? '' : 's'} en la vista actual
 									{statusFilter !== 'ALL' ? ` · filtro ${formatRecipientStatus(statusFilter)}` : ''}
 									{purchaseFilter !== 'ALL' ? ` · ${formatPurchaseFilter(purchaseFilter)}` : ''}
 									{search ? ' · búsqueda aplicada' : ''}
@@ -877,8 +875,8 @@ export default function CampaignRunsPanel({
 
 							<div className="campaign-customer-pagination campaign-customer-pagination--tracking">
 								<span>
-									Mostrando {filteredRecipients.length === 0 ? 0 : (safePage - 1) * pageSize + 1}-
-									{Math.min(safePage * pageSize, filteredRecipients.length)} de {filteredRecipients.length}
+									Mostrando {visibleTotal === 0 ? 0 : (safePage - 1) * pageSize + 1}-
+									{Math.min(safePage * pageSize, visibleTotal)} de {visibleTotal}
 								</span>
 
 								<div className="campaign-inline-actions campaign-inline-actions--wrap">

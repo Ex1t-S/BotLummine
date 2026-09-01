@@ -1,0 +1,11 @@
+[Unit]
+Description=Monitoreo de BladeIA cada cinco minutos
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=bladeia-health-monitor.service
+
+[Install]
+WantedBy=timers.target

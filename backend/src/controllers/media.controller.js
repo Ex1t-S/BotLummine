@@ -8,8 +8,14 @@ import {
 	uploadWhatsAppMedia,
 	resolveInboxMediaAbsolutePath,
 	getWhatsAppMediaMetadata,
-	downloadWhatsAppMediaBuffer
+	downloadWhatsAppMediaBuffer,
+	saveRecoveredInboxMediaBuffer,
 } from '../services/whatsapp/whatsapp-media.service.js';
+import {
+	getPrivateObject,
+	isR2StorageEnabled,
+	putPublicObject,
+} from '../services/storage/r2-storage.service.js';
 import {
 	isPlatformAdmin,
 	requireRequestWorkspaceId
@@ -61,10 +67,13 @@ async function findInboxMediaMessage(fileName, workspaceId) {
 			}
 		},
 		select: {
+			id: true,
 			workspaceId: true,
 			attachmentMimeType: true,
 			attachmentName: true,
 			attachmentStatus: true,
+			attachmentStorageKey: true,
+			attachmentSha256: true,
 			rawPayload: true
 		},
 		orderBy: {
@@ -133,12 +142,62 @@ async function tryRestoreMissingInboxMedia(fileName, workspaceId) {
 		workspaceId: message.workspaceId,
 		phoneNumberId
 	});
-	const absolutePath = resolveInboxMediaAbsolutePath(safeFileName);
+	const persisted = await saveRecoveredInboxMediaBuffer({
+		workspaceId,
+		buffer,
+		fileName: safeFileName,
+		mimeType: metadata.mimeType || resolveInboxMediaMimeType(message),
+		sha256: metadata.sha256 || message.attachmentSha256 || '',
+	});
 
-	await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-	await fs.writeFile(absolutePath, buffer);
+	await prisma.message.update({
+		where: { id: message.id },
+		data: {
+			attachmentStatus: 'AVAILABLE',
+			attachmentStorageKey: persisted.storageKey,
+			attachmentSha256: metadata.sha256 || message.attachmentSha256 || null,
+		},
+	});
 
-	return true;
+	return persisted;
+}
+
+function isMissingR2Object(error) {
+	return ['NoSuchKey', 'NotFound'].includes(String(error?.name || error?.Code || '')) ||
+		Number(error?.$metadata?.httpStatusCode || 0) === 404;
+}
+
+async function tryServePrivateR2Object(message, res) {
+	if (!isR2StorageEnabled() || !message?.attachmentStorageKey) return false;
+
+	let object;
+	try {
+		object = await getPrivateObject(message.attachmentStorageKey);
+	} catch (error) {
+		if (isMissingR2Object(error)) return false;
+		throw error;
+	}
+
+	applyPrivateMediaCachePolicy(res);
+	const mimeType = String(object.ContentType || resolveInboxMediaMimeType(message) || '').trim();
+	if (mimeType) res.type(mimeType);
+	if (Number.isFinite(Number(object.ContentLength))) {
+		res.setHeader('Content-Length', String(object.ContentLength));
+	}
+
+	if (typeof object.Body?.pipe === 'function') {
+		object.Body.on('error', (error) => res.destroy(error));
+		object.Body.pipe(res);
+		return true;
+	}
+
+	if (typeof object.Body?.transformToByteArray === 'function') {
+		const bytes = await object.Body.transformToByteArray();
+		res.send(Buffer.from(bytes));
+		return true;
+	}
+
+	return false;
 }
 
 export async function serveInboxMediaController(req, res) {
@@ -162,6 +221,10 @@ export async function serveInboxMediaController(req, res) {
 			});
 		}
 
+		if (await tryServePrivateR2Object(message, res)) {
+			return;
+		}
+
 		const absolutePath = resolveInboxMediaAbsolutePath(fileName);
 		let stats = await fs.stat(absolutePath).catch(() => null);
 
@@ -182,6 +245,13 @@ export async function serveInboxMediaController(req, res) {
 				});
 				return false;
 			});
+
+			if (restored?.storageKey && await tryServePrivateR2Object({
+				...message,
+				attachmentStorageKey: restored.storageKey,
+			}, res)) {
+				return;
+			}
 
 			if (restored) {
 				stats = await fs.stat(absolutePath).catch(() => null);
@@ -311,10 +381,21 @@ export async function uploadBrandLogoController(req, res) {
 		const stem = sanitizeFileStem(path.basename(file.originalname || 'brand-logo', path.extname(file.originalname || '')));
 		const fileName = `${workspaceId}-${stem}-${crypto.randomUUID()}${extension}`;
 		const absolutePath = path.join(BRAND_LOGO_DIR, fileName);
-		const logoUrl = buildBrandLogoUrl(fileName);
+		let logoUrl = buildBrandLogoUrl(fileName);
 
-		await fs.mkdir(BRAND_LOGO_DIR, { recursive: true });
-		await fs.rename(file.path, absolutePath);
+		if (isR2StorageEnabled()) {
+			const buffer = await fs.readFile(file.path);
+			const stored = await putPublicObject({
+				key: `branding/${workspaceId}/${fileName}`,
+				body: buffer,
+				contentType: file.mimetype || 'image/png',
+				metadata: { workspaceid: workspaceId },
+			});
+			logoUrl = stored.url;
+		} else {
+			await fs.mkdir(BRAND_LOGO_DIR, { recursive: true });
+			await fs.rename(file.path, absolutePath);
+		}
 
 		await prisma.workspaceBranding.upsert({
 			where: { workspaceId },

@@ -1,0 +1,129 @@
+name: bladeia
+
+x-app-common: &app-common
+  image: ${BLADEIA_IMAGE_REPOSITORY:-ghcr.io/ex1t-s/botlummine-backend}:${BLADEIA_IMAGE_TAG:?BLADEIA_IMAGE_TAG is required}
+  env_file:
+    - .env
+  environment:
+    NODE_ENV: production
+    PORT: 8080
+  networks:
+    - bladeia_internal
+    - bladeia_egress
+  restart: "no"
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: bladeia-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BLADEIA_POSTGRES_DB:-bladeia}
+      POSTGRES_USER: ${BLADEIA_POSTGRES_USER:-bladeia}
+      POSTGRES_PASSWORD: ${BLADEIA_POSTGRES_PASSWORD:?BLADEIA_POSTGRES_PASSWORD is required}
+    command:
+      - postgres
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=384MB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=192MB
+      - -c
+      - wal_compression=on
+    volumes:
+      - bladeia_postgres_data:/var/lib/postgresql/data
+    networks:
+      - bladeia_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    shm_size: 256mb
+    mem_limit: 1536m
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  api:
+    <<: *app-common
+    container_name: bladeia-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      CAMPAIGN_DISPATCHER_ENABLED: "false"
+      HEALTHCHECK_DB: "true"
+      APP_COMMIT_SHA: ${BLADEIA_IMAGE_TAG}
+    ports:
+      - "127.0.0.1:3002:8080"
+    tmpfs:
+      - /app/tmp:size=128m,mode=1777
+    volumes:
+      - bladeia_legacy_storage:/app/storage
+    mem_limit: 1g
+    cpus: 1.5
+    stop_grace_period: 30s
+
+  job:
+    <<: *app-common
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      CAMPAIGN_DISPATCHER_ENABLED: "false"
+      APP_COMMIT_SHA: ${BLADEIA_IMAGE_TAG}
+    mem_limit: 512m
+    cpus: 1.0
+    volumes:
+      - bladeia_legacy_storage:/app/storage
+
+  restic:
+    image: restic/restic:0.18.1
+    profiles: ["ops"]
+    env_file:
+      - .env
+    environment:
+      AWS_ACCESS_KEY_ID: ${R2_BACKUP_ACCESS_KEY_ID:?R2_BACKUP_ACCESS_KEY_ID is required}
+      AWS_SECRET_ACCESS_KEY: ${R2_BACKUP_SECRET_ACCESS_KEY:?R2_BACKUP_SECRET_ACCESS_KEY is required}
+      AWS_DEFAULT_REGION: auto
+      RESTIC_REPOSITORY: s3:https://${R2_ACCOUNT_ID:?R2_ACCOUNT_ID is required}.r2.cloudflarestorage.com/${R2_PRIVATE_BUCKET:?R2_PRIVATE_BUCKET is required}/db-backups/restic
+      RESTIC_PASSWORD_FILE: /run/secrets/restic-password
+    volumes:
+      - ./backups:/backups
+      - ./restore-test:/restore
+      - ./secrets/restic-password:/run/secrets/restic-password:ro
+    networks:
+      - bladeia_egress
+
+networks:
+  bladeia_internal:
+    name: bladeia_internal
+    internal: true
+  bladeia_egress:
+    name: bladeia_egress
+
+volumes:
+  bladeia_postgres_data:
+    name: bladeia_postgres_data_v17
+  bladeia_legacy_storage:
+    name: bladeia_legacy_storage

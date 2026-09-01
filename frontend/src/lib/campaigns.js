@@ -4,8 +4,8 @@ function unwrap(response) {
 	return response?.data?.data ?? response?.data ?? null;
 }
 
-export async function fetchCampaignOverview() {
-	const response = await api.get('/campaigns/stats');
+export async function fetchCampaignOverview(params = {}) {
+	const response = await api.get('/campaigns/stats', { params });
 	return unwrap(response);
 }
 
@@ -54,8 +54,8 @@ export async function fetchAutomationRunDetail(runId, params = {}) {
 	return unwrap(response);
 }
 
-export async function fetchCampaignDetail(campaignId) {
-	const response = await api.get(`/campaigns/${campaignId}`);
+export async function fetchCampaignDetail(campaignId, params = {}) {
+	const response = await api.get(`/campaigns/${campaignId}`, { params });
 	return unwrap(response);
 }
 
@@ -71,6 +71,11 @@ export async function updateCampaignDraft(campaignId, payload) {
 
 export async function deleteCampaign(campaignId) {
 	const response = await api.delete(`/campaigns/${campaignId}`);
+	return unwrap(response);
+}
+
+export async function archiveCampaign(campaignId, archived = true) {
+	const response = await api.patch(`/campaigns/${campaignId}/archive`, { archived });
 	return unwrap(response);
 }
 

@@ -468,24 +468,31 @@ async function claimCandidateLogs(setting, candidates = []) {
 
 	if (!rows.length) return [];
 
+	// Claim each checkout atomically. The previous createMany + follow-up query
+	// returned every existing log, including logs claimed by a concurrent worker.
+	// That race allowed the same cart to be appended and dispatched more than once
+	// (in practice users could receive the abandoned-cart template three times in
+	// a row). The unique (workspaceId, checkoutId) constraint is now the lock: only
+	// the request that successfully inserts the row receives the candidate.
+	const uniqueRows = [...new Map(rows.map((row) => [row.checkoutId, row])).values()];
+	const claimedIds = new Set();
+
 	try {
-		await prisma.abandonedCartAutomationLog.createMany({
-			data: rows,
-			skipDuplicates: true,
-		});
+		for (const row of uniqueRows) {
+			try {
+				await prisma.abandonedCartAutomationLog.create({ data: row });
+				claimedIds.add(row.checkoutId);
+			} catch (error) {
+				// A concurrent automation tick won this checkout. It is expected and
+				// must not make the losing tick dispatch the same recipient.
+				if (error?.code !== 'P2002') throw error;
+			}
+		}
 	} catch (error) {
 		if (!isAbandonedCartAutomationTableMissing(error)) throw error;
 		throw createAutomationSchemaNotReadyError('de carritos abandonados', error);
 	}
 
-	const claimed = await prisma.abandonedCartAutomationLog.findMany({
-		where: {
-			workspaceId: setting.workspaceId,
-			checkoutId: { in: rows.map((row) => row.checkoutId) },
-		},
-		select: { checkoutId: true },
-	});
-	const claimedIds = new Set(claimed.map((row) => row.checkoutId));
 	return candidates.filter((cart) => claimedIds.has(normalizeString(cart.checkoutId)));
 }
 
@@ -496,6 +503,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 		workspaceId: setting.workspaceId,
 		type: AUTOMATION_RUN_TYPES.ABANDONED_CART,
 	});
+	let campaignId = null;
 
 	try {
 		const created = await createOrAppendAutomationCampaignDraft({
@@ -516,7 +524,7 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 			notes: 'Automatizacion horaria de carritos abandonados.',
 			launchedByUserId,
 		});
-		const campaignId = created?.campaign?.id || created?.campaignId || null;
+		campaignId = created?.campaign?.id || created?.campaignId || null;
 
 		if (campaignId) {
 			const failedRecipientReset = await prisma.campaignRecipient.updateMany({
@@ -557,15 +565,35 @@ async function createAndLaunchAutomationCampaign(setting, carts = [], { launched
 			automationRunId: run.id,
 			campaignId,
 			selectedCount: Number(created?.addedRecipients || created?.campaign?.pendingRecipients || created?.campaign?.totalRecipients || 0) + Number(created?.resetFailedRecipients || 0),
-		};
+	};
 	} catch (error) {
-		await prisma.abandonedCartAutomationLog.deleteMany({
-			where: {
-				workspaceId: setting.workspaceId,
-				checkoutId: { in: checkoutIds },
-				campaignId: null,
-			},
-		});
+		// Never release a claim blindly: if campaign creation succeeded but a
+		// later step failed, deleting the log lets the next tick send the same
+		// cart again. Only release claims when no campaign exists for this run.
+		const persistedCampaign = campaignId
+			? null
+			: await prisma.campaign.findFirst({
+					where: { workspaceId: setting.workspaceId, automationRunId: run.id },
+					select: { id: true },
+			  });
+		if (campaignId || persistedCampaign?.id) {
+			await prisma.abandonedCartAutomationLog.updateMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					checkoutId: { in: checkoutIds },
+					campaignId: null,
+				},
+				data: { campaignId: campaignId || persistedCampaign.id, automationRunId: run.id },
+			});
+		} else {
+			await prisma.abandonedCartAutomationLog.deleteMany({
+				where: {
+					workspaceId: setting.workspaceId,
+					checkoutId: { in: checkoutIds },
+					campaignId: null,
+				},
+			});
+		}
 		await markAutomationRunError(run.id, error, { workspaceId: setting.workspaceId });
 		throw error;
 	}

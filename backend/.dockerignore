@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log*
+.env*
+tmp
+storage
+reports
+evals
+test
+*.md
+

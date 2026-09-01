@@ -21,7 +21,7 @@ test.describe('experiencia pública de conversión', () => {
 		await expect(page.getByRole('heading', {
 			name: 'Convertí conversaciones en trabajo comercial ordenado.',
 		})).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Solicitar demo' }).first()).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Solicitar una demo' }).first()).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Ver planes' })).toBeVisible();
 		await expect(page.getByText('+12k')).toHaveCount(0);
 		await expect(page.getByText('86%')).toHaveCount(0);

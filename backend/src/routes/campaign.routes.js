@@ -20,6 +20,7 @@ import {
 	launchCampaignController,
 	cancelCampaignController,
 	deleteCampaignController,
+	archiveCampaignController,
 	retryFailedCampaignRecipientsController,
 	retryFailedAutomationRunController,
 	dispatchTickController,
@@ -82,6 +83,7 @@ router.post('/automation-runs/:runId/retry-failed', retryFailedAutomationRunCont
 router.get('/', listCampaignsController);
 router.post('/', createCampaignController);
 router.get('/:campaignId', getCampaignController);
+router.patch('/:campaignId/archive', archiveCampaignController);
 router.patch('/:campaignId', updateCampaignDraftController);
 router.delete('/:campaignId', deleteCampaignController);
 router.post('/:campaignId/launch', launchCampaignController);

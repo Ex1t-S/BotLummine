@@ -258,3 +258,7 @@
 	.analytics-v2-table th:nth-child(5),
 	.analytics-v2-table td:nth-child(5) { display: none; }
 }
+.analytics-v2-header-controls { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; }
+.analytics-v2-header-controls > span { font-size: 12px; font-weight: 700; color: #64748b; margin-right: 3px; }
+.analytics-v2-header-controls button { min-height: 34px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; font: inherit; }
+.analytics-v2-header-controls button.is-active { background: #0f172a; color: #fff; border-color: #0f172a; }

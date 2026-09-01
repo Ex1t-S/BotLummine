@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDownToLine, Eye, MessageCircle, RefreshCw, ShoppingCart, Send } from 'lucide-react';
 import api from '../lib/api.js';
@@ -59,12 +59,13 @@ function ProgressRow({ icon: Icon, label, value, total, helper }) {
 export default function AnalyticsPage() {
 	useInternalDarkOverrides();
 	const { user } = useAuth();
+	const [periodDays, setPeriodDays] = useState(30);
 	const workspaceId = user?.workspaceId || user?.workspace?.id || '';
 	const analyticsQuery = useQuery({
-		queryKey: ['admin', 'analytics', 'brand', workspaceId],
+		queryKey: ['admin', 'analytics', 'brand', workspaceId, periodDays],
 		queryFn: async () => {
 			const response = await api.get('/admin/analytics/workspaces', {
-				params: workspaceId ? { workspaceId } : {},
+				params: { ...(workspaceId ? { workspaceId } : {}), periodDays },
 			});
 			return response.data || {};
 		},
@@ -94,6 +95,10 @@ export default function AnalyticsPage() {
 				title="Estadísticas"
 				description={`Señales para decidir sobre atención, campañas y recuperación durante los últimos ${number(data.activityWindowDays || 30)} días.`}
 			>
+				<div className="analytics-v2-header-controls" aria-label="Período de estadísticas">
+					<span>Período</span>
+					{[7, 30, 90].map((days) => <button type="button" key={days} className={periodDays === days ? 'is-active' : ''} onClick={() => setPeriodDays(days)}>{days} días</button>)}
+				</div>
 				<ActionButton variant="secondary" icon={RefreshCw} disabled={analyticsQuery.isFetching} onClick={() => analyticsQuery.refetch()}>
 					{analyticsQuery.isFetching ? 'Actualizando' : 'Actualizar'}
 				</ActionButton>
@@ -110,7 +115,7 @@ export default function AnalyticsPage() {
 			) : (
 				<>
 					<div className="analytics-v2-metrics" aria-label="Indicadores principales">
-						<AnalyticsMetric label="Conversaciones activas" value={number(metrics.activeConversations30d)} helper={`${number(metrics.unreadMessagesCount)} mensajes requieren lectura`} tone={metrics.unreadMessagesCount ? 'warning' : 'neutral'} />
+						<AnalyticsMetric label="Esperando respuesta" value={number(metrics.waitingResponseConversations)} helper={`${number(metrics.waitingResponseUnder24h)} <24 h · ${number(metrics.waitingResponseOver24h)} >24 h`} tone={metrics.waitingResponseOver24h ? 'warning' : 'neutral'} />
 						<AnalyticsMetric label="Entrega de campañas" value={percent(deliveryRate)} helper={`${number(delivered)} de ${number(sent)} mensajes enviados`} tone={deliveryRate >= 90 ? 'success' : 'warning'} />
 						<AnalyticsMetric label="Lectura efectiva" value={percent(readRate)} helper={`${number(read)} mensajes leídos`} />
 						<AnalyticsMetric label="Carritos recuperados" value={number(metrics.recoveredCartsCount)} helper={currency(metrics.recoveredCartValue, metrics.currency || 'ARS')} tone="success" />
@@ -134,9 +139,10 @@ export default function AnalyticsPage() {
 								<div><span>Atención y ventas</span><h3 id="analytics-activity-title">Actividad que requiere contexto</h3></div>
 							</div>
 							<dl className="analytics-v2-facts">
-								<div><dt><MessageCircle size={16} aria-hidden="true" /> Mensajes 30d</dt><dd>{number(totalMessages)}</dd><small>{number(metrics.messages30dInbound)} recibidos · {number(metrics.messages30dOutbound)} enviados</small></div>
+								<div><dt><MessageCircle size={16} aria-hidden="true" /> Mensajes del período</dt><dd>{number(totalMessages)}</dd><small>{number(metrics.messages30dInbound)} recibidos · {number(metrics.messages30dOutbound)} enviados</small></div>
 								<div><dt><ShoppingCart size={16} aria-hidden="true" /> Recuperación</dt><dd>{currency(metrics.recoveredCartValue, metrics.currency || 'ARS')}</dd><small>{number(metrics.recoveredCartsCount)} carritos con recuperación atribuida</small></div>
-								<div><dt><Eye size={16} aria-hidden="true" /> Conversiones</dt><dd>{number(metrics.conversionCount)}</dd><small>Ventas y carritos con señal atribuida</small></div>
+								<div><dt><Eye size={16} aria-hidden="true" /> Ventas atribuidas</dt><dd>{currency(metrics.attributedRevenue, metrics.attributedCurrency || metrics.currency || 'ARS')}</dd><small>{number(metrics.conversionCount)} ventas reales deduplicadas</small></div>
+								<div><dt><MessageCircle size={16} aria-hidden="true" /> Señales de chat</dt><dd>{number(metrics.chatConfirmedPurchaseCount)}</dd><small>No se mezclan con ventas conciliadas</small></div>
 							</dl>
 						</section>
 					</div>

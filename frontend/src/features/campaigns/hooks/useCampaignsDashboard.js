@@ -6,6 +6,7 @@ import {
 	createCampaignSchedule,
 	createTemplate,
 	deleteCampaign,
+	archiveCampaign,
 	deleteCampaignSchedule,
 	deleteTemplate,
 	dispatchCampaign,
@@ -408,12 +409,19 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			...(selectedTrackingItem?.kind === 'automation_run'
 				? queryKeys.campaigns.automationRunDetail(selectedCampaignId)
 				: queryKeys.campaigns.detail(selectedCampaignId)),
-			CAMPAIGN_RECIPIENT_FETCH_SIZE,
+			CAMPAIGN_TRACKING_PAGE_SIZE,
+			campaignTrackingPage,
+			campaignTrackingStatus,
+			campaignTrackingPurchase,
+			campaignTrackingSearch,
 		],
 		queryFn: async () => {
 			const params = {
-				page: 1,
-				pageSize: CAMPAIGN_RECIPIENT_FETCH_SIZE,
+				page: campaignTrackingPage,
+				pageSize: CAMPAIGN_TRACKING_PAGE_SIZE,
+				status: campaignTrackingStatus,
+				purchase: campaignTrackingPurchase,
+				search: campaignTrackingSearch,
 			};
 			if (selectedTrackingItem?.kind === 'automation_run') {
 				return fetchAutomationRunDetail(selectedCampaignId, params);
@@ -650,6 +658,15 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			showFeedback('success', 'Campaña eliminada.');
 		},
 		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo eliminar la campaña.'),
+	});
+
+	const archiveCampaignMutation = useMutation({
+		mutationFn: ({ campaignId, archived = true }) => archiveCampaign(campaignId, archived),
+		onSuccess: (_response, input) => {
+			invalidateAll(input?.campaignId);
+			showFeedback('success', input?.archived === false ? 'Campaña restaurada.' : 'Campaña archivada.' );
+		},
+		onError: (error) => showFeedback('error', error?.response?.data?.error || 'No se pudo archivar la campaña.'),
 	});
 
 	const abandonedCartPreviewMutation = useMutation({
@@ -937,7 +954,8 @@ export function useCampaignsDashboard({ activeTab = 'library', initialCampaignId
 			deleteTemplate: deleteTemplateMutation,
 			createCampaign: createCampaignMutation,
 			updateCampaignDraft: updateCampaignDraftMutation,
-			deleteCampaign: deleteCampaignMutation,
+		deleteCampaign: deleteCampaignMutation,
+		archiveCampaign: archiveCampaignMutation,
 			action: actionMutation,
 			abandonedPreview: abandonedCartPreviewMutation,
 			updateAbandonedCartAutomation: updateAbandonedCartAutomationMutation,
