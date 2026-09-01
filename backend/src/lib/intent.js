@@ -100,6 +100,12 @@ function hasPurchaseKeywords(q = '') {
 	);
 }
 
+function hasOptOutKeywords(q = '') {
+	return /(no me interesa|denme de baja|dame de baja|no me escriban mas|no me escribas mas|no me manden mas mensajes|no me mandes mas mensajes|dejen de escribirme|deja de escribirme)/.test(
+		q
+	);
+}
+
 function hasPriceKeywords(q = '') {
 	return /(precio|cuanto sale|cuanto cuesta|valor|a cuanto|sale\s+\$?\d)/.test(q);
 }
@@ -249,6 +255,10 @@ export function detectIntent(text = '', currentState = {}, options = {}) {
 		)
 	) {
 		return 'return_exchange';
+	}
+
+	if (hasOptOutKeywords(q)) {
+		return 'general';
 	}
 
 	if (preservePurchaseContext) {
