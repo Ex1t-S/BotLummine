@@ -80,7 +80,6 @@ services:
       - bladeia_legacy_storage:/app/storage
     mem_limit: 1g
     cpus: 1.5
-    init: true
     stop_grace_period: 30s
 
   job:
@@ -95,7 +94,6 @@ services:
       APP_COMMIT_SHA: ${BLADEIA_IMAGE_TAG}
     mem_limit: 512m
     cpus: 1.0
-    init: true
     volumes:
       - bladeia_legacy_storage:/app/storage
 
