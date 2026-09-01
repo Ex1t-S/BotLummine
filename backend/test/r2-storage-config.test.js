@@ -30,7 +30,7 @@ test('R2 accepts an account-scoped S3 configuration', () => {
 		R2_ACCESS_KEY_ID: 'access-key',
 		R2_SECRET_ACCESS_KEY: 'secret-key',
 		R2_PRIVATE_BUCKET: 'bladeia-private-prod',
-		R2_PUBLIC_BUCKET: 'bladeia-public-prod',
+		R2_PUBLIC_BUCKET: 'bladeia',
 		R2_PUBLIC_BASE_URL: 'https://assets.bladeia.com/',
 	});
 

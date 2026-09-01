@@ -13,7 +13,8 @@ base de datos con la aplicación de inmobiliaria.
 ## Preparación única
 
 1. Crear `api.bladeia.com` apuntando al VPS y los buckets R2
-   `bladeia-public-prod` y `bladeia-private-prod`.
+   `bladeia` (público, servido por `assets.bladeia.com`) y
+   `bladeia-private-prod` (privado, sin dominio público).
 2. Copiar esta carpeta a una ruta temporal del VPS.
 3. Ejecutar como root:
 
