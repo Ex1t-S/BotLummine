@@ -8,6 +8,40 @@ import { prisma } from '../../lib/prisma.js';
 let dispatcherBusy = false;
 const taskLastRunAt = new Map();
 
+const DEFAULT_AUTOMATION_TIMEZONE = 'America/Argentina/Buenos_Aires';
+const DEFAULT_QUIET_START_HOUR = 21;
+const DEFAULT_QUIET_END_HOUR = 9;
+
+function normalizeHour(value, fallback) {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed >= 0 && parsed <= 23 ? parsed : fallback;
+}
+
+function getLocalHour(date = new Date(), timezone = DEFAULT_AUTOMATION_TIMEZONE) {
+	const formatted = new Intl.DateTimeFormat('en-US', {
+		timeZone: timezone || DEFAULT_AUTOMATION_TIMEZONE,
+		hour: '2-digit',
+		hourCycle: 'h23',
+	}).format(date);
+	return Number(formatted);
+}
+
+/**
+ * Automated campaigns are intentionally paused overnight to avoid contacting
+ * customers outside the configured attention window. Manual campaigns remain
+ * dispatchable because they are explicitly triggered by an operator.
+ */
+export function isAutomationDispatchPaused(date = new Date()) {
+	const timezone = process.env.CAMPAIGN_AUTOMATION_TIMEZONE || DEFAULT_AUTOMATION_TIMEZONE;
+	const startHour = normalizeHour(process.env.CAMPAIGN_AUTOMATION_QUIET_START_HOUR, DEFAULT_QUIET_START_HOUR);
+	const endHour = normalizeHour(process.env.CAMPAIGN_AUTOMATION_QUIET_END_HOUR, DEFAULT_QUIET_END_HOUR);
+	const hour = getLocalHour(date, timezone);
+
+	if (startHour === endHour) return false;
+	if (startHour > endHour) return hour >= startHour || hour < endHour;
+	return hour >= startHour && hour < endHour;
+}
+
 function normalizeIntervalMs(envName, fallbackMinutes, minMinutes = 5) {
 	const parsed = Number(process.env[envName] || fallbackMinutes);
 	const minutes = Number.isFinite(parsed) ? parsed : fallbackMinutes;
@@ -43,6 +77,21 @@ async function executeCampaignDispatcherTickWithLock() {
 	dispatcherBusy = true;
 
 	try {
+		if (isAutomationDispatchPaused()) {
+			const campaigns = await runCampaignDispatchTick({ excludeAutomated: true });
+			return {
+				ok: true,
+				skipped: true,
+				reason: 'automation_quiet_hours',
+				quietHours: {
+					from: Number(process.env.CAMPAIGN_AUTOMATION_QUIET_START_HOUR || DEFAULT_QUIET_START_HOUR),
+					to: Number(process.env.CAMPAIGN_AUTOMATION_QUIET_END_HOUR || DEFAULT_QUIET_END_HOUR),
+					timezone: process.env.CAMPAIGN_AUTOMATION_TIMEZONE || DEFAULT_AUTOMATION_TIMEZONE,
+				},
+				campaigns,
+			};
+		}
+
 		const schedules = await runTaskIfDue(
 			'schedules',
 			normalizeIntervalMs('CAMPAIGN_SCHEDULE_INTERVAL_MINUTES', 60, 60),

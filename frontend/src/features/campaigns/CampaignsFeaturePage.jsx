@@ -179,9 +179,9 @@ const TAB_DEFINITIONS = [
 		path: 'abandoned-carts',
 		label: 'Carritos',
 		eyebrow: 'Audiencia inteligente',
-		title: 'Recuperación de carritos',
+		title: 'Automatización de carritos',
 		description:
-			'Filtrá carritos, revisá destinatarios y automatizá recuperaciones desde una sección propia.',
+			'Configurá la regla automática y su horario. Las campañas puntuales se crean desde Crear.',
 	},
 	{
 		id: 'tracking',
@@ -1886,7 +1886,7 @@ export default function CampaignsFeaturePage() {
 					<span className="campaigns-eyebrow">Campañas - WhatsApp Templates</span>
 					<h2>Campañas de WhatsApp</h2>
 					<p className="campaigns-hero-lead">
-						Creá campañas, elegí audiencias, editá templates y programá envíos desde un solo lugar.
+						Configurá automatizaciones por separado y usá Crear para lanzar campañas puntuales con control.
 					</p>
 
 					<CampaignFeedbackAlert feedback={feedback} />
