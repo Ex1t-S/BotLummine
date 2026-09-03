@@ -4,6 +4,9 @@ services:
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
     container_name: bladeia-docker-socket-proxy
+    labels:
+      - dev.dozzle.name=Infra - Docker socket proxy
+      - dev.dozzle.group=Infraestructura
     privileged: true
     environment:
       CONTAINERS: "1"
@@ -25,11 +28,14 @@ services:
   dozzle:
     image: amir20/dozzle@sha256:7f01a2504f89788b60ad0efddd94472fd66f9a225c708356cdb815d9d8abd184
     container_name: bladeia-dozzle
+    labels:
+      - dev.dozzle.name=Infra - Visor de logs (Dozzle)
+      - dev.dozzle.group=Infraestructura
     depends_on:
       - docker-socket-proxy
     environment:
       DOZZLE_AUTH_PROVIDER: simple
-      DOZZLE_REMOTE_HOST: tcp://bladeia-docker-socket-proxy:2375
+      DOZZLE_REMOTE_HOST: tcp://bladeia-docker-socket-proxy:2375|Contabo VPS
       DOZZLE_LEVEL: info
     ports:
       - "127.0.0.1:3010:8080"

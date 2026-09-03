@@ -19,6 +19,9 @@ x-app-common: &app-common
 
 services:
   db:
+    labels:
+      - dev.dozzle.name=BladeIA - PostgreSQL
+      - dev.dozzle.group=BladeIA
     image: postgres:17-alpine
     container_name: bladeia-db
     restart: unless-stopped
@@ -62,6 +65,9 @@ services:
   api:
     <<: *app-common
     container_name: bladeia-api
+    labels:
+      - dev.dozzle.name=BladeIA - API
+      - dev.dozzle.group=BladeIA
     restart: unless-stopped
     depends_on:
       db:
