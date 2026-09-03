@@ -87,8 +87,8 @@ services:
       - /app/tmp:size=128m,mode=1777
     volumes:
       - bladeia_legacy_storage:/app/storage
-    mem_limit: 1g
-    cpus: 1.5
+    mem_limit: ${BLADEIA_API_MEM_LIMIT:-1g}
+    cpus: ${BLADEIA_API_CPUS:-1.5}
     stop_grace_period: 30s
 
   job:
