@@ -1,0 +1,51 @@
+name: bladeia-observability
+
+services:
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: bladeia-docker-socket-proxy
+    privileged: true
+    environment:
+      CONTAINERS: "1"
+      EVENTS: "1"
+      INFO: "1"
+      POST: "0"
+      DELETE: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - observability
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dozzle:
+    image: amir20/dozzle@sha256:7f01a2504f89788b60ad0efddd94472fd66f9a225c708356cdb815d9d8abd184
+    container_name: bladeia-dozzle
+    depends_on:
+      - docker-socket-proxy
+    environment:
+      DOZZLE_AUTH_PROVIDER: simple
+      DOZZLE_REMOTE_HOST: tcp://bladeia-docker-socket-proxy:2375
+      DOZZLE_LEVEL: info
+    ports:
+      - "127.0.0.1:3010:8080"
+    volumes:
+      - /srv/bladeia/dozzle:/data
+      - /srv/bladeia/dozzle-users.yml:/data/users.yml:ro
+    networks:
+      - observability
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  observability:
+    name: bladeia-observability
+    external: true

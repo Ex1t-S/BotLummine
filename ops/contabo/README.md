@@ -9,6 +9,8 @@ base de datos con la aplicación de inmobiliaria.
 - `db`: PostgreSQL 17 sin puertos publicados.
 - `job`: proceso efímero usado por el timer horario.
 - `restic`: proceso efímero para backups cifrados en R2.
+- `bladeia-observability`: Dozzle y proxy Docker de sólo lectura para revisar
+  logs en `https://logs.bladeia.com`.
 
 ## Preparación única
 
@@ -41,6 +43,7 @@ systemctl enable --now bladeia-backup-local.timer
 systemctl enable --now bladeia-backup-weekly.timer
 systemctl enable --now bladeia-restore-test-monthly.timer
 systemctl enable --now bladeia-health-monitor.timer
+systemctl enable --now bladeia-observability.service
 ```
 
 El monitor escribe en `journald` y, si se configura `ALERT_WEBHOOK_URL`, también

@@ -17,6 +17,10 @@ install -d -m 700 -o "$APP_USER" -g "$APP_USER" \
   "$DEPLOY_ROOT/backups" "$DEPLOY_ROOT/restore-test" "$DEPLOY_ROOT/secrets"
 install -m 640 -o "$APP_USER" -g "$APP_USER" "$SOURCE_ROOT/docker-compose.yml" "$DEPLOY_ROOT/docker-compose.yml"
 install -d -m 750 -o "$APP_USER" -g "$APP_USER" "$DEPLOY_ROOT/scripts"
+install -d -m 750 -o "$APP_USER" -g "$APP_USER" "$DEPLOY_ROOT/observability"
+if [ -f "$SOURCE_ROOT/observability/docker-compose.yml" ]; then
+  install -m 640 -o "$APP_USER" -g "$APP_USER" "$SOURCE_ROOT/observability/docker-compose.yml" "$DEPLOY_ROOT/observability/docker-compose.yml"
+fi
 for script in "$SOURCE_ROOT"/scripts/*.sh; do
   [ "$(basename "$script")" = "bootstrap-root.sh" ] && continue
   install -m 750 -o "$APP_USER" -g "$APP_USER" "$script" "$DEPLOY_ROOT/scripts/$(basename "$script")"
