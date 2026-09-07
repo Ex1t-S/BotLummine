@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { reserveMenuPrompt } from './menu-send-guard.js';
 import {
 	buildUnableToContinueHandoffReply,
 	isDkvWorkspace,
@@ -56,7 +57,7 @@ function isGreetingOnlyMessage(messageBody = '') {
 	const text = normalizeLooseText(messageBody);
 	if (!text) return false;
 
-	return /^(hola+|holaaa+|buenas+|buen dia|buen diaa+|buenas tardes|buenas noches|hello+|hi+|hey+|alo+|ey+)$/i.test(text);
+	return /^(hola+|ola+|holaaa+|buenas+|buen dia|buen diaa+|buenas tardes|buenas noches|hello+|hi+|hey+|alo+|ey+)$/i.test(text);
 }
 
 function isMenuResetCommand(messageBody = '') {
@@ -339,6 +340,13 @@ async function sendMenuPrompt({ conversationId, menuPath, bodyPrefix = '', deliv
 	const menuConfig = await getMenuConfig(menuPath, workspaceId);
 	if (!menuConfig) return null;
 
+	const resolvedMenuPath = menuConfig.path || menuConfig.key || menuPath;
+	if (deliveryMode !== 'lab' && !await reserveMenuPrompt(prisma, {
+		workspaceId, conversationId, menuPath: resolvedMenuPath,
+	})) {
+		return { ok: true, skipped: true, reason: 'recent_menu_already_sent' };
+	}
+
 	const body = [bodyPrefix ? normalizeText(bodyPrefix) : null, menuConfig.body]
 		.filter(Boolean)
 		.join('\n\n');
@@ -396,7 +404,7 @@ async function sendMenuTextOnly({
 }
 
 function shouldForceMenuFirst({ currentState, freshConversation, messageBody }) {
-	if (Boolean(currentState?.menuActive && currentState?.menuPath)) return true;
+	if (Boolean(currentState?.menuActive && currentState?.menuPath)) return false;
 
 	const normalizedMessage = normalizeText(messageBody);
 	if (!normalizedMessage) return false;
@@ -677,6 +685,8 @@ export async function maybeHandleMenuFlow({
 
 	const shouldOfferMenu =
 		autoMenuEnabled &&
+		!wantsMenu &&
+		(!Boolean(currentState?.menuActive && currentState?.menuPath) || isStaleConversation) &&
 		!autoMenuDisabledForConsole &&
 		(
 			isStaleConversation ||
@@ -748,12 +758,15 @@ export async function maybeHandleMenuFlow({
 			menuPath: MENU_PATHS.MAIN,
 			workspaceId,
 			bodyPrefix: 'Perfecto, abrimos el menú de nuevo.',
+			deliveryMode: transportMode,
 		});
 
 		return { handled: true };
 	}
 
 	if (currentState?.menuActive && currentState?.menuPath) {
+		// Repeated greetings are not invalid selections and must not resend the open menu.
+		if (isGreetingOnlyMessage(messageBody)) return { handled: true };
 		const selectionId = await detectMenuSelection({
 			messageBody,
 			rawPayload,
@@ -825,6 +838,7 @@ export async function maybeHandleMenuFlow({
 				menuPath: currentState.menuPath,
 				workspaceId,
 				bodyPrefix: 'No llegué a entender esa opción. Elegí una de la lista así vamos más rápido.',
+				deliveryMode: transportMode,
 			});
 
 			return { handled: true };
