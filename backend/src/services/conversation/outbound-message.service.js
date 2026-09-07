@@ -9,6 +9,7 @@ import {
 } from '../whatsapp/whatsapp.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
 import { findConversationForWorkspace } from '../workspaces/workspace-scope.js';
+import { WORKSPACE_FEATURE_FLAGS, isWorkspaceFeatureEnabled } from '../workspaces/workspace-feature-flags.service.js';
 
 function isOutboundDebugEnabled() {
 	return String(process.env.OUTBOUND_DEBUG || '').trim().toLowerCase() === 'true';
@@ -97,6 +98,17 @@ export async function sendAndPersistOutbound({
 	);
 	const workspaceId = conversation.workspaceId;
 	const whatsappChannelId = conversation.whatsappChannelId || null;
+	// Recheck at the send boundary: a turn may have started before an operator paused the bot.
+	const automaticReply = (aiMeta?.provider || provider) !== 'manual';
+	if (deliveryMode !== 'lab' && automaticReply && (
+		String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() !== 'true'
+		|| !await isWorkspaceFeatureEnabled(workspaceId, WORKSPACE_FEATURE_FLAGS.AI_AUTO_REPLIES)
+	)) {
+		const error = new Error('Las respuestas automáticas están pausadas.');
+		error.code = 'AUTO_REPLIES_PAUSED';
+		error.status = 409;
+		throw error;
+	}
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 
 	if (isOutboundDebugEnabled()) {

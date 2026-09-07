@@ -23,3 +23,12 @@
 - Routing regression tests exercise the real inbound processor with a fake database: both stale retries and paused current messages must exit before automatic routing, including resumed pending replies.
 - Keep emergency flags disabled after deployment. Reactivate only following a controlled test with an internal number and review of campaign queues; do not replay historical inbound messages to customers.
 - Already delivered WhatsApp messages cannot be undone by deleting database records. Preserve the audit trail.
+
+## Follow-up hardening
+
+- Active menus must reach selection/free-text/invalid-attempt handling instead of restarting the main menu on every inbound. Repeated greetings do not count as invalid choices. Stale conversations may still reopen the menu after the configured inactivity threshold.
+- Reserve identical menu prompts for 60 seconds, serialized by a short database row lock and an auditable event. Different menu paths remain usable; no transaction is held while contacting Meta.
+- Recheck the automatic-reply flag at the send boundary. Manual responses remain a separate operation; the global WhatsApp outbound flag still applies to them.
+- Preserve `lab` transport on explicit menu resets and invalid-choice prompts, preventing simulator paths from defaulting to live delivery.
+- `backend/scripts/repair-inbound-event-times.mjs` defaults to dry-run and requires explicit workspace/date bounds. Applied repairs preserve the original ingestion timestamp in an idempotent audit event, recalculate conversation activity, and clear only pending replies linked to repaired stale messages. It deletes no messages and changes no outbound timestamps or read counters.
+- Before applying, take a verified local database backup. Re-run dry-run after application to verify no candidates remain. Keep emergency flags unchanged unless the operator explicitly chooses a recovery mode.
