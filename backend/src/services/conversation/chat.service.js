@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { evaluateInboundFreshness, createInboundOnce, advanceInboundConversation } from './inbound-safety.js';
 import { logger, maskPhone } from '../../lib/logger.js';
 import { createAiTurnTrace, logAiTurnTrace } from '../ai/turn-trace.js';
 import { persistAiTurnTrace } from '../ai/turn-trace-store.js';
@@ -754,25 +755,14 @@ export async function processInboundMessage({
 		});
 	}
 
-	if (!existingInboundMessageId && metaMessageId) {
-		const existingMessage = await prisma.message.findFirst({
-			where: {
-				workspaceId: resolvedWorkspaceId,
-				whatsappChannelId: normalizeWorkspaceId(whatsappChannelId) || conversation.whatsappChannelId || null,
-				metaMessageId
-			}
-		});
-
-		if (existingMessage) {
-			return finalizeInboundResult({ conversation });
-		}
-	}
+	const inboundFreshness = evaluateInboundFreshness({ rawPayload, metaMessageId, transportMode });
+	if (!existingInboundMessageId && inboundFreshness.sentAt) createdInboundAt = inboundFreshness.sentAt;
 
 	if (!existingInboundMessageId) {
-		inboundMessage = await prisma.message.create({
-			data: {
+		inboundMessage = await createInboundOnce(prisma, {
 				conversationId: conversation.id,
 				workspaceId: resolvedWorkspaceId,
+				whatsappChannelId: normalizeWorkspaceId(whatsappChannelId) || conversation.whatsappChannelId || null,
 				metaMessageId,
 				senderName: contactName || normalizedWaId,
 				direction: 'INBOUND',
@@ -795,8 +785,8 @@ export async function processInboundMessage({
 				attachmentSha256: attachmentMeta?.attachmentSha256 || null,
 				rawPayload,
 				createdAt: createdInboundAt,
-			}
 		});
+		if (!inboundMessage) return finalizeInboundResult({ conversation });
 		await recordConversationEvent({
 			workspaceId: resolvedWorkspaceId,
 			conversationId: conversation.id,
@@ -836,15 +826,10 @@ export async function processInboundMessage({
 	}
 
 	if (!existingInboundMessageId) {
-		await prisma.conversation.update({
-			where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
-			data: {
-				lastMessageAt: createdInboundAt,
-				lastInboundMessageAt: createdInboundAt,
-				unreadCount: {
-					increment: 1,
-				},
-			}
+		await advanceInboundConversation(prisma, {
+			id: conversation.id,
+			workspaceId: resolvedWorkspaceId,
+			createdAt: createdInboundAt,
 		});
 	}
 
@@ -859,6 +844,20 @@ export async function processInboundMessage({
 			metaMessageId,
 			createdAt: createdInboundAt.toISOString(),
 		});
+	}
+
+	// This gate must precede ALL automatic routes, including menus and payment acknowledgements.
+	const autoRepliesEnabled = String(process.env.AI_AUTOREPLY_ENABLED || 'true').toLowerCase() === 'true'
+		&& await isWorkspaceFeatureEnabled(resolvedWorkspaceId, WORKSPACE_FEATURE_FLAGS.AI_AUTO_REPLIES);
+	if (!inboundFreshness.allowed || !autoRepliesEnabled) {
+		const reason = inboundFreshness.reason || 'auto_replies_paused';
+		logger.info('inbound.auto_reply_suppressed', {
+			workspaceId: resolvedWorkspaceId, conversationId: conversation.id,
+			messageId: inboundMessage.id, reason,
+		});
+		return finalizeInboundResult({ conversation, trace: {
+			shouldReply: false, responsePolicy: { shouldReply: false, reason },
+		} });
 	}
 
 	const freshConversation = await prisma.conversation.findFirst({
