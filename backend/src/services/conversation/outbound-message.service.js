@@ -1,4 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
+import { canFallbackInteractiveMessage } from './reply-safety.js';
+import { assertAutoReplyAuthorized } from './auto-reply-authorization.js';
+import { trackOutboundDelivery } from './outbound-delivery-context.js';
+import { reserveAutomaticReply } from './outbound-reservation.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
 import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { logger, maskPhone } from '../../lib/logger.js';
@@ -50,7 +54,11 @@ function buildOutboundDebugPayload({
 	};
 }
 
-export async function sendAndPersistOutbound({
+export function sendAndPersistOutbound(options) {
+	return trackOutboundDelivery(() => sendAndPersistOutboundInternal(options));
+}
+
+async function sendAndPersistOutboundInternal({
 	conversationId,
 	workspaceId: expectedWorkspaceId,
 	waId: providedWaId = '',
@@ -65,6 +73,7 @@ export async function sendAndPersistOutbound({
 	mediaPayload = null,
 	attachmentMeta = null,
 	deliveryMode = 'live',
+	turnAuthorization = null,
 }) {
 	const cleanBody = String(body || '').trim();
 	const hasMedia = Boolean(mediaPayload?.mediaId && mediaPayload?.mediaType);
@@ -110,6 +119,9 @@ export async function sendAndPersistOutbound({
 		throw error;
 	}
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
+	if (automaticReply && turnAuthorization) {
+		await assertAutoReplyAuthorized(prisma, { ...turnAuthorization, workspaceId, conversationId });
+	}
 
 	if (isOutboundDebugEnabled()) {
 		logger.debug('whatsapp.outbound_send_started', {
@@ -129,6 +141,11 @@ export async function sendAndPersistOutbound({
 	}
 
 	let sendResult = null;
+	let reservation = null;
+	if (automaticReply && turnAuthorization && deliveryMode !== 'lab') {
+		reservation = await reserveAutomaticReply(prisma, { ...turnAuthorization, workspaceId, conversationId });
+		if (!reservation.acquired) return { ok: true, skipped: true, reason: 'automatic_reply_already_reserved' };
+	}
 	const persistedInteractivePayload = interactivePayload
 		? {
 				...interactivePayload,
@@ -174,7 +191,7 @@ export async function sendAndPersistOutbound({
 			sections: interactivePayload?.sections || [],
 		});
 
-		if (!sendResult?.ok && interactivePayload?.fallbackText) {
+		if (canFallbackInteractiveMessage(sendResult) && interactivePayload?.fallbackText) {
 			sendResult = await sendWhatsAppText({
 				workspaceId,
 				whatsappChannelId,
@@ -203,10 +220,11 @@ export async function sendAndPersistOutbound({
 
 	if (!sendResult?.ok) {
 		const error = new Error(
-			sendResult?.error?.message ||
+			sendResult?.error?.error?.message || sendResult?.error?.message ||
 			'No se pudo enviar el mensaje por WhatsApp.'
 		);
-		error.status = 400;
+		error.status = sendResult?.outcome === 'UNKNOWN' ? 502 : 400;
+		error.code = sendResult?.outcome === 'UNKNOWN' ? 'OUTBOUND_OUTCOME_UNKNOWN' : 'OUTBOUND_REJECTED';
 		error.details = sendResult?.error || null;
 		throw error;
 	}
@@ -257,6 +275,13 @@ export async function sendAndPersistOutbound({
 				},
 		},
 	});
+	if (reservation) {
+		await prisma.conversationEvent.updateMany({
+			where: { id: reservation.eventId, workspaceId, conversationId },
+			data: { metadata: { inboundMessageId: turnAuthorization.inboundMessageId, outcome: 'ACCEPTED',
+				messageId: createdMessage.id, metaMessageId: createdMessage.metaMessageId } },
+		}).catch(error => logger.error('ai.outbound_reservation_result_failed', { workspaceId, conversationId, eventId: reservation.eventId, error }));
+	}
 
 	await prisma.conversation.updateMany({
 		where: { id: conversation.id, workspaceId },

@@ -4,6 +4,11 @@ import { logger, maskPhone } from '../../lib/logger.js';
 import { createAiTurnTrace, logAiTurnTrace } from '../ai/turn-trace.js';
 import { persistAiTurnTrace } from '../ai/turn-trace-store.js';
 import { validateAssistantOutput } from '../ai/assistant-output.js';
+import { resolveAssistantHandoff, contextMessageLimit } from './reply-safety.js';
+import { assertAutoReplyAuthorized } from './auto-reply-authorization.js';
+import { captureOutboundDeliveries, getOutboundDeliveries } from './outbound-delivery-context.js';
+import { loadRecentConversation } from './recent-history.js';
+import { availablePendingReplyLease, ownedPendingReplyLease } from './pending-reply-lease.js';
 import {
 	conversationStateForWorkspaceWhere,
 	findInboundMessageForWorkspace,
@@ -371,14 +376,16 @@ async function processPendingAutoReply(conversationId, { workspaceId, transportM
 	if (!state?.pendingAutoReplyMessageId || !state?.pendingAutoReplyDueAt) return false;
 	if (new Date(state.pendingAutoReplyDueAt).getTime() > Date.now()) return false;
 
+	const lockedAt = new Date();
 	const claimed = await prisma.conversationState.updateMany({
 		where: {
 			...stateScope,
 			pendingAutoReplyMessageId: state.pendingAutoReplyMessageId,
-			pendingAutoReplyLockedAt: null,
+			pendingAutoReplyDueAt: state.pendingAutoReplyDueAt,
+			...availablePendingReplyLease(lockedAt),
 		},
 		data: {
-			pendingAutoReplyLockedAt: new Date(),
+			pendingAutoReplyLockedAt: lockedAt,
 		},
 	});
 	if (!claimed.count) return false;
@@ -399,7 +406,13 @@ async function processPendingAutoReply(conversationId, { workspaceId, transportM
 				},
 			},
 		});
-		if (!inbound) return false;
+		if (!inbound) {
+			await prisma.conversationState.updateMany({
+				where: ownedPendingReplyLease(stateScope, state.pendingAutoReplyMessageId, lockedAt),
+				data: { pendingAutoReplyMessageId: null, pendingAutoReplyDueAt: null, pendingAutoReplyLockedAt: null },
+			});
+			return false;
+		}
 
 		await processInboundMessage({
 			workspaceId,
@@ -423,10 +436,7 @@ async function processPendingAutoReply(conversationId, { workspaceId, transportM
 		});
 
 		await prisma.conversationState.updateMany({
-			where: {
-				...stateScope,
-				pendingAutoReplyMessageId: inbound.id,
-			},
+			where: ownedPendingReplyLease(stateScope, inbound.id, lockedAt),
 			data: {
 				pendingAutoReplyMessageId: null,
 				pendingAutoReplyDueAt: null,
@@ -436,14 +446,14 @@ async function processPendingAutoReply(conversationId, { workspaceId, transportM
 		return true;
 	} catch (error) {
 		await prisma.conversationState.updateMany({
-			where: stateScope,
+			where: ownedPendingReplyLease(stateScope, state.pendingAutoReplyMessageId, lockedAt),
 			data: { pendingAutoReplyLockedAt: null },
 		}).catch(() => {});
 		throw error;
 	}
 }
 
-function scheduleAutoReplyCooldown({
+async function scheduleAutoReplyCooldown({
 	conversationId,
 	workspaceId,
 	messageId,
@@ -456,15 +466,13 @@ function scheduleAutoReplyCooldown({
 	const stateScope = conversationStateForWorkspaceWhere({ conversationId, workspaceId });
 	const dueAt = new Date(Date.now() + delayMs);
 	if (messageId) {
-		prisma.conversationState.updateMany({
+		await prisma.conversationState.updateMany({
 			where: stateScope,
 			data: {
 				pendingAutoReplyMessageId: messageId,
 				pendingAutoReplyDueAt: dueAt,
 				pendingAutoReplyLockedAt: null,
 			},
-		}).catch((error) => {
-			logger.warn('ai.cooldown_persist_failed', { workspaceId, conversationId, error });
 		});
 	}
 
@@ -492,7 +500,7 @@ async function sweepPendingAutoReplies() {
 		where: {
 			pendingAutoReplyMessageId: { not: null },
 			pendingAutoReplyDueAt: { lte: new Date() },
-			pendingAutoReplyLockedAt: null,
+			...availablePendingReplyLease(),
 		},
 		take: 25,
 		include: {
@@ -638,7 +646,11 @@ export async function getOrCreateConversation({
 	return conversation;
 }
 
-export async function processInboundMessage({
+export function processInboundMessage(options) {
+	return captureOutboundDeliveries(() => processInboundMessageTurn(options));
+}
+
+async function processInboundMessageTurn({
 	workspaceId,
 	whatsappChannelId = null,
 	waId,
@@ -662,6 +674,7 @@ export async function processInboundMessage({
 	let inboundMessage = null;
 
 	async function finalizeInboundResult({ conversation: resultConversation = null, trace: legacyTrace = null }) {
+		const deliveries = getOutboundDeliveries();
 		const route = legacyTrace?.queueDecision?.queue || resultConversation?.queue || 'AUTO';
 		const handoffReason = legacyTrace?.queueDecision?.reason
 			|| (route === 'HUMAN' ? 'human_route' : null);
@@ -677,6 +690,7 @@ export async function processInboundMessage({
 			model: legacyTrace?.model,
 			latencyMs: Date.now() - turnStartedAt,
 			usage: legacyTrace?.usage,
+			deliveries,
 			audit: legacyTrace?.audit,
 			handoff: handoffReason ? { reason: handoffReason } : null,
 		});
@@ -693,6 +707,8 @@ export async function processInboundMessage({
 					intent: legacyTrace?.intent || null,
 					model: legacyTrace?.model || null,
 					shouldReply: Boolean(legacyTrace?.shouldReply),
+					// shouldReply describes the generator decision, not provider delivery.
+					deliveries,
 					responsePolicy: legacyTrace?.responsePolicy || null,
 				},
 			});
@@ -711,7 +727,7 @@ export async function processInboundMessage({
 
 		return {
 			conversation: resultConversation,
-			trace: legacyTrace ? { ...legacyTrace, turnTrace } : null,
+			trace: legacyTrace ? { ...legacyTrace, deliveries, turnTrace } : null,
 			turnTrace,
 		};
 	}
@@ -860,15 +876,9 @@ export async function processInboundMessage({
 		} });
 	}
 
-	const freshConversation = await prisma.conversation.findFirst({
-		where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
-		include: {
-			contact: true,
-			state: true,
-			messages: {
-				orderBy: { createdAt: 'asc' }
-			}
-		}
+	const freshConversation = await loadRecentConversation(prisma, {
+		conversationId: conversation.id, workspaceId: resolvedWorkspaceId,
+		contextLimit: process.env.MAX_CONTEXT_MESSAGES,
 	});
 
 	if (!freshConversation) {
@@ -1224,7 +1234,7 @@ export async function processInboundMessage({
 		transportMode === 'live' &&
 		AUTO_REPLY_COOLDOWN_MS > 0
 	) {
-		scheduleAutoReplyCooldown({
+		await scheduleAutoReplyCooldown({
 			conversationId: freshConversation.id,
 			workspaceId: resolvedWorkspaceId,
 			messageId: inboundMessage?.id || null,
@@ -1575,7 +1585,7 @@ export async function processInboundMessage({
 		return finalizeInboundResult({ conversation: freshConversation, trace });
 	}
 
-	const maxContext = Number(process.env.MAX_CONTEXT_MESSAGES || 12);
+	const maxContext = contextMessageLimit(process.env.MAX_CONTEXT_MESSAGES);
 
 	const fullRecentMessages = freshConversation.messages.slice(-maxContext).map((msg) => ({
 		role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
@@ -1949,6 +1959,8 @@ export async function processInboundMessage({
 		};
 	}
 
+	let expectedHandoff = null;
+	const turnAuthorization = { workspaceId: resolvedWorkspaceId, conversationId: freshConversation.id, inboundMessageId: inboundMessage.id };
 	if (!finalReply) {
 		try {
 			const compiledPrompt = compilePrompt({
@@ -1977,6 +1989,7 @@ export async function processInboundMessage({
 				compiledPrompt,
 				detectedIntent: intent,
 			});
+			await assertAutoReplyAuthorized(prisma, turnAuthorization);
 
 			const fallbackReply = buildFallbackOrderAwareReply({
 				workspaceId: resolvedWorkspaceId,
@@ -2006,26 +2019,31 @@ export async function processInboundMessage({
 				audited.finalText,
 				menuAssistantContext
 			);
+			const handoff = resolveAssistantHandoff({
+				output: aiResult.output, audit: audited, fallbackReason: commercialPlan?.handoffReason,
+			});
 			const output = validateAssistantOutput({
 				...aiResult.output,
 				reply: finalReply,
-				needsHuman: audited.triggerHumanHandoff,
-				handoffReason: audited.triggerHumanHandoff
-					? commercialPlan?.handoffReason || 'ai_declared_handoff'
-					: null,
+				...handoff,
 			});
 			finalReply = output.reply;
 			aiMeta = { ...aiResult, text: output.reply, output };
 
-			if (audited.triggerHumanHandoff) {
-				await syncHumanHandoff({
+			if (output.needsHuman) {
+				expectedHandoff = await syncHumanHandoff({
 					conversationId: freshConversation.id,
 					workspaceId: freshConversation.workspaceId,
-					reason: commercialPlan?.handoffReason || 'ai_declared_handoff',
+					reason: output.handoffReason,
 					currentState: enrichedState,
 				});
 			}
 		} catch (aiError) {
+			if (aiError.code === 'OUTBOUND_TURN_CANCELLED') {
+				return finalizeInboundResult({ conversation: freshConversation, trace: {
+					...trace, shouldReply: false, responsePolicy: { reason: aiError.reason },
+				} });
+			}
 			logger.error('ai.autoreply_failed', {
 				workspaceId: resolvedWorkspaceId,
 				conversationId: freshConversation.id,
@@ -2062,7 +2080,8 @@ export async function processInboundMessage({
 		(isDkvWorkspace(resolvedWorkspaceId) || !useCommerceEngine) &&
 		isUnableToContinueHandoffReply(finalReply)
 	) {
-		await syncHumanHandoff({
+		await assertAutoReplyAuthorized(prisma, { ...turnAuthorization, expectedHandoff });
+		expectedHandoff = await syncHumanHandoff({
 			conversationId: freshConversation.id,
 			workspaceId: freshConversation.workspaceId,
 			reason: 'ai_cannot_continue',
@@ -2098,13 +2117,26 @@ export async function processInboundMessage({
 		usage: aiMeta?.usage || null,
 	};
 
-	await sendAndPersistOutbound({
-		conversationId: freshConversation.id,
-		workspaceId: freshConversation.workspaceId,
-		body: finalReply,
-		deliveryMode: transportMode,
-		aiMeta
-	});
+	try {
+		const outbound = await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			workspaceId: freshConversation.workspaceId,
+			body: finalReply,
+			deliveryMode: transportMode,
+			turnAuthorization: { ...turnAuthorization, expectedHandoff },
+			aiMeta
+		});
+		if (outbound.skipped) {
+			return finalizeInboundResult({ conversation: freshConversation, trace: {
+				...trace, shouldReply: false, assistantMessage: null, responsePolicy: { reason: outbound.reason },
+			} });
+		}
+	} catch (error) {
+		if (error.code !== 'OUTBOUND_TURN_CANCELLED') throw error;
+		return finalizeInboundResult({ conversation: freshConversation, trace: {
+			...trace, shouldReply: false, assistantMessage: null, responsePolicy: { reason: error.reason },
+		} });
+	}
 
 	await prisma.conversation.update({
 		where: workspaceOwnedWhere({ id: freshConversation.id, workspaceId: resolvedWorkspaceId }),
