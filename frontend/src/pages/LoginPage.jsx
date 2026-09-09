@@ -248,7 +248,7 @@ function ProductPreview({ compact = false }) {
 	);
 }
 
-function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, togglePassword }) {
+function LoginForm({ credentialsInvalid, error, form, onChange, onSubmit, showPassword, submitting, togglePassword }) {
 	return (
 		<form className="login-card login-card--centered" onSubmit={onSubmit} aria-describedby={error ? 'login-error' : undefined}>
 			<div className="login-card__header">
@@ -274,7 +274,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 						placeholder="nombre@empresa.com"
 						value={form.email}
 						onChange={(e) => onChange({ ...form, email: e.target.value })}
-						aria-invalid={Boolean(error)}
+						aria-invalid={credentialsInvalid}
 						aria-describedby={error ? 'login-error' : undefined}
 						required
 					/>
@@ -291,7 +291,7 @@ function LoginForm({ error, form, onChange, onSubmit, showPassword, submitting, 
 						placeholder="********"
 						value={form.password}
 						onChange={(e) => onChange({ ...form, password: e.target.value })}
-						aria-invalid={Boolean(error)}
+						aria-invalid={credentialsInvalid}
 						aria-describedby={error ? 'login-error' : undefined}
 						required
 					/>
@@ -335,6 +335,7 @@ export default function LoginPage() {
 
 	const [form, setForm] = useState({ email: '', password: '' });
 	const [error, setError] = useState('');
+	const [credentialsInvalid, setCredentialsInvalid] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
 	const [navScrolled, setNavScrolled] = useState(false);
@@ -440,6 +441,7 @@ export default function LoginPage() {
 	async function handleSubmit(e) {
 		e.preventDefault();
 		setError('');
+		setCredentialsInvalid(false);
 		setSubmitting(true);
 
 		try {
@@ -447,7 +449,8 @@ export default function LoginPage() {
 			const nextPath = resolveRedirectPath(result?.user || null, requestedPath);
 			navigate(nextPath, { replace: true });
 		} catch (err) {
-			setError(getApiErrorMessage(err, 'No se pudo iniciar sesion'));
+			setCredentialsInvalid(err?.response?.status === 401);
+			setError(getApiErrorMessage(err, 'No se pudo iniciar sesión'));
 		} finally {
 			setSubmitting(false);
 		}
@@ -783,6 +786,7 @@ export default function LoginPage() {
 				<section className="login-access-section login-access-section--form-only" aria-labelledby="login-access-title">
 					<LoginForm
 						error={error}
+						credentialsInvalid={credentialsInvalid}
 						form={form}
 						onChange={setForm}
 						onSubmit={handleSubmit}

@@ -32,6 +32,8 @@ import './InboxPage.v2.css';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isAdminUser } from '../lib/authz.js';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
+import { useRuntimeStatus } from '../components/operations/RuntimeStatus.jsx';
+import { conversationAutomationLabel } from '../lib/automationStatus.js';
 
 const QUEUES = [
 	{ key: 'ALL', label: 'Todos' },
@@ -132,7 +134,7 @@ function ConversationContextPanel({ conversation, activeContact, queueLabel, onC
 				<h3>Resumen</h3>
 				<dl>
 					<div><dt>Cola</dt><dd>{queueLabel}</dd></div>
-					<div><dt>Atención</dt><dd>{conversation?.aiEnabled ? 'IA activa' : 'Equipo humano'}</dd></div>
+					<div><dt>Asignación</dt><dd>{conversation?.aiEnabled ? 'Asignada a IA' : 'Equipo humano'}</dd></div>
 					<div><dt>Sin leer</dt><dd>{unreadCount}</dd></div>
 					<div><dt>Última actividad</dt><dd>{activeContact?.lastMessageTime || 'Reciente'}</dd></div>
 				</dl>
@@ -918,6 +920,7 @@ function ActionButton({ children, danger = false, active = false, disabled = fal
 }
 
 export default function InboxPage() {
+	const runtime = useRuntimeStatus();
 	useInternalDarkOverrides();
 
 	const queryClient = useQueryClient();
@@ -2273,9 +2276,9 @@ export default function InboxPage() {
 								resolveContactAvatarUrl(conversation?.contact) ||
 								resolveContactAvatarUrl(activeContact)
 							}
-							status={conversation?.aiEnabled ? 'online' : 'dnd'}
+							status="offline"
 							queueLabel={currentQueueLabel}
-							aiLabel={conversation?.aiEnabled ? 'IA activa' : 'Humano'}
+							aiLabel={conversationAutomationLabel(conversation, runtime.isError ? null : runtime.data)}
 							headerTools={(
 								<button
 									type="button"

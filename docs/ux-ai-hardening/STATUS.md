@@ -16,11 +16,20 @@ Fecha: 2026-09-09. Rama: `codex/ux-ai-hardening`, desde main `6392ea0`.
 | IA-06 Derivación estructurada | Se conserva la petición del modelo o del auditor | Evaluaciones sandbox de veracidad de stock/precios y casos adversariales |
 | IA-07 Toma manual | Nueva toma manual HARD; las existentes no vencen silenciosamente | UI para explicar duración/liberación y prueba de operador |
 | IA-08 Historial | Consulta acotada 20–100 mensajes, más último saliente histórico cuando hace falta | Medición en staging con chat largo y comparación funcional |
-| UX-01 a UX-20 | Sin implementar | Aprobar e implementar diseños por fase; probar navegación, métricas, errores y accesibilidad |
+| UX-01 Estados de IA | La asignación se distingue de permisos pausados o desconocidos en Bandeja | QA con operadores en staging |
+| UX-02/03 Automatizaciones | Consultas independientes, error por regla, configuración separada de permisos y horario real del servidor | Heartbeat fiable: el lastRunAt actual no se actualiza en todos los ciclos vacíos |
+| UX-04/05 Operación | Acceso a reglas correcto, tres métricas con unidades, sin KPI que suma categorías, tareas separadas de estado técnico | QA con roles reales |
+| UX-06/07 Resultados | URL conserva campaña, filtros y página; fetch de selección fuera de página; cero no reemplazado por subtotal; período correcto | Período compartido con Diagnóstico y respuestas globales (ahora rotuladas por página) |
+| UX-08/13/20 Correcciones funcionales | Denominador de lectura alineado, moneda explícita, aria-pressed del período y error API no invalida credenciales | Resto de etiquetas de filtros y metadatos de actualización |
+| UX-09 a UX-19 restantes | Rediseño general pendiente | Propuestas visuales y QA por fase, preservando marca y animación |
 
 ## Verificación local
 
-- Tests Node del backend sin conexiones a producción: 134 pasan, 0 fallan.
+- Tests Node del backend sin conexiones a producción: 137 pasan, 0 fallan.
+- Tests unitarios del estado de automatización frontend: 4 pasan.
+- Build frontend correcto. Persiste advertencia de chunk Three.js mayor a 500 kB.
+- E2E demo: 1024/1280/1440, claro/oscuro, fallos independientes, ruta Configurar correcta, URL/filtros persistentes, ceros y login 503; sin errores JavaScript.
+- Capturas finales en `frontend/audit-artifacts/hardening/`; todos los datos son sintéticos.
 - Evaluación offline: 28 casos correctos; 8 casos de candidato requieren sandbox y no se ejecutaron.
 - Check de sintaxis desde el directorio backend.
 - Sin migraciones ejecutadas, mensajes externos, push ni despliegue.
@@ -31,7 +40,7 @@ La reserva de salida es conservadora: queda retenida incluso ante caída antes d
 
 Los cambios se probaron con dobles de base/transporte. No se debe confundir una prueba concurrente con mocks con una certificación E2E en PostgreSQL/Meta.
 
-## Aprobación visual pendiente — fase 1
+## Aprobación visual recibida — fase 1
 
 [Propuesta generada](./phase-1-proposal.png): Operación y Automatizaciones. Es un mockup demo, no un snapshot implementado ni una lectura de producción.
 
@@ -48,11 +57,15 @@ Cambios propuestos:
 7. Conservar navegación y funciones existentes: el mockup no autoriza eliminar Audiencias, aunque su pestaña no aparezca en la imagen generada.
 8. En la implementación, “Habilitada” irá bajo Configuración; “Pausada por el equipo” bajo Estado de envío. El render conceptual no reemplaza esta definición.
 
-No se implementará la UI hasta recibir la aprobación de esta fase. Landing, Resultados/Diagnóstico, Bandeja, Carritos/Clientes/Catálogo y Configuración/Laboratorio tendrán sus propias referencias antes de cambios visuales.
+El usuario aprobó esta fase con “Si aplica todo”. Se implementaron Operación y Automatizaciones, preservando Audiencias y el resto de rutas. Se corrigieron además errores funcionales de Resultados, Estadísticas, Bandeja y Login sin rediseñar esas pantallas. Landing, Resultados/Diagnóstico, Bandeja, Carritos/Clientes/Catálogo y Configuración/Laboratorio siguen pendientes de sus referencias para rediseños completos.
+
+Las guías de UX, copy, accesibilidad y estados de carga/error del repositorio guiaron la separación de configuración y capacidad de envío; un fallo de consulta nunca se interpreta como regla deshabilitada. Se reutilizaron componentes y tokens. Compatibilidad puntual con el CSS heredado requirió overrides acotados; todavía no es una consolidación global de estilos.
+
+La API de permisos es autenticada y de sólo lectura, no prueba conectividad con Meta. No se alteraron flags ni horarios en producción. No se ejecutaron migraciones ni despliegues. Se debe publicar backend antes de frontend; si el endpoint todavía no existe, la UI mostrará “sin verificar”.
 
 ## Siguientes pasos
 
-1. Aprobación de la fase visual presentada.
+1. Revisar capturas finales de la fase 1 implementada; preparar las referencias de las fases restantes.
 2. Persistencia durable del webhook y conciliación de salida, con base de pruebas aislada.
 3. Implementación UI por fase y pruebas desktop 1024/1280/1440.
 4. QA en staging con envíos reales bloqueados; casos con Meta sólo mediante destinatarios de prueba autorizados.
