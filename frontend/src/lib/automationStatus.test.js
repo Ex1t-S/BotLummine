@@ -15,6 +15,9 @@ test('an enabled rule respects global pause, quiet hours and errors',()=>{
 });
 test('runtime unavailable is unknown, not zero or healthy',()=>{
  assert.equal(runtimePresentation(null).title,'Estado de envíos sin verificar');
+ assert.equal(runtimePresentation({}).title,'Estado de envíos sin verificar');
+ assert.equal(automationStatus({settings,runtime:{}}).label,'Envíos sin verificar');
+ assert.equal(conversationAutomationLabel({aiEnabled:true},{}),'IA · permisos sin verificar');
  assert.equal(contactWindowLabel(null),'Horario sin verificar');
  assert.match(contactWindowLabel({quietHours:{startHour:21,endHour:9,timezone:'Argentina'}}),/21:00 a 09:00/);
 });
