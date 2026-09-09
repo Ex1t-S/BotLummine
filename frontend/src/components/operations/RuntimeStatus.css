@@ -1,0 +1,6 @@
+.runtime-status { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; margin-block:12px; border:1px solid var(--border-subtle); border-radius:12px; background:var(--surface-panel); color:var(--text-primary); }
+.runtime-status p { margin:4px 0 0; font-size:14px; color:var(--text-secondary); }
+.runtime-status small { flex-shrink:0; color:var(--text-secondary); }
+.runtime-status.tone-warning { background:var(--status-warning-bg); color:var(--status-warning-text); }
+.runtime-status button { border:1px solid var(--border-strong); border-radius:8px; padding:8px 12px; color:var(--text-primary); background:var(--surface-panel); }
+.runtime-status button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }

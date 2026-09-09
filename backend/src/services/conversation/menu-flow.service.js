@@ -286,6 +286,7 @@ export async function syncHumanHandoff({
 			humanAutoResumeAt: humanAutoResumeAt?.toISOString() || null,
 		},
 	});
+	return { reason, lockedAt };
 }
 
 async function enableAutomaticConversation({ conversationId, workspaceId }) {

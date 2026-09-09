@@ -23,6 +23,7 @@ const db = {
 globalThis.prisma = db;
 const { maybeHandleMenuFlow } = await import('../src/services/conversation/menu-flow.service.js');
 const { sendAndPersistOutbound } = await import('../src/services/conversation/outbound-message.service.js');
+const { captureOutboundDeliveries, getOutboundDeliveries } = await import('../src/services/conversation/outbound-delivery-context.js');
 
 function reset() {
 	state = { menuActive: true, menuPath: 'MAIN_MENU', menuInvalidAttempts: 0, needsHuman: false };
@@ -63,6 +64,28 @@ test('explicit menu reset in lab preserves simulation mode', async () => {
 	await run('menu');
 	assert.equal(messages.length, 1);
 	assert.equal(messages[0].rawPayload.deliveryMode, 'lab');
+});
+
+test('a menu delivery is correlated even though the generator will not reply again', async () => {
+	reset();
+	await captureOutboundDeliveries(async () => {
+		await run('menu');
+		const deliveries = getOutboundDeliveries();
+		assert.equal(deliveries.length, 1);
+		assert.equal(deliveries[0].status, 'SIMULATED');
+		assert.equal(deliveries[0].messageId, messages[0].id);
+	});
+});
+
+test('the real send boundary rechecks human ownership before reaching transport', async (t) => {
+	reset();
+	t.mock.method(db.workspaceFeatureFlag, 'findUnique', async () => ({ enabled: true }));
+	t.mock.method(db.conversation, 'findFirst', async () => ({ ...conversation, queue: 'HUMAN', aiEnabled: false, state: {} }));
+	db.message.findFirst = async () => ({ id: 'inbound' });
+	await assert.rejects(sendAndPersistOutbound({ conversationId: 'c', workspaceId: 'w', body: 'Must not send',
+		turnAuthorization: { inboundMessageId: 'inbound' }, aiMeta: { provider: 'system' },
+	}), error => error.code === 'OUTBOUND_TURN_CANCELLED');
+	assert.equal(messages.length, 0);
 });
 
 test('send boundary blocks an automatic turn when paused, but does not classify manual replies as automatic', async (t) => {

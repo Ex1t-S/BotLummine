@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getRuntimeStatus } from '../controllers/runtime-status.controller.js';
 import multer from 'multer';
 import { requireAuth, requireAdmin, requireAnyRole } from '../middleware/auth.js';
 import {
@@ -83,6 +84,7 @@ const uploadInboxAttachment = multer({
 router.use(requireAuth);
 
 router.get('/operations/summary', requireInboxAccess, getOperationSummary);
+router.get('/runtime-status', requireInboxAccess, getRuntimeStatus);
 router.get('/inbox', requireInboxAccess, getInbox);
 router.get('/inbox/stream', requireInboxAccess, getInboxStream);
 router.get('/conversations/:conversationId/messages', requireInboxAccess, getConversationMessagesJson);

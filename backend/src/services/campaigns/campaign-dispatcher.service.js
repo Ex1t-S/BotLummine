@@ -32,14 +32,20 @@ function getLocalHour(date = new Date(), timezone = DEFAULT_AUTOMATION_TIMEZONE)
  * dispatchable because they are explicitly triggered by an operator.
  */
 export function isAutomationDispatchPaused(date = new Date()) {
-	const timezone = process.env.CAMPAIGN_AUTOMATION_TIMEZONE || DEFAULT_AUTOMATION_TIMEZONE;
-	const startHour = normalizeHour(process.env.CAMPAIGN_AUTOMATION_QUIET_START_HOUR, DEFAULT_QUIET_START_HOUR);
-	const endHour = normalizeHour(process.env.CAMPAIGN_AUTOMATION_QUIET_END_HOUR, DEFAULT_QUIET_END_HOUR);
+	const { timezone, startHour, endHour } = getAutomationContactWindow();
 	const hour = getLocalHour(date, timezone);
 
 	if (startHour === endHour) return false;
 	if (startHour > endHour) return hour >= startHour || hour < endHour;
 	return hour >= startHour && hour < endHour;
+}
+
+export function getAutomationContactWindow() {
+	return {
+		timezone: process.env.CAMPAIGN_AUTOMATION_TIMEZONE || DEFAULT_AUTOMATION_TIMEZONE,
+		startHour: normalizeHour(process.env.CAMPAIGN_AUTOMATION_QUIET_START_HOUR, DEFAULT_QUIET_START_HOUR),
+		endHour: normalizeHour(process.env.CAMPAIGN_AUTOMATION_QUIET_END_HOUR, DEFAULT_QUIET_END_HOUR),
+	};
 }
 
 function normalizeIntervalMs(envName, fallbackMinutes, minMinutes = 5) {

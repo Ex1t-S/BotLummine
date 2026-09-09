@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -20,12 +20,10 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api.js';
 import {
-	fetchAbandonedCartAutomationSettings,
 	fetchCampaignOverview,
 	fetchCampaigns,
+	fetchCampaignDetail,
 	archiveCampaign,
-	fetchPendingPaymentAutomationSettings,
-	fetchShipmentNotificationSettings,
 	fetchTemplates,
 } from '../../lib/campaigns.js';
 import { ActionButton, EmptyState } from '../../components/ui/InternalPage.jsx';
@@ -65,6 +63,7 @@ function currency(value, code = 'ARS') {
 	return new Intl.NumberFormat('es-AR', {
 		style: 'currency',
 		currency: code || 'ARS',
+		currencyDisplay: 'code',
 		maximumFractionDigits: 0,
 	}).format(Number(value || 0));
 }
@@ -142,15 +141,16 @@ function useArchiveCampaignMutation() {
 
 export function CampaignOsLayout({ pathname, children }) {
 	const navigate = useNavigate();
+	const automationView = pathname === '/campaigns/automations';
 	return (
-		<section className="campaign-os">
+		<section className={`campaign-os${automationView ? ' campaign-os--automation' : ''}`}>
 			<header className="campaign-os-header">
 				<div>
-					<span className="campaign-os-eyebrow">Campañas Lummine</span>
-					<h1>Centro de campañas</h1>
-					<p>Planificá, lanzá y medí campañas sin perderte entre configuraciones.</p>
+					<span className="campaign-os-eyebrow">Campañas</span>
+					<h1>{automationView ? 'Automatizaciones' : 'Centro de campañas'}</h1>
+					{!automationView ? <p>Planificá, lanzá y medí campañas sin perderte entre configuraciones.</p> : null}
 				</div>
-				{!pathname.startsWith('/campaigns/segment') ? (
+				{!automationView && !pathname.startsWith('/campaigns/segment') ? (
 					<ActionButton icon={Plus} onClick={() => navigate('/campaigns/segment')}>Nueva campaña</ActionButton>
 				) : null}
 			</header>
@@ -324,89 +324,22 @@ export function CampaignAudienceStudio() {
 	);
 }
 
-export function CampaignAutomationHub() {
-	const navigate = useNavigate();
-	const automationQuery = useQuery({
-		queryKey: ['campaign-os', 'automations'],
-		queryFn: async () => {
-			const [carts, payments, shipments] = await Promise.all([
-				fetchAbandonedCartAutomationSettings(),
-				fetchPendingPaymentAutomationSettings(),
-				fetchShipmentNotificationSettings(),
-			]);
-			return { carts, payments, shipments };
-		},
-		staleTime: 30_000,
-	});
-
-	const rows = [
-		{
-			id: 'carts',
-			icon: ShoppingCart,
-			title: 'Recuperación de carritos',
-			description: 'Detecta oportunidades nuevas y prepara el contacto con una regla controlada.',
-			settings: automationQuery.data?.carts?.settings || automationQuery.data?.carts || {},
-			to: '/campaigns/abandoned-carts',
-		},
-		{
-			id: 'payments',
-			icon: WalletCards,
-			title: 'Recordatorio de pedidos pendientes',
-			description: 'Recuerda completar el pago sin mezclar la revisión humana de comprobantes.',
-			settings: automationQuery.data?.payments?.settings || automationQuery.data?.payments || {},
-			to: '/campaigns/pending-payments',
-		},
-		{
-			id: 'shipments',
-			icon: Truck,
-			title: 'Avisos de despacho',
-			description: 'Informa el seguimiento cuando el pedido está listo para salir.',
-			settings: automationQuery.data?.shipments?.settings || automationQuery.data?.shipments || {},
-			to: '/campaigns/shipments',
-		},
-	];
-	const activeCount = rows.filter((row) => Boolean(row.settings?.enabled)).length;
-	const errorCount = rows.filter((row) => Boolean(row.settings?.lastError)).length;
-
-	return (
-		<div className="campaign-os-automations">
-			<div className="campaign-os-intro">
-				<div><span>Centro de control</span><h2>Automatizaciones con propósito claro</h2><p>Revisá el estado primero. Entrá a configurar sólo la regla que necesita cambios.</p></div>
-				<div className="campaign-os-inline-totals" aria-label="Resumen de automatizaciones"><span><strong>{number(activeCount)}</strong> activas</span><span className={errorCount ? 'has-error' : ''}><strong>{number(errorCount)}</strong> con error</span></div>
-			</div>
-			{automationQuery.isError ? <div className="campaign-os-inline-error" role="alert">No pudimos leer todas las reglas. Reintentá antes de modificar una automatización.</div> : null}
-			<div className="campaign-os-automation-window" role="note">
-				<div><strong>Ventana de contacto</strong><span>Las automatizaciones envían de 09:00 a 21:00 (hora de Argentina). Durante la noche quedan pausadas y retoman en la próxima ventana.</span></div>
-				<span className="campaign-os-automation-window__badge">09:00–21:00 ART</span>
-			</div>
-			<div className="campaign-os-automation-list">
-				{rows.map((row) => {
-					const Icon = row.icon;
-					const enabled = Boolean(row.settings?.enabled);
-					const hasError = Boolean(row.settings?.lastError);
-					return (
-						<article className="campaign-os-automation-row" key={row.id}>
-							<span className="campaign-os-automation-icon"><Icon size={19} aria-hidden="true" /></span>
-							<div><span>{hasError ? 'Revisión recomendada' : enabled ? 'Activa' : 'Pausada'}</span><h3>{row.title}</h3><p>{row.description}</p></div>
-							<strong className={`campaign-os-automation-state ${hasError ? 'has-error' : enabled ? 'is-active' : ''}`}>{hasError ? 'Error' : enabled ? 'Funcionando' : 'Pausada'}</strong>
-							<button type="button" onClick={() => navigate(row.to)}><Settings2 size={15} aria-hidden="true" />Configurar</button>
-						</article>
-					);
-				})}
-			</div>
-			<div className="campaign-os-audience-note"><strong>Configura con contexto.</strong><span>Cada regla conserva su editor completo, pero la complejidad queda detrás de una decisión explícita.</span></div>
-		</div>
-	);
-}
+export { CampaignAutomationHub } from './CampaignAutomationHub.jsx';
 
 export function CampaignResultsHub() {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
-	const [periodDays, setPeriodDays] = useState(7);
-	const [kind, setKind] = useState('');
-	const [search, setSearch] = useState('');
-	const [archiveScope, setArchiveScope] = useState('current');
-	const [page, setPage] = useState(1);
+	const periodDays = [7, 30, 90].includes(Number(searchParams.get('period'))) ? Number(searchParams.get('period')) : 7;
+	const kind = ['manual', 'automated'].includes(searchParams.get('kind')) ? searchParams.get('kind') : '';
+	const search = searchParams.get('search') || '';
+	const archiveScope = searchParams.get('archiveScope') === 'archive' ? 'archive' : 'current';
+	const page = Math.max(1, Math.floor(Number(searchParams.get('page')) || 1));
+	function updateFilters(values, { resetPage = true, replace = false } = {}) {
+		const next = new URLSearchParams(searchParams);
+		for (const [key, value] of Object.entries(values)) value ? next.set(key, String(value)) : next.delete(key);
+		if (resetPage) next.set('page', '1');
+		setSearchParams(next, { replace });
+	}
 	const queryClient = useQueryClient();
 	const archiveMutation = useMutation({ mutationFn: ({ id, archived }) => archiveCampaign(id, archived), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['campaign-os', 'results'] }) });
 	const dateRange = useMemo(() => {
@@ -429,15 +362,16 @@ export function CampaignResultsHub() {
 	const withActivity = campaigns.filter((campaign) => Number(campaign.sentCount || campaign.sentRecipients || 0) > 0);
 	const pagination = resultsQuery.data?.campaignData?.pagination || {};
 	const requestedCampaignId = searchParams.get('campaign');
-	const selectedCampaign = campaigns.find((campaign) => campaign.id === requestedCampaignId)
-		|| withActivity[0]
-		|| campaigns[0]
-		|| null;
-
-	useEffect(() => {
-		if (!selectedCampaign?.id || requestedCampaignId === selectedCampaign.id) return;
-		setSearchParams({ campaign: selectedCampaign.id }, { replace: true });
-	}, [requestedCampaignId, selectedCampaign?.id, setSearchParams]);
+	const listedCampaign = campaigns.find(campaign => campaign.id === requestedCampaignId);
+	const selectedQuery = useQuery({
+		queryKey: ['campaign-os', 'selected-result', requestedCampaignId],
+		queryFn: () => fetchCampaignDetail(requestedCampaignId, { page: 1, pageSize: 1 }),
+		enabled: Boolean(requestedCampaignId && !listedCampaign && resultsQuery.isSuccess),
+		retry: 1,
+	});
+	const selectedCampaign = requestedCampaignId
+		? listedCampaign || (selectedQuery.isError ? null : selectedQuery.data?.campaign) || null
+		: withActivity[0] || campaigns[0] || null;
 
 	if (resultsQuery.isLoading) return <EmptyState tone="loading" title="Preparando resultados" description="Consolidando entrega, respuesta y compras atribuidas." />;
 	if (resultsQuery.isError) return <EmptyState tone="error" title="No pudimos cargar los resultados" description="Reintentá para volver a calcular la lectura operativa."><ActionButton variant="secondary" icon={RefreshCw} onClick={() => resultsQuery.refetch()}>Reintentar</ActionButton></EmptyState>;
@@ -451,10 +385,10 @@ export function CampaignResultsHub() {
 		return acc;
 	}, { sent: 0, delivered: 0, replied: 0, purchased: 0, revenue: 0 });
 	const stats = resultsQuery.data?.statsData?.stats || resultsQuery.data?.statsData || {};
-	const summarySent = Number(stats.sentRecipientsCount || totals.sent);
-	const summaryDelivered = Number(stats.deliveredRecipientsCount || totals.delivered);
-	const revenue = Number(stats.attributedRevenue || totals.revenue || 0);
-	const selectedAnalytics = selectedCampaign?.analytics || {};
+	const summarySent = Number(stats.sentRecipientsCount ?? 0);
+	const summaryDelivered = Number(stats.deliveredRecipientsCount ?? 0);
+	const revenue = Number(stats.attributedRevenue ?? 0);
+	const selectedAnalytics = selectedCampaign?.analytics || selectedQuery.data?.analytics || {};
 	const selectedSent = Number(selectedCampaign?.sentCount || selectedCampaign?.sentRecipients || 0);
 	const selectedDelivered = Number(selectedCampaign?.deliveredCount || selectedCampaign?.deliveredRecipients || 0);
 	const selectedStatus = statusMeta(selectedCampaign?.status, selectedCampaign);
@@ -462,7 +396,7 @@ export function CampaignResultsHub() {
 	const selectedHasActivity = selectedSent > 0;
 
 	function selectCampaign(campaignId) {
-		setSearchParams({ campaign: campaignId });
+		updateFilters({ campaign: campaignId }, { resetPage: false });
 	}
 
 	function requestArchiveCampaign(campaign) {
@@ -472,7 +406,7 @@ export function CampaignResultsHub() {
 		archiveMutation.mutate({ id: campaign.id, archived: archiveScope !== 'archive' }, {
 			onSuccess: () => {
 				const nextCampaign = campaigns.find((item) => item.id !== campaign.id);
-				setSearchParams(nextCampaign ? { campaign: nextCampaign.id } : {}, { replace: true });
+				updateFilters({ campaign: nextCampaign?.id || '' }, { resetPage: false, replace: true });
 			},
 		});
 	}
@@ -484,21 +418,21 @@ export function CampaignResultsHub() {
 				<button type="button" onClick={() => resultsQuery.refetch()} disabled={resultsQuery.isFetching}><RefreshCw size={16} aria-hidden="true" />{resultsQuery.isFetching ? 'Actualizando' : 'Actualizar'}</button>
 			</div>
 			<div className="campaign-os-results-filters" aria-label="Filtros de resultados">
-				<div className="campaign-os-filter-group"><span>Período</span>{[7, 30, 90].map((days) => <button type="button" key={days} className={periodDays === days ? 'is-active' : ''} onClick={() => { setPeriodDays(days); setPage(1); }}>{days} días</button>)}</div>
-				<div className="campaign-os-filter-group"><span>Tipo</span><button type="button" className={!kind ? 'is-active' : ''} onClick={() => { setKind(''); setPage(1); }}>Todas</button><button type="button" className={kind === 'manual' ? 'is-active' : ''} onClick={() => { setKind('manual'); setPage(1); }}>Manuales</button><button type="button" className={kind === 'automated' ? 'is-active' : ''} onClick={() => { setKind('automated'); setPage(1); }}>Automáticas</button></div>
-				<button type="button" className={archiveScope === 'archive' ? 'is-active' : ''} onClick={() => { setArchiveScope(archiveScope === 'archive' ? 'current' : 'archive'); setPage(1); }}>{archiveScope === 'archive' ? 'Volver a actuales' : 'Abrir Archivo'}</button>
-				<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Buscar campaña" aria-label="Buscar campaña" />
+				<div className="campaign-os-filter-group"><span>Período</span>{[7, 30, 90].map((days) => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'is-active' : ''} onClick={() => { updateFilters({ period: days }); }}>{days} días</button>)}</div>
+				<div className="campaign-os-filter-group"><span>Tipo</span><button type="button" className={!kind ? 'is-active' : ''} onClick={() => { updateFilters({ kind: '' }); }}>Todas</button><button type="button" className={kind === 'manual' ? 'is-active' : ''} onClick={() => { updateFilters({ kind: 'manual' }); }}>Manuales</button><button type="button" className={kind === 'automated' ? 'is-active' : ''} onClick={() => { updateFilters({ kind: 'automated' }); }}>Automáticas</button></div>
+				<button type="button" className={archiveScope === 'archive' ? 'is-active' : ''} onClick={() => { updateFilters({ archiveScope: archiveScope === 'archive' ? 'current' : 'archive' }); }}>{archiveScope === 'archive' ? 'Volver a actuales' : 'Abrir Archivo'}</button>
+				<input type="search" value={search} onChange={(event) => { updateFilters({ search: event.target.value }, { replace: true }); }} placeholder="Buscar campaña" aria-label="Buscar campaña" />
 			</div>
 			{stats.automationHealth?.some?.((item) => item.stale) ? <div className="campaign-os-inline-error" role="alert">Una automatización activa lleva más de dos intervalos sin ejecutar. Revisá su configuración y la última corrida.</div> : null}
 			<div className="campaign-os-result-summary" aria-label="Resumen general de resultados">
 				<div><span>Entrega general</span><strong>{percent(summarySent ? summaryDelivered / summarySent * 100 : 0)}</strong><small>{number(summaryDelivered)} de {number(summarySent)} enviados</small></div>
-				<div><span>Conversaciones</span><strong>{number(totals.replied)}</strong><small>{percent(totals.sent ? totals.replied / totals.sent * 100 : 0)} respondió</small></div>
-				<div><span>Compras atribuidas</span><strong>{number(Number(stats.purchasedRecipients || totals.purchased))}</strong><small>{currency(revenue, stats.attributedCurrency || 'ARS')} en ventas reales</small></div>
+				<div><span>Respuestas · página actual</span><strong>{number(totals.replied)}</strong><small>{percent(totals.sent ? totals.replied / totals.sent * 100 : 0)} respondió</small></div>
+				<div><span>Compras atribuidas</span><strong>{number(Number(stats.purchasedRecipients ?? 0))}</strong><small>{currency(revenue, stats.attributedCurrency || 'ARS')} en ventas reales</small></div>
 			</div>
 
 			<div className="campaign-os-results-workspace">
 			<section className="campaign-os-results-list" aria-labelledby="campaign-results-title">
-				<div className="campaign-os-section-head"><div><span>{archiveScope === 'archive' ? 'Archivo' : 'Historial · últimos 90 días'}</span><h3 id="campaign-results-title">Campañas</h3></div><small>{number(pagination.total ?? campaigns.length)} resultados</small></div>
+				<div className="campaign-os-section-head"><div><span>{archiveScope === 'archive' ? 'Archivo' : `Historial · últimos ${periodDays} días`}</span><h3 id="campaign-results-title">Campañas</h3></div><small>{number(pagination.total ?? campaigns.length)} resultados</small></div>
 				{campaigns.length ? campaigns.map((campaign) => {
 					const analytics = campaign.analytics || {};
 					const sent = Number(campaign.sentCount || campaign.sentRecipients || 0);
@@ -541,10 +475,10 @@ export function CampaignResultsHub() {
 							disabled={archiveMutation.isPending || ['RUNNING', 'QUEUED'].includes(String(selectedCampaign.status || '').toUpperCase())}
 						>{archiveScope === 'archive' ? 'Restaurar campaña' : 'Archivar campaña'}</button> : null}
 					</div>
-				</> : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><strong>Elegí una campaña</strong><span>Vas a ver su lectura operativa en este panel.</span></div></div>}
+				</> : <div className="campaign-os-empty"><BarChart3 size={20} aria-hidden="true" /><div><h3 id="campaign-result-detail-title">{requestedCampaignId ? selectedQuery.isPending ? 'Cargando campaña seleccionada' : 'No pudimos abrir esa campaña' : 'Elegí una campaña'}</h3><span>{requestedCampaignId ? 'El enlace se conserva; no seleccionamos otra campaña en su lugar.' : 'Vas a ver su lectura operativa en este panel.'}</span>{selectedQuery.isError ? <button type="button" onClick={() => selectedQuery.refetch()}>Reintentar campaña</button> : null}</div></div>}
 			</aside>
 			</div>
-				{Number(pagination.totalPages || 1) > 1 ? <div className="campaign-os-pagination"><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button><span>Página {page} de {pagination.totalPages}</span><button type="button" disabled={!pagination.hasNextPage} onClick={() => setPage((current) => current + 1)}>Siguiente</button></div> : null}
+				{Number(pagination.totalPages || 1) > 1 ? <div className="campaign-os-pagination"><button type="button" disabled={page <= 1} onClick={() => updateFilters({ page: page - 1 }, { resetPage: false })}>Anterior</button><span>Página {page} de {pagination.totalPages}</span><button type="button" disabled={!pagination.hasNextPage} onClick={() => updateFilters({ page: page + 1 }, { resetPage: false })}>Siguiente</button></div> : null}
 		</div>
 	);
 }
