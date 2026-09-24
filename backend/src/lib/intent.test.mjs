@@ -13,6 +13,10 @@ describe('commercial intent detection', () => {
 		assert.equal(detectIntent('quiero comprar la calza'), 'product');
 	});
 
+	it('recognizes CVU questions as payment intent', () => {
+		assert.equal(detectIntent('pasame el CVU para transferir'), 'payment');
+	});
+
 	it('preserves post-sale intent over commercial keywords', () => {
 		assert.equal(detectIntent('quiero saber donde esta mi pedido'), 'order_status');
 		assert.equal(detectIntent('quiero hacer un cambio'), 'return_exchange');

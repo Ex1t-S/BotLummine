@@ -19,7 +19,7 @@ function classifyPaymentQuestion(messageBody = '') {
 		return 'installments';
 	}
 
-	if (/(transferencia|transferir|alias|cbu|comprobante|ya transferi|te transferi|pasame alias)/.test(text)) {
+	if (/(transferencia|transferir|alias|cbu|cvu|comprobante|ya transferi|te transferi|pasame alias)/.test(text)) {
 		return 'transfer';
 	}
 
@@ -31,11 +31,20 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 		? await getWorkspaceRuntimeConfig(workspaceId).catch(() => null)
 		: null;
 	const questionType = classifyPaymentQuestion(messageBody);
-	const transferConfig = workspaceConfig?.ai?.paymentConfig?.transfer || {};
+	const paymentConfig = workspaceConfig?.ai?.paymentConfig || {};
+	// Older workspaces stored public transfer details in a separate object. Merge
+	// it as a compatibility fallback so a stale/partial `transfer` object can
+	// never hide the current payment details.
+	const transferConfig = {
+		...(paymentConfig.transferPublicInfo || {}),
+		...(paymentConfig.transfer || {}),
+	};
 	const alias = transferConfig.alias || process.env.TRANSFER_ALIAS;
+	const cvu = transferConfig.cvu || transferConfig.CVU || process.env.TRANSFER_CVU;
 	const cbu = transferConfig.cbu || process.env.TRANSFER_CBU;
 	const holder = transferConfig.holder || process.env.TRANSFER_HOLDER;
 	const bank = transferConfig.bank || process.env.TRANSFER_BANK;
+	const cuit = transferConfig.cuit || transferConfig.taxId || transferConfig.CUIT || process.env.TRANSFER_CUIT;
 	const extra = transferConfig.extra || transferConfig.extraInstructions || process.env.TRANSFER_EXTRA;
 
 	const missing = [];
@@ -52,11 +61,13 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 		missing.push('envío o retiro');
 	}
 
-	const paymentDataAvailable = Boolean(alias || cbu);
+	const paymentDataAvailable = Boolean(alias || cvu || cbu);
 	const transferDetails = [
 		alias ? `Alias: ${alias}` : '',
+		cvu ? `CVU: ${cvu}` : '',
 		cbu ? `CBU: ${cbu}` : '',
 		holder ? `Titular: ${holder}` : '',
+		cuit ? `CUIT: ${cuit}` : '',
 		bank ? `Banco: ${bank}` : '',
 		extra ? String(extra) : '',
 	].filter(Boolean);
@@ -81,8 +92,10 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 			missing,
 			transfer: {
 				alias: alias || null,
+				cvu: cvu || null,
 				cbu: cbu || null,
 				holder: holder || null,
+				cuit: cuit || null,
 				bank: bank || null,
 				extra: extra || null
 			}
