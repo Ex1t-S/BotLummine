@@ -111,7 +111,7 @@ function hasPriceKeywords(q = '') {
 }
 
 function hasPaymentKeywords(q = '') {
-	return /(transferencia|transferir|alias|cbu|banco|comprobante|pago|cuotas|tarjeta|mercado pago|mercadopago)/.test(
+	return /(transferencia|transferir|alias|cbu|cvu|banco|comprobante|pago|cuotas|tarjeta|mercado pago|mercadopago)/.test(
 		q
 	);
 }

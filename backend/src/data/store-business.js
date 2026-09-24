@@ -23,8 +23,10 @@ export const PAYMENT_RULES = {
 	transfer: {
 		enabled: true,
 		alias: process.env.TRANSFER_ALIAS || 'TU_ALIAS_REAL',
+		cvu: process.env.TRANSFER_CVU || '',
 		cbu: process.env.TRANSFER_CBU || 'TU_CBU_REAL',
 		holder: process.env.TRANSFER_HOLDER || 'TITULAR_REAL',
+		cuit: process.env.TRANSFER_CUIT || '',
 		bank: process.env.TRANSFER_BANK || 'BANCO_REAL',
 		extraInstructions:
 			process.env.TRANSFER_EXTRA ||
@@ -52,7 +54,7 @@ export function detectBusinessIntent(text = '') {
 		)
 	) return 'order_status';
 
-	if (/(transferencia|alias|cbu|banco|comprobante|pago)/.test(q)) return 'payment';
+	if (/(transferencia|alias|cbu|cvu|banco|comprobante|pago)/.test(q)) return 'payment';
 	if (/(envio|enviar|correo|llega|demora)/.test(q)) return 'shipping';
 	if (/(cambio|devolucion|devolución|reclamo|defecto|dañado|danado)/.test(q)) return 'returns';
 	if (/(talle|medida|medidas|m\/l|xl\/xxl|xl|xxl)/.test(q)) return 'size_help';
