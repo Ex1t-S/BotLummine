@@ -1978,9 +1978,10 @@ async function processInboundMessageTurn({
 				catalogProducts,
 				catalogContext,
 				commercialHints,
-				commercialPlan,
-				responsePolicy,
-				menuAssistantContext,
+			commercialPlan,
+			responsePolicy,
+			latestUserMessage: effectiveMessageBody,
+			menuAssistantContext,
 				campaignAssistantContext: promptCampaignAssistantContext
 			});
 			prompt = compiledPrompt.text;
@@ -2010,6 +2011,7 @@ async function processInboundMessageTurn({
 				fallbackReply,
 				commercialPlan,
 				recentMessages: fullRecentMessages,
+				latestUserMessage: effectiveMessageBody,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				businessName: aiBrand.businessName,
 				agentName: aiBrand.agentName
@@ -2028,7 +2030,13 @@ async function processInboundMessageTurn({
 				...handoff,
 			});
 			finalReply = output.reply;
-			aiMeta = { ...aiResult, text: output.reply, output };
+			aiMeta = {
+				...aiResult,
+				text: output.reply,
+				output,
+				continuityRecovery: Boolean(audited.continuityRecovery),
+				repetitionDetected: Boolean(audited.repetitionDetected),
+			};
 
 			if (output.needsHuman) {
 				expectedHandoff = await syncHumanHandoff({
@@ -2114,6 +2122,8 @@ async function processInboundMessageTurn({
 		assistantMessage: finalReply,
 		provider: aiMeta?.provider || (forcedReply ? 'system' : null),
 		model: aiMeta?.model || (forcedReply ? 'rule-based-forced-reply' : null),
+		continuityRecovery: Boolean(aiMeta?.continuityRecovery),
+		repetitionDetected: Boolean(aiMeta?.repetitionDetected),
 		usage: aiMeta?.usage || null,
 	};
 

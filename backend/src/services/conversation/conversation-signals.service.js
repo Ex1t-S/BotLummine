@@ -14,7 +14,7 @@ export function looksLikeExplicitHumanRequest(text = '') {
 
 export function looksLikeCustomerFrustration(text = '') {
 	const q = normalizeSignalText(text);
-	return /(no me entendes|no entiendes|no funciona|no sirve|no explica nada|no tengo idea|creo que no vuelvo|no vuelvo a comprar|malisimo|pesimo|\?\?\?)/i.test(q);
+	return /(no me entendes|no entiendes|no entendiste|no me lees|no me estas leyendo|no me estás leyendo|me estas repitiendo|me estás repitiendo|preguntas? lo mismo|ya te dije|ya te lo dije|te lo dije|no respondiste|no me respondiste|no funciona|no sirve|no explica nada|no tengo idea|creo que no vuelvo|no vuelvo a comprar|malisimo|pesimo|\?\?\?)/i.test(q);
 }
 
 export function looksLikeThirdPartyAutoReply(text = '') {

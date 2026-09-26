@@ -7,8 +7,9 @@ import {
 	resolveAiProfile,
 	usesCommerceEngine,
 } from '../ai/vertical-profile.service.js';
+import { buildConversationContinuityBlock } from '../conversation/continuity.service.js';
 
-export const PROMPT_VERSION = 'conversation-v1';
+export const PROMPT_VERSION = 'conversation-v2-continuity';
 
 function formatTranscript({ businessName, contactName, recentMessages }) {
 	return recentMessages
@@ -61,6 +62,7 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 	const lines = [
 		`- Accion permitida: ${responsePolicy.action || 'general_help'}`,
 		`- Tono: ${responsePolicy.tone || 'amigable_directo'}`,
+		'- El tono adapta la forma de hablar, pero nunca reemplaza los datos confirmados, la privacidad, la derivacion humana ni las reglas de no inventar.',
 		`- Maximo ideal: ${responsePolicy.maxChars || 220} caracteres`,
 		`- Puede mencionar derivacion humana: ${responsePolicy.allowHandoffMention ? 'Si' : 'No'}`,
 		'- Responde solo con lo confirmado.',
@@ -250,7 +252,8 @@ export function buildPrompt({
 	commercialPlan = {},
 	responsePolicy = {},
 	menuAssistantContext = null,
-	campaignAssistantContext = null
+	campaignAssistantContext = null,
+	latestUserMessage = ''
 }) {
 	const aiConfig = workspaceConfig?.ai || {};
 	const systemPromptExtra = aiConfig.systemPrompt || '';
@@ -289,6 +292,12 @@ export function buildPrompt({
 	});
 	const regionalLanguageRule = buildRegionalLanguageRule({ businessName, businessContext });
 	const compactCatalog = formatCatalogProducts({ catalogProducts, catalogContext, profile: verticalProfile });
+	const resolvedLatestUserMessage = latestUserMessage || [...recentMessages].reverse().find((message) => message?.role === 'user')?.text || '';
+	const continuityBlock = buildConversationContinuityBlock({
+		latestUserMessage: resolvedLatestUserMessage,
+		recentMessages,
+		responsePolicy,
+	});
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
@@ -311,6 +320,7 @@ export function buildPrompt({
 		useStoreCommerceContext && facts.length ? `HECHOS UTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}` : '',
 		`${verticalProfile.relevantInfoTitle}:\n${compactCatalog}`,
 		`${verticalProfile.hintsTitle}:\n${commercialHintsBlock}`,
+		continuityBlock,
 		campaignAssistantContext?.promptBlock ? `CONTEXTO DE CAMPAÑA:\n${campaignAssistantContext.promptBlock}` : '',
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',
 		useStoreCommerceContext && businessData ? `POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}` : '',

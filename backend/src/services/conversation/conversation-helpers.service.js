@@ -18,6 +18,11 @@ import {
 	shouldTreatAsPreSaleObjection,
 } from './conversation-signals.service.js';
 import {
+	buildContinuityRecoveryReply,
+	findRepeatedAssistantReply,
+	responseSimilarity,
+} from './continuity.service.js';
+import {
 	isInsuranceVertical,
 	isInsuranceWorkspaceId,
 	isLummineBodywearProfile,
@@ -1265,6 +1270,7 @@ export function auditAssistantReply({
 	fallbackReply,
 	commercialPlan,
 	recentMessages = [],
+	latestUserMessage = '',
 	contactName = '',
 	businessName = 'la marca',
 	agentName = 'Asistente',
@@ -1281,8 +1287,15 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
 	}
+
+	const repetition = findRepeatedAssistantReply({
+		text: cleaned,
+		recentMessages,
+		latestUserMessage,
+	});
 
 	if (
 		responsePolicy?.action?.startsWith('order_status') &&
@@ -1291,6 +1304,7 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
 	}
 
@@ -1301,6 +1315,7 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
 	}
 
@@ -1308,7 +1323,18 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
+	}
+
+	let continuityRecovery = false;
+	if (repetition.repeated) {
+		const candidateFallback = String(fallbackReply || '').trim();
+		const fallbackIsDifferent = candidateFallback && responseSimilarity(candidateFallback, cleaned) < 0.84;
+		cleaned = fallbackIsDifferent
+			? candidateFallback
+			: buildContinuityRecoveryReply({ responsePolicy, latestUserMessage });
+		continuityRecovery = true;
 	}
 
 	if (looksLikeUnsupportedOperationalPromise(cleaned, responsePolicy)) {
@@ -1337,6 +1363,8 @@ export function auditAssistantReply({
 	return {
 		finalText,
 		triggerHumanHandoff,
+		repetitionDetected: repetition.repeated,
+		continuityRecovery,
 	};
 }
 
