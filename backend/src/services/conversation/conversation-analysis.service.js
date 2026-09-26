@@ -3,6 +3,7 @@ import {
 	inferCommercialFamily,
 } from '../../data/catalog-commercial-map.js';
 import { shouldTreatAsPreSaleObjection } from './conversation-signals.service.js';
+import { responseSimilarity } from './continuity.service.js';
 
 function normalizeText(value = '') {
 	return String(value || '')
@@ -290,11 +291,14 @@ function wasLoopingRecentMessages(recentMessages = []) {
 	const assistantMessages = recentMessages
 		.filter((m) => m.role === 'assistant')
 		.slice(-3)
-		.map((m) => String(m.text || '').trim().toLowerCase());
+		.map((m) => String(m.text || '').trim());
 
 	if (assistantMessages.length < 3) return false;
 
-	return new Set(assistantMessages).size <= 1;
+	const anchor = assistantMessages[assistantMessages.length - 1];
+	return assistantMessages
+		.slice(0, -1)
+		.every((message) => responseSimilarity(anchor, message) >= 0.82);
 }
 
 function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState = {}, recentMessages = [], campaignContext = null }) {

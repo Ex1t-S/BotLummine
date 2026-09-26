@@ -641,7 +641,8 @@ export async function runConversationTurn({
 			catalogContext,
 			commercialHints,
 			commercialPlan,
-			responsePolicy
+			responsePolicy,
+			latestUserMessage: messageBody
 		});
 		prompt = compiledPrompt.text;
 
@@ -669,6 +670,7 @@ export async function runConversationTurn({
 				fallbackReply,
 				commercialPlan,
 				recentMessages: fullRecentMessages,
+				latestUserMessage: messageBody,
 				contactName: customerContext?.name || contactName || normalizedWaId,
 				businessName,
 				agentName: workspaceConfig?.ai?.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente'
@@ -683,7 +685,13 @@ export async function runConversationTurn({
 					: null,
 			});
 			finalReply = output.reply;
-			aiMeta = { ...aiResult, text: output.reply, output };
+			aiMeta = {
+				...aiResult,
+				text: output.reply,
+				output,
+				continuityRecovery: Boolean(audited.continuityRecovery),
+				repetitionDetected: Boolean(audited.repetitionDetected),
+			};
 			postReplyHandoff = audited.triggerHumanHandoff;
 		} catch (error) {
 			logger.error('ai.conversation_turn_failed', {
@@ -782,6 +790,8 @@ export async function runConversationTurn({
 			assistantMessage: finalReply,
 			provider: aiMeta?.provider || null,
 			model: aiMeta?.model || null,
+			continuityRecovery: Boolean(aiMeta?.continuityRecovery),
+			repetitionDetected: Boolean(aiMeta?.repetitionDetected),
 			aiGuidance,
 			liveOrderContext,
 			shouldReply: true

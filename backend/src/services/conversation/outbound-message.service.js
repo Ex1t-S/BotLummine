@@ -36,6 +36,25 @@ function getOutboundError(sendResult = null) {
 	};
 }
 
+const configuredDuplicateWindowMs = Number(process.env.AI_DUPLICATE_OUTBOUND_WINDOW_MS || 60_000);
+const DUPLICATE_OUTBOUND_WINDOW_MS = Number.isFinite(configuredDuplicateWindowMs)
+	? Math.min(Math.max(configuredDuplicateWindowMs, 1_000), 300_000)
+	: 60_000;
+
+export function shouldSuppressDuplicateAutomaticBody({
+	lastOutbound = null,
+	body = '',
+	now = Date.now(),
+	windowMs = DUPLICATE_OUTBOUND_WINDOW_MS,
+} = {}) {
+	const cleanBody = String(body || '').trim();
+	if (!cleanBody || !lastOutbound?.body) return false;
+	if (String(lastOutbound.body).trim() !== cleanBody) return false;
+	const sentAt = new Date(lastOutbound.createdAt || 0).getTime();
+	if (!Number.isFinite(sentAt) || sentAt <= 0) return false;
+	return now - sentAt >= 0 && now - sentAt <= Math.max(1000, Number(windowMs) || 60_000);
+}
+
 function buildOutboundDebugPayload({
 	sendResult = null,
 	provider = 'whatsapp-cloud-api',
@@ -121,6 +140,27 @@ async function sendAndPersistOutboundInternal({
 	const workspaceConfig = await getWorkspaceRuntimeConfig(workspaceId);
 	if (automaticReply && turnAuthorization) {
 		await assertAutoReplyAuthorized(prisma, { ...turnAuthorization, workspaceId, conversationId });
+	}
+
+	if (automaticReply && deliveryMode !== 'lab' && typeof prisma.message?.findFirst === 'function') {
+		const recentDuplicate = await prisma.message.findFirst({
+			where: {
+				conversationId,
+				workspaceId,
+				direction: 'OUTBOUND',
+				createdAt: { gte: new Date(Date.now() - Math.max(1000, DUPLICATE_OUTBOUND_WINDOW_MS)) },
+			},
+			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+			select: { body: true, createdAt: true },
+		});
+		if (shouldSuppressDuplicateAutomaticBody({ lastOutbound: recentDuplicate, body: cleanBody })) {
+			logger.warn('ai.outbound_duplicate_suppressed', {
+				workspaceId,
+				conversationId,
+				windowMs: DUPLICATE_OUTBOUND_WINDOW_MS,
+			});
+			return { ok: true, skipped: true, reason: 'duplicate_automatic_body' };
+		}
 	}
 
 	if (isOutboundDebugEnabled()) {
