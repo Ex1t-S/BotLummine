@@ -7,8 +7,9 @@ import {
 	resolveAiProfile,
 	usesCommerceEngine,
 } from '../ai/vertical-profile.service.js';
+import { buildConversationContinuityBlock } from '../conversation/continuity.service.js';
 
-export const PROMPT_VERSION = 'conversation-v2';
+export const PROMPT_VERSION = 'conversation-v3-grounded-continuity';
 
 function formatTranscript({ businessName, contactName, recentMessages }) {
 	return recentMessages
@@ -61,6 +62,7 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 	const lines = [
 		`- Accion permitida: ${responsePolicy.action || 'general_help'}`,
 		`- Tono: ${responsePolicy.tone || 'amigable_directo'}`,
+		'- El tono adapta la forma de hablar, pero nunca reemplaza los datos confirmados, la privacidad, la derivacion humana ni las reglas de no inventar.',
 		`- Maximo ideal: ${responsePolicy.maxChars || 220} caracteres`,
 		`- Puede mencionar derivacion humana: ${responsePolicy.allowHandoffMention ? 'Si' : 'No'}`,
 		'- Responde solo con lo confirmado.',
@@ -202,12 +204,19 @@ function formatCatalogProducts({ catalogProducts = [], catalogContext = '', prof
 			`  precio: ${item.price || 'no cargado'}`
 		);
 		if (item.productUrl) lines.push(`  link: ${item.productUrl}`);
-		const description = String(item.shortDescription || '').replace(/\s+/g, ' ').trim();
+		const description = String(item.shortDescription || item.description || '').replace(/\s+/g, ' ').trim();
 		if (description && !/^sin descripcion cargada\.?$/i.test(description)) {
 			lines.push(`  descripcion confirmada: ${description.slice(0, 320)}`);
 		}
 		if (Array.isArray(item.tags) && item.tags.length) {
 			lines.push(`  etiquetas confirmadas: ${item.tags.slice(0, 8).join(', ')}`);
+		}
+		const confirmedAttributes = item.confirmedAttributes || item.attributes || item.variantHints;
+		if (confirmedAttributes) {
+			const attributesText = typeof confirmedAttributes === 'string'
+				? confirmedAttributes
+				: JSON.stringify(confirmedAttributes);
+			if (attributesText) lines.push(`  atributos confirmados: ${attributesText.slice(0, 400)}`);
 		}
 		const sizeGuide = item.sizeGuide || item.sizeMeasurements || item.measurementTable || item.confirmedSizeGuide;
 		if (sizeGuide) {
@@ -271,7 +280,8 @@ export function buildPrompt({
 	commercialPlan = {},
 	responsePolicy = {},
 	menuAssistantContext = null,
-	campaignAssistantContext = null
+	campaignAssistantContext = null,
+	latestUserMessage = ''
 }) {
 	const aiConfig = workspaceConfig?.ai || {};
 	const systemPromptExtra = aiConfig.systemPrompt || '';
@@ -310,6 +320,12 @@ export function buildPrompt({
 	});
 	const regionalLanguageRule = buildRegionalLanguageRule({ businessName, businessContext });
 	const compactCatalog = formatCatalogProducts({ catalogProducts, catalogContext, profile: verticalProfile });
+	const resolvedLatestUserMessage = latestUserMessage || [...recentMessages].reverse().find((message) => message?.role === 'user')?.text || '';
+	const continuityBlock = buildConversationContinuityBlock({
+		latestUserMessage: resolvedLatestUserMessage,
+		recentMessages,
+		responsePolicy,
+	});
 
 	return [
 		`SISTEMA: ${systemPrompt}`,
@@ -333,8 +349,9 @@ export function buildPrompt({
 		`${verticalProfile.relevantInfoTitle}:\n${compactCatalog}`,
 		`${verticalProfile.hintsTitle}:\n${commercialHintsBlock}`,
 		useCommerceContext
-			? 'REGLA DE HECHOS DEL CATALOGO:\n- La descripcion y las etiquetas del producto son las unicas fuentes para afirmar beneficios o materiales.\n- No conviertas lo que busca el cliente en una caracteristica del producto.\n- Las categorias y variantes sirven para identificar la oferta, no prueban comodidad, calce ni stock.'
+			? 'REGLA DE HECHOS DEL CATALOGO:\n- Usa descripciones, etiquetas y atributos confirmados del producto como únicas fuentes para afirmar beneficios o materiales.\n- No conviertas lo que busca el cliente en una característica del producto.\n- Las categorías y variantes identifican la oferta, pero no prueban comodidad, calce ni stock.'
 			: '',
+		continuityBlock,
 		campaignAssistantContext?.promptBlock ? `CONTEXTO DE CAMPAÑA:\n${campaignAssistantContext.promptBlock}` : '',
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',
 		useStoreCommerceContext && businessData ? `POLITICAS RESUMIDAS:\n- Envios: ${businessData.policySummary.shipping.join(' ')}\n- Cambios/devoluciones: ${businessData.policySummary.returns.join(' ')}` : '',

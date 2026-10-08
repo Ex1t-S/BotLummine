@@ -18,6 +18,11 @@ import {
 	shouldTreatAsPreSaleObjection,
 } from './conversation-signals.service.js';
 import {
+	buildContinuityRecoveryReply,
+	findRepeatedAssistantReply,
+	responseSimilarity,
+} from './continuity.service.js';
+import {
 	isInsuranceVertical,
 	isInsuranceWorkspaceId,
 	isLummineBodywearProfile,
@@ -1292,7 +1297,7 @@ const CATALOG_CLAIM_RULES = [
 	{ flag: 'unverified_catalog_claim:all_day_use', label: 'uso durante todo el día', pattern: /\b(?:todo el dia|durante todo el dia|uso diario|jornada completa)\b/ },
 	{ flag: 'unverified_catalog_claim:fit', label: 'calce', pattern: /\b(?:calce|calzar)\b/ },
 	{ flag: 'unverified_catalog_claim:adjustment', label: 'ajuste', pattern: /\b(?:ajust\w*|holgad\w*|entall\w*)\b/ },
-	{ flag: 'unverified_catalog_claim:modeling', label: 'modelado', pattern: /\b(?:model\w*|molde\w*)\b/ },
+	{ flag: 'unverified_catalog_claim:modeling', label: 'modelado', pattern: /\b(?:modelad\w*|modela|modelan|modelador\w*|molde\w*)\b/ },
 	{ flag: 'unverified_catalog_claim:compression', label: 'compresión', pattern: /\b(?:compresi\w*|reductor\w*)\b/ },
 	{ flag: 'unverified_catalog_claim:softness', label: 'suavidad', pattern: /\b(?:suav\w*|delicad\w*)\b/ },
 	{ flag: 'unverified_catalog_claim:material_cotton', label: 'algodón', pattern: /\balgodon\b/ },
@@ -1329,6 +1334,20 @@ function getConfirmedProductEvidence(product = {}) {
 	].flatMap(flattenCatalogValues).join(' '));
 }
 
+function isExplicitlyUnconfirmedMention(text, matchIndex) {
+	const clauseStart = Math.max(
+		text.lastIndexOf('.', matchIndex - 1),
+		text.lastIndexOf('!', matchIndex - 1),
+		text.lastIndexOf('?', matchIndex - 1),
+		text.lastIndexOf(';', matchIndex - 1),
+		text.lastIndexOf('\n', matchIndex - 1),
+	);
+	const leadIn = text.slice(clauseStart + 1, matchIndex);
+	return /\b(?:no tengo|no hay|no cuento con|no puedo (?:confirmar|asegurar)|sin)\b/.test(leadIn)
+		&& /\b(?:dato\w*|informacion|confirmad\w*|verificad\w*|guia|ficha)\b/.test(leadIn)
+		&& !/\b(?:pero|sin embargo|aunque)\b/.test(leadIn);
+}
+
 function getClaimedProducts({ text, catalogProducts = [], commercialPlan = null } = {}) {
 	const normalizedReply = normalizeGateText(text);
 	const mentioned = catalogProducts.filter((product) => {
@@ -1361,7 +1380,10 @@ function findUnsupportedCatalogClaims({ text, catalogProducts = [], commercialPl
 	const evidenceByProduct = products.map(getConfirmedProductEvidence);
 
 	return CATALOG_CLAIM_RULES
-		.filter(({ pattern }) => pattern.test(replyWithoutProductNames))
+		.filter(({ pattern }) => {
+			const match = pattern.exec(replyWithoutProductNames);
+			return match && !isExplicitlyUnconfirmedMention(replyWithoutProductNames, match.index);
+		})
 		.filter((rule) =>
 			!evidenceByProduct.length ||
 			evidenceByProduct.some((evidence) => !rule.pattern.test(evidence))
@@ -1457,6 +1479,9 @@ export function auditAssistantReply({
 			finalText: 'Para no darte una respuesta incorrecta sobre el cambio o la devolución, te paso con una asesora para que confirme la política que corresponde.',
 			triggerHumanHandoff: true,
 			handoffReason: 'unanswered_return_exchange',
+			auditFlags: ['unanswered_return_exchange'],
+			repetitionDetected: false,
+			continuityRecovery: false,
 		};
 	}
 
@@ -1465,18 +1490,23 @@ export function auditAssistantReply({
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
 			auditFlags: [],
+			repetitionDetected: false,
+			continuityRecovery: false,
 		};
 	}
 
-	if (detectedIntent === 'size_help' && looksLikeSizeRecommendation(cleaned) && !hasConfirmedSizeGuide(catalogProducts)) {
+	const sizeProducts = getClaimedProducts({ text: cleaned, catalogProducts, commercialPlan });
+	if (detectedIntent === 'size_help' && looksLikeSizeRecommendation(cleaned) && !hasConfirmedSizeGuide(sizeProducts)) {
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
 			auditFlags: ['unsupported_size_recommendation'],
+			repetitionDetected: false,
+			continuityRecovery: false,
 		};
 	}
 
-	const unsupportedCatalogClaims = detectedIntent === 'product'
+	const unsupportedCatalogClaims = ['product', 'size_help'].includes(detectedIntent)
 		? findUnsupportedCatalogClaims({ text: cleaned, catalogProducts, commercialPlan })
 		: [];
 	if (unsupportedCatalogClaims.length) {
@@ -1484,6 +1514,8 @@ export function auditAssistantReply({
 			finalText: buildUnverifiedCatalogClaimReply({ catalogProducts, commercialPlan, claims: unsupportedCatalogClaims }),
 			triggerHumanHandoff: false,
 			auditFlags: unsupportedCatalogClaims.map(({ flag }) => flag),
+			repetitionDetected: false,
+			continuityRecovery: false,
 		};
 	}
 
@@ -1496,8 +1528,17 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			auditFlags: [],
+			repetitionDetected: false,
+			continuityRecovery: false,
 		};
 	}
+
+	const repetition = findRepeatedAssistantReply({
+		text: cleaned,
+		recentMessages,
+		latestUserMessage,
+	});
 
 	if (
 		responsePolicy?.action?.startsWith('order_status') &&
@@ -1506,6 +1547,7 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
 	}
 
@@ -1516,6 +1558,7 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
 	}
 
@@ -1523,7 +1566,18 @@ export function auditAssistantReply({
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			repetitionDetected: false,
 		};
+	}
+
+	let continuityRecovery = false;
+	if (repetition.repeated) {
+		const candidateFallback = String(fallbackReply || '').trim();
+		const fallbackIsDifferent = candidateFallback && responseSimilarity(candidateFallback, cleaned) < 0.84;
+		cleaned = fallbackIsDifferent
+			? candidateFallback
+			: buildContinuityRecoveryReply({ responsePolicy, latestUserMessage });
+		continuityRecovery = true;
 	}
 
 	if (looksLikeUnsupportedOperationalPromise(cleaned, responsePolicy)) {
@@ -1554,6 +1608,8 @@ export function auditAssistantReply({
 		triggerHumanHandoff,
 		handoffReason: triggerHumanHandoff ? commercialPlan?.handoffReason || null : null,
 		auditFlags: [],
+		repetitionDetected: repetition.repeated,
+		continuityRecovery,
 	};
 }
 

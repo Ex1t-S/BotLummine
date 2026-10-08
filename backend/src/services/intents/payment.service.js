@@ -43,7 +43,19 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 		? await getWorkspaceRuntimeConfig(workspaceId).catch(() => null)
 		: null;
 	const questionType = classifyPaymentQuestion(messageBody);
-	const transfer = resolveTransferDetails(workspaceConfig?.ai?.paymentConfig?.transfer || {});
+	const paymentConfig = workspaceConfig?.ai?.paymentConfig || {};
+	// Older workspaces stored public transfer details in a separate object. Merge
+	// it as a compatibility fallback so a stale/partial `transfer` object can
+	// never hide the current payment details.
+	const transferConfig = {
+		...(paymentConfig.transferPublicInfo || {}),
+		...(paymentConfig.transfer || {}),
+	};
+	const transfer = resolveTransferDetails({
+		...transferConfig,
+		cvu: transferConfig.cvu || transferConfig.CVU,
+		cuit: transferConfig.cuit || transferConfig.taxId || transferConfig.CUIT,
+	});
 
 	const missing = [];
 
@@ -62,8 +74,8 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 	const paymentDataAvailable = Boolean(transfer.alias || transfer.cbu || transfer.cvu);
 	const transferDetails = [
 		transfer.alias ? `Alias: ${transfer.alias}` : '',
-		transfer.cbu ? `CBU: ${transfer.cbu}` : '',
 		transfer.cvu ? `CVU: ${transfer.cvu}` : '',
+		transfer.cbu ? `CBU: ${transfer.cbu}` : '',
 		transfer.holder ? `Titular: ${transfer.holder}` : '',
 		transfer.cuit ? `CUIT: ${transfer.cuit}` : '',
 		transfer.bank ? `Banco: ${transfer.bank}` : '',

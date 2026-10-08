@@ -6,6 +6,7 @@ export const HUMAN_LOCK_MODE = Object.freeze({
 });
 
 const HARD_HANDOFF_REASONS = new Set([
+	'manual_handoff',
 	'cancel_request',
 	'customer_frustration',
 	'explicit_human_request',
@@ -39,7 +40,7 @@ export function resolveHumanLockMode({ reason = '', currentState = {} } = {}) {
 	const lastIntent = String(currentState?.lastIntent || currentState?.lastDetectedIntent || '')
 		.trim()
 		.toLowerCase();
-	if (COMMERCIAL_INTENTS.has(lastIntent) || normalizedReason === 'manual_handoff') {
+	if (COMMERCIAL_INTENTS.has(lastIntent)) {
 		return HUMAN_LOCK_MODE.COMMERCIAL_24H;
 	}
 
@@ -53,6 +54,8 @@ export function resolveHumanAutoResumeAt({ mode, lockedAt = new Date() } = {}) {
 
 export function isHumanLockActive(state = {}, now = new Date()) {
 	if (!state?.needsHuman) return false;
+	// Honor existing manually-taken chats too; no data rewrite or automatic release.
+	if (state.handoffReason === 'manual_handoff') return true;
 
 	if (state.humanLockMode === HUMAN_LOCK_MODE.HARD) return true;
 

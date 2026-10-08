@@ -47,6 +47,7 @@ import {
 	buildUnableToContinueHandoffReply,
 } from './conversation-helpers.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
+import { resolveAssistantHandoff } from './reply-safety.js';
 import {
 	buildVerticalNonCommercePlan,
 	getAiVerticalProfile,
@@ -642,7 +643,8 @@ export async function runConversationTurn({
 			catalogContext,
 			commercialHints,
 			commercialPlan,
-			responsePolicy
+			responsePolicy,
+			latestUserMessage: messageBody
 		});
 		prompt = compiledPrompt.text;
 
@@ -678,17 +680,26 @@ export async function runConversationTurn({
 				agentName: workspaceConfig?.ai?.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente'
 			});
 
+			const handoff = resolveAssistantHandoff({
+				output: aiResult.output,
+				audit: audited,
+				fallbackReason: commercialPlan?.handoffReason,
+			});
 			const output = validateAssistantOutput({
 				...aiResult.output,
 				reply: audited.finalText,
-				needsHuman: audited.triggerHumanHandoff,
-				handoffReason: audited.triggerHumanHandoff
-					? audited.handoffReason || commercialPlan?.handoffReason || 'ai_declared_handoff'
-					: null,
+				...handoff,
 			});
 			finalReply = output.reply;
-			aiMeta = { ...aiResult, text: output.reply, output, auditFlags: audited.auditFlags || [] };
-			postReplyHandoff = audited.triggerHumanHandoff;
+			aiMeta = {
+				...aiResult,
+				text: output.reply,
+				output,
+				auditFlags: audited.auditFlags || [],
+				continuityRecovery: Boolean(audited.continuityRecovery),
+				repetitionDetected: Boolean(audited.repetitionDetected),
+			};
+			postReplyHandoff = output.needsHuman;
 		} catch (error) {
 			logger.error('ai.conversation_turn_failed', {
 				workspaceId,
@@ -787,6 +798,8 @@ export async function runConversationTurn({
 			assistantMessage: finalReply,
 			provider: aiMeta?.provider || null,
 			model: aiMeta?.model || null,
+			continuityRecovery: Boolean(aiMeta?.continuityRecovery),
+			repetitionDetected: Boolean(aiMeta?.repetitionDetected),
 			aiGuidance,
 			liveOrderContext,
 			shouldReply: true

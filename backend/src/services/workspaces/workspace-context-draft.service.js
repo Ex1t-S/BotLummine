@@ -455,12 +455,17 @@ function summarizeLogistics(logisticsConnections = []) {
 }
 
 function summarizePayments(aiConfig = {}) {
-	const transfer = aiConfig?.paymentConfig?.transfer || null;
-	if (!transfer) return 'No hay datos de transferencia cargados.';
+	const paymentConfig = aiConfig?.paymentConfig || {};
+	const transfer = {
+		...(paymentConfig.transferPublicInfo || {}),
+		...(paymentConfig.transfer || {}),
+	};
+	if (!Object.keys(transfer).length) return 'No hay datos de transferencia cargados.';
 
 	const parts = [];
 	if (transfer.bank) parts.push(`banco ${transfer.bank}`);
 	if (transfer.alias) parts.push(`alias ${transfer.alias}`);
+	if (transfer.cvu) parts.push('CVU cargado');
 	if (transfer.cbu) parts.push('CBU cargado');
 
 	return parts.length

@@ -7,6 +7,36 @@
 	padding-bottom: 4px;
 }
 
+.operations-page--v4 .operations-header h2 { font-size: 28px; }
+.operations-page--v4 .operations-v3-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.operations-page--v4 .operations-v3-panel { background: var(--surface-panel); border-color: var(--border-subtle); box-shadow: none; }
+.operations-page--v4 .operations-v3-priority { background: var(--surface-panel); color: var(--text-primary); border-color: var(--border-subtle); }
+.operations-page--v4 .operations-v3-panel-head h3,
+.operations-page--v4 .operations-v3-health-list strong { color: var(--text-primary); }
+.operations-page--v4 .operations-v3-panel-head > strong,
+.operations-page--v4 .operations-v3-health-list button,
+.operations-page--v4 .operations-v3-priority-copy small { color: var(--text-secondary); }
+.operations-page--v4 .operations-v3-priority-copy small { white-space: normal; }
+.operations-page--v4 .operations-v3-priority-icon { color: #3744dd; }
+.operations-page--v4 .operations-v3-priority.tone-warning .operations-v3-priority-icon { color: #925100; }
+.operations-page--v4 .operations-v3-health-list button { text-align: left; border-color: var(--border-subtle); }
+.operations-page--v4 .operations-v3-health-list strong { text-align: right; }
+.operations-technical-note { padding: 0 18px 16px; margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.operations-rules-link { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 20px; }
+.operations-rules-link h3 { margin: 0; font-size: 17px; }
+.operations-rules-link p { margin: 6px 0 0; font-size: 14px; color: var(--text-secondary); }
+.operations-page--v4 .operations-v3-health-list button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Scoped compatibility with the legacy global !important theme overrides. */
+.admin-shell .admin-content .operations-page--v4 .operations-header {
+ padding: 8px 2px 10px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+.admin-shell .admin-content .operations-page--v4 .operations-header h2 { font-size: 28px !important; }
+.dark .admin-shell .admin-content .operations-page--v4 .operations-v3-priority-icon { background: #263246 !important; color: #9ebcff !important; }
+.dark .admin-shell .admin-content .operations-page--v4 .operations-v3-priority.tone-warning .operations-v3-priority-icon { background: #42321b !important; color: #ffd38a !important; }
+.dark .admin-shell .admin-content .operations-page--v4 .internal-action-btn.is-secondary { background: var(--surface-panel) !important; color: var(--text-primary) !important; border-color: var(--border-subtle) !important; }
+.dark .admin-shell .admin-content .operations-page--v4 .internal-action-btn.is-primary { background: #3157de !important; color: #fff !important; }
+
 .operations-header {
 	display: flex;
 	align-items: flex-start;

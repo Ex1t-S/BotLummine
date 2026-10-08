@@ -322,6 +322,12 @@ function makeHandler(stateRef) {
 		if (pathname === '/auth/me') return sendJson(res, { ok: true, user: demoUser, demo: true });
 		if (pathname === '/auth/login') return sendJson(res, { ok: true, user: demoUser, demo: true });
 		if (pathname === '/auth/logout') return sendJson(res, { ok: true, demo: true });
+		if (pathname === '/dashboard/runtime-status') return sendJson(res, {
+			workspaceId: demoWorkspace.id, updatedAt: new Date().toISOString(), channelConfigured: true, connectivity: 'UNVERIFIED',
+			outboundEnabled: false, autoRepliesEnabled: false, automationEnabled: false, quietHoursPaused: false,
+			quietHours: { startHour: 21, endHour: 9, timezone: 'America/Argentina/Buenos_Aires' },
+			timezone: 'America/Argentina/Buenos_Aires', pausedFlags: [{ key: 'whatsapp_outbound', reason: 'Pausa demo' }], demo: true,
+		});
 
 		if (pathname === '/dashboard/operations/summary') {
 			return sendJson(res, {

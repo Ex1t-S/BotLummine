@@ -19,18 +19,18 @@ describe('conversation human lock policy', () => {
 		);
 	});
 
-	it('uses a 24 hour lock for a simple commercial manual handoff', () => {
+	it('keeps a manual takeover locked until explicit release, including commercial chats', () => {
 		const lockedAt = new Date('2026-08-01T12:00:00.000Z');
 		const mode = resolveHumanLockMode({
 			reason: 'manual_handoff',
 			currentState: { lastIntent: 'product' },
 		});
 
-		assert.equal(mode, HUMAN_LOCK_MODE.COMMERCIAL_24H);
-		assert.equal(
-			resolveHumanAutoResumeAt({ mode, lockedAt }).toISOString(),
-			'2026-08-02T12:00:00.000Z'
-		);
+		assert.equal(mode, HUMAN_LOCK_MODE.HARD);
+		assert.equal(resolveHumanAutoResumeAt({ mode, lockedAt }), null);
+		assert.equal(isHumanLockActive({ needsHuman: true, handoffReason: 'manual_handoff',
+			humanLockMode: HUMAN_LOCK_MODE.COMMERCIAL_24H, humanAutoResumeAt: lockedAt,
+		}, new Date('2030-01-01')), true);
 	});
 
 	it('expires only the commercial lock', () => {

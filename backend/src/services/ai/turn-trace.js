@@ -47,6 +47,7 @@ export function createAiTurnTrace({
 	model = null,
 	latencyMs = 0,
 	usage = null,
+	deliveries = [],
 	audit = null,
 	handoff = null,
 } = {}) {
@@ -67,6 +68,12 @@ export function createAiTurnTrace({
 		latencyMs: Math.max(0, Math.round(Number(latencyMs) || 0)),
 		inputTokens: Math.max(0, Math.round(Number(usage?.inputTokens) || 0)),
 		outputTokens: Math.max(0, Math.round(Number(usage?.outputTokens) || 0)),
+		deliveries: Object.freeze((Array.isArray(deliveries) ? deliveries : []).slice(0, 20).map(item => Object.freeze({
+			status: ['ACCEPTED', 'SIMULATED', 'SKIPPED', 'UNKNOWN', 'CANCELLED', 'FAILED'].includes(item?.status) ? item.status : 'UNKNOWN',
+			messageId: boundedText(item?.messageId),
+			metaMessageId: boundedText(item?.metaMessageId, 256),
+			reason: boundedText(item?.reason),
+		}))),
 		audit: Object.freeze({
 			passed: audit?.passed === undefined ? flags.length === 0 : Boolean(audit.passed),
 			flags: Object.freeze(flags),

@@ -15,6 +15,7 @@ function currency(value, code = 'ARS') {
 	return new Intl.NumberFormat('es-AR', {
 		style: 'currency',
 		currency: code || 'ARS',
+		currencyDisplay: 'code',
 		maximumFractionDigits: 0,
 	}).format(Number(value || 0));
 }
@@ -93,11 +94,11 @@ export default function AnalyticsPage() {
 			<PageHeader
 				eyebrow="Rendimiento operativo"
 				title="Estadísticas"
-				description={`Señales para decidir sobre atención, campañas y recuperación durante los últimos ${number(data.activityWindowDays || 30)} días.`}
+				description={`Señales para decidir sobre atención, campañas y recuperación durante los últimos ${number(data.activityWindowDays || periodDays)} días.`}
 			>
 				<div className="analytics-v2-header-controls" aria-label="Período de estadísticas">
 					<span>Período</span>
-					{[7, 30, 90].map((days) => <button type="button" key={days} className={periodDays === days ? 'is-active' : ''} onClick={() => setPeriodDays(days)}>{days} días</button>)}
+					{[7, 30, 90].map((days) => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'is-active' : ''} onClick={() => setPeriodDays(days)}>{days} días</button>)}
 				</div>
 				<ActionButton variant="secondary" icon={RefreshCw} disabled={analyticsQuery.isFetching} onClick={() => analyticsQuery.refetch()}>
 					{analyticsQuery.isFetching ? 'Actualizando' : 'Actualizar'}
@@ -117,7 +118,7 @@ export default function AnalyticsPage() {
 					<div className="analytics-v2-metrics" aria-label="Indicadores principales">
 						<AnalyticsMetric label="Esperando respuesta" value={number(metrics.waitingResponseConversations)} helper={`${number(metrics.waitingResponseUnder24h)} <24 h · ${number(metrics.waitingResponseOver24h)} >24 h`} tone={metrics.waitingResponseOver24h ? 'warning' : 'neutral'} />
 						<AnalyticsMetric label="Entrega de campañas" value={percent(deliveryRate)} helper={`${number(delivered)} de ${number(sent)} mensajes enviados`} tone={deliveryRate >= 90 ? 'success' : 'warning'} />
-						<AnalyticsMetric label="Lectura efectiva" value={percent(readRate)} helper={`${number(read)} mensajes leídos`} />
+						<AnalyticsMetric label="Lectura efectiva" value={percent(readRate)} helper={`${number(read)} de ${number(delivered)} entregados`} />
 						<AnalyticsMetric label="Carritos recuperados" value={number(metrics.recoveredCartsCount)} helper={currency(metrics.recoveredCartValue, metrics.currency || 'ARS')} tone="success" />
 					</div>
 
@@ -130,7 +131,7 @@ export default function AnalyticsPage() {
 							<div className="analytics-v2-progress-list">
 								<ProgressRow icon={Send} label="Enviados" value={sent} total={sent} helper="Base de comparación" />
 								<ProgressRow icon={ArrowDownToLine} label="Entregados" value={delivered} total={sent} helper={`${percent(deliveryRate)} de los enviados`} />
-								<ProgressRow icon={Eye} label="Leídos" value={read} total={sent} helper={`${percent(readRate)} de los entregados`} />
+								<ProgressRow icon={Eye} label="Leídos" value={read} total={delivered} helper={`${percent(readRate)} de los entregados`} />
 							</div>
 						</section>
 

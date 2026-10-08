@@ -100,7 +100,7 @@ test('operations comunica loading y luego muestra prioridades', async ({ page })
 
 	await expect(page.getByRole('status')).toContainText('Cargando prioridades operativas');
 	releaseSummary();
-	await expect(page.getByRole('heading', { name: 'Lo que requiere tu atención' })).toBeVisible();
+	await expect(page.getByRole('main').getByRole('heading', { name: 'Operación', exact: true, level: 2 })).toBeVisible();
 	await expect(page.getByText('2 comprobantes esperan revisión')).toBeVisible();
 });
 
@@ -114,7 +114,7 @@ test('operations separa error de empty y permite reintentar', async ({ page }) =
 	await expect(page.getByText('No hay tareas críticas')).toHaveCount(0);
 	errorControl.allow = true;
 	await errorState.getByRole('button', { name: 'Reintentar' }).click();
-	await expect(page.getByRole('heading', { name: 'Lo que requiere tu atención' })).toBeVisible();
+	await expect(page.getByRole('main').getByRole('heading', { name: 'Operación', exact: true, level: 2 })).toBeVisible();
 });
 
 test('operations ofrece empty explícito sin inventar prioridades', async ({ page }) => {
@@ -123,5 +123,6 @@ test('operations ofrece empty explícito sin inventar prioridades', async ({ pag
 
 	await expect(page.getByText('No hay tareas críticas')).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveCount(0);
-	await expect(page.getByText('La operación está dentro de los niveles esperados.')).toBeVisible();
+	await expect(page.getByText('No hay pendientes en los datos consultados.')).toBeVisible();
+	await expect(page.getByText('Estado de envíos sin verificar')).toBeVisible();
 });

@@ -77,6 +77,22 @@ describe('assistant response relevance safeguards', () => {
 		assert.deepEqual(result.auditFlags, []);
 	});
 
+	it('blocks unsupported fit claims even when the customer asked for sizing help', () => {
+		const result = auditAssistantReply({
+			text: 'El Body Comfort es muy cómodo y no te va a ajustar.',
+			fallbackReply: 'No tengo una guía de medidas confirmada para ese modelo.',
+			detectedIntent: 'size_help',
+			commercialPlan: { bestOffer: { name: 'Body Comfort' } },
+			catalogProducts: [{ name: 'Body Comfort', sizes: ['S', 'M', 'L'] }],
+		});
+
+		assert.match(result.finalText, /no tengo confirmados datos sobre comodidad o calce/i);
+		assert.deepEqual(result.auditFlags, [
+			'unverified_catalog_claim:comfort',
+			'unverified_catalog_claim:adjustment',
+		]);
+	});
+
 	it('replaces size advice based only on the customer size and available variants', () => {
 		const result = auditAssistantReply({
 			text: 'Como usás M, te sugiero mantener ese talle para que te resulte cómodo.',
@@ -111,6 +127,22 @@ describe('assistant response relevance safeguards', () => {
 
 		assert.equal(result.finalText, text);
 		assert.deepEqual(result.auditFlags, []);
+	});
+
+	it('does not use another product size guide to justify a recommendation', () => {
+		const result = auditAssistantReply({
+			text: 'Para el Body Vista te conviene el talle M; te va a quedar cómodo.',
+			fallbackReply: 'Necesito revisar las medidas del Body Vista antes de recomendarte un talle.',
+			detectedIntent: 'size_help',
+			commercialPlan: { bestOffer: { name: 'Body Vista' } },
+			catalogProducts: [
+				{ name: 'Body Air', sizeGuide: { M: 'busto 92 cm, cintura 80 cm' } },
+				{ name: 'Body Vista', sizes: ['S', 'M', 'L'] },
+			],
+		});
+
+		assert.match(result.finalText, /medidas del Body Vista/i);
+		assert.deepEqual(result.auditFlags, ['unsupported_size_recommendation']);
 	});
 
 	it('uses a known size without inventing fit or asking for that size again', () => {
