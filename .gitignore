@@ -15,6 +15,8 @@ docs/
 scripts/
 !backend/scripts/
 backend/scripts/*
+!backend/scripts/smoke-ai-no-context.mjs
+!backend/scripts/smoke-ai-workspace-flow.mjs
 !backend/scripts/run-ai-regression-suite.mjs
 !backend/scripts/compare-ai-regression-suite.mjs
 !backend/scripts/compact-raw-payloads.mjs
@@ -28,6 +30,9 @@ debug-output/
 backend/debug-output/
 **/debug-output/
 tmp/
+.tmp-bladeia-migration/
+.tmp-e2e-screenshots-backup-*/
+.tmp-inbox-capture-backup-*/
 generated/*.pdf
 .codex/
 local-demo/
