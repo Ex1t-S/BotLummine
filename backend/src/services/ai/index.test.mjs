@@ -105,4 +105,22 @@ describe('canonical prompt compiler', () => {
 
 		assert.notEqual(first.promptHash, changed.promptHash);
 	});
+
+	it('includes confirmed product details and explicitly separates variants from product claims', () => {
+		const compiled = compilePrompt({
+			...input,
+			catalogProducts: [{
+				name: 'Body Air',
+				family: 'body_modelador',
+				price: '$45.000',
+				shortDescription: 'Diseñado para comodidad diaria con modelado suave.',
+				tags: ['microfibra'],
+				sizes: ['M', 'L'],
+			}],
+		});
+
+		assert.match(compiled.text, /Diseñado para comodidad diaria con modelado suave/);
+		assert.match(compiled.text, /la preferencia del cliente no confirma/i);
+		assert.match(compiled.text, /variantes.*no.*gu[ií]a de medidas/i);
+	});
 });
