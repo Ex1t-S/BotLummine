@@ -9,6 +9,7 @@ import {
 } from '../whatsapp/whatsapp.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
 import { findConversationForWorkspace } from '../workspaces/workspace-scope.js';
+import { shouldFallbackInteractiveToText } from './interactive-fallback-policy.js';
 
 function isOutboundDebugEnabled() {
 	return String(process.env.OUTBOUND_DEBUG || '').trim().toLowerCase() === 'true';
@@ -162,7 +163,7 @@ export async function sendAndPersistOutbound({
 			sections: interactivePayload?.sections || [],
 		});
 
-		if (!sendResult?.ok && interactivePayload?.fallbackText) {
+		if (shouldFallbackInteractiveToText(sendResult) && interactivePayload?.fallbackText) {
 			sendResult = await sendWhatsAppText({
 				workspaceId,
 				whatsappChannelId,
