@@ -1978,9 +1978,12 @@ export async function upsertWhatsAppChannel(req, res, next) {
 			});
 		}
 
-		if (whatsappAppId) {
-			const app = await prisma.whatsAppApp.findFirst({ where: { id: whatsappAppId, workspaceId, status: 'ACTIVE' } });
-			if (!app) return res.status(400).json({ ok: false, error: 'La App de WhatsApp no pertenece a este workspace o esta inactiva.' });
+		let whatsappApp = null;
+		if (data.whatsappAppId) {
+			whatsappApp = await prisma.whatsAppApp.findFirst({
+				where: { id: data.whatsappAppId, workspaceId, status: 'ACTIVE' },
+			});
+			if (!whatsappApp) return res.status(400).json({ ok: false, error: 'La App de WhatsApp no pertenece a este workspace o esta inactiva.' });
 		}
 
 		let validatedAccess = null;
@@ -1990,11 +1993,22 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				phoneNumberId: data.phoneNumberId,
 				accessToken: data.accessToken,
 				graphVersion: data.graphVersion || undefined,
+				appConfig: whatsappApp
+					? {
+							metaAppId: whatsappApp.metaAppId,
+							appSecret: decryptSecret(whatsappApp.appSecret),
+							graphVersion: whatsappApp.graphVersion || undefined,
+					  }
+					: {},
 			});
 		} catch (error) {
 			return res.status(400).json({
 				ok: false,
-				error: 'El access token no tiene permisos para leer ese WABA/numero de WhatsApp.',
+				error: error?.code === 'WHATSAPP_MESSAGING_PERMISSION_MISSING'
+					? 'El token no tiene permiso para enviar mensajes por WhatsApp.'
+					: error?.code === 'WHATSAPP_TOKEN_INVALID'
+						? 'El token de WhatsApp vencio o fue revocado.'
+						: 'El access token no tiene permisos para leer ese WABA/numero de WhatsApp.',
 				details: error?.message || null,
 				metaCode: error?.metaCode || null,
 				metaSubcode: error?.metaSubcode || null,
@@ -2059,6 +2073,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 		return res.json({
 			ok: true,
 			channel: sanitizeWhatsAppChannel(channel),
+			messagingPermissionCheck: validatedAccess?.messagingPermissionCheck || { checked: false, missingScopes: [] },
 		});
 	} catch (error) {
 		next(error);

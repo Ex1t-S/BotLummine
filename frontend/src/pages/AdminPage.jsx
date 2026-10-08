@@ -264,6 +264,8 @@ function mapPaymentForm(workspace) {
 		transferHolder: fieldValue(transfer.holder),
 		transferAlias: fieldValue(transfer.alias),
 		transferCbu: fieldValue(transfer.cbu),
+		transferCvu: fieldValue(transfer.cvu),
+		transferCuit: fieldValue(transfer.cuit),
 		transferExtra: fieldValue(transfer.extra),
 		paymentProofForwardPhone: fieldValue(transfer.paymentProofForwardPhone)
 	};
@@ -985,6 +987,8 @@ export default function AdminPage({ defaultTab = '' }) {
 					holder: paymentForm.transferHolder,
 					alias: paymentForm.transferAlias,
 					cbu: paymentForm.transferCbu,
+					cvu: paymentForm.transferCvu,
+					cuit: paymentForm.transferCuit,
 					extra: paymentForm.transferExtra,
 					paymentProofForwardPhone: paymentForm.paymentProofForwardPhone
 				}
@@ -1214,9 +1218,11 @@ export default function AdminPage({ defaultTab = '' }) {
 		event.preventDefault();
 		setSaving(true);
 		try {
-			await api.put(`/admin/workspaces/${selectedWorkspaceId}/whatsapp-channel`, channelForm);
+			const res = await api.put(`/admin/workspaces/${selectedWorkspaceId}/whatsapp-channel`, channelForm);
 			await loadWorkspaceDetail(selectedWorkspaceId);
-			showNotice('Canal WhatsApp guardado.');
+			showNotice(res.data?.messagingPermissionCheck?.checked
+				? 'Canal guardado y permiso de envío verificado con Meta.'
+				: 'Canal guardado, pero Meta no confirmó el permiso de envío. Revisá el permiso de mensajería antes de activar campañas.');
 		} catch (err) {
 			showError(err);
 		} finally {
@@ -1890,7 +1896,9 @@ export default function AdminPage({ defaultTab = '' }) {
 							<Input label="Banco para transferencias" value={paymentForm.transferBank} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferBank: value }))} />
 							<Input label="Titular de la cuenta" value={paymentForm.transferHolder} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferHolder: value }))} />
 							<Input label="Alias" value={paymentForm.transferAlias} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferAlias: value }))} />
-							<Input label="CBU / CVU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
+							<Input label="CBU" value={paymentForm.transferCbu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCbu: value }))} />
+							<Input label="CVU" value={paymentForm.transferCvu} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCvu: value }))} />
+							<Input label="CUIT del titular" value={paymentForm.transferCuit} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferCuit: value }))} />
 							<Input label="Reenviar comprobantes a" value={paymentForm.paymentProofForwardPhone} placeholder="54911..." onChange={(value) => setPaymentForm((cur) => ({ ...cur, paymentProofForwardPhone: value }))} />
 							<Textarea label="Texto extra para transferencia" value={paymentForm.transferExtra} onChange={(value) => setPaymentForm((cur) => ({ ...cur, transferExtra: value }))} />
 							<button type="submit" disabled={saving}>Guardar datos de pago</button>

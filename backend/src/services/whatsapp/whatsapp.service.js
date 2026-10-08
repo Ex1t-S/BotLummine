@@ -146,6 +146,7 @@ async function sendWhatsAppRequest({ workspaceId = null, whatsappChannelId = nul
 			ok: false,
 			provider: 'whatsapp-cloud-api',
 			model: null,
+			httpStatus: error.response?.status || null,
 			error: error.response?.data || { message: error.message },
 		};
 	}

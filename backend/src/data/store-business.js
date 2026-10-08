@@ -21,14 +21,9 @@ export const PAYMENT_RULES = {
 		'No inventes beneficios comerciales si no están presentes en el contexto.'
 	],
 	transfer: {
-		enabled: true,
-		alias: process.env.TRANSFER_ALIAS || 'TU_ALIAS_REAL',
-		cbu: process.env.TRANSFER_CBU || 'TU_CBU_REAL',
-		holder: process.env.TRANSFER_HOLDER || 'TITULAR_REAL',
-		bank: process.env.TRANSFER_BANK || 'BANCO_REAL',
-		extraInstructions:
-			process.env.TRANSFER_EXTRA ||
-			'Una vez realizada la transferencia, enviar comprobante por este medio para validarlo.'
+		enabled: false,
+		// Account details belong to each workspace and are read from its paymentConfig.
+		// Never populate global defaults: the backend serves multiple independent stores.
 	}
 };
 

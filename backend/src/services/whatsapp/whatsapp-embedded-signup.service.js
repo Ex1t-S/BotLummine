@@ -136,12 +136,43 @@ function getWabaIdsFromDebugToken(debugToken = {}) {
 	return uniqueNormalizedStrings(targetIds);
 }
 
-function getScopesFromDebugToken(debugToken = {}) {
+export function getScopesFromDebugToken(debugToken = {}) {
 	const scopes = Array.isArray(debugToken?.data?.scopes) ? debugToken.data.scopes : [];
 	const granularScopes = Array.isArray(debugToken?.data?.granular_scopes)
 		? debugToken.data.granular_scopes.map((item) => item?.scope)
 		: [];
 	return uniqueNormalizedStrings([...scopes, ...granularScopes]);
+}
+
+export function getMissingWhatsAppScopes(scopes = []) {
+	const normalizedScopes = uniqueNormalizedStrings(scopes);
+	return REQUIRED_EMBEDDED_SIGNUP_SCOPES.filter((scope) => !normalizedScopes.includes(scope));
+}
+
+async function validateMessagingPermission(accessToken, appConfig = {}) {
+	const hasAppCredentials = Boolean(getMetaAppId(appConfig) && getMetaAppSecret(appConfig));
+	if (!hasAppCredentials) return { checked: false, missingScopes: [] };
+
+	const debugToken = await debugAccessToken(accessToken, appConfig);
+	if (debugToken?.data?.is_valid === false) {
+		const error = new Error('Meta informa que el token no es válido o ya venció.');
+		error.status = 401;
+		error.metaCode = 190;
+		error.code = 'WHATSAPP_TOKEN_INVALID';
+		throw error;
+	}
+
+	const scopes = getScopesFromDebugToken(debugToken);
+	const missingScopes = getMissingWhatsAppScopes(scopes);
+	if (scopes.length && missingScopes.includes('whatsapp_business_messaging')) {
+		const error = new Error('El token puede leer la cuenta, pero no tiene el permiso whatsapp_business_messaging para enviar mensajes.');
+		error.status = 403;
+		error.metaCode = 200;
+		error.code = 'WHATSAPP_MESSAGING_PERMISSION_MISSING';
+		throw error;
+	}
+
+	return { checked: scopes.length > 0, missingScopes };
 }
 
 function warnAboutEmbeddedSignupScopes(debugToken = {}) {
@@ -254,6 +285,7 @@ export async function validateWhatsAppChannelAccess({
 	phoneNumberId,
 	accessToken,
 	graphVersion = getEmbeddedSignupGraphVersion(),
+	appConfig = {},
 }) {
 	const cleanWabaId = normalizeString(wabaId);
 	const cleanPhoneNumberId = normalizeString(phoneNumberId);
@@ -264,6 +296,7 @@ export async function validateWhatsAppChannelAccess({
 		error.status = 400;
 		throw error;
 	}
+	const messagingPermissionCheck = await validateMessagingPermission(cleanAccessToken, appConfig);
 
 	let waba = null;
 	let lastError = null;
@@ -294,6 +327,7 @@ export async function validateWhatsAppChannelAccess({
 			return {
 				waba: waba || { id: cleanWabaId },
 				phoneNumber: matchingPhoneNumber,
+				messagingPermissionCheck,
 			};
 		}
 
@@ -329,6 +363,7 @@ export async function validateWhatsAppChannelAccess({
 		return {
 			waba: waba || (resolvedWabaId ? { id: resolvedWabaId } : { id: cleanWabaId }),
 			phoneNumber,
+			messagingPermissionCheck,
 		};
 	} catch (error) {
 		lastError = error;
