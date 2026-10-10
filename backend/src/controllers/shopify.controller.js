@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { encryptSecret } from '../lib/secret-crypto.js';
 import { syncCatalogFromShopify } from '../services/catalog/catalog.service.js';
+import { syncCustomers } from '../services/customers/customer.service.js';
 import { markPrimaryCommerceConnection } from '../services/commerce/active-commerce.service.js';
 import { DEFAULT_WORKSPACE_ID, requireRequestWorkspaceId } from '../services/workspaces/workspace-context.service.js';
 
@@ -9,6 +10,7 @@ const SHOPIFY_DEFAULT_SCOPES = 'read_products,read_orders,read_customers,read_fu
 const SHOPIFY_ALLOWED_SCOPES = new Set([
 	'read_products',
 	'read_orders',
+	'read_all_orders',
 	'read_customers',
 	'read_fulfillments',
 	'read_inventory',
@@ -172,6 +174,20 @@ async function fetchShopInfo(shopDomain, accessToken) {
 	return response.json();
 }
 
+async function listShopifyWebhooks(shopDomain, accessToken) {
+	const response = await fetch(`https://${shopDomain}/admin/api/${getApiVersion()}/webhooks.json?limit=250`, {
+		headers: {
+			'X-Shopify-Access-Token': accessToken,
+			'Content-Type': 'application/json'
+		}
+	});
+	if (!response.ok) {
+		throw new Error(`No se pudieron consultar los webhooks existentes de Shopify (${response.status}).`);
+	}
+	const body = await response.json();
+	return Array.isArray(body?.webhooks) ? body.webhooks : [];
+}
+
 async function registerWebhook(shopDomain, accessToken, topic, address) {
 	const response = await fetch(`https://${shopDomain}/admin/api/${getApiVersion()}/webhooks.json`, {
 		method: 'POST',
@@ -197,8 +213,26 @@ async function registerWebhook(shopDomain, accessToken, topic, address) {
 async function registerShopifyWebhooks(req, { shopDomain, accessToken }) {
 	const baseUrl = resolvePublicBackendBaseUrl(req);
 	const address = `${baseUrl}/api/webhook/shopify`;
+	let existingWebhooks = [];
+	try {
+		existingWebhooks = await listShopifyWebhooks(shopDomain, accessToken);
+	} catch (error) {
+		return [{
+			topic: 'list',
+			error: error?.message || 'No se pudieron consultar los webhooks existentes de Shopify.'
+		}];
+	}
+	const existingTopics = new Set(
+		existingWebhooks
+			.filter((webhook) => webhook.address === address)
+			.map((webhook) => webhook.topic)
+	);
 	const results = [];
 	for (const topic of SHOPIFY_WEBHOOK_TOPICS) {
+		if (existingTopics.has(topic)) {
+			results.push({ topic, existing: true });
+			continue;
+		}
 		try {
 			results.push(await registerWebhook(shopDomain, accessToken, topic, address));
 		} catch (error) {
@@ -220,7 +254,7 @@ export async function startShopifyInstall(req, res) {
 			return res.status(400).json({ ok: false, error: 'Falta el dominio Shopify.' });
 		}
 
-		const state = signState({ workspaceId, ts: Date.now(), nonce: crypto.randomUUID() });
+		const state = signState({ workspaceId, shopDomain, ts: Date.now(), nonce: crypto.randomUUID() });
 		const url = new URL(`https://${shopDomain}/admin/oauth/authorize`);
 		url.searchParams.set('client_id', clientId);
 		url.searchParams.set('scope', getScopes());
@@ -233,28 +267,59 @@ export async function startShopifyInstall(req, res) {
 }
 
 export async function handleShopifyCallback(req, res) {
+	let workspaceId = null;
+	let shopDomain = normalizeShopDomain(req.query?.shop);
+	const state = cleanString(req.query?.state);
+	let statePayload = null;
 	try {
-		const shopDomain = normalizeShopDomain(req.query?.shop);
+		if (state) {
+			statePayload = verifyState(state);
+			workspaceId = statePayload.workspaceId;
+		}
+	} catch {
+		// The signed state is validated again below; don't trust workspace IDs from query parameters.
+	}
+
+	try {
 		const code = cleanString(req.query?.code);
-		const state = cleanString(req.query?.state);
+		const oauthError = cleanString(req.query?.error);
+		if (oauthError) {
+			return redirectInstallResult(res, {
+				workspaceId,
+				status: oauthError === 'access_denied' ? 'cancelled' : 'error',
+				shop: shopDomain,
+				message: oauthError === 'access_denied'
+					? 'La autorización de Shopify fue cancelada.'
+					: 'Shopify no pudo autorizar la app. Revisá la versión y los permisos publicados.'
+			});
+		}
 		if (!shopDomain || !code || !state) {
 			return redirectInstallResult(res, {
-				workspaceId: DEFAULT_WORKSPACE_ID,
+				workspaceId,
 				status: 'error',
-				message: 'Shopify no devolvio shop, code o state.'
+				shop: shopDomain,
+				message: 'Shopify no devolvió los datos necesarios para completar la conexión.'
+			});
+		}
+		statePayload = statePayload || verifyState(state);
+		workspaceId = statePayload.workspaceId;
+		if (statePayload.shopDomain && normalizeShopDomain(statePayload.shopDomain) !== shopDomain) {
+			return redirectInstallResult(res, {
+				workspaceId,
+				status: 'error',
+				shop: shopDomain,
+				message: 'La tienda del retorno OAuth no coincide con la tienda solicitada.'
 			});
 		}
 		if (!verifyShopifyQueryHmac(req.query)) {
 			return redirectInstallResult(res, {
-				workspaceId: DEFAULT_WORKSPACE_ID,
+				workspaceId,
 				status: 'error',
 				shop: shopDomain,
 				message: 'Firma OAuth Shopify invalida.'
 			});
 		}
 
-		const statePayload = verifyState(state);
-		const workspaceId = statePayload.workspaceId;
 		const tokenResponse = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -335,28 +400,43 @@ export async function handleShopifyCallback(req, res) {
 		});
 		await markPrimaryCommerceConnection(connection.id, { workspaceId });
 
-		const webhookResult = await registerShopifyWebhooks(req, { shopDomain, accessToken });
+		let webhookResult = [];
+		try {
+			webhookResult = await registerShopifyWebhooks(req, { shopDomain, accessToken });
+		} catch (error) {
+			webhookResult = [{ topic: 'registration', error: error?.message || 'No se pudieron registrar los webhooks Shopify.' }];
+		}
 		let catalogError = null;
+		let customerSyncError = null;
+		let customerSyncStarted = false;
 		try {
 			await syncCatalogFromShopify({ workspaceId });
 		} catch (error) {
 			catalogError = error?.message || 'No se pudo sincronizar catalogo Shopify.';
 		}
+		try {
+			const customerSync = await syncCustomers({ workspaceId, provider: 'SHOPIFY' });
+			customerSyncStarted = Boolean(customerSync?.started || customerSync?.running);
+		} catch (error) {
+			customerSyncError = error?.message || 'No se pudo iniciar la sincronización de clientes y pedidos Shopify.';
+		}
 
 		const webhookErrors = webhookResult.filter((item) => item?.error);
+		const hasPendingTasks = Boolean(webhookErrors.length || catalogError || customerSyncError || !customerSyncStarted);
 		return redirectInstallResult(res, {
 			workspaceId,
-			status: webhookErrors.length || catalogError ? 'partial' : 'connected',
+			status: hasPendingTasks ? 'partial' : 'connected',
 			shop: shopDomain,
-			message: webhookErrors.length || catalogError
-				? `Shopify conectado para ${shopDomain}, pero quedaron tareas pendientes.`
-				: `Shopify conectado para ${shopDomain}.`
+			message: hasPendingTasks
+				? `Shopify quedó conectado para ${shopDomain}, pero la sincronización inicial requiere revisión.`
+				: `Shopify conectado para ${shopDomain}. Catálogo sincronizado y clientes/pedidos en proceso.`
 		});
 	} catch (error) {
 		return redirectInstallResult(res, {
-			workspaceId: DEFAULT_WORKSPACE_ID,
+			workspaceId,
 			status: 'error',
-			message: error.message
+			shop: shopDomain,
+			message: 'No se pudo completar OAuth con Shopify. Revisá la URL de retorno, el flujo de instalación y los permisos de la versión activa.'
 		});
 	}
 }
