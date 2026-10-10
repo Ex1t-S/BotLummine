@@ -30,6 +30,8 @@ import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '
 import { getShopifyClient } from '../services/shopify/client.js';
 import {
 	completeWhatsAppEmbeddedSignup,
+	getWhatsAppWabaSubscription,
+	subscribeWhatsAppWaba,
 	validateWhatsAppChannelAccess,
 } from '../services/whatsapp/whatsapp-embedded-signup.service.js';
 import {
@@ -1892,10 +1894,25 @@ export async function upsertWhatsAppApp(req, res, next) {
 		const appSecret = normalizeString(req.body?.appSecret);
 		const verifyToken = normalizeString(req.body?.verifyToken);
 
-		if (!metaAppId || !embeddedSignupConfigId || (!existingApp && (!appSecret || !verifyToken))) {
+		if (!metaAppId || (!existingApp && (!appSecret || !verifyToken))) {
 			return res.status(400).json({
 				ok: false,
-				error: 'metaAppId, embeddedSignupConfigId, appSecret y verifyToken son obligatorios al crear la App.',
+				error: 'Meta App ID, App Secret y Verify Token son obligatorios al crear la App. El Config ID solo se usa con Embedded Signup.',
+			});
+		}
+		if (!/^\d+$/.test(metaAppId)) {
+			return res.status(400).json({ ok: false, error: 'Meta App ID debe ser un identificador numerico.' });
+		}
+		if (req.body?.businessManagerId && !/^\d+$/.test(normalizeString(req.body.businessManagerId))) {
+			return res.status(400).json({ ok: false, error: 'ID del negocio debe ser numerico.' });
+		}
+		if (req.body?.graphVersion && !/^v\d+\.\d+$/.test(normalizeString(req.body.graphVersion))) {
+			return res.status(400).json({ ok: false, error: 'La version de Graph debe tener el formato v25.0.' });
+		}
+		if (embeddedSignupConfigId && !/^\d+$/.test(embeddedSignupConfigId)) {
+			return res.status(400).json({
+				ok: false,
+				error: 'Embedded Signup Config ID debe ser un identificador numerico, no un enlace. Dejalo vacio para la conexion manual.',
 			});
 		}
 
@@ -1926,6 +1943,76 @@ export async function upsertWhatsAppApp(req, res, next) {
 
 		return res.json({ ok: true, app: sanitizeWhatsAppApp(app) });
 	} catch (error) {
+		next(error);
+	}
+}
+
+export async function checkWhatsAppChannel(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const whatsappAppId = normalizeString(req.body?.whatsappAppId);
+		const app = whatsappAppId
+			? await prisma.whatsAppApp.findFirst({ where: { id: whatsappAppId, workspaceId, status: 'ACTIVE' } })
+			: null;
+		if (!app) return res.status(400).json({ ok: false, error: 'Selecciona primero la App de Meta de esta marca.' });
+
+		const existingChannelId = normalizeString(req.body?.id);
+		const existingChannel = existingChannelId
+			? await prisma.whatsAppChannel.findFirst({ where: { id: existingChannelId, workspaceId } })
+			: null;
+		const accessToken = normalizeString(req.body?.accessToken) ||
+			(existingChannel?.accessToken ? decryptSecret(existingChannel.accessToken) : '');
+		const wabaId = normalizeString(req.body?.wabaId);
+		const phoneNumberId = normalizeString(req.body?.phoneNumberId);
+		if (!wabaId || !phoneNumberId || !accessToken) {
+			return res.status(400).json({ ok: false, error: 'Completa WABA ID, Phone Number ID y token de acceso para comprobar la conexion.' });
+		}
+		if (!/^\d+$/.test(wabaId) || !/^\d+$/.test(phoneNumberId)) {
+			return res.status(400).json({ ok: false, error: 'WABA ID y Phone Number ID deben ser identificadores numericos de Meta.' });
+		}
+		if (req.body?.graphVersion && !/^v\d+\.\d+$/.test(normalizeString(req.body.graphVersion))) {
+			return res.status(400).json({ ok: false, error: 'La versión de Graph debe tener el formato v25.0.' });
+		}
+		const result = await validateWhatsAppChannelAccess({
+			wabaId,
+			phoneNumberId,
+			accessToken,
+			graphVersion: normalizeString(req.body?.graphVersion) || app.graphVersion || undefined,
+			appConfig: { metaAppId: app.metaAppId, appSecret: decryptSecret(app.appSecret) },
+		});
+		if (!result.messagingPermissionCheck?.checked) {
+			return res.status(400).json({ ok: false, error: 'Meta no confirmó los permisos del token. Generá uno de usuario del sistema con permisos de administración y mensajería para esta App.' });
+		}
+		if (result.phoneNumber?.code_verification_status && result.phoneNumber.code_verification_status !== 'VERIFIED') {
+			return res.status(400).json({ ok: false, error: 'El número figura en la WABA, pero Meta todavía no confirma su verificación.' });
+		}
+		let subscription;
+		try {
+			subscription = await getWhatsAppWabaSubscription({
+				wabaId,
+				accessToken,
+				metaAppId: app.metaAppId,
+				graphVersion: normalizeString(req.body?.graphVersion) || app.graphVersion || undefined,
+			});
+		} catch (error) {
+			subscription = { checked: false, subscribed: false, error: error?.message || 'Meta no permitio comprobar la suscripcion.' };
+		}
+		return res.json({
+			ok: true,
+			appId: app.metaAppId,
+			wabaId,
+			phoneNumberId,
+			displayPhoneNumber: result.phoneNumber?.display_phone_number || null,
+			codeVerificationStatus: result.phoneNumber?.code_verification_status || null,
+			messagingPermissionCheck: result.messagingPermissionCheck,
+			subscription,
+			registrationChecked: false,
+		});
+	} catch (error) {
+		if (error?.graphOperation || error?.code?.startsWith?.('WHATSAPP_') || error?.status === 400) {
+			return res.status(400).json({ ok: false, error: error.message, metaCode: error.metaCode || null });
+		}
 		next(error);
 	}
 }
@@ -1977,6 +2064,15 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				error: 'wabaId, phoneNumberId y accessToken son obligatorios.',
 			});
 		}
+		if (!/^\d+$/.test(data.wabaId) || !/^\d+$/.test(data.phoneNumberId)) {
+			return res.status(400).json({ ok: false, error: 'WABA ID y Phone Number ID deben ser identificadores numericos de Meta.' });
+		}
+		if (data.graphVersion && !/^v\d+\.\d+$/.test(data.graphVersion)) {
+			return res.status(400).json({ ok: false, error: 'La version de Graph debe tener el formato v25.0.' });
+		}
+		if (!data.whatsappAppId && !existingChannel) {
+			return res.status(400).json({ ok: false, error: 'Selecciona la App de Meta de esta marca antes de vincular un numero nuevo.' });
+		}
 
 		let whatsappApp = null;
 		if (data.whatsappAppId) {
@@ -2006,6 +2102,10 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				ok: false,
 				error: error?.code === 'WHATSAPP_MESSAGING_PERMISSION_MISSING'
 					? 'El token no tiene permiso para enviar mensajes por WhatsApp.'
+					: error?.code === 'WHATSAPP_MANAGEMENT_PERMISSION_MISSING'
+						? 'El token no tiene permiso para administrar la WABA y suscribir webhooks.'
+					: error?.code === 'WHATSAPP_TOKEN_APP_MISMATCH'
+						? 'El token pertenece a otra App de Meta. Genera uno nuevo desde la App seleccionada.'
 					: error?.code === 'WHATSAPP_TOKEN_INVALID'
 						? 'El token de WhatsApp vencio o fue revocado.'
 						: 'El access token no tiene permisos para leer ese WABA/numero de WhatsApp.',
@@ -2013,6 +2113,41 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				metaCode: error?.metaCode || null,
 				metaSubcode: error?.metaSubcode || null,
 			});
+		}
+		if (validatedAccess?.phoneNumber?.code_verification_status &&
+			validatedAccess.phoneNumber.code_verification_status !== 'VERIFIED') {
+			return res.status(400).json({ ok: false, error: 'Meta identifica el numero, pero aun no confirma la verificacion de su codigo.' });
+		}
+		if (whatsappApp && data.status === 'ACTIVE' && !validatedAccess?.messagingPermissionCheck?.checked) {
+			return res.status(400).json({ ok: false, error: 'Meta no confirmó los permisos del token. No se activó el canal.' });
+		}
+
+		const existingPhone = await prisma.whatsAppChannel.findUnique({
+			where: { phoneNumberId: data.phoneNumberId },
+			select: { id: true, workspaceId: true },
+		});
+		if (existingPhone?.workspaceId && existingPhone.workspaceId !== workspaceId) {
+			return res.status(409).json({ ok: false, error: 'Ese phoneNumberId ya esta asignado a otro workspace.' });
+		}
+		if (existingPhone?.id && channelId && existingPhone.id !== channelId) {
+			return res.status(409).json({ ok: false, error: 'Ese phoneNumberId ya esta vinculado a otro canal de esta marca.' });
+		}
+
+		let subscription = null;
+		if (whatsappApp && data.status === 'ACTIVE') {
+			try {
+				subscription = await subscribeWhatsAppWaba({
+					wabaId: data.wabaId,
+					accessToken: data.accessToken,
+					graphVersion: data.graphVersion || whatsappApp.graphVersion || undefined,
+				});
+			} catch (error) {
+				return res.status(400).json({
+					ok: false,
+					error: 'Meta no pudo suscribir esta App a los webhooks de la WABA. El canal no fue activado.',
+					details: error?.message || null,
+				});
+			}
 		}
 
 		data.displayPhoneNumber =
@@ -2024,21 +2159,8 @@ export async function upsertWhatsAppChannel(req, res, next) {
 			validatedAt: new Date().toISOString(),
 			waba: validatedAccess?.waba || null,
 			phoneNumber: validatedAccess?.phoneNumber || null,
+			subscription,
 		};
-
-		if (!channelId) {
-			const existingPhone = await prisma.whatsAppChannel.findUnique({
-				where: { phoneNumberId: data.phoneNumberId },
-				select: { workspaceId: true },
-			});
-
-			if (existingPhone?.workspaceId && existingPhone.workspaceId !== workspaceId) {
-				return res.status(409).json({
-					ok: false,
-					error: 'Ese phoneNumberId ya esta asignado a otro workspace.',
-				});
-			}
-		}
 
 		const channel = channelId
 			? await prisma.whatsAppChannel.update({
@@ -2074,6 +2196,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 			ok: true,
 			channel: sanitizeWhatsAppChannel(channel),
 			messagingPermissionCheck: validatedAccess?.messagingPermissionCheck || { checked: false, missingScopes: [] },
+			subscription,
 		});
 	} catch (error) {
 		next(error);
