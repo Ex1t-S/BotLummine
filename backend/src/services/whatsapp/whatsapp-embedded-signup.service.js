@@ -14,6 +14,7 @@ const GRAPH_OPERATION_LABELS = {
 	read_waba: 'leer la WABA autorizada',
 	read_phone_number: 'leer el numero de WhatsApp',
 	list_phone_numbers: 'listar numeros de la WABA',
+	list_subscribed_apps: 'comprobar las suscripciones de webhooks de la WABA',
 	subscribe_waba_webhooks: 'suscribir la WABA a webhooks',
 };
 
@@ -77,7 +78,7 @@ function normalizeGraphError(error, fallbackMessage = 'No se pudo completar la o
 	const isPermissionError = apiError?.code === 200 || PERMISSION_ERROR_PATTERN.test(message);
 	const nextError = new Error(
 		isPermissionError
-			? `Meta rechazo la conexion por permisos al ${operationLabel || 'completar la operacion'}: ${message}. Revisa que la app tenga acceso avanzado a whatsapp_business_management y whatsapp_business_messaging, que el Config ID de Embedded Signup pertenezca a la misma app, y que el usuario sea administrador del Business/WABA que esta conectando.`
+			? `Meta rechazó la conexión por permisos al ${operationLabel || 'completar la operación'}: ${message}. Revisá que el token tenga whatsapp_business_management y whatsapp_business_messaging y que su usuario del sistema tenga acceso a esta WABA.`
 			: operationLabel
 				? `Meta no pudo ${operationLabel}: ${message}`
 				: message
@@ -93,10 +94,8 @@ function normalizeGraphError(error, fallbackMessage = 'No se pudo completar la o
 async function graphGet(path, { accessToken, params = {}, graphVersion, operation = '' } = {}) {
 	try {
 		const response = await axios.get(buildGraphUrl(path, graphVersion), {
-			params: {
-				...params,
-				access_token: accessToken,
-			},
+			params,
+			headers: { Authorization: `Bearer ${accessToken}` },
 			timeout: GRAPH_TIMEOUT_MS,
 		});
 		return response.data;
@@ -108,10 +107,8 @@ async function graphGet(path, { accessToken, params = {}, graphVersion, operatio
 async function graphPost(path, { accessToken, data = {}, params = {}, graphVersion, operation = '' } = {}) {
 	try {
 		const response = await axios.post(buildGraphUrl(path, graphVersion), data, {
-			params: {
-				...params,
-				access_token: accessToken,
-			},
+			params,
+			headers: { Authorization: `Bearer ${accessToken}` },
 			timeout: GRAPH_TIMEOUT_MS,
 		});
 		return response.data;
@@ -136,12 +133,89 @@ function getWabaIdsFromDebugToken(debugToken = {}) {
 	return uniqueNormalizedStrings(targetIds);
 }
 
-function getScopesFromDebugToken(debugToken = {}) {
+export function getScopesFromDebugToken(debugToken = {}) {
 	const scopes = Array.isArray(debugToken?.data?.scopes) ? debugToken.data.scopes : [];
 	const granularScopes = Array.isArray(debugToken?.data?.granular_scopes)
 		? debugToken.data.granular_scopes.map((item) => item?.scope)
 		: [];
 	return uniqueNormalizedStrings([...scopes, ...granularScopes]);
+}
+
+export function getMissingWhatsAppScopes(scopes = []) {
+	const normalizedScopes = uniqueNormalizedStrings(scopes);
+	return REQUIRED_EMBEDDED_SIGNUP_SCOPES.filter((scope) => !normalizedScopes.includes(scope));
+}
+
+async function validateMessagingPermission(accessToken, appConfig = {}) {
+	const hasAppCredentials = Boolean(getMetaAppId(appConfig) && getMetaAppSecret(appConfig));
+	if (!hasAppCredentials) return { checked: false, missingScopes: [] };
+
+	const debugToken = await debugAccessToken(accessToken, appConfig);
+	if (debugToken?.data?.is_valid === false) {
+		const error = new Error('Meta informa que el token no es válido o ya venció.');
+		error.status = 401;
+		error.metaCode = 190;
+		error.code = 'WHATSAPP_TOKEN_INVALID';
+		throw error;
+	}
+
+	const scopes = getScopesFromDebugToken(debugToken);
+	const missingScopes = getMissingWhatsAppScopes(scopes);
+	const tokenAppId = normalizeString(debugToken?.data?.app_id);
+	if (tokenAppId && tokenAppId !== getMetaAppId(appConfig)) {
+		const error = new Error('El token fue generado para otra App de Meta. Genera un token de usuario del sistema seleccionando la App registrada para esta marca.');
+		error.status = 403;
+		error.code = 'WHATSAPP_TOKEN_APP_MISMATCH';
+		throw error;
+	}
+	if (scopes.length && missingScopes.includes('whatsapp_business_messaging')) {
+		const error = new Error('El token puede leer la cuenta, pero no tiene el permiso whatsapp_business_messaging para enviar mensajes.');
+		error.status = 403;
+		error.metaCode = 200;
+		error.code = 'WHATSAPP_MESSAGING_PERMISSION_MISSING';
+		throw error;
+	}
+	if (scopes.length && missingScopes.includes('whatsapp_business_management')) {
+		const error = new Error('Al token le falta whatsapp_business_management para leer la WABA y suscribir sus webhooks.');
+		error.status = 403;
+		error.code = 'WHATSAPP_MANAGEMENT_PERMISSION_MISSING';
+		throw error;
+	}
+
+	return {
+		checked: scopes.length > 0,
+		missingScopes,
+		appId: tokenAppId || null,
+		tokenType: normalizeString(debugToken?.data?.type) || null,
+		expiresAt: Number(debugToken?.data?.expires_at) || null,
+	};
+}
+
+export async function getWhatsAppWabaSubscription({ wabaId, accessToken, metaAppId, graphVersion }) {
+	const result = await graphGet(`/${normalizeString(wabaId)}/subscribed_apps`, {
+		accessToken,
+		graphVersion,
+		operation: 'list_subscribed_apps',
+	});
+	const apps = Array.isArray(result?.data) ? result.data : [];
+	return {
+		checked: true,
+		subscribed: apps.some((app) => normalizeString(app?.id || app?.app_id) === normalizeString(metaAppId)),
+	};
+}
+
+export async function subscribeWhatsAppWaba({ wabaId, accessToken, graphVersion }) {
+	const result = await graphPost(`/${normalizeString(wabaId)}/subscribed_apps`, {
+		accessToken,
+		graphVersion,
+		operation: 'subscribe_waba_webhooks',
+	});
+	if (result?.success !== true && result?.success !== 'true') {
+		const error = new Error('Meta no confirmó la suscripción de la App a los webhooks de la WABA.');
+		error.status = 502;
+		throw error;
+	}
+	return { success: true };
 }
 
 function warnAboutEmbeddedSignupScopes(debugToken = {}) {
@@ -254,6 +328,7 @@ export async function validateWhatsAppChannelAccess({
 	phoneNumberId,
 	accessToken,
 	graphVersion = getEmbeddedSignupGraphVersion(),
+	appConfig = {},
 }) {
 	const cleanWabaId = normalizeString(wabaId);
 	const cleanPhoneNumberId = normalizeString(phoneNumberId);
@@ -264,9 +339,9 @@ export async function validateWhatsAppChannelAccess({
 		error.status = 400;
 		throw error;
 	}
+	const messagingPermissionCheck = await validateMessagingPermission(cleanAccessToken, appConfig);
 
 	let waba = null;
-	let lastError = null;
 
 	try {
 		waba = await graphGet(`/${cleanWabaId}`, {
@@ -278,63 +353,26 @@ export async function validateWhatsAppChannelAccess({
 			},
 		});
 	} catch (error) {
-		lastError = error;
+		// Access to the phone_numbers edge is the authoritative ownership check below.
 	}
 
-	try {
-		const phoneNumbers = await listPhoneNumbersForWaba({
-			wabaId: cleanWabaId,
-			accessToken: cleanAccessToken,
-			graphVersion,
-		});
-		const matchingPhoneNumber =
-			phoneNumbers.find((item) => normalizeString(item?.id) === cleanPhoneNumberId) || null;
-
-		if (matchingPhoneNumber) {
-			return {
-				waba: waba || { id: cleanWabaId },
-				phoneNumber: matchingPhoneNumber,
-			};
-		}
-
-		const error = new Error('El WABA no devolvio el phoneNumberId indicado en /phone_numbers.');
+	const phoneNumbers = await listPhoneNumbersForWaba({
+		wabaId: cleanWabaId,
+		accessToken: cleanAccessToken,
+		graphVersion,
+	});
+	const matchingPhoneNumber =
+		phoneNumbers.find((item) => normalizeString(item?.id) === cleanPhoneNumberId) || null;
+	if (!matchingPhoneNumber) {
+		const error = new Error('El Phone Number ID no aparece entre los números de esa WABA. Revisá que no sea el número de prueba ni pertenezca a otro negocio.');
 		error.status = 400;
 		throw error;
-	} catch (error) {
-		lastError = error;
 	}
-
-	try {
-		const phoneNumber = await resolvePhoneNumber({
-			wabaId: cleanWabaId,
-			phoneNumberId: cleanPhoneNumberId,
-			accessToken: cleanAccessToken,
-			graphVersion,
-		});
-		const resolvedPhoneNumberId = normalizeString(phoneNumber?.id);
-		const resolvedWabaId = normalizeString(phoneNumber?.whatsapp_business_account?.id);
-
-		if (resolvedPhoneNumberId !== cleanPhoneNumberId) {
-			const error = new Error('El access token no devolvio el numero de WhatsApp indicado.');
-			error.status = 400;
-			throw error;
-		}
-
-		if (resolvedWabaId && resolvedWabaId !== cleanWabaId) {
-			const error = new Error('El numero de WhatsApp pertenece a otra WABA.');
-			error.status = 400;
-			throw error;
-		}
-
-		return {
-			waba: waba || (resolvedWabaId ? { id: resolvedWabaId } : { id: cleanWabaId }),
-			phoneNumber,
-		};
-	} catch (error) {
-		lastError = error;
-	}
-
-	throw lastError || new Error('No se pudo validar el acceso al canal de WhatsApp.');
+	return {
+		waba: waba || { id: cleanWabaId },
+		phoneNumber: matchingPhoneNumber,
+		messagingPermissionCheck,
+	};
 }
 
 async function resolveEmbeddedSignupAssets({
