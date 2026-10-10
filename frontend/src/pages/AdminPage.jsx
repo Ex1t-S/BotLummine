@@ -792,6 +792,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			appSecret: '',
 			verifyToken: ''
 		});
+		setShowWhatsAppVerifyToken(false);
 		setChannelForm({
 			...EMPTY_CHANNEL_FORM,
 			id: channel?.id || '',
@@ -2116,7 +2117,7 @@ export default function AdminPage({ defaultTab = '' }) {
 						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
 							<Input label="Nombre" value={channelForm.name} onChange={(value) => setChannelForm((cur) => ({ ...cur, name: value }))} />
 							<Select label="App de Meta" value={channelForm.whatsappAppId || ''} onChange={(value) => setChannelForm((cur) => ({ ...cur, whatsappAppId: value }))}>
-								<option value="">Seleccioná la App de esta marca</option>
+								<option value="">{channelForm.id ? 'Canal heredado sin App' : 'Seleccioná la App de esta marca'}</option>
 								{(workspace?.whatsappApps || []).map((item) => <option key={item.id} value={item.id}>{item.name} - {item.metaAppId}</option>)}
 							</Select>
 							<Input label="WABA ID" value={channelForm.wabaId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, wabaId: value }))} />
@@ -2133,9 +2134,10 @@ export default function AdminPage({ defaultTab = '' }) {
 							<label className="admin-field"><span>Canal principal</span><input type="checkbox" checked={Boolean(channelForm.isPrimary)} onChange={(event) => setChannelForm((cur) => ({ ...cur, isPrimary: event.target.checked }))} /></label>
 							<div className="wa-setup-submit-actions">
 								<button type="button" disabled={whatsappChecking || saving || !channelForm.whatsappAppId} onClick={handleCheckWhatsAppChannel}>{whatsappChecking ? 'Comprobando...' : 'Comprobar con Meta'}</button>
-								<button type="submit" disabled={saving || whatsappChecking || !channelForm.whatsappAppId}>{saving ? 'Guardando...' : channelForm.status === 'ACTIVE' ? 'Vincular y suscribir webhooks' : 'Guardar canal sin activar'}</button>
+								<button type="submit" disabled={saving || whatsappChecking || (!channelForm.whatsappAppId && !channelForm.id) || (channelForm.status === 'ACTIVE' && channelForm.whatsappAppId && !whatsappCheck?.ok)}>{saving ? 'Guardando...' : !channelForm.whatsappAppId ? 'Guardar canal heredado' : channelForm.status === 'ACTIVE' ? 'Vincular y suscribir webhooks' : 'Guardar canal sin activar'}</button>
 							</div>
 						</form>
+						{channelForm.status === 'ACTIVE' && channelForm.whatsappAppId && !whatsappCheck?.ok ? <small className="wa-setup-field-note">Primero comprobá la conexión con Meta para habilitar la vinculación.</small> : null}
 						{whatsappCheckError ? <p className="wa-setup-check-error" role="alert">{whatsappCheckError}</p> : null}
 						{whatsappCheck?.ok ? (
 							<div className="wa-setup-check-result" role="status">
