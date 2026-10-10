@@ -2108,6 +2108,8 @@ export async function upsertWhatsAppChannel(req, res, next) {
 						? 'El token pertenece a otra App de Meta. Genera uno nuevo desde la App seleccionada.'
 					: error?.code === 'WHATSAPP_TOKEN_INVALID'
 						? 'El token de WhatsApp vencio o fue revocado.'
+					: error?.status === 400 && !error?.graphOperation
+						? error.message
 						: 'El access token no tiene permisos para leer ese WABA/numero de WhatsApp.',
 				details: error?.message || null,
 				metaCode: error?.metaCode || null,

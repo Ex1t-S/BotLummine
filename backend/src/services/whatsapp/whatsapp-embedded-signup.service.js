@@ -78,7 +78,7 @@ function normalizeGraphError(error, fallbackMessage = 'No se pudo completar la o
 	const isPermissionError = apiError?.code === 200 || PERMISSION_ERROR_PATTERN.test(message);
 	const nextError = new Error(
 		isPermissionError
-			? `Meta rechazo la conexion por permisos al ${operationLabel || 'completar la operacion'}: ${message}. Revisa que la app tenga acceso avanzado a whatsapp_business_management y whatsapp_business_messaging, que el Config ID de Embedded Signup pertenezca a la misma app, y que el usuario sea administrador del Business/WABA que esta conectando.`
+			? `Meta rechazó la conexión por permisos al ${operationLabel || 'completar la operación'}: ${message}. Revisá que el token tenga whatsapp_business_management y whatsapp_business_messaging y que su usuario del sistema tenga acceso a esta WABA.`
 			: operationLabel
 				? `Meta no pudo ${operationLabel}: ${message}`
 				: message
