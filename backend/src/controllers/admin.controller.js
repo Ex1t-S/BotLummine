@@ -30,9 +30,11 @@ import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '
 import { getShopifyClient } from '../services/shopify/client.js';
 import {
 	completeWhatsAppEmbeddedSignup,
+	discoverWhatsAppManualAssets,
 	getWhatsAppWabaSubscription,
 	subscribeWhatsAppWaba,
 	validateWhatsAppChannelAccess,
+	validateMetaAppCredentials,
 } from '../services/whatsapp/whatsapp-embedded-signup.service.js';
 import {
 	AI_PROFILES,
@@ -1923,6 +1925,17 @@ export async function upsertWhatsAppApp(req, res, next) {
 		if (duplicate) {
 			return res.status(409).json({ ok: false, error: 'Ese Meta App ID ya esta registrado.' });
 		}
+		if (appSecret) {
+			try {
+				await validateMetaAppCredentials({
+					metaAppId,
+					appSecret,
+					graphVersion: normalizeString(req.body?.graphVersion) || existingApp?.graphVersion || 'v25.0',
+				});
+			} catch (error) {
+				return res.status(400).json({ ok: false, error: error.message });
+			}
+		}
 
 		const data = {
 			workspaceId,
@@ -1943,6 +1956,28 @@ export async function upsertWhatsAppApp(req, res, next) {
 
 		return res.json({ ok: true, app: sanitizeWhatsAppApp(app) });
 	} catch (error) {
+		next(error);
+	}
+}
+
+export async function checkWhatsAppAppCredentials(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const app = await prisma.whatsAppApp.findFirst({
+			where: { id: normalizeString(req.params?.appId), workspaceId, status: 'ACTIVE' },
+		});
+		if (!app) return res.status(404).json({ ok: false, error: 'App de Meta no encontrada para este workspace.' });
+		const result = await validateMetaAppCredentials({
+			metaAppId: app.metaAppId,
+			appSecret: decryptSecret(app.appSecret),
+			graphVersion: app.graphVersion || undefined,
+		});
+		return res.json({ ok: true, valid: true, appId: result.id, name: result.name });
+	} catch (error) {
+		if (error?.graphOperation || error?.status === 400) {
+			return res.status(400).json({ ok: false, valid: false, error: error.message });
+		}
 		next(error);
 	}
 }
@@ -2013,6 +2048,69 @@ export async function checkWhatsAppChannel(req, res, next) {
 		if (error?.graphOperation || error?.code?.startsWith?.('WHATSAPP_') || error?.status === 400) {
 			return res.status(400).json({ ok: false, error: error.message, metaCode: error.metaCode || null });
 		}
+		next(error);
+	}
+}
+
+export async function discoverWhatsAppChannelAssets(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const app = await prisma.whatsAppApp.findFirst({
+			where: { id: normalizeString(req.body?.whatsappAppId), workspaceId, status: 'ACTIVE' },
+		});
+		if (!app) return res.status(400).json({ ok: false, error: 'Seleccioná primero la App de Meta de esta marca.' });
+		const accessToken = normalizeString(req.body?.accessToken);
+		const existingChannelId = normalizeString(req.body?.id);
+		const existingChannel = existingChannelId
+			? await prisma.whatsAppChannel.findFirst({ where: { id: existingChannelId, workspaceId } })
+			: null;
+		const result = await discoverWhatsAppManualAssets({
+			accessToken: accessToken || (existingChannel?.accessToken ? decryptSecret(existingChannel.accessToken) : ''),
+			businessManagerId: app.businessManagerId || '',
+			graphVersion: normalizeString(req.body?.graphVersion) || app.graphVersion || undefined,
+			appConfig: { metaAppId: app.metaAppId, appSecret: decryptSecret(app.appSecret) },
+		});
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		if (error?.graphOperation || error?.code?.startsWith?.('WHATSAPP_') || error?.status === 400) {
+			return res.status(400).json({ ok: false, error: error.message, metaCode: error.metaCode || null });
+		}
+		next(error);
+	}
+}
+
+export async function getWhatsAppChannelLiveStatus(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const channel = await prisma.whatsAppChannel.findFirst({
+			where: { workspaceId, status: 'ACTIVE' },
+			orderBy: [{ isPrimary: 'desc' }, { updatedAt: 'desc' }],
+		});
+		if (!channel) return res.json({ ok: true, channelActive: false, lastInboundAt: null, lastOutboundAt: null });
+		const validationDate = channel.rawPayload?.connectedAt || channel.rawPayload?.validatedAt || channel.createdAt;
+		const since = new Date(validationDate);
+		const [inbound, outbound] = await Promise.all([
+			prisma.message.findFirst({
+				where: { workspaceId, whatsappChannelId: channel.id, direction: 'INBOUND', createdAt: { gte: since } },
+				orderBy: { createdAt: 'desc' },
+				select: { createdAt: true },
+			}),
+			prisma.message.findFirst({
+				where: { workspaceId, whatsappChannelId: channel.id, direction: 'OUTBOUND', createdAt: { gte: since }, metaMessageId: { not: null } },
+				orderBy: { createdAt: 'desc' },
+				select: { createdAt: true },
+			}),
+		]);
+		return res.json({
+			ok: true,
+			channelActive: true,
+			phoneNumberId: channel.phoneNumberId,
+			lastInboundAt: inbound?.createdAt || null,
+			lastOutboundAt: outbound?.createdAt || null,
+		});
+	} catch (error) {
 		next(error);
 	}
 }

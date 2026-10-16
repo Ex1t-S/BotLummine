@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { requireAuth, requirePlatformAdmin, requireAdmin } from '../middleware/auth.js';
 import {
 	checkWhatsAppChannel,
+	checkWhatsAppAppCredentials,
+	discoverWhatsAppChannelAssets,
+	getWhatsAppChannelLiveStatus,
 	createWorkspace,
 	deleteWorkspace,
 	completeWhatsAppEmbeddedSignupForWorkspace,
@@ -47,7 +50,10 @@ router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspac
 router.post('/workspaces/:workspaceId/whatsapp/embedded-signup/complete', requireAdmin, completeWhatsAppEmbeddedSignupForWorkspace);
 router.put('/workspaces/:workspaceId/whatsapp-apps', requireAdmin, upsertWhatsAppApp);
 router.put('/workspaces/:workspaceId/whatsapp-apps/:appId', requireAdmin, upsertWhatsAppApp);
+router.post('/workspaces/:workspaceId/whatsapp-apps/:appId/check', requireAdmin, checkWhatsAppAppCredentials);
 router.post('/workspaces/:workspaceId/whatsapp-channel/check', requirePlatformAdmin, checkWhatsAppChannel);
+router.post('/workspaces/:workspaceId/whatsapp-channel/discover', requirePlatformAdmin, discoverWhatsAppChannelAssets);
+router.get('/workspaces/:workspaceId/whatsapp-channel/status', requireAdmin, getWhatsAppChannelLiveStatus);
 router.put('/workspaces/:workspaceId/whatsapp-channel', requirePlatformAdmin, upsertWhatsAppChannel);
 router.put('/workspaces/:workspaceId/commerce-connections/:provider', requirePlatformAdmin, upsertCommerceConnection);
 router.put('/workspaces/:workspaceId/logistics-connections/:provider', requirePlatformAdmin, upsertLogisticsConnection);

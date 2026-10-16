@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import axios from 'axios';
 import {
+	discoverWhatsAppManualAssets,
+	validateMetaAppCredentials,
 	getWhatsAppWabaSubscription,
 	subscribeWhatsAppWaba,
 	validateWhatsAppChannelAccess,
@@ -16,6 +18,54 @@ const baseInput = {
 };
 
 describe('WhatsApp channel token permission validation', () => {
+	it('rejects an access token in the App Secret field', async () => {
+		await assert.rejects(
+			validateMetaAppCredentials({ metaAppId: '123', appSecret: 'EAAexpiredtoken' }),
+			(error) => error.status === 400 && /access token/.test(error.message)
+		);
+	});
+
+	it('checks the App Secret against Meta before it can be saved', async (t) => {
+		t.mock.method(axios, 'get', async (url, options) => {
+			assert.ok(url.endsWith('/123'));
+			assert.equal(options.headers.Authorization, 'Bearer 123|valid-secret');
+			return { data: { id: '123', name: 'Marca' } };
+		});
+		assert.deepEqual(await validateMetaAppCredentials({ metaAppId: '123', appSecret: 'valid-secret', graphVersion: 'v25.0' }), { id: '123', name: 'Marca' });
+	});
+	it('discovers the business WABA and its real phone number without exposing the token', async (t) => {
+		t.mock.method(axios, 'get', async (url, options) => {
+			if (url.endsWith('/debug_token')) {
+				assert.equal(options.headers.Authorization, 'Bearer app-test|secret-test');
+				return { data: { data: { is_valid: true, app_id: 'app-test', scopes: ['whatsapp_business_management', 'whatsapp_business_messaging'] } } };
+			}
+			assert.equal(options.headers.Authorization, 'Bearer token-test');
+			if (url.endsWith('/owned_whatsapp_business_accounts')) return { data: { data: [{ id: '12345', name: 'Marca' }] } };
+			if (url.endsWith('/client_whatsapp_business_accounts')) return { data: { data: [] } };
+			if (url.endsWith('/12345/phone_numbers')) return { data: { data: [{ id: '98765', display_phone_number: '+54 11 1234-5678', code_verification_status: 'VERIFIED' }] } };
+			throw new Error(`Unexpected Graph request: ${url}`);
+		});
+		const result = await discoverWhatsAppManualAssets({
+			accessToken: 'token-test', businessManagerId: '111', graphVersion: 'v25.0',
+			appConfig: baseInput.appConfig,
+		});
+		assert.equal(result.wabas[0].id, '12345');
+		assert.equal(result.wabas[0].phoneNumbers[0].id, '98765');
+		assert.equal(result.wabas[0].phoneNumbers[0].codeVerificationStatus, 'VERIFIED');
+		assert.equal(JSON.stringify(result).includes('token-test'), false);
+	});
+
+	it('uses token-scoped WABAs when the business listing is unavailable', async (t) => {
+		t.mock.method(axios, 'get', async (url) => {
+			if (url.endsWith('/debug_token')) return { data: { data: { is_valid: true, app_id: 'app-test', scopes: ['whatsapp_business_management', 'whatsapp_business_messaging'], granular_scopes: [{ scope: 'whatsapp_business_management', target_ids: ['12345'] }] } } };
+			if (url.endsWith('/owned_whatsapp_business_accounts') || url.endsWith('/client_whatsapp_business_accounts')) throw new Error('Unavailable');
+			if (url.endsWith('/12345/phone_numbers')) return { data: { data: [{ id: '98765' }] } };
+			throw new Error(`Unexpected Graph request: ${url}`);
+		});
+		const result = await discoverWhatsAppManualAssets({ accessToken: 'token-test', businessManagerId: '111', appConfig: baseInput.appConfig });
+		assert.equal(result.wabas[0].phoneNumbers[0].id, '98765');
+		assert.equal(result.warnings.length, 2);
+	});
 	it('rejects expired tokens before saving the channel', async (t) => {
 		t.mock.method(axios, 'get', async () => ({ data: { data: { is_valid: false, scopes: [] } } }));
 

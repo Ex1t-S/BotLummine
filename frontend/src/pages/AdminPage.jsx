@@ -688,6 +688,12 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [uploadingLogo, setUploadingLogo] = useState(false);
 	const [whatsappConnecting, setWhatsappConnecting] = useState(false);
 	const [whatsappChecking, setWhatsappChecking] = useState(false);
+	const [whatsappDiscovering, setWhatsappDiscovering] = useState(false);
+	const [whatsappAssets, setWhatsappAssets] = useState(null);
+	const [whatsappDiscoveryError, setWhatsappDiscoveryError] = useState('');
+	const [whatsappLiveStatus, setWhatsappLiveStatus] = useState(null);
+	const [whatsappAppCheck, setWhatsappAppCheck] = useState(null);
+	const [whatsappAppCheckLoading, setWhatsappAppCheckLoading] = useState(false);
 	const [whatsappCheck, setWhatsappCheck] = useState(null);
 	const [whatsappCheckError, setWhatsappCheckError] = useState('');
 	const [showWhatsAppVerifyToken, setShowWhatsAppVerifyToken] = useState(false);
@@ -701,6 +707,15 @@ export default function AdminPage({ defaultTab = '' }) {
 		setWhatsappCheck(null);
 		setWhatsappCheckError('');
 	}, [selectedWorkspaceId, channelForm.whatsappAppId, channelForm.wabaId, channelForm.phoneNumberId, channelForm.accessToken, channelForm.graphVersion]);
+
+	useEffect(() => {
+		setWhatsappAssets(null);
+		setWhatsappDiscoveryError('');
+	}, [selectedWorkspaceId, channelForm.whatsappAppId, channelForm.accessToken]);
+
+	useEffect(() => {
+		setWhatsappAppCheck(null);
+	}, [selectedWorkspaceId, selectedWhatsAppAppId]);
 
 	const workspaceOptions = useMemo(() => {
 		if (platformAdmin) return workspaces;
@@ -743,7 +758,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function loadWorkspaceDetail(workspaceId) {
 		if (!workspaceId) return;
 
-		const [workspaceRes, usersRes, catalogRes, featureFlagsRes, tiendanubeStatusRes, shopifyStatusRes, menuSettingsRes] = await Promise.all([
+		const [workspaceRes, usersRes, catalogRes, featureFlagsRes, tiendanubeStatusRes, shopifyStatusRes, menuSettingsRes, whatsappLiveStatusRes] = await Promise.all([
 			api.get(`/admin/workspaces/${workspaceId}`),
 			api.get(`/admin/workspaces/${workspaceId}/users`),
 			api.get(`/admin/workspaces/${workspaceId}/catalog/status`).catch(() => null),
@@ -751,6 +766,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			api.get('/tiendanube/status', { params: { workspaceId } }).catch(() => null),
 			api.get('/shopify/status', { params: { workspaceId } }).catch(() => null),
 			api.get('/whatsapp-menu', { params: { workspaceId } }).catch(() => null),
+			api.get(`/admin/workspaces/${workspaceId}/whatsapp-channel/status`).catch(() => null),
 		]);
 
 		const nextWorkspace = workspaceRes.data.workspace || null;
@@ -769,6 +785,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			autoMenuEnabled: menuSettingsRes?.data?.runtime?.autoMenuEnabled !== false,
 			config: menuSettingsRes?.data?.settings?.config || null,
 		});
+		setWhatsappLiveStatus(whatsappLiveStatusRes?.data || null);
 		setSelectedBrandProvider(resolveSelectedBrandProvider(nextWorkspace, tiendanubeStatusRes?.data, shopifyStatusRes?.data));
 		setShopifyInstallShop(
 			shopifyStatusRes?.data?.shopDomain ||
@@ -1251,6 +1268,53 @@ export default function AdminPage({ defaultTab = '' }) {
 			setWhatsappCheckError(err.response?.data?.error || err.message || 'No se pudo comprobar el canal con Meta.');
 		} finally {
 			setWhatsappChecking(false);
+		}
+	}
+
+	async function handleDiscoverWhatsAppAssets() {
+		setWhatsappDiscovering(true);
+		setWhatsappDiscoveryError('');
+		setWhatsappAssets(null);
+		try {
+			const res = await api.post(`/admin/workspaces/${selectedWorkspaceId}/whatsapp-channel/discover`, channelForm);
+			setWhatsappAssets(res.data);
+			const firstWaba = res.data?.wabas?.find((item) => item.phoneNumbers?.length);
+			const firstPhone = firstWaba?.phoneNumbers?.[0];
+			if (firstPhone) {
+				setChannelForm((current) => ({
+					...current,
+					wabaId: firstWaba.id,
+					phoneNumberId: firstPhone.id,
+					displayPhoneNumber: firstPhone.displayPhoneNumber,
+				}));
+			}
+		} catch (err) {
+			setWhatsappDiscoveryError(err.response?.data?.error || err.message || 'Meta no pudo listar las cuentas y números.');
+		} finally {
+			setWhatsappDiscovering(false);
+		}
+	}
+
+	async function handleRefreshWhatsAppLiveStatus() {
+		try {
+			const res = await api.get(`/admin/workspaces/${selectedWorkspaceId}/whatsapp-channel/status`);
+			setWhatsappLiveStatus(res.data);
+		} catch (err) {
+			showError(err);
+		}
+	}
+
+	async function handleCheckWhatsAppAppCredentials() {
+		if (!selectedWhatsAppAppId) return;
+		setWhatsappAppCheckLoading(true);
+		setWhatsappAppCheck(null);
+		try {
+			const res = await api.post(`/admin/workspaces/${selectedWorkspaceId}/whatsapp-apps/${selectedWhatsAppAppId}/check`);
+			setWhatsappAppCheck({ valid: Boolean(res.data?.valid), message: res.data?.name || 'Meta confirmó el App ID y el App Secret.' });
+		} catch (err) {
+			setWhatsappAppCheck({ valid: false, message: err.response?.data?.error || err.message || 'Meta no pudo validar esta App.' });
+		} finally {
+			setWhatsappAppCheckLoading(false);
 		}
 	}
 
@@ -2007,6 +2071,8 @@ export default function AdminPage({ defaultTab = '' }) {
 										<option key={item.id} value={item.id}>{item.name} - {item.metaAppId}</option>
 									))}
 								</Select>
+								<button type="button" disabled={whatsappAppCheckLoading} onClick={handleCheckWhatsAppAppCredentials}>{whatsappAppCheckLoading ? 'Comprobando App...' : 'Comprobar App de Meta'}</button>
+								{whatsappAppCheck ? <p className={whatsappAppCheck.valid ? 'wa-setup-check-result' : 'wa-setup-check-error'} role="status">{whatsappAppCheck.message}</p> : null}
 								{selectedWhatsAppApp?.callbackUrl ? (
 									<div className="wa-setup-callback"><strong>Callback URL para Meta</strong><code>{selectedWhatsAppApp.callbackUrl}</code><small>El Verify Token es el que ingresaste al guardar esta App en BladeIA.</small></div>
 								) : null}
@@ -2019,7 +2085,8 @@ export default function AdminPage({ defaultTab = '' }) {
 								))}
 							</div>
 						) : null}
-						<WhatsAppManualGuide app={selectedWhatsAppApp} channel={currentWhatsAppChannel} check={whatsappCheck} platformAdmin={platformAdmin} />
+						<WhatsAppManualGuide app={selectedWhatsAppApp} channel={currentWhatsAppChannel} appCheck={whatsappAppCheck} check={whatsappCheck} liveStatus={whatsappLiveStatus} platformAdmin={platformAdmin} />
+						{whatsappConnected ? <button type="button" onClick={handleRefreshWhatsAppLiveStatus}>Actualizar prueba de mensajes</button> : null}
 						{!selectedWhatsAppApp && platformAdmin ? <p className="wa-setup-caution">Primero guardá la App de Meta en el formulario de abajo. Después aparecerá su Callback URL.</p> : null}
 						{canUseWhatsAppEmbeddedSignup ? (
 							<details className="wa-setup-alternative">
@@ -2124,6 +2191,27 @@ export default function AdminPage({ defaultTab = '' }) {
 							<Input label="Phone Number ID (no el teléfono visible)" value={channelForm.phoneNumberId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, phoneNumberId: value }))} />
 							<Input label="Teléfono visible (opcional)" value={channelForm.displayPhoneNumber} onChange={(value) => setChannelForm((cur) => ({ ...cur, displayPhoneNumber: value }))} />
 							<Input label="Token de usuario del sistema" type="password" value={channelForm.accessToken} required={!channelForm.id} onChange={(value) => setChannelForm((cur) => ({ ...cur, accessToken: value }))} />
+							<button type="button" disabled={whatsappDiscovering || saving || !channelForm.whatsappAppId || (!channelForm.accessToken && !channelForm.id)} onClick={handleDiscoverWhatsAppAssets}>
+								{whatsappDiscovering ? 'Buscando en Meta...' : 'Buscar cuentas y números con Meta'}
+							</button>
+							{whatsappDiscoveryError ? <p className="wa-setup-check-error" role="alert">{whatsappDiscoveryError}</p> : null}
+							{whatsappAssets?.wabas?.length ? (
+							<>
+								<Select label="Cuenta de WhatsApp encontrada" value={channelForm.wabaId} onChange={(value) => {
+									const phone = whatsappAssets.wabas.find((item) => item.id === value)?.phoneNumbers?.[0];
+									setChannelForm((current) => ({ ...current, wabaId: value, phoneNumberId: phone?.id || '', displayPhoneNumber: phone?.displayPhoneNumber || '' }));
+								}}>
+									{whatsappAssets.wabas.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
+								</Select>
+								<Select label="Número encontrado" value={channelForm.phoneNumberId} onChange={(value) => {
+									const phone = whatsappAssets.wabas.find((item) => item.id === channelForm.wabaId)?.phoneNumbers?.find((item) => item.id === value);
+									setChannelForm((current) => ({ ...current, phoneNumberId: value, displayPhoneNumber: phone?.displayPhoneNumber || '' }));
+								}}>
+									<option value="">Seleccioná un número</option>
+									{(whatsappAssets.wabas.find((item) => item.id === channelForm.wabaId)?.phoneNumbers || []).map((item) => <option key={item.id} value={item.id}>{item.displayPhoneNumber || item.id} {item.codeVerificationStatus ? `(${item.codeVerificationStatus})` : ''}</option>)}
+								</Select>
+							</>
+							) : null}
 							<Input label="Versión de Graph" value={channelForm.graphVersion} onChange={(value) => setChannelForm((cur) => ({ ...cur, graphVersion: value }))} />
 							<Select label="Estado" value={channelForm.status} onChange={(value) => setChannelForm((cur) => ({ ...cur, status: value }))}>
 								<option value="ACTIVE">Activo</option>
