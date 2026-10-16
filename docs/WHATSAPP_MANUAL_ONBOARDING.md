@@ -10,7 +10,7 @@ Este procedimiento es para una marca que administra **su propia App de Meta, neg
 
 ## 1. App y webhook
 
-En BladeIA → Administración → Integraciones → **Paso 1**, guardar la App ID, App Secret y un Verify Token generado para esa App. El campo **Embedded Signup Config ID queda vacío** en este procedimiento. BladeIA mostrará una Callback URL específica de la App.
+En BladeIA → Administración → Integraciones → **Paso 1**, guardar la App ID, App Secret y un Verify Token generado para esa App. BladeIA comprueba el App ID y el App Secret contra Meta antes de guardar un secreto nuevo; un token de acceso no sirve en el campo App Secret. El campo **Embedded Signup Config ID queda vacío** en este procedimiento. BladeIA mostrará una Callback URL específica de la App.
 
 En Meta for Developers → App → WhatsApp → Configuración, pegar esa Callback URL y **el mismo Verify Token**. Verificar el webhook y suscribir el campo `messages`. No usar `https://api.bladeia.com/api/` sin la ruta completa que muestra BladeIA.
 
@@ -22,7 +22,7 @@ Si la WABA no aparece entre los activos que pueden asignarse, detenerse y verifi
 
 ## 3. Número y conexión
 
-Desde WhatsApp Manager o la configuración de la API obtener el **Phone Number ID del número real**. En BladeIA → **Paso 2**, elegir la App, pegar WABA ID, Phone Number ID y token. Pulsar **Comprobar con Meta**. Esta consulta es de solo lectura: valida que el token pertenezca a la App, tenga permisos y que el número figure dentro de la WABA. No prueba el registro Cloud API ni envía mensajes.
+En BladeIA → **Paso 2**, elegir la App y pegar el token. Pulsar **Buscar cuentas y números con Meta** para listar las WABAs accesibles y elegir el número real. BladeIA completa los IDs; si la cuenta no aparece, comprobar la asignación del usuario del sistema en Meta antes de introducir IDs manualmente. Luego pulsar **Comprobar con Meta**. Esta consulta es de solo lectura: valida que el token pertenezca a la App, tenga permisos y que el número figure dentro de la WABA. No prueba el registro Cloud API ni envía mensajes.
 
 Corregir cualquier error antes de continuar. Al pulsar **Vincular canal y suscribir webhooks**, BladeIA solicita a Meta suscribir esa App a la WABA y solo guarda el canal activo si Meta confirma la operación. Esto es adicional a la configuración del campo `messages` en la App.
 
@@ -33,8 +33,9 @@ Si Meta aún pide registrar el número en Cloud API, completar ese paso en la co
 1. Desde un teléfono autorizado, enviar un mensaje al número de la marca.
 2. Confirmar que aparece en la bandeja del workspace correcto de BladeIA.
 3. Responder desde BladeIA dentro de la ventana de conversación abierta y confirmar recepción.
-4. Comprobar en logs que no hay errores de firma, enrutamiento por Phone Number ID ni respuestas duplicadas.
-5. Solo después habilitar automatizaciones y campañas de esa marca.
+4. En Integraciones, pulsar **Actualizar prueba de mensajes**. BladeIA debe mostrar una entrada real vinculada al canal y una salida que Meta aceptó después de conectar ese canal.
+5. Comprobar en logs que no hay errores de firma, enrutamiento por Phone Number ID ni respuestas duplicadas.
+6. Solo después habilitar automatizaciones y campañas de esa marca.
 
 ## Diagnóstico rápido
 
