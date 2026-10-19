@@ -47,6 +47,7 @@ import {
 	buildUnableToContinueHandoffReply,
 } from './conversation-helpers.service.js';
 import { getWorkspaceRuntimeConfig } from '../workspaces/workspace-context.service.js';
+import { resolveAssistantHandoff } from './reply-safety.js';
 import {
 	buildVerticalNonCommercePlan,
 	getAiVerticalProfile,
@@ -469,7 +470,7 @@ export async function runConversationTurn({
 
 		if (aiGuidance?.type === 'size_help') {
 			commercialHints.push(
-				'Si ya venían hablando de un producto, tratá la pregunta de talle como continuidad.'
+				'Si ya venían hablando de un producto, tratá la pregunta de talle como continuidad. Contestá primero la preocupación de calce o comodidad; no infieras que un talle va a quedar holgado sin una guía de medidas confirmada del modelo. Si no hay medidas, explicá brevemente qué dato falta y no recomiendes otro producto ni una promoción.'
 			);
 
 			if (aiGuidance.knownSize) {
@@ -480,6 +481,7 @@ export async function runConversationTurn({
 		}
 
 		commercialHints.push('No repitas saludo si la conversación ya empezó.');
+		commercialHints.push('Si el último mensaje combina un saludo y una consulta concreta, responde primero la consulta; no contestes sólo con una presentación genérica.');
 		commercialHints.push('No derivas por una duda simple si ya la podés resolver.');
 		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
 		commercialHints.push('No pases más de un link en una misma respuesta.');
@@ -669,30 +671,35 @@ export async function runConversationTurn({
 				liveOrderContext,
 				fallbackReply,
 				commercialPlan,
-				recentMessages: fullRecentMessages,
+				catalogProducts,
+				detectedIntent: intent,
 				latestUserMessage: messageBody,
+				recentMessages: fullRecentMessages,
 				contactName: customerContext?.name || contactName || normalizedWaId,
 				businessName,
 				agentName: workspaceConfig?.ai?.agentName || process.env.BUSINESS_AGENT_NAME || 'Asistente'
 			});
 
+			const handoff = resolveAssistantHandoff({
+				output: aiResult.output,
+				audit: audited,
+				fallbackReason: commercialPlan?.handoffReason,
+			});
 			const output = validateAssistantOutput({
 				...aiResult.output,
 				reply: audited.finalText,
-				needsHuman: audited.triggerHumanHandoff,
-				handoffReason: audited.triggerHumanHandoff
-					? commercialPlan?.handoffReason || 'ai_declared_handoff'
-					: null,
+				...handoff,
 			});
 			finalReply = output.reply;
 			aiMeta = {
 				...aiResult,
 				text: output.reply,
 				output,
+				auditFlags: audited.auditFlags || [],
 				continuityRecovery: Boolean(audited.continuityRecovery),
 				repetitionDetected: Boolean(audited.repetitionDetected),
 			};
-			postReplyHandoff = audited.triggerHumanHandoff;
+			postReplyHandoff = output.needsHuman;
 		} catch (error) {
 			logger.error('ai.conversation_turn_failed', {
 				workspaceId,
@@ -787,6 +794,7 @@ export async function runConversationTurn({
 			promptVersion: aiMeta?.promptVersion || null,
 			promptHash: aiMeta?.promptHash || null,
 			factsUsed: aiMeta?.factsUsed || [],
+			auditFlags: aiMeta?.auditFlags || [],
 			assistantMessage: finalReply,
 			provider: aiMeta?.provider || null,
 			model: aiMeta?.model || null,

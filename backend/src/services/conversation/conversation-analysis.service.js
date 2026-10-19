@@ -2,7 +2,10 @@ import {
 	commercialFamilyAllowedForProfile,
 	inferCommercialFamily,
 } from '../../data/catalog-commercial-map.js';
-import { shouldTreatAsPreSaleObjection } from './conversation-signals.service.js';
+import {
+	looksLikeCustomerFrustration,
+	shouldTreatAsPreSaleObjection,
+} from './conversation-signals.service.js';
 import { responseSimilarity } from './continuity.service.js';
 
 function normalizeText(value = '') {
@@ -202,6 +205,8 @@ function extractObjections(text) {
 }
 
 function detectMood(text, intent) {
+	if (looksLikeCustomerFrustration(text)) return 'molesta';
+
 	if (
 		/(estoy enojad|malisimo|malísimo|pesimo|pésimo|horrible|me molesta|me enoja|un desastre|no me responden|quiero reclamar|reclamo|me llego mal|me vino mal)/.test(
 			text
@@ -320,6 +325,13 @@ function shouldEscalateToHuman({ text, intent, mood, urgencyLevel, currentState 
 		return {
 			needsHuman: true,
 			handoffReason: 'sensitive_support'
+		};
+	}
+
+	if (looksLikeCustomerFrustration(text)) {
+		return {
+			needsHuman: true,
+			handoffReason: 'customer_frustration'
 		};
 	}
 

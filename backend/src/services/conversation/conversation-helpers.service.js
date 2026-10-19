@@ -313,6 +313,18 @@ export function buildAiFailureFallback({
 		return 'Te paso con una asesora para seguir mejor con esto.';
 	}
 
+	if (intent === 'size_help') {
+		const knownSize = String(enrichedState?.frequentSize || '').trim();
+		if (knownSize) {
+			return `Tomo el talle ${knownSize} como referencia. Para no recomendarte uno que ajuste, necesito la guía de medidas del modelo específico; no quiero asegurarte el calce sólo por la letra del talle.`;
+		}
+		return 'Para orientarte con el calce, decime qué talle usás normalmente y qué modelo estabas mirando.';
+	}
+
+	if (intent === 'return_exchange') {
+		return 'Entiendo la duda sobre el cambio. No quiero confirmarte condiciones sin revisar la política que corresponde. ¿Es una consulta por el talle antes de comprar o necesitás cambiar un pedido que ya recibiste?';
+	}
+
 	if (isProductImageRequestAction(commercialPlan)) {
 		return buildProductImageRequestReply({ commercialPlan });
 	}
@@ -1263,14 +1275,193 @@ function looksLikeUnsupportedMediaPromise(text = '') {
 	);
 }
 
+function isGenericGreetingReply(text = '') {
+	const normalized = normalizeGateText(text)
+		.replace(/[¡!¿?.,:;]/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+
+	return /^(?:(?:hola|holi|buenas|buen dia|buenas tardes|buenas noches)\s*)?(?:soy\s+.{1,48}?\s+)?(?:en que (?:te )?puedo ayudar(?:te)?|como puedo ayudarte|que estas buscando|que necesitas)$/.test(
+		normalized
+	);
+}
+
+function replyAddressesReturnExchange(text = '') {
+	return /(cambio|cambiar|devoluci|devolver|reintegro|reembolso|politica|asesor|asesora|persona del equipo|te derivo|te paso con)/i.test(
+		normalizeGateText(text)
+	);
+}
+
+const CATALOG_CLAIM_RULES = [
+	{ flag: 'unverified_catalog_claim:comfort', label: 'comodidad', pattern: /\b(?:comod\w*|confort\w*|comfortable|comfy)\b/ },
+	{ flag: 'unverified_catalog_claim:all_day_use', label: 'uso durante todo el día', pattern: /\b(?:todo el dia|durante todo el dia|uso diario|jornada completa)\b/ },
+	{ flag: 'unverified_catalog_claim:fit', label: 'calce', pattern: /\b(?:calce|calzar)\b/ },
+	{ flag: 'unverified_catalog_claim:adjustment', label: 'ajuste', pattern: /\b(?:ajust\w*|holgad\w*|entall\w*)\b/ },
+	{ flag: 'unverified_catalog_claim:modeling', label: 'modelado', pattern: /\b(?:modelad\w*|modela|modelan|modelador\w*|molde\w*)\b/ },
+	{ flag: 'unverified_catalog_claim:compression', label: 'compresión', pattern: /\b(?:compresi\w*|reductor\w*)\b/ },
+	{ flag: 'unverified_catalog_claim:softness', label: 'suavidad', pattern: /\b(?:suav\w*|delicad\w*)\b/ },
+	{ flag: 'unverified_catalog_claim:material_cotton', label: 'algodón', pattern: /\balgodon\b/ },
+	{ flag: 'unverified_catalog_claim:material_lycra', label: 'lycra', pattern: /\blycra\b/ },
+	{ flag: 'unverified_catalog_claim:material_elastane', label: 'elastano', pattern: /\belastano\b/ },
+	{ flag: 'unverified_catalog_claim:material_microfiber', label: 'microfibra', pattern: /\bmicrofibra\b/ },
+	{ flag: 'unverified_catalog_claim:material_lace', label: 'encaje', pattern: /\bencaje\b/ },
+	{ flag: 'unverified_catalog_claim:material_satin', label: 'satén', pattern: /\bsatin\b/ },
+	{ flag: 'unverified_catalog_claim:material_nylon', label: 'nylon', pattern: /\bnylon\b/ },
+	{ flag: 'unverified_catalog_claim:opacity_transparent', label: 'transparencia', pattern: /\btransparent\w*\b/ },
+	{ flag: 'unverified_catalog_claim:opacity_opaque', label: 'opacidad', pattern: /\bopac\w*\b/ },
+	{ flag: 'unverified_catalog_claim:seamless', label: 'confección sin costuras', pattern: /\bsin costuras\b/ },
+	{ flag: 'unverified_catalog_claim:no_marks', label: 'que no marque', pattern: /\bno marca\b/ },
+];
+
+function flattenCatalogValues(value) {
+	if (value === null || value === undefined) return [];
+	if (typeof value === 'string' || typeof value === 'number') return [String(value)];
+	if (Array.isArray(value)) return value.flatMap(flattenCatalogValues);
+	if (typeof value === 'object') {
+		return Object.entries(value).flatMap(([key, child]) => [key, ...flattenCatalogValues(child)]);
+	}
+	return [];
+}
+
+function getConfirmedProductEvidence(product = {}) {
+	return normalizeGateText([
+		product.shortDescription,
+		product.description,
+		product.tags,
+		product.variantHints,
+		product.confirmedAttributes,
+		product.attributes,
+	].flatMap(flattenCatalogValues).join(' '));
+}
+
+function isExplicitlyUnconfirmedMention(text, matchIndex) {
+	const clauseStart = Math.max(
+		text.lastIndexOf('.', matchIndex - 1),
+		text.lastIndexOf('!', matchIndex - 1),
+		text.lastIndexOf('?', matchIndex - 1),
+		text.lastIndexOf(';', matchIndex - 1),
+		text.lastIndexOf('\n', matchIndex - 1),
+	);
+	const leadIn = text.slice(clauseStart + 1, matchIndex);
+	return /\b(?:no tengo|no hay|no cuento con|no puedo (?:confirmar|asegurar)|sin)\b/.test(leadIn)
+		&& /\b(?:dato\w*|informacion|confirmad\w*|verificad\w*|guia|ficha)\b/.test(leadIn)
+		&& !/\b(?:pero|sin embargo|aunque)\b/.test(leadIn);
+}
+
+function getClaimedProducts({ text, catalogProducts = [], commercialPlan = null } = {}) {
+	const normalizedReply = normalizeGateText(text);
+	const mentioned = catalogProducts.filter((product) => {
+		const name = normalizeGateText(product?.name || '');
+		return name.length >= 3 && normalizedReply.includes(name);
+	});
+	if (mentioned.length) return mentioned;
+
+	const bestOffer = commercialPlan?.bestOffer;
+	if (bestOffer) {
+		const match = catalogProducts.find((product) =>
+			(bestOffer.productId && String(product.productId || product.id) === String(bestOffer.productId)) ||
+			(bestOffer.name && normalizeGateText(product.name) === normalizeGateText(bestOffer.name))
+		);
+		return [match || bestOffer];
+	}
+
+	return catalogProducts.slice(0, 1);
+}
+
+function findUnsupportedCatalogClaims({ text, catalogProducts = [], commercialPlan = null } = {}) {
+	const normalizedReply = normalizeGateText(text);
+	const products = getClaimedProducts({ text, catalogProducts, commercialPlan });
+	const replyWithoutProductNames = products.reduce((reply, product) => {
+		const name = String(product?.name || '').trim();
+		if (!name) return reply;
+		const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		return reply.replace(new RegExp(escapedName, 'ig'), ' ');
+	}, normalizedReply);
+	const evidenceByProduct = products.map(getConfirmedProductEvidence);
+
+	return CATALOG_CLAIM_RULES
+		.filter(({ pattern }) => {
+			const match = pattern.exec(replyWithoutProductNames);
+			return match && !isExplicitlyUnconfirmedMention(replyWithoutProductNames, match.index);
+		})
+		.filter((rule) =>
+			!evidenceByProduct.length ||
+			evidenceByProduct.some((evidence) => !rule.pattern.test(evidence))
+		)
+		.map(({ flag, label }) => ({ flag, label }));
+}
+
+function hasConfirmedSizeGuide(catalogProducts = []) {
+	return catalogProducts.some((product) => {
+		const guide = [
+			product?.sizeGuide,
+			product?.sizeMeasurements,
+			product?.measurementTable,
+			product?.confirmedSizeGuide,
+		].flatMap(flattenCatalogValues).join(' ');
+		const normalizedGuide = normalizeGateText(guide);
+		return /\d/.test(normalizedGuide) && /\b(?:cm|mm|centimetros?|milimetros?|pulgadas?|inches?)\b/.test(normalizedGuide);
+	});
+}
+
+function looksLikeSizeRecommendation(text = '') {
+	const normalized = normalizeGateText(text);
+	return (
+		/\b(?:te recomiendo|te sugiero|te conviene|yo (?:elegiria|iria con|usaria)|elegi|elige|usa|manten|seguiria con|quedate con|quedate en|proba con)\b.{0,55}\b(?:talle|talla|taman|xs|s|m|l|xl|xxl|xxxl|xxxxl|ese talle|el mismo talle)\b/.test(normalized) ||
+		/\b(?:talle|talla)\s+(?:xs|s|m|l|xl|xxl|xxxl|xxxxl)\b.{0,45}\b(?:te va a quedar|te quedaria|te queda|te conviene|es ideal|va a ser mejor|deberia quedar)\b/.test(normalized) ||
+		/\b(?:xs|s|m|l|xl|xxl|xxxl|xxxxl)\b.{0,45}\b(?:te va a quedar|te quedaria|te queda|te iria|deberia quedarte|podria quedarte)\b/.test(normalized) ||
+		/\b(?:te va a quedar|te quedaria|te queda)\s+(?:bien|comodo|holgado|justo)\b/.test(normalized)
+	);
+}
+
+function buildUnverifiedCatalogClaimReply({ catalogProducts = [], commercialPlan = null, claims = [] } = {}) {
+	const products = getClaimedProducts({
+		text: commercialPlan?.bestOffer?.name || '',
+		catalogProducts,
+		commercialPlan,
+	});
+	const productName = products[0]?.name || commercialPlan?.bestOffer?.name;
+	const flags = new Set(claims.map(({ flag }) => flag));
+	const features = [];
+	if ([
+		'unverified_catalog_claim:comfort',
+		'unverified_catalog_claim:all_day_use',
+		'unverified_catalog_claim:fit',
+		'unverified_catalog_claim:adjustment',
+		'unverified_catalog_claim:modeling',
+		'unverified_catalog_claim:compression',
+		'unverified_catalog_claim:softness',
+	].some((flag) => flags.has(flag))) features.push('comodidad o calce');
+	if ([
+		'unverified_catalog_claim:material_cotton',
+		'unverified_catalog_claim:material_lycra',
+		'unverified_catalog_claim:material_elastane',
+		'unverified_catalog_claim:material_microfiber',
+		'unverified_catalog_claim:material_lace',
+		'unverified_catalog_claim:material_satin',
+		'unverified_catalog_claim:material_nylon',
+	].some((flag) => flags.has(flag))) features.push('material o composición');
+	if ([
+		'unverified_catalog_claim:opacity_transparent',
+		'unverified_catalog_claim:opacity_opaque',
+		'unverified_catalog_claim:seamless',
+		'unverified_catalog_claim:no_marks',
+	].some((flag) => flags.has(flag))) features.push('transparencia u opacidad');
+	const featureLabel = features.length ? features.join(' y ') : 'esa característica';
+	const subject = productName ? `En la ficha de ${productName}` : 'En la información del catálogo';
+	return `${subject} no tengo confirmados datos sobre ${featureLabel}. No quiero recomendártelo por algo que no figura; ¿querés que te comparta la información disponible?`;
+}
+
 export function auditAssistantReply({
 	text,
 	responsePolicy,
 	liveOrderContext,
 	fallbackReply,
 	commercialPlan,
-	recentMessages = [],
+	catalogProducts = [],
+	detectedIntent = '',
 	latestUserMessage = '',
+	recentMessages = [],
 	contactName = '',
 	businessName = 'la marca',
 	agentName = 'Asistente',
@@ -1283,11 +1474,63 @@ export function auditAssistantReply({
 	cleaned = stripBotOpenings(cleaned);
 	cleaned = normalizeText(cleaned);
 
+	if (detectedIntent === 'return_exchange' && !replyAddressesReturnExchange(cleaned)) {
+		return {
+			finalText: 'Para no darte una respuesta incorrecta sobre el cambio o la devolución, te paso con una asesora para que confirme la política que corresponde.',
+			triggerHumanHandoff: true,
+			handoffReason: 'unanswered_return_exchange',
+			auditFlags: ['unanswered_return_exchange'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
 	if (!cleaned) {
 		return {
 			finalText: fallbackReply,
 			triggerHumanHandoff: false,
+			auditFlags: [],
 			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	const sizeProducts = getClaimedProducts({ text: cleaned, catalogProducts, commercialPlan });
+	if (detectedIntent === 'size_help' && looksLikeSizeRecommendation(cleaned) && !hasConfirmedSizeGuide(sizeProducts)) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false,
+			auditFlags: ['unsupported_size_recommendation'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	const unsupportedCatalogClaims = ['product', 'size_help'].includes(detectedIntent)
+		? findUnsupportedCatalogClaims({ text: cleaned, catalogProducts, commercialPlan })
+		: [];
+	if (unsupportedCatalogClaims.length) {
+		return {
+			finalText: buildUnverifiedCatalogClaimReply({ catalogProducts, commercialPlan, claims: unsupportedCatalogClaims }),
+			triggerHumanHandoff: false,
+			auditFlags: unsupportedCatalogClaims.map(({ flag }) => flag),
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	if (
+		!preserveGreeting &&
+		['product', 'size_help', 'stock_check', 'payment', 'shipping'].includes(detectedIntent) &&
+		latestUserMessage &&
+		isGenericGreetingReply(cleaned)
+	) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false,
+			auditFlags: [],
+			repetitionDetected: false,
+			continuityRecovery: false,
 		};
 	}
 
@@ -1363,6 +1606,8 @@ export function auditAssistantReply({
 	return {
 		finalText,
 		triggerHumanHandoff,
+		handoffReason: triggerHumanHandoff ? commercialPlan?.handoffReason || null : null,
+		auditFlags: [],
 		repetitionDetected: repetition.repeated,
 		continuityRecovery,
 	};
@@ -1561,6 +1806,18 @@ export function buildFallbackOrderAwareReply({
 }) {
 	if (intent === 'order_status' && liveOrderContext) {
 		return buildFixedOrderReply(liveOrderContext);
+	}
+
+	if (intent === 'size_help' || intent === 'return_exchange') {
+		return buildAiFailureFallback({
+			workspaceId,
+			vertical,
+			aiProfile,
+			intent,
+			enrichedState,
+			catalogProducts,
+			commercialPlan,
+		});
 	}
 
 	if (campaignAssistantContext?.category === 'pending_payment') {

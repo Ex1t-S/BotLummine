@@ -13,7 +13,7 @@ export function resolveAssistantHandoff({ output, audit, fallbackReason } = {}) 
 	return {
 		needsHuman,
 		handoffReason: needsHuman
-			? String(output?.handoffReason || fallbackReason || 'ai_declared_handoff').trim() || 'ai_declared_handoff'
+			? String(output?.handoffReason || audit?.handoffReason || fallbackReason || 'ai_declared_handoff').trim() || 'ai_declared_handoff'
 			: null,
 	};
 }

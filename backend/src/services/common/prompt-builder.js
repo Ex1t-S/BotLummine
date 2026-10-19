@@ -9,7 +9,7 @@ import {
 } from '../ai/vertical-profile.service.js';
 import { buildConversationContinuityBlock } from '../conversation/continuity.service.js';
 
-export const PROMPT_VERSION = 'conversation-v2-continuity';
+export const PROMPT_VERSION = 'conversation-v3-grounded-continuity';
 
 function formatTranscript({ businessName, contactName, recentMessages }) {
 	return recentMessages
@@ -84,6 +84,15 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 			'- Si la intencion no es producto, no abras promociones ni upsell salvo pedido explicito del cliente.',
 			'- Si piden fotos, imagenes o videos de producto, no prometas enviar imagenes ni inventes adjuntos; si hay link real, comparti solo el link del producto.'
 		);
+		if (usesCommerceEngine(profile?.aiProfile)) {
+			lines.push(
+				'- El nombre, la familia o la categoria de un producto no demuestran por si solos comodidad, calce, compresion, material, transparencia ni otros beneficios.',
+				'- Atribui una caracteristica al producto solo si aparece expresamente en su descripcion o etiquetas confirmadas; la preferencia del cliente no confirma esa caracteristica.',
+				'- Si falta ese dato, deci que no esta confirmado y no recomiendes el producto por esa caracteristica.',
+				'- Los talles listados son variantes, no una guia de medidas ni evidencia de calce. No recomiendes un talle basandote solo en el talle habitual del cliente.',
+				'- La lista de colores y talles tampoco confirma stock actual; no afirmes disponibilidad sin un dato de inventario confirmado.'
+			);
+		}
 	}
 
 	return lines.join('\n');
@@ -195,6 +204,25 @@ function formatCatalogProducts({ catalogProducts = [], catalogContext = '', prof
 			`  precio: ${item.price || 'no cargado'}`
 		);
 		if (item.productUrl) lines.push(`  link: ${item.productUrl}`);
+		const description = String(item.shortDescription || item.description || '').replace(/\s+/g, ' ').trim();
+		if (description && !/^sin descripcion cargada\.?$/i.test(description)) {
+			lines.push(`  descripcion confirmada: ${description.slice(0, 320)}`);
+		}
+		if (Array.isArray(item.tags) && item.tags.length) {
+			lines.push(`  etiquetas confirmadas: ${item.tags.slice(0, 8).join(', ')}`);
+		}
+		const confirmedAttributes = item.confirmedAttributes || item.attributes || item.variantHints;
+		if (confirmedAttributes) {
+			const attributesText = typeof confirmedAttributes === 'string'
+				? confirmedAttributes
+				: JSON.stringify(confirmedAttributes);
+			if (attributesText) lines.push(`  atributos confirmados: ${attributesText.slice(0, 400)}`);
+		}
+		const sizeGuide = item.sizeGuide || item.sizeMeasurements || item.measurementTable || item.confirmedSizeGuide;
+		if (sizeGuide) {
+			const sizeGuideText = typeof sizeGuide === 'string' ? sizeGuide : JSON.stringify(sizeGuide);
+			if (sizeGuideText) lines.push(`  guia de medidas confirmada: ${sizeGuideText.slice(0, 500)}`);
+		}
 		if (item.colors?.length) lines.push(`  colores: ${item.colors.join(', ')}`);
 		if (item.sizes?.length) lines.push(`  talles: ${item.sizes.join(', ')}`);
 		return lines.join('\n');
@@ -320,6 +348,9 @@ export function buildPrompt({
 		useStoreCommerceContext && facts.length ? `HECHOS UTILES:\n${facts.map((fact) => `- ${fact}`).join('\n')}` : '',
 		`${verticalProfile.relevantInfoTitle}:\n${compactCatalog}`,
 		`${verticalProfile.hintsTitle}:\n${commercialHintsBlock}`,
+		useCommerceContext
+			? 'REGLA DE HECHOS DEL CATALOGO:\n- Usa descripciones, etiquetas y atributos confirmados del producto como únicas fuentes para afirmar beneficios o materiales.\n- No conviertas lo que busca el cliente en una característica del producto.\n- Las categorías y variantes identifican la oferta, pero no prueban comodidad, calce ni stock.'
+			: '',
 		continuityBlock,
 		campaignAssistantContext?.promptBlock ? `CONTEXTO DE CAMPAÑA:\n${campaignAssistantContext.promptBlock}` : '',
 		menuAssistantContext?.promptBlock ? `GUIA DE MENU:\n${menuAssistantContext.promptBlock}` : '',

@@ -111,7 +111,7 @@ function hasPriceKeywords(q = '') {
 }
 
 function hasPaymentKeywords(q = '') {
-	return /(transferencia|transferir|alias|cbu|cvu|banco|comprobante|pago|cuotas|tarjeta|mercado pago|mercadopago)/.test(
+	return /(transferencia|transferir|alias|cbu|cvu|cuit|banco|comprobante|pago|cuotas|tarjeta|mercado pago|mercadopago)/.test(
 		q
 	);
 }
@@ -250,7 +250,7 @@ export function detectIntent(text = '', currentState = {}, options = {}) {
 	}
 
 	if (
-		/(cambio|devolucion|devolver|quiero cambiar|quiero devolver|me quedo chico|me quedo grande)/.test(
+		/(\b(?:cambios?|cambiar(?:lo|la|los|las)?|devolucion|devolver(?:lo|la|los|las)?|devolv(?:er|erlo|erla|erlos|erlas)|reintegr(?:o|ar)|me queda(?:n)? (?:chico|chica|grande|ajustado|ajustada)|me quedo (?:chico|chica|grande)|quiero cambiar|quiero devolver)\b|(?:si no me queda.{0,40}(?:cambi|devol)|(?:cambi|devol).{0,40}si no me queda))/.test(
 			q
 		)
 	) {

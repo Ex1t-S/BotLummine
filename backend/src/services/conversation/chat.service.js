@@ -1763,7 +1763,7 @@ async function processInboundMessageTurn({
 
 		if (aiGuidance?.type === 'size_help') {
 			commercialHints.push(
-				'Si ya venían hablando de un producto, tratá la pregunta de talle como continuidad.'
+				'Si ya venían hablando de un producto, tratá la pregunta de talle como continuidad. Contestá primero la preocupación de calce o comodidad; no infieras que un talle va a quedar holgado sin una guía de medidas confirmada del modelo. Si no hay medidas, explicá brevemente qué dato falta y no recomiendes otro producto ni una promoción.'
 			);
 
 			if (aiGuidance.knownSize) {
@@ -1794,6 +1794,7 @@ async function processInboundMessageTurn({
 		}
 
 		commercialHints.push('No repitas saludo si la conversación ya empezó.');
+		commercialHints.push('Si el último mensaje combina un saludo y una consulta concreta, responde primero la consulta; no contestes sólo con una presentación genérica.');
 		commercialHints.push('No derivas por una duda simple si ya la podés resolver.');
 		commercialHints.push('Si la clienta ya dejó claro el producto, respondé directo.');
 		commercialHints.push('No pases más de un link en una misma respuesta.');
@@ -1926,7 +1927,7 @@ async function processInboundMessageTurn({
 				intent,
 				enrichedState,
 				catalogProducts,
-				commercialPlan
+				commercialPlan,
 			});
 		}
 	}
@@ -2010,20 +2011,21 @@ async function processInboundMessageTurn({
 				liveOrderContext,
 				fallbackReply,
 				commercialPlan,
-				recentMessages: fullRecentMessages,
+				catalogProducts,
+				detectedIntent: intent,
 				latestUserMessage: effectiveMessageBody,
+				recentMessages: fullRecentMessages,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				businessName: aiBrand.businessName,
 				agentName: aiBrand.agentName
 			});
 
-			finalReply = appendMenuHintIfNeeded(
-				audited.finalText,
-				menuAssistantContext
-			);
 			const handoff = resolveAssistantHandoff({
 				output: aiResult.output, audit: audited, fallbackReason: commercialPlan?.handoffReason,
 			});
+			finalReply = handoff.needsHuman
+				? audited.finalText
+				: appendMenuHintIfNeeded(audited.finalText, menuAssistantContext);
 			const output = validateAssistantOutput({
 				...aiResult.output,
 				reply: finalReply,
@@ -2034,6 +2036,7 @@ async function processInboundMessageTurn({
 				...aiResult,
 				text: output.reply,
 				output,
+				auditFlags: audited.auditFlags || [],
 				continuityRecovery: Boolean(audited.continuityRecovery),
 				repetitionDetected: Boolean(audited.repetitionDetected),
 			};
@@ -2119,6 +2122,7 @@ async function processInboundMessageTurn({
 		promptVersion: aiMeta?.promptVersion || null,
 		promptHash: aiMeta?.promptHash || null,
 		factsUsed: aiMeta?.factsUsed || [],
+		auditFlags: aiMeta?.auditFlags || [],
 		assistantMessage: finalReply,
 		provider: aiMeta?.provider || (forcedReply ? 'system' : null),
 		model: aiMeta?.model || (forcedReply ? 'rule-based-forced-reply' : null),

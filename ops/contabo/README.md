@@ -9,6 +9,8 @@ base de datos con la aplicación de inmobiliaria.
 - `db`: PostgreSQL 17 sin puertos publicados.
 - `job`: proceso efímero usado por el timer horario.
 - `restic`: proceso efímero para backups cifrados en R2.
+- `bladeia-observability`: Dozzle y proxy Docker de sólo lectura para revisar
+  logs en `https://logs.bladeia.com`.
 
 ## Preparación única
 
@@ -56,3 +58,14 @@ envía la alerta a ese webhook.
 
 El workflow publica una imagen por SHA, toma un backup antes de migraciones,
 aplica Prisma, valida base y commit, y vuelve a la imagen anterior si falla.
+
+El workflow actualiza la imagen de la API, pero no copia `ops/contabo/` al VPS.
+Cuando cambien Compose, Nginx, systemd u observabilidad, aplicar esos archivos
+en el servidor con el procedimiento de preparación y validar cada servicio antes
+de habilitarlo. La configuración y los secretos del VPS no se reemplazan con
+el despliegue de una imagen.
+
+Para observabilidad, generar el archivo de usuarios y el secreto como se describe
+en [observability/README.md](observability/README.md), crear el DNS y certificado
+de `logs.bladeia.com`, instalar su configuración Nginx y recién entonces habilitar
+`bladeia-observability.service`.

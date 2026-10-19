@@ -8,7 +8,7 @@ function normalizeText(value = '') {
 		.trim();
 }
 
-function classifyPaymentQuestion(messageBody = '') {
+export function classifyPaymentQuestion(messageBody = '') {
 	const text = normalizeText(messageBody);
 
 	if (/\b(eva|cupon|coupon|descuento|promo|promocion|no aplica|no me aplica|no esta disponible)\b/.test(text)) {
@@ -19,11 +19,23 @@ function classifyPaymentQuestion(messageBody = '') {
 		return 'installments';
 	}
 
-	if (/(transferencia|transferir|alias|cbu|cvu|comprobante|ya transferi|te transferi|pasame alias)/.test(text)) {
+	if (/(transferencia|transferir|alias|cbu|cvu|cuit|comprobante|ya transferi|te transferi|pasame alias)/.test(text)) {
 		return 'transfer';
 	}
 
 	return 'general';
+}
+
+export function resolveTransferDetails(transferConfig = {}) {
+	return {
+		alias: String(transferConfig.alias || '').trim() || null,
+		cbu: String(transferConfig.cbu || '').trim() || null,
+		cvu: String(transferConfig.cvu || '').trim() || null,
+		holder: String(transferConfig.holder || '').trim() || null,
+		cuit: String(transferConfig.cuit || '').trim() || null,
+		bank: String(transferConfig.bank || '').trim() || null,
+		extra: String(transferConfig.extra || transferConfig.extraInstructions || '').trim() || null,
+	};
 }
 
 export async function handlePaymentIntent({ messageBody = '', currentState = {}, workspaceId } = {}) {
@@ -39,13 +51,11 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 		...(paymentConfig.transferPublicInfo || {}),
 		...(paymentConfig.transfer || {}),
 	};
-	const alias = transferConfig.alias || process.env.TRANSFER_ALIAS;
-	const cvu = transferConfig.cvu || transferConfig.CVU || process.env.TRANSFER_CVU;
-	const cbu = transferConfig.cbu || process.env.TRANSFER_CBU;
-	const holder = transferConfig.holder || process.env.TRANSFER_HOLDER;
-	const bank = transferConfig.bank || process.env.TRANSFER_BANK;
-	const cuit = transferConfig.cuit || transferConfig.taxId || transferConfig.CUIT || process.env.TRANSFER_CUIT;
-	const extra = transferConfig.extra || transferConfig.extraInstructions || process.env.TRANSFER_EXTRA;
+	const transfer = resolveTransferDetails({
+		...transferConfig,
+		cvu: transferConfig.cvu || transferConfig.CVU,
+		cuit: transferConfig.cuit || transferConfig.taxId || transferConfig.CUIT,
+	});
 
 	const missing = [];
 
@@ -61,15 +71,15 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 		missing.push('envío o retiro');
 	}
 
-	const paymentDataAvailable = Boolean(alias || cvu || cbu);
+	const paymentDataAvailable = Boolean(transfer.alias || transfer.cbu || transfer.cvu);
 	const transferDetails = [
-		alias ? `Alias: ${alias}` : '',
-		cvu ? `CVU: ${cvu}` : '',
-		cbu ? `CBU: ${cbu}` : '',
-		holder ? `Titular: ${holder}` : '',
-		cuit ? `CUIT: ${cuit}` : '',
-		bank ? `Banco: ${bank}` : '',
-		extra ? String(extra) : '',
+		transfer.alias ? `Alias: ${transfer.alias}` : '',
+		transfer.cvu ? `CVU: ${transfer.cvu}` : '',
+		transfer.cbu ? `CBU: ${transfer.cbu}` : '',
+		transfer.holder ? `Titular: ${transfer.holder}` : '',
+		transfer.cuit ? `CUIT: ${transfer.cuit}` : '',
+		transfer.bank ? `Banco: ${transfer.bank}` : '',
+		transfer.extra || '',
 	].filter(Boolean);
 	const forcedReplyByQuestion = {
 		coupon:
@@ -91,13 +101,7 @@ export async function handlePaymentIntent({ messageBody = '', currentState = {},
 			paymentDataAvailable,
 			missing,
 			transfer: {
-				alias: alias || null,
-				cvu: cvu || null,
-				cbu: cbu || null,
-				holder: holder || null,
-				cuit: cuit || null,
-				bank: bank || null,
-				extra: extra || null
+				...transfer
 			}
 		}
 	};

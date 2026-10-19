@@ -24,6 +24,13 @@ test('a structured human request cannot be overridden by a negative text audit',
 		{ needsHuman: false, handoffReason: null });
 });
 
+test('preserves the specific reason when a response audit requests human handoff', () => {
+	assert.deepEqual(resolveAssistantHandoff({
+		output: { needsHuman: false },
+		audit: { triggerHumanHandoff: true, handoffReason: 'unanswered_return_exchange' },
+	}), { needsHuman: true, handoffReason: 'unanswered_return_exchange' });
+});
+
 test('context size has safe defaults and an upper bound', () => {
 	for (const value of [undefined, 'NaN', Infinity, -1, 0]) assert.equal(contextMessageLimit(value), 12);
 	assert.equal(contextMessageLimit(4.9), 4);

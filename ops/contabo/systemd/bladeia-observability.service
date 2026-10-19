@@ -1,0 +1,17 @@
+[Unit]
+Description=BladeIA observability (Dozzle and Docker socket proxy)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/srv/bladeia/observability
+ExecStartPre=/bin/sh -c '/usr/bin/docker network inspect bladeia-observability >/dev/null 2>&1 || /usr/bin/docker network create bladeia-observability'
+ExecStart=/usr/bin/docker compose -f /srv/bladeia/observability/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f /srv/bladeia/observability/docker-compose.yml down
+TimeoutStartSec=120
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
