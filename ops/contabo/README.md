@@ -43,7 +43,6 @@ systemctl enable --now bladeia-backup-local.timer
 systemctl enable --now bladeia-backup-weekly.timer
 systemctl enable --now bladeia-restore-test-monthly.timer
 systemctl enable --now bladeia-health-monitor.timer
-systemctl enable --now bladeia-observability.service
 ```
 
 El monitor escribe en `journald` y, si se configura `ALERT_WEBHOOK_URL`, también
@@ -59,3 +58,14 @@ envía la alerta a ese webhook.
 
 El workflow publica una imagen por SHA, toma un backup antes de migraciones,
 aplica Prisma, valida base y commit, y vuelve a la imagen anterior si falla.
+
+El workflow actualiza la imagen de la API, pero no copia `ops/contabo/` al VPS.
+Cuando cambien Compose, Nginx, systemd u observabilidad, aplicar esos archivos
+en el servidor con el procedimiento de preparación y validar cada servicio antes
+de habilitarlo. La configuración y los secretos del VPS no se reemplazan con
+el despliegue de una imagen.
+
+Para observabilidad, generar el archivo de usuarios y el secreto como se describe
+en [observability/README.md](observability/README.md), crear el DNS y certificado
+de `logs.bladeia.com`, instalar su configuración Nginx y recién entonces habilitar
+`bladeia-observability.service`.

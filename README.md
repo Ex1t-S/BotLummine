@@ -2,7 +2,7 @@
 
 Panel multi marca para operar ventas por WhatsApp con IA, inbox humano, catalogo, campanias, carritos abandonados, clientes e integraciones de ecommerce/logistica.
 
-El backend corre con Express, Prisma y PostgreSQL/Neon. El frontend corre con Vite + React. Produccion esta pensada para Railway en backend y dominio publico del panel en `bladeia.com`.
+El backend corre con Express, Prisma y PostgreSQL; el frontend con Vite + React. El backend y la base de datos de produccion se operan en Contabo, con la API en `api.bladeia.com` y el panel en `bladeia.com`. Consultar [la guia de operacion de Contabo](ops/contabo/README.md).
 
 ## Estructura
 
@@ -46,7 +46,13 @@ npm --prefix frontend run dev
 
 El frontend local usa `http://localhost:5173`. El backend por defecto usa `PORT=3000` si no se define otro puerto.
 
-## Produccion En Railway
+## Produccion en Contabo
+
+Los cambios en `main` disparan `.github/workflows/deploy-contabo.yml`, que construye la imagen del backend y despliega el commit exacto. El VPS conserva sus archivos de Compose, Nginx, systemd y secretos: los cambios bajo `ops/contabo/` requieren aplicacion operativa separada. Ver [ops/contabo/README.md](ops/contabo/README.md).
+
+## Referencia historica: Railway y Neon
+
+Los comandos y variables de las siguientes secciones corresponden al despliegue anterior. No describen el entorno actual de Contabo.
 
 Railway ejecuta el comando de inicio definido en `railway.json`:
 
@@ -87,7 +93,7 @@ recuperar respuestas pendientes despues de reinicios, y si queda activo consulta
 
 ## Variables De Entorno
 
-No guardar valores reales en git. Configurar secretos solo en Railway o en `.env` local ignorado.
+No guardar valores reales en git. Configurar secretos en `/srv/bladeia/.env` del VPS o en un `.env` local ignorado.
 
 Base:
 
@@ -160,7 +166,7 @@ Campanias:
 - `CAMPAIGN_HEADER_MEDIA_MAX_BYTES`
 - `OUTBOUND_MEDIA_MAX_BYTES`
 
-## Railway Cron Para Automatizaciones
+## Referencia histórica: Railway Cron para automatizaciones
 
 Crear un servicio Cron separado apuntando al mismo repositorio y usar:
 
@@ -196,8 +202,8 @@ https://<BACKEND_PUBLIC_URL>/api/webhook/whatsapp/<callbackKey>
 ```
 
 En Meta, configurar esa URL y el Verify Token de la App, suscribir el campo `messages` y conectar cada WABA
-desde Embedded Signup. El backend ejecuta la suscripcion de la WABA a la App y resuelve cada evento por
-`metadata.phone_number_id`, sin agregar una variable de Railway por cada numero.
+con el flujo manual documentado en [WhatsApp manual](docs/WHATSAPP_MANUAL_ONBOARDING.md), o mediante Embedded Signup cuando la App este habilitada. El backend suscribe la WABA a la App y resuelve cada evento por
+`metadata.phone_number_id`, sin agregar una variable de entorno por cada numero.
 
 Las variables `META_APP_ID`, `META_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN` y
 `WHATSAPP_PHONE_NUMBER_ID` se mantienen como fallback legacy durante la migracion. Las Apps nuevas guardan
@@ -272,5 +278,5 @@ npm --prefix frontend run build
 Confirmar tambien:
 
 - `git status` no muestra secretos ni artefactos locales.
-- Railway tiene los dominios exactos en `FRONTEND_URL`, `FRONTEND_URL_PROD` y `BACKEND_PUBLIC_URL`.
+- El VPS tiene los dominios exactos en `FRONTEND_URL`, `FRONTEND_URL_PROD` y `BACKEND_PUBLIC_URL`.
 - Los webhooks publicos usan HTTPS.

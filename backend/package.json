@@ -64,6 +64,7 @@
     "nodemon": "^3.1.10"
   },
   "overrides": {
+    "chokidar": "^4.0.3",
     "deepmerge-ts": "^8.0.2"
   }
 }
