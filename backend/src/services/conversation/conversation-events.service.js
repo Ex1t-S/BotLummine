@@ -24,6 +24,8 @@ const HARD_HANDOFF_REASONS = new Set([
 	'ai_cannot_continue',
 	'audio_requires_human',
 	'missing_product_details',
+	'missing_payment_policy',
+	'missing_shipping_policy',
 	'missing_size_guide',
 	'unverified_product_claim',
 ]);

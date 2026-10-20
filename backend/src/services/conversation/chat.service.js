@@ -98,6 +98,14 @@ const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_
 const pendingAutoReplyTimers = new Map();
 let pendingAutoReplySweepStarted = false;
 
+function hasMeaningfulConfiguredValue(value) {
+	if (typeof value === 'string') return Boolean(value.trim());
+	if (typeof value === 'number') return true;
+	if (Array.isArray(value)) return value.some(hasMeaningfulConfiguredValue);
+	if (value && typeof value === 'object') return Object.values(value).some(hasMeaningfulConfiguredValue);
+	return false;
+}
+
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	const baseText = String(text || '').trim();
 	const suffix = String(menuAssistantContext?.suffixText || '').trim();
@@ -2061,7 +2069,9 @@ async function processInboundMessageTurn({
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				businessName: aiBrand.businessName,
 				agentName: aiBrand.agentName,
-				strictCatalogHandoff: workspaceConfig.ai.catalogConfig?.handoffOnMissingProductDetails === true
+				strictCatalogHandoff: workspaceConfig.ai.catalogConfig?.handoffOnMissingProductDetails === true,
+				hasPaymentFacts: hasMeaningfulConfiguredValue(workspaceConfig.ai.paymentConfig),
+				hasShippingFacts: Boolean(String(workspaceConfig.ai.policyConfig?.shipping || '').trim()),
 			});
 
 			const handoff = resolveAssistantHandoff({
