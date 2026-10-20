@@ -7,6 +7,33 @@ import {
 } from './conversation-helpers.service.js';
 
 describe('assistant response relevance safeguards', () => {
+	it('hands off an unverified product detail when strict catalog mode is enabled', () => {
+		const result = auditAssistantReply({
+			text: 'Sí, la mascarilla se usa todos los días.',
+			fallbackReply: 'Necesito revisar la ficha.',
+			detectedIntent: 'product',
+			latestUserMessage: '¿Cada cuánto uso la mascarilla?',
+			catalogProducts: [{ name: 'Mascarilla', shortDescription: 'Sin descripcion cargada.' }],
+			strictCatalogHandoff: true,
+		});
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'missing_product_details');
+		assert.doesNotMatch(result.finalText, /todos los días/i);
+	});
+
+	it('keeps a confirmed catalog price in strict mode', () => {
+		const result = auditAssistantReply({
+			text: 'La mascarilla sale $39.900.',
+			fallbackReply: 'Necesito revisar la ficha.',
+			detectedIntent: 'product',
+			latestUserMessage: '¿Cuánto sale la mascarilla?',
+			catalogProducts: [{ name: 'Mascarilla', price: '$39.900', shortDescription: 'Sin descripcion cargada.' }],
+			strictCatalogHandoff: true,
+		});
+		assert.equal(result.triggerHumanHandoff, false);
+		assert.match(result.finalText, /39.900/);
+	});
+
 	it('replaces a generic greeting when the customer already asked about a product', () => {
 		const result = auditAssistantReply({
 			text: 'Hola, soy Sofi. ¿En qué puedo ayudarte?',

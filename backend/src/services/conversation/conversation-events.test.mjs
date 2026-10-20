@@ -9,6 +9,8 @@ import {
 
 describe('conversation human lock policy', () => {
 	it('keeps payment and complaint handoffs locked until explicit release', () => {
+		assert.equal(resolveHumanLockMode({ reason: 'audio_requires_human', currentState: {} }), HUMAN_LOCK_MODE.HARD);
+		assert.equal(resolveHumanLockMode({ reason: 'missing_product_details', currentState: {} }), HUMAN_LOCK_MODE.HARD);
 		assert.equal(
 			resolveHumanLockMode({ reason: 'payment_review', currentState: {} }),
 			HUMAN_LOCK_MODE.HARD
