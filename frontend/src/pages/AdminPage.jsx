@@ -2245,8 +2245,8 @@ export default function AdminPage({ defaultTab = '' }) {
 						{whatsappCheck?.ok ? (
 							<div className="wa-setup-check-result" role="status">
 								<strong>Meta reconoce {whatsappCheck.displayPhoneNumber || 'el número'} dentro de la WABA indicada.</strong>
-								<p>Token: {whatsappCheck.messagingPermissionCheck?.checked ? 'permisos comprobados' : 'permisos sin confirmar'} · Webhooks: {whatsappCheck.subscription?.checked ? (whatsappCheck.subscription.subscribed ? 'App ya suscrita' : 'App aún no suscrita; se hará al vincular') : 'no se pudieron comprobar'}</p>
-								<p>Estado en Meta: {whatsappCheck.phoneStatus || 'sin informar'}{whatsappCheck.platformType ? ` · ${whatsappCheck.platformType}` : ''}. Entrega real: pendiente de probar con un mensaje. {whatsappCheck.subscription?.error || ''}</p>
+								<p>Token: {whatsappCheck.messagingPermissionCheck?.checked ? 'incluye los permisos de WhatsApp' : 'permisos sin confirmar'} · Webhooks: {whatsappCheck.subscription?.checked ? (whatsappCheck.subscription.subscribed ? 'App ya suscrita' : 'App aún no suscrita; se hará al vincular') : 'no se pudieron comprobar'}</p>
+								<p>Estado en Meta: {whatsappCheck.phoneStatus || 'sin informar'}{whatsappCheck.platformType ? ` · ${whatsappCheck.platformType}` : ''}. Esta comprobación no confirma el permiso para enviar desde este número. Probá una respuesta real desde la bandeja. {whatsappCheck.subscription?.error || ''}</p>
 							</div>
 						) : null}
 					</section>
