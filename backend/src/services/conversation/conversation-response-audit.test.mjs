@@ -48,6 +48,41 @@ describe('assistant response relevance safeguards', () => {
 		assert.doesNotMatch(result.finalText, /hialur[oó]nico|sensible/i);
 	});
 
+	it('hands off payment and shipping questions when Kaisy has no configured policy facts', () => {
+		for (const [detectedIntent, latestUserMessage, handoffReason] of [
+			['payment', '¿Puedo pagar por transferencia?', 'missing_payment_policy'],
+			['shipping', '¿Cuánto sale el envío a Córdoba?', 'missing_shipping_policy'],
+		]) {
+			const result = auditAssistantReply({
+				text: 'Sí, te confirmo las opciones.',
+				fallbackReply: 'Necesito revisar la política.',
+				detectedIntent,
+				latestUserMessage,
+				strictCatalogHandoff: true,
+			});
+			assert.equal(result.triggerHumanHandoff, true);
+			assert.equal(result.handoffReason, handoffReason);
+		}
+	});
+
+	it('does not invent sizes or stock from a generic product description', () => {
+		for (const [detectedIntent, latestUserMessage] of [
+			['size_help', '¿Qué talles tiene?'],
+			['stock_check', '¿Hay stock disponible?'],
+		]) {
+			const result = auditAssistantReply({
+				text: 'Tenemos S, M y L disponibles.',
+				fallbackReply: 'Necesito revisar la ficha.',
+				detectedIntent,
+				latestUserMessage,
+				catalogProducts: [{ name: 'Mascarilla', shortDescription: 'Mascarilla facial hidratante.' }],
+				strictCatalogHandoff: true,
+			});
+			assert.equal(result.triggerHumanHandoff, true);
+			assert.doesNotMatch(result.finalText, /\bS, M y L\b/i);
+		}
+	});
+
 	it('replaces a generic greeting when the customer already asked about a product', () => {
 		const result = auditAssistantReply({
 			text: 'Hola, soy Sofi. ¿En qué puedo ayudarte?',

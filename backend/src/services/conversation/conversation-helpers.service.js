@@ -1458,11 +1458,27 @@ function catalogSupportsAskedProductDetail(product = {}, question = '') {
 	);
 	const q = normalizeGateText(question);
 	if (!description || /^sin descripcion cargada\.?$/.test(description)) return false;
+	if (/\b(?:talle|talles|talla|tallas|medidas?)\b/.test(q)) {
+		const sizeGuide = [product?.sizeGuide, product?.sizeMeasurements, product?.measurementTable, product?.confirmedSizeGuide]
+			.flatMap(flattenCatalogValues).join(' ');
+		const sizes = [...flattenCatalogValues(product?.sizes), ...flattenCatalogValues(product?.variantHints)]
+			.join(' ');
+		if (/\bmedidas?\b/.test(q)) {
+			return /\d/.test(normalizeGateText(sizeGuide)) && /\b(?:cm|mm|centimetros?|milimetros?)\b/.test(normalizeGateText(sizeGuide));
+		}
+		return /\b(?:xs|s|m|l|xl|xxl|xxxl|xxxxl)\b/i.test(sizes) ||
+			/\btalles?\s+(?:xs|s|m|l|xl|xxl|xxxl|xxxxl)\b/i.test(description);
+	}
+	if (/\b(?:stock|disponible|disponibilidad)\b/.test(q)) {
+		return ['inventoryQuantity', 'availableQuantity', 'stockQuantity', 'stock', 'inStock', 'inventoryStatus']
+			.some((key) => product?.[key] !== null && product?.[key] !== undefined && product?.[key] !== '');
+	}
 
 	const evidenceByQuestion = [
 		[/ingredientes?|composicion|inci/, /ingrediente|composicion|inci/],
 		[/material/, /material|algodon|lycra|elastano|microfibra|nylon|satin|encaje/],
 		[/piel sensible|piel grasa|apto para|compatible con/, /piel|hipoalergen|dermatolog|apto|compatible/],
+		[/colores?|color/, /colores?|color/],
 		[/como (?:se )?usa|frecuencia|cada cuanto/, /modo de uso|aplicacion|aplicar|frecuencia|veces por semana|uso diario/],
 		[/cuanto dura|duracion|beneficios?|resultados?/, /duracion|dura \d|beneficios?|resultados?/],
 	];
@@ -1484,6 +1500,8 @@ export function auditAssistantReply({
 	businessName = 'la marca',
 	agentName = 'Asistente',
 	strictCatalogHandoff = false,
+	hasPaymentFacts = false,
+	hasShippingFacts = false,
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
 	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
@@ -1504,16 +1522,6 @@ export function auditAssistantReply({
 		};
 	}
 
-	if (!cleaned) {
-		return {
-			finalText: fallbackReply,
-			triggerHumanHandoff: false,
-			auditFlags: [],
-			repetitionDetected: false,
-			continuityRecovery: false,
-		};
-	}
-
 	const asksUnverifiedProductDetail =
 		strictCatalogHandoff &&
 		['product', 'size_help', 'stock_check'].includes(detectedIntent) &&
@@ -1527,6 +1535,38 @@ export function auditAssistantReply({
 			triggerHumanHandoff: true,
 			handoffReason: 'missing_product_details',
 			auditFlags: ['missing_product_details'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	if (strictCatalogHandoff && detectedIntent === 'payment' && !hasPaymentFacts) {
+		return {
+			finalText: 'No tengo los medios de pago de Kaisy confirmados en la información cargada. Te paso con una asesora para que te indique las opciones vigentes.',
+			triggerHumanHandoff: true,
+			handoffReason: 'missing_payment_policy',
+			auditFlags: ['missing_payment_policy'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	if (strictCatalogHandoff && detectedIntent === 'shipping' && !hasShippingFacts) {
+		return {
+			finalText: 'No tengo las condiciones de envío de Kaisy confirmadas en la información cargada. Te paso con una asesora para que te indique el plazo y costo según tu localidad.',
+			triggerHumanHandoff: true,
+			handoffReason: 'missing_shipping_policy',
+			auditFlags: ['missing_shipping_policy'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	if (!cleaned) {
+		return {
+			finalText: fallbackReply,
+			triggerHumanHandoff: false,
+			auditFlags: [],
 			repetitionDetected: false,
 			continuityRecovery: false,
 		};
