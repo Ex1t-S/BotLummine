@@ -18,6 +18,7 @@ const HARD_HANDOFF_REASONS = new Set([
 	'return_exchange_followup_received',
 	'requested_human',
 	'sensitive_support',
+	'sensitive_product_safety',
 	'tracking_followup',
 	'tracking_followup_needs_human',
 	'ai_cannot_continue',
