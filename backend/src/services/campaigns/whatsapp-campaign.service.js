@@ -8,6 +8,7 @@ import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
 import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import {
 	getWorkspaceRuntimeConfig,
+	getWhatsAppChannelForWorkspace,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
 import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
@@ -994,6 +995,9 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 		contact = await prisma.contact.findFirst({
 			where: { id: contactId, workspaceId: resolvedWorkspaceId }
 		});
+		if (contact && normalizeCampaignPhone(contact.waId) !== normalizedPhone) {
+			contact = null;
+		}
 	}
 
 	if (!contact) {
@@ -1017,16 +1021,33 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 		});
 	}
 
-	let conversation = await prisma.conversation.findFirst({
-		where: { routingKey: `${resolvedWorkspaceId}:legacy:${contact.id}` }
-	});
+	// Campaign templates are sent through the same primary channel that receives
+	// replies. Keep both directions on one thread so the reply sees campaignMeta.
+	const channel = await getWhatsAppChannelForWorkspace(resolvedWorkspaceId);
+	const channelId = channel?.channelId || null;
+	const routingKey = `${resolvedWorkspaceId}:${channelId || 'legacy'}:${contact.id}`;
+	const legacyRoutingKey = `${resolvedWorkspaceId}:legacy:${contact.id}`;
+	let conversation = await prisma.conversation.findUnique({ where: { routingKey } });
+
+	if (!conversation && channelId) {
+		const legacyConversation = await prisma.conversation.findUnique({
+			where: { routingKey: legacyRoutingKey }
+		});
+		if (legacyConversation) {
+			conversation = await prisma.conversation.update({
+				where: workspaceOwnedWhere({ id: legacyConversation.id, workspaceId: resolvedWorkspaceId }),
+				data: { routingKey, whatsappChannelId: channelId }
+			});
+		}
+	}
 
 	if (!conversation) {
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
 				workspaceId: resolvedWorkspaceId,
-				routingKey: `${resolvedWorkspaceId}:legacy:${contact.id}`,
+				whatsappChannelId: channelId,
+				routingKey,
 				queue: 'AUTO',
 				aiEnabled: true,
 				state: {
@@ -1043,20 +1064,10 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 		});
 	}
 
-	await prisma.conversation.update({
-		where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
-		data: {
-			queue: 'AUTO',
-			aiEnabled: true,
-		}
-	});
-
 	await prisma.conversationState.upsert({
 		where: { conversationId: conversation.id },
 		update: {
 			customerName: contact.name || normalizedPhone,
-			needsHuman: false,
-			handoffReason: null,
 		},
 		create: {
 			conversationId: conversation.id,
@@ -1064,7 +1075,7 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 			interactionCount: 0,
 			interestedProducts: [],
 			objections: [],
-			needsHuman: false,
+			needsHuman: conversation.queue !== 'AUTO' || !conversation.aiEnabled,
 			handoffReason: null,
 		}
 	});
@@ -1072,11 +1083,12 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 	return {
 		contactId: contact.id,
 		conversationId: conversation.id,
-		queue: 'AUTO',
+		whatsappChannelId: channelId,
+		queue: conversation.queue,
 	};
 }
 
-async function applyCampaignConversationContext({ campaign, recipient, conversationId }) {
+async function applyCampaignConversationContext({ campaign, recipient, conversationId, queue = 'AUTO' }) {
 	if (!conversationId) return null;
 	if (normalizeAudienceSource(campaign.audienceSource || '') !== 'abandoned_carts') {
 		return null;
@@ -1110,8 +1122,6 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: false,
-			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		},
 		create: {
@@ -1128,7 +1138,7 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: false,
+			needsHuman: queue !== 'AUTO',
 			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		}
@@ -3007,7 +3017,8 @@ async function persistCampaignOutboundMessage({
 			...recipient,
 			contactId: ensured.contactId || recipient.contactId
 		},
-		conversationId: ensured.conversationId
+		conversationId: ensured.conversationId,
+		queue: ensured.queue
 	});
 
 	const workspaceConfig = await getWorkspaceRuntimeConfig(campaign.workspaceId);
@@ -3015,6 +3026,7 @@ async function persistCampaignOutboundMessage({
 		data: {
 			workspaceId: campaign.workspaceId,
 			conversationId: ensured.conversationId,
+			whatsappChannelId: ensured.whatsappChannelId,
 			metaMessageId: sendResult?.rawPayload?.messages?.[0]?.id || null,
 			senderName: workspaceConfig.ai.businessName || 'Marca',
 			direction: 'OUTBOUND',
