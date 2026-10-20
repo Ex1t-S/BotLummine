@@ -2196,6 +2196,7 @@ export default function AdminPage({ defaultTab = '' }) {
 							<button type="button" className={!channelForm.id ? 'is-selected' : ''} onClick={startNewWhatsAppChannel}>+ Agregar número</button>
 						</div>
 						<h4>{channelForm.id ? 'Editar número' : 'Conectar un número nuevo'}</h4>
+						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
 						<div className="wa-setup-discovery">
 							<p>Pegá el token del usuario del sistema. BladeIA buscará los números a los que tiene acceso para esta App.</p>
 							<div className="tenant-admin-grid">
@@ -2218,14 +2219,13 @@ export default function AdminPage({ defaultTab = '' }) {
 								</div>
 							) : null}
 						</div>
-						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
 							<Input label="Nombre" value={channelForm.name} onChange={(value) => setChannelForm((cur) => ({ ...cur, name: value }))} />
 							<Select label="App de Meta" value={channelForm.whatsappAppId || ''} onChange={(value) => setChannelForm((cur) => ({ ...cur, whatsappAppId: value }))}>
 								<option value="">{channelForm.id ? 'Canal heredado sin App' : 'Seleccioná la App de esta marca'}</option>
 								{(workspace?.whatsappApps || []).map((item) => <option key={item.id} value={item.id}>{item.name} - {item.metaAppId}</option>)}
 							</Select>
-							<Input label="WABA ID" value={channelForm.wabaId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, wabaId: value }))} />
-							<Input label="Phone Number ID (no el teléfono visible)" value={channelForm.phoneNumberId} required onChange={(value) => setChannelForm((cur) => ({ ...cur, phoneNumberId: value }))} />
+							<Input label="WABA ID" value={channelForm.wabaId} required onChange={(value) => { setChannelForm((cur) => ({ ...cur, wabaId: value })); setWhatsappCheck(null); }} />
+							<Input label="Phone Number ID (no el teléfono visible)" value={channelForm.phoneNumberId} required onChange={(value) => { setChannelForm((cur) => ({ ...cur, phoneNumberId: value })); setWhatsappCheck(null); }} />
 							<Input label="Teléfono visible (opcional)" value={channelForm.displayPhoneNumber} onChange={(value) => setChannelForm((cur) => ({ ...cur, displayPhoneNumber: value }))} />
 							<Input label="Versión de Graph" value={channelForm.graphVersion} onChange={(value) => setChannelForm((cur) => ({ ...cur, graphVersion: value }))} />
 							<Select label="Estado" value={channelForm.status} onChange={(value) => setChannelForm((cur) => ({ ...cur, status: value }))}>
