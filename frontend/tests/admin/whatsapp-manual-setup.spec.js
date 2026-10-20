@@ -66,6 +66,7 @@ test('guía manual: comprueba antes de vincular y no ofrece Embedded Signup con 
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await page.goto('/admin');
 	await page.getByRole('button', { name: 'Integraciones' }).click();
+	await page.getByText('Guía de configuración manual y requisitos de Meta').click();
 	await expect(page.getByText('Conexión manual de WhatsApp Cloud API')).toBeVisible();
 	await expect(page.getByText('Alternativa: Embedded Signup para una App habilitada por Meta')).toHaveCount(0);
 	await expect(page.getByText('https://api.bladeia.com/api/webhook/whatsapp/demo-callback', { exact: true })).toBeVisible();

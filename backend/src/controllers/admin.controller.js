@@ -30,6 +30,7 @@ import { markPrimaryCommerceConnection, resolveActiveCommerceConnection } from '
 import { getShopifyClient } from '../services/shopify/client.js';
 import {
 	completeWhatsAppEmbeddedSignup,
+	discoverWhatsAppPhoneNumbers,
 	getWhatsAppWabaSubscription,
 	subscribeWhatsAppWaba,
 	validateWhatsAppChannelAccess,
@@ -52,6 +53,27 @@ const ANALYTICS_ACTIVITY_DAYS = 30;
 
 function normalizeString(value = '') {
 	return String(value || '').trim();
+}
+
+function assertConnectedCloudApiPhone(phoneNumber = {}) {
+	const platformType = normalizeString(phoneNumber.platform_type).toUpperCase();
+	const status = normalizeString(phoneNumber.status).toUpperCase();
+	const codeStatus = normalizeString(phoneNumber.code_verification_status).toUpperCase();
+	if (platformType && platformType !== 'CLOUD_API') {
+		const error = new Error('El número todavía no utiliza WhatsApp Cloud API. Revisá su configuración en Meta antes de activarlo.');
+		error.status = 400;
+		throw error;
+	}
+	if (status && status !== 'CONNECTED') {
+		const error = new Error(`El número figura como ${status} en Meta. Esperá a que esté conectado antes de activarlo.`);
+		error.status = 400;
+		throw error;
+	}
+	if (!status && codeStatus && codeStatus !== 'VERIFIED') {
+		const error = new Error('Meta todavía no confirma que el número esté listo para Cloud API.');
+		error.status = 400;
+		throw error;
+	}
 }
 
 function normalizeSlug(value = '') {
@@ -1947,6 +1969,33 @@ export async function upsertWhatsAppApp(req, res, next) {
 	}
 }
 
+export async function discoverWhatsAppNumbers(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const appId = normalizeString(req.body?.whatsappAppId);
+		const app = appId
+			? await prisma.whatsAppApp.findFirst({ where: { id: appId, workspaceId, status: 'ACTIVE' } })
+			: null;
+		if (!app) return res.status(400).json({ ok: false, error: 'Seleccioná primero la App de Meta de esta marca.' });
+		const accessToken = normalizeString(req.body?.accessToken);
+		if (!accessToken) return res.status(400).json({ ok: false, error: 'Ingresá el token de usuario del sistema para buscar números.' });
+		const result = await discoverWhatsAppPhoneNumbers({
+			businessManagerId: normalizeString(req.body?.businessManagerId) || app.businessManagerId,
+			wabaId: normalizeString(req.body?.wabaId),
+			accessToken,
+			graphVersion: normalizeString(req.body?.graphVersion) || app.graphVersion || undefined,
+			appConfig: { metaAppId: app.metaAppId, appSecret: decryptSecret(app.appSecret) },
+		});
+		return res.json({ ok: true, ...result });
+	} catch (error) {
+		if (error?.graphOperation || error?.code?.startsWith?.('WHATSAPP_') || error?.status === 400) {
+			return res.status(400).json({ ok: false, error: error.message, metaCode: error.metaCode || null });
+		}
+		next(error);
+	}
+}
+
 export async function checkWhatsAppChannel(req, res, next) {
 	try {
 		const workspaceId = requireRequestWorkspaceId(req);
@@ -1984,9 +2033,7 @@ export async function checkWhatsAppChannel(req, res, next) {
 		if (!result.messagingPermissionCheck?.checked) {
 			return res.status(400).json({ ok: false, error: 'Meta no confirmó los permisos del token. Generá uno de usuario del sistema con permisos de administración y mensajería para esta App.' });
 		}
-		if (result.phoneNumber?.code_verification_status && result.phoneNumber.code_verification_status !== 'VERIFIED') {
-			return res.status(400).json({ ok: false, error: 'El número figura en la WABA, pero Meta todavía no confirma su verificación.' });
-		}
+		assertConnectedCloudApiPhone(result.phoneNumber);
 		let subscription;
 		try {
 			subscription = await getWhatsAppWabaSubscription({
@@ -2005,6 +2052,8 @@ export async function checkWhatsAppChannel(req, res, next) {
 			phoneNumberId,
 			displayPhoneNumber: result.phoneNumber?.display_phone_number || null,
 			codeVerificationStatus: result.phoneNumber?.code_verification_status || null,
+			phoneStatus: result.phoneNumber?.status || null,
+			platformType: result.phoneNumber?.platform_type || null,
 			messagingPermissionCheck: result.messagingPermissionCheck,
 			subscription,
 			registrationChecked: false,
@@ -2116,10 +2165,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 				metaSubcode: error?.metaSubcode || null,
 			});
 		}
-		if (validatedAccess?.phoneNumber?.code_verification_status &&
-			validatedAccess.phoneNumber.code_verification_status !== 'VERIFIED') {
-			return res.status(400).json({ ok: false, error: 'Meta identifica el numero, pero aun no confirma la verificacion de su codigo.' });
-		}
+		assertConnectedCloudApiPhone(validatedAccess?.phoneNumber);
 		if (whatsappApp && data.status === 'ACTIVE' && !validatedAccess?.messagingPermissionCheck?.checked) {
 			return res.status(400).json({ ok: false, error: 'Meta no confirmó los permisos del token. No se activó el canal.' });
 		}
@@ -2131,7 +2177,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 		if (existingPhone?.workspaceId && existingPhone.workspaceId !== workspaceId) {
 			return res.status(409).json({ ok: false, error: 'Ese phoneNumberId ya esta asignado a otro workspace.' });
 		}
-		if (existingPhone?.id && channelId && existingPhone.id !== channelId) {
+		if (existingPhone?.id && existingPhone.id !== channelId) {
 			return res.status(409).json({ ok: false, error: 'Ese phoneNumberId ya esta vinculado a otro canal de esta marca.' });
 		}
 
