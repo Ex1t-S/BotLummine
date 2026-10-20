@@ -16,6 +16,7 @@ const GRAPH_OPERATION_LABELS = {
 	list_phone_numbers: 'listar numeros de la WABA',
 	list_subscribed_apps: 'comprobar las suscripciones de webhooks de la WABA',
 	subscribe_waba_webhooks: 'suscribir la WABA a webhooks',
+	list_business_wabas: 'listar las cuentas de WhatsApp del negocio',
 };
 
 function normalizeString(value = '') {
@@ -200,7 +201,7 @@ export async function getWhatsAppWabaSubscription({ wabaId, accessToken, metaApp
 	const apps = Array.isArray(result?.data) ? result.data : [];
 	return {
 		checked: true,
-		subscribed: apps.some((app) => normalizeString(app?.id || app?.app_id) === normalizeString(metaAppId)),
+		subscribed: apps.some((app) => normalizeString(app?.whatsapp_business_api_data?.id || app?.id || app?.app_id) === normalizeString(metaAppId)),
 	};
 }
 
@@ -315,12 +316,66 @@ async function listPhoneNumbersForWaba({ wabaId, accessToken, graphVersion }) {
 		graphVersion,
 		operation: 'list_phone_numbers',
 		params: {
-			fields: 'id,display_phone_number,verified_name,code_verification_status,quality_rating',
+			fields: 'id,display_phone_number,verified_name,code_verification_status,status,platform_type,quality_rating',
 			limit: 200,
 		},
 	});
 
 	return Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : [];
+}
+
+export async function discoverWhatsAppPhoneNumbers({ businessManagerId, wabaId, accessToken, graphVersion, appConfig = {} }) {
+	const cleanBusinessManagerId = normalizeString(businessManagerId);
+	const cleanWabaId = normalizeString(wabaId);
+	if ((!cleanBusinessManagerId && !cleanWabaId) ||
+		(cleanBusinessManagerId && !/^\d+$/.test(cleanBusinessManagerId)) ||
+		(cleanWabaId && !/^\d+$/.test(cleanWabaId))) {
+		const error = new Error('Ingresá el ID numérico del portfolio de Meta o de la WABA para buscar números.');
+		error.status = 400;
+		throw error;
+	}
+
+	const messagingPermissionCheck = await validateMessagingPermission(accessToken, appConfig);
+	if (!messagingPermissionCheck.checked) {
+		const error = new Error('Meta no pudo confirmar los permisos del token.');
+		error.status = 400;
+		throw error;
+	}
+
+	let wabas = [];
+	if (cleanWabaId) {
+		const account = await graphGet(`/${cleanWabaId}`, {
+			accessToken,
+			graphVersion,
+			operation: 'read_waba',
+			params: { fields: 'id,name' },
+		});
+		wabas = [account];
+	} else {
+		const accountTypes = ['owned_whatsapp_business_accounts', 'client_whatsapp_business_accounts'];
+		const accountResults = await Promise.allSettled(accountTypes.map((type) => graphGet(`/${cleanBusinessManagerId}/${type}`, {
+			accessToken,
+			graphVersion,
+			operation: 'list_business_wabas',
+			params: { fields: 'id,name', limit: 100 },
+		})));
+		wabas = accountResults.flatMap((result) => result.status === 'fulfilled' && Array.isArray(result.value?.data)
+			? result.value.data
+			: []);
+		if (!wabas.length && accountResults.every((result) => result.status === 'rejected')) {
+			throw accountResults[0].reason;
+		}
+	}
+
+	const uniqueWabas = [...new Map(wabas.filter((item) => /^\d+$/.test(normalizeString(item?.id))).map((item) => [String(item.id), item])).values()];
+	const results = await Promise.allSettled(uniqueWabas.map(async (account) => ({
+		id: String(account.id),
+		name: normalizeString(account.name) || 'Cuenta de WhatsApp',
+		phoneNumbers: await listPhoneNumbersForWaba({ wabaId: account.id, accessToken, graphVersion }),
+	})));
+	const accounts = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+	if (cleanWabaId && !accounts.length && results[0]?.status === 'rejected') throw results[0].reason;
+	return { accounts, messagingPermissionCheck };
 }
 
 export async function validateWhatsAppChannelAccess({
