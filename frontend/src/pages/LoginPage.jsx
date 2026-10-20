@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
 	ArrowRight,
@@ -7,29 +7,14 @@ import {
 	MessageCircle,
 	Rocket,
 	ShieldCheck,
-	Sparkles,
-	Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { canAccessRouteForUser, getDefaultRouteForUser } from '../lib/authz.js';
 import { getApiErrorMessage } from '../lib/api.js';
 import logoBladeIA from '../assets/app-logo-mark.png';
-import showcaseInboxAuto from '../assets/feature-carousel/showcase-inbox-auto.png';
-import showcaseInboxPayments from '../assets/feature-carousel/showcase-inbox-payments.png';
-import showcaseCampaigns from '../assets/feature-carousel/showcase-campaigns.png';
-import showcaseTemplates from '../assets/feature-carousel/showcase-templates.png';
-import showcaseCarts from '../assets/feature-carousel/showcase-carts.png';
-import showcaseOperations from '../assets/feature-carousel/showcase-operations.png';
 import * as PricingCard from '../components/ui/pricing-card.tsx';
-import './LoginPage.css';
+import PublicHome from '../components/PublicHome.jsx';
 import './PublicRefresh.css';
-
-const DottedSurface = lazy(() => import('../components/ui/dotted-surface.tsx'));
-const FeatureCarousel = lazy(() =>
-	import('../components/ui/animated-feature-carousel.tsx').then((module) => ({
-		default: module.FeatureCarousel,
-	})),
-);
 
 const pricingPlans = [
 	{
@@ -46,7 +31,7 @@ const pricingPlans = [
 		name: 'Avanzado',
 		price: 'US$ 80',
 		period: '/mes',
-		badge: 'M\u00e1s elegido',
+		badge: 'Más herramientas',
 		icon: Rocket,
 		idealFor: 'Para operaciones que también recuperan y reactivan ventas.',
 		description: 'Para retomar conversaciones, recuperar ventas y entender qué acciones generan más respuesta.',
@@ -61,46 +46,6 @@ const pricingPlans = [
 		ctaLabel: 'Consultar por el plan Avanzado',
 	},
 ];
-
-const outcomeItems = [
-	{
-		icon: MessageCircle,
-		title: 'Una sola bandeja para todo el equipo',
-		description: 'Separá atención automática, intervención humana y comprobantes sin perder el contexto de cada cliente.',
-	},
-	{
-		icon: Users,
-		title: 'Seguimientos que se pueden operar',
-		description: 'Creá campañas, elegí audiencias y revisá resultados desde un flujo guiado y trazable.',
-	},
-	{
-		icon: Sparkles,
-		title: 'IA con control humano',
-		description: 'Automatizá lo repetitivo y derivá al equipo cuando una conversación necesita criterio o una decisión.',
-	},
-];
-
-const workflowSteps = [
-	{ number: '01', title: 'Conectá tu operación', description: 'Centralizá WhatsApp, clientes, catálogo y reglas del negocio.' },
-	{ number: '02', title: 'Definí cómo atender', description: 'Elegí qué resuelve la IA y cuándo debe intervenir una persona.' },
-	{ number: '03', title: 'Medí y mejorá', description: 'Revisá prioridades, campañas y oportunidades desde el mismo panel.' },
-];
-
-const productProofPoints = [
-	'Bandeja compartida',
-	'Campañas y carritos',
-	'Control humano cuando hace falta',
-];
-
-const featureCarouselImages = {
-	alt: 'Pantallas internas de BladeIA',
-	step1img1: showcaseInboxAuto,
-	step1img2: showcaseInboxPayments,
-	step2img1: showcaseCampaigns,
-	step2img2: showcaseTemplates,
-	step3img: showcaseCarts,
-	step4img: showcaseOperations,
-};
 
 const publicMeta = {
 	'/inicio': {
@@ -120,59 +65,6 @@ const publicMeta = {
 		description: 'Acceso seguro al panel operativo de BladeIA.',
 	},
 };
-
-function LazyWhenVisible({ children, className, fallback = null, rootMargin = '360px' }) {
-	const containerRef = useRef(null);
-	const [isVisible, setIsVisible] = useState(false);
-
-	useEffect(() => {
-		if (isVisible) return undefined;
-		const node = containerRef.current;
-		if (!node) return undefined;
-
-		if (!('IntersectionObserver' in window)) {
-			setIsVisible(true);
-			return undefined;
-		}
-
-		const observer = new IntersectionObserver(
-			([entry]) => {
-				if (entry.isIntersecting) {
-					setIsVisible(true);
-					observer.disconnect();
-				}
-			},
-			{ rootMargin },
-		);
-
-		observer.observe(node);
-		return () => observer.disconnect();
-	}, [isVisible, rootMargin]);
-
-	return (
-		<div ref={containerRef} className={className}>
-			{isVisible ? children : fallback}
-		</div>
-	);
-}
-
-function FeatureCarouselPlaceholder() {
-	return (
-		<div className="login-feature-carousel__placeholder" role="status" aria-live="polite">
-			<div className="login-feature-carousel__placeholder-bar" aria-hidden="true" />
-			<div className="login-feature-carousel__placeholder-copy">
-				<span className="login-feature-carousel__placeholder-kicker">Producto real</span>
-				<strong>Cargando vista del producto…</strong>
-				<span>Preparando una muestra de los flujos de BladeIA.</span>
-			</div>
-			<div className="login-feature-carousel__placeholder-panel" aria-hidden="true">
-				<span />
-				<span />
-				<span />
-			</div>
-		</div>
-	);
-}
 
 const publicNavLinks = [
 	{ label: 'Producto', to: '/inicio', activePaths: ['/inicio'] },
@@ -217,37 +109,6 @@ function MenuIcon({ open = false }) {
 	);
 }
 
-function ProductPreview({ compact = false }) {
-	return (
-		<aside className={`login-product-preview${compact ? ' login-product-preview--compact' : ''}`} aria-label="Vista previa del producto">
-			<div className="login-product-preview__bar">
-				<div className="login-product-preview__window-controls" aria-hidden="true">
-					<span />
-					<span />
-					<span />
-				</div>
-				<strong>Bandeja compartida</strong>
-				<span className="login-product-preview__live">Vista del producto</span>
-			</div>
-			<div className="login-product-preview__image">
-				<img
-					src={showcaseInboxAuto}
-					alt="Bandeja de BladeIA con lista de conversaciones y chat activo"
-					width="1280"
-					height="800"
-					decoding="async"
-					fetchpriority="high"
-				/>
-			</div>
-			<div className="login-product-preview__footer">
-				<span>Automático</span>
-				<span>Atención humana</span>
-				<span>Comprobantes</span>
-			</div>
-		</aside>
-	);
-}
-
 function LoginForm({ credentialsInvalid, error, form, onChange, onSubmit, showPassword, submitting, togglePassword }) {
 	return (
 		<form className="login-card login-card--centered" onSubmit={onSubmit} aria-describedby={error ? 'login-error' : undefined}>
@@ -270,7 +131,8 @@ function LoginForm({ credentialsInvalid, error, form, onChange, onSubmit, showPa
 					<input
 						id="login-email"
 						type="email"
-						autoComplete="email"
+						name="email"
+						autoComplete="username"
 						placeholder="nombre@empresa.com"
 						value={form.email}
 						onChange={(e) => onChange({ ...form, email: e.target.value })}
@@ -287,8 +149,9 @@ function LoginForm({ credentialsInvalid, error, form, onChange, onSubmit, showPa
 					<input
 						id="login-password"
 						type={showPassword ? 'text' : 'password'}
+						name="password"
 						autoComplete="current-password"
-						placeholder="********"
+						placeholder="Ingresá tu contraseña"
 						value={form.password}
 						onChange={(e) => onChange({ ...form, password: e.target.value })}
 						aria-invalid={credentialsInvalid}
@@ -300,6 +163,7 @@ function LoginForm({ credentialsInvalid, error, form, onChange, onSubmit, showPa
 						className="login-password-toggle"
 						onClick={togglePassword}
 						aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+						aria-pressed={showPassword}
 					>
 						{showPassword ? 'Ocultar' : 'Mostrar'}
 					</button>
@@ -342,8 +206,6 @@ export default function LoginPage() {
 	const [mobileNavOpen, setMobileNavOpen] = useState(false);
 	const mobileNavButtonRef = useRef(null);
 	const mobileNavRef = useRef(null);
-	const pointerFrameRef = useRef(0);
-	const pointerPositionRef = useRef({ x: '50%', y: '42%' });
 
 	const requestedPath = location.state?.from?.pathname || '';
 	const redirectTo = resolveRedirectPath(user, requestedPath);
@@ -389,12 +251,15 @@ export default function LoginPage() {
 
 	useEffect(() => {
 		setMobileNavOpen(false);
+		window.scrollTo({ top: 0, behavior: 'instant' });
 	}, [publicPath]);
 
 	useEffect(() => {
 		if (!mobileNavOpen) return undefined;
 
 		const mobileNav = mobileNavRef.current;
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
 		const focusFirstLinkFrame = window.requestAnimationFrame(() => {
 			mobileNav?.querySelector('.login-mobile-nav__link')?.focus();
 		});
@@ -425,18 +290,12 @@ export default function LoginPage() {
 
 		document.addEventListener('keydown', handleMobileNavKeyDown);
 		return () => {
+			document.body.style.overflow = previousOverflow;
 			window.cancelAnimationFrame(focusFirstLinkFrame);
 			document.removeEventListener('keydown', handleMobileNavKeyDown);
 		};
 	}, [mobileNavOpen]);
 
-	useEffect(() => {
-		return () => {
-			if (pointerFrameRef.current) {
-				window.cancelAnimationFrame(pointerFrameRef.current);
-			}
-		};
-	}, []);
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -456,25 +315,6 @@ export default function LoginPage() {
 		}
 	}
 
-	function handlePointerMove(e) {
-		const bounds = e.currentTarget.getBoundingClientRect();
-		const x = ((e.clientX - bounds.left) / bounds.width) * 100;
-		const y = ((e.clientY - bounds.top) / bounds.height) * 100;
-		const target = e.currentTarget;
-
-		pointerPositionRef.current = {
-			x: `${x.toFixed(2)}%`,
-			y: `${y.toFixed(2)}%`,
-		};
-
-		if (pointerFrameRef.current) return;
-		pointerFrameRef.current = window.requestAnimationFrame(() => {
-			target.style.setProperty('--pointer-x', pointerPositionRef.current.x);
-			target.style.setProperty('--pointer-y', pointerPositionRef.current.y);
-			pointerFrameRef.current = 0;
-		});
-	}
-
 	function isActiveNavLink(link) {
 		return link.activePaths?.includes(publicPath);
 	}
@@ -483,27 +323,8 @@ export default function LoginPage() {
 		<div
 			id={isLogin ? 'login' : 'inicio'}
 			className={`login-page ${isLogin ? 'login-page--login' : isHome ? 'login-page--home' : 'login-page--public'}`}
-			onPointerMove={handlePointerMove}
 		>
-			<Suspense fallback={null}>
-				<DottedSurface className="login-dotted-surface" />
-			</Suspense>
-			<div className="login-orb login-orb--one" aria-hidden="true" />
-			<div className="login-orb login-orb--two" aria-hidden="true" />
-			<div className="login-grid" aria-hidden="true" />
-			<div className="login-beam login-beam--one" aria-hidden="true" />
-			<div className="login-beam login-beam--two" aria-hidden="true" />
-			<div className="login-signal-field" aria-hidden="true">
-				<span />
-				<span />
-				<span />
-				<span />
-				<span />
-				<span />
-				<span />
-				<span />
-			</div>
-
+			<a className="public-skip-link" href="#public-main">Saltar al contenido</a>
 			<header className={`login-nav-shell${navScrolled ? ' is-scrolled' : ''}${mobileNavOpen ? ' menu-open' : ''}`}>
 				<div className="login-nav-frame">
 					<div className="login-nav">
@@ -526,11 +347,7 @@ export default function LoginPage() {
 						</nav>
 
 						<div className="login-nav__actions">
-							{!user ? (
-								<Link className="login-nav__cta" to="/contacto">
-									Solicitar una demo
-								</Link>
-							) : null}
+
 							<Link className="login-nav__login" to={accessPath}>
 								{accessLabel}
 							</Link>
@@ -581,11 +398,7 @@ export default function LoginPage() {
 						</div>
 
 						<div className="login-mobile-nav__actions">
-							{!user ? (
-								<Link to="/contacto" tabIndex={mobileNavOpen ? 0 : -1}>
-									Solicitar una demo
-								</Link>
-							) : null}
+
 							<Link to={accessPath} tabIndex={mobileNavOpen ? 0 : -1}>
 								{accessLabel}
 							</Link>
@@ -594,7 +407,7 @@ export default function LoginPage() {
 				</div>
 			</header>
 
-			<main className="login-shell">
+			<main id="public-main" className="login-shell">
 				{publicPath === '/contacto' ? (
 					<section className="public-section public-section--single public-contact" aria-labelledby="contact-title">
 						<div className="public-page-heading">
@@ -694,93 +507,8 @@ export default function LoginPage() {
 					</section>
 				) : null}
 
-				{isHome ? (
-					<>
-						<section className="login-story" aria-label="Resumen de la plataforma">
-							<div className="login-hero-copy">
-								<span className="public-eyebrow">Operación comercial en WhatsApp</span>
-								<h1>Convertí conversaciones en trabajo comercial ordenado.</h1>
-								<p className="login-lead">
-									BladeIA reúne bandeja, clientes, campañas y carritos para que tu equipo sepa qué atender, qué seguir y cuándo debe intervenir una persona.
-								</p>
+				{isHome ? <PublicHome /> : null}
 
-								<div className="login-hero-actions">
-									<Link className="login-primary-cta" to="/contacto">
-										Solicitar una demo <ArrowRight aria-hidden="true" />
-									</Link>
-									<Link className="login-secondary-cta" to="/precios">Ver planes</Link>
-								</div>
-
-								<div className="login-hero-checks" aria-label="Funciones incluidas">
-									{productProofPoints.map((point) => <span key={point}>{point}</span>)}
-								</div>
-							</div>
-
-							<ProductPreview />
-						</section>
-
-						<section className="public-outcomes" aria-labelledby="outcomes-title">
-							<div className="public-section-heading">
-								<span className="public-eyebrow">Menos fricción operativa</span>
-								<h2 id="outcomes-title">Cada función tiene una decisión detrás.</h2>
-							</div>
-							<div className="public-outcomes__grid">
-								{outcomeItems.map((item) => {
-									const OutcomeIcon = item.icon;
-									return (
-										<article key={item.title}>
-											<OutcomeIcon aria-hidden="true" />
-											<h3>{item.title}</h3>
-											<p>{item.description}</p>
-										</article>
-									);
-								})}
-							</div>
-						</section>
-
-						<section className="login-feature-carousel" aria-label="Recorrido por BladeIA">
-							<div className="public-section-heading">
-								<span className="public-eyebrow">Producto real</span>
-								<h2>Recorré los flujos que usa el equipo todos los días.</h2>
-								<p>Las vistas usan datos sintéticos y muestran el producto sin información de clientes reales.</p>
-							</div>
-							<LazyWhenVisible
-								className="login-feature-carousel__lazy"
-								fallback={<FeatureCarouselPlaceholder />}
-							>
-								<Suspense fallback={<FeatureCarouselPlaceholder />}>
-									<FeatureCarousel image={featureCarouselImages} />
-								</Suspense>
-							</LazyWhenVisible>
-						</section>
-
-						<section className="public-workflow" aria-labelledby="workflow-title">
-							<div className="public-section-heading">
-								<span className="public-eyebrow">Implementación</span>
-								<h2 id="workflow-title">Un recorrido entendible desde el primer día.</h2>
-							</div>
-							<ol>
-								{workflowSteps.map((step) => (
-									<li key={step.number}>
-										<span>{step.number}</span>
-										<h3>{step.title}</h3>
-										<p>{step.description}</p>
-									</li>
-								))}
-							</ol>
-						</section>
-
-						<section className="public-final-cta" aria-labelledby="final-cta-title">
-							<div>
-								<span className="public-eyebrow">Próximo paso</span>
-								<h2 id="final-cta-title">Mostranos cómo trabaja tu equipo.</h2>
-								<p>Te ayudamos a identificar qué conviene centralizar primero y qué puede esperar.</p>
-							</div>
-							<Link className="login-primary-cta" to="/contacto">Solicitar una demo <ArrowRight aria-hidden="true" /></Link>
-						</section>
-					</>
-				) : null}
-			</main>
 
 			{isLogin ? (
 				<section className="login-access-section login-access-section--form-only" aria-labelledby="login-access-title">
@@ -796,6 +524,8 @@ export default function LoginPage() {
 					/>
 				</section>
 			) : null}
+
+			</main>
 
 			<footer className="login-footer">
 				<div className="login-footer__inner">
