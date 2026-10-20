@@ -420,6 +420,10 @@ export function buildHandoffReply({ contactName = '', reason = '' } = {}) {
 			`${prefix}para resolverlo mejor te paso con una persona del equipo.`,
 			`${prefix}esto conviene verlo con una asesora para darte una respuesta más precisa.`
 		],
+		sensitive_product_safety: [
+			`${prefix}lamento que te haya pasado. Para cuidarte, te paso con una asesora que pueda revisar lo ocurrido; no voy a recomendarte cómo usar el producto en esta situación.`,
+			`${prefix}para orientarte con cuidado sobre esa reacción, te derivo con una asesora del equipo.`,
+		],
 		urgent_return_exchange: [
 			`${prefix}te derivo con una asesora para resolver el cambio o devolución lo antes posible.`,
 			`${prefix}esto te lo va a tomar una persona del equipo para verlo mejor.`,

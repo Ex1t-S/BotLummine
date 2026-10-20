@@ -10,6 +10,11 @@ function normalizeText(value = '') {
 		.trim();
 }
 
+export function hasProductSafetyConcern(text = '') {
+	const q = normalizeText(text);
+	return /\b(alerg\w*|reaccion\w*|irritacion\w*|me quemo|me hizo mal|ardor|hinchazon|erupcion|sarpullido)\b/.test(q);
+}
+
 function hasExplicitOrderContext(text = '') {
 	const q = normalizeText(text);
 
@@ -232,6 +237,7 @@ export function detectIntent(text = '', currentState = {}, options = {}) {
 	const purchaseFlow = hasPurchaseKeywords(q);
 	const trackingIntent = isTrackingIntent(q, currentState);
 	const preservePurchaseContext = shouldPreservePurchaseContext(q, currentState);
+	if (hasProductSafetyConcern(q)) return 'human_handoff';
 
 	if (
 		/((?:quiero|necesito|quisiera|puedo|podria).*(?:hablar con|persona|alguien|humano|asesor|asesora|operador|agente humano|equipo)|persona real|asesor|asesora|operador humano|agente humano|alguien del equipo)/.test(
@@ -278,6 +284,11 @@ export function detectIntent(text = '', currentState = {}, options = {}) {
 	if (!insuranceVertical && hasSizeKeywords(q)) return 'size_help';
 	if (!insuranceVertical && hasStockKeywords(q)) return 'stock_check';
 	if (!insuranceVertical && hasPriceKeywords(q)) return 'product';
+	if (
+		/(ingredientes?|composicion|inci|material|piel sensible|piel grasa|apto para|compatible con|como (?:se )?usa|frecuencia|cada cuanto|cuanto dura|beneficios?|resultados?|contraindicaciones?)/.test(q)
+	) {
+		return 'product';
+	}
 	if (hasProductKeywords(q)) return 'product';
 
 	if (purchaseFlow) {

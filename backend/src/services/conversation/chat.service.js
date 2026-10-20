@@ -20,6 +20,7 @@ import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
 import {
 	detectIntent,
+	hasProductSafetyConcern,
 	extractOrderNumber,
 	extractStandaloneOrderNumber
 } from '../../lib/intent.js';
@@ -1103,7 +1104,9 @@ async function processInboundMessageTurn({
 
 	if (intent === 'human_handoff') {
 		memoryPatch.needsHuman = true;
-		memoryPatch.handoffReason = 'requested_human';
+		memoryPatch.handoffReason = hasProductSafetyConcern(effectiveMessageBody)
+			? 'sensitive_product_safety'
+			: 'requested_human';
 	}
 
 	const detectedPaymentProof = isPaymentProofMessage({

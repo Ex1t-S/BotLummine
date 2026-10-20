@@ -1452,6 +1452,24 @@ function buildUnverifiedCatalogClaimReply({ catalogProducts = [], commercialPlan
 	return `${subject} no tengo confirmados datos sobre ${featureLabel}. No quiero recomendártelo por algo que no figura; ¿querés que te comparta la información disponible?`;
 }
 
+function catalogSupportsAskedProductDetail(product = {}, question = '') {
+	const description = normalizeGateText(
+		`${product?.shortDescription || ''} ${product?.description || ''}`
+	);
+	const q = normalizeGateText(question);
+	if (!description || /^sin descripcion cargada\.?$/.test(description)) return false;
+
+	const evidenceByQuestion = [
+		[/ingredientes?|composicion|inci/, /ingrediente|composicion|inci/],
+		[/material/, /material|algodon|lycra|elastano|microfibra|nylon|satin|encaje/],
+		[/piel sensible|piel grasa|apto para|compatible con/, /piel|hipoalergen|dermatolog|apto|compatible/],
+		[/como (?:se )?usa|frecuencia|cada cuanto/, /modo de uso|aplicacion|aplicar|frecuencia|veces por semana|uso diario/],
+		[/cuanto dura|duracion|beneficios?|resultados?/, /duracion|dura \d|beneficios?|resultados?/],
+	];
+	const requestedEvidence = evidenceByQuestion.find(([questionPattern]) => questionPattern.test(q));
+	return requestedEvidence ? requestedEvidence[1].test(description) : true;
+}
+
 export function auditAssistantReply({
 	text,
 	responsePolicy,
@@ -1499,10 +1517,9 @@ export function auditAssistantReply({
 	const asksUnverifiedProductDetail =
 		strictCatalogHandoff &&
 		['product', 'size_help', 'stock_check'].includes(detectedIntent) &&
-		/(ingredientes?|composici[oó]n|material|piel sensible|apto|c[oó]mo (?:se )?usa|cada cu[aá]nto|frecuencia|medidas?|talles?|stock|disponib|cu[aá]nto dura|resultados?)/i.test(latestUserMessage) &&
+		/(ingredientes?|composici[oó]n|inci|material|piel sensible|apto|compatible|c[oó]mo (?:se )?usa|cada cu[aá]nto|frecuencia|medidas?|talles?|stock|disponib|cu[aá]nto dura|duraci[oó]n|beneficios?|resultados?)/i.test(latestUserMessage) &&
 		!getClaimedProducts({ text: latestUserMessage, catalogProducts, commercialPlan }).some((product) =>
-			String(product?.shortDescription || product?.description || '').trim() &&
-			!/^sin descripcion cargada\.?$/i.test(String(product?.shortDescription || product?.description || '').trim())
+			catalogSupportsAskedProductDetail(product, latestUserMessage)
 		);
 	if (asksUnverifiedProductDetail) {
 		return {
