@@ -339,7 +339,7 @@ function getShopifyWebhookSecret() {
 
 function getWhatsAppWebhookSecretsForApp(app = null) {
 	return [...new Set([
-		app?.appSecret,
+		app?.appSecret ? decryptSecret(app.appSecret) : null,
 		...getWhatsAppWebhookSecrets()
 	].map((secret) => String(secret || '').trim()).filter(Boolean))];
 }
