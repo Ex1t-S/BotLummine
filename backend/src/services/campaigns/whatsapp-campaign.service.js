@@ -1153,6 +1153,9 @@ function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentS
 		return 'FAILED';
 	}
 	if (pending > 0) {
+		if (['DRAFT', 'QUEUED', 'RUNNING'].includes(currentStatus)) {
+			return currentStatus;
+		}
 		return 'RUNNING';
 	}
 	if (accepted === 0 && failed > 0) {
