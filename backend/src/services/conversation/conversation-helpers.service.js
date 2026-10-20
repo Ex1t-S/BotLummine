@@ -1465,6 +1465,7 @@ export function auditAssistantReply({
 	contactName = '',
 	businessName = 'la marca',
 	agentName = 'Asistente',
+	strictCatalogHandoff = false,
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
 	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
@@ -1495,11 +1496,33 @@ export function auditAssistantReply({
 		};
 	}
 
+	const asksUnverifiedProductDetail =
+		strictCatalogHandoff &&
+		['product', 'size_help', 'stock_check'].includes(detectedIntent) &&
+		/(ingredientes?|composici[oó]n|material|piel sensible|apto|c[oó]mo (?:se )?usa|cada cu[aá]nto|frecuencia|medidas?|talles?|stock|disponib|cu[aá]nto dura|resultados?)/i.test(latestUserMessage) &&
+		!getClaimedProducts({ text: latestUserMessage, catalogProducts, commercialPlan }).some((product) =>
+			String(product?.shortDescription || product?.description || '').trim() &&
+			!/^sin descripcion cargada\.?$/i.test(String(product?.shortDescription || product?.description || '').trim())
+		);
+	if (asksUnverifiedProductDetail) {
+		return {
+			finalText: 'No tengo ese detalle confirmado en la ficha del producto. Te paso con una asesora para que lo revise y te responda bien.',
+			triggerHumanHandoff: true,
+			handoffReason: 'missing_product_details',
+			auditFlags: ['missing_product_details'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
 	const sizeProducts = getClaimedProducts({ text: cleaned, catalogProducts, commercialPlan });
 	if (detectedIntent === 'size_help' && looksLikeSizeRecommendation(cleaned) && !hasConfirmedSizeGuide(sizeProducts)) {
 		return {
-			finalText: fallbackReply,
-			triggerHumanHandoff: false,
+			finalText: strictCatalogHandoff
+				? 'No tengo una guía de medidas confirmada para recomendarte un talle. Te paso con una asesora para que te oriente bien.'
+				: fallbackReply,
+			triggerHumanHandoff: strictCatalogHandoff,
+			handoffReason: strictCatalogHandoff ? 'missing_size_guide' : null,
 			auditFlags: ['unsupported_size_recommendation'],
 			repetitionDetected: false,
 			continuityRecovery: false,
@@ -1511,8 +1534,11 @@ export function auditAssistantReply({
 		: [];
 	if (unsupportedCatalogClaims.length) {
 		return {
-			finalText: buildUnverifiedCatalogClaimReply({ catalogProducts, commercialPlan, claims: unsupportedCatalogClaims }),
-			triggerHumanHandoff: false,
+			finalText: strictCatalogHandoff
+				? 'No tengo ese dato confirmado en la ficha del producto. Te paso con una asesora para que lo revise antes de recomendarte algo incorrecto.'
+				: buildUnverifiedCatalogClaimReply({ catalogProducts, commercialPlan, claims: unsupportedCatalogClaims }),
+			triggerHumanHandoff: strictCatalogHandoff,
+			handoffReason: strictCatalogHandoff ? 'unverified_product_claim' : null,
 			auditFlags: unsupportedCatalogClaims.map(({ flag }) => flag),
 			repetitionDetected: false,
 			continuityRecovery: false,

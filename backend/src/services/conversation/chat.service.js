@@ -905,6 +905,46 @@ async function processInboundMessageTurn({
 		campaignAssistantContext: null,
 	};
 
+	// Voice notes are stored for the inbox, but no transcription is available.
+	// Never ask the text model to interpret the "[Audio recibido]" placeholder.
+	if (String(messageType || '').toLowerCase() === 'audio') {
+		if (freshConversation.queue !== 'AUTO' || !freshConversation.aiEnabled) {
+			return finalizeInboundResult({ conversation: freshConversation, trace: {
+				...trace, responsePolicy: { reason: 'audio_waiting_human' },
+			} });
+		}
+
+		const handoff = await syncHumanHandoff({
+			conversationId: freshConversation.id,
+			workspaceId: resolvedWorkspaceId,
+			reason: 'audio_requires_human',
+			currentState,
+		});
+		const reply = 'Recibí tu audio. Para responderte bien, lo va a revisar una asesora y te contesta por acá.';
+		const outbound = await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			workspaceId: resolvedWorkspaceId,
+			body: reply,
+			deliveryMode: transportMode,
+			turnAuthorization: {
+				workspaceId: resolvedWorkspaceId,
+				conversationId: freshConversation.id,
+				inboundMessageId: inboundMessage.id,
+				expectedHandoff: handoff,
+			},
+			aiMeta: { provider: 'system', model: 'audio-human-handoff' },
+		});
+		return finalizeInboundResult({ conversation: freshConversation, trace: {
+			...trace,
+			intent: 'audio',
+			queueDecision: { queue: 'HUMAN', aiEnabled: false },
+			assistantMessage: outbound.skipped ? null : reply,
+			provider: 'system',
+			model: 'audio-human-handoff',
+			shouldReply: !outbound.skipped,
+		} });
+	}
+
 	const abandonedCartDecision = await maybeHandleAbandonedCartReply({
 		conversation: freshConversation,
 		currentState,
@@ -2017,7 +2057,8 @@ async function processInboundMessageTurn({
 				recentMessages: fullRecentMessages,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				businessName: aiBrand.businessName,
-				agentName: aiBrand.agentName
+				agentName: aiBrand.agentName,
+				strictCatalogHandoff: workspaceConfig.ai.catalogConfig?.handoffOnMissingProductDetails === true
 			});
 
 			const handoff = resolveAssistantHandoff({
