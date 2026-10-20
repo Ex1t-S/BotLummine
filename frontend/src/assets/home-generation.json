@@ -1,0 +1,18 @@
+{
+  "generator": "Built-in image_gen",
+  "created": "2026-10-20",
+  "assets": [
+    {
+      "file": "commerce-team.webp",
+      "prompt": "Use case: photorealistic-natural. Asset type: premium SaaS ecommerce landing page editorial image for BladeIA. Landscape 3:2 composition. A candid editorial photo of two young adult Latin American small business owners, woman and man, collaborating at a neat ecommerce fulfillment desk inside a modern apparel boutique. One is using a silver laptop seen from the side, the other carefully packing a cream garment into a small cardboard shipping box. Rich cobalt blue shelving and a few sky blue accents, off-white walls, warm natural daylight. Human, authentic, optimistic, premium brand photography, fine realistic textures, natural skin and hands. Medium wide framing with the two people clearly visible, desk and packages in foreground. No visible text, no brands, no readable laptop screen, no floating graphics, no watermarks. Not a testimonial, illustrative business scene.",
+      "purpose": "Illustrative ecommerce team scene, not a client testimonial."
+    },
+    {
+      "file": "ecommerce-products.webp",
+      "thumbnail": "ecommerce-products-thumb.webp",
+      "prompt": "Use case: product-mockup. Asset type: ecommerce imagery for BladeIA SaaS landing page. Landscape 3:2 premium studio editorial photograph, tactile playful but sophisticated. A curated arrangement of a cobalt blue folded sweatshirt, white sneakers with subtle light blue details, a matte ivory skincare bottle without writing, and two small kraft shipping boxes with electric blue paper wrapping. Arrange on pale ice blue architectural plinths with one translucent blue glass slab. Background light cool blue, directional soft sunlight casting elegant shadows. Carefully balanced composition with plenty of breathing room, crisp materials and cloth texture, photorealistic luxury ecommerce campaign. Main objects centered and clearly visible. No people, no text, no logos, no watermarks, no interface, no chat bubbles.",
+      "purpose": "Illustrative product still life for the landing and catalog mockup."
+    }
+  ],
+  "processing": "Lossless source PNGs preserved in output/public-home-refresh/source-images; WebP quality 84 and 320px thumbnail quality 80 created with existing sharp."
+}
