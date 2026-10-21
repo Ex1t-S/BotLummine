@@ -18,13 +18,21 @@ const HARD_HANDOFF_REASONS = new Set([
 	'return_exchange_followup_received',
 	'requested_human',
 	'sensitive_support',
+	'sensitive_product_safety',
 	'tracking_followup',
 	'tracking_followup_needs_human',
+	'ai_cannot_continue',
 	'ai_cannot_continue',
 	'stock_unconfirmed',
 	'promotion_unconfirmed',
 	'size_data_unconfirmed',
 	'product_data_unconfirmed',
+	'audio_requires_human',
+	'missing_product_details',
+	'missing_payment_policy',
+	'missing_shipping_policy',
+	'missing_size_guide',
+	'unverified_product_claim',
 ]);
 
 const COMMERCIAL_INTENTS = new Set([

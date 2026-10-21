@@ -107,6 +107,7 @@ type MessageConversationProps = {
 	onBack?: () => void;
 	actions?: ConversationAction[];
 	moreActions?: ConversationAction[];
+	primaryAction?: ConversationAction;
 	headerTools?: ReactNode;
 	feedback?: string;
 	feedbackTone?: "status" | "error";
@@ -115,6 +116,7 @@ type MessageConversationProps = {
 	emptyState?: ReactNode;
 	loadOlderControl?: ReactNode;
 	composer?: ReactNode;
+	newMessagesControl?: ReactNode;
 	messagesContainerRef?: RefObject<HTMLDivElement>;
 	onMessagesScroll?: () => void;
 };
@@ -125,13 +127,14 @@ export default function MessageConversation({
 	contactSubtitle = "",
 	avatarUrl = "",
 	avatarFallback = "?",
-	status = "online",
+	status,
 	queueLabel = "",
 	aiLabel = "",
 	showBackButton = false,
 	onBack,
 	actions = [],
 	moreActions = [],
+	primaryAction,
 	headerTools = null,
 	feedback = "",
 	feedbackTone = "status",
@@ -140,6 +143,7 @@ export default function MessageConversation({
 	emptyState = null,
 	loadOlderControl = null,
 	composer = null,
+	newMessagesControl = null,
 	messagesContainerRef,
 	onMessagesScroll,
 }: MessageConversationProps) {
@@ -162,7 +166,7 @@ export default function MessageConversation({
 						<div className="min-w-0">
 							<h2 className="inbox-chat-title">{contactName}</h2>
 							<div className="inbox-chat-subtitle">
-								<StatusBadge status={status} />
+								{status ? <StatusBadge status={status} /> : null}
 								<span>{contactSubtitle}</span>
 							</div>
 						</div>
@@ -171,9 +175,10 @@ export default function MessageConversation({
 					<div className="inbox-badges">
 						{queueLabel ? <span className="inbox-badge inbox-badge--neutral">{queueLabel}</span> : null}
 						{aiLabel ? (
-							<span className={cn("inbox-badge", status === "online" ? "inbox-badge--ai" : "inbox-badge--human")}>{aiLabel}</span>
+							<span className={cn("inbox-badge", "inbox-badge--neutral")}>{aiLabel}</span>
 						) : null}
-						{headerTools}
+						{primaryAction ? <button type="button" className="inbox-primary-action" disabled={primaryAction.disabled} onClick={primaryAction.onClick}>{primaryAction.label}</button> : null}
+                        {headerTools}
 						<MoreActionsMenu actions={actions} moreActions={moreActions} />
 					</div>
 				</div>
@@ -211,7 +216,8 @@ export default function MessageConversation({
 				</div>
 			</CardContent>
 
-			{composer ? <div className="inbox-composer-shell">{composer}</div> : null}
+			{newMessagesControl}
+            {composer ? <div className="inbox-composer-shell">{composer}</div> : null}
 		</Card>
 	);
 }

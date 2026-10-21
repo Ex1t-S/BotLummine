@@ -11,7 +11,7 @@ import {
 	serializeCustomerProductFilters,
 } from '../../lib/customerFilters.js';
 
-const SAFE_MAX_CUSTOMER_PAGES = 20;
+const BULK_CUSTOMER_PAGE_SIZE = 100;
 
 const initialForm = {
 	name: '',
@@ -1203,18 +1203,18 @@ export default function CampaignComposerPanel({
 
 	async function fetchAllFilteredCustomers(nextFilters = customerFilters) {
 		const firstPage = await fetchCampaignCustomers({
-			...buildCustomerRequestParams(nextFilters),
+			...buildCustomerRequestParams({ ...nextFilters, pageSize: BULK_CUSTOMER_PAGE_SIZE }),
 			page: 1,
 		});
 
 		const pagination = firstPage?.pagination || {};
-		const totalPages = Math.min(Number(pagination.totalPages || 1), SAFE_MAX_CUSTOMER_PAGES);
+		const totalPages = Math.max(1, Number(pagination.totalPages || 1));
 
 		let mergedCustomers = Array.isArray(firstPage?.customers) ? [...firstPage.customers] : [];
 
 		for (let page = 2; page <= totalPages; page += 1) {
 			const nextPage = await fetchCampaignCustomers({
-				...buildCustomerRequestParams(nextFilters),
+				...buildCustomerRequestParams({ ...nextFilters, pageSize: BULK_CUSTOMER_PAGE_SIZE }),
 				page,
 			});
 

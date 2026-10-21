@@ -344,6 +344,26 @@
 .wa-setup-check-result { background: var(--ui-success-soft, #ecfdf3); border: 1px solid #86efac; }
 .wa-setup-check-result p { margin: 5px 0 0; }
 .wa-setup-check-error { margin: 0; color: #9f1239; background: #fff1f2; border: 1px solid #fda4af; }
+.wa-setup-channel-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.wa-setup-channel-list button {
+	display: grid;
+	gap: 3px;
+	min-width: 170px;
+	padding: 11px 13px;
+	text-align: left;
+	border: 1px solid var(--ui-border, #cbd5e1);
+	border-radius: 10px;
+	background: var(--ui-surface, #fff);
+	color: var(--ui-text, #17212f);
+	cursor: pointer;
+}
+.wa-setup-channel-list button.is-selected { border-color: var(--ui-primary-strong, #0a5f59); box-shadow: 0 0 0 2px var(--ui-primary-muted, #e7f6f2); }
+.wa-setup-channel-list button small { color: var(--ui-muted, #64748b); }
+.wa-setup-channel-list button:focus-visible { outline: 3px solid var(--ui-primary-strong, #0a5f59); outline-offset: 2px; }
+.wa-setup-discovery { grid-column: 1 / -1; display: grid; gap: 10px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--ui-border, #cbd5e1); border-radius: 10px; background: var(--ui-surface-soft, #f8fafc); }
+.wa-setup-discovery p { margin: 0; color: var(--ui-muted, #64748b); font-size: 13px; }
+.wa-setup-discovery .tenant-admin-grid { align-items: end; }
+.wa-setup-alternative .wa-setup-guide { margin-top: 12px; }
 
 .tenant-admin-provider-actions,
 .tenant-admin-shopify-actions {

@@ -12,7 +12,7 @@ function Step({ number, title, complete, children }) {
 	);
 }
 
-export default function WhatsAppManualGuide({ app, channel, check, platformAdmin }) {
+export default function WhatsAppManualGuide({ app, channel, check }) {
 	const appUrl = app?.metaAppId ? `https://developers.facebook.com/apps/${encodeURIComponent(app.metaAppId)}/` : 'https://developers.facebook.com/apps/';
 	const appConfigured = Boolean(app?.metaAppId && app?.callbackUrl);
 	const channelLinked = Boolean(channel?.phoneNumberId && channel?.status === 'ACTIVE');
@@ -46,7 +46,7 @@ export default function WhatsAppManualGuide({ app, channel, check, platformAdmin
 			</ol>
 			{tokenExpiresSoon ? <p className="wa-setup-caution">Este token vence pronto. Generá uno de usuario del sistema antes de dejar el canal en producción.</p> : null}
 			<p className="wa-setup-caution">Si ese número sigue funcionando en la app WhatsApp Business, no lo elimines ni lo migres a ciegas: la coexistencia puede necesitar un proveedor habilitado. Primero verificá su estado en WhatsApp Manager.</p>
-			{!platformAdmin ? <p className="wa-setup-caution">La vinculación final la realiza un administrador de BladeIA. Podés compartirle estos pasos y los identificadores, pero nunca enviar el token por chat.</p> : null}
+			<p className="wa-setup-caution">El administrador de esta marca puede vincular sus números desde esta pantalla. Guardá el token aquí; no lo envíes por chat.</p>
 		</div>
 	);
 }

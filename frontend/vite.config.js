@@ -13,9 +13,15 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [demoMode ? createDemoApiPlugin() : null, react(), tailwindcss()].filter(Boolean),
 		resolve: {
+			dedupe: ['react', 'react-dom'],
 			alias: {
 				'@': path.resolve(__dirname, './src'),
 			},
+		},
+		// Prebundle the React entry points together so lazy routes and the renderer
+		// share the same hook dispatcher, including during local hot reloads.
+		optimizeDeps: {
+			include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
 		},
 		build: {
 			rollupOptions: {

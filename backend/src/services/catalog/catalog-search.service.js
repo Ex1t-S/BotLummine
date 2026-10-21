@@ -1042,14 +1042,11 @@ export function buildCatalogContext(products = []) {
 
 			if (product.originalPrice) lines.push(`   - Precio anterior: ${product.originalPrice}`);
 			if (product.variantPriceRange) lines.push('   - El precio cambia según la variante; confirma la presentación elegida antes de cerrar el monto.');
-			if (product.colors?.length) lines.push(`   - Colores detectados: ${product.colors.join(', ')}`);
-			if (product.sizes?.length) lines.push(`   - Talles disponibles: ${product.sizes.join(', ')}`);
+			if (product.colors?.length) lines.push(`   - Colores listados (stock no confirmado): ${product.colors.join(', ')}`);
+			if (product.sizes?.length) lines.push(`   - Talles listados (stock no confirmado): ${product.sizes.join(', ')}`);
 			if (product.availabilityLabel) lines.push(`   - Disponibilidad: ${product.availabilityLabel}`);
 			if (product.storefrontFaq?.length) {
-				lines.push(`   - Preguntas frecuentes de la ficha: ${product.storefrontFaq
-					.slice(0, 6)
-					.map((item) => `${item.question}: ${item.answer}`)
-					.join(' | ')}`);
+				lines.push(`   - Preguntas frecuentes de la ficha: ${product.storefrontFaq.slice(0, 6).map((item) => `${item.question}: ${item.answer}`).join(' | ')}`);
 			}
 			return lines.join('\n');
 		})
@@ -1067,10 +1064,10 @@ export function pickCommercialHints(products = [], commercialPlan = null, { aiPr
 	if (profile?.defaultPitch) hints.push(profile.defaultPitch);
 	if (commercialPlan?.bestOffer?.name) hints.push(`Prioriza como oferta principal ${commercialPlan.bestOffer.name}.`);
 	if (Array.isArray(commercialPlan?.bestOffer?.sizes) && commercialPlan.bestOffer.sizes.length) {
-		hints.push(`Talles confirmados del producto foco: ${commercialPlan.bestOffer.sizes.join(', ')}.`);
+		hints.push(`Talles listados del producto foco (stock no confirmado): ${commercialPlan.bestOffer.sizes.join(', ')}.`);
 	}
 	if (Array.isArray(commercialPlan?.bestOffer?.colors) && commercialPlan.bestOffer.colors.length) {
-		hints.push(`Colores confirmados del producto foco: ${commercialPlan.bestOffer.colors.join(', ')}.`);
+		hints.push(`Colores listados del producto foco (stock no confirmado): ${commercialPlan.bestOffer.colors.join(', ')}.`);
 	}
 
 	if (Array.isArray(commercialPlan?.offerCandidates) && commercialPlan.offerCandidates.length > 1) {

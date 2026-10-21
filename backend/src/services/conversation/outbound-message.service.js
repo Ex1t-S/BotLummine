@@ -36,6 +36,14 @@ function getOutboundError(sendResult = null) {
 	};
 }
 
+function getOutboundFailureMessage(sendResult = null) {
+	const providerError = sendResult?.error?.error || sendResult?.error || {};
+	if (String(providerError.error_subcode || '') === '2593181') {
+		return 'Meta no autorizó a esta App a enviar desde esta cuenta de WhatsApp (error 2593181). Revisá en Meta el acceso de la App a la WABA y sus permisos de mensajería.';
+	}
+	return providerError.message || 'No se pudo enviar el mensaje por WhatsApp.';
+}
+
 const configuredDuplicateWindowMs = Number(process.env.AI_DUPLICATE_OUTBOUND_WINDOW_MS || 60_000);
 const DUPLICATE_OUTBOUND_WINDOW_MS = Number.isFinite(configuredDuplicateWindowMs)
 	? Math.min(Math.max(configuredDuplicateWindowMs, 1_000), 300_000)
@@ -259,10 +267,7 @@ async function sendAndPersistOutboundInternal({
 	}
 
 	if (!sendResult?.ok) {
-		const error = new Error(
-			sendResult?.error?.error?.message || sendResult?.error?.message ||
-			'No se pudo enviar el mensaje por WhatsApp.'
-		);
+		const error = new Error(getOutboundFailureMessage(sendResult));
 		error.status = sendResult?.outcome === 'UNKNOWN' ? 502 : 400;
 		error.code = sendResult?.outcome === 'UNKNOWN' ? 'OUTBOUND_OUTCOME_UNKNOWN' : 'OUTBOUND_REJECTED';
 		error.details = sendResult?.error || null;

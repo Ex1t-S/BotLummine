@@ -8,6 +8,7 @@ import { sendWhatsAppTemplate } from '../whatsapp/whatsapp.service.js';
 import { renderTemplatePreviewFromComponents, getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
 import {
 	getWorkspaceRuntimeConfig,
+	getWhatsAppChannelForWorkspace,
 	normalizeWorkspaceId,
 } from '../workspaces/workspace-context.service.js';
 import { requireWorkspaceScope, workspaceOwnedWhere } from '../workspaces/workspace-scope.js';
@@ -994,6 +995,9 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 		contact = await prisma.contact.findFirst({
 			where: { id: contactId, workspaceId: resolvedWorkspaceId }
 		});
+		if (contact && normalizeCampaignPhone(contact.waId) !== normalizedPhone) {
+			contact = null;
+		}
 	}
 
 	if (!contact) {
@@ -1017,16 +1021,33 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 		});
 	}
 
-	let conversation = await prisma.conversation.findFirst({
-		where: { routingKey: `${resolvedWorkspaceId}:legacy:${contact.id}` }
-	});
+	// Campaign templates are sent through the same primary channel that receives
+	// replies. Keep both directions on one thread so the reply sees campaignMeta.
+	const channel = await getWhatsAppChannelForWorkspace(resolvedWorkspaceId);
+	const channelId = channel?.channelId || null;
+	const routingKey = `${resolvedWorkspaceId}:${channelId || 'legacy'}:${contact.id}`;
+	const legacyRoutingKey = `${resolvedWorkspaceId}:legacy:${contact.id}`;
+	let conversation = await prisma.conversation.findUnique({ where: { routingKey } });
+
+	if (!conversation && channelId) {
+		const legacyConversation = await prisma.conversation.findUnique({
+			where: { routingKey: legacyRoutingKey }
+		});
+		if (legacyConversation) {
+			conversation = await prisma.conversation.update({
+				where: workspaceOwnedWhere({ id: legacyConversation.id, workspaceId: resolvedWorkspaceId }),
+				data: { routingKey, whatsappChannelId: channelId }
+			});
+		}
+	}
 
 	if (!conversation) {
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
 				workspaceId: resolvedWorkspaceId,
-				routingKey: `${resolvedWorkspaceId}:legacy:${contact.id}`,
+				whatsappChannelId: channelId,
+				routingKey,
 				queue: 'AUTO',
 				aiEnabled: true,
 				state: {
@@ -1043,20 +1064,10 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 		});
 	}
 
-	await prisma.conversation.update({
-		where: workspaceOwnedWhere({ id: conversation.id, workspaceId: resolvedWorkspaceId }),
-		data: {
-			queue: 'AUTO',
-			aiEnabled: true,
-		}
-	});
-
 	await prisma.conversationState.upsert({
 		where: { conversationId: conversation.id },
 		update: {
 			customerName: contact.name || normalizedPhone,
-			needsHuman: false,
-			handoffReason: null,
 		},
 		create: {
 			conversationId: conversation.id,
@@ -1064,7 +1075,7 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 			interactionCount: 0,
 			interestedProducts: [],
 			objections: [],
-			needsHuman: false,
+			needsHuman: conversation.queue !== 'AUTO' || !conversation.aiEnabled,
 			handoffReason: null,
 		}
 	});
@@ -1072,11 +1083,12 @@ async function ensureCampaignConversation({ workspaceId, phone, contactId = null
 	return {
 		contactId: contact.id,
 		conversationId: conversation.id,
-		queue: 'AUTO',
+		whatsappChannelId: channelId,
+		queue: conversation.queue,
 	};
 }
 
-async function applyCampaignConversationContext({ campaign, recipient, conversationId }) {
+async function applyCampaignConversationContext({ campaign, recipient, conversationId, queue = 'AUTO' }) {
 	if (!conversationId) return null;
 	if (normalizeAudienceSource(campaign.audienceSource || '') !== 'abandoned_carts') {
 		return null;
@@ -1110,8 +1122,6 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: false,
-			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		},
 		create: {
@@ -1128,7 +1138,7 @@ async function applyCampaignConversationContext({ campaign, recipient, conversat
 			menuActive: false,
 			menuPath: null,
 			menuLastSelection: null,
-			needsHuman: false,
+			needsHuman: queue !== 'AUTO',
 			handoffReason: null,
 			commercialSummary: commercialSummary || null
 		}
@@ -1143,6 +1153,9 @@ function buildCampaignFinalStatus({ pending, accepted, failed, skipped, currentS
 		return 'FAILED';
 	}
 	if (pending > 0) {
+		if (['DRAFT', 'QUEUED', 'RUNNING'].includes(currentStatus)) {
+			return currentStatus;
+		}
 		return 'RUNNING';
 	}
 	if (accepted === 0 && failed > 0) {
@@ -1601,6 +1614,69 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 	}
 
 	return null;
+}
+
+function readFixedVariableValue(variableMapping = {}, key = '') {
+	const value = variableMapping?.[key];
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		return normalizeString(value.fixedValue || '');
+	}
+	return normalizeString(value || '');
+}
+
+/**
+ * Campaigns keep the uploaded media in draftContext and in each recipient's
+ * variables. Meta's campaign dispatcher also needs it on the stored template
+ * components, otherwise launchCampaign rejects an otherwise valid draft.
+ */
+function applyCampaignHeaderMedia({ components = [], template = null, variableMapping = {}, draftContext = null } = {}) {
+	const nextComponents = safeArray(components).map((component) => ({ ...component }));
+	const headerIndex = nextComponents.findIndex((component) => toUpper(component?.type) === 'HEADER');
+	if (headerIndex < 0) return nextComponents;
+
+	const header = nextComponents[headerIndex];
+	const templateHeader = safeArray(template?.rawPayload?.components).find(
+		(component) => toUpper(component?.type) === 'HEADER'
+	);
+	const headerFormat = toUpper(header?.format || templateHeader?.format || template?.headerFormat || '');
+	if (!['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(headerFormat)) return nextComponents;
+
+	const mediaField = headerFormat.toLowerCase();
+	const existingParameter = safeArray(header?.parameters)[0] || {};
+	const existingMedia = existingParameter?.[mediaField] || {};
+	if (normalizeString(existingMedia.id) || normalizeString(existingMedia.link)) return nextComponents;
+
+	const mediaId = normalizeString(
+		readFixedVariableValue(variableMapping, `header_${mediaField}_id`) ||
+		readFixedVariableValue(variableMapping, `${mediaField}_id`) ||
+		draftContext?.uploadedMediaId ||
+		template?.rawPayload?.headerMedia?.mediaId ||
+		header?.[mediaField]?.id ||
+		templateHeader?.[mediaField]?.id ||
+		''
+	);
+	const mediaLink = normalizeString(
+		readFixedVariableValue(variableMapping, `header_${mediaField}_link`) ||
+		readFixedVariableValue(variableMapping, `${mediaField}_link`) ||
+		template?.rawPayload?.headerMedia?.previewUrl ||
+		header?.[mediaField]?.link ||
+		templateHeader?.[mediaField]?.link ||
+		''
+	);
+
+	if (!mediaId && !mediaLink) return nextComponents;
+
+	nextComponents[headerIndex] = {
+		...header,
+		parameters: [
+			{
+				type: mediaField,
+				[mediaField]: mediaId ? { id: mediaId } : { link: mediaLink },
+			}
+		]
+	};
+
+	return nextComponents;
 }
 
 function buildBodyComponentForSend(bodyComponent = {}, variables = {}, template = {}) {
@@ -2307,9 +2383,17 @@ export async function createCampaignDraft({
 		throw new Error('No hay destinatarios válidos para crear la campaña.');
 	}
 
-	const normalizedComponents = safeArray(sendComponents);
+	const variableMapping = audienceFilters?.variableMapping || draftContext?.variableMapping || {};
+	const normalizedComponents = applyCampaignHeaderMedia({
+		components: safeArray(sendComponents).length
+			? safeArray(sendComponents)
+			: safeArray(template?.rawPayload?.components),
+		template,
+		variableMapping,
+		draftContext,
+	});
 	const previewBase = renderTemplatePreviewFromComponents(
-		normalizedComponents.length ? normalizedComponents : safeArray(template?.rawPayload?.components),
+		normalizedComponents,
 		{}
 	);
 
@@ -2333,7 +2417,7 @@ export async function createCampaignDraft({
 		});
 
 		const personalized = renderTemplatePreviewFromComponents(
-			normalizedComponents.length ? normalizedComponents : safeArray(template?.rawPayload?.components),
+			normalizedComponents,
 			variables
 		);
 
@@ -2382,9 +2466,7 @@ export async function createCampaignDraft({
 			totalRecipients: recipientRows.length,
 			pendingRecipients,
 			skippedRecipients,
-			defaultComponents: normalizedComponents.length
-				? normalizedComponents
-				: safeArray(template?.rawPayload?.components),
+			defaultComponents: normalizedComponents,
 			draftContext: draftContext && typeof draftContext === 'object' ? draftContext : null,
 			previewText: previewBase.previewText,
 			status: 'DRAFT',
@@ -2431,9 +2513,15 @@ export async function updateCampaignDraft(campaignId, {
 		? await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId })
 		: await getTemplateOrThrow(existing.templateLocalId, { workspaceId: resolvedWorkspaceId });
 	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || existing.audienceSource || 'manual');
-	const normalizedComponents = safeArray(sendComponents).length
-		? safeArray(sendComponents)
-		: safeArray(template?.rawPayload?.components);
+	const variableMapping = audienceFilters?.variableMapping || draftContext?.variableMapping || {};
+	const normalizedComponents = applyCampaignHeaderMedia({
+		components: safeArray(sendComponents).length
+			? safeArray(sendComponents)
+			: safeArray(template?.rawPayload?.components),
+		template,
+		variableMapping,
+		draftContext,
+	});
 	const draftCampaign = {
 		...existing,
 		templateLocalId: template.id,
@@ -3007,7 +3095,8 @@ async function persistCampaignOutboundMessage({
 			...recipient,
 			contactId: ensured.contactId || recipient.contactId
 		},
-		conversationId: ensured.conversationId
+		conversationId: ensured.conversationId,
+		queue: ensured.queue
 	});
 
 	const workspaceConfig = await getWorkspaceRuntimeConfig(campaign.workspaceId);
@@ -3015,6 +3104,7 @@ async function persistCampaignOutboundMessage({
 		data: {
 			workspaceId: campaign.workspaceId,
 			conversationId: ensured.conversationId,
+			whatsappChannelId: ensured.whatsappChannelId,
 			metaMessageId: sendResult?.rawPayload?.messages?.[0]?.id || null,
 			senderName: workspaceConfig.ai.businessName || 'Marca',
 			direction: 'OUTBOUND',

@@ -1452,6 +1452,40 @@ function buildUnverifiedCatalogClaimReply({ catalogProducts = [], commercialPlan
 	return `${subject} no tengo confirmados datos sobre ${featureLabel}. No quiero recomendártelo por algo que no figura; ¿querés que te comparta la información disponible?`;
 }
 
+function catalogSupportsAskedProductDetail(product = {}, question = '') {
+	const description = normalizeGateText(
+		`${product?.shortDescription || ''} ${product?.description || ''}`
+	);
+	const q = normalizeGateText(question);
+	if (!description || /^sin descripcion cargada\.?$/.test(description)) return false;
+	if (/\b(?:talle|talles|talla|tallas|medidas?)\b/.test(q)) {
+		const sizeGuide = [product?.sizeGuide, product?.sizeMeasurements, product?.measurementTable, product?.confirmedSizeGuide]
+			.flatMap(flattenCatalogValues).join(' ');
+		const sizes = [...flattenCatalogValues(product?.sizes), ...flattenCatalogValues(product?.variantHints)]
+			.join(' ');
+		if (/\bmedidas?\b/.test(q)) {
+			return /\d/.test(normalizeGateText(sizeGuide)) && /\b(?:cm|mm|centimetros?|milimetros?)\b/.test(normalizeGateText(sizeGuide));
+		}
+		return /\b(?:xs|s|m|l|xl|xxl|xxxl|xxxxl)\b/i.test(sizes) ||
+			/\btalles?\s+(?:xs|s|m|l|xl|xxl|xxxl|xxxxl)\b/i.test(description);
+	}
+	if (/\b(?:stock|disponible|disponibilidad)\b/.test(q)) {
+		return ['inventoryQuantity', 'availableQuantity', 'stockQuantity', 'stock', 'inStock', 'inventoryStatus']
+			.some((key) => product?.[key] !== null && product?.[key] !== undefined && product?.[key] !== '');
+	}
+
+	const evidenceByQuestion = [
+		[/ingredientes?|composicion|inci/, /ingrediente|composicion|inci/],
+		[/material/, /material|algodon|lycra|elastano|microfibra|nylon|satin|encaje/],
+		[/piel sensible|piel grasa|apto para|compatible con/, /piel|hipoalergen|dermatolog|apto|compatible/],
+		[/colores?|color/, /colores?|color/],
+		[/como (?:se )?usa|frecuencia|cada cuanto/, /modo de uso|aplicacion|aplicar|frecuencia|veces por semana|uso diario/],
+		[/cuanto dura|duracion|beneficios?|resultados?/, /duracion|dura \d|beneficios?|resultados?/],
+	];
+	const requestedEvidence = evidenceByQuestion.find(([questionPattern]) => questionPattern.test(q));
+	return requestedEvidence ? requestedEvidence[1].test(description) : true;
+}
+
 export function auditAssistantReply({
 	text,
 	responsePolicy,
@@ -1465,6 +1499,9 @@ export function auditAssistantReply({
 	contactName = '',
 	businessName = 'la marca',
 	agentName = 'Asistente',
+	strictCatalogHandoff = false,
+	hasPaymentFacts = false,
+	hasShippingFacts = false,
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
 	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
@@ -1527,6 +1564,46 @@ export function auditAssistantReply({
 		};
 	}
 
+	const asksUnverifiedProductDetail =
+		strictCatalogHandoff &&
+		['product', 'size_help', 'stock_check'].includes(detectedIntent) &&
+		/(ingredientes?|composici[oó]n|inci|material|piel sensible|apto|compatible|c[oó]mo (?:se )?usa|cada cu[aá]nto|frecuencia|medidas?|talles?|stock|disponib|cu[aá]nto dura|duraci[oó]n|beneficios?|resultados?)/i.test(latestUserMessage) &&
+		!getClaimedProducts({ text: latestUserMessage, catalogProducts, commercialPlan }).some((product) =>
+			catalogSupportsAskedProductDetail(product, latestUserMessage)
+		);
+	if (asksUnverifiedProductDetail) {
+		return {
+			finalText: 'No tengo ese detalle confirmado en la ficha del producto. Te paso con una asesora para que lo revise y te responda bien.',
+			triggerHumanHandoff: true,
+			handoffReason: 'missing_product_details',
+			auditFlags: ['missing_product_details'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	if (strictCatalogHandoff && detectedIntent === 'payment' && !hasPaymentFacts) {
+		return {
+			finalText: 'No tengo los medios de pago de Kaisy confirmados en la información cargada. Te paso con una asesora para que te indique las opciones vigentes.',
+			triggerHumanHandoff: true,
+			handoffReason: 'missing_payment_policy',
+			auditFlags: ['missing_payment_policy'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
+	if (strictCatalogHandoff && detectedIntent === 'shipping' && !hasShippingFacts) {
+		return {
+			finalText: 'No tengo las condiciones de envío de Kaisy confirmadas en la información cargada. Te paso con una asesora para que te indique el plazo y costo según tu localidad.',
+			triggerHumanHandoff: true,
+			handoffReason: 'missing_shipping_policy',
+			auditFlags: ['missing_shipping_policy'],
+			repetitionDetected: false,
+			continuityRecovery: false,
+		};
+	}
+
 	if (!cleaned) {
 		return {
 			finalText: fallbackReply,
@@ -1542,8 +1619,8 @@ export function auditAssistantReply({
 		return {
 			finalText: 'No tengo una guía de medidas confirmada para recomendarte un talle con seguridad. Te paso con una asesora para que revise ese modelo.',
 			triggerHumanHandoff: true,
-			handoffReason: 'size_data_unconfirmed',
-			auditFlags: ['unsupported_size_recommendation', 'size_data_unconfirmed'],
+			handoffReason: strictCatalogHandoff ? 'missing_size_guide' : 'size_data_unconfirmed',
+			auditFlags: ['unsupported_size_recommendation', strictCatalogHandoff ? 'missing_size_guide' : 'size_data_unconfirmed'],
 			repetitionDetected: false,
 			continuityRecovery: false,
 		};
@@ -1556,8 +1633,8 @@ export function auditAssistantReply({
 		return {
 			finalText: 'No tengo ese dato confirmado en la ficha del producto. Te paso con una asesora para que lo verifique antes de recomendarte algo.',
 			triggerHumanHandoff: true,
-			handoffReason: 'product_data_unconfirmed',
-			auditFlags: [...unsupportedCatalogClaims.map(({ flag }) => flag), 'product_data_unconfirmed'],
+			handoffReason: strictCatalogHandoff ? 'unverified_product_claim' : 'product_data_unconfirmed',
+			auditFlags: [...unsupportedCatalogClaims.map(({ flag }) => flag), strictCatalogHandoff ? 'unverified_product_claim' : 'product_data_unconfirmed'],
 			repetitionDetected: false,
 			continuityRecovery: false,
 		};

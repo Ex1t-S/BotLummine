@@ -30,6 +30,17 @@ describe('commercial intent detection', () => {
 		assert.equal(detectIntent('hay stock disponible?'), 'stock_check');
 	});
 
+	it('routes product detail questions through catalog grounded product handling', () => {
+		assert.equal(detectIntent('¿Qué ingredientes tiene?'), 'product');
+		assert.equal(detectIntent('¿Es apto para piel sensible?'), 'product');
+		assert.equal(detectIntent('¿Cómo se usa y cada cuánto?'), 'product');
+	});
+
+	it('routes adverse skin reactions to a human', () => {
+		assert.equal(detectIntent('Me dio alergia y me arde la cara'), 'human_handoff');
+		assert.equal(detectIntent('El producto me causó irritación'), 'human_handoff');
+	});
+
 	it('does not classify campaign opt-outs as purchase intent', () => {
 		assert.equal(detectIntent('No me interesa, denme de baja'), 'general');
 		assert.equal(detectIntent('No me escriban más por este carrito'), 'general');

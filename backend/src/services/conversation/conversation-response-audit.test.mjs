@@ -47,6 +47,82 @@ describe('assistant response relevance safeguards', () => {
 		assert.match(result.finalText, /promoción vigente confirmada/i);
 	});
 
+	it('hands off an unverified product detail when strict catalog mode is enabled', () => {
+		const result = auditAssistantReply({
+			text: 'Sí, la mascarilla se usa todos los días.',
+			fallbackReply: 'Necesito revisar la ficha.',
+			detectedIntent: 'product',
+			latestUserMessage: '¿Cada cuánto uso la mascarilla?',
+			catalogProducts: [{ name: 'Mascarilla', shortDescription: 'Sin descripcion cargada.' }],
+			strictCatalogHandoff: true,
+		});
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'missing_product_details');
+		assert.doesNotMatch(result.finalText, /todos los días/i);
+	});
+
+	it('keeps a confirmed catalog price in strict mode', () => {
+		const result = auditAssistantReply({
+			text: 'La mascarilla sale $39.900.',
+			fallbackReply: 'Necesito revisar la ficha.',
+			detectedIntent: 'product',
+			latestUserMessage: '¿Cuánto sale la mascarilla?',
+			catalogProducts: [{ name: 'Mascarilla', price: '$39.900', shortDescription: 'Sin descripcion cargada.' }],
+			strictCatalogHandoff: true,
+		});
+		assert.equal(result.triggerHumanHandoff, false);
+		assert.match(result.finalText, /39.900/);
+	});
+
+	it('hands off product detail questions when the catalog description does not confirm the detail', () => {
+		const result = auditAssistantReply({
+			text: 'Tiene ácido hialurónico y es ideal para piel sensible.',
+			fallbackReply: 'Necesito revisar la ficha.',
+			detectedIntent: 'product',
+			latestUserMessage: '¿Qué ingredientes tiene? ¿Es apta para piel sensible?',
+			catalogProducts: [{ name: 'Mascarilla', shortDescription: 'Mascarilla facial hidratante.' }],
+			strictCatalogHandoff: true,
+		});
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'missing_product_details');
+		assert.doesNotMatch(result.finalText, /hialur[oó]nico|sensible/i);
+	});
+
+	it('hands off payment and shipping questions when Kaisy has no configured policy facts', () => {
+		for (const [detectedIntent, latestUserMessage, handoffReason] of [
+			['payment', '¿Puedo pagar por transferencia?', 'missing_payment_policy'],
+			['shipping', '¿Cuánto sale el envío a Córdoba?', 'missing_shipping_policy'],
+		]) {
+			const result = auditAssistantReply({
+				text: 'Sí, te confirmo las opciones.',
+				fallbackReply: 'Necesito revisar la política.',
+				detectedIntent,
+				latestUserMessage,
+				strictCatalogHandoff: true,
+			});
+			assert.equal(result.triggerHumanHandoff, true);
+			assert.equal(result.handoffReason, handoffReason);
+		}
+	});
+
+	it('does not invent sizes or stock from a generic product description', () => {
+		for (const [detectedIntent, latestUserMessage] of [
+			['size_help', '¿Qué talles tiene?'],
+			['stock_check', '¿Hay stock disponible?'],
+		]) {
+			const result = auditAssistantReply({
+				text: 'Tenemos S, M y L disponibles.',
+				fallbackReply: 'Necesito revisar la ficha.',
+				detectedIntent,
+				latestUserMessage,
+				catalogProducts: [{ name: 'Mascarilla', shortDescription: 'Mascarilla facial hidratante.' }],
+				strictCatalogHandoff: true,
+			});
+			assert.equal(result.triggerHumanHandoff, true);
+			assert.doesNotMatch(result.finalText, /\bS, M y L\b/i);
+		}
+	});
+
 	it('replaces a generic greeting when the customer already asked about a product', () => {
 		const result = auditAssistantReply({
 			text: 'Hola, soy Sofi. ¿En qué puedo ayudarte?',

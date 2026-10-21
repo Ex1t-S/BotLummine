@@ -1,20 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Languages, Mic, Paperclip, Send, Smile, Square, StopCircle, Trash2, Wand2, X } from "lucide-react";
+import { Mic, Paperclip, Send, Smile, Square, LoaderCircle, Trash2, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
-
-const COMMANDS = [
-	{ id: "summarize", label: "Resumen interno", icon: <Wand2 className="h-3.5 w-3.5" /> },
-	{ id: "translate", label: "Traducir borrador", icon: <Languages className="h-3.5 w-3.5" /> },
-	{ id: "explain", label: "Explicar contexto", icon: <BookOpen className="h-3.5 w-3.5" /> },
-];
 
 const EMOJIS = ["🙂", "😂", "😍", "✨", "❤️", "👍", "🙏", "📦"];
 const FILE_ACCEPT =
@@ -65,15 +56,20 @@ export default function AiChatInput({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const submissionInFlightRef = useRef(false);
 	const [internalInput, setInternalInput] = useState("");
-	const [selectedCommands, setSelectedCommands] = useState<string[]>([]);
 	const [emojiOpen, setEmojiOpen] = useState(false);
-	const [commandOpen, setCommandOpen] = useState(false);
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 	const recordingStreamRef = useRef<MediaStream | null>(null);
 	const recordingChunksRef = useRef<Blob[]>([]);
 	const [isRecording, setIsRecording] = useState(false);
 	const [recordingSeconds, setRecordingSeconds] = useState(0);
 	const [recordingError, setRecordingError] = useState("");
+    const [attachmentPreview, setAttachmentPreview] = useState('');
+    useEffect(() => {
+        if (!selectedFile || !/^(image|audio)\//.test(selectedFile.type)) { setAttachmentPreview(''); return; }
+        const url = URL.createObjectURL(selectedFile);
+        setAttachmentPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [selectedFile]);
 
 	const input = value ?? internalInput;
 	const setInput = (nextValue: string | ((current: string) => string)) => {
@@ -81,7 +77,8 @@ export default function AiChatInput({
 		if (value === undefined) setInternalInput(resolvedValue);
 		onValueChange?.(resolvedValue);
 	};
-	const canSubmit = Boolean(input.trim() || selectedFile) && !disabled && !isLoading;
+	const canSubmit = Boolean(input.trim() || selectedFile) && !disabled && !isLoading && !isRecording;
+	const mountedRef = useRef(true);
 
 	useEffect(() => {
 		if (!isRecording) return undefined;
@@ -89,9 +86,14 @@ export default function AiChatInput({
 		return () => window.clearInterval(timer);
 	}, [isRecording]);
 
-	useEffect(() => () => {
-		mediaRecorderRef.current?.stop();
+	useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+		mountedRef.current = false;
+		if (mediaRecorderRef.current) mediaRecorderRef.current.onstop = null;
+		if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
 		recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+		};
 	}, []);
 
 	const formatRecordingTime = (seconds: number) =>
@@ -113,6 +115,7 @@ export default function AiChatInput({
 
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			if (!mountedRef.current) { stream.getTracks().forEach(track => track.stop()); return; }
 			const mimeType = RECORDING_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 			const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 			recordingStreamRef.current = stream;
@@ -125,7 +128,7 @@ export default function AiChatInput({
 				const type = recorder.mimeType || mimeType || "audio/webm";
 				const extension = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
 				const file = new File(recordingChunksRef.current, `audio-${Date.now()}.${extension}`, { type });
-				if (file.size > 0) onRecording(file);
+				if (file.size > 0 && mountedRef.current) onRecording(file);
 				recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
 				recordingStreamRef.current = null;
 				mediaRecorderRef.current = null;
@@ -148,34 +151,19 @@ export default function AiChatInput({
 		try {
 			const sent = await onSendMessage(input.trim());
 			if (sent === false) return;
-			setInput("");
-			setSelectedCommands([]);
-			setCommandOpen(false);
+			if (value === undefined && mountedRef.current) setInput("");
 		} finally {
 			submissionInFlightRef.current = false;
 		}
 	};
 
 	const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (event.key === "Enter" && !event.shiftKey) {
+		if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
 			event.preventDefault();
 			handleSubmit();
 			return;
 		}
 
-		if (event.key === "/" && !commandOpen) {
-			event.preventDefault();
-			setCommandOpen(true);
-		}
-	};
-
-	const addCommand = (commandId: string) => {
-		setSelectedCommands((current) => (current.includes(commandId) ? current : [...current, commandId]));
-		setCommandOpen(false);
-	};
-
-	const removeCommand = (commandId: string) => {
-		setSelectedCommands((current) => current.filter((item) => item !== commandId));
 	};
 
 	const addEmoji = (emoji: string) => {
@@ -198,12 +186,15 @@ export default function AiChatInput({
 
 	return (
 		<div className="ai-chat-input w-full bg-background">
+            <div className="inbox-composer-label">Responder al cliente</div>
 			{error || recordingError ? <div role="alert" className="inbox-composer-feedback inbox-composer-feedback--error">{error || recordingError}</div> : null}
 			{isLoading ? <div role="status" aria-live="polite" className="inbox-composer-feedback inbox-composer-feedback--sending">Enviando mensaje...</div> : null}
 
 			{selectedFile ? (
 				<div className="inbox-selected-file">
 					<div className="inbox-selected-file-main">
+                        {attachmentPreview && selectedFile.type.startsWith("image/") ? <img className="inbox-file-thumbnail" src={attachmentPreview} alt="Vista previa del adjunto" /> : null}
+                        {attachmentPreview && selectedFile.type.startsWith("audio/") ? <audio controls src={attachmentPreview} aria-label="Escuchar audio antes de enviar" /> : null}
 						<span className="inbox-selected-file-icon">
 							<Paperclip size={13} strokeWidth={2.4} aria-hidden="true" />
 						</span>
@@ -241,8 +232,8 @@ export default function AiChatInput({
 					size="icon"
 					type="button"
 					onClick={() => fileInputRef.current?.click()}
-					disabled={disabled || isLoading}
-					title="Adjuntar archivo"
+					disabled={disabled || isLoading || isRecording}
+					title="Adjuntar archivo" aria-label="Adjuntar archivo"
 				>
 					<Paperclip className="h-5 w-5" />
 				</Button>
@@ -256,66 +247,27 @@ export default function AiChatInput({
 						if (file && onUploadFile) onUploadFile(file);
 						event.currentTarget.value = "";
 					}}
-					disabled={disabled || isLoading}
+					disabled={disabled || isLoading || isRecording}
 				/>
 
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					{selectedCommands.length > 0 ? (
-						<div className="flex flex-wrap gap-1">
-							{selectedCommands.map((commandId) => {
-								const command = COMMANDS.find((item) => item.id === commandId);
-								return (
-									<Badge
-										key={commandId}
-										variant="secondary"
-										className="cursor-pointer gap-1"
-										onClick={() => removeCommand(commandId)}
-										title="Quitar herramienta"
-									>
-										{command?.icon}
-										{command?.label}
-									</Badge>
-								);
-							})}
-						</div>
-					) : null}
-
-					<Popover open={commandOpen} onOpenChange={setCommandOpen}>
-						<PopoverAnchor asChild>
-							<Textarea
+<Textarea
 								value={input}
 								onChange={(event) => setInput(event.target.value)}
 								onKeyDown={handleKeyDown}
 								onPaste={handlePaste}
 								placeholder={placeholder}
 								aria-label="Mensaje"
-								disabled={disabled || isLoading}
+								disabled={disabled || isLoading || isRecording}
 								className="inbox-textarea min-h-[44px] max-h-[160px] resize-none rounded-xl px-3 py-2 text-sm"
-								rows={1}
+								rows={2}
 							/>
-						</PopoverAnchor>
-						<PopoverContent className="w-60 p-0" align="start">
-							<Command>
-								<CommandInput placeholder="Buscar herramienta..." />
-								<CommandList>
-									<CommandGroup heading="Herramientas">
-										{COMMANDS.map((command) => (
-											<CommandItem key={command.id} onSelect={() => addCommand(command.id)} className="gap-2">
-												{command.icon}
-												{command.label}
-											</CommandItem>
-										))}
-									</CommandGroup>
-								</CommandList>
-							</Command>
-						</PopoverContent>
-					</Popover>
 				</div>
 
 				<div className="ai-chat-input__actions flex items-center gap-1">
 					<Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
 						<PopoverTrigger asChild>
-							<Button variant="ghost" size="icon" type="button" disabled={disabled || isLoading} title="Emoji">
+							<Button variant="ghost" size="icon" type="button" disabled={disabled || isLoading || isRecording} title="Emoji" aria-label="Agregar emoji">
 								<Smile className="h-5 w-5" />
 							</Button>
 						</PopoverTrigger>
@@ -340,7 +292,7 @@ export default function AiChatInput({
 						type="button"
 						onClick={() => setInput("")}
 						disabled={disabled || isLoading || !input}
-						title="Limpiar texto"
+						title="Limpiar texto" aria-label="Limpiar borrador"
 					>
 						<Trash2 className="h-5 w-5" />
 					</Button>
@@ -349,14 +301,15 @@ export default function AiChatInput({
 				<Button
 					onClick={handleSubmit}
 					disabled={!canSubmit || isLoading}
-					variant="outline"
-					className={cn("rounded-full", canSubmit && "inbox-send-btn")}
+					variant="default"
+					className="inbox-send-btn"
 					type="button"
-					title={isLoading ? "Enviando" : "Enviar"}
+					title={isLoading ? "Enviando" : "Enviar"} aria-label="Enviar mensaje"
 				>
-					{isLoading ? <StopCircle className="h-5 w-5" /> : <Send className="h-4 w-4" />}
+					<span>{isLoading ? 'Enviando' : 'Enviar'}</span>{isLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
 				</Button>
 			</div>
+            <p className="inbox-composer-hint">{isRecording ? "Detené el audio antes de enviarlo. Cambiar de chat descarta la grabación." : "Enter para enviar · Shift + Enter para otra línea"}</p>
 		</div>
 	);
 }

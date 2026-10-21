@@ -20,6 +20,7 @@ import { normalizeThreadPhone } from '../../lib/conversation-threads.js';
 import { publishInboxEvent } from '../../lib/inbox-events.js';
 import {
 	detectIntent,
+	hasProductSafetyConcern,
 	extractOrderNumber,
 	extractStandaloneOrderNumber
 } from '../../lib/intent.js';
@@ -99,6 +100,14 @@ const AUTO_REPLY_COOLDOWN_MS = Number(process.env.AI_REPLY_COOLDOWN_MS || 10_000
 const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_MS || 5_000);
 const pendingAutoReplyTimers = new Map();
 let pendingAutoReplySweepStarted = false;
+
+function hasMeaningfulConfiguredValue(value) {
+	if (typeof value === 'string') return Boolean(value.trim());
+	if (typeof value === 'number') return true;
+	if (Array.isArray(value)) return value.some(hasMeaningfulConfiguredValue);
+	if (value && typeof value === 'object') return Object.values(value).some(hasMeaningfulConfiguredValue);
+	return false;
+}
 
 function appendMenuHintIfNeeded(text = '', menuAssistantContext = null) {
 	const baseText = String(text || '').trim();
@@ -908,6 +917,46 @@ async function processInboundMessageTurn({
 		campaignAssistantContext: null,
 	};
 
+	// Voice notes are stored for the inbox, but no transcription is available.
+	// Never ask the text model to interpret the "[Audio recibido]" placeholder.
+	if (String(messageType || '').toLowerCase() === 'audio') {
+		if (freshConversation.queue !== 'AUTO' || !freshConversation.aiEnabled) {
+			return finalizeInboundResult({ conversation: freshConversation, trace: {
+				...trace, responsePolicy: { reason: 'audio_waiting_human' },
+			} });
+		}
+
+		const handoff = await syncHumanHandoff({
+			conversationId: freshConversation.id,
+			workspaceId: resolvedWorkspaceId,
+			reason: 'audio_requires_human',
+			currentState,
+		});
+		const reply = 'Recibí tu audio. Para responderte bien, lo va a revisar una asesora y te contesta por acá.';
+		const outbound = await sendAndPersistOutbound({
+			conversationId: freshConversation.id,
+			workspaceId: resolvedWorkspaceId,
+			body: reply,
+			deliveryMode: transportMode,
+			turnAuthorization: {
+				workspaceId: resolvedWorkspaceId,
+				conversationId: freshConversation.id,
+				inboundMessageId: inboundMessage.id,
+				expectedHandoff: handoff,
+			},
+			aiMeta: { provider: 'system', model: 'audio-human-handoff' },
+		});
+		return finalizeInboundResult({ conversation: freshConversation, trace: {
+			...trace,
+			intent: 'audio',
+			queueDecision: { queue: 'HUMAN', aiEnabled: false },
+			assistantMessage: outbound.skipped ? null : reply,
+			provider: 'system',
+			model: 'audio-human-handoff',
+			shouldReply: !outbound.skipped,
+		} });
+	}
+
 	const abandonedCartDecision = await maybeHandleAbandonedCartReply({
 		conversation: freshConversation,
 		currentState,
@@ -1066,7 +1115,9 @@ async function processInboundMessageTurn({
 
 	if (intent === 'human_handoff') {
 		memoryPatch.needsHuman = true;
-		memoryPatch.handoffReason = 'requested_human';
+		memoryPatch.handoffReason = hasProductSafetyConcern(effectiveMessageBody)
+			? 'sensitive_product_safety'
+			: 'requested_human';
 	}
 
 	const detectedPaymentProof = isPaymentProofMessage({
@@ -2025,7 +2076,10 @@ async function processInboundMessageTurn({
 				recentMessages: fullRecentMessages,
 				contactName: freshConversation.contact.name || freshConversation.contact.waId,
 				businessName: aiBrand.businessName,
-				agentName: aiBrand.agentName
+				agentName: aiBrand.agentName,
+				strictCatalogHandoff: workspaceConfig.ai.catalogConfig?.handoffOnMissingProductDetails === true,
+				hasPaymentFacts: hasMeaningfulConfiguredValue(workspaceConfig.ai.paymentConfig),
+				hasShippingFacts: Boolean(String(workspaceConfig.ai.policyConfig?.shipping || '').trim()),
 			});
 
 			const handoff = resolveAssistantHandoff({
