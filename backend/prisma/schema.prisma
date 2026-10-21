@@ -516,6 +516,7 @@ model CatalogProduct {
   images         Json?
   categories     Json?
   attributes     Json?
+  commercialData Json?
   rawPayload     Json?
   syncedAt       DateTime         @default(now())
   createdAt      DateTime         @default(now())

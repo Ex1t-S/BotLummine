@@ -10,7 +10,6 @@ export const AI_PROFILES = {
 };
 
 const INSURANCE_WORKSPACE_IDS = new Set(['cmpevb0oq0000pd0pgp66xq6k']);
-const LUMMINE_WORKSPACE_IDS = new Set(['workspace_lummine']);
 
 const GENERIC_ECOMMERCE_PROFILE = {
 	aiProfile: AI_PROFILES.GENERIC_ECOMMERCE,
@@ -162,7 +161,6 @@ export function resolveAiProfile({
 
 	const resolvedWorkspaceId = String(workspaceId || workspaceConfig?.workspaceId || '').trim();
 	if (INSURANCE_WORKSPACE_IDS.has(resolvedWorkspaceId)) return AI_PROFILES.DKV_INSURANCE;
-	if (LUMMINE_WORKSPACE_IDS.has(resolvedWorkspaceId)) return AI_PROFILES.LUMMINE_BODYWEAR;
 
 	const text = normalizeText([
 		workspaceName,
@@ -175,10 +173,6 @@ export function resolveAiProfile({
 
 	if (/\b(dkv|seguros?|polizas?|aseguradora|vecindario|las palmas)\b/.test(text)) {
 		return AI_PROFILES.DKV_INSURANCE;
-	}
-
-	if (/\blummine\b/.test(text)) {
-		return AI_PROFILES.LUMMINE_BODYWEAR;
 	}
 
 	return AI_PROFILES.GENERIC_ECOMMERCE;

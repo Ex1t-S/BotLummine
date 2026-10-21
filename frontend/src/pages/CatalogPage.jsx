@@ -24,6 +24,8 @@ export default function CatalogPage() {
 	const queryClient = useQueryClient();
 	const [query, setQuery] = useState('');
 	const [page, setPage] = useState(1);
+	const [editingProductId, setEditingProductId] = useState(null);
+	const [commercialDraft, setCommercialDraft] = useState({});
 	const debouncedQuery = useDebouncedValue(query);
 
 	const catalogParams = {
@@ -65,6 +67,29 @@ export default function CatalogPage() {
 			console.error(error);
 		},
 	});
+
+	const commercialMutation = useMutation({
+		mutationFn: async ({ productId, commercialData }) => {
+			await api.patch(`/dashboard/catalog/${productId}/commercial-data`, { commercialData });
+		},
+		onSuccess: async () => {
+			setEditingProductId(null);
+			await queryClient.invalidateQueries({ queryKey: ['dashboard', 'catalog'] });
+		},
+	});
+
+	function startEditing(item) {
+		setEditingProductId(item.id);
+		setCommercialDraft({
+			presentationLabel: item.commercialData?.presentationLabel || '',
+			unitsPerPack: item.commercialData?.unitsPerPack || '',
+			offerLabel: item.commercialData?.offerLabel || '',
+			offerPrice: item.commercialData?.offerPrice ?? '',
+			offerStartsAt: item.commercialData?.offerStartsAt?.slice(0, 10) || '',
+			offerEndsAt: item.commercialData?.offerEndsAt?.slice(0, 10) || '',
+		});
+		commercialMutation.reset();
+	}
 
 	const data = catalogQuery.data || {
 		items: [],
@@ -145,7 +170,42 @@ export default function CatalogPage() {
 
 							<h3>{item.name}</h3>
 							<p>{item.brand || item.provider || 'Sin marca'}</p>
-							<strong>{item.currentPriceLabel || 'Sin precio'}</strong>
+							<strong>{item.currentPriceLabel || 'Sin precio en Shopify'}</strong>
+							<p className="catalog-stock-summary">Stock: {item.stockSummary}</p>
+							{item.commercialData?.presentationLabel ? (
+								<p>Presentación confirmada: {item.commercialData.presentationLabel}</p>
+							) : null}
+							{item.commercialData?.offerLabel ? (
+								<p>Oferta cargada: {item.commercialData.offerLabel}{item.commercialData.offerPrice ? ` · $${Number(item.commercialData.offerPrice).toLocaleString('es-AR')}` : ''}</p>
+							) : null}
+							<button type="button" className="catalog-commercial-toggle" onClick={() => editingProductId === item.id ? setEditingProductId(null) : startEditing(item)}>
+								{editingProductId === item.id ? 'Cerrar edición' : 'Editar presentación y oferta'}
+							</button>
+							{editingProductId === item.id ? (
+								<form className="catalog-commercial-form" onSubmit={(event) => {
+									event.preventDefault();
+									commercialMutation.mutate({
+										productId: item.id,
+										commercialData: {
+											...commercialDraft,
+											unitsPerPack: commercialDraft.unitsPerPack === '' ? null : Number(commercialDraft.unitsPerPack),
+											offerPrice: commercialDraft.offerPrice === '' ? null : Number(commercialDraft.offerPrice),
+										},
+									});
+								}}>
+									<label>Presentación confirmada<input maxLength={120} value={commercialDraft.presentationLabel || ''} placeholder="Pack de 4 unidades" onChange={(event) => setCommercialDraft((draft) => ({ ...draft, presentationLabel: event.target.value }))} /></label>
+									<label>Unidades por pack<input type="number" min="2" max="100" value={commercialDraft.unitsPerPack || ''} placeholder="4" onChange={(event) => setCommercialDraft((draft) => ({ ...draft, unitsPerPack: event.target.value }))} /></label>
+									<label>Oferta vigente confirmada<input maxLength={120} value={commercialDraft.offerLabel || ''} placeholder="Pack x 4 en promo" onChange={(event) => setCommercialDraft((draft) => ({ ...draft, offerLabel: event.target.value }))} /></label>
+									<label>Precio de la oferta<input type="number" min="0" step="0.01" value={commercialDraft.offerPrice || ''} placeholder="39900" onChange={(event) => setCommercialDraft((draft) => ({ ...draft, offerPrice: event.target.value }))} /></label>
+									<div className="catalog-commercial-dates">
+										<label>Vigente desde<input type="date" value={commercialDraft.offerStartsAt || ''} onChange={(event) => setCommercialDraft((draft) => ({ ...draft, offerStartsAt: event.target.value }))} /></label>
+										<label>Vigente hasta<input type="date" value={commercialDraft.offerEndsAt || ''} onChange={(event) => setCommercialDraft((draft) => ({ ...draft, offerEndsAt: event.target.value }))} /></label>
+									</div>
+									<p>El stock y el precio base siguen viniendo de Shopify. Estos datos manuales se conservan al sincronizar.</p>
+									{commercialMutation.isError ? <p role="alert">{commercialMutation.error?.response?.data?.error || 'No se pudieron guardar los datos comerciales.'}</p> : null}
+									<button type="submit" disabled={commercialMutation.isPending}>{commercialMutation.isPending ? 'Guardando…' : 'Guardar datos comerciales'}</button>
+								</form>
+							) : null}
 						</article>
 					))}
 				</div>

@@ -78,6 +78,18 @@ function resolveCatalogPrices(aValue, bValue) {
 	return { currentPrice: null, originalPrice: null };
 }
 
+function resolveVariantPriceRange(variants = []) {
+	const prices = uniqueStrings(parseJsonArray(variants)
+		.map((variant) => toNumberOrNull(variant?.price))
+		.filter((value) => value != null)
+		.map((value) => String(value)))
+		.map(Number)
+		.filter(Number.isFinite)
+		.sort((a, b) => a - b);
+	if (prices.length < 2 || prices[0] === prices[prices.length - 1]) return null;
+	return { min: prices[0], max: prices[prices.length - 1] };
+}
+
 const COLOR_PATTERNS = /(negro|negra|blanco|blanca|beige|avellana|marron|nude|rosa|gris|azul|verde|bordo|chocolate)/i;
 const CATALOG_STOPWORDS = new Set([
 	'hola', 'holi', 'buenas', 'buenos', 'dias', 'dia', 'tardes', 'noches',
@@ -426,9 +438,29 @@ function buildShortDescription(product) {
 		.replace(/<[^>]+>/g, ' ')
 		.replace(/\s+/g, ' ')
 		.trim();
+	const storefrontFacts = product.commercialData?.storefrontFacts || {};
+	const enriched = [
+		description,
+		storefrontFacts.summary,
+		storefrontFacts.includes,
+		storefrontFacts.usage,
+		storefrontFacts.ingredients
+	].filter(Boolean).join(' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 
-	if (!description) return 'Sin descripcion cargada.';
-	return description.length > 180 ? `${description.slice(0, 177)}...` : description;
+	if (!enriched) return 'Sin descripcion cargada.';
+	return enriched.length > 320 ? `${enriched.slice(0, 317)}...` : enriched;
+}
+
+function storefrontFactsText(product = {}) {
+	const facts = product.commercialData?.storefrontFacts || {};
+	const faq = Array.isArray(facts.faq)
+		? facts.faq.map((item) => `${item.question || ''} ${item.answer || ''}`).join(' ')
+		: '';
+	return [facts.summary, facts.includes, facts.usage, facts.ingredients, facts.packLabel, faq]
+		.filter(Boolean)
+		.join(' ');
 }
 
 function formatPrice(value) {
@@ -443,6 +475,33 @@ function formatPrice(value) {
 	} catch {
 		return `$${value}`;
 	}
+}
+
+function resolveVariantAvailability(variants = []) {
+	const normalized = Array.isArray(variants) ? variants : [];
+	const signals = normalized
+		.map((variant) => {
+			if (!variant || typeof variant !== 'object') return null;
+
+			if (typeof variant.available === 'boolean') {
+				return variant.available;
+			}
+
+			const quantities = [variant.stock, variant.inventory_management ? variant.inventory_quantity : null, variant.quantity]
+				.map((value) => (value === '' || value == null ? null : Number(value)))
+				.filter((value) => Number.isFinite(value));
+
+			if (quantities.length) return quantities[0] > 0;
+			return null;
+		})
+		.filter((value) => value !== null);
+
+	if (!signals.length) return null;
+
+	const availableCount = signals.filter(Boolean).length;
+	if (!availableCount) return 'No disponible según las variantes sincronizadas.';
+	if (availableCount === signals.length) return 'Disponible según las variantes sincronizadas.';
+	return `Disponible en ${availableCount} de ${signals.length} variantes sincronizadas.`;
 }
 
 export function detectRequestedSignals(query = '', interestedProducts = [], { aiProfile = '' } = {}) {
@@ -464,7 +523,7 @@ export function detectRequestedSignals(query = '', interestedProducts = [], { ai
 		normalizedQuery,
 		terms,
 		requestedFamily,
-		asksCatalog: /(catalogo|catálogo|servicio|servicios|opciones|que tienen|qu[eé] seguros|seguros que tienen|polizas|p[oó]lizas)/i.test(normalizedQuery),
+		asksCatalog: /(catalogo|catálogo|servicio|servicios|opciones|ver productos|(?:qu[eé])\s+(?:productos?|opciones?).*(?:tienen|hay|venden|ofrecen)|qu[eé]\s+tienen|qu[eé]\s+seguros|seguros que tienen|polizas|p[oó]lizas)/i.test(normalizedQuery),
 		asksInsurance: /(seguro|seguros|poliza|p[oó]liza|polizas|p[oó]lizas|salud|medico|m[eé]dico|dental|decesos|hogar|vida|renta|autonomo|aut[oó]nomo|autonomos|aut[oó]nomos|pyme|pymes|empresa|empresas)/i.test(normalizedQuery),
 		asksPromo: /(oferta|promo|promocion|pack|combo|2x1|3x1|5x2|cinco por dos)/i.test(normalizedQuery),
 		asksPrice: /(precio|cuanto|sale|valor)/i.test(normalizedQuery),
@@ -514,7 +573,10 @@ function isSpecificCatalogRequest(signals = {}) {
 	if (signals.asksImage && terms.length >= 2) return true;
 	if (signals.asksLink && terms.length >= 2) return true;
 	if (signals.asksPrice && terms.length >= 2) return true;
-	return terms.length >= 3;
+	// A two-word product request such as "mascarilla colageno" is already
+	// specific. Requiring three tokens allowed unrelated products to pass the
+	// base published/image/url score when the requested product was absent.
+	return terms.length >= 2 || terms.some((term) => term.length >= STRONG_PRODUCT_TOKEN_MIN_LENGTH);
 }
 
 function inferOfferType(product = {}) {
@@ -527,7 +589,10 @@ function inferOfferType(product = {}) {
 	const secondaryHaystack = normalizeText([
 		product.description,
 		JSON.stringify(product.attributes || []),
-		JSON.stringify(product.variants || [])
+		JSON.stringify(product.variants || []),
+		storefrontFactsText(product),
+		product.commercialData?.presentationLabel,
+		product.commercialData?.offerLabel
 	].filter(Boolean).join(' '));
 
 	if (/5x2|cinco por dos/.test(primaryHaystack)) return '5x2';
@@ -543,11 +608,63 @@ function inferOfferType(product = {}) {
 	return 'single';
 }
 
-function inferPackCount(offerType = 'single') {
+function inferPackCountFromText(value = '') {
+	const text = normalizeText(value).replace(/\s+/g, ' ');
+	if (!text) return null;
+
+	const patterns = [
+		/\bpack\s*(?:x|de)?\s*(\d{1,2})\b/,
+		/\b(?:x|de)\s*(\d{1,2})\s*(?:unidades?|unid|uds?|u)\b/,
+		/\b(\d{1,2})\s*(?:unidades?|unid|uds?|mascarillas?|sobres?|parches?|piezas?|pares)\b/,
+	];
+
+	for (const pattern of patterns) {
+		const match = text.match(pattern);
+		const count = Number(match?.[1] || 0);
+		if (Number.isInteger(count) && count > 1 && count <= 100) return count;
+	}
+
+	return null;
+}
+
+function inferPackCount(offerType = 'single', product = {}) {
 	if (offerType === '5x2') return 5;
 	if (offerType === '3x1') return 3;
 	if (offerType === '2x1') return 2;
+	const text = [
+		product.commercialData?.presentationLabel,
+		product.commercialData?.offerLabel,
+		product.name,
+		product.handle,
+		product.tags,
+		product.description,
+		storefrontFactsText(product),
+		JSON.stringify(product.attributes || []),
+		JSON.stringify(product.variants || []),
+	].filter(Boolean).join(' ');
+	const inferred = inferPackCountFromText(text);
+	if (inferred) return inferred;
+	if (offerType === 'pack') return null;
 	return 1;
+}
+
+function resolveCommercialOverride(product = {}, now = new Date()) {
+	const source = product.commercialData && typeof product.commercialData === 'object' && !Array.isArray(product.commercialData)
+		? product.commercialData
+		: {};
+	const startsAt = source.offerStartsAt ? new Date(source.offerStartsAt) : null;
+	const endsAt = source.offerEndsAt ? new Date(source.offerEndsAt) : null;
+	const offerWindowOpen = (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+	const offerLabel = offerWindowOpen ? normalizeSpacing(source.offerLabel || '') : '';
+	const offerPrice = offerWindowOpen ? toNumberOrNull(source.offerPrice) : null;
+	const unitsPerPack = Number(source.unitsPerPack);
+	return {
+		presentationLabel: normalizeSpacing(source.presentationLabel || source.storefrontFacts?.packLabel || ''),
+		unitsPerPack: Number.isInteger(unitsPerPack) && unitsPerPack > 1 ? unitsPerPack : null,
+		offerLabel,
+		offerPrice: offerPrice != null && offerPrice > 0 ? offerPrice : null,
+		offerActive: Boolean(offerLabel || (offerPrice != null && offerPrice > 0))
+	};
 }
 
 function normalizeOfferSignature(product = {}) {
@@ -564,7 +681,8 @@ function countDirectTermMatches(product = {}, terms = []) {
 		normalizeText(product.name || ''),
 		normalizeText(product.handle || ''),
 		normalizeText(product.tags || ''),
-		normalizeText(product.description || '')
+		normalizeText(product.description || ''),
+		normalizeText(storefrontFactsText(product))
 	];
 
 	let matches = 0;
@@ -581,8 +699,9 @@ function buildProductMatchMeta(product = {}, terms = [], normalizedQuery = '') {
 	const handle = normalizeText(product.handle || '');
 	const tags = normalizeText(product.tags || '');
 	const description = normalizeText(product.description || '');
+	const storefrontFacts = normalizeText(storefrontFactsText(product));
 	const primaryTokens = splitSearchTokens(`${name} ${handle}`);
-	const secondaryTokens = splitSearchTokens(`${tags} ${description}`);
+	const secondaryTokens = splitSearchTokens(`${tags} ${description} ${storefrontFacts}`);
 	const primaryMatches = countTokenMatches({ fieldTokens: primaryTokens, terms, allowFuzzy: true });
 	const secondaryMatches = countTokenMatches({ fieldTokens: secondaryTokens, terms, allowFuzzy: false });
 	const directTermMatches = uniqueStrings([...primaryMatches.direct, ...secondaryMatches.direct]).length;
@@ -593,7 +712,7 @@ function buildProductMatchMeta(product = {}, terms = [], normalizedQuery = '') {
 	);
 	const fullQueryMatch = Boolean(
 		normalizedQuery &&
-		[name, handle, tags, description].some((value) => value.includes(normalizedQuery))
+		[name, handle, tags, description, storefrontFacts].some((value) => value.includes(normalizedQuery))
 	);
 
 	return {
@@ -690,17 +809,29 @@ function scoreProduct(product, normalizedQuery, terms = [], signals = {}) {
 export async function getCatalogLookupStatus({ workspaceId } = {}) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
 	try {
-		const [totalProducts, totalPublished] = await Promise.all([
+		const [totalProducts, totalPublished, latestProduct] = await Promise.all([
 			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId } }),
-			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId, published: true } })
+			prisma.catalogProduct.count({ where: { workspaceId: resolvedWorkspaceId, published: true } }),
+			prisma.catalogProduct.findFirst({
+				where: { workspaceId: resolvedWorkspaceId, published: true },
+				orderBy: { syncedAt: 'desc' },
+				select: { syncedAt: true }
+			})
 		]);
+		const lastSync = latestProduct?.syncedAt || null;
+		const stale = !lastSync || Date.now() - new Date(lastSync).getTime() > 24 * 60 * 60 * 1000;
 
 		return {
 			ok: true,
 			available: totalPublished > 0,
 			reason: totalPublished > 0 ? 'catalog_ready' : 'catalog_empty',
 			totalProducts,
-			totalPublished
+			totalPublished,
+			lastSync,
+			stale,
+			message: stale
+				? 'El catálogo no se sincroniza desde hace más de 24 horas. No confirmes stock ni cambios recientes sin revisarlo.'
+				: null
 		};
 	} catch (error) {
 		const message = error?.message || String(error);
@@ -714,6 +845,9 @@ export async function getCatalogLookupStatus({ workspaceId } = {}) {
 			reason: missingTable ? 'catalog_table_missing' : 'catalog_lookup_failed',
 			totalProducts: 0,
 			totalPublished: 0,
+			lastSync: null,
+			stale: true,
+			message: 'No se pudo verificar la fecha de sincronización del catálogo.',
 			error: message
 		};
 	}
@@ -730,7 +864,13 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 		}))
 		.filter((entry) => entry.score > 0)
 		.map(({ product, score }) => {
-			const { currentPrice, originalPrice } = resolveCatalogPrices(product.price, product.compareAtPrice);
+			const commercialOverride = resolveCommercialOverride(product);
+			const catalogPrices = resolveCatalogPrices(product.price, product.compareAtPrice);
+			const variantPriceRange = resolveVariantPriceRange(product.variants);
+			const currentPrice = commercialOverride.offerPrice ?? catalogPrices.currentPrice;
+			const originalPrice = commercialOverride.offerPrice != null && catalogPrices.currentPrice != null
+				? catalogPrices.currentPrice
+				: variantPriceRange ? null : catalogPrices.originalPrice;
 			const shortDescription = buildShortDescription(product);
 			const family = inferCommercialFamily(
 				[product.name, product.tags, product.handle, shortDescription]
@@ -740,12 +880,24 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 			);
 			const variantMeta = extractVariantMeta(product.variants, { family, attributes: product.attributes });
 			const offerType = inferOfferType(product);
+			const packCount = commercialOverride.unitsPerPack || inferPackCount(offerType, product);
+			const offerLabel = commercialOverride.offerLabel || commercialOverride.presentationLabel ||
+				(Number.isInteger(packCount) && packCount > 1
+					? `Pack de ${packCount} unidades`
+					: offerType === 'pack'
+						? 'Pack con cantidad no confirmada'
+						: offerType === '5x2' ? 'Promoción 5x2'
+							: offerType === '3x1' ? 'Promoción 3x1'
+								: offerType === '2x1' ? 'Promoción 2x1' : 'Unidad');
 			const matchMeta = buildProductMatchMeta(product, signals.terms, signals.normalizedQuery);
 			const profileScore = scoreProductAgainstCommercialProfile({
 				name: product.name,
 				handle: product.handle,
 				tags: product.tags,
 				shortDescription,
+				storefrontFaq: Array.isArray(product.commercialData?.storefrontFacts?.faq)
+					? product.commercialData.storefrontFacts.faq
+					: [],
 				variantHints: variantMeta.variantHints,
 				colors: variantMeta.colors,
 				sizes: variantMeta.sizes
@@ -756,8 +908,16 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 				productId: product.productId,
 				name: product.name,
 				brand: product.brand || null,
-				price: formatPrice(currentPrice),
-				priceValue: currentPrice,
+				price: commercialOverride.offerPrice != null
+					? formatPrice(currentPrice)
+					: variantPriceRange
+						? `${formatPrice(variantPriceRange.min)} a ${formatPrice(variantPriceRange.max)}, según la variante`
+						: formatPrice(currentPrice),
+				priceValue: variantPriceRange && commercialOverride.offerPrice == null ? null : currentPrice,
+				variantPriceRange: variantPriceRange ? {
+					min: formatPrice(variantPriceRange.min),
+					max: formatPrice(variantPriceRange.max),
+				} : null,
 				originalPrice: formatPrice(originalPrice),
 				originalPriceValue: originalPrice,
 				hasDiscount: currentPrice != null && originalPrice != null && currentPrice !== originalPrice,
@@ -768,13 +928,17 @@ export function rankCatalogProductsForSearch(rawProducts = [], signals = {}, { l
 				variantHints: variantMeta.variantHints,
 				colors: variantMeta.colors,
 				sizes: variantMeta.sizes,
+				availabilityLabel: resolveVariantAvailability(product.variants),
 				tags: product.tags
 					? product.tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 6)
 					: [],
 				score,
 				family,
 				offerType,
-				packCount: inferPackCount(offerType),
+				packCount,
+				offerLabel,
+				manualOfferActive: commercialOverride.offerActive,
+				manualOfferPriceActive: commercialOverride.offerPrice != null,
 				commercialProfile: getCommercialProfile(family),
 				commercialScoreBoost: profileScore,
 				fullQueryMatch: matchMeta.fullQueryMatch,
@@ -865,9 +1029,28 @@ export function buildCatalogContext(products = []) {
 				`   - Resumen: ${product.shortDescription}`
 			];
 
+			if (product.offerLabel) lines.push(`   - Presentación/promoción: ${product.offerLabel}`);
+			if (Number.isInteger(product.packCount) && product.packCount > 1) {
+				lines.push(`   - El precio publicado corresponde a esa presentación; no hay precio unitario confirmado.`);
+			} else if (product.offerType === 'pack') {
+				lines.push(`   - Es un pack, pero la cantidad de unidades no está confirmada en los datos sincronizados.`);
+			}
+			if (product.manualOfferActive) {
+				lines.push('   - Presentación/oferta confirmada y vigente en BladeIA.');
+				if (product.manualOfferPriceActive) lines.push('   - El precio indicado es el precio de la oferta manual vigente.');
+			}
+
 			if (product.originalPrice) lines.push(`   - Precio anterior: ${product.originalPrice}`);
+			if (product.variantPriceRange) lines.push('   - El precio cambia según la variante; confirma la presentación elegida antes de cerrar el monto.');
 			if (product.colors?.length) lines.push(`   - Colores detectados: ${product.colors.join(', ')}`);
 			if (product.sizes?.length) lines.push(`   - Talles disponibles: ${product.sizes.join(', ')}`);
+			if (product.availabilityLabel) lines.push(`   - Disponibilidad: ${product.availabilityLabel}`);
+			if (product.storefrontFaq?.length) {
+				lines.push(`   - Preguntas frecuentes de la ficha: ${product.storefrontFaq
+					.slice(0, 6)
+					.map((item) => `${item.question}: ${item.answer}`)
+					.join(' | ')}`);
+			}
 			return lines.join('\n');
 		})
 		.join('\n\n');

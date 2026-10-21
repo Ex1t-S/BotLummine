@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
-import { getCatalogPage, syncCatalogForWorkspace, syncCatalogFromProvider } from '../services/catalog/catalog.service.js';
+import { getCatalogPage, syncCatalogForWorkspace, syncCatalogFromProvider, updateCatalogCommercialData } from '../services/catalog/catalog.service.js';
 import { getQueueMeta } from '../services/conversation/inbox-routing.service.js';
 import { normalizeThreadPhone } from '../lib/conversation-threads.js';
 import { sendAndPersistOutbound } from '../services/conversation/outbound-message.service.js';
@@ -1495,6 +1495,20 @@ export async function postSyncCatalog(req, res, next) {
 			ok: true,
 			...result,
 		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function patchCatalogCommercialData(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		const product = await updateCatalogCommercialData({
+			productId: String(req.params.productId || ''),
+			workspaceId,
+			commercialData: req.body?.commercialData || {}
+		});
+		return res.json({ ok: true, product: { id: product.id, commercialData: product.commercialData } });
 	} catch (error) {
 		next(error);
 	}

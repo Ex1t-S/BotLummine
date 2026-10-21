@@ -21,6 +21,10 @@ const HARD_HANDOFF_REASONS = new Set([
 	'tracking_followup',
 	'tracking_followup_needs_human',
 	'ai_cannot_continue',
+	'stock_unconfirmed',
+	'promotion_unconfirmed',
+	'size_data_unconfirmed',
+	'product_data_unconfirmed',
 ]);
 
 const COMMERCIAL_INTENTS = new Set([

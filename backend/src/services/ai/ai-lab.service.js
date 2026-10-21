@@ -47,6 +47,7 @@ function buildTracePayload(trace = null) {
 		assistantMessage: trace.assistantMessage || null,
 		provider: trace.provider || null,
 		model: trace.model || null,
+		usage: trace.usage || null,
 		aiGuidance: trace.aiGuidance || null,
 		liveOrderContext: trace.liveOrderContext || null,
 		shouldReply: trace.shouldReply ?? true,

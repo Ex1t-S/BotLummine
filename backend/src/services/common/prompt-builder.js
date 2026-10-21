@@ -90,7 +90,9 @@ function buildPolicyBlock(responsePolicy = {}, { agentName = 'la asesora', busin
 				'- Atribui una caracteristica al producto solo si aparece expresamente en su descripcion o etiquetas confirmadas; la preferencia del cliente no confirma esa caracteristica.',
 				'- Si falta ese dato, deci que no esta confirmado y no recomiendes el producto por esa caracteristica.',
 				'- Los talles listados son variantes, no una guia de medidas ni evidencia de calce. No recomiendes un talle basandote solo en el talle habitual del cliente.',
-				'- La lista de colores y talles tampoco confirma stock actual; no afirmes disponibilidad sin un dato de inventario confirmado.'
+				'- La lista de colores y talles tampoco confirma stock actual; no afirmes disponibilidad sin un dato de inventario confirmado.',
+				'- Si preguntan por stock y el producto no trae disponibilidad sincronizada, deriva a una asesora para confirmarlo.',
+				'- Si preguntan por una promoción, confirma únicamente la oferta vigente del catálogo o la registrada manualmente en BladeIA; si no aparece, deriva a una asesora.'
 			);
 		}
 	}
@@ -203,7 +205,14 @@ function formatCatalogProducts({ catalogProducts = [], catalogContext = '', prof
 			`  oferta: ${item.offerType || 'single'}`,
 			`  precio: ${item.price || 'no cargado'}`
 		);
+		if (item.offerLabel) lines.push(`  presentacion/promocion confirmada: ${item.offerLabel}`);
+		if (Number.isInteger(item.packCount) && item.packCount > 1) {
+			lines.push('  alcance del precio: corresponde a la presentacion completa; no hay precio unitario confirmado.');
+		} else if (item.offerType === 'pack') {
+			lines.push('  alcance del precio: es un pack, pero la cantidad no esta confirmada. No lo describas como unidad.');
+		}
 		if (item.productUrl) lines.push(`  link: ${item.productUrl}`);
+		if (item.availabilityLabel) lines.push(`  stock sincronizado: ${item.availabilityLabel}`);
 		const description = String(item.shortDescription || item.description || '').replace(/\s+/g, ' ').trim();
 		if (description && !/^sin descripcion cargada\.?$/i.test(description)) {
 			lines.push(`  descripcion confirmada: ${description.slice(0, 320)}`);

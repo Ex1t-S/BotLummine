@@ -171,6 +171,10 @@
 	.catalog-grid {
 		grid-template-columns: 1fr;
 	}
+
+	.catalog-commercial-dates {
+		grid-template-columns: 1fr;
+	}
 }
 
 /* Professional polish */
@@ -239,6 +243,65 @@
 .catalog-card > strong {
 	color: var(--ui-heading, #0d151b);
 	font-size: 15px;
+}
+
+.catalog-stock-summary {
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--ui-surface-muted, #f4f7fa);
+}
+
+.catalog-commercial-toggle,
+.catalog-commercial-form button {
+	min-height: 40px;
+	padding: 9px 12px;
+	border: 1px solid var(--ui-border, #d8dee8);
+	border-radius: 9px;
+	background: #fff;
+	color: var(--ui-text, #101828);
+	font: inherit;
+	font-weight: 650;
+	cursor: pointer;
+}
+
+.catalog-commercial-form {
+	display: grid;
+	gap: 10px;
+	margin-top: 8px;
+	padding: 12px;
+	border: 1px solid var(--ui-border, #d8dee8);
+	border-radius: 10px;
+	background: var(--ui-surface-muted, #f8fafc);
+}
+
+.catalog-commercial-form label {
+	display: grid;
+	gap: 5px;
+	color: var(--ui-muted, #66737d);
+	font-size: 12px;
+	font-weight: 650;
+}
+
+.catalog-commercial-form input {
+	width: 100%;
+	min-width: 0;
+	min-height: 38px;
+	padding: 8px 10px;
+	border: 1px solid var(--ui-border, #d8dee8);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--ui-text, #101828);
+	font: inherit;
+}
+
+.catalog-commercial-form p {
+	font-size: 12px;
+}
+
+.catalog-commercial-dates {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
 }
 
 .catalog-card {

@@ -1468,6 +1468,48 @@ export function auditAssistantReply({
 }) {
 	const rawText = typeof text === 'string' ? text : text?.text || String(text || '');
 	const preserveGreeting = Boolean(commercialPlan?.greetingOnly);
+	const normalizedLatestUserMessage = normalizeGateText(latestUserMessage);
+	const supportRequest = isSupportIntent(detectedIntent);
+	const asksCurrentStock =
+		detectedIntent === 'stock_check' ||
+		(!supportRequest && /\b(stock|disponible|disponibilidad|hay unidades|queda(n)?|tienen en|tenes en)\b/.test(normalizedLatestUserMessage));
+	const asksPromotion =
+		!supportRequest && /\b(promo|promocion|oferta|descuento|pack|combo|2x1|3x1|5x2)\b/.test(normalizedLatestUserMessage);
+	const selectedProducts = getClaimedProducts({ text: latestUserMessage, catalogProducts, commercialPlan });
+	const hasRelevantProductContext = Boolean(commercialPlan?.bestOffer) || catalogProducts.some((product) => {
+		const productName = normalizeGateText(product?.name || '');
+		return productName.length >= 3 && normalizedLatestUserMessage.includes(productName);
+	});
+	if (asksCurrentStock) {
+		const hasSyncedStock = hasRelevantProductContext && selectedProducts.some((product) => Boolean(product?.availabilityLabel));
+		if (!hasSyncedStock) {
+			return {
+				finalText: 'No tengo el stock actualizado para confirmártelo con seguridad. Te paso con una asesora para que lo revise y te confirme.',
+				triggerHumanHandoff: true,
+				handoffReason: 'stock_unconfirmed',
+				auditFlags: ['stock_unconfirmed'],
+				repetitionDetected: false,
+				continuityRecovery: false,
+			};
+		}
+	}
+	if (asksPromotion) {
+		const hasConfirmedPromotion = hasRelevantProductContext && selectedProducts.some((product) =>
+			product?.manualOfferActive ||
+			product?.hasDiscount ||
+			['2x1', '3x1', '5x2'].includes(String(product?.offerType || ''))
+		);
+		if (!hasConfirmedPromotion) {
+			return {
+				finalText: 'No tengo una promoción vigente confirmada para ese producto. Te paso con una asesora para que te indique la opción actual.',
+				triggerHumanHandoff: true,
+				handoffReason: 'promotion_unconfirmed',
+				auditFlags: ['promotion_unconfirmed'],
+				repetitionDetected: false,
+				continuityRecovery: false,
+			};
+		}
+	}
 	let cleaned = normalizeText(rawText);
 	cleaned = stripRepeatedGreeting(cleaned, recentMessages, contactName, preserveGreeting);
 	cleaned = stripRepeatedIdentity(cleaned, recentMessages, contactName, agentName, businessName, preserveGreeting);
@@ -1498,9 +1540,10 @@ export function auditAssistantReply({
 	const sizeProducts = getClaimedProducts({ text: cleaned, catalogProducts, commercialPlan });
 	if (detectedIntent === 'size_help' && looksLikeSizeRecommendation(cleaned) && !hasConfirmedSizeGuide(sizeProducts)) {
 		return {
-			finalText: fallbackReply,
-			triggerHumanHandoff: false,
-			auditFlags: ['unsupported_size_recommendation'],
+			finalText: 'No tengo una guía de medidas confirmada para recomendarte un talle con seguridad. Te paso con una asesora para que revise ese modelo.',
+			triggerHumanHandoff: true,
+			handoffReason: 'size_data_unconfirmed',
+			auditFlags: ['unsupported_size_recommendation', 'size_data_unconfirmed'],
 			repetitionDetected: false,
 			continuityRecovery: false,
 		};
@@ -1511,9 +1554,10 @@ export function auditAssistantReply({
 		: [];
 	if (unsupportedCatalogClaims.length) {
 		return {
-			finalText: buildUnverifiedCatalogClaimReply({ catalogProducts, commercialPlan, claims: unsupportedCatalogClaims }),
-			triggerHumanHandoff: false,
-			auditFlags: unsupportedCatalogClaims.map(({ flag }) => flag),
+			finalText: 'No tengo ese dato confirmado en la ficha del producto. Te paso con una asesora para que lo verifique antes de recomendarte algo.',
+			triggerHumanHandoff: true,
+			handoffReason: 'product_data_unconfirmed',
+			auditFlags: [...unsupportedCatalogClaims.map(({ flag }) => flag), 'product_data_unconfirmed'],
 			repetitionDetected: false,
 			continuityRecovery: false,
 		};

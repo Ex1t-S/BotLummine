@@ -93,7 +93,10 @@ import {
 } from './conversation-signals.service.js';
 
 const AUTO_REPLY_COOLDOWN_MS = Number(process.env.AI_REPLY_COOLDOWN_MS || 10_000);
-const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_MS || 0);
+// Keep the burst queue durable across API restarts. The in-memory timer is
+// still used for low latency, while this sweep recovers pending turns that
+// were scheduled immediately before a deploy or process restart.
+const AUTO_REPLY_COOLDOWN_SWEEP_MS = Number(process.env.AI_REPLY_COOLDOWN_SWEEP_MS || 5_000);
 const pendingAutoReplyTimers = new Map();
 let pendingAutoReplySweepStarted = false;
 
@@ -1739,6 +1742,11 @@ async function processInboundMessageTurn({
 		} else {
 			catalogContext = buildCatalogContext(catalogProducts);
 			commercialHints = pickCommercialHints(catalogProducts, commercialPlan, { aiProfile });
+			if (commercialPlan?.catalogStatusReason === 'catalog_ready' && commercialPlan?.catalogStatusMessage) {
+				commercialHints.push(
+					'El catálogo está desactualizado. Usá los datos visibles solo como referencia; no confirmes stock ni cambios recientes y deriva si preguntan por disponibilidad actual.'
+				);
+			}
 		}
 
 		if (aiGuidance?.type === 'payment') {
@@ -2087,10 +2095,7 @@ async function processInboundMessageTurn({
 		finalReply = appendMenuHintIfNeeded(finalReply, menuAssistantContext);
 	}
 
-	if (
-		(isDkvWorkspace(resolvedWorkspaceId) || !useCommerceEngine) &&
-		isUnableToContinueHandoffReply(finalReply)
-	) {
+	if (isUnableToContinueHandoffReply(finalReply)) {
 		await assertAutoReplyAuthorized(prisma, { ...turnAuthorization, expectedHandoff });
 		expectedHandoff = await syncHumanHandoff({
 			conversationId: freshConversation.id,

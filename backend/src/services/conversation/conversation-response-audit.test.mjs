@@ -7,6 +7,46 @@ import {
 } from './conversation-helpers.service.js';
 
 describe('assistant response relevance safeguards', () => {
+	it('hands off stock questions when Shopify did not synchronize availability', () => {
+		const result = auditAssistantReply({
+			text: 'Sí, está disponible.',
+			detectedIntent: 'stock_check',
+			latestUserMessage: '¿Hay stock de la mascarilla de colágeno?',
+			commercialPlan: { bestOffer: { name: 'Mascarilla de colágeno' } },
+			catalogProducts: [{ name: 'Mascarilla de colágeno' }],
+		});
+
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'stock_unconfirmed');
+		assert.match(result.finalText, /stock actualizado/i);
+	});
+
+	it('keeps an explicit Shopify stock signal without forcing a handoff', () => {
+		const result = auditAssistantReply({
+			text: 'Shopify indica disponibilidad en las variantes sincronizadas.',
+			detectedIntent: 'stock_check',
+			latestUserMessage: '¿Hay stock de la mascarilla de colágeno?',
+			commercialPlan: { bestOffer: { name: 'Mascarilla de colágeno' } },
+			catalogProducts: [{ name: 'Mascarilla de colágeno', availabilityLabel: 'Disponible según Shopify.' }],
+		});
+
+		assert.equal(result.triggerHumanHandoff, false);
+	});
+
+	it('hands off promotion questions when no current offer is confirmed', () => {
+		const result = auditAssistantReply({
+			text: 'Tenemos una promo especial.',
+			detectedIntent: 'product',
+			latestUserMessage: '¿Qué promo tienen para la mascarilla de colágeno?',
+			commercialPlan: { bestOffer: { name: 'Mascarilla de colágeno' } },
+			catalogProducts: [{ name: 'Mascarilla de colágeno', offerType: 'single' }],
+		});
+
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'promotion_unconfirmed');
+		assert.match(result.finalText, /promoción vigente confirmada/i);
+	});
+
 	it('replaces a generic greeting when the customer already asked about a product', () => {
 		const result = auditAssistantReply({
 			text: 'Hola, soy Sofi. ¿En qué puedo ayudarte?',
@@ -54,10 +94,11 @@ describe('assistant response relevance safeguards', () => {
 			catalogProducts: [{ name: 'Body Comfort', shortDescription: 'Colores negro y beige. Talles S, M y L.' }],
 		});
 
-		assert.match(result.finalText, /no tengo confirmados datos sobre comodidad o calce/i);
+		assert.match(result.finalText, /dato confirmado en la ficha del producto/i);
 		assert.doesNotMatch(result.finalText, /ideal para usar todo el d[ií]a|modela suavemente/i);
-		assert.equal(result.triggerHumanHandoff, false);
-		assert.deepEqual(result.auditFlags, ['unverified_catalog_claim:all_day_use', 'unverified_catalog_claim:modeling', 'unverified_catalog_claim:softness']);
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'product_data_unconfirmed');
+		assert.deepEqual(result.auditFlags, ['unverified_catalog_claim:all_day_use', 'unverified_catalog_claim:modeling', 'unverified_catalog_claim:softness', 'product_data_unconfirmed']);
 	});
 
 	it('allows a product feature when the selected product description confirms it', () => {
@@ -86,10 +127,12 @@ describe('assistant response relevance safeguards', () => {
 			catalogProducts: [{ name: 'Body Comfort', sizes: ['S', 'M', 'L'] }],
 		});
 
-		assert.match(result.finalText, /no tengo confirmados datos sobre comodidad o calce/i);
+		assert.match(result.finalText, /dato confirmado en la ficha del producto/i);
+		assert.equal(result.triggerHumanHandoff, true);
 		assert.deepEqual(result.auditFlags, [
 			'unverified_catalog_claim:comfort',
 			'unverified_catalog_claim:adjustment',
+			'product_data_unconfirmed',
 		]);
 	});
 
@@ -104,7 +147,7 @@ describe('assistant response relevance safeguards', () => {
 
 		assert.match(result.finalText, /gu[ií]a de medidas/i);
 		assert.doesNotMatch(result.finalText, /te sugiero mantener ese talle/i);
-		assert.deepEqual(result.auditFlags, ['unsupported_size_recommendation']);
+		assert.deepEqual(result.auditFlags, ['unsupported_size_recommendation', 'size_data_unconfirmed']);
 	});
 
 	it('keeps a cautious size reply that does not recommend a size', () => {
@@ -141,8 +184,11 @@ describe('assistant response relevance safeguards', () => {
 			],
 		});
 
-		assert.match(result.finalText, /medidas del Body Vista/i);
-		assert.deepEqual(result.auditFlags, ['unsupported_size_recommendation']);
+		assert.match(result.finalText, /asesora/i);
+		assert.doesNotMatch(result.finalText, /medidas del Body Air/i);
+		assert.equal(result.triggerHumanHandoff, true);
+		assert.equal(result.handoffReason, 'size_data_unconfirmed');
+		assert.deepEqual(result.auditFlags, ['unsupported_size_recommendation', 'size_data_unconfirmed']);
 	});
 
 	it('uses a known size without inventing fit or asking for that size again', () => {

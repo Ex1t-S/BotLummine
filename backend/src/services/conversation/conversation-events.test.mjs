@@ -19,6 +19,14 @@ describe('conversation human lock policy', () => {
 		);
 	});
 
+	it('keeps unresolved catalog facts locked until a person reviews them', () => {
+		for (const reason of ['stock_unconfirmed', 'promotion_unconfirmed', 'size_data_unconfirmed', 'product_data_unconfirmed']) {
+			const mode = resolveHumanLockMode({ reason, currentState: { lastIntent: 'product' } });
+			assert.equal(mode, HUMAN_LOCK_MODE.HARD, reason);
+			assert.equal(resolveHumanAutoResumeAt({ mode, lockedAt: new Date('2026-10-21T12:00:00Z') }), null, reason);
+		}
+	});
+
 	it('keeps a manual takeover locked until explicit release, including commercial chats', () => {
 		const lockedAt = new Date('2026-08-01T12:00:00.000Z');
 		const mode = resolveHumanLockMode({

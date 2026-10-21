@@ -446,6 +446,11 @@ export async function runConversationTurn({
 		} else {
 			catalogContext = buildCatalogContext(catalogProducts, commercialPlan);
 			commercialHints = pickCommercialHints(catalogProducts, commercialPlan, { aiProfile });
+			if (commercialPlan?.catalogStatusReason === 'catalog_ready' && commercialPlan?.catalogStatusMessage) {
+				commercialHints.push(
+					'El catálogo está desactualizado. Podés usar los datos visibles como referencia, pero no confirmes stock ni cambios recientes; si preguntan por disponibilidad actual, derivá o pedí verificarlo.'
+				);
+			}
 		}
 
 		if (aiGuidance?.type === 'payment') {
@@ -727,9 +732,7 @@ export async function runConversationTurn({
 		}
 	}
 
-	const shouldEscalateUnableFallback =
-		(isDkvWorkspace(workspaceId) || !useCommerceEngine) &&
-		isUnableToContinueHandoffReply(finalReply);
+	const shouldEscalateUnableFallback = isUnableToContinueHandoffReply(finalReply);
 	const finalQueueDecision = shouldEscalateUnableFallback
 		? {
 			queue: 'HUMAN',

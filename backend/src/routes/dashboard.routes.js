@@ -15,6 +15,7 @@ import {
 	deleteConversationHistory,
 	getCatalog,
 	postSyncCatalog,
+	patchCatalogCommercialData,
 	getEnboxSyncStatusJson,
 	postRunEnboxSync,
 	patchConversationArchive,
@@ -107,6 +108,7 @@ router.post('/inbox/deduplicate', requireAdmin, postDeduplicateInboxContacts);
 
 router.get('/catalog', requireAdmin, getCatalog);
 router.post('/catalog/sync', requireAdmin, postSyncCatalog);
+router.patch('/catalog/:productId/commercial-data', requireAdmin, patchCatalogCommercialData);
 router.get('/enbox-sync/status', requireAdmin, getEnboxSyncStatusJson);
 router.post('/enbox-sync/run', requireAdmin, postRunEnboxSync);
 

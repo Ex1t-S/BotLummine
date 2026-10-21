@@ -123,7 +123,6 @@ function resolveProductFamily({ messageBody = '', currentState = {}, products = 
 	}
 	const currentFocusFamily = inferCommercialFamily(currentState?.currentProductFocus || '', scope);
 	if (currentFocusFamily) return currentFocusFamily;
-	if (products[0]?.family && commercialFamilyAllowedForProfile(products[0].family, scope)) return products[0].family;
 	const joinedInterest = asArray(currentState?.interestedProducts).join(' ');
 	return inferCommercialFamily(joinedInterest, scope);
 }
@@ -306,6 +305,7 @@ function rankCommercialProducts(
 
 function buildOfferLabel(product = {}) {
 	const fallbackPrice = product.price ? ` (${product.price})` : '';
+	if (product.offerLabel) return `${product.offerLabel}${fallbackPrice}`;
 	if (product.offerType === '5x2') return `5x2${fallbackPrice}`;
 	if (product.offerType === '3x1') return `3x1${fallbackPrice}`;
 	if (product.offerType === '2x1') return `2x1${fallbackPrice}`;
@@ -337,7 +337,9 @@ function mapBestOffer(chosen, family) {
 		offerKey: chosen.hasDiscount ? `${chosen.name}::discount` : chosen.name,
 		offerLabel: buildOfferLabel(chosen),
 		family: chosen.family || family || null,
-		offerType: chosen.offerType || 'single'
+		offerType: chosen.offerType || 'single',
+		packCount: chosen.packCount || null,
+		manualOfferActive: Boolean(chosen.manualOfferActive)
 	};
 }
 

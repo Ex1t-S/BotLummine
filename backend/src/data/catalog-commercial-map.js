@@ -53,7 +53,10 @@ export function commercialFamilyAllowedForProfile(family = null, { aiProfile = '
 	if (!profile) return true;
 	if (profile === AI_PROFILE_IDS.LUMMINE_BODYWEAR) return BODYWEAR_FAMILIES.has(family);
 	if (profile === AI_PROFILE_IDS.DKV_INSURANCE) return DKV_FAMILIES.has(family);
-	if (profile === AI_PROFILE_IDS.GENERIC_ECOMMERCE) return !BODYWEAR_FAMILIES.has(family) && !DKV_FAMILIES.has(family);
+	// A generic ecommerce profile must adapt to the workspace catalog.  The
+	// workspace itself is the isolation boundary, so excluding bodywear here
+	// would make a generic fashion catalog silently lose valid products.
+	if (profile === AI_PROFILE_IDS.GENERIC_ECOMMERCE) return true;
 	return true;
 }
 

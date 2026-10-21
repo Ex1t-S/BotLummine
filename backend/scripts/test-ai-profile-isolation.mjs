@@ -21,7 +21,7 @@ function menuText(config) {
 
 assert.equal(
 	resolveAiProfile({ workspaceId: 'workspace_lummine', businessName: 'Lummine' }),
-	AI_PROFILES.LUMMINE_BODYWEAR
+	AI_PROFILES.GENERIC_ECOMMERCE
 );
 assert.equal(
 	resolveAiProfile({ workspaceId: 'workspace_ruchi', businessName: 'Ruchi Argentina' }),
@@ -34,7 +34,7 @@ assert.equal(
 
 assert.equal(
 	inferCommercialFamily('Quiero ver bodys modeladores', { aiProfile: AI_PROFILES.GENERIC_ECOMMERCE }),
-	null
+	'body_modelador'
 );
 assert.equal(
 	inferCommercialFamily('Quiero ver bodys modeladores', { aiProfile: AI_PROFILES.LUMMINE_BODYWEAR }),
@@ -44,7 +44,7 @@ assert.equal(
 	scoreProductAgainstCommercialProfile({ name: '3x1 Body modelador' }, 'body_modelador', {
 		aiProfile: AI_PROFILES.GENERIC_ECOMMERCE,
 	}),
-	0
+	38
 );
 assert.ok(
 	scoreProductAgainstCommercialProfile({ name: '3x1 Body modelador' }, 'body_modelador', {
