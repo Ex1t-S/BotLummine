@@ -1616,6 +1616,69 @@ function buildHeaderComponentForSend(headerComponent = {}, template = {}, variab
 	return null;
 }
 
+function readFixedVariableValue(variableMapping = {}, key = '') {
+	const value = variableMapping?.[key];
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		return normalizeString(value.fixedValue || '');
+	}
+	return normalizeString(value || '');
+}
+
+/**
+ * Campaigns keep the uploaded media in draftContext and in each recipient's
+ * variables. Meta's campaign dispatcher also needs it on the stored template
+ * components, otherwise launchCampaign rejects an otherwise valid draft.
+ */
+function applyCampaignHeaderMedia({ components = [], template = null, variableMapping = {}, draftContext = null } = {}) {
+	const nextComponents = safeArray(components).map((component) => ({ ...component }));
+	const headerIndex = nextComponents.findIndex((component) => toUpper(component?.type) === 'HEADER');
+	if (headerIndex < 0) return nextComponents;
+
+	const header = nextComponents[headerIndex];
+	const templateHeader = safeArray(template?.rawPayload?.components).find(
+		(component) => toUpper(component?.type) === 'HEADER'
+	);
+	const headerFormat = toUpper(header?.format || templateHeader?.format || template?.headerFormat || '');
+	if (!['IMAGE', 'VIDEO', 'DOCUMENT', 'AUDIO'].includes(headerFormat)) return nextComponents;
+
+	const mediaField = headerFormat.toLowerCase();
+	const existingParameter = safeArray(header?.parameters)[0] || {};
+	const existingMedia = existingParameter?.[mediaField] || {};
+	if (normalizeString(existingMedia.id) || normalizeString(existingMedia.link)) return nextComponents;
+
+	const mediaId = normalizeString(
+		readFixedVariableValue(variableMapping, `header_${mediaField}_id`) ||
+		readFixedVariableValue(variableMapping, `${mediaField}_id`) ||
+		draftContext?.uploadedMediaId ||
+		template?.rawPayload?.headerMedia?.mediaId ||
+		header?.[mediaField]?.id ||
+		templateHeader?.[mediaField]?.id ||
+		''
+	);
+	const mediaLink = normalizeString(
+		readFixedVariableValue(variableMapping, `header_${mediaField}_link`) ||
+		readFixedVariableValue(variableMapping, `${mediaField}_link`) ||
+		template?.rawPayload?.headerMedia?.previewUrl ||
+		header?.[mediaField]?.link ||
+		templateHeader?.[mediaField]?.link ||
+		''
+	);
+
+	if (!mediaId && !mediaLink) return nextComponents;
+
+	nextComponents[headerIndex] = {
+		...header,
+		parameters: [
+			{
+				type: mediaField,
+				[mediaField]: mediaId ? { id: mediaId } : { link: mediaLink },
+			}
+		]
+	};
+
+	return nextComponents;
+}
+
 function buildBodyComponentForSend(bodyComponent = {}, variables = {}, template = {}) {
 	const text = normalizeString(bodyComponent?.text || '');
 	const parameters = buildBodyParametersFromText(text, variables, {
@@ -2320,9 +2383,17 @@ export async function createCampaignDraft({
 		throw new Error('No hay destinatarios válidos para crear la campaña.');
 	}
 
-	const normalizedComponents = safeArray(sendComponents);
+	const variableMapping = audienceFilters?.variableMapping || draftContext?.variableMapping || {};
+	const normalizedComponents = applyCampaignHeaderMedia({
+		components: safeArray(sendComponents).length
+			? safeArray(sendComponents)
+			: safeArray(template?.rawPayload?.components),
+		template,
+		variableMapping,
+		draftContext,
+	});
 	const previewBase = renderTemplatePreviewFromComponents(
-		normalizedComponents.length ? normalizedComponents : safeArray(template?.rawPayload?.components),
+		normalizedComponents,
 		{}
 	);
 
@@ -2346,7 +2417,7 @@ export async function createCampaignDraft({
 		});
 
 		const personalized = renderTemplatePreviewFromComponents(
-			normalizedComponents.length ? normalizedComponents : safeArray(template?.rawPayload?.components),
+			normalizedComponents,
 			variables
 		);
 
@@ -2395,9 +2466,7 @@ export async function createCampaignDraft({
 			totalRecipients: recipientRows.length,
 			pendingRecipients,
 			skippedRecipients,
-			defaultComponents: normalizedComponents.length
-				? normalizedComponents
-				: safeArray(template?.rawPayload?.components),
+			defaultComponents: normalizedComponents,
 			draftContext: draftContext && typeof draftContext === 'object' ? draftContext : null,
 			previewText: previewBase.previewText,
 			status: 'DRAFT',
@@ -2444,9 +2513,15 @@ export async function updateCampaignDraft(campaignId, {
 		? await getTemplateOrThrow(templateId, { workspaceId: resolvedWorkspaceId })
 		: await getTemplateOrThrow(existing.templateLocalId, { workspaceId: resolvedWorkspaceId });
 	const normalizedAudienceSource = normalizeAudienceSource(audienceSource || existing.audienceSource || 'manual');
-	const normalizedComponents = safeArray(sendComponents).length
-		? safeArray(sendComponents)
-		: safeArray(template?.rawPayload?.components);
+	const variableMapping = audienceFilters?.variableMapping || draftContext?.variableMapping || {};
+	const normalizedComponents = applyCampaignHeaderMedia({
+		components: safeArray(sendComponents).length
+			? safeArray(sendComponents)
+			: safeArray(template?.rawPayload?.components),
+		template,
+		variableMapping,
+		draftContext,
+	});
 	const draftCampaign = {
 		...existing,
 		templateLocalId: template.id,
