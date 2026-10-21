@@ -1,18 +1,9 @@
-// Confirmed by the owner. Fictional names are for local composition review only.
+// Customer relationships confirmed by the owner; logos from the stores' sites.
 export const customerBrands = [
-  { name: 'lummine', confirmed: true },
-  { name: 'kaisy', confirmed: true },
-  { name: 'PAMPA STORE', confirmed: true },
-  { name: 'surco', confirmed: false },
-  { name: 'CASA CEIBO', confirmed: false },
-  { name: 'bruma', confirmed: false },
-  { name: 'MONTE SUR', confirmed: false },
-  { name: 'Nativa Estudio', confirmed: false },
-  { name: 'COSTA CLUB', confirmed: false },
-  { name: 'alero', confirmed: false },
-  { name: 'TIERRA NUEVA', confirmed: false },
-  { name: 'Río Objetos', confirmed: false },
-  { name: 'BUEN AIRE', confirmed: false },
-  { name: 'andén', confirmed: false },
-  { name: 'OLIVA CASA', confirmed: false },
+  { name: 'Lummine', slug: 'lummine', confirmed: true, logo: '/images/home/brands/lummine.png', source: 'https://lummine.com/' },
+  { name: 'Kaisy', slug: 'kaisy', confirmed: true, logo: '/images/home/brands/kaisy.png', source: 'https://www.kaisy.com.ar/' },
+  { name: 'Pampa Store', slug: 'pampa-store', confirmed: true, logo: '/images/home/brands/pampa-store.png', source: 'https://pampastore.com.ar/' },
+  { name: 'FMH', slug: 'fmh', confirmed: true, logo: null },
+  { name: 'Bamboo', slug: 'bamboo', confirmed: true, logo: null },
+  { name: 'ALVEA', slug: 'alvea', confirmed: true, logo: '/images/home/brands/alvea.png', source: 'https://www.alvea.com.ar/' },
 ];

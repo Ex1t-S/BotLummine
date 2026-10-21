@@ -2,7 +2,7 @@
    removed incrementally instead of adding another global override layer. */
 
 .inbox-page--v2 {
-	--inbox-v2-canvas: #f6f7f8;
+	--inbox-v2-canvas: #f1f6fc;
 	--inbox-v2-paper: #ffffff;
 	--inbox-v2-soft: #f8f9fa;
 	--inbox-v2-text: #151a22;
@@ -10,8 +10,8 @@
 	--inbox-v2-muted: #707a87;
 	--inbox-v2-border: #e2e5e9;
 	--inbox-v2-border-strong: #d3d8df;
-	--inbox-v2-primary: #5046e5;
-	--inbox-v2-primary-soft: #efedff;
+	--inbox-v2-primary: #2563c7;
+	--inbox-v2-primary-soft: #e7f1ff;
 	--inbox-v2-success: #157451;
 	--inbox-v2-success-soft: #eaf8f1;
 	--inbox-v2-danger: #c83f4c;
@@ -129,7 +129,7 @@
 
 .inbox-page--v2 .inbox-search-input:focus {
 	border-color: var(--inbox-v2-primary);
-	box-shadow: 0 0 0 3px rgba(80, 70, 229, 0.12);
+	box-shadow: 0 0 0 3px rgba(37, 99, 199, 0.12);
 }
 
 .inbox-queue-tabs-v2 {
@@ -244,7 +244,7 @@
 .inbox-page--v2 .inbox-contact-card--selected,
 .inbox-page--v2 .inbox-contact-card--selected:hover {
 	border-color: var(--inbox-v2-border);
-	background: #f3f2ff;
+	background: #e9f3ff;
 }
 
 .inbox-page--v2 .inbox-contact-row {
@@ -459,8 +459,8 @@
 }
 
 .inbox-page--v2 .inbox-message-bubble {
-	border: 1px solid var(--inbox-v2-border);
-	border-radius: 9px 9px 9px 3px;
+	border: 1px solid #e8eef4;
+	border-radius: 16px 16px 16px 5px;
 	background: var(--inbox-v2-paper);
 	box-shadow: 0 1px 1px rgba(21, 26, 34, 0.02);
 }
@@ -471,9 +471,9 @@
 }
 
 .inbox-page--v2 .inbox-message-bubble--outbound {
-	border-color: #dcd8ff;
-	border-radius: 9px 9px 3px 9px;
-	background: #eeecff;
+	border-color: #dceaf5;
+	border-radius: 16px 16px 5px 16px;
+	background: #eaf3fb;
 }
 
 .inbox-page--v2 .inbox-message-bubble-inner {
@@ -520,7 +520,7 @@
 
 .inbox-page--v2 .inbox-textarea:focus {
 	border-color: var(--inbox-v2-primary);
-	box-shadow: 0 0 0 3px rgba(80, 70, 229, 0.12);
+	box-shadow: 0 0 0 3px rgba(37, 99, 199, 0.12);
 }
 
 .inbox-page--v2 .inbox-send-btn {
@@ -890,8 +890,8 @@
 }
 
 .dark .admin-shell .admin-content .inbox-page--v2 .inbox-message-bubble--outbound {
-	background: #2b2849 !important;
-	border-color: #403b72 !important;
+	background: #203347 !important;
+	border-color: #30465d !important;
 }
 
 /* The global stylesheet still contains several legacy dashboard layers with
@@ -991,7 +991,7 @@
 
 .admin-shell .admin-content .inbox-page--v2 .inbox-contact-card--selected,
 .admin-shell .admin-content .inbox-page--v2 .inbox-contact-card--selected:hover {
-	background: #f3f2ff;
+	background: #e9f3ff;
 }
 
 .admin-shell .admin-content .inbox-page--v2 .inbox-contact-card::before,
@@ -1031,3 +1031,78 @@
 		box-shadow: none;
 	}
 }
+
+/* Operator workspace: visible actions, calm surfaces and a full-width composer. */
+.admin-shell .admin-content .inbox-page--v2:not(.inbox-page--context-open) { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr); }
+.admin-shell .admin-content .inbox-page--v2.inbox-page--contacts-hidden:not(.inbox-page--context-open) { grid-template-columns: minmax(0, 1fr); }
+.admin-shell .admin-content .inbox-page--v2 .inbox-sidebar-top { min-height: 82px; padding: 18px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-queue-tabs-v2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px 14px 14px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-queue-tabs-v2 button { min-height: 42px; justify-content: space-between; border: 1px solid var(--inbox-v2-border); border-radius: 8px; color: var(--inbox-v2-text-secondary); }
+.admin-shell .admin-content .inbox-page--v2 .inbox-queue-tabs-v2 button.is-active { background: var(--inbox-v2-primary-soft); border-color: var(--inbox-v2-primary); color: var(--inbox-v2-primary); }
+.admin-shell .admin-content .inbox-page--v2 .inbox-read-filters { flex-wrap: wrap; border-radius: 0; gap: 6px; padding: 10px 14px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-read-filter-btn { min-height: 34px; font-size: 12px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-chat-header-top { display: flex; flex-wrap: wrap; gap: 12px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-badges { flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-badge--neutral { display: inline-flex; background: var(--inbox-v2-soft); color: var(--inbox-v2-text-secondary); }
+.admin-shell .admin-content .inbox-page--v2 .inbox-context-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; min-height: 42px; padding: 0 12px; font-size: 12px; border: 1px solid var(--inbox-v2-border); }
+.admin-shell .admin-content .inbox-page--v2 .inbox-primary-action { min-height: 42px; padding: 10px 14px; border-radius: 8px; background: var(--inbox-v2-primary); color: white; font-size: 12px; font-weight: 650; border: 0; }
+.inbox-primary-action:disabled { opacity: .5; cursor: wait; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-message-body { font-size: 14px; line-height: 1.65; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-composer-shell { padding: 16px 20px 12px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-composer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid var(--inbox-v2-border); border-radius: 18px; padding: 10px; background: var(--inbox-v2-paper); transition: border-color 160ms ease, box-shadow 160ms ease; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-composer > .flex-1 { order: -1; flex: 0 0 100%; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-textarea { width: 100%; min-height: 64px; max-height: 160px; border: 0; border-radius: 6px; background: transparent !important; box-shadow: none; outline: none; padding: 8px; font-size: 15px; line-height: 1.5; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-composer > button { min-height: 42px; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-composer > button:last-child { margin-left: auto; display: inline-flex; gap: 10px; width: auto; min-width: 112px; padding: 10px 20px; border-radius: 999px; }
+.inbox-composer-label { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; font-weight: 650; color: var(--inbox-v2-text-secondary); margin-bottom: 10px; }
+.inbox-composer-hint { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: var(--inbox-v2-muted); }
+.inbox-new-messages { align-self: center; padding: 9px 16px; margin: 8px; border: 1px solid var(--inbox-v2-border); border-radius: 24px; background: var(--inbox-v2-paper); color: var(--inbox-v2-primary); font-size: 12px; }
+.inbox-welcome { max-width: 410px; text-align: left; padding: 28px; }
+.inbox-welcome > svg { color: var(--inbox-v2-primary); margin-bottom: 20px; }
+.inbox-welcome h2 { color: var(--inbox-v2-text); font-size: 25px; font-weight: 650; letter-spacing: -.6px; margin-bottom: 12px; }
+.inbox-welcome p, .inbox-welcome dd { font-size: 13px; color: var(--inbox-v2-muted); line-height: 1.7; }
+.inbox-welcome dl { display: grid; gap: 18px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--inbox-v2-border); }
+.inbox-welcome dt { font-size: 13px; font-weight: 650; color: var(--inbox-v2-text-secondary); }
+.inbox-welcome dd { margin: 3px 0 0; }
+.inbox-menu-preview { border-top: 1px solid var(--inbox-v2-border); padding: 12px; }
+.inbox-menu-preview summary { display: flex; gap: 8px; align-items: center; cursor: pointer; color: var(--inbox-v2-primary); min-height: 36px; }
+.inbox-menu-preview p { font-size: 12px; margin: 10px 0; color: var(--inbox-v2-muted); }
+.inbox-menu-preview ul { padding: 0; list-style: none; display: grid; gap: 8px; }
+.inbox-menu-preview li { display: grid; gap: 4px; padding: 12px; background: var(--inbox-v2-soft); border-radius: 8px; }
+.inbox-menu-preview li span { font-size: 12px; }
+.inbox-history-loader { text-align: center; }
+.inbox-history-loader p { color: var(--inbox-v2-danger); font-size: 12px; }
+@media (max-width: 900px) {
+ .admin-shell .admin-content .inbox-page--v2:not(.inbox-page--context-open) { grid-template-columns: minmax(0, 1fr); }
+ .admin-shell .admin-content .inbox-page--v2 .inbox-badges { width: 100%; justify-content: flex-start; }
+ .admin-shell .admin-content .inbox-page--v2 .inbox-composer-shell { padding: 12px; }
+ .admin-shell .admin-content .inbox-page--v2 .inbox-textarea { font-size: 16px; min-height: 65px; }
+}
+@media (prefers-reduced-motion: reduce) { .inbox-page--v2 *, .inbox-page--v2 *::before, .inbox-page--v2 *::after { transition: none !important; } }
+
+.inbox-page--v2 .inbox-context-header button { display: grid; min-height: 44px; min-width: 44px; }
+
+.inbox-file-thumbnail { width: 60px; height: 60px; object-fit: contain; border-radius: 6px; }
+.inbox-selected-file-main { flex-wrap: wrap; }
+.inbox-selected-file-main audio { width: min(280px, 100%); }
+.inbox-payment-task { padding: 18px; margin-bottom: 18px; background: var(--inbox-v2-primary-soft); color: var(--inbox-v2-text); border: 1px solid var(--inbox-v2-border); border-radius: 10px; }
+.inbox-payment-task strong { font-size: 14px; }
+.inbox-payment-task p { font-size: 12px; line-height: 1.6; margin: 8px 0 14px; color: var(--inbox-v2-text-secondary); }
+.inbox-payment-task > div { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Keep the writing surface quiet; focus surrounds the whole composer. */
+.admin-shell .admin-content .inbox-page--v2 .inbox-messages { background: #f6f9fc; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-composer:focus-within {
+	border-color: #8db4e5;
+	box-shadow: 0 0 0 3px rgba(68, 120, 190, .08);
+}
+.admin-shell .admin-content .inbox-page--v2 .inbox-textarea:focus-visible { box-shadow: none; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-textarea::placeholder { color: #758398; opacity: 1; font-weight: 400; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-send-btn { background: #356bb4; border: 0; color: #fff; box-shadow: 0 3px 8px #356bb41c; font-weight: 600; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-send-btn:hover:not(:disabled) { background: #285997; box-shadow: none; transform: none; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-send-btn:disabled { background: #e8eff8; color: #687b94; opacity: 1; box-shadow: none; }
+.admin-shell .admin-content .inbox-page--v2 .inbox-send-btn:focus-visible { outline: 2px solid #356bb4; outline-offset: 3px; }
+.dark .admin-shell .admin-content .inbox-page--v2 .inbox-textarea::placeholder { color: #9baabd; }
+.dark .admin-shell .admin-content .inbox-page--v2 .inbox-send-btn { background: #91baf1 !important; color: #152c49 !important; }
+.dark .admin-shell .admin-content .inbox-page--v2 .inbox-send-btn:hover:not(:disabled) { background: #accdf6 !important; }
+.dark .admin-shell .admin-content .inbox-page--v2 .inbox-send-btn:disabled { background: #27374c !important; color: #a2b1c5 !important; opacity: 1 !important; }
