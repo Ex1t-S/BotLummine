@@ -7,7 +7,7 @@ import {
 	WORKSPACE_FEATURE_FLAGS,
 	isWorkspaceFeatureEnabled,
 } from '../workspaces/workspace-feature-flags.service.js';
-import { getTemplateOrThrow } from '../whatsapp/whatsapp-template.service.js';
+import { getTemplateOrThrow, syncTemplatesFromMeta } from '../whatsapp/whatsapp-template.service.js';
 import { requireWorkspaceScope } from '../workspaces/workspace-scope.js';
 import { filterRecoverableAbandonedCarts } from './campaign-attribution.service.js';
 import { getOrCreateDailyAutomationRun, markAutomationRunError, touchAutomationRun, AUTOMATION_RUN_TYPES } from './automation-run.service.js';
@@ -625,6 +625,21 @@ export async function runAbandonedCartAutomation({
 	}
 
 	try {
+		let template = await getTemplateOrThrow(setting.templateLocalId, { workspaceId: setting.workspaceId });
+		if (template.deletedAt || String(template.status || '').toUpperCase() !== 'APPROVED') {
+			await syncTemplatesFromMeta({ workspaceId: setting.workspaceId, pageLimit: 2, purgeDeleted: false });
+			template = await getTemplateOrThrow(setting.templateLocalId, { workspaceId: setting.workspaceId });
+		}
+		if (template.deletedAt || String(template.status || '').toUpperCase() !== 'APPROVED') {
+			return {
+				workspaceId: setting.workspaceId,
+				processed: 0,
+				skipped: true,
+				reason: 'template_not_approved',
+				templateStatus: template.status,
+			};
+		}
+
 		await syncAbandonedCarts(30, { workspaceId: setting.workspaceId });
 		const candidates = await findAutomationCandidates(setting);
 		const claimedCandidates = await claimCandidateLogs(setting, candidates);
