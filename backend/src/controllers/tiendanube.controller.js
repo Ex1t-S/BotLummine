@@ -16,6 +16,7 @@ import {
 } from '../services/workspaces/workspace-context.service.js';
 import { requireWorkspaceScope } from '../services/workspaces/workspace-scope.js';
 import { AI_PROFILES, AI_VERTICALS } from '../services/ai/vertical-profile.service.js';
+import { saveTiendanubeInstallation } from '../services/tiendanube/installation.service.js';
 
 const TIENDANUBE_API_VERSION = process.env.TIENDANUBE_API_VERSION || '2025-03';
 const ORDER_WEBHOOK_EVENTS = [
@@ -143,13 +144,9 @@ function buildInstallUrl(workspaceId) {
 	}
 
 	const url = new URL(`https://www.tiendanube.com/apps/${appId}/authorize`);
-	url.searchParams.set('redirect_uri', redirectUri);
-	url.searchParams.set('response_type', 'code');
+	// Tiendanube uses the callback and scopes registered in the Partner Portal.
+	// An override that differs from that registration makes its installer fail.
 	url.searchParams.set('state', signTiendanubeState({ workspaceId: resolvedWorkspaceId, ts: Date.now(), nonce: crypto.randomUUID() }));
-	url.searchParams.set(
-		'scope',
-		process.env.TIENDANUBE_APP_SCOPES || 'read_orders read_products'
-	);
 	return url.toString();
 }
 
@@ -611,57 +608,7 @@ export async function handleTiendanubeCallback(req, res) {
 		}
 
 		const data = await exchangeCodeForToken(code);
-		const encryptedAccessToken = encryptSecret(data.access_token);
-
-		await prisma.storeInstallation.upsert({
-			where: { storeId: String(data.user_id) },
-			update: {
-				workspaceId,
-				provider: 'TIENDANUBE',
-				accessToken: encryptedAccessToken,
-				scope: data.scope || null
-			},
-			create: {
-				workspaceId,
-				provider: 'TIENDANUBE',
-				storeId: String(data.user_id),
-				accessToken: encryptedAccessToken,
-				scope: data.scope || null
-			}
-		});
-
-		const connection = await prisma.commerceConnection.upsert({
-			where: {
-				workspaceId_provider: {
-					workspaceId,
-					provider: 'TIENDANUBE'
-				}
-			},
-			update: {
-				externalStoreId: String(data.user_id),
-				accessToken: encryptedAccessToken,
-				scope: data.scope || null,
-				status: 'ACTIVE',
-				rawPayload: {
-					source: 'oauth-callback',
-					userId: String(data.user_id),
-					scope: data.scope || null
-				}
-			},
-			create: {
-				workspaceId,
-				provider: 'TIENDANUBE',
-				externalStoreId: String(data.user_id),
-				accessToken: encryptedAccessToken,
-				scope: data.scope || null,
-				status: 'ACTIVE',
-				rawPayload: {
-					source: 'oauth-callback',
-					userId: String(data.user_id),
-					scope: data.scope || null
-				}
-			}
-		});
+		const connection = await saveTiendanubeInstallation({ workspaceId, data });
 		await markPrimaryCommerceConnection(connection.id, { workspaceId });
 
 		let brandingResult = null;
