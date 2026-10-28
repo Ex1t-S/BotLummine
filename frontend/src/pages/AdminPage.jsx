@@ -39,7 +39,7 @@ const EMPTY_CHANNEL_FORM = {
 	isPrimary: true
 };
 
-function mapWhatsAppChannelForm(channel, app) {
+function mapWhatsAppChannelForm(channel, app, channels = []) {
 	return {
 		...EMPTY_CHANNEL_FORM,
 		id: channel?.id || '',
@@ -50,7 +50,7 @@ function mapWhatsAppChannelForm(channel, app) {
 		displayPhoneNumber: fieldValue(channel?.displayPhoneNumber),
 		graphVersion: fieldValue(channel?.graphVersion || app?.graphVersion || EMPTY_CHANNEL_FORM.graphVersion),
 		status: fieldValue(channel?.status || 'ACTIVE'),
-		isPrimary: channel ? Boolean(channel.isPrimary) : true,
+		isPrimary: channel ? Boolean(channel.isPrimary) : !channels.some((item) => item.isPrimary && item.status === 'ACTIVE'),
 		accessToken: '',
 		verifyToken: ''
 	};
@@ -838,7 +838,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			verifyToken: ''
 		});
 		setWhatsappWebhook(null);
-		setChannelForm(mapWhatsAppChannelForm(channel, app));
+		setChannelForm(mapWhatsAppChannelForm(channel, app, nextWorkspace?.whatsappChannels || []));
 		setWhatsappCheck(null);
 		setWhatsappCheckError('');
 		setWhatsappDiscovery(null);
@@ -1281,7 +1281,7 @@ export default function AdminPage({ defaultTab = '' }) {
 
 	function selectWhatsAppChannel(channel) {
 		const app = workspace?.whatsappApps?.find((item) => item.id === channel?.whatsappAppId) || selectedWhatsAppApp;
-		setChannelForm(mapWhatsAppChannelForm(channel, app));
+		setChannelForm(mapWhatsAppChannelForm(channel, app, workspace?.whatsappChannels || []));
 		setSelectedWhatsAppAppId(app?.id || '');
 		setWhatsappAppForm(mapWhatsAppAppForm(app));
 		setWhatsappWebhook(null);
@@ -1305,7 +1305,7 @@ export default function AdminPage({ defaultTab = '' }) {
 		const app = workspace?.whatsappApps?.find((item) => item.id === appId) || null;
 		setSelectedWhatsAppAppId(appId);
 		const channel = workspace?.whatsappChannels?.find((item) => item.whatsappAppId === appId) || null;
-		setChannelForm(mapWhatsAppChannelForm(channel, app));
+		setChannelForm(mapWhatsAppChannelForm(channel, app, workspace?.whatsappChannels || []));
 		setDiscoveryBusinessId(fieldValue(app?.businessManagerId));
 		setWhatsappDiscovery(null);
 		setWhatsappDiscoveryError('');
