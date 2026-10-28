@@ -2199,7 +2199,7 @@ export default function AdminPage({ defaultTab = '' }) {
 							</div></details>
 							<div className="wa-setup-submit-actions">
 								<details className="wa-setup-optional"><summary>Diagnóstico sin conectar</summary><button type="button" disabled={whatsappChecking || saving || !channelForm.whatsappAppId} onClick={handleCheckWhatsAppChannel}>{whatsappChecking ? 'Comprobando...' : 'Solo comprobar acceso'}</button></details>
-								<button type="submit" disabled={saving || whatsappChecking || (!channelForm.whatsappAppId && !channelForm.id)}>{saving ? 'Validando y conectando…' : !channelForm.whatsappAppId ? 'Guardar canal heredado' : channelForm.status === 'ACTIVE' ? 'Conectar' : 'Guardar canal sin activar'}</button>
+								<button type="submit" disabled={saving || whatsappChecking || (!channelForm.whatsappAppId && !channelForm.id)}>{saving ? 'Validando y conectando…' : !channelForm.whatsappAppId && channelForm.id ? 'Guardar canal heredado' : channelForm.status === 'ACTIVE' ? 'Conectar' : 'Guardar canal sin activar'}</button>
 							</div>
 						</form>
 						{channelForm.status === 'ACTIVE' && channelForm.whatsappAppId && !whatsappCheck?.ok ? <small className="wa-setup-field-note">Al pulsar Conectar, BladeIA comprueba el token, la WABA, el número y el webhook antes de activar el canal.</small> : null}
