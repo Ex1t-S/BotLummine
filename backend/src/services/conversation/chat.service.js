@@ -8,6 +8,7 @@ import { resolveAssistantHandoff, contextMessageLimit } from './reply-safety.js'
 import { assertAutoReplyAuthorized } from './auto-reply-authorization.js';
 import { captureOutboundDeliveries, getOutboundDeliveries } from './outbound-delivery-context.js';
 import { loadRecentConversation } from './recent-history.js';
+import { getInitialInboundRouting } from './initial-routing.service.js';
 import { availablePendingReplyLease, ownedPendingReplyLease } from './pending-reply-lease.js';
 import {
 	conversationStateForWorkspaceWhere,
@@ -556,6 +557,7 @@ export async function getOrCreateConversation({
 	profileImageSource = 'unknown',
 	queue = 'HUMAN',
 	aiEnabled = false,
+	useWorkspaceRouting = false,
 	forceRouting = false
 }) {
 	const resolvedWorkspaceId = requireWorkspaceScope(normalizeWorkspaceId(workspaceId));
@@ -599,6 +601,9 @@ export async function getOrCreateConversation({
 	});
 
 	if (!conversation) {
+		if (useWorkspaceRouting) {
+			({ queue, aiEnabled } = await getInitialInboundRouting(resolvedWorkspaceId));
+		}
 		conversation = await prisma.conversation.create({
 			data: {
 				contactId: contact.id,
@@ -779,7 +784,8 @@ async function processInboundMessageTurn({
 			waId: normalizedWaId,
 			contactName,
 			profileImageUrl,
-			profileImageSource
+			profileImageSource,
+			useWorkspaceRouting: true,
 		});
 	}
 

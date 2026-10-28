@@ -282,6 +282,7 @@ function mapWorkspaceForm(workspace) {
 			vertical: fieldValue(ai.vertical || ai.catalogConfig?.vertical || getDefaultVerticalForAiProfile(aiProfile)),
 			systemPrompt: fieldValue(ai.systemPrompt),
 			businessContext: fieldValue(ai.businessContext),
+			policyConfig: { ...(ai.policyConfig || {}) },
 			catalogConfig: {
 				...(ai.catalogConfig || {}),
 				vertical: fieldValue(ai.vertical || ai.catalogConfig?.vertical || getDefaultVerticalForAiProfile(aiProfile)),
@@ -1040,6 +1041,7 @@ export default function AdminPage({ defaultTab = '' }) {
 				}
 			},
 			policyConfig: {
+				...(workspace?.aiConfig?.policyConfig || {}),
 				returns: policyForm.returns
 			},
 			...extra
@@ -1115,6 +1117,14 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function handleSavePayment(event) {
 		event.preventDefault();
 		await saveWorkspace({ aiConfig: buildAiConfig() }, 'Datos de pago guardados.');
+	}
+
+	async function handleSaveInitialRouting(event) {
+		event.preventDefault();
+		await saveWorkspace({ aiConfig: { policyConfig: {
+			...(workspace?.aiConfig?.policyConfig || {}),
+			defaultInboundQueue: workspaceForm.aiConfig?.policyConfig?.defaultInboundQueue === 'AUTO' ? 'AUTO' : 'HUMAN',
+		} } }, 'Asignación de chats nuevos guardada. Los chats existentes conservan su modo actual.');
 	}
 
 	async function handleSaveReturnsPolicy(event) {
@@ -2021,6 +2031,16 @@ export default function AdminPage({ defaultTab = '' }) {
 							<Input label="Nombre de la asesora IA" value={workspaceForm.aiConfig?.agentName || ''} onChange={(value) => setNestedForm('aiConfig', 'agentName', value)} />
 							<Textarea label="Tono de la asesora" value={workspaceForm.aiConfig?.tone || ''} onChange={(value) => setNestedForm('aiConfig', 'tone', value)} />
 							<button type="submit" disabled={saving || loading}>Guardar asesora IA</button>
+						</form>
+						<form className="tenant-admin-grid" onSubmit={handleSaveInitialRouting}>
+							<Select label="Cómo comienzan los chats nuevos" value={workspaceForm.aiConfig?.policyConfig?.defaultInboundQueue === 'AUTO' ? 'AUTO' : 'HUMAN'} onChange={(value) => setNestedForm('aiConfig', 'policyConfig', {
+								...(workspaceForm.aiConfig?.policyConfig || {}), defaultInboundQueue: value,
+							})}>
+								<option value="HUMAN">Atención humana</option>
+								<option value="AUTO">Automático: menú e IA</option>
+							</Select>
+							<small>Se aplica al primer mensaje de contactos nuevos de esta marca. Los chats existentes conservan su asignación. La IA y los envíos deben estar habilitados.</small>
+							<button type="submit" disabled={saving || loading}>Guardar asignación inicial</button>
 						</form>
 					</section>
 				) : null}

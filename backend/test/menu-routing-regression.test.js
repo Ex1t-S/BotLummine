@@ -45,6 +45,33 @@ test('an active menu does not loop on greetings, and meaningful free text escape
 	assert.equal(state.menuActive, false);
 });
 
+test('a first greeting offers the main menu in automatic mode', async () => {
+	reset();
+	state = { menuActive: false, needsHuman: false };
+	const result = await maybeHandleMenuFlow({
+		conversation: { ...conversation, messages: [{ direction: 'INBOUND', createdAt: new Date() }] },
+		currentState: { ...state }, messageBody: 'Hola', messageType: 'text', transportMode: 'lab',
+	});
+	assert.equal(result.handled, true);
+	assert.equal(state.menuPath, 'MAIN_MENU');
+	assert.equal(conversation.queue, 'AUTO');
+	assert.equal(messages.length, 1);
+	assert.equal(messages[0].type, 'interactive');
+	assert.equal(messages[0].rawPayload.deliveryMode, 'lab');
+});
+
+test('menu options open order support and honor an explicit human request', async () => {
+	reset();
+	await run('2');
+	assert.equal(state.menuPath, 'ORDERS_MENU');
+	assert.equal(messages[0].type, 'interactive');
+	reset();
+	await run('4');
+	assert.equal(conversation.queue, 'HUMAN');
+	assert.equal(conversation.aiEnabled, false);
+	assert.equal(state.handoffReason, 'menu_requested_human');
+});
+
 test('invalid selections reach the bounded retry and human handoff instead of restarting main menu', async () => {
 	reset();
 	await run('xyz');
