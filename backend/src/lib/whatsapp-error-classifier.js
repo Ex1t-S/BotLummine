@@ -29,11 +29,18 @@ const CATALOG = [
 		action: 'Revisa el tipo de encabezado, el media cargado y las variables.',
 	},
 	{
-		codes: ['2388299', '2388293'],
+		codes: ['2388299'],
 		category: 'Variables mal ubicadas',
-		title: 'La posicion de una variable no es valida',
-		message: 'Meta no permite variables al inicio o al final del texto, ni demasiadas variables para la cantidad de palabras.',
-		action: 'Agrega texto alrededor de la variable o reduce la cantidad de variables.',
+		title: 'El cuerpo empieza o termina con una variable',
+		message: 'Meta no permite que el cuerpo empiece o termine con una variable. Agregá texto fijo antes y después. Si el enlace está al final, escribí después: Si necesitás ayuda, respondé este mensaje.',
+		action: 'Corregí el cuerpo y volvé a guardar. Las variables se pueden conservar.',
+	},
+	{
+		codes: ['2388293'],
+		category: 'Variables mal ubicadas',
+		title: 'Hay demasiadas variables para el texto fijo',
+		message: 'Meta necesita más texto fijo para la cantidad de variables del cuerpo.',
+		action: 'Agregá texto fijo o reducí la cantidad de variables.',
 	},
 	{
 		codes: ['2388040'],

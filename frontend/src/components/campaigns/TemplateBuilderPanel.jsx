@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { uploadCampaignHeaderMedia } from '../../lib/campaigns.js';
+import { validateTemplateBodyBoundaries } from '../../features/campaigns/templateVariables.js';
 
 function createEmptyButton(type = 'QUICK_REPLY') {
 	return {
@@ -528,6 +529,9 @@ export default function TemplateBuilderPanel({
 			return 'El cuerpo de la plantilla es obligatorio.';
 		}
 
+		const boundaryError = validateTemplateBodyBoundaries(bodyText);
+		if (boundaryError) return boundaryError;
+
 		const variableError = validateVariableUsage();
 		if (variableError) {
 			return variableError;
@@ -878,10 +882,11 @@ export default function TemplateBuilderPanel({
 							onChange={(event) => updateForm('bodyText', event.target.value)}
 							placeholder={
 								form.parameterFormat === 'NAMED'
-									? 'Hola {{nombre}}, tenemos una promo para {{producto}}'
-									: 'Hola {{1}}, tenemos una promo para {{2}}'
+									? 'Hola {{nombre}}, retomá tu compra en {{enlace}}. Si necesitás ayuda, respondé este mensaje.'
+									: 'Hola {{1}}, retomá tu compra en {{2}}. Si necesitás ayuda, respondé este mensaje.'
 							}
 						/>
+						<small>Si usás variables, dejá texto fijo antes de la primera y después de la última.</small>
 					</label>
 
 					<label className="field">
