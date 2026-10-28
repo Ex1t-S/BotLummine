@@ -15,6 +15,7 @@ const GRAPH_OPERATION_LABELS = {
 	read_phone_number: 'leer el numero de WhatsApp',
 	list_phone_numbers: 'listar numeros de la WABA',
 	list_subscribed_apps: 'comprobar las suscripciones de webhooks de la WABA',
+	read_app_webhook: 'comprobar el webhook de la App de Meta',
 	subscribe_waba_webhooks: 'suscribir la WABA a webhooks',
 	list_business_wabas: 'listar las cuentas de WhatsApp del negocio',
 };
@@ -203,6 +204,33 @@ export async function getWhatsAppWabaSubscription({ wabaId, accessToken, metaApp
 		checked: true,
 		subscribed: apps.some((app) => normalizeString(app?.whatsapp_business_api_data?.id || app?.id || app?.app_id) === normalizeString(metaAppId)),
 	};
+}
+
+export async function validateWhatsAppAppWebhook({ metaAppId, appSecret, callbackUrl, graphVersion }) {
+	if (!metaAppId || !appSecret || !callbackUrl) {
+		const error = new Error('Generá primero el webhook de esta App en BladeIA.');
+		error.status = 400;
+		throw error;
+	}
+	const result = await graphGet(`/${metaAppId}/subscriptions`, {
+		accessToken: `${metaAppId}|${appSecret}`,
+		graphVersion,
+		operation: 'read_app_webhook',
+	});
+	const expectedUrl = callbackUrl.replace(/\/+$/, '');
+	const configured = (Array.isArray(result?.data) ? result.data : []).some((subscription) =>
+		subscription.object === 'whatsapp_business_account' &&
+		subscription.active === true &&
+		String(subscription.callback_url || '').replace(/\/+$/, '') === expectedUrl &&
+		(Array.isArray(subscription.fields) ? subscription.fields : []).some((field) => (field?.name || field) === 'messages')
+	);
+	if (!configured) {
+		const error = new Error('En Meta for Developers, verificá la Callback URL y el Verify Token de BladeIA y suscribí el campo messages. Después volvé a pulsar Conectar.');
+		error.status = 400;
+		error.code = 'WHATSAPP_WEBHOOK_NOT_CONFIGURED';
+		throw error;
+	}
+	return { checked: true, configured: true };
 }
 
 export async function subscribeWhatsAppWaba({ wabaId, accessToken, graphVersion }) {

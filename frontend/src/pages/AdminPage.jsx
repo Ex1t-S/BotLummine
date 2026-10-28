@@ -6,6 +6,7 @@ import { EmptyState, PageHeader } from '../components/ui/InternalPage.jsx';
 import { useInternalDarkOverrides } from '../hooks/useInternalDarkOverrides.js';
 import { formatStatusLabel } from '../utils/statusLabels.js';
 import WhatsAppManualGuide from './WhatsAppManualGuide.jsx';
+import WhatsAppWebhookSetup from './WhatsAppWebhookSetup.jsx';
 import './AdminPage.css';
 
 const EMPTY_WORKSPACE_FORM = {
@@ -66,6 +67,19 @@ const EMPTY_WHATSAPP_APP_FORM = {
 	graphVersion: 'v25.0',
 	status: 'ACTIVE'
 };
+
+function mapWhatsAppAppForm(app) {
+	return {
+		...EMPTY_WHATSAPP_APP_FORM,
+		id: app?.id || '',
+		name: app?.name || EMPTY_WHATSAPP_APP_FORM.name,
+		businessManagerId: app?.businessManagerId || '',
+		metaAppId: app?.metaAppId || '',
+		embeddedSignupConfigId: /^\d+$/.test(app?.embeddedSignupConfigId || '') ? app.embeddedSignupConfigId : '',
+		graphVersion: app?.graphVersion || EMPTY_WHATSAPP_APP_FORM.graphVersion,
+		status: app?.status || 'ACTIVE',
+	};
+}
 
 const EMPTY_COMMERCE_FORM = {
 	id: '',
@@ -714,7 +728,8 @@ export default function AdminPage({ defaultTab = '' }) {
 	const [whatsappDiscovery, setWhatsappDiscovery] = useState(null);
 	const [whatsappDiscoveryError, setWhatsappDiscoveryError] = useState('');
 	const [discoveryBusinessId, setDiscoveryBusinessId] = useState('');
-	const [showWhatsAppVerifyToken, setShowWhatsAppVerifyToken] = useState(false);
+	const [whatsappWebhook, setWhatsappWebhook] = useState(null);
+	const [webhookRevealing, setWebhookRevealing] = useState(false);
 	const [brandLogoFailed, setBrandLogoFailed] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -764,7 +779,7 @@ export default function AdminPage({ defaultTab = '' }) {
 		});
 	}
 
-	async function loadWorkspaceDetail(workspaceId, preferredChannelId = '') {
+	async function loadWorkspaceDetail(workspaceId, preferredChannelId = '', preferredAppId = '') {
 		if (!workspaceId) return;
 
 		const [workspaceRes, usersRes, catalogRes, featureFlagsRes, tiendanubeStatusRes, shopifyStatusRes, menuSettingsRes] = await Promise.all([
@@ -801,10 +816,13 @@ export default function AdminPage({ defaultTab = '' }) {
 			''
 		);
 
-		const channel = nextWorkspace?.whatsappChannels?.find((item) => item.id === preferredChannelId) ||
+		const candidateChannel = nextWorkspace?.whatsappChannels?.find((item) => item.id === preferredChannelId) ||
 			nextWorkspace?.whatsappChannels?.find((item) => item.isPrimary) ||
 			nextWorkspace?.whatsappChannels?.[0] || null;
-		const app = nextWorkspace?.whatsappApps?.[0] || null;
+		const channel = preferredAppId && candidateChannel?.whatsappAppId !== preferredAppId
+			? nextWorkspace?.whatsappChannels?.find((item) => item.whatsappAppId === preferredAppId) || null
+			: candidateChannel;
+		const app = nextWorkspace?.whatsappApps?.find((item) => item.id === (preferredAppId || channel?.whatsappAppId)) || nextWorkspace?.whatsappApps?.[0] || null;
 		setSelectedWhatsAppAppId(app?.id || '');
 		setDiscoveryBusinessId(fieldValue(app?.businessManagerId));
 		setWhatsappAppForm({
@@ -819,7 +837,7 @@ export default function AdminPage({ defaultTab = '' }) {
 			appSecret: '',
 			verifyToken: ''
 		});
-		setShowWhatsAppVerifyToken(false);
+		setWhatsappWebhook(null);
 		setChannelForm(mapWhatsAppChannelForm(channel, app));
 		setWhatsappCheck(null);
 		setWhatsappCheckError('');
@@ -1245,13 +1263,16 @@ export default function AdminPage({ defaultTab = '' }) {
 	async function handleSaveChannel(event) {
 		event.preventDefault();
 		setSaving(true);
+		setWhatsappCheckError('');
 		try {
 			const res = await api.put(`/admin/workspaces/${selectedWorkspaceId}/whatsapp-channel`, channelForm);
 			await loadWorkspaceDetail(selectedWorkspaceId, res.data?.channel?.id || '');
+			setWhatsappCheck({ ok: true, displayPhoneNumber: res.data?.channel?.displayPhoneNumber, phoneStatus: res.data?.channel?.rawPayload?.phoneNumber?.status, messagingPermissionCheck: res.data?.messagingPermissionCheck, subscription: res.data?.subscription, webhook: res.data?.webhook });
 			showNotice(res.data?.subscription?.success
 				? 'Canal vinculado y App suscrita a la WABA. Hacé ahora la prueba de mensaje entrante y saliente.'
 				: 'Canal guardado. Falta comprobar la recepción y el envío de mensajes.');
 		} catch (err) {
+			setWhatsappCheckError(err.response?.data?.error || err.message || 'No se pudo conectar el número.');
 			showError(err);
 		} finally {
 			setSaving(false);
@@ -1262,6 +1283,8 @@ export default function AdminPage({ defaultTab = '' }) {
 		const app = workspace?.whatsappApps?.find((item) => item.id === channel?.whatsappAppId) || selectedWhatsAppApp;
 		setChannelForm(mapWhatsAppChannelForm(channel, app));
 		setSelectedWhatsAppAppId(app?.id || '');
+		setWhatsappAppForm(mapWhatsAppAppForm(app));
+		setWhatsappWebhook(null);
 		setDiscoveryBusinessId(fieldValue(app?.businessManagerId));
 		setWhatsappDiscovery(null);
 		setWhatsappDiscoveryError('');
@@ -1281,11 +1304,14 @@ export default function AdminPage({ defaultTab = '' }) {
 	function selectWhatsAppApp(appId) {
 		const app = workspace?.whatsappApps?.find((item) => item.id === appId) || null;
 		setSelectedWhatsAppAppId(appId);
-		setChannelForm((current) => ({ ...current, whatsappAppId: appId }));
+		const channel = workspace?.whatsappChannels?.find((item) => item.whatsappAppId === appId) || null;
+		setChannelForm(mapWhatsAppChannelForm(channel, app));
 		setDiscoveryBusinessId(fieldValue(app?.businessManagerId));
 		setWhatsappDiscovery(null);
 		setWhatsappDiscoveryError('');
 		setWhatsappCheck(null);
+		setWhatsappWebhook(null);
+		setWhatsappAppForm(mapWhatsAppAppForm(app));
 	}
 
 	async function handleDiscoverWhatsAppNumbers() {
@@ -1333,9 +1359,9 @@ export default function AdminPage({ defaultTab = '' }) {
 				`/admin/workspaces/${selectedWorkspaceId}/whatsapp-apps${whatsappAppForm.id ? `/${whatsappAppForm.id}` : ''}`,
 				whatsappAppForm
 			);
-			setSelectedWhatsAppAppId(res.data?.app?.id || '');
-			await loadWorkspaceDetail(selectedWorkspaceId);
-			showNotice('App de Meta guardada. Usa la callback URL mostrada en el panel de Meta.');
+			await loadWorkspaceDetail(selectedWorkspaceId, '', res.data?.app?.id || '');
+			setWhatsappWebhook({ ...res.data?.webhook, appId: res.data?.app?.id, workspaceId: selectedWorkspaceId });
+			showNotice('Webhook listo. Copiá la URL y el Verify Token en Meta, verificá y suscribí messages.');
 		} catch (err) {
 			showError(err);
 		} finally {
@@ -1343,12 +1369,18 @@ export default function AdminPage({ defaultTab = '' }) {
 		}
 	}
 
-	function handleGenerateWhatsAppVerifyToken() {
-		const bytes = new Uint8Array(24);
-		window.crypto.getRandomValues(bytes);
-		const token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-		setWhatsappAppForm((current) => ({ ...current, verifyToken: token }));
-		setShowWhatsAppVerifyToken(true);
+	async function handleRevealWhatsAppWebhook() {
+		const workspaceId = selectedWorkspaceId;
+		const appId = selectedWhatsAppAppId;
+		setWebhookRevealing(true);
+		try {
+			const res = await api.get(`/admin/workspaces/${workspaceId}/whatsapp-apps/${appId}/webhook`);
+			setWhatsappWebhook({ ...res.data?.webhook, workspaceId, appId });
+		} catch (err) {
+			showError(err);
+		} finally {
+			setWebhookRevealing(false);
+		}
 	}
 
 	async function handleSaveCommerce(event) {
@@ -1655,7 +1687,7 @@ export default function AdminPage({ defaultTab = '' }) {
 	const isShopifySelected = selectedBrandProvider === 'SHOPIFY';
 	const isTiendanubeSelected = selectedBrandProvider === 'TIENDANUBE';
 	const brandLogoUrl = resolveApiUrl(workspaceForm.branding?.logoUrl || '');
-	const selectedWhatsAppApp = workspace?.whatsappApps?.find((item) => item.id === selectedWhatsAppAppId) || workspace?.whatsappApps?.[0] || null;
+	const selectedWhatsAppApp = workspace?.whatsappApps?.find((item) => item.id === selectedWhatsAppAppId) || null;
 	const availableMetaNumbers = (whatsappDiscovery?.accounts || []).flatMap((account) =>
 		(account.phoneNumbers || []).map((phone) => ({ account, phone }))
 	);
@@ -2079,20 +2111,25 @@ export default function AdminPage({ defaultTab = '' }) {
 						{workspace?.whatsappApps?.length ? (
 							<div className="tenant-admin-grid">
 								<Select label="App de Meta" value={selectedWhatsAppAppId} onChange={selectWhatsAppApp}>
+									<option value="">+ Configurar otra App</option>
 									{workspace.whatsappApps.map((item) => (
 										<option key={item.id} value={item.id}>{item.name} - {item.metaAppId}</option>
 									))}
 								</Select>
-								{selectedWhatsAppApp?.callbackUrl ? (
-									<div className="wa-setup-callback"><strong>Callback URL para Meta</strong><code>{selectedWhatsAppApp.callbackUrl}</code><small>El Verify Token es el que ingresaste al guardar esta App en BladeIA.</small></div>
-								) : null}
 							</div>
 						) : null}
+						<WhatsAppWebhookSetup
+							key={`${selectedWorkspaceId}:${selectedWhatsAppAppId}`}
+							app={selectedWhatsAppApp} form={whatsappAppForm} onChange={setWhatsappAppForm}
+							onSave={handleSaveWhatsAppApp} saving={saving || loading}
+							webhook={whatsappWebhook?.workspaceId === selectedWorkspaceId && whatsappWebhook?.appId === selectedWhatsAppAppId ? whatsappWebhook : null}
+							onReveal={handleRevealWhatsAppWebhook} revealing={webhookRevealing}
+						/>
 						<details className="wa-setup-alternative">
 							<summary>Guía de configuración manual y requisitos de Meta</summary>
 							<WhatsAppManualGuide app={selectedWhatsAppApp} channel={currentWhatsAppChannel} check={whatsappCheck} />
 						</details>
-						{!selectedWhatsAppApp ? <p className="wa-setup-caution">Primero guardá la App de Meta en la sección siguiente. Después podrás buscar los números.</p> : null}
+						{!selectedWhatsAppApp ? <p className="wa-setup-caution">Generá el webhook en el paso 1 para habilitar la conexión del número.</p> : null}
 						{canUseWhatsAppEmbeddedSignup ? (
 							<details className="wa-setup-alternative">
 								<summary>Alternativa: Embedded Signup para una App habilitada por Meta</summary>
@@ -2101,6 +2138,78 @@ export default function AdminPage({ defaultTab = '' }) {
 									{whatsappConnecting ? 'Conectando...' : 'Abrir Embedded Signup'}
 								</button>
 							</details>
+						) : null}
+					</section>
+				) : null}
+
+				{showWhatsAppSetup && activeTab === 'integrations' ? (
+					<section className="tenant-admin-panel">
+						<SectionIntro title="2. Datos del número" description="Cargá el WABA ID, el Phone Number ID y el token del usuario del sistema. Conectar valida los datos y el webhook, suscribe la App y guarda el número en esta marca." />
+						<div className="wa-setup-channel-list">
+							{(workspace?.whatsappChannels || []).map((item) => (
+								<button key={item.id} type="button" className={channelForm.id === item.id ? 'is-selected' : ''} onClick={() => selectWhatsAppChannel(item)}>
+									<strong>{item.displayPhoneNumber || item.name || item.phoneNumberId}</strong>
+									<small>{item.status === 'ACTIVE' ? 'Activo' : item.status}{item.isPrimary ? ' · Principal' : ''}</small>
+								</button>
+							))}
+							<button type="button" className={!channelForm.id ? 'is-selected' : ''} onClick={startNewWhatsAppChannel}>+ Agregar número</button>
+						</div>
+						<h4>{channelForm.id ? 'Editar número' : 'Conectar un número nuevo'}</h4>
+						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
+						<details className="wa-setup-discovery wa-setup-full-width"><summary>Buscar números en Meta (opcional)</summary>
+							<p>Si ya tenés los identificadores, completalos directamente abajo. Para buscarlos, cargá el token del formulario y el ID del portfolio.</p>
+							<div className="tenant-admin-grid">
+
+								<Input label="ID del portfolio de Meta" value={discoveryBusinessId} placeholder="Se completa desde la App" onChange={setDiscoveryBusinessId} />
+								<button type="button" disabled={whatsappDiscovering || !channelForm.whatsappAppId || !channelForm.accessToken || (!discoveryBusinessId && !channelForm.wabaId)} onClick={handleDiscoverWhatsAppNumbers}>{whatsappDiscovering ? 'Buscando...' : 'Buscar números en Meta'}</button>
+							</div>
+							{whatsappDiscoveryError ? <p className="wa-setup-check-error" role="alert">{whatsappDiscoveryError}</p> : null}
+							{availableMetaNumbers.length ? (
+								<div className="wa-setup-channel-list" role="group" aria-label="Números disponibles en Meta">
+									{availableMetaNumbers.map(({ account, phone }) => (
+										<button key={phone.id} type="button" className={channelForm.phoneNumberId === phone.id ? 'is-selected' : ''} onClick={() => {
+											setChannelForm((current) => ({ ...current, wabaId: account.id, phoneNumberId: phone.id, displayPhoneNumber: phone.display_phone_number || '', name: phone.verified_name || current.name }));
+											setWhatsappCheck(null);
+										}}>
+											<strong>{phone.display_phone_number || phone.id}</strong>
+											<small>{account.name} · {phone.status || 'Estado desconocido'}{phone.platform_type ? ` · ${phone.platform_type}` : ''}</small>
+										</button>
+									))}
+								</div>
+							) : null}
+						</details>
+							<Input label="Nombre" value={channelForm.name} onChange={(value) => setChannelForm((cur) => ({ ...cur, name: value }))} />
+							<Select label="App de Meta" value={channelForm.whatsappAppId || ''} onChange={selectWhatsAppApp}>
+								<option value="">{channelForm.id ? 'Canal heredado sin App' : 'Seleccioná la App de esta marca'}</option>
+								{(workspace?.whatsappApps || []).map((item) => <option key={item.id} value={item.id}>{item.name} - {item.metaAppId}</option>)}
+							</Select>
+							<Input label="Token de usuario del sistema" type="password" autoComplete="new-password" value={channelForm.accessToken} required={!channelForm.id} placeholder={channelForm.id ? "Guardado · dejá vacío para conservarlo" : ""} onChange={(value) => { setChannelForm((current) => ({ ...current, accessToken: value })); setWhatsappCheck(null); }} />
+							<Input label="WABA ID" value={channelForm.wabaId} required onChange={(value) => { setChannelForm((cur) => ({ ...cur, wabaId: value })); setWhatsappCheck(null); }} />
+							<Input label="Phone Number ID (no el teléfono visible)" value={channelForm.phoneNumberId} required onChange={(value) => { setChannelForm((cur) => ({ ...cur, phoneNumberId: value })); setWhatsappCheck(null); }} />
+							<details className="wa-setup-optional wa-setup-full-width"><summary>Opciones del número</summary><div className="tenant-admin-grid">
+							<Input label="Teléfono visible (opcional)" value={channelForm.displayPhoneNumber} onChange={(value) => setChannelForm((cur) => ({ ...cur, displayPhoneNumber: value }))} />
+							<Input label="Versión de Graph" value={channelForm.graphVersion} onChange={(value) => setChannelForm((cur) => ({ ...cur, graphVersion: value }))} />
+							<Select label="Estado" value={channelForm.status} onChange={(value) => setChannelForm((cur) => ({ ...cur, status: value }))}>
+								<option value="ACTIVE">Activo</option>
+								<option value="PENDING">Pendiente</option>
+								<option value="DISABLED">Desactivado</option>
+								<option value="ERROR">Con errores</option>
+							</Select>
+							<label className="admin-field"><span>Canal principal</span><input type="checkbox" checked={Boolean(channelForm.isPrimary)} onChange={(event) => setChannelForm((cur) => ({ ...cur, isPrimary: event.target.checked }))} /></label>
+							</div></details>
+							<div className="wa-setup-submit-actions">
+								<details className="wa-setup-optional"><summary>Diagnóstico sin conectar</summary><button type="button" disabled={whatsappChecking || saving || !channelForm.whatsappAppId} onClick={handleCheckWhatsAppChannel}>{whatsappChecking ? 'Comprobando...' : 'Solo comprobar acceso'}</button></details>
+								<button type="submit" disabled={saving || whatsappChecking || (!channelForm.whatsappAppId && !channelForm.id)}>{saving ? 'Validando y conectando…' : !channelForm.whatsappAppId ? 'Guardar canal heredado' : channelForm.status === 'ACTIVE' ? 'Conectar' : 'Guardar canal sin activar'}</button>
+							</div>
+						</form>
+						{channelForm.status === 'ACTIVE' && channelForm.whatsappAppId && !whatsappCheck?.ok ? <small className="wa-setup-field-note">Al pulsar Conectar, BladeIA comprueba el token, la WABA, el número y el webhook antes de activar el canal.</small> : null}
+						{whatsappCheckError ? <p className="wa-setup-check-error" role="alert">{whatsappCheckError}</p> : null}
+						{whatsappCheck?.ok ? (
+							<div className="wa-setup-check-result" role="status">
+								<strong>Meta reconoce {whatsappCheck.displayPhoneNumber || 'el número'} dentro de la WABA indicada.</strong>
+								<p>{whatsappCheck.webhook?.configured ? 'Webhook de la App verificado · ' : ''}Token: {whatsappCheck.messagingPermissionCheck?.checked ? 'incluye los permisos de WhatsApp' : 'permisos sin confirmar'} · Webhooks: {whatsappCheck.subscription?.checked ? (whatsappCheck.subscription.subscribed ? 'App ya suscrita' : 'App aún no suscrita; se hará al vincular') : 'no se pudieron comprobar'}</p>
+								<p>Estado en Meta: {whatsappCheck.phoneStatus || 'sin informar'}{whatsappCheck.platformType ? ` · ${whatsappCheck.platformType}` : ''}. Esta comprobación no confirma el permiso para enviar desde este número. Probá una respuesta real desde la bandeja. {whatsappCheck.subscription?.error || ''}</p>
+							</div>
 						) : null}
 					</section>
 				) : null}
@@ -2151,106 +2260,9 @@ export default function AdminPage({ defaultTab = '' }) {
 					</section>
 				) : null}
 
-				{showWhatsAppSetup && activeTab === 'integrations' ? (
-					<section className="tenant-admin-panel">
-						<details className="wa-setup-alternative" open={!selectedWhatsAppApp ? true : undefined}>
-						<summary>Configuración de la App de Meta {selectedWhatsAppApp ? '· lista' : '· necesaria'}</summary>
-						<p>Guardá la App de esta marca para obtener su Callback URL. Si ya aparece arriba, podés pasar directamente a conectar el número.</p>
-						<form className="tenant-admin-grid" onSubmit={handleSaveWhatsAppApp}>
-							<Input label="Nombre de la App" value={whatsappAppForm.name} required onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, name: value }))} />
-							<Input label="ID del negocio (opcional)" value={whatsappAppForm.businessManagerId} onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, businessManagerId: value }))} />
-							<Input label="Meta App ID" value={whatsappAppForm.metaAppId} required onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, metaAppId: value }))} />
-							<Input label="App Secret" type="password" value={whatsappAppForm.appSecret} required={!whatsappAppForm.id} onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, appSecret: value }))} />
-							<Input label="Verify Token del webhook" type={showWhatsAppVerifyToken ? 'text' : 'password'} value={whatsappAppForm.verifyToken} required={!whatsappAppForm.id} onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, verifyToken: value }))} />
-							<div className="wa-setup-token-actions">
-								<button type="button" onClick={handleGenerateWhatsAppVerifyToken}>Generar token de verificación</button>
-								<button type="button" onClick={() => setShowWhatsAppVerifyToken((current) => !current)}>{showWhatsAppVerifyToken ? 'Ocultar' : 'Mostrar'}</button>
-							</div>
-							<small className="wa-setup-field-note">Al editar, dejá App Secret y Verify Token vacíos para conservar los actuales. Si generás un Verify Token nuevo, guardalo y pegalo también en Meta.</small>
-							<details className="wa-setup-optional"><summary>Solo para Embedded Signup</summary><Input label="Config ID numérico (opcional)" value={whatsappAppForm.embeddedSignupConfigId} onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, embeddedSignupConfigId: value }))} /><small>No pegues el enlace de onboarding. La conexión manual no necesita este dato.</small></details>
-							<Input label="Graph version" value={whatsappAppForm.graphVersion} onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, graphVersion: value }))} />
-							<Select label="Estado" value={whatsappAppForm.status} onChange={(value) => setWhatsappAppForm((cur) => ({ ...cur, status: value }))}>
-								<option value="ACTIVE">ACTIVE</option>
-								<option value="DISABLED">DISABLED</option>
-								<option value="ERROR">ERROR</option>
-							</Select>
-							<button type="submit" disabled={saving || !selectedWorkspaceId}>Guardar App y obtener Callback URL</button>
-							{workspace?.whatsappApps?.find((item) => item.id === whatsappAppForm.id)?.callbackUrl ? (
-								<small>Callback URL: {workspace.whatsappApps.find((item) => item.id === whatsappAppForm.id).callbackUrl}</small>
-							) : null}
-						</form>
-						</details>
-					</section>
-				) : null}
 
-				{showWhatsAppSetup && activeTab === 'integrations' ? (
-					<section className="tenant-admin-panel">
-						<SectionIntro title="Números de WhatsApp" description="Elegí un número conectado o agregá otro. BladeIA buscará sus identificadores en Meta y suscribirá la App al vincularlo." />
-						<div className="wa-setup-channel-list">
-							{(workspace?.whatsappChannels || []).map((item) => (
-								<button key={item.id} type="button" className={channelForm.id === item.id ? 'is-selected' : ''} onClick={() => selectWhatsAppChannel(item)}>
-									<strong>{item.displayPhoneNumber || item.name || item.phoneNumberId}</strong>
-									<small>{item.status === 'ACTIVE' ? 'Activo' : item.status}{item.isPrimary ? ' · Principal' : ''}</small>
-								</button>
-							))}
-							<button type="button" className={!channelForm.id ? 'is-selected' : ''} onClick={startNewWhatsAppChannel}>+ Agregar número</button>
-						</div>
-						<h4>{channelForm.id ? 'Editar número' : 'Conectar un número nuevo'}</h4>
-						<form className="tenant-admin-grid" onSubmit={handleSaveChannel}>
-						<div className="wa-setup-discovery">
-							<p>Pegá el token del usuario del sistema. BladeIA buscará los números a los que tiene acceso para esta App.</p>
-							<div className="tenant-admin-grid">
-								<Input label="Token de usuario del sistema" type="password" value={channelForm.accessToken} required={!channelForm.id} onChange={(value) => { setChannelForm((current) => ({ ...current, accessToken: value })); setWhatsappCheck(null); }} />
-								<Input label="ID del portfolio de Meta" value={discoveryBusinessId} placeholder="Se completa desde la App" onChange={setDiscoveryBusinessId} />
-								<button type="button" disabled={whatsappDiscovering || !channelForm.whatsappAppId || !channelForm.accessToken || (!discoveryBusinessId && !channelForm.wabaId)} onClick={handleDiscoverWhatsAppNumbers}>{whatsappDiscovering ? 'Buscando...' : 'Buscar números en Meta'}</button>
-							</div>
-							{whatsappDiscoveryError ? <p className="wa-setup-check-error" role="alert">{whatsappDiscoveryError}</p> : null}
-							{availableMetaNumbers.length ? (
-								<div className="wa-setup-channel-list" role="group" aria-label="Números disponibles en Meta">
-									{availableMetaNumbers.map(({ account, phone }) => (
-										<button key={phone.id} type="button" className={channelForm.phoneNumberId === phone.id ? 'is-selected' : ''} onClick={() => {
-											setChannelForm((current) => ({ ...current, wabaId: account.id, phoneNumberId: phone.id, displayPhoneNumber: phone.display_phone_number || '', name: phone.verified_name || current.name }));
-											setWhatsappCheck(null);
-										}}>
-											<strong>{phone.display_phone_number || phone.id}</strong>
-											<small>{account.name} · {phone.status || 'Estado desconocido'}{phone.platform_type ? ` · ${phone.platform_type}` : ''}</small>
-										</button>
-									))}
-								</div>
-							) : null}
-						</div>
-							<Input label="Nombre" value={channelForm.name} onChange={(value) => setChannelForm((cur) => ({ ...cur, name: value }))} />
-							<Select label="App de Meta" value={channelForm.whatsappAppId || ''} onChange={(value) => setChannelForm((cur) => ({ ...cur, whatsappAppId: value }))}>
-								<option value="">{channelForm.id ? 'Canal heredado sin App' : 'Seleccioná la App de esta marca'}</option>
-								{(workspace?.whatsappApps || []).map((item) => <option key={item.id} value={item.id}>{item.name} - {item.metaAppId}</option>)}
-							</Select>
-							<Input label="WABA ID" value={channelForm.wabaId} required onChange={(value) => { setChannelForm((cur) => ({ ...cur, wabaId: value })); setWhatsappCheck(null); }} />
-							<Input label="Phone Number ID (no el teléfono visible)" value={channelForm.phoneNumberId} required onChange={(value) => { setChannelForm((cur) => ({ ...cur, phoneNumberId: value })); setWhatsappCheck(null); }} />
-							<Input label="Teléfono visible (opcional)" value={channelForm.displayPhoneNumber} onChange={(value) => setChannelForm((cur) => ({ ...cur, displayPhoneNumber: value }))} />
-							<Input label="Versión de Graph" value={channelForm.graphVersion} onChange={(value) => setChannelForm((cur) => ({ ...cur, graphVersion: value }))} />
-							<Select label="Estado" value={channelForm.status} onChange={(value) => setChannelForm((cur) => ({ ...cur, status: value }))}>
-								<option value="ACTIVE">Activo</option>
-								<option value="PENDING">Pendiente</option>
-								<option value="DISABLED">Desactivado</option>
-								<option value="ERROR">Con errores</option>
-							</Select>
-							<label className="admin-field"><span>Canal principal</span><input type="checkbox" checked={Boolean(channelForm.isPrimary)} onChange={(event) => setChannelForm((cur) => ({ ...cur, isPrimary: event.target.checked }))} /></label>
-							<div className="wa-setup-submit-actions">
-								<button type="button" disabled={whatsappChecking || saving || !channelForm.whatsappAppId} onClick={handleCheckWhatsAppChannel}>{whatsappChecking ? 'Comprobando...' : 'Comprobar con Meta'}</button>
-								<button type="submit" disabled={saving || whatsappChecking || (!channelForm.whatsappAppId && !channelForm.id) || (channelForm.status === 'ACTIVE' && channelForm.whatsappAppId && !whatsappCheck?.ok)}>{saving ? 'Guardando...' : !channelForm.whatsappAppId ? 'Guardar canal heredado' : channelForm.status === 'ACTIVE' ? 'Vincular y suscribir webhooks' : 'Guardar canal sin activar'}</button>
-							</div>
-						</form>
-						{channelForm.status === 'ACTIVE' && channelForm.whatsappAppId && !whatsappCheck?.ok ? <small className="wa-setup-field-note">Primero comprobá la conexión con Meta para habilitar la vinculación.</small> : null}
-						{whatsappCheckError ? <p className="wa-setup-check-error" role="alert">{whatsappCheckError}</p> : null}
-						{whatsappCheck?.ok ? (
-							<div className="wa-setup-check-result" role="status">
-								<strong>Meta reconoce {whatsappCheck.displayPhoneNumber || 'el número'} dentro de la WABA indicada.</strong>
-								<p>Token: {whatsappCheck.messagingPermissionCheck?.checked ? 'incluye los permisos de WhatsApp' : 'permisos sin confirmar'} · Webhooks: {whatsappCheck.subscription?.checked ? (whatsappCheck.subscription.subscribed ? 'App ya suscrita' : 'App aún no suscrita; se hará al vincular') : 'no se pudieron comprobar'}</p>
-								<p>Estado en Meta: {whatsappCheck.phoneStatus || 'sin informar'}{whatsappCheck.platformType ? ` · ${whatsappCheck.platformType}` : ''}. Esta comprobación no confirma el permiso para enviar desde este número. Probá una respuesta real desde la bandeja. {whatsappCheck.subscription?.error || ''}</p>
-							</div>
-						) : null}
-					</section>
-				) : null}
+
+
 
 				{platformAdmin && activeTab === 'integrations' ? (
 					<section className="tenant-admin-panel">

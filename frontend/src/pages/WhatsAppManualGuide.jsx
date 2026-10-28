@@ -38,7 +38,7 @@ export default function WhatsAppManualGuide({ app, channel, check }) {
 				En la App → WhatsApp → Configuración, pegá la Callback URL de abajo y el mismo Verify Token guardado en BladeIA. Verificá y suscribí el campo <code>messages</code>. Al vincular el canal, BladeIA también suscribe la App a la WABA.
 				</Step>
 				<Step number="4" title="Comprobar WABA, Phone Number ID y token" complete={Boolean(check?.ok)}>
-				Copiá los identificadores del <strong>número real</strong> desde WhatsApp Manager o la configuración de la API. Pegalos abajo junto con el token y pulsá “Comprobar con Meta”. Solo después, vinculá el canal.
+				Copiá los identificadores del <strong>número real</strong> desde WhatsApp Manager o la configuración de la API. Pegalos junto con el token y pulsá “Conectar”. BladeIA valida los permisos, el número y el webhook antes de suscribir la App y guardar el canal.
 				</Step>
 				<Step number="5" title="Probar entrada y salida" complete={false}>
 				Enviá un mensaje desde un teléfono de prueba autorizado y verificá que llegue a la bandeja. Respondé desde BladeIA y comprobá que el destinatario lo reciba. Un número verificado en el negocio todavía puede requerir registro en Cloud API; esta comprobación no lo registra automáticamente.

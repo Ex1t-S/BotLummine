@@ -34,6 +34,7 @@ import {
 	getWhatsAppWabaSubscription,
 	subscribeWhatsAppWaba,
 	validateWhatsAppChannelAccess,
+	validateWhatsAppAppWebhook,
 } from '../services/whatsapp/whatsapp-embedded-signup.service.js';
 import {
 	AI_PROFILES,
@@ -59,6 +60,11 @@ function assertConnectedCloudApiPhone(phoneNumber = {}) {
 	const platformType = normalizeString(phoneNumber.platform_type).toUpperCase();
 	const status = normalizeString(phoneNumber.status).toUpperCase();
 	const codeStatus = normalizeString(phoneNumber.code_verification_status).toUpperCase();
+	if (!platformType || !status) {
+		const error = new Error('Meta no confirmó el estado del número en Cloud API. Revisá el acceso del usuario del sistema a esta WABA y volvé a conectar.');
+		error.status = 400;
+		throw error;
+	}
 	if (platformType && platformType !== 'CLOUD_API') {
 		const error = new Error('El número todavía no utiliza WhatsApp Cloud API. Revisá su configuración en Meta antes de activarlo.');
 		error.status = 400;
@@ -1914,12 +1920,12 @@ export async function upsertWhatsAppApp(req, res, next) {
 		const metaAppId = normalizeString(req.body?.metaAppId);
 		const embeddedSignupConfigId = normalizeString(req.body?.embeddedSignupConfigId);
 		const appSecret = normalizeString(req.body?.appSecret);
-		const verifyToken = normalizeString(req.body?.verifyToken);
+		const verifyToken = normalizeString(req.body?.verifyToken) || (!existingApp ? crypto.randomBytes(24).toString('base64url') : '');
 
-		if (!metaAppId || (!existingApp && (!appSecret || !verifyToken))) {
+		if (!metaAppId || (!existingApp && !appSecret)) {
 			return res.status(400).json({
 				ok: false,
-				error: 'Meta App ID, App Secret y Verify Token son obligatorios al crear la App. El Config ID solo se usa con Embedded Signup.',
+				error: 'Ingresá el App ID y el App Secret de Meta. BladeIA genera el token de verificación del webhook.',
 			});
 		}
 		if (!/^\d+$/.test(metaAppId)) {
@@ -1963,7 +1969,25 @@ export async function upsertWhatsAppApp(req, res, next) {
 			? await prisma.whatsAppApp.update({ where: { id: existingApp.id }, data })
 			: await prisma.whatsAppApp.create({ data });
 
-		return res.json({ ok: true, app: sanitizeWhatsAppApp(app) });
+		res.set('Cache-Control', 'no-store');
+		return res.json({
+			ok: true,
+			app: sanitizeWhatsAppApp(app),
+			webhook: { callbackUrl: sanitizeWhatsAppApp(app).callbackUrl, verifyToken: decryptSecret(app.verifyToken) },
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getWhatsAppWebhookCredentials(req, res, next) {
+	try {
+		const workspaceId = requireRequestWorkspaceId(req);
+		assertWorkspaceAdmin(req, workspaceId);
+		const app = await prisma.whatsAppApp.findFirst({ where: { id: req.params.appId, workspaceId } });
+		if (!app) return res.status(404).json({ ok: false, error: 'App de WhatsApp no encontrada para esta marca.' });
+		res.set('Cache-Control', 'no-store');
+		return res.json({ ok: true, webhook: { callbackUrl: sanitizeWhatsAppApp(app).callbackUrl, verifyToken: decryptSecret(app.verifyToken) } });
 	} catch (error) {
 		next(error);
 	}
@@ -2182,18 +2206,32 @@ export async function upsertWhatsAppChannel(req, res, next) {
 		}
 
 		let subscription = null;
+		let webhook = null;
 		if (whatsappApp && data.status === 'ACTIVE') {
 			try {
+				webhook = await validateWhatsAppAppWebhook({
+					metaAppId: whatsappApp.metaAppId,
+					appSecret: decryptSecret(whatsappApp.appSecret),
+					callbackUrl: sanitizeWhatsAppApp(whatsappApp).callbackUrl,
+					graphVersion: data.graphVersion || whatsappApp.graphVersion || undefined,
+				});
 				subscription = await subscribeWhatsAppWaba({
 					wabaId: data.wabaId,
 					accessToken: data.accessToken,
 					graphVersion: data.graphVersion || whatsappApp.graphVersion || undefined,
 				});
+				const confirmed = await getWhatsAppWabaSubscription({
+					wabaId: data.wabaId, accessToken: data.accessToken, metaAppId: whatsappApp.metaAppId,
+					graphVersion: data.graphVersion || whatsappApp.graphVersion || undefined,
+				});
+				if (!confirmed.subscribed) throw new Error('Meta todavía no confirma la suscripción de esta App a la WABA. Volvé a pulsar Conectar.');
+				subscription = { ...subscription, ...confirmed };
 			} catch (error) {
 				return res.status(400).json({
 					ok: false,
-					error: 'Meta no pudo suscribir esta App a los webhooks de la WABA. El canal no fue activado.',
-					details: error?.message || null,
+					error: error?.message || 'No se pudo verificar el webhook o suscribir la WABA. El canal no fue activado.',
+					code: error?.code || null,
+					metaCode: error?.metaCode || null,
 				});
 			}
 		}
@@ -2208,6 +2246,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 			waba: validatedAccess?.waba || null,
 			phoneNumber: validatedAccess?.phoneNumber || null,
 			subscription,
+			webhook,
 		};
 
 		const channel = channelId
@@ -2245,6 +2284,7 @@ export async function upsertWhatsAppChannel(req, res, next) {
 			channel: sanitizeWhatsAppChannel(channel),
 			messagingPermissionCheck: validatedAccess?.messagingPermissionCheck || { checked: false, missingScopes: [] },
 			subscription,
+			webhook,
 		});
 	} catch (error) {
 		next(error);

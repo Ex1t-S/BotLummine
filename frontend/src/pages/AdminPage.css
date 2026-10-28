@@ -332,6 +332,13 @@
 	background: var(--ui-surface-soft, #f8fafc);
 }
 .wa-setup-callback code { user-select: all; }
+.wa-setup-full-width { grid-column: 1 / -1; min-width: 0; }
+.wa-setup-webhook-step { margin-block: 20px; min-width: 0; }
+.wa-setup-webhook-step h4 { margin-bottom: 8px; }
+.wa-setup-webhook-step > p { color: var(--ui-muted, #64748b); line-height: 1.5; }
+.wa-setup-webhook-step .wa-setup-callback { margin-top: 16px; }
+.wa-setup-webhook-step .wa-setup-callback button { justify-self: start; }
+.wa-setup-webhook-step .wa-setup-callback input { width: 100%; min-width: 0; }
 .wa-setup-callback small, .wa-setup-field-note, .wa-setup-optional small { color: var(--ui-muted, #64748b); line-height: 1.45; }
 .wa-setup-field-note { align-self: center; }
 .wa-setup-token-actions, .wa-setup-submit-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }

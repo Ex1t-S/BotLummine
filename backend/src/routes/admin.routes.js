@@ -23,6 +23,7 @@ import {
 	upsertCommerceConnection,
 	upsertLogisticsConnection,
 	upsertWhatsAppApp,
+	getWhatsAppWebhookCredentials,
 	upsertWhatsAppChannel,
 } from '../controllers/admin.controller.js';
 
@@ -48,6 +49,7 @@ router.post('/workspaces/:workspaceId/branding/sync', requireAdmin, syncWorkspac
 router.post('/workspaces/:workspaceId/whatsapp/embedded-signup/complete', requireAdmin, completeWhatsAppEmbeddedSignupForWorkspace);
 router.put('/workspaces/:workspaceId/whatsapp-apps', requireAdmin, upsertWhatsAppApp);
 router.put('/workspaces/:workspaceId/whatsapp-apps/:appId', requireAdmin, upsertWhatsAppApp);
+router.get('/workspaces/:workspaceId/whatsapp-apps/:appId/webhook', requireAdmin, getWhatsAppWebhookCredentials);
 router.post('/workspaces/:workspaceId/whatsapp-channel/discover', requireAdmin, discoverWhatsAppNumbers);
 router.post('/workspaces/:workspaceId/whatsapp-channel/check', requireAdmin, checkWhatsAppChannel);
 router.put('/workspaces/:workspaceId/whatsapp-channel', requireAdmin, upsertWhatsAppChannel);
