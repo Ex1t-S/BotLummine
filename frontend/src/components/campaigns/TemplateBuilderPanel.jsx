@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { uploadCampaignHeaderMedia } from '../../lib/campaigns.js';
 import { validateTemplateBodyBoundaries } from '../../features/campaigns/templateVariables.js';
 
@@ -225,6 +225,30 @@ function getVariables(text = '', parameterFormat = 'POSITIONAL') {
 	return getPositionalVariables(text);
 }
 
+function getNextPositionalVariable(text = '') {
+	const existingVariables = new Set(getPositionalVariables(text));
+	let nextVariable = 1;
+	while (existingVariables.has(String(nextVariable))) nextVariable += 1;
+	return String(nextVariable);
+}
+
+function getNextNamedVariable(text = '') {
+	const existingVariables = new Set(getNamedVariables(text));
+	let nextVariable = 1;
+	while (existingVariables.has(`variable_${nextVariable}`)) nextVariable += 1;
+	return `variable_${nextVariable}`;
+}
+
+function normalizeVariableName(value = '') {
+	const normalized = String(value || '')
+		.trim()
+		.replace(/[^a-zA-Z0-9_]/g, '_')
+		.replace(/_+/g, '_');
+
+	if (!normalized) return '';
+	return /^[a-zA-Z_]/.test(normalized) ? normalized : `variable_${normalized}`;
+}
+
 function buildNamedExamples(keys = [], context = 'general') {
 	return keys.map((key) => ({
 		param_name: key,
@@ -371,6 +395,9 @@ export default function TemplateBuilderPanel({
 	const [localError, setLocalError] = useState('');
 	const [uploadingImage, setUploadingImage] = useState(false);
 	const [forcedCreateMode, setForcedCreateMode] = useState(false);
+	const [newVariableName, setNewVariableName] = useState('');
+	const headerTextRef = useRef(null);
+	const bodyTextRef = useRef(null);
 
 	useEffect(() => {
 		if (selectedTemplate?.id) {
@@ -439,6 +466,66 @@ export default function TemplateBuilderPanel({
 			if (inferredFormat) next.parameterFormat = inferredFormat;
 			return next;
 		});
+	}
+
+	function insertVariable(field, inputRef) {
+		const text = String(form[field] || '');
+		const input = inputRef.current;
+		const start = Number.isInteger(input?.selectionStart) ? input.selectionStart : text.length;
+		const end = Number.isInteger(input?.selectionEnd) ? input.selectionEnd : start;
+		const variableKey =
+			form.parameterFormat === 'NAMED'
+				? normalizeVariableName(newVariableName) || getNextNamedVariable(text)
+				: getNextPositionalVariable(text);
+		const placeholder = `{{${variableKey}}}`;
+		const nextText = `${text.slice(0, start)}${placeholder}${text.slice(end)}`;
+
+		updateForm(field, nextText);
+		if (form.parameterFormat === 'NAMED') setNewVariableName('');
+
+		requestAnimationFrame(() => {
+			const nextCursor = start + placeholder.length;
+			input?.focus();
+			input?.setSelectionRange?.(nextCursor, nextCursor);
+		});
+	}
+
+	function renderVariableInserter(field, inputRef) {
+		const text = String(form[field] || '');
+		const variableKey =
+			form.parameterFormat === 'NAMED'
+				? normalizeVariableName(newVariableName) || getNextNamedVariable(text)
+				: getNextPositionalVariable(text);
+
+		return (
+			<div
+				className="campaign-inline-actions campaign-inline-actions--wrap"
+				style={{ alignItems: 'end', marginTop: -4 }}
+			>
+				{form.parameterFormat === 'NAMED' ? (
+					<label className="field" style={{ flex: '1 1 180px', margin: 0 }}>
+						<span>Nombre de la variable</span>
+						<input
+							value={newVariableName}
+							onChange={(event) => setNewVariableName(event.target.value)}
+							placeholder={getNextNamedVariable(text)}
+							maxLength={40}
+						/>
+					</label>
+				) : (
+					<small style={{ alignSelf: 'center', color: '#64748b' }}>
+						Se insertará <strong>{`{{${variableKey}}}`}</strong> automáticamente.
+					</small>
+				)}
+				<button
+					type="button"
+					className="button secondary"
+					onClick={() => insertVariable(field, inputRef)}
+				>
+					{`Insertar ${`{{${variableKey}}}`}`}
+				</button>
+			</div>
+		);
 	}
 
 	function addButton(type = 'QUICK_REPLY') {
@@ -757,16 +844,20 @@ export default function TemplateBuilderPanel({
 					</div>
 
 					{form.headerType === 'TEXT' ? (
-						<label className="field">
-						<span>Encabezado opcional</span>
-							<input
-								value={form.headerText}
-								onChange={(event) => updateForm('headerText', event.target.value)}
-								placeholder={
-									form.parameterFormat === 'NAMED' ? 'Hola {{nombre}}' : 'Hola {{1}}'
-								}
-							/>
-						</label>
+						<>
+							<label className="field">
+								<span>Encabezado opcional</span>
+								<input
+									ref={headerTextRef}
+									value={form.headerText}
+									onChange={(event) => updateForm('headerText', event.target.value)}
+									placeholder={
+										form.parameterFormat === 'NAMED' ? 'Hola {{nombre}}' : 'Hola {{1}}'
+									}
+								/>
+							</label>
+							{renderVariableInserter('headerText', headerTextRef)}
+						</>
 					) : ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.headerType) ? (
 						<div
 							className="field template-builder-media-panel"
@@ -906,6 +997,7 @@ export default function TemplateBuilderPanel({
 					<label className="field">
 						<span>Body</span>
 						<textarea
+							ref={bodyTextRef}
 							rows={7}
 							value={form.bodyText}
 							onChange={(event) => updateForm('bodyText', event.target.value)}
@@ -917,6 +1009,7 @@ export default function TemplateBuilderPanel({
 						/>
 						<small>Si usás variables, dejá texto fijo antes de la primera y después de la última.</small>
 					</label>
+					{renderVariableInserter('bodyText', bodyTextRef)}
 
 					<label className="field">
 						<span>Footer opcional</span>
