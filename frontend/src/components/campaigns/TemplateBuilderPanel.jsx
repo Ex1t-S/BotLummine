@@ -77,12 +77,29 @@ function detectParameterFormatFromText(text = '') {
 	return 'POSITIONAL';
 }
 
+function inferParameterFormat(form = {}) {
+	const text = [
+		form.headerText,
+		form.bodyText,
+		form.footerText,
+		...safeArray(form.buttons).map((button) => button?.url || ''),
+	].join('\n');
+	const hasNumeric = /\{\{\s*\d+\s*\}\}/.test(text);
+	const hasNamed = /\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}/.test(text);
+
+	if (hasNamed && !hasNumeric) return 'NAMED';
+	if (hasNumeric && !hasNamed) return 'POSITIONAL';
+	return '';
+}
+
 function mapTemplateToForm(template) {
 	if (!template) {
 		return { ...defaultForm };
 	}
 
-	const components = safeArray(template?.rawPayload?.components);
+	const components = safeArray(
+		Array.isArray(template?.components) ? template.components : template?.rawPayload?.components
+	);
 	const header = getComponentByType(components, 'HEADER');
 	const body = getComponentByType(components, 'BODY');
 	const footer = getComponentByType(components, 'FOOTER');
@@ -400,16 +417,28 @@ export default function TemplateBuilderPanel({
 	}, [form.buttons]);
 
 	function updateForm(field, value) {
-		setForm((current) => ({ ...current, [field]: value }));
+		setForm((current) => {
+			const next = { ...current, [field]: value };
+			if (field !== 'parameterFormat') {
+				const inferredFormat = inferParameterFormat(next);
+				if (inferredFormat) next.parameterFormat = inferredFormat;
+			}
+			return next;
+		});
 	}
 
 	function updateButton(buttonId, patch) {
-		setForm((current) => ({
-			...current,
-			buttons: safeArray(current.buttons).map((button) =>
-				button.id === buttonId ? { ...button, ...patch } : button
-			),
-		}));
+		setForm((current) => {
+			const next = {
+				...current,
+				buttons: safeArray(current.buttons).map((button) =>
+					button.id === buttonId ? { ...button, ...patch } : button
+				),
+			};
+			const inferredFormat = inferParameterFormat(next);
+			if (inferredFormat) next.parameterFormat = inferredFormat;
+			return next;
+		});
 	}
 
 	function addButton(type = 'QUICK_REPLY') {
@@ -695,7 +724,7 @@ export default function TemplateBuilderPanel({
 								<option value="NAMED">Por nombre ({"{{nombre}}, {{producto}}"})</option>
 							</select>
 							<small>
-								Los botones siguen usando parámetros por posición en Meta aunque el cuerpo use nombres.
+								El formato se detecta al escribir los placeholders. Usá variables por posición o por nombre en toda la plantilla.
 							</small>
 						</label>
 

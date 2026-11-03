@@ -100,7 +100,11 @@ function collectTemplateText(value, texts = []) {
 }
 
 function extractTemplateVariableKeys(template = null) {
-	const components = Array.isArray(template?.rawPayload?.components) ? template.rawPayload.components : [];
+	const components = Array.isArray(template?.components)
+		? template.components
+		: Array.isArray(template?.rawPayload?.components)
+			? template.rawPayload.components
+			: [];
 	const keys = new Set();
 	collectTemplateText(components).forEach((text) => {
 		String(text).replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawKey) => {
