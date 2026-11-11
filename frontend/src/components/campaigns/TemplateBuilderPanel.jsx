@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { uploadCampaignHeaderMedia } from '../../lib/campaigns.js';
 import { validateTemplateBodyBoundaries } from '../../features/campaigns/templateVariables.js';
+import { getFriendlyError } from '../../features/campaigns/errorMessages.js';
 
 function createEmptyButton(type = 'QUICK_REPLY') {
 	return {
@@ -718,14 +719,23 @@ export default function TemplateBuilderPanel({
 
 		setLocalError('');
 
-		if (isEditingSelectedTemplate) {
-			await onUpdateTemplate(selectedTemplate.id, payload);
-			return;
-		}
+		try {
+			if (isEditingSelectedTemplate) {
+				await onUpdateTemplate(selectedTemplate.id, payload);
+				return;
+			}
 
-		await onCreateTemplate(payload);
-		setForcedCreateMode(true);
-		setForm({ ...defaultForm });
+			await onCreateTemplate(payload);
+			setForcedCreateMode(true);
+			setForm({ ...defaultForm });
+			onBackToLibrary?.();
+		} catch (error) {
+			setLocalError(
+				getFriendlyError(error, isEditingSelectedTemplate
+					? 'No se pudieron guardar los cambios de la plantilla.'
+					: 'No se pudo crear la plantilla.')
+			);
+		}
 	}
 
 	return (
