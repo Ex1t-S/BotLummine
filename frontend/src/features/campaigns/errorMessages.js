@@ -53,7 +53,23 @@ function translateRawError(message = '') {
 
 export function getFriendlyError(error, fallback = 'No se pudo completar la operacion.') {
 	const data = error?.response?.data || error?.data || {};
-	if (data?.errorInfo?.message) return `${data.errorInfo.title}: ${data.errorInfo.message}`;
+	if (data?.errorInfo?.message) {
+		const { title, message, technicalMessage, code: infoCode } = data.errorInfo;
+		const isGenericMessage = /^ocurri[oó] un problema al procesar la solicitud\.?$/i.test(
+			String(message || '').trim()
+		);
+		const technicalDetail = String(technicalMessage || '')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 320);
+
+		if (isGenericMessage && technicalDetail && technicalDetail !== message) {
+			const code = data?.meta?.code || infoCode;
+			return `${title || 'No se pudo completar la operacion'}: ${technicalDetail}${code ? ` (código ${code})` : ''}`;
+		}
+
+		return `${title}: ${message}`;
+	}
 	const code = String(data?.meta?.subcode || data?.meta?.code || data?.errorCode || '').trim();
 	const mapped = CODE_MESSAGES[code];
 	if (mapped) return `${mapped[0]}: ${mapped[1]}`;
