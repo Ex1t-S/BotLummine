@@ -22,6 +22,7 @@ const CODE_MESSAGES = {
 	131042: ['Cuenta de WhatsApp', 'Meta rechazo el envio por facturacion, limite o estado de cuenta.'],
 	190: ['Acceso a Meta', 'El acceso a Meta vencio o no tiene permisos suficientes.'],
 	10: ['Acceso a Meta', 'La aplicacion no tiene permisos suficientes para esta operacion.'],
+	200: ['Acceso a Meta', 'La App o el token no tienen acceso de administración sobre esta WABA. Se requiere whatsapp_business_management y acceso del usuario del sistema a la cuenta.'],
 	4: ['Limite de envios', 'Se alcanzo un limite temporal de Meta.'],
 	80007: ['Limite de envios', 'Se alcanzo el limite de mensajes de la cuenta.'],
 	130429: ['Limite de envios', 'Meta esta limitando la velocidad de envio.'],
@@ -54,7 +55,7 @@ function translateRawError(message = '') {
 export function getFriendlyError(error, fallback = 'No se pudo completar la operacion.') {
 	const data = error?.response?.data || error?.data || {};
 	if (data?.errorInfo?.message) {
-		const { title, message, technicalMessage, code: infoCode } = data.errorInfo;
+		const { title, message, technicalMessage, code: infoCode, action } = data.errorInfo;
 		const isGenericMessage = /^ocurri[oó] un problema al procesar la solicitud\.?$/i.test(
 			String(message || '').trim()
 		);
@@ -65,10 +66,10 @@ export function getFriendlyError(error, fallback = 'No se pudo completar la oper
 
 		if (isGenericMessage && technicalDetail && technicalDetail !== message) {
 			const code = data?.meta?.code || infoCode;
-			return `${title || 'No se pudo completar la operacion'}: ${technicalDetail}${code ? ` (código ${code})` : ''}`;
+			return `${title || 'No se pudo completar la operacion'}: ${technicalDetail}${code ? ` (código ${code})` : ''}${action ? ` ${action}` : ''}`;
 		}
 
-		return `${title}: ${message}`;
+		return `${title}: ${message}${action ? ` ${action}` : ''}`;
 	}
 	const code = String(data?.meta?.subcode || data?.meta?.code || data?.errorCode || '').trim();
 	const mapped = CODE_MESSAGES[code];

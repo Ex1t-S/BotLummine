@@ -113,6 +113,13 @@ const CATALOG = [
 		action: 'Renueva el token y verifica los permisos de WhatsApp Business.',
 	},
 	{
+		codes: ['200'],
+		category: 'Acceso a Meta',
+		title: 'Meta bloqueó el acceso a esta cuenta de WhatsApp',
+		message: 'La App o el token no tienen acceso de administración sobre esta WABA. Para crear plantillas, se requiere whatsapp_business_management y acceso del usuario del sistema a la cuenta.',
+		action: 'En Configuración del negocio, asigna la WABA al usuario del sistema y genera para la App conectada en BladeIA un token con whatsapp_business_management. Luego actualiza el canal de WhatsApp y vuelve a intentar.',
+	},
+	{
 		codes: ['4', '80007', '130429', '131056'],
 		category: 'Limite de envios',
 		title: 'Se alcanzo el limite temporal de envios',
