@@ -1,8 +1,29 @@
-# BotLummine
+# BotLummine · BladeIA
 
-Panel multi marca para operar ventas por WhatsApp con IA, inbox humano, catalogo, campanias, carritos abandonados, clientes e integraciones de ecommerce/logistica.
+Plataforma para centralizar ventas por WhatsApp, combinar atención humana con IA y gestionar la operación de varias marcas desde un panel web.
 
-El backend corre con Express, Prisma y PostgreSQL; el frontend con Vite + React. El backend y la base de datos de produccion se operan en Contabo, con la API en `api.bladeia.com` y el panel en `bladeia.com`. Consultar [la guia de operacion de Contabo](ops/contabo/README.md).
+[Desarrollo local](#desarrollo-local) · [Arquitectura](#estructura) · [Operación](ops/contabo/README.md) · [Onboarding de WhatsApp](docs/WHATSAPP_MANUAL_ONBOARDING.md)
+
+## Qué resuelve
+
+Reúne conversaciones, catálogo, clientes y seguimiento comercial para trabajar sobre el mismo flujo de venta.
+
+- Inbox con atención humana y respuestas asistidas por IA.
+- Gestión de catálogo, clientes, campañas y carritos abandonados.
+- Integraciones de ecommerce y logística.
+- Configuración de varias marcas y conexiones de WhatsApp.
+
+## Tecnologías
+
+| Capa | Tecnología |
+| --- | --- |
+| Panel web | React y Vite |
+| API | Node.js y Express |
+| Datos | PostgreSQL y Prisma |
+| Integraciones | WhatsApp/Meta, Tiendanube y Shopify |
+| Verificación | Pruebas de frontend con Playwright y auditorías de seguridad |
+
+La documentación operativa sitúa el panel en `bladeia.com` y la API en `api.bladeia.com`, con backend y base de datos en Contabo. Los detalles de configuración y despliegue están en la [guía de operación](ops/contabo/README.md).
 
 ## Estructura
 
